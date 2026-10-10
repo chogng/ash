@@ -24,6 +24,8 @@ export class TestEditorService implements IEditorService {
 		this.opened.push(input);
 	}
 	public focusActiveEditor(): void { }
+	public async save() { return { success: true, editors: [] }; }
+	public async saveAll() { return { success: true, editors: [] }; }
 }
 
 export class TestDialogService implements IDialogService {

@@ -11,7 +11,6 @@ import { IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPi
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ITaskService, type IWorkspaceTask } from '../../../../services/tasks/common/taskService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
-import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 import { RUN_TASK_COMMAND_ID } from '../../common/tasks.js';
 
 interface TaskItem extends IQuickPickItem { readonly task: IWorkspaceTask; }
@@ -39,7 +38,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	for (const failure of [false, true]) {
-		test(`Run Task uses the latest open picker catalog and ${failure ? 'reports failure' : 'focuses the terminal'} after command invocation ends`, async () => {
+		test(`Run Task uses the latest open picker catalog and ${failure ? 'reports failure' : 'leaves presentation to the execution owner'} after command invocation ends`, async () => {
 			using changes = new Emitter<readonly IWorkspaceTask[]>();
 			using picker = new Picker();
 			using services = new InstantiationService();
@@ -50,6 +49,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 			const focused: string[] = [];
 			const errors: string[] = [];
 			const tasks: ITaskService = {
+				rerun: async () => undefined,
 				get tasks() { return catalog; }, activeRuns: [], lastRun: undefined,
 				onDidChangeTasks: changes.event, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
 				registerTaskProvider: () => Disposable.None,
@@ -60,6 +60,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 					if (failure) throw new Error('Unsupported execution setting');
 					return { task, terminalId: 'terminal', status: 'running', exitCode: undefined, onDidChangeStatus: Event.None };
 				},
+				runProvidedTask: async () => { throw new Error('Provided task execution is not expected in this fixture'); },
 				terminate: async () => { }, dispose() { }, [Symbol.dispose]() { },
 			};
 			services.registerInstance(ITaskService, tasks);
@@ -74,7 +75,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				assert.deepEqual(picker.items.map(item => item.label), ['Updated task']);
 				picker.accepted.fire(picker.items[0] as TaskItem);
 				await new Promise<void>(resolve => setImmediate(resolve));
-				assert.deepEqual({ executed, focused, errors }, { executed: [latest], focused: failure ? [] : [TERMINAL_VIEW_ID], errors: failure ? ['Unsupported execution setting'] : [] });
+				assert.deepEqual({ executed, focused, errors }, { executed: [latest], focused: [], errors: failure ? ['Unsupported execution setting'] : [] });
 				changes.fire([previous]);
 				assert.deepEqual(picker.items.map(item => item.label), ['Updated task']);
 			} finally { picker.hide(); }

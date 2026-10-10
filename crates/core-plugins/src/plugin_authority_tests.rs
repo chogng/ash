@@ -679,3 +679,90 @@ fn unrelated_activation_change_does_not_revoke_an_exact_package_fence() {
     assert!(fence.authorizes());
     assert!(fence.acquire().is_some());
 }
+
+#[test]
+fn old_local_vscode_grants_retire_without_removing_other_plugin_grants() {
+    let profile = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let vscode_root = source.path().join("vscode");
+    let ordinary_root = source.path().join("ordinary");
+    let ordinary = package(&ordinary_root, "acme/ordinary", "1.0.0");
+    package(&vscode_root, "acme/vscode", "1.0.0");
+    let manifest_path = vscode_root.join(".ash-plugin/plugin.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    manifest["contributions"]["editorExtensions"] = serde_json::json!([{
+        "id": "commands", "runtime": "javascript", "api": "vscode", "entrypoint": "extension.cjs",
+        "runtimeApiVersion": 1, "activationEvents": [{ "type": "onCommand", "id": "test.command" }], "capabilities": ["command"]
+    }]);
+    fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    fs::write(
+        vscode_root.join("extension.cjs"),
+        "exports.activate = () => {}; ",
+    )
+    .unwrap();
+    let vscode = LocalPluginPackage::load(&vscode_root).unwrap();
+    let authority = PluginActivationAuthority::open(profile.path()).unwrap();
+    let mut installed = Vec::new();
+    for (index, local) in [&vscode, &ordinary].into_iter().enumerate() {
+        let package = authority
+            .install_local(
+                PluginAuthorityCommandId::new(format!("install-{index}")).unwrap(),
+                authority.snapshot().revision(),
+                local,
+            )
+            .unwrap()
+            .package;
+        for (action, command) in [
+            (
+                "grant",
+                PluginAuthorityCommand::Grant {
+                    package: package.clone(),
+                },
+            ),
+            (
+                "enable",
+                PluginAuthorityCommand::Enable {
+                    package: package.clone(),
+                },
+            ),
+        ] {
+            authority
+                .apply(request(&authority, &format!("{action}-{index}"), command))
+                .unwrap();
+        }
+        installed.push(package);
+    }
+    let before = authority.snapshot();
+    drop(authority);
+    let path = profile.path().join("authority.json");
+    let mut durable: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    durable
+        .as_object_mut()
+        .unwrap()
+        .remove("nodeExecutionContractVersion");
+    fs::write(&path, serde_json::to_vec(&durable).unwrap()).unwrap();
+    let reopened = PluginActivationAuthority::open(profile.path()).unwrap();
+    let after = reopened.snapshot();
+    assert_eq!(after.granted(), &[installed[1].clone()]);
+    assert_eq!(after.enabled().len(), 2);
+    assert_eq!(after.activation().packages().len(), 1);
+    assert_eq!(after.revision(), before.revision() + 1);
+    assert_eq!(
+        after.activation().generation(),
+        before.activation().generation() + 1
+    );
+    reopened
+        .apply(request(
+            &reopened,
+            "new-node-grant",
+            PluginAuthorityCommand::Grant {
+                package: installed[0].clone(),
+            },
+        ))
+        .unwrap();
+    drop(reopened);
+    let again = PluginActivationAuthority::open(profile.path()).unwrap();
+    assert_eq!(again.snapshot().granted().len(), 2);
+    assert_eq!(again.snapshot().activation().packages().len(), 2);
+}

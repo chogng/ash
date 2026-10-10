@@ -67,6 +67,7 @@ fn start() -> RunningExtension {
     let authority = Arc::new(Authority(AtomicBool::new(true)));
     let activation = ExtensionActivationSpec::new(
         ActivateParams {
+            initialization: None,
             extension_id: "example.review".into(),
             package: PackageBinding {
                 package_id: "example/review@1.0.0".into(),

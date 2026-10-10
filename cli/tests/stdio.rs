@@ -175,6 +175,9 @@ fn remote_runtime_preserves_a_terminal_between_real_connections() {
             cols: 80,
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::Reconnectable,
+            env: None,
+            cwd: None,
+            execution: None,
         })
         .unwrap();
     let first_lease = created.reconnect.unwrap();

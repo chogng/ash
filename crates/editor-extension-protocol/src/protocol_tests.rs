@@ -21,6 +21,7 @@ use crate::ProtocolLimits;
 
 fn activation() -> ActivateParams {
     ActivateParams {
+        initialization: None,
         extension_id: "acme.review".into(),
         package: PackageBinding {
             package_id: "acme/review@1.0.0".into(),
@@ -635,6 +636,171 @@ fn completion_triggers_round_trip_and_require_unique_single_characters() {
             );
         }
     }
+}
+
+#[test]
+fn debug_adapter_tracker_registrations_allow_multiple_factories_and_require_debug_capability() {
+    let mut params = activation();
+    params.capabilities = vec![ExtensionCapability::DebugAdapter];
+    let result = ActivateResult {
+        registrations: vec![
+            RegistrationDescriptor {
+                registration_id: "tracker.one".into(),
+                kind: RegistrationKind::DebugAdapterTracker {
+                    debugger_type: "*".into(),
+                },
+            },
+            RegistrationDescriptor {
+                registration_id: "tracker.two".into(),
+                kind: RegistrationKind::DebugAdapterTracker {
+                    debugger_type: "*".into(),
+                },
+            },
+        ],
+    };
+    let request = ExtensionHostRequest {
+        context: RequestContext::new(1, 2, 3),
+        request: HostRequestKind::Activate(params.clone()),
+    };
+    let response = ExtensionHostResponse {
+        context: request.context.clone(),
+        response: HostResponseKind::Success(HostSuccess::Activated(result)),
+    };
+    response
+        .validate_for(&request, &ProtocolLimits::default())
+        .unwrap();
+    let encoded = serde_json::to_value(&response).unwrap();
+    let decoded: ExtensionHostResponse = serde_json::from_value(encoded).unwrap();
+    assert_eq!(decoded, response);
+    params.capabilities = vec![ExtensionCapability::Command];
+    let request = ExtensionHostRequest {
+        context: request.context,
+        request: HostRequestKind::Activate(params),
+    };
+    assert!(
+        response
+            .validate_for(&request, &ProtocolLimits::default())
+            .is_err()
+    );
+    assert!(serde_json::from_value::<RegistrationDescriptor>(json!({"registrationId":"tracker","kind":"debugAdapterTracker","debuggerType":"*","program":"forged"})).is_err());
+}
+
+#[test]
+fn debug_configuration_providers_require_debug_capability_and_valid_trigger_kind() {
+    let mut params = activation();
+    let mut request = ExtensionHostRequest {
+        context: RequestContext::new(1, 2, 3),
+        request: HostRequestKind::Activate(params.clone()),
+    };
+    let mut response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![1, 2]
+                .into_iter()
+                .map(|trigger_kind| RegistrationDescriptor {
+                    registration_id: format!("debug-config-{trigger_kind}"),
+                    kind: RegistrationKind::DebugConfigurationProvider {
+                        debugger_type: "example".into(),
+                        trigger_kind,
+                    },
+                })
+                .collect(),
+        })),
+    };
+    let limits = ProtocolLimits::default();
+    assert!(response.validate_for(&request, &limits).is_err());
+    params.capabilities = vec![ExtensionCapability::DebugAdapter];
+    request.request = HostRequestKind::Activate(params);
+    response.validate_for(&request, &limits).unwrap();
+    let encoded = serde_json::to_value(&response).unwrap();
+    assert_eq!(
+        serde_json::from_value::<ExtensionHostResponse>(encoded.clone()).unwrap(),
+        response
+    );
+    let mut unknown = encoded;
+    unknown["body"]["body"]["registrations"][0]["ambientAuthority"] = json!(true);
+    assert!(serde_json::from_value::<ExtensionHostResponse>(unknown).is_err());
+    if let HostResponseKind::Success(HostSuccess::Activated(result)) = &mut response.response {
+        result.registrations[0].kind = RegistrationKind::DebugConfigurationProvider {
+            debugger_type: "example".into(),
+            trigger_kind: 3,
+        };
+    }
+    assert!(response.validate_for(&request, &limits).is_err());
+}
+
+#[test]
+fn activation_initialization_requires_bounded_window_facts_and_preserves_absence() {
+    let mut params = activation();
+    assert!(
+        serde_json::to_value(&params)
+            .unwrap()
+            .get("initialization")
+            .is_none()
+    );
+    let snapshot = super::ExtensionHostInitialization {
+        language: Some("zh-cn".into()),
+        workspace_folders: vec![super::ExtensionWorkspaceFolder {
+            uri: "file:///workspace".into(),
+            name: "Workspace".into(),
+            index: 0,
+        }],
+        workspace_name: Some("Workspace".into()),
+        workspace_file: None,
+        configuration_values: json!({"enabled": false}),
+        configuration_data: json!({"defaults": {}}),
+    };
+    params.initialization = Some(snapshot.clone());
+    let encoded = serde_json::to_value(&params).unwrap();
+    assert_eq!(
+        serde_json::from_value::<ActivateParams>(encoded).unwrap(),
+        params
+    );
+    assert!(snapshot.validate().is_ok());
+    for mutate in [0, 1, 2, 3, 4, 5, 6] {
+        let mut invalid = snapshot.clone();
+        match mutate {
+            0 => invalid.workspace_folders[0].index = 1,
+            1 => invalid.configuration_values = json!([]),
+            2 => invalid.workspace_folders[0].uri = "invalid\nuri".into(),
+            3 => invalid.configuration_values = json!({"large": "x".repeat(512 * 1024)}),
+            4 => invalid.language = Some(String::new()),
+            5 => invalid.language = Some("../other".into()),
+            6 => invalid.language = Some("x".repeat(65)),
+            _ => unreachable!(),
+        }
+        assert!(invalid.validate().is_err());
+    }
+    let mut legacy = serde_json::to_value(&snapshot).unwrap();
+    legacy.as_object_mut().unwrap().remove("language");
+    let legacy: super::ExtensionHostInitialization = serde_json::from_value(legacy).unwrap();
+    assert_eq!(legacy.language, None);
+    assert!(legacy.validate().is_ok());
+}
+
+#[test]
+fn window_fact_observers_do_not_borrow_an_execution_capability() {
+    let mut params = activation();
+    params.capabilities.clear();
+    let request = ExtensionHostRequest {
+        context: RequestContext::new(1, 2, 3),
+        request: HostRequestKind::Activate(params),
+    };
+    let response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![RegistrationDescriptor {
+                registration_id: "window.facts".into(),
+                kind: RegistrationKind::WorkspaceEvents {},
+            }],
+        })),
+    };
+    response
+        .validate_for(&request, &ProtocolLimits::default())
+        .unwrap();
+    let mut wire = serde_json::to_value(&response).unwrap();
+    wire["body"]["body"]["registrations"][0]["connectionId"] = json!(42);
+    assert!(serde_json::from_value::<ExtensionHostResponse>(wire).is_err());
 }
 
 #[test]

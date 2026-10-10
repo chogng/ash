@@ -60,6 +60,8 @@ export const enum AccessibleViewProviderId {
 	IssueReporter = 'issueReporter',
 	Output = 'output',
 	TerminalFindHelp = 'terminalFindHelp',
+	Terminal = 'terminal',
+	TerminalHelp = 'terminal-help',
 }
 
 export const enum AccessibleViewType {
@@ -123,6 +125,7 @@ export const enum AccessibilityVerbositySettingId {
 	ExecutionSettings = 'accessibility.verbosity.executionSettings',
 	IssueReporter = 'accessibility.verbosity.issueReporter',
 	Output = 'accessibility.verbosity.output',
+	Terminal = 'accessibility.verbosity.terminal',
 }
 
 export interface IAccessibleViewOptions {

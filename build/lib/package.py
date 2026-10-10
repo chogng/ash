@@ -336,6 +336,18 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     copy_executable(
         Path(tgrep["executable"]), tgrep_dir / ("tgrep" + suffix), is_windows
     )
+    # The standard host uses the same product Node runtime as other installed scripts.
+    extension_host = resources / "extension-host"
+    extension_host.mkdir()
+    for source, destination in (
+        ("crates/js-extension-host/src/node.mjs", "node.mjs"),
+        ("crates/js-extension-host/src/vscode.js", "vscode.mjs"),
+        ("extension-sdk/index.js", "sdk.mjs"),
+    ):
+        source_path = source_root / source
+        if source_path.is_symlink() or not source_path.is_file():
+            raise RuntimeError(f"Invalid product extension host resource: {source_path}")
+        shutil.copyfile(source_path, extension_host / destination)
     node = inputs.get("node")
     if node is not None:
         node_dir = resources / "node/bin"
@@ -563,6 +575,10 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         raise RuntimeError(
             "Package build identity does not match its complete file manifest"
         )
+    for name in ("node.mjs", "vscode.mjs", "sdk.mjs"):
+        script = package / "ash-resources/extension-host" / name
+        if script.is_symlink() or not script.is_file():
+            raise RuntimeError(f"Missing product extension host resource: {script}")
     javascript_runtime = metadata.get("javascriptRuntime")
     if javascript_runtime == {"kind": "packagedNode"}:
         if not isinstance(components.get("node"), dict):

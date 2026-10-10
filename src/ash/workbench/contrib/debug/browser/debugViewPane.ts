@@ -1,11 +1,13 @@
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { DEBUG_CONFIGURE_COMMAND_ID } from './debugCommands.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { getHoverDelegate, type IManagedHover } from "../../../../base/browser/ui/hover/hoverDelegate.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { Pane, PaneView } from "../../../../base/browser/ui/splitview/paneview.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
-import { FileNotFoundError, IFileService } from "../../../../platform/files/common/files.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -16,6 +18,10 @@ import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.j
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { basename } from "../../../../base/common/resources.js";
 import { URI } from "../../../../base/common/uri.js";
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { getUriFromSource } from '../common/debugSource.js';
+import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
@@ -69,6 +75,7 @@ export class DebugViewPane extends ViewPane {
 	private readonly welcomeDescription: HTMLElement;
 	private readonly controls: HTMLElement;
 	private readonly configureButton: Button;
+	private readonly configurationRequest = this._register(new MutableDisposable<DisposableStore>());
 	private readonly watchToolbar: WorkbenchToolBar;
 	private mountedSections: readonly DebugSection[] = [];
 	private hasDebugged = false;
@@ -115,7 +122,10 @@ export class DebugViewPane extends ViewPane {
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IWorkspaceOpenService private readonly workspaceOpen: IWorkspaceOpenService,
-		@IFileService private readonly files: IFileService,
+		@ICommandService private readonly commands: ICommandService,
+		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
+		@ILogService private readonly logService: ILogService,
+		@ITextModelService private readonly textModels: ITextModelService,
 	) {
 		super(container, options);
 		const document = container.ownerDocument;
@@ -141,7 +151,7 @@ export class DebugViewPane extends ViewPane {
 			iconOnly: true,
 			size: "small",
 			title: localize("debug.configure", "Open launch.json"),
-			onClick: () => { void this.configure().catch(error => { this.error = message(error); this.render(); }); },
+			onClick: () => { void this.configure().catch(error => { if (!isCancellationError(error)) { this.error = message(error); this.render(); } }); },
 		}));
 		this.sessionsElement = select(document, localize("debug.session", "Active debug session"));
 		this.sessionToolbar = this._register(new WorkbenchToolBar(controls, contextMenus, { ariaLabel: localize("debug.controls", "Debug controls") }));
@@ -165,7 +175,7 @@ export class DebugViewPane extends ViewPane {
 		this.welcomeButton = this._register(new Button(this.welcome.body, {
 			label: localize("debug.createLaunch", "Create a launch.json file"),
 			presentation: "primary",
-			onClick: () => { void this.configure().catch(error => { this.error = message(error); this.render(); }); },
+			onClick: () => { void this.configure().catch(error => { if (!isCancellationError(error)) { this.error = message(error); this.render(); } }); },
 		}));
 		this.welcomeDescription = h(document, "p");
 		this.welcome.body.append(this.welcomeDescription);
@@ -281,15 +291,16 @@ export class DebugViewPane extends ViewPane {
 			await this.workspaceOpen.openFolder();
 			return;
 		}
-		const resource = URI.joinPath(folder.uri, ".vscode", "launch.json");
+		const controller = new AbortController();
+		const lifetime = new DisposableStore();
+		lifetime.add(toDisposable(() => controller.abort()));
+		lifetime.add(this.workspace.onDidChangeWorkspace(() => controller.abort()));
+		this.configurationRequest.value = lifetime;
 		try {
-			await this.files.stat(resource);
-		} catch (error) {
-			if (!(error instanceof FileNotFoundError)) throw error;
-			await this.files.createDirectory(URI.joinPath(folder.uri, ".vscode"));
-			await this.files.writeFileBytes(resource, new TextEncoder().encode('{\n\t"version": "0.2.0",\n\t"configurations": []\n}\n'));
+			await this.commands.executeCommand(DEBUG_CONFIGURE_COMMAND_ID, folder.uri, false, controller.signal);
+		} finally {
+			if (this.configurationRequest.value === lifetime) this.configurationRequest.clear();
 		}
-		await this.editor.openEditor({ resource }, { pinned: true, ignoreError: true });
 	}
 
 	private control(operation: DebugOperation): void {
@@ -303,7 +314,11 @@ export class DebugViewPane extends ViewPane {
 			case "stopAll": action = this.debug.stopAll(); break;
 			default: action = session![operation](); break;
 		}
-		void action.catch(error => { this.error = message(error); this.render(); });
+		void action.catch(error => {
+			if (isCancellationError(error)) return;
+			this.error = message(error);
+			this.render();
+		});
 	}
 
 	private debugAction(operation: DebugOperation, label: string, icon: IAction["icon"], enabled = true): IAction {
@@ -344,7 +359,7 @@ export class DebugViewPane extends ViewPane {
 	private async selectThread(): Promise<void> {
 		const session = this.debug.session;
 		const threadId = Number(this.threadsElement.value);
-		if (!session || !Number.isSafeInteger(threadId) || threadId <= 0) return;
+		if (!session || !this.threadsElement.value || !Number.isSafeInteger(threadId)) return;
 		session.selectThread(threadId);
 		await this.refreshStoppedState();
 	}
@@ -442,16 +457,13 @@ export class DebugViewPane extends ViewPane {
 	private async openFrameSource(session: IDebugSession, frame: IDebugStackFrame, generation: number): Promise<void> {
 		if (!this.isCurrentInspection(session, generation)) return;
 		const selection = frame.lineNumber > 0 && frame.columnNumber > 0 ? Range.fromPositions(new Position(frame.lineNumber, frame.columnNumber)) : undefined;
-		if (frame.source?.resource) {
-			await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection });
-			return;
-		}
 		if (frame.source?.sourceReference && frame.source.sourceReference > 0) {
-			const source = await session.source(frame.source);
+			const resource = getUriFromSource(frame.source, frame.source.path, session.id, this.uriIdentity, this.logService);
+			using reference = await this.textModels.createModelReference(resource);
 			if (!this.isCurrentInspection(session, generation)) return;
-			const name = frame.source.name ?? `source-${frame.source.sourceReference}`;
-			const resource = URI.parse(`debug-source://session/${encodeURIComponent(session.id)}/${frame.source.sourceReference}/${encodeURIComponent(name)}`);
-			await this.editor.openEditor({ resource, label: name, contentType: source.mimeType, readOnly: true, initialText: source.content }, { selection });
+			await this.editor.openEditor({ resource, label: frame.source.name, readOnly: true }, { selection });
+		} else if (frame.source?.resource) {
+			await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection });
 		}
 	}
 
@@ -780,19 +792,19 @@ export class DebugViewPane extends ViewPane {
 			this.debugAction("restart", localize("debug.restart", "Restart"), Lxicon.refresh, session.state !== "starting"),
 			this.debugAction("stop", localize("debug.stop", "Stop"), Lxicon.square),
 		] : [], this.debug.sessions.length > 1 ? [this.debugAction("stopAll", localize("debug.stopAll", "Stop All"), Lxicon.square)] : []);
-		this.sessionsElement.replaceChildren(...this.debug.sessions.map(candidate => option(this.element.ownerDocument, candidate.id, `${candidate.configuration.name} — ${sessionStateLabel(candidate.state)}`)));
+		this.sessionsElement.replaceChildren(...this.debug.sessions.map(candidate => option(this.element.ownerDocument, candidate.id, `${candidate.name} — ${sessionStateLabel(candidate.state)}`)));
 		if (session) this.sessionsElement.value = session.id;
 		this.sessionsElement.hidden = this.debug.sessions.length < 2;
 		this.statusElement.classList.toggle("error", this.error !== undefined);
 		let status = "";
 		if (session) {
-			status = `${session.configuration.name}: ${sessionStateLabel(session.state)}${session.reason ? ` (${session.reason})` : ""}`;
+			status = `${session.name}: ${sessionStateLabel(session.state)}${session.reason ? ` (${session.reason})` : ""}`;
 		}
 		this.statusElement.textContent = this.error ?? status;
 		this.statusElement.hidden = !this.statusElement.textContent;
 		this.statusElement.classList.toggle("empty", !this.statusElement.textContent);
 		this.threadsElement.replaceChildren(...this.threads.map(thread => option(this.element.ownerDocument, String(thread.id), thread.name)));
-		if (session?.threadId) this.threadsElement.value = String(session.threadId);
+		if (session?.threadId !== undefined) this.threadsElement.value = String(session.threadId);
 		this.threadsElement.hidden = this.threads.length < 2;
 		this.rowControls.clear();
 		this.stackElement.replaceChildren(...this.frames.map((frame, index) => itemButton(this.rowControls, this.element.ownerDocument, `${frame.name}  ${frame.source?.name ?? frame.source?.path ?? ""}${frame.lineNumber > 0 ? `:${frame.lineNumber}` : ""}`, "ash-debug-frame", "frameIndex", index, frame.id === this.selectedFrameId)));

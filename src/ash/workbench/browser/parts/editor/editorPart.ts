@@ -821,24 +821,25 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			await workingCopy.revert(controller.signal);
 			return !workingCopy.isDirty;
 		}
-		if (group && input.resource.scheme === 'untitled') return this.saveEditor(group, input, pane);
+		if (group && input.resource.scheme === 'untitled') return !!await this.saveEditor(group, input, pane);
 		await workingCopy.save(controller.signal);
 		if (group && !group.inputs.some(candidate => this.isSameEditor(candidate, input))) return true;
 		return !workingCopy.isDirty;
 	}
 
-	private async saveEditor(group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane): Promise<boolean> {
-		if (input.resource.scheme !== "untitled") throw new Error("Save As is only available for untitled editors");
+	private async saveEditor(group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane): Promise<IResourceEditorInput | undefined> {
 		if (!this.saveAsResource) throw new Error("Editor Save As is unavailable in this host");
 		if (!pane.saveAs) throw new Error("The active editor cannot save this document");
 		const target = await this.saveAsResource(editorInputLabel(input));
-		if (!target) return false;
+		if (!target || this.isDisposed || !group.inputs.includes(input)) return undefined;
 		await pane.saveAs(target);
-		await this.replaceEditorResource!(group, input, {
+		if (this.isDisposed || !group.inputs.includes(input) || pane.workingCopy?.isDirty) return undefined;
+		const replacement: IResourceEditorInput = {
 			resource: target,
 			label: editorInputLabel({ resource: target }),
-		});
-		return true;
+		};
+		await this.replaceEditorResource!(group, input, replacement);
+		return replacement;
 	}
 
 	private createGroup(id?: EditorGroupId): EditorGroupHost {

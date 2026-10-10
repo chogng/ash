@@ -72,6 +72,7 @@ fn activate(id: u64, capabilities: Vec<ExtensionCapability>) -> ExtensionHostReq
     ExtensionHostRequest {
         context: RequestContext::new(id, 2, 3),
         request: HostRequestKind::Activate(ActivateParams {
+            initialization: None,
             extension_id: "example.commands".into(),
             package: PackageBinding {
                 package_id: "example/commands@1.0.0".into(),

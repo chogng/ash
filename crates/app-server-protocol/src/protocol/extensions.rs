@@ -41,6 +41,14 @@ pub struct ExtensionDto {
     pub version: String,
     pub display_name: String,
     pub source_kind: ExtensionSourceKindDto,
+    /// File URI of the exact package directory on the extension execution host.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub extension_location: Option<String>,
+    /// Execution host OS and architecture, independent of the renderer platform.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub target_platform: Option<String>,
     pub manifest_json: String,
     pub manifest_sha256: String,
     pub package_sha256: String,

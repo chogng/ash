@@ -20,8 +20,14 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 		return result.profiles;
 	}
 
+	async getEnvironment(names: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>> {
+		const result = await appServerRequest(this.connection, "terminal/environment/read", { names: [...names], dirId });
+		return result.values;
+	}
+
 	async create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
-		const created = await appServerRequest(this.connection, "terminal/create", { ...options, lifecycle: { type: "connectionOwned" } });
+		const execution = options.execution?.type === 'process' ? { ...options.execution, args: [...options.execution.args] } : options.execution;
+		const created = await appServerRequest(this.connection, "terminal/create", { ...options, execution, lifecycle: { type: "connectionOwned" } });
 		return { ready: created.ready, terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" };
 	}
 

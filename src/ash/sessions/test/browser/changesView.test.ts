@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import type { IResourceEditorInput } from '../../../workbench/common/editor.js';
@@ -74,7 +75,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		using chat = services.createInstance(ChatService);
 		const opened: IResourceEditorInput[] = [];
 		const openOptions: (EditorOpenOptions | undefined)[] = [];
-		const editors: IEditorService = { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], async openEditor(input, options) { opened.push(input); openOptions.push(options); }, focusActiveEditor() { } };
+		const editors: IEditorService = { ...emptyEditorServiceState, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], async openEditor(input, options) { opened.push(input); openOptions.push(options); }, focusActiveEditor() { } };
 		services.registerInstance(IQuickInputService, { input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); } });
 		services.registerInstance(ISessionsService, sessions);
 		services.registerInstance(IChatService, chat);

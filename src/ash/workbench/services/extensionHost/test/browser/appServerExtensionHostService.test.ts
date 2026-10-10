@@ -1,9 +1,22 @@
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { getNLSLanguage } from '../../../../../nls.js';
+import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { MainThreadConfiguration } from '../../../../api/browser/mainThreadConfiguration.js';
+import { MainThreadWorkspace } from '../../../../api/browser/mainThreadWorkspace.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { MockDebugSession } from '../../../../contrib/debug/test/common/mockDebug.js';
+import { Event } from '../../../../../base/common/event.js';
+import { IExtensionService } from '../../../extensions/common/extensionService.js';
+import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
+import { IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../../debug/common/debugService.js';
+import { DebugAdapterFactoriesRegistry } from '../../../debug/common/debugAdapterFactory.js';
 import { IHostService } from '../../../host/browser/host.js';
 import { readFileSync } from 'node:fs';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { Event } from '../../../../../base/common/event.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
@@ -11,11 +24,11 @@ import { test } from "mocha";
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import { CommandRegistry } from "../../../../../platform/commands/common/commands.js";
+import { CommandRegistry, CommandsRegistry } from "../../../../../platform/commands/common/commands.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { type ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
+import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -46,6 +59,47 @@ import { ILanguageService } from '../../../../../editor/common/languages/languag
 import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
+
+test('extension command requests preserve value presence through the real CommandService owner', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.commands'));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	const values = [undefined, null, false, 0, { value: 7 }];
+	using registration = CommandsRegistry.register('test.extension.commandValue', (_accessor, index, argument) => {
+		assert.equal(argument, 'literal argument');
+		return values[index as number];
+	});
+	await host.start();
+	const source = { extensionId: 'acme.demo', activationGeneration: 11, incarnation: 3 };
+	const signal = new AbortController().signal;
+	const results = [];
+	for (let index = 0; index < values.length; index++) {
+		results.push(await api.clientHandler!({ operation: 'executeCommand', command: 'test.extension.commandValue', arguments: [index, 'literal argument'] }, signal, source));
+	}
+	assert.deepEqual(JSON.parse(JSON.stringify(results)), values.map(value => ({ result: 'command', value: value === undefined ? null : value, hasValue: value !== undefined })));
+	await assert.rejects(api.clientHandler!({ operation: 'executeCommand', command: 'test.extension.missingCommand', arguments: [] }, signal, source), /Unknown command/);
+});
+
+test('task provider presentation retains optional panel and clear values and rejects invalid host data', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.panels'));
+	using languages = new LanguageFeaturesService();
+	const tasks = new ProviderSink<TaskProvider>();
+	using services = createServices(api, languages, tasks, new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const provider = tasks.providers[0]!;
+	const valid: readonly JsonValue[] = [{}, { panel: 'shared' }, { panel: 'dedicated', clear: false }, { panel: 'new', clear: true }, { clear: true }];
+	for (const presentation of valid) {
+		api.invocationResult = Promise.resolve({ tasks: [{ id: 'build', label: 'Build', command: 'builder', group: 'build', presentation }] });
+		assert.deepEqual((await provider.provideTasks(new AbortController().signal))[0]!.presentation, presentation);
+	}
+	const invalid: readonly JsonValue[] = [null, [], { panel: 1 }, { panel: 'invalid' }, { clear: 'true' }, { focus: 'true' }];
+	for (const presentation of invalid) {
+		api.invocationResult = Promise.resolve({ tasks: [{ id: 'build', label: 'Build', command: 'builder', group: 'build', presentation }] });
+		await assert.rejects(async () => provider.provideTasks(new AbortController().signal));
+	}
+});
 
 test('document highlights translate protocol kinds into editor kinds', async () => {
 	using languages = new LanguageFeaturesService();
@@ -268,8 +322,8 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 
 	await service.start();
 	assert.equal(service.currentSnapshot.fleetGeneration, 1);
-	assert.equal(service.state, "degraded");
-	assert.ok(failures.includes("unsupportedRegistrationBridge"));
+	assert.equal(service.state, "ready");
+	assert.equal(failures.length, 0);
 	assert.ok(commands.hasCommand("acme.old"));
 
 	const handler = commands.getCommand("acme.old")!;
@@ -281,6 +335,15 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 
 	assert.deepEqual(await tasks.providers[0]!.provideTasks(new AbortController().signal), [{ id: "unit", label: "Unit", command: "pnpm test", group: "test" }]);
 	assert.deepEqual(await tests.providers[0]!.provideTestProfiles(new AbortController().signal), [{ id: "unit", label: "Unit", taskId: "extension:extensionHost.61636d652e64656d6f.7461736b73:unit" }]);
+
+	using descriptorSession = new MockDebugSession('debug-registration', 'Host', {});
+	assert.deepEqual(await DebugAdapterFactoriesRegistry.get('acme')!.createDebugAdapterDescriptor!({ id: 'launch', name: 'Host', type: 'acme', request: 'launch', arguments: { program: '/workspace/app' } }, new AbortController().signal, descriptorSession), { program: 'hosted-adapter', arguments: ['', ' literal '] });
+	assert.equal(api.invocations.at(-1)?.registrationId, 'debug');
+	api.invocationResult = Promise.resolve(null);
+	assert.equal(await DebugAdapterFactoriesRegistry.get('acme')!.createDebugAdapterDescriptor!({ id: 'empty', name: 'Empty', type: 'acme', request: 'launch', arguments: {} }, new AbortController().signal, descriptorSession), undefined);
+	api.invocationResult = Promise.resolve({});
+	await assert.rejects(Promise.resolve(DebugAdapterFactoriesRegistry.get('acme')!.createDebugAdapterDescriptor!({ id: 'invalid', name: 'Invalid', type: 'acme', request: 'launch', arguments: {} }, new AbortController().signal, descriptorSession)), /Extension Debug Adapter descriptor has an invalid shape/);
+	api.invocationResult = undefined;
 
 	const pendingList = deferred<ExtensionHostFleetSnapshot>();
 	api.listResult = pendingList.promise;
@@ -303,6 +366,7 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 
 	api.emitConnection("crashed");
 	assert.equal(commands.hasCommand("acme.new"), false);
+	assert.equal(DebugAdapterFactoriesRegistry.get("acme"), undefined);
 	assert.equal(service.state, "failed");
 	api.emitConnection("ready");
 	await waitFor(() => commands.hasCommand("acme.latest"));
@@ -601,9 +665,10 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		this.invocations.push(request);
 		this.invocationSignals.push(signal);
 		if (this.invocationResult) return this.invocationResult;
-		if (request.operation === 'documentEvent') return null;
+		if (request.operation === 'documentEvent' || request.operation === 'workspaceEvent') return null;
 		if (request.operation === 'resolveConnection') return { connectionName: 'build' };
 		if (request.operation === "execute") return Object.freeze({ executed: true });
+		if (request.operation === 'createDebugAdapterDescriptor') return { program: 'hosted-adapter', arguments: ['', ' literal '] };
 		if (request.operation === "provideTasks") return Object.freeze({ tasks: Object.freeze([{ id: "unit", label: "Unit", command: "pnpm test", group: "test" }]) });
 		if (request.operation === "provideTestProfiles") return Object.freeze({ profiles: Object.freeze([{ id: "unit", label: "Unit", taskProviderRegistrationId: "tasks", taskId: "unit" }]) });
 		if (request.operation === "hover") return Object.freeze({ contents: Object.freeze(["Host hover"]) });
@@ -616,13 +681,34 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 }
 
 class ProviderSink<TProvider> {
+	readonly onDidStartTask = Event.None;
+	readonly onDidChangeTaskRun = Event.None;
+	readonly onWillNewSession = Event.None;
+	readonly onDidNewSession = Event.None;
+	readonly onDidEndSession = Event.None;
+	readonly onDidChangeSession = Event.None;
+	readonly onDidFocusStackFrame = Event.None;
+	readonly onDidChangeBreakpoints = Event.None;
+	readonly breakpoints = [];
+	readonly functionBreakpoints = [];
+	readonly activeRuns = Object.freeze([]);
+	readonly sessions = Object.freeze([]);
+	readonly session = undefined;
 	providers: readonly TProvider[] = Object.freeze([]);
 	rejectNextReplacement: Error | undefined;
+
+	registerDebugAdapterTrackerFactories(_providers: readonly IDebugAdapterTrackerFactory[]): DebugAdapterTrackerFactoryRegistration {
+		const registration = toDisposable(() => { }) as DebugAdapterTrackerFactoryRegistration;
+		registration.replace = () => { };
+		return registration;
+	}
+
+	registerDebugConfigurationProviders(providers: readonly IDebugConfigurationProvider[]): DebugConfigurationProviderRegistration { return this.registration(providers as readonly TProvider[]) as DebugConfigurationProviderRegistration; }
 
 	registerTaskProviders(providers: readonly TaskProvider[]): TaskProviderRegistration { return this.registration(providers as readonly TProvider[]) as TaskProviderRegistration; }
 	registerTestProfileProviders(providers: readonly TestProfileProvider[]): TestProfileProviderRegistration { return this.registration(providers as readonly TProvider[]) as TestProfileProviderRegistration; }
 
-	private registration(initial: readonly TProvider[]): TaskProviderRegistration | TestProfileProviderRegistration {
+	private registration(initial: readonly TProvider[]): TaskProviderRegistration | TestProfileProviderRegistration | DebugConfigurationProviderRegistration {
 		let disposed = false;
 		this.providers = Object.freeze([...initial]);
 		const registration = toDisposable(() => { disposed = true; this.providers = Object.freeze([]); }) as TaskProviderRegistration;
@@ -678,8 +764,9 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	throw new Error("Timed out waiting for Extension Host state");
 }
 
-function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }): InstantiationService {
+function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, debug = new ProviderSink<IDebugConfigurationProvider>(), remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
+	services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	services.registerInstance(IExtensionHostApi, api);
 	services.registerInstance(IHostService, {
 		hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => assert.fail('Unexpected window'),
@@ -698,6 +785,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerSingleton(ILifecycleService, () => services.createInstance(FixtureLifecycleService, undefined));
 	services.registerInstance(ITaskService, tasks as unknown as ITaskService);
+	services.registerInstance(IDebugService, debug as unknown as IDebugService);
 	services.registerInstance(ITestingService, tests as unknown as ITestingService);
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerSingleton(INotificationService, () => services.createInstance(NotificationService));
@@ -749,7 +837,10 @@ test('declared command starts on first use and invokes the actual registered inc
 	await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'ready');
 	activation.resolve(api.current);
 	assert.deepEqual(await result, { executed: true });
-	assert.deepEqual(api.activations, [{ extensionId: 'acme.demo', activationGeneration: 11, event: { type: 'command', command: 'acme.lazy' } }]);
+	assert.deepEqual(api.activations.map(({ initialization, ...request }) => request), [{ extensionId: 'acme.demo', activationGeneration: 11, event: { type: 'command', command: 'acme.lazy' } }]);
+	assert.ok(api.activations[0]!.initialization);
+	assert.deepEqual(api.activations[0]!.initialization!.workspaceFolders, services.get(IWorkspaceContextService).getWorkspace().folders.map(folder => ({ uri: folder.uri.toString(), name: folder.name, index: folder.index })));
+	assert.deepEqual(api.activations[0]!.initialization!.configurationValues, services.get(IConfigurationService).getValue());
 	assert.equal(api.invocations.length, 1);
 	assert.equal(api.invocations[0]!.incarnation, 3);
 	assert.deepEqual(JSON.parse(JSON.stringify(api.invocations[0]!.payload)), { arguments: ['first'] });
@@ -830,12 +921,259 @@ test('startupFinished waits for window restoration and ignores replies after sto
 });
 
 
+test('Debug configuration callbacks receive the canonical folder and retire with the extension incarnation', async () => {
+	const registration = { kind: 'debugConfigurationProvider' as const, registrationId: 'configurations', debuggerType: 'acme', triggerKind: 1 as const };
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [registration]));
+	using languages = new LanguageFeaturesService();
+	const debug = new ProviderSink<IDebugConfigurationProvider>();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, debug);
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	assert.equal(debug.providers.length, 1);
+	const provider = debug.providers[0]!;
+	const folder = URI.file('/workspace');
+	const config = { name: 'Generated', type: 'acme', request: 'launch' as const, program: '${workspaceFolder}/app' };
+	api.invocationResult = Promise.resolve({ configurations: [config] });
+	assert.deepEqual(await provider.provideDebugConfigurations!(folder, new AbortController().signal), [config]);
+	assert.deepEqual(api.invocations[0]!.payload, { folder: { uri: folder.toString(), name: 'workspace', index: 0 } });
+	api.invocationResult = Promise.resolve({ configuration: config });
+	assert.deepEqual(await provider.resolveDebugConfiguration!(folder, config, new AbortController().signal), config);
+	assert.equal(api.invocations[1]!.operation, 'resolveDebugConfiguration');
+	api.invocationResult = Promise.resolve({ configuration: null });
+	assert.equal(await provider.resolveDebugConfigurationWithSubstitutedVariables!(folder, config, new AbortController().signal), null);
+	for (const callback of [provider.resolveDebugConfiguration!, provider.resolveDebugConfigurationWithSubstitutedVariables!]) {
+		api.invocationResult = Promise.resolve({ cancelled: true });
+		assert.equal(await callback(folder, config, new AbortController().signal), undefined);
+		api.invocationResult = Promise.resolve({ configuration: null });
+		assert.equal(await callback(folder, config, new AbortController().signal), null);
+		for (const invalid of [null, config, { cancelled: false }, { cancelled: true, configuration: config }, { configuration: null, extra: true }] as JsonValue[]) {
+			api.invocationResult = Promise.resolve(invalid);
+			await assert.rejects(async () => callback(folder, config, new AbortController().signal), TypeError);
+		}
+	}
+	api.emitConnection('restarting');
+	assert.deepEqual(debug.providers, []);
+	await assert.rejects(async () => provider.resolveDebugConfiguration!(folder, config, new AbortController().signal));
+});
+
+test('task discovery and debug phases activate only matching dormant extension owners', async () => {
+	for (const { declarations, ignored, event, expected } of [
+		{ declarations: ['onTaskType:build'], ignored: 'onTaskType:test', event: 'onTaskType', expected: { type: 'taskType', taskType: 'build' } },
+		{ declarations: ['onTaskType'], ignored: 'onDebug', event: 'onTaskType', expected: { type: 'taskType', taskType: null } },
+		{ declarations: ['onDebugResolve:node'], ignored: 'onDebugResolve:python', event: 'onDebugResolve:node', expected: { type: 'debug', phase: 'resolveConfiguration', debugType: 'node' } },
+		{ declarations: ['onDebugInitialConfigurations'], ignored: 'onDebugDynamicConfigurations', event: 'onDebugInitialConfigurations', expected: { type: 'debug', phase: 'initialConfigurations', debugType: null } },
+		{ declarations: ['onDebugDynamicConfigurations'], ignored: 'onDebugInitialConfigurations', event: 'onDebugDynamicConfigurations', expected: { type: 'debug', phase: 'dynamicConfigurations', debugType: null } },
+		{ declarations: ['onDebugDynamicConfigurations:node'], ignored: 'onDebugDynamicConfigurations:python', event: 'onDebugDynamicConfigurations', expected: { type: 'debug', phase: 'dynamicConfigurations', debugType: 'node' } },
+	]) {
+		const api = new FakeExtensionHostApi(dormantSnapshot(declarations));
+		api.activationResult = Promise.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+		using languages = new LanguageFeaturesService();
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+		using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+		await host.start();
+		const extensions = services.get(IExtensionService);
+		await extensions.activateByEvent(ignored);
+		assert.equal(api.activations.length, 0);
+		await extensions.activateByEvent(event);
+		assert.deepEqual(api.activations.map(({ initialization, ...request }) => request), [{ extensionId: 'acme.demo', activationGeneration: 11, event: expected }]);
+		assert.deepEqual(api.activations[0]!.initialization!.configurationValues, services.get(IConfigurationService).getValue());
+		assert.equal(host.currentSnapshot.extensions[0]!.state, 'ready');
+	}
+});
+
+test('canceling task activation releases the discovery waiter and never applies a reply after disconnect', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onTaskType:build']));
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const controller = new AbortController();
+	const discovery = assert.rejects(services.get(IExtensionService).activateByEvent('onTaskType', controller.signal));
+	await waitFor(() => api.activations.length === 1);
+	controller.abort();
+	await discovery;
+	api.emitConnection('stopped');
+	activation.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+	await activation.promise;
+	assert.equal(host.currentSnapshot.extensions.length, 0);
+});
+
+
+test('a failed dormant owner rejects task discovery instead of presenting activation as successful', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onTaskType:build']));
+	const ready = snapshot(2, 'acme.lazy', [], '', [], 11);
+	api.activationResult = Promise.resolve({ ...ready, extensions: [{ ...ready.extensions[0]!, lifecycle: 'failed', incarnation: undefined, registrations: [] }] });
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	await assert.rejects(services.get(IExtensionService).activateByEvent('onTaskType'), /failed/);
+	assert.equal(host.currentSnapshot.extensions[0]!.state, 'failed');
+});
+
+test('activating a task-only owner preserves existing debug providers and pending calls until their own owner retires', async () => {
+	const configuration = { kind: 'debugConfigurationProvider' as const, registrationId: 'configurations', debuggerType: 'acme', triggerKind: 1 as const };
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [configuration]));
+	const original = api.current.extensions[0]!;
+	const tasks = new ProviderSink<TaskProvider>();
+	const debug = new ProviderSink<IDebugConfigurationProvider>();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, tasks, new ProviderSink<TestProfileProvider>(), undefined, debug);
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const provider = debug.providers[0]!;
+	const adapter = DebugAdapterFactoriesRegistry.get('acme');
+	const result = deferred<JsonValue>();
+	api.invocationResult = result.promise;
+	const pending = provider.resolveDebugConfiguration!(URI.file('/workspace'), { name: 'Resolve', type: 'acme', request: 'launch' }, new AbortController().signal);
+	const next = { ...original, id: 'acme.lazy-task', registrations: [{ kind: 'taskProvider' as const, registrationId: 'build', taskType: 'builder' }] };
+	api.current = { generation: 2, extensions: [original, next] };
+	api.emitChanged(2);
+	await waitFor(() => host.currentSnapshot.fleetGeneration === 2);
+	assert.equal(debug.providers[0], provider);
+	assert.equal(DebugAdapterFactoriesRegistry.get('acme'), adapter);
+	assert.equal(api.invocationSignals[0]!.aborted, false);
+	result.resolve({ configuration: { name: 'Resolved', type: 'acme', request: 'launch' } });
+	assert.equal((await pending)?.name, 'Resolved');
+	assert.equal(tasks.providers.length, 2);
+	const retiredResult = deferred<JsonValue>();
+	api.invocationResult = retiredResult.promise;
+	const retirement = assert.rejects(async () => provider.resolveDebugConfiguration!(URI.file('/workspace'), { name: 'Resolve', type: 'acme', request: 'launch' }, new AbortController().signal));
+	api.current = { generation: 3, extensions: [next] };
+	api.emitChanged(3);
+	await waitFor(() => host.currentSnapshot.fleetGeneration === 3);
+	assert.equal(api.invocationSignals[1]!.aborted, true);
+	retiredResult.resolve(null);
+	await retirement;
+	assert.equal(debug.providers.length, 0);
+});
+
+
+test('wildcard startup binds actual window facts before restoration', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['*']));
+	api.activationResult = Promise.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'ready');
+	assert.equal(api.activations.length, 1);
+	assert.deepEqual(api.activations[0]!.event, { type: 'startupFinished' });
+	assert.deepEqual(api.activations[0]!.initialization!.configurationValues, services.get(IConfigurationService).getValue());
+	assert.deepEqual(api.activations[0]!.initialization!.workspaceFolders, services.get(IWorkspaceContextService).getWorkspace().folders.map(folder => ({ uri: folder.uri.toString(), name: folder.name, index: folder.index })));
+});
+
+test('configuration bridge preserves owner commit order, falsy values, language changes and retirement', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'workspaceEvents', registrationId: 'window' }]));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'sample.enabled', defaultValue: true, parse: value => Boolean(value) });
+	registry.registerConfiguration({ key: 'sample.count', defaultValue: 1, parse: value => Number(value) });
+	using configuration = new InMemoryConfigurationService(registry);
+	using scope = services.createChild();
+	scope.registerInstance(IConfigurationService, configuration);
+	const errors: unknown[] = [];
+	using bridge = scope.createInstance(MainThreadConfiguration, 1_000, (error: unknown) => errors.push(error));
+	const gate = deferred<JsonValue>();
+	api.invocationResult = gate.promise;
+	bridge.update(api.current);
+	await waitFor(() => api.invocations.length === 1);
+	await configuration.updateValue('sample.enabled', false);
+	await configuration.updateValue('sample.count', 0);
+	assert.equal(api.invocations.length, 1, 'later commits wait for the earlier delivery');
+	gate.resolve(null);
+	await waitFor(() => api.invocations.length === 3);
+	assert.deepEqual(api.invocations.map(request => (request.payload as Record<string, JsonValue>).configurationValues), normalizeExtensionHostPayload([
+		{ sample: { enabled: true, count: 1 } }, { sample: { enabled: false, count: 1 } }, { sample: { enabled: false, count: 0 } },
+	]));
+	await configuration.updateValue('sample.enabled', true, { overrideIdentifiers: ['typescript'] });
+	await waitFor(() => api.invocations.length === 4);
+	assert.deepEqual((api.invocations[3]!.payload as Record<string, JsonValue>).change, normalizeExtensionHostPayload({ keys: [], overrides: [['typescript', ['sample.enabled']]] }));
+	const previous = api.invocationSignals[3]!;
+	bridge.update(snapshot(2, 'acme.run', [{ kind: 'workspaceEvents', registrationId: 'window' }]));
+	assert.equal(previous.aborted, true);
+	await waitFor(() => api.invocations.length === 5);
+	assert.equal(api.invocations[4]!.activationGeneration, 12);
+	bridge.clear();
+	const count = api.invocations.length;
+	await configuration.updateValue('sample.count', 2);
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(api.invocations.length, count);
+	assert.deepEqual(errors, []);
+});
+
+test('workspace bridge reads the actual workspace owner and fences cleared subscriptions', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'workspaceEvents', registrationId: 'window' }]));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using workspace = new WorkspaceContextService({ id: 'empty' });
+	using scope = services.createChild();
+	scope.registerInstance(IWorkspaceContextService, workspace);
+	const errors: unknown[] = [];
+	using bridge = scope.createInstance(MainThreadWorkspace, 1_000, (error: unknown) => errors.push(error));
+	bridge.update(api.current);
+	await waitFor(() => api.invocations.length === 1);
+	const folders = [URI.file('/one'), URI.file('/two')].map((uri, index) => ({ id: String(index), uri, index, name: `Root ${index}` }));
+	workspace.updateWorkspace({ id: 'two', name: 'Two roots', configuration: URI.file('/window.code-workspace'), folders });
+	await waitFor(() => api.invocations.length === 2);
+	const event = api.invocations[1]!.payload as Record<string, JsonValue>;
+	assert.deepEqual(event.workspaceFolders, normalizeExtensionHostPayload(folders.map(folder => ({ uri: folder.uri.toString(), name: folder.name, index: folder.index }))));
+	assert.equal(event.workspaceFile, 'file:///window.code-workspace');
+	assert.equal(event.workspaceName, 'Two roots');
+	assert.equal(event.emit, true);
+	const retired = api.invocationSignals[1]!;
+	bridge.clear();
+	assert.equal(retired.aborted, true);
+	workspace.updateWorkspace({ id: 'one', folders: [{ ...folders[1]!, index: 0 }] });
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(api.invocations.length, 2);
+	bridge.update(api.current);
+	await waitFor(() => api.invocations.length === 3);
+	const fresh = api.invocations[2]!.payload as Record<string, JsonValue>;
+	assert.ok((fresh.revision as number) > (event.revision as number));
+	assert.deepEqual(fresh.workspaceFolders, normalizeExtensionHostPayload([{ uri: 'file:///two', name: 'Root 1', index: 0 }]));
+	assert.deepEqual(errors, []);
+});
+
+test('Node startup and recovery requests read fresh facts from the existing window owners', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run'));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'sample.enabled', defaultValue: true, parse: value => Boolean(value) });
+	using configuration = new InMemoryConfigurationService(registry);
+	using workspace = new WorkspaceContextService({ id: 'empty' });
+	using scope = services.createChild();
+	scope.registerInstance(IConfigurationService, configuration);
+	scope.registerInstance(IWorkspaceContextService, workspace);
+	using host = scope.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const source = { extensionId: 'acme.demo', activationGeneration: 11, incarnation: 3 };
+	const signal = new AbortController().signal;
+	const before = await api.clientHandler!({ operation: 'readInitialization' }, signal, source);
+	assert.ok(before.result === 'initialization');
+	assert.equal(before.initialization.language, getNLSLanguage());
+	await configuration.updateValue('sample.enabled', false);
+	workspace.updateWorkspace({ id: 'folder', folders: [{ id: 'root', uri: URI.file('/changed'), name: 'Changed', index: 0 }] });
+	const after = await api.clientHandler!({ operation: 'readInitialization' }, signal, source);
+	assert.ok(after.result === 'initialization');
+	assert.equal(after.initialization.language, getNLSLanguage());
+	assert.deepEqual(before.initialization.workspaceFolders, []);
+	assert.deepEqual(after.initialization.workspaceFolders, [{ uri: 'file:///changed', name: 'Changed', index: 0 }]);
+	assert.equal((before.initialization.configurationValues.sample as { enabled: boolean; }).enabled, true);
+	assert.equal((after.initialization.configurationValues.sample as { enabled: boolean; }).enabled, false);
+	assert.deepEqual(after.initialization.configurationData, configuration.getConfigurationData());
+});
+
 test('Remote extension resolves a saved target and connects only after host confirmation', async () => {
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'remoteConnectionResolver', registrationId: 'remote:team', authorityPrefix: 'team' }]));
 	using languages = new LanguageFeaturesService();
 	const connected: string[] = [];
 	const confirmations: unknown[] = [];
-	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, {
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, {
 		connections: {
 			...UnavailableRemoteConnectionApi, available: true,
 			list: async () => [{ name: 'build', host: 'build-linux', workspace: '/srv/project' }],
@@ -860,7 +1198,7 @@ test('Remote extension resolves a saved target and connects only after host conf
 test('Remote extension cancellation and revocation cannot open a window', async () => {
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'remoteConnectionResolver', registrationId: 'remote:team', authorityPrefix: 'team' }]));
 	using languages = new LanguageFeaturesService();
-	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, {
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, {
 		connections: {
 			...UnavailableRemoteConnectionApi, available: true,
 			list: async () => [{ name: 'build', host: 'build-linux', workspace: '/srv/project' }],

@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IEditorIdentifier, IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { Range } from "../../../../editor/common/core/range.js";
 import type { IEditorOptions, TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
@@ -17,6 +17,20 @@ export interface EditorOpenOptions extends IEditorOptions {
 /** The editor group selected by a resource-navigation request. */
 export type EditorOpenTarget = "activeGroup" | "sideGroup" | "modalGroup" | { readonly groupId: string; };
 
+export interface ISaveEditorsOptions extends ISaveOptions {
+	readonly saveAs?: boolean;
+}
+
+export interface ISaveAllEditorsOptions extends ISaveEditorsOptions {
+	readonly includeUntitled?: boolean | { readonly includeScratchpad: boolean; };
+	readonly excludeSticky?: boolean;
+}
+
+export interface ISaveEditorsResult {
+	readonly success: boolean;
+	readonly editors: IResourceEditorInput[];
+}
+
 /** Resource-oriented editor operations available to Workbench contributions. */
 export interface IEditorService {
 	readonly onDidActiveEditorChange: Event<void>;
@@ -25,6 +39,8 @@ export interface IEditorService {
 	readonly visibleEditors: readonly IResourceEditorInput[];
 	/** Resolves after displaying the resource or its error page; ignoreError leaves failures with the caller. */
 	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void>;
+	save(editors: IEditorIdentifier | readonly IEditorIdentifier[], options?: ISaveEditorsOptions): Promise<ISaveEditorsResult>;
+	saveAll(options?: ISaveAllEditorsOptions): Promise<ISaveEditorsResult>;
 	focusActiveEditor(): void;
 }
 

@@ -42,6 +42,7 @@ function createServices(resources: DisposableStore): {
 	resources.add(catalogChanged.event(next => { catalog = next; }));
 	const extensions: IExtensionService = Object.assign(toDisposable(() => { }), {
 		currentCatalog: catalog,
+		getExtension: async (id: string) => catalog.extensions.find(extension => extension.id.toLowerCase() === id.toLowerCase()),
 		themes: { currentCatalog: { revision: 0, themes: [] }, onDidChange: Event.None },
 		fileTemplates: { currentCatalog: { revision: 0, templates: [] }, onDidChange: Event.None },
 		debugAdapters: { definitions: [], onDidChange: Event.None, get: () => undefined },
@@ -49,6 +50,8 @@ function createServices(resources: DisposableStore): {
 		onDidFail: Event.None,
 		start: async () => { },
 		reload: async () => { },
+		activateByEvent: async () => { },
+		registerActivationHandler: () => toDisposable(() => { }),
 	});
 	Object.defineProperty(extensions, 'currentCatalog', { get: () => catalog });
 	resources.add(extensions);

@@ -1,10 +1,11 @@
+import { decodeAppServerServerResponse } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { createAppServerAppServerApi } from '../../browser/appServerApi.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { isCancellationError } from "../../../../base/common/errors.js";
+import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../common/appServerError.js";
@@ -907,12 +908,33 @@ test('renderer dispatches host requests and rejects late results after disconnec
 	client.dispose();
 });
 
+for (const cancelled of [false, true]) {
+	test(`host handler ${cancelled ? 'cancellation' : 'failure'} produces a complete error and leaves the connection usable`, async () => {
+		const transport = new FakeTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => {
+			throw cancelled ? new CancellationError('host operation cancelled') : new Error('host operation failed');
+		});
+		await client.connect();
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'host-error', method: 'browser/create', params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' } }) });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(decodeAppServerServerResponse('browser/create', transport.requests.at(-1)), {
+			jsonrpc: '2.0', id: 'host-error', error: { code: cancelled ? -32800 : -32000, message: cancelled ? 'host operation cancelled' : 'host operation failed', data: null },
+		});
+		assert.equal(client.state, 'ready');
+		const next = client.request(APP_SERVER_METHODS['automation/list'], {});
+		transport.respondAt(-1, { automations: [] });
+		assert.deepEqual(await next, { automations: [] });
+	});
+}
+
 test('invalid response rejects its pending request and unknown host methods receive method-not-found', async () => {
 	const hot = new FakeTransport();
 	const client = new AppServerProtocolClient(hot);
 	await client.connect();
 	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'unknown-1', method: 'host/unknown', params: {} }) });
-	assert.deepEqual(hot.requests.at(-1)?.error, { code: -32601, message: 'Method not found' });
+	assert.deepEqual(hot.requests.at(-1)?.error, { code: -32601, message: 'Method not found', data: null });
 	assert.equal(client.state, 'ready');
 	const pending = client.request(APP_SERVER_METHODS['automation/list'], {});
 	hot.respondAt(-1, { automations: 'invalid' });
@@ -937,10 +959,10 @@ test('extension client callbacks round-trip immutable JSON and release their req
 		const params = { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'executeCommand', command: 'test.paths', arguments: [{ paths: ['src/main.ts'] }] } };
 		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-1', method: 'extensionClient/request', params }) });
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(transport.requests.at(-1), { jsonrpc: '2.0', id: 'extension-1', result: { result: 'command', value: { paths: ['src/main.ts'] } } });
+		assert.deepEqual(transport.requests.at(-1), { jsonrpc: '2.0', id: 'extension-1', result: { result: 'command', hasValue: true, value: { paths: ['src/main.ts'] } } });
 		registration.dispose();
 		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-2', method: 'extensionClient/request', params }) });
-		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32601, message: 'Method not found' });
+		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32601, message: 'Method not found', data: null });
 	} finally { registration.dispose(); }
 });
 
@@ -984,7 +1006,7 @@ test('extension disk requests are rejected before reaching a renderer service', 
 		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-disk', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'readWorkspaceFile', path: 'data.txt' } } }) });
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(calls, 0);
-		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Workspace file requests must be handled by App Server' });
+		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Workspace file requests must be handled by App Server', data: null });
 	} finally { registration.dispose(); }
 });
 
@@ -1049,7 +1071,7 @@ test('host cancellation retires only its request and ignores late completion', a
 	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'cancel-host' } }) });
 	assert.equal(signal?.aborted, true);
 	assert.equal(client.state, 'ready');
-	assert.deepEqual(hot.requests.find(request => request.id === 'cancel-host')?.error, { code: -32800, message: 'Host request cancelled' });
+	assert.deepEqual(hot.requests.find(request => request.id === 'cancel-host')?.error, { code: -32800, message: 'Host request cancelled', data: null });
 	finish({ targetId: 'cancelled-target' });
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(hot.requests.filter(request => request.id === 'cancel-host').length, 1);

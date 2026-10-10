@@ -22,9 +22,9 @@
 | `terminalContrib/links`                                    | URL 用户命令，扫描与选择由屏幕实现，真实打开委托 Opener                                                     |
 | `terminalContrib/voice`                                    | 听写会话与动作，消费实例输入契约和已有 dictation 服务                                                       |
 
-桌面原始输入链路是 xterm 的 onData/onBinary → TerminalInstance 绑定 → `TerminalProcessManager.write`/`processBinary` → `ITerminalProcessService.write` → Renderer protocol client → MessagePort → Main 透明 relay → App Server → `exec-server` → PTY。Tasks、DAP runInTerminal 和听写通过实例 `sendText` 进入同一管理器。输出走相反方向，实例创建并保留唯一 xterm 屏幕；Rust Desktop 的终端网格属于另一个产品，并不作为 Electron 屏幕的后端副本。
+桌面原始输入链路是 xterm 的 onData/onBinary → TerminalInstance 绑定 → `TerminalProcessManager.write`/`processBinary` → `ITerminalProcessService.write` → Renderer protocol client → MessagePort → Main 透明 relay → App Server → `exec-server` → PTY。Tasks 与 DAP runInTerminal 使用创建参数中的进程或 Shell 执行配置；听写和用户文本通过实例 `sendText` 进入同一管理器。输出走相反方向，实例创建并保留唯一 xterm 屏幕；Rust Desktop 的终端网格属于另一个产品，并不作为 Electron 屏幕的后端副本。
 
-Shell 实例从平台契约消费原始字节和前端退出码，不解析生成 DTO 或 base64。`TerminalProcessManager` 拥有轮询与两个读取游标，实例转发 `IProcessDataEvent`。屏幕同步设置 `writePromise`，只在 xterm write 回调中完成；管理器等待解析后才续读、发布对应命令完成和退出。没有屏幕消费者的 Shell 不制造解析确认，命令状态仍可供 Tasks 使用。已退出进程的输出和命令流均排空分页后才报告退出；未来输出对应的命令事件留在管理器中等待。
+Shell 实例从平台契约消费原始字节和前端退出码，不解析生成 DTO 或 base64。`TerminalProcessManager` 拥有轮询与两个读取游标，实例向进程观察者转发 `IProcessDataEvent`，并把显示内容交给唯一屏幕的 `write`。有屏幕时实例同步设置 `writePromise`，只在 xterm write 回调中完成；管理器等待解析后才续读、发布对应命令完成和退出。没有屏幕的 Shell 不制造解析确认，命令状态仍可供 Tasks 使用。实例单独按顺序保存显示数据及退出提示，即使任务观察者已消费过程输出，稍后 attach 仍能显示；隐藏历史最多 1 MiB、4096 个分块，超限先丢弃最旧内容并明确提示截断。已退出进程的输出和命令流均排空分页后才报告退出；未来输出对应的命令事件留在管理器中等待。
 
 宿主提供的输出 PTY 从 `services/terminal/common/embedderTerminalService.ts` 经 `TerminalMainContribution` 接入同一个实例列表。实例先登记、发布再打开 PTY，保留界面订阅前的输出和退出；标题直接跟随宿主改名，后端连接变化不影响宿主 PTY。xterm 禁止输入，语音输入不启动；关闭与 Relaunch 使用宿主的生命周期，不请求 Rust Shell，也不要求打开 Workspace folder。宿主 PTY 无 OS 子进程，PID 使用 `-1`，cwd 为空。
 
@@ -35,6 +35,8 @@ Shell 实例从平台契约消费原始字节和前端退出码，不解析生�
 完整文件对应关系、仅 Ash 文件及实施准入见 [Terminal 对齐台账](../../../../../docs/terminal-api-alignment-status.md)。本目录说明现有职责，不授权移动、删除或批量创建上游文件。
 
 ## 实例与创建生命周期
+
+Tasks 通过 `ITerminalInstance.reuseTerminal` 在同一个实例与屏幕上替换进程。实例先停止旧读取并等待后端释放，再完整替换启动环境、目录和执行参数；旧读取回复不能写入新进程的屏幕或结束新任务。`IShellLaunchConfig.initialText` 归实例的显示队列拥有，在新进程输出前写入；Tasks 的命令回显使用这个端口，不经过进程观察事件。复用时连同缺省值完整替换初始文案，关闭 echo 不保留上一轮命令。创建期间关闭实例时，close 等待晚到进程的清理。`clearBuffer` 由实例调用自己的屏幕，并清除尚未显示的队列。任务系统仅持有可复用资格与预留状态，实例集合和活动选择仍由 TerminalService 唯一拥有。
 
 Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共同加载的 Terminal contribution 声明依赖并经容器 `createInstance(TerminalService)` 创建窗口唯一实例服务。缺少进程或 Workspace 注册时，创建立即失败。Terminal View、Tasks、Debug、Testing View 和 voice 消费同一个公开实例契约；共享 services 不导入它。
 
@@ -55,4 +57,8 @@ Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共�
 
 公开契约目前承接 Ash 已有行为；与 VS Code 完整 backend、child process、profile/configuration、group 和 editor terminal API 仍有差异。本批完成对应 owner 与实例装配，不能记为整个 Terminal API 已对齐。
 
-本轮迁回八个已确认的 UI 文件，并拆出实例、Tab、菜单与动作 owner；独立的主题、滚动和 profile 图标实现保持原有行为。`XtermTerminal.raw` 暴露已初始化的真实解析器，初始化前与释放后访问会失败。`clearBuffer` 控制屏幕。实例旧 stdin `write` 已退出；`sendText(text, shouldExecute, bracketedPasteMode?)` 归一 CRLF/LF、按需追加一次 Enter，并仅在 Shell 开启模式时包装粘贴。原始键盘、鼠标和终端应答不经过文本归一。管理器 `write`/`processBinary`/`setDimensions` 返回 Promise；这表示 RPC 接受输入或尺寸，不表示命令执行完成。Tasks 等待发送结果，失败结束运行并清理终端；DAP 确认写入后才回复成功。其余完整 VS Code 构造与公开契约、profile 选择参数仍有差异。
+本轮迁回八个已确认的 UI 文件，并拆出实例、Tab、菜单与动作 owner；独立的主题、滚动和 profile 图标实现保持原有行为。`XtermTerminal.raw` 暴露已初始化的真实解析器，初始化前与释放后访问会失败。`clearBuffer` 控制屏幕。实例旧 stdin `write` 已退出；`sendText(text, shouldExecute, bracketedPasteMode?)` 归一 CRLF/LF、按需追加一次 Enter，并仅在 Shell 开启模式时包装粘贴。原始键盘、鼠标和终端应答不经过文本归一。管理器 `write`/`processBinary`/`setDimensions` 返回 Promise；这表示 RPC 接受输入或尺寸，不表示命令执行完成。Tasks 等待进程创建与输出/退出，创建失败不发布运行；DAP 确认终端创建后才回复成功。其余完整 VS Code 构造与公开契约、profile 选择参数仍有差异。
+
+`IShellLaunchConfig.waitOnExit` 由实例持有，可为布尔值、文本或退出码回调。任务完成提示只写入显示队列，不产生进程数据或 stdin；普通字符键和 Enter 关闭已退出的等待终端，工作台快捷键继续可用。任务复用完整替换退出策略；后台读取产生的终端应答不能触发关闭。
+
+终端无障碍贡献读取已解析的屏幕和滚动历史，提供随输出更新的只读视图与帮助，关闭后回到终端输入。`accessibility.verbosity.terminal` 控制输入标签中的帮助提示。贡献与屏幕同生命周期，内容提供者由无障碍对话框释放；查找贡献继续拥有终端焦点上下文。

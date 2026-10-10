@@ -84,6 +84,8 @@ function task(id: string, label: string, group: IWorkspaceTask["group"]): IWorks
 }
 
 class FakeTaskService extends Disposable implements ITaskService {
+	async rerun(): Promise<undefined> { return undefined; }
+	async runProvidedTask(): Promise<never> { throw new Error('Provided task execution is outside this fixture'); }
 	private readonly tasksEmitter = this._register(new Emitter<readonly IWorkspaceTask[]>());
 	readonly startEmitter = this._register(new Emitter<ITaskRun>());
 	readonly runEmitter = this._register(new Emitter<ITaskRun>());

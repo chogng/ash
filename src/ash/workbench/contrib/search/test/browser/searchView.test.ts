@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import assert from "node:assert/strict";
@@ -740,7 +741,7 @@ function createServices(store: DisposableStore, browser: JSDOM, search: IContent
 	services.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
 	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") })));
 	services.registerInstance(ILabelService, store.add(createTestLabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)));
-	services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => { }, focusActiveEditor() { } });
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", flushInterval: 0 })));
 	services.registerInstance(ISearchHistoryService, store.add(services.createInstance(SearchHistoryService)));
 	const editing = store.add(new BulkEditTestServices([]));

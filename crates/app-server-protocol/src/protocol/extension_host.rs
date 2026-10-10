@@ -36,6 +36,15 @@ pub enum ExtensionHostActivationEventDto {
         #[schemars(length(min = 1, max = 128))]
         language_id: String,
     },
+    TaskType {
+        #[schemars(length(min = 1, max = 128))]
+        task_type: Option<String>,
+    },
+    Debug {
+        phase: ExtensionHostDebugActivationPhaseDto,
+        #[schemars(length(min = 1, max = 128))]
+        debug_type: Option<String>,
+    },
     // A struct variant preserves the closed wire shape; Serde unit variants ignore extra fields.
     StartupFinished {},
     ResolveAuthority {
@@ -44,10 +53,23 @@ pub enum ExtensionHostActivationEventDto {
     },
 }
 
+/// Debugger activation moments remain distinct so configuration discovery cannot start unrelated adapters.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExtensionHostDebugActivationPhaseDto {
+    Start,
+    InitialConfigurations,
+    DynamicConfigurations,
+    ResolveConfiguration,
+}
+
 /// Activates one exact admitted package generation when its declaration matches the event.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtensionHostActivateParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub initialization: Option<extension_protocol::ExtensionHostInitialization>,
     #[schemars(length(min = 1, max = 256))]
     pub extension_id: String,
     #[schemars(range(min = 1))]
@@ -313,6 +335,7 @@ impl<'de> Deserialize<'de> for ExtensionHostRegistrationDescriptorDto {
     deny_unknown_fields
 )]
 pub enum ExtensionHostRegistrationKindDto {
+    WorkspaceEvents {},
     RemoteConnectionResolver {
         #[schemars(length(min = 1, max = 64))]
         authority_prefix: String,
@@ -327,6 +350,8 @@ pub enum ExtensionHostRegistrationKindDto {
         entries: Vec<extension_protocol::ExtensionStatusBarEntry>,
     },
     TextDocumentEvents {},
+    TaskEvents {},
+    DebugEvents {},
     ExternalUriOpener {
         #[schemars(length(min = 1, max = 2))]
         schemes: Vec<ExtensionHostExternalUriSchemeDto>,
@@ -361,6 +386,16 @@ pub enum ExtensionHostRegistrationKindDto {
     DebugAdapter {
         #[schemars(length(min = 1, max = 256))]
         debugger_type: String,
+    },
+    DebugAdapterTracker {
+        #[schemars(length(min = 1, max = 256))]
+        debugger_type: String,
+    },
+    DebugConfigurationProvider {
+        #[schemars(length(min = 1, max = 256))]
+        debugger_type: String,
+        #[schemars(range(min = 1, max = 2))]
+        trigger_kind: u8,
     },
     TaskProvider {
         #[schemars(length(min = 1, max = 256))]

@@ -2,7 +2,7 @@ import type { IView } from "../../../common/views.js";
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IProcessDataEvent, IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution } from '../../../../platform/terminal/common/terminal.js';
 import type { XtermTerminal } from './xterm/xtermTerminal.js';
 
 /** Character-cell dimensions used by Workbench terminal callers. */
@@ -41,6 +41,13 @@ export type ITerminalCreateOptions = {
 	readonly dirId?: string;
 	readonly dimensions: ITerminalDimensions;
 	readonly title?: string;
+	readonly env?: Readonly<Record<string, string | null>>;
+	readonly cwd?: string;
+	readonly execution?: TerminalProcessExecution;
+	readonly initialText?: IShellLaunchConfig['initialText'];
+	readonly waitOnExit?: IShellLaunchConfig['waitOnExit'];
+	/** The caller subscribes to output and exit before opening a custom PTY or polling a process. */
+	readonly deferStart?: boolean;
 } & (
 		| { readonly profile: ITerminalProfileSelection; readonly config?: never; }
 		| { readonly config: IShellLaunchConfig & Required<Pick<IShellLaunchConfig, 'customPtyImplementation'>>; readonly profile?: never; }
@@ -65,12 +72,15 @@ export interface ITerminalInstance extends IDisposable {
 	readonly xterm: XtermTerminal | undefined;
 	readonly xtermReadyPromise: Promise<XtermTerminal | undefined>;
 	getContribution<T extends ITerminalContribution>(id: string): T | null;
+	start(): void;
 	attachToElement(container: HTMLElement): void;
 	detachFromElement(): void;
 	/** Sends text to stdin, optionally executing it or applying the child Shell's paste mode. */
 	sendText(text: string, shouldExecute: boolean, bracketedPasteMode?: boolean): Promise<void>;
 	processBinary(data: string): Promise<void>;
 	resize(dimensions: ITerminalDimensions): void;
+	clearBuffer(): void;
+	reuseTerminal(shell: IShellLaunchConfig): Promise<void>;
 	close(): Promise<void>;
 }
 

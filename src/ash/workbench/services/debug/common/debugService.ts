@@ -1,3 +1,4 @@
+import type { DebugAdapterDescriptor } from './debugAdapterFactory.js';
 import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
@@ -5,15 +6,69 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 
 export interface IDebugConfiguration {
 	readonly id: string;
-	readonly dirId?: string;
+	/** null is an explicitly folderless launch; undefined retains default selection. */
+	readonly dirId?: string | null;
 	readonly workspaceFolderName?: string;
 	readonly name: string;
 	readonly type: string;
 	readonly request: "launch" | "attach";
-	readonly adapter: { readonly program: string; readonly arguments: readonly string[]; };
+	/** Contributed executables are internal defaults, not extension configuration properties. */
+	readonly adapterExplicit?: boolean;
+	readonly adapter?: DebugAdapterDescriptor;
 	readonly arguments: Readonly<Record<string, unknown>>;
 	readonly preLaunchTask?: string;
 	readonly postDebugTask?: string;
+}
+
+/** A session can start only after its adapter descriptor has been resolved. */
+export interface IResolvedDebugConfiguration extends IDebugConfiguration {
+	readonly adapter: NonNullable<IDebugConfiguration['adapter']>;
+}
+
+export enum DebugConfigurationProviderTriggerKind {
+	Initial = 1,
+	Dynamic = 2,
+}
+
+/** Extension-facing launch data, before it becomes an owned execution snapshot. */
+export interface DebugConfiguration {
+	readonly name: string;
+	readonly type: string;
+	readonly request: 'launch' | 'attach';
+	readonly [key: string]: unknown;
+}
+
+export interface IDebugConfigurationProvider {
+	readonly id: string;
+	readonly type: string;
+	readonly triggerKind: DebugConfigurationProviderTriggerKind;
+	provideDebugConfigurations?(folder: URI | undefined, signal: AbortSignal): readonly DebugConfiguration[] | PromiseLike<readonly DebugConfiguration[]>;
+	resolveDebugConfiguration?(folder: URI | undefined, configuration: DebugConfiguration, signal: AbortSignal): DebugConfiguration | null | undefined | PromiseLike<DebugConfiguration | null | undefined>;
+	resolveDebugConfigurationWithSubstitutedVariables?(folder: URI | undefined, configuration: DebugConfiguration, signal: AbortSignal): DebugConfiguration | null | undefined | PromiseLike<DebugConfiguration | null | undefined>;
+}
+
+export interface DebugConfigurationProviderRegistration extends IDisposable {
+	replace(providers: readonly IDebugConfigurationProvider[]): void;
+}
+
+/** Hooks belong to the DAP session; factories belong to their extension registration. */
+export interface IDebugAdapterTracker extends IDisposable {
+	onWillStartSession?(): void | PromiseLike<void>;
+	onWillReceiveMessage?(message: unknown): void | PromiseLike<void>;
+	onDidSendMessage?(message: unknown): void | PromiseLike<void>;
+	onWillStopSession?(): void | PromiseLike<void>;
+	onError?(error: Error): void | PromiseLike<void>;
+	onExit?(code: number | undefined, signal: string | undefined): void | PromiseLike<void>;
+}
+
+export interface IDebugAdapterTrackerFactory {
+	readonly id: string;
+	readonly type: string;
+	createDebugAdapterTracker(session: IDebugSession, signal: AbortSignal): IDebugAdapterTracker | undefined | PromiseLike<IDebugAdapterTracker | undefined>;
+}
+
+export interface DebugAdapterTrackerFactoryRegistration extends IDisposable {
+	replace(factories: readonly IDebugAdapterTrackerFactory[]): void;
 }
 
 export interface IDebugCompound {
@@ -21,7 +76,7 @@ export interface IDebugCompound {
 	readonly dirId?: string;
 	readonly workspaceFolderName?: string;
 	readonly name: string;
-	readonly configurations: readonly string[];
+	readonly configurations: readonly (string | { readonly name: string; readonly folder: string; })[];
 	readonly preLaunchTask?: string;
 	readonly stopAll: boolean;
 }
@@ -38,12 +93,14 @@ export interface IBaseBreakpoint {
 export interface IDebugBreakpoint extends IBaseBreakpoint {
 	readonly resource: URI;
 	readonly lineNumber: number;
+	readonly columnNumber?: number;
 	readonly logMessage?: string;
 }
 
 export interface IFunctionBreakpoint extends IBaseBreakpoint {
 	readonly kind: "function";
 	readonly name: string;
+	readonly logMessage?: string;
 }
 
 export type DataBreakpointAccessType = "read" | "write" | "readWrite";
@@ -126,6 +183,8 @@ export interface IDebugThread {
 // so callers can inspect a frame without inventing an editor position.
 export interface IDebugStackFrame {
 	readonly id: number;
+	/** Thread that produced this frame; an asynchronous reply cannot change its identity. */
+	readonly threadId?: number;
 	readonly name: string;
 	readonly source?: IDebugSource;
 	readonly lineNumber: number;
@@ -202,16 +261,41 @@ export interface IDebugSessionCapabilities {
 
 export type DebugSessionState = "starting" | "running" | "stopped" | "terminated" | "error";
 
+export enum DebugConsoleMode {
+	Separate = 0,
+	MergeWithParent = 1,
+}
+
+/** Session relationships stay with DebugService; extensions pass canonical handles. */
+export interface IDebugSessionOptions {
+	readonly parentSession?: IDebugSession;
+	readonly lifecycleManagedByParent?: boolean;
+	readonly consoleMode?: DebugConsoleMode;
+	readonly noDebug?: boolean;
+	readonly suppressSaveBeforeStart?: boolean;
+}
+
 export interface IDebugSession extends IDisposable {
 	readonly id: string;
+	readonly name: string;
+	readonly onDidChangeName: Event<string>;
+	setName(name: string): void;
+	readonly parentSession?: IDebugSession;
+	readonly sessionOptions?: IDebugSessionOptions;
 	readonly configuration: IDebugConfiguration;
+	/** Resolved launch snapshot for extension inspection; source configuration remains available for restart. */
+	readonly resolvedConfiguration?: IDebugConfiguration;
 	readonly capabilities: IDebugSessionCapabilities;
 	readonly state: DebugSessionState;
 	readonly reason?: string;
 	readonly threadId?: number;
+	readonly onDidChangeThread: Event<number | undefined>;
 	readonly output: string;
 	readonly onDidChangeState: Event<DebugSessionState>;
 	readonly onDidOutput: Event<string>;
+	readonly onDidCustomEvent: Event<{ readonly event: string; readonly body?: unknown; }>;
+	customRequest(command: string, args?: unknown): Promise<unknown>;
+	getDebugProtocolBreakpoint(breakpointId: string): unknown;
 	continue(): Promise<void>;
 	pause(): Promise<void>;
 	stepOver(granularity?: DebugSteppingGranularity): Promise<void>;
@@ -244,6 +328,8 @@ export interface IDebugService extends IDisposable {
 	readonly watchExpressions: readonly string[];
 	readonly exceptionBreakpoints: readonly string[];
 	readonly sessions: readonly IDebugSession[];
+	/** Includes the prepared session while its descriptor is being resolved. */
+	getSession(id: string): IDebugSession | undefined;
 	readonly session: IDebugSession | undefined;
 	readonly focusedStackFrame: IDebugStackFrame | undefined;
 	readonly onDidFocusStackFrame: Event<IDebugStackFrame | undefined>;
@@ -252,16 +338,27 @@ export interface IDebugService extends IDisposable {
 	readonly onDidChangeWatchExpressions: Event<readonly string[]>;
 	readonly onDidChangeExceptionBreakpoints: Event<readonly string[]>;
 	readonly onDidChangeSession: Event<IDebugSession | undefined>;
+	readonly onWillNewSession: Event<IDebugSession>;
+	readonly onDidNewSession: Event<IDebugSession>;
+	readonly onDidEndSession: Event<IDebugSession>;
 	refresh(): Promise<readonly IDebugConfiguration[]>;
-	start(configuration: IDebugConfiguration): Promise<IDebugSession>;
+	registerDebugAdapterTrackerFactories(factories: readonly IDebugAdapterTrackerFactory[]): DebugAdapterTrackerFactoryRegistration;
+	registerDebugConfigurationProviders(providers: readonly IDebugConfigurationProvider[]): DebugConfigurationProviderRegistration;
+	/** Supplies validated initial templates or configurations for dynamic selection. */
+	provideDebugConfigurations(folder: URI, signal?: AbortSignal, triggerKind?: DebugConfigurationProviderTriggerKind): Promise<readonly DebugConfiguration[]>;
+	start(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
+	/** Binds a dynamic provider result to its current canonical workspace folder. */
+	startDynamicDebugging(folder: URI | undefined, configuration: DebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
 	/** Starts a supplied configuration without adding it to launch.json. */
-	startDebugging(configuration: IDebugConfiguration): Promise<IDebugSession>;
+	startDebugging(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
 	startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]>;
 	setActiveSession(session: IDebugSession): void;
 	focusStackFrame(frame: IDebugStackFrame | undefined): void;
 	restart(session?: IDebugSession): Promise<IDebugSession>;
 	stop(session?: IDebugSession): Promise<void>;
 	stopAll(): Promise<void>;
+	addBreakpoints(breakpoints: readonly (IDebugBreakpoint | IFunctionBreakpoint)[]): void;
+	removeBreakpoints(breakpointIds: readonly string[]): void;
 	toggleBreakpoint(resource: URI, lineNumber: number): void;
 	removeBreakpoint(id: string): void;
 	updateBreakpoint(id: string, update: IDebugBreakpointUpdate): void;

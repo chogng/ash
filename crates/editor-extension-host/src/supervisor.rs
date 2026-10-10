@@ -31,7 +31,11 @@ use crate::RestartPolicy;
 use crate::RestartTracker;
 use crate::SequencedExtensionHostOutputEvent;
 
+mod client;
 mod invocation;
+
+use client::BackgroundClientWorker;
+pub use client::ExtensionBackgroundClientHandler;
 
 pub use invocation::ExtensionInvocation;
 pub use invocation::ExtensionInvocationHandle;
@@ -67,6 +71,9 @@ struct RetainedOutputEvent {
 }
 
 struct SupervisorState {
+    initialization: Option<extension_protocol::ExtensionHostInitialization>,
+    client_handler: Option<Arc<ExtensionBackgroundClientHandler>>,
+    client_worker: Option<BackgroundClientWorker>,
     status: ExtensionHostStatus,
     incarnation: u64,
     process: Option<Arc<dyn ExtensionHostProcess>>,
@@ -118,6 +125,9 @@ impl ExtensionHostSupervisor {
                 activation,
                 limits,
                 state: Mutex::new(SupervisorState {
+                    initialization: None,
+                    client_handler: None,
+                    client_worker: None,
                     status: ExtensionHostStatus::Stopped,
                     incarnation: 0,
                     process: None,
@@ -137,17 +147,45 @@ impl ExtensionHostSupervisor {
     }
 
     pub fn start(&self) -> Result<ExtensionHostSnapshot, ExtensionHostError> {
+        self.start_with_initialization(None)
+    }
+
+    /// Binds window facts to the first incarnation; recovery retains this activation's snapshot.
+    pub fn start_with_initialization(
+        &self,
+        initialization: Option<extension_protocol::ExtensionHostInitialization>,
+    ) -> Result<ExtensionHostSnapshot, ExtensionHostError> {
+        self.start_with_client(initialization, None)
+    }
+
+    /// Binds standard Node service calls to the initiating product client. Recovery reuses it.
+    pub fn start_with_client(
+        &self,
+        initialization: Option<extension_protocol::ExtensionHostInitialization>,
+        handler: Option<Arc<ExtensionBackgroundClientHandler>>,
+    ) -> Result<ExtensionHostSnapshot, ExtensionHostError> {
+        if handler.is_some() && !self.inner.command.is_vscode() {
+            return Err(ExtensionHostError::InvalidProtocol(
+                "background editor calls require the Node host".into(),
+            ));
+        }
         let _lifecycle = self
             .inner
             .lifecycle
             .lock()
             .map_err(|_| ExtensionHostError::HostExited)?;
         let (status, process) = {
-            let state = self
+            let mut state = self
                 .inner
                 .state
                 .lock()
                 .map_err(|_| ExtensionHostError::HostExited)?;
+            if state.status == ExtensionHostStatus::Stopped {
+                state.initialization = initialization
+                    .or_else(|| state.initialization.clone())
+                    .or_else(|| self.inner.activation.params().initialization.clone());
+                state.client_handler = handler;
+            }
             (state.status, state.process.clone())
         };
         match status {
@@ -216,7 +254,7 @@ impl ExtensionHostSupervisor {
             .lifecycle
             .lock()
             .map_err(|_| ExtensionHostError::HostExited)?;
-        let (process, incarnation) = {
+        let (process, incarnation, client_worker) = {
             let mut state = self
                 .inner
                 .state
@@ -224,8 +262,13 @@ impl ExtensionHostSupervisor {
                 .map_err(|_| ExtensionHostError::HostExited)?;
             state.status = ExtensionHostStatus::Stopped;
             state.registrations.clear();
-            (state.process.clone(), state.incarnation)
+            (
+                state.process.clone(),
+                state.incarnation,
+                state.client_worker.take(),
+            )
         };
+        drop(client_worker);
         let Some(process) = process else {
             let mut state = self
                 .inner
@@ -365,6 +408,51 @@ impl ExtensionHostSupervisor {
             state.registrations.clear();
             state.incarnation
         };
+        let handler = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?
+            .client_handler
+            .clone();
+        let weak = Arc::downgrade(&self.inner);
+        let handler = handler.map(|handler| {
+            let guarded: Arc<ExtensionBackgroundClientHandler> =
+                Arc::new(move |context, operation, token, timeout| {
+                    client::service_background_operation(
+                        &weak,
+                        context.incarnation,
+                        operation,
+                        |operation| handler(context, operation, token, timeout),
+                    )
+                });
+            guarded
+        });
+        let worker = handler
+            .map(|handler| {
+                BackgroundClientWorker::start(
+                    Arc::clone(&process),
+                    self.inner.activation.clone(),
+                    handler,
+                    self.inner.limits.request_timeout,
+                )
+            })
+            .transpose();
+        let worker = match worker {
+            Ok(worker) => worker,
+            Err(error) => {
+                terminate_confirmed(&process)?;
+                let mut state = self
+                    .inner
+                    .state
+                    .lock()
+                    .map_err(|_| ExtensionHostError::HostExited)?;
+                state.status = ExtensionHostStatus::Stopped;
+                state.process = None;
+                return Err(error);
+            }
+        };
+        // Startup needs the same pump as background listeners; retain it only after activation.
         let result = self.initialize_and_activate(&process, incarnation);
         match result {
             Ok(registrations) => {
@@ -380,10 +468,12 @@ impl ExtensionHostSupervisor {
                 state.status = ExtensionHostStatus::Ready;
                 state.registrations = registrations;
                 state.process_lease = Some(lease);
+                state.client_worker = worker;
                 state.restart.record_healthy();
                 Ok(())
             }
             Err(error) => {
+                drop(worker);
                 let terminated = terminate_confirmed(&process);
                 let mut state = self
                     .inner
@@ -431,11 +521,55 @@ impl ExtensionHostSupervisor {
                 "runtime handshake version does not match activation".into(),
             ));
         }
-        let activate = self.request(
-            process,
-            incarnation,
-            HostRequestKind::Activate(self.inner.activation.params().clone()),
-        )?;
+        let handler = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?
+            .client_handler
+            .clone();
+        if self.inner.command.is_vscode() {
+            if let Some(handler) = handler {
+                // Recovery must query the same window owners before package evaluation: facts
+                // may have changed while this process was offline. The process lease covers IO.
+                let cancellation = ash_async_utils::CancellationSource::new();
+                let result = handler(
+                    crate::HostEventContext::new(
+                        incarnation,
+                        self.inner.activation.activation_generation().get(),
+                    ),
+                    extension_protocol::ExtensionClientOperation::ReadInitialization {},
+                    &cancellation.token(),
+                    self.inner.limits.startup_timeout,
+                )
+                .map_err(|failure| ExtensionHostError::HostRejected {
+                    code: failure.code,
+                    message: failure.message,
+                })?;
+                let extension_protocol::ExtensionClientResult::Initialization { initialization } =
+                    result
+                else {
+                    return Err(ExtensionHostError::InvalidProtocol(
+                        "initialization reply has another result kind".into(),
+                    ));
+                };
+                initialization.validate()?;
+                self.inner
+                    .state
+                    .lock()
+                    .map_err(|_| ExtensionHostError::HostExited)?
+                    .initialization = Some(initialization);
+            }
+        }
+        let mut params = self.inner.activation.params().clone();
+        params.initialization = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?
+            .initialization
+            .clone();
+        let activate = self.request(process, incarnation, HostRequestKind::Activate(params))?;
         let response = activate
             .recv_timeout(self.inner.limits.startup_timeout)?
             .ok_or(ExtensionHostError::StartupTimedOut)?;
@@ -504,7 +638,7 @@ impl ExtensionHostSupervisor {
 
     fn recover_locked(&self) -> Result<(), ExtensionHostError> {
         loop {
-            let (process, incarnation, decision) = {
+            let (process, incarnation, decision, client_worker) = {
                 let mut state = self
                     .inner
                     .state
@@ -517,8 +651,9 @@ impl ExtensionHostSupervisor {
                 let decision = state
                     .restart
                     .record_failure(self.inner.started_at.elapsed());
-                (process, incarnation, decision)
+                (process, incarnation, decision, state.client_worker.take())
             };
+            drop(client_worker);
             if let Some(process) = process {
                 terminate_confirmed(&process)?;
                 let mut state = self

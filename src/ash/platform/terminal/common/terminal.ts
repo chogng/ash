@@ -14,11 +14,18 @@ export type TerminalProcessProfileSelection =
 	| { readonly type: "default"; }
 	| { readonly type: "profile"; readonly profileId: string; };
 
+export type TerminalProcessExecution =
+	| { readonly type: 'process'; readonly program: string; readonly args: readonly string[]; }
+	| { readonly type: 'shell'; readonly commandLine: string; };
+
 export interface ITerminalProcessCreateOptions {
 	readonly dirId?: string;
 	readonly rows: number;
 	readonly cols: number;
 	readonly profile: TerminalProcessProfileSelection;
+	readonly env?: Readonly<Record<string, string | null>>;
+	readonly cwd?: string;
+	readonly execution?: TerminalProcessExecution;
 }
 
 /** Describes whether a terminal process survives replacement of its App Server connection. */
@@ -94,6 +101,8 @@ export interface ITerminalProcessCloseOptions {
 /** Platform contract for creating and communicating with terminal processes. */
 export interface ITerminalProcessService {
 	listProfiles(): Promise<readonly ITerminalProcessProfile[]>;
+	/** Reads requested variables from the selected execution host; missing values are omitted. */
+	getEnvironment(names: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>>;
 	create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation>;
 	write(options: ITerminalProcessWriteOptions): Promise<void>;
 	resize(options: ITerminalProcessResizeOptions): Promise<void>;
@@ -105,10 +114,21 @@ export interface ITerminalProcessService {
 
 export const ITerminalProcessService = createServiceIdentifier<ITerminalProcessService>("terminalProcessService");
 
+export type WaitOnExitValue = boolean | string | ((exitCode: number) => string);
+
 /** Launch information shared with providers that supply their own terminal output. */
 export interface IShellLaunchConfig {
 	readonly name?: string;
 	readonly isFeatureTerminal?: boolean;
+	/** Displayed before process output; strings include a trailing newline. */
+	readonly initialText?: string | { text: string; trailingNewLine: boolean; };
+	/** Retain a completed terminal until a key press, optionally displaying a message. */
+	readonly waitOnExit?: WaitOnExitValue;
+	readonly env?: Readonly<Record<string, string | null>>;
+	readonly cwd?: string;
+	/** Structured execution stays with the existing Rust process owner when a task reuses its screen. */
+	readonly execution?: TerminalProcessExecution;
+	readonly deferStart?: boolean;
 	readonly customPtyImplementation?: (terminalId: number, cols: number, rows: number) => ITerminalChildProcess;
 }
 
@@ -144,4 +164,6 @@ export interface ITerminalChildProcess extends IDisposable {
 	readonly onProcessExit: Event<number | undefined>;
 	start(): Promise<void>;
 	shutdown(immediate: boolean): void;
+	input?(data: string): void;
+	resize?(cols: number, rows: number): void;
 }

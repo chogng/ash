@@ -1,3 +1,4 @@
+import type { URI } from "../../../../base/common/uri.js";
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -22,6 +23,8 @@ export interface ExtensionDescriptor {
 	readonly version: string;
 	readonly displayName: string;
 	readonly sourceKind: ExtensionSourceKind;
+	/** Validated installation root on the extension execution host. */
+	readonly extensionLocation?: URI;
 	readonly manifestSha256: string;
 	readonly packageSha256: string;
 }
@@ -55,6 +58,10 @@ export interface IExtensionService extends IDisposable {
 	readonly onDidFail: Event<ExtensionServiceFailure>;
 	start(): Promise<void>;
 	reload(): Promise<void>;
+	getExtension(id: string): Promise<ExtensionDescriptor | undefined>;
+	activateByEvent(event: string, signal?: AbortSignal): Promise<void>;
+	/** The executable host owns this registration; declaration-only hosts have no handler. */
+	registerActivationHandler(handler: (event: string, signal?: AbortSignal) => Promise<void>): IDisposable;
 }
 
 export const IExtensionService = createServiceIdentifier<IExtensionService>("extensionService");

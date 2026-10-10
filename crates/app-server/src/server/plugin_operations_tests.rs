@@ -11,6 +11,51 @@ use std::sync::Arc;
 use tempfile::tempdir;
 
 #[test]
+fn declarative_extensions_are_manageable_without_becoming_effective_on_install() {
+    let source = tempdir().unwrap();
+    fs::create_dir_all(source.path().join(".ash-plugin")).unwrap();
+    fs::create_dir_all(source.path().join("matcher")).unwrap();
+    fs::write(
+        source.path().join("matcher/package.json"),
+        r#"{"name":"matcher","publisher":"acme","version":"1.0.0","contributes":{}}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.path().join(".ash-plugin/plugin.json"),
+        r#"{
+            "schemaVersion":1,"id":"acme/matcher","version":"1.0.0","displayName":"Matcher",
+            "compatibility":{"ash":">=0.1.0"},
+            "contributions":{"declarativeExtensions":[{"id":"matcher","path":"matcher"}]},
+            "permissions":[]
+        }"#,
+    )
+    .unwrap();
+    let profile = tempdir().unwrap();
+    let server = plugin_server(profile.path());
+    server
+        .plugin_authority()
+        .unwrap()
+        .install_local(
+            PluginAuthorityCommandId::new("install-matcher").unwrap(),
+            0,
+            &LocalPluginPackage::load(source.path()).unwrap(),
+        )
+        .unwrap();
+    let mut connection = initialized_connection(&server);
+    let listed = call(
+        &server,
+        &mut connection,
+        2,
+        "plugin/list",
+        serde_json::json!({}),
+    );
+    let package = &listed["result"]["packages"][0];
+    assert_eq!(package["hasEditorExtensions"], true);
+    assert_eq!(package["enabled"], false);
+    assert_eq!(package["granted"], false);
+    assert_eq!(package["effective"], false);
+}
+#[test]
 fn app_server_projects_and_mutates_distinct_plugin_authority_layers() {
     let source = tempdir().unwrap();
     fs::create_dir_all(source.path().join(".ash-plugin")).unwrap();
@@ -67,6 +112,10 @@ fn app_server_projects_and_mutates_distinct_plugin_authority_layers() {
         serde_json::json!({}),
     );
     assert_eq!(initial["result"]["packages"][0]["enabled"], false);
+    assert_eq!(
+        initial["result"]["packages"][0]["hasEditorExtensions"],
+        false
+    );
     assert_eq!(initial["result"]["packages"][0]["granted"], false);
     assert_eq!(initial["result"]["packages"][0]["effective"], false);
     let target = |command_id: &str, expected_revision: u64| {

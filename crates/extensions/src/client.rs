@@ -65,7 +65,7 @@ impl Client {
             },
             token,
         )? {
-            ExtensionClientResult::Command { value } => Ok(value),
+            ExtensionClientResult::Command { value, .. } => Ok(value),
             _ => Err(unexpected_result()),
         }
     }

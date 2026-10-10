@@ -1,3 +1,18 @@
+import { IEditorService } from '../../../editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../editor/common/editorGroupsService.js';
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
+import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
+import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { BrowserPathService } from '../../../path/browser/pathService.js';
+import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../commands/common/commandService.js';
+import { ConfigurationResolverService } from '../../../configurationResolver/browser/configurationResolverService.js';
+import { IConfigurationResolverService } from '../../../configurationResolver/common/configurationResolver.js';
+import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -27,15 +42,17 @@ import { WorkspaceContextService } from '../../../workspaces/browser/workspaceCo
 
 test('DAP runInTerminal creates an integrated PowerShell terminal with quoted arguments', async () => {
 	const writes: string[] = [];
+	const environments: unknown[] = [];
 	const terminals = {
 		getProfiles: async () => [{ profileId: 'powershell', title: 'PowerShell', isDefault: true }],
-		createTerminal: async () => ({ state: 'running', processId: 1234, sendText: async (value: string, shouldExecute: boolean) => { writes.push(value + (shouldExecute ? '\r' : '')); } }),
+		createTerminal: async (options: import('../../../../contrib/terminal/browser/terminal.js').ITerminalCreateOptions) => { environments.push(options.env); return { state: 'running', processId: 1234, sendText: async (value: string, shouldExecute: boolean) => { writes.push(value + (shouldExecute ? '\r' : '')); } }; },
 	} as unknown as ITerminalService;
 	const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', title: 'Debug app', cwd: 'C:\\work tree', args: ['C:\\bin\\app.exe', 'a b', "don't"], env: { MODE: 'debug value', REMOVE_ME: null } });
 
 	assert.equal(response.success, true);
 	assert.deepEqual(response.body, { shellProcessId: 1234 });
-	assert.deepEqual(writes, ["$env:MODE='debug value'; Remove-Item -LiteralPath 'Env:REMOVE_ME' -ErrorAction SilentlyContinue; Set-Location -LiteralPath 'C:\\work tree'; & 'C:\\bin\\app.exe' 'a b' 'don''t'\r"]);
+	assert.deepEqual(environments, [{ MODE: 'debug value', REMOVE_ME: null }]);
+	assert.deepEqual(writes, ["Set-Location -LiteralPath 'C:\\work tree'; & 'C:\\bin\\app.exe' 'a b' 'don''t'\r"]);
 });
 
 test('DAP runInTerminal rejects external terminals before acquiring a profile', async () => {
@@ -56,14 +73,14 @@ suite('DAP terminal availability', () => {
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
 				getConnectionState: async () => 'ready', onConnectionState: Event.None,
-				listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
+				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
 				read: async () => ({ terminalId: 'debug-process', commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 				write: async () => { calls.push('write'); void submitted.complete(undefined); await acknowledgement.p; },
 				resize: async () => { }, close: async () => { calls.push('close'); },
 			};
 			const workspace = resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
-			const services = resources.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 			const terminals = resources.add(services.createInstance(TerminalService));
 			let finished = false;
 			const pending = launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }).then(response => { finished = true; return response; });
@@ -90,7 +107,7 @@ suite('DAP terminal availability', () => {
 			const processes: ITerminalProcessService = {
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
-				listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
+				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: persistence }),
 				read: async () => { throw new Error('Disconnected terminal must not poll'); },
 				write: async () => { calls.push('write'); },
@@ -98,7 +115,7 @@ suite('DAP terminal availability', () => {
 				close: async options => { calls.push(`close:${options.terminalId}`); },
 			};
 			const workspace = resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
-			const services = resources.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 			const terminals = resources.add(services.createInstance(TerminalService));
 			const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] });
 			assert.deepEqual({ success: response.success, message: response.message, calls, terminals: terminals.instances }, {
@@ -138,9 +155,9 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	resources.add(toDisposable(() => browser.window.close()));
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	const workspace = resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
-	const services = resources.add(new InstantiationService(new ServiceCollection(
+	const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, { onDidChangeFiles: Event.None } as IFileService],
-		[IWorkspaceContextService, workspace],
+		[ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[IStorageService, storage],
 		[IDebugAdapterProcessService, processes],
 		[ITerminalService, terminals],
@@ -148,7 +165,11 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 		[IDebugAdapterFactorySource, adapters],
 		[ILogService, new NullLoggerService()],
 	)));
+	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
+	registerTestExtensionService(resources, services);
+	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
+	if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
 	using service = services.createInstance(DebugService);
 	const session = await service.startDebugging({ id: 'debug-terminal', name: 'Terminal request', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: { cwd: URI.file('/workspace').fsPath } });
 	try { return await response; }

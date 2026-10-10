@@ -600,6 +600,10 @@ class PackageTests(unittest.TestCase):
                     (output / "ash-resources/protocol/metadata.json").read_text()
                 ),
             )
+            for script in ("node.mjs", "vscode.mjs", "sdk.mjs"):
+                resource = f"ash-resources/extension-host/{script}"
+                self.assertIn(resource, metadata["files"])
+                self.assertTrue((output / resource).is_file())
             self.assertIn("ash-resources/protocol-sources.json", metadata["files"])
             self.assertIn(
                 "ash-resources/protocol/typescript/AppServerProtocolDecoder.ts",

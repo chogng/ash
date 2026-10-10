@@ -1,9 +1,10 @@
-const COMMON_HOST_ENVIRONMENT_KEYS = ["CARGO_HOME", "RUSTUP_HOME", "HOME", "LANG", "LOGNAME", "PATH", "SHELL", "SSH_AUTH_SOCK", "TEMP", "TMP", "TMPDIR", "USER", "ZCODE_DATA_BASE_DIR"] as const;
-const POSIX_HOST_ENVIRONMENT_KEYS = ["XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "XDG_STATE_HOME"] as const;
-const LINUX_DISPLAY_ENVIRONMENT_KEYS = ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"] as const;
-const WINDOWS_HOST_ENVIRONMENT_KEYS = ["ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMSPEC", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "NUMBER_OF_PROCESSORS", "OS", "PATHEXT", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PSMODULEPATH", "PUBLIC", "SYSTEMDRIVE", "SYSTEMROOT", "USERDOMAIN", "USERNAME", "USERPROFILE", "WINDIR"] as const;
 const PRODUCT_ENVIRONMENT_KEYS = ["ASH_DEV_RUNTIME_ROOT", "ASH_APP_SERVER_PATH", "ASH_APP_SERVER_SHA256", "ASH_APP_SERVER_CONNECTION_ROLE", "ASH_ELECTRON_RUN_AS_NODE_PATH", "ASH_PRODUCT_SERVICES_PATH", "ASH_HOME", "ASH_RG_PATH", "ASH_SSH_PATH", "ASH_WORKSPACE_ROOT", "ASH_DIR_GRANT_SOURCE", "ASH_REMOTE_HOST", "ASH_REMOTE_ROOT", "ASH_REMOTE_RUNTIME"] as const;
-const ALL_HOST_ENVIRONMENT_KEYS = new Set<string>([...COMMON_HOST_ENVIRONMENT_KEYS, ...POSIX_HOST_ENVIRONMENT_KEYS, ...LINUX_DISPLAY_ENVIRONMENT_KEYS, ...WINDOWS_HOST_ENVIRONMENT_KEYS]);
+// Match the process boundary in exec-server: developer credentials stay usable,
+// while launcher authentication cannot pass to developer or extension child processes.
+const PRIVATE_HOST_ENVIRONMENT_KEYS = new Set([
+	"CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN", "NODE_REPL_AUTH_TOKEN", "CODEX_GUARDIAN_DECISIONS_API_KEY",
+	"OPENAI_FEDERATION_RULE_ID", "OPENAI_IDENTITY_TOKEN_FILE", "OPENAI_WORKLOAD_IDENTITY_CONTEXT",
+]);
 const ALL_PRODUCT_ENVIRONMENT_KEYS = new Set<string>(PRODUCT_ENVIRONMENT_KEYS);
 
 export type AppServerHostPlatform = "macos" | "linux" | "windows";
@@ -12,23 +13,14 @@ export type AppServerLaunchMode = "desktop" | "web";
 /** Whether a variable may cross the Electron Main to App Server process boundary. */
 export function isAllowedAppServerEnvironmentKey(key: string): boolean {
 	const normalized = key.toUpperCase();
-	return ALL_HOST_ENVIRONMENT_KEYS.has(normalized) || ALL_PRODUCT_ENVIRONMENT_KEYS.has(normalized) || normalized.startsWith("LC_");
+	return isValidEnvironmentName(key) && !PRIVATE_HOST_ENVIRONMENT_KEYS.has(normalized) && !normalized.startsWith("ELECTRON_");
 }
 
-/** Builds the explicit, secret-excluding environment supplied to the local App Server process. */
-export function buildAppServerEnvironment(source: Readonly<Record<string, string | undefined>>, platform: AppServerHostPlatform, productEnvironment: Readonly<Record<string, string>>, launchMode: AppServerLaunchMode): Readonly<Record<string, string>> {
+/** Builds the developer environment supplied to the local App Server process. */
+export function buildAppServerEnvironment(source: Readonly<Record<string, string | undefined>>, platform: AppServerHostPlatform, productEnvironment: Readonly<Record<string, string>>, _launchMode: AppServerLaunchMode): Readonly<Record<string, string>> {
 	const result: Record<string, string> = {};
-	const hostKeys = [
-		...COMMON_HOST_ENVIRONMENT_KEYS,
-		...(platform === "windows" ? WINDOWS_HOST_ENVIRONMENT_KEYS : POSIX_HOST_ENVIRONMENT_KEYS),
-		...(platform === "linux" && launchMode === "desktop" ? LINUX_DISPLAY_ENVIRONMENT_KEYS : []),
-	];
-	for (const key of hostKeys) {
-		const value = environmentValue(source, key, platform);
-		if (isValidEnvironmentValue(value)) result[key] = value;
-	}
 	for (const [key, value] of Object.entries(source)) {
-		if (!key.toUpperCase().startsWith("LC_") || !isValidEnvironmentName(key) || !isValidEnvironmentValue(value)) continue;
+		if (!isAllowedAppServerEnvironmentKey(key) || !isValidEnvironmentValue(value)) continue;
 		result[platform === "windows" ? key.toUpperCase() : key] = value;
 	}
 	for (const [key, value] of Object.entries(productEnvironment)) {
@@ -39,12 +31,6 @@ export function buildAppServerEnvironment(source: Readonly<Record<string, string
 		result[normalized] = value;
 	}
 	return result;
-}
-
-function environmentValue(source: Readonly<Record<string, string | undefined>>, key: string, platform: AppServerHostPlatform): string | undefined {
-	if (platform !== "windows") return source[key];
-	const entry = Object.entries(source).find(([candidate]) => candidate.toUpperCase() === key);
-	return entry?.[1];
 }
 
 function isValidEnvironmentName(name: string): boolean {

@@ -35,17 +35,23 @@ struct WebPackage {
     package: PackageRef,
     capabilities: Vec<PluginPackageCapability>,
     manifest: Vec<u8>,
+    source_path: &'static str,
 }
 const SOURCE: &[u8] = b"exports.activate = context => context.subscriptions.push(require('vscode').commands.registerCommand('web.hello', () => {}));";
 impl WebPackage {
     fn new(entry: &str) -> Self {
-        let manifest = serde_json::to_vec(&json!({"name":"web", "publisher":"test", "version":"1.0.0", "browser":entry, "main":"missing.js", "contributes":{"commands":[{"command":"web.hello","title":"Hello"}]}})).unwrap();
+        let source_path = if entry == "./main.cjs" {
+            "extension/main.cjs"
+        } else {
+            "extension/main.js"
+        };
+        let manifest = serde_json::to_vec(&json!({"name":"web", "publisher":"test", "version":"1.0.0", "browser":"missing.js", "main":entry, "contributes":{"commands":[{"command":"web.hello","title":"Hello"}]}})).unwrap();
         Self {
             package: PackageRef {
                 id: "test.web".into(),
                 version: "1.0.0".into(),
                 digest: super::package_digest(&[
-                    ("extension/main.js", SOURCE),
+                    (source_path, SOURCE),
                     ("extension/package.json", &manifest),
                 ]),
             },
@@ -57,6 +63,7 @@ impl WebPackage {
                 language_ids: Vec::new(),
             }],
             manifest,
+            source_path,
         }
     }
 }
@@ -76,7 +83,7 @@ impl PluginPackagePayload for WebPackage {
     fn copy_to(&self, destination: &Path) -> Result<(), MarketplaceClientError> {
         std::fs::create_dir(destination.join("extension"))
             .map_err(|_| MarketplaceClientError::storage())?;
-        std::fs::write(destination.join("extension/main.js"), SOURCE)
+        std::fs::write(destination.join(self.source_path), SOURCE)
             .map_err(|_| MarketplaceClientError::storage())?;
         std::fs::write(destination.join("extension/package.json"), &self.manifest)
             .map_err(|_| MarketplaceClientError::storage())
@@ -134,7 +141,7 @@ fn marketplace_web_execution_requires_exact_persistent_consent_and_pins_the_pack
     let deployment = super::super::deployments(&manager, &admission)
         .unwrap()
         .remove(0);
-    assert!(deployment.command.is_javascript());
+    assert!(deployment.command.is_vscode());
     let plan = deployment.activation.as_ref().unwrap();
     assert_eq!(plan.events, ["onCommand:web.hello"]);
     assert_eq!(plan.commands, [("web.hello".into(), "Hello".into())]);
@@ -253,6 +260,38 @@ fn marketplace_web_execution_requires_exact_persistent_consent_and_pins_the_pack
             .unwrap()
             .is_empty()
     );
+}
+
+#[test]
+fn marketplace_commonjs_entry_reaches_the_installed_package_deployment() {
+    let profile = tempfile::tempdir().unwrap();
+    let manager = Arc::new(
+        PluginsManager::open(
+            profile.path().join("manager"),
+            super::providers(Arc::new(WebRegistry("./main.cjs"))),
+        )
+        .unwrap(),
+    );
+    manager
+        .install(InstallPackageRequest {
+            package_id: "test.web@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let admission: Arc<dyn MarketplaceEditorExtensionAdmission> =
+        Arc::new(ProfileEditorExtensionAdmission(Arc::new(
+            EditorExtensionPolicy::open(profile.path().join("editor-policy.json")).unwrap(),
+        )));
+    let deployment = super::super::deployments(&manager, &admission)
+        .unwrap()
+        .remove(0);
+    assert!(deployment.command.is_vscode());
+    assert_eq!(deployment.params.package.entrypoint, "main.cjs");
+    assert_eq!(
+        deployment.activation.unwrap().events,
+        ["onCommand:web.hello"]
+    );
+    assert!(!deployment.authority.authorizes());
 }
 
 #[test]

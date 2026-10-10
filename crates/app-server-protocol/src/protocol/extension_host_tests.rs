@@ -82,7 +82,10 @@ fn registration_descriptor_matches_host_rpc_v1_shape() {
 #[test]
 fn channel_and_link_registration_wire_shapes_round_trip_and_reject_extra_fields() {
     for mut fixture in [
+        json!({"registrationId":"window","kind":"workspaceEvents"}),
         json!({"registrationId":"documents","kind":"textDocumentEvents"}),
+        json!({"registrationId":"tasks","kind":"taskEvents"}),
+        json!({"registrationId":"debug","kind":"debugEvents"}),
         json!({"registrationId":"completions","kind":"languageProvider","languageIds":["rust"],"operations":["completion"],"completionTriggerCharacters":["."]}),
         json!({"registrationId":"browser","kind":"externalUriOpener","schemes":["https"],"label":"Acme browser"}),
         json!({"registrationId":"edits","kind":"dataChannel","channelId":"editTelemetry"}),
@@ -162,6 +165,12 @@ fn activation_intent_is_fenced_and_closed_without_granting_process_identity() {
         json!({"type":"command","command":"lazy.run"}),
         json!({"type":"language","languageId":"rust"}),
         json!({"type":"startupFinished"}),
+        json!({"type":"taskType","taskType":null}),
+        json!({"type":"taskType","taskType":"build"}),
+        json!({"type":"debug","phase":"start","debugType":null}),
+        json!({"type":"debug","phase":"initialConfigurations","debugType":null}),
+        json!({"type":"debug","phase":"dynamicConfigurations","debugType":"node"}),
+        json!({"type":"debug","phase":"resolveConfiguration","debugType":"node"}),
     ] {
         let fixture = json!({"extensionId":"lazy","activationGeneration":7,"event":event});
         let params: super::ExtensionHostActivateParams =
@@ -170,5 +179,21 @@ fn activation_intent_is_fenced_and_closed_without_granting_process_identity() {
         let mut invalid = fixture;
         invalid["event"]["incarnation"] = json!(1);
         assert!(serde_json::from_value::<super::ExtensionHostActivateParams>(invalid).is_err());
+    }
+}
+
+#[test]
+fn debug_activation_rejects_unknown_phases_and_forged_runtime_authority() {
+    for event in [
+        json!({"type":"debug","phase":"execute","debugType":"node"}),
+        json!({"type":"debug","phase":"start","debugType":"node","capabilities":["debugAdapter"]}),
+        json!({"type":"taskType","taskType":"build","packageDigest":"forged"}),
+    ] {
+        assert!(
+            serde_json::from_value::<super::ExtensionHostActivateParams>(
+                json!({"extensionId":"lazy","activationGeneration":7,"event":event})
+            )
+            .is_err()
+        );
     }
 }

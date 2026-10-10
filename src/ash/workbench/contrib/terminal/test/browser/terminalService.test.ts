@@ -323,6 +323,8 @@ class TestTerminalProcessService implements ITerminalProcessService {
 
 	constructor(private readonly reads: Array<ITerminalProcessReadResult | Promise<ITerminalProcessReadResult>>, private readonly connectionPersistence: "connectionOwned" | "reconnectable" = "connectionOwned") { }
 
+	async getEnvironment(): Promise<Readonly<Record<string, string>>> { return {}; }
+
 	async listProfiles() {
 		this.profileListCalls += 1;
 		return [DEFAULT_PROFILE];
@@ -768,6 +770,70 @@ suite('TerminalService lifecycle', () => {
 		});
 	});
 
+	test('task reuse waits for old-process release and replaces environment and execution without replaying old output', async () => {
+		const oldRead = deferred<ITerminalProcessReadResult>();
+		const release = deferred<void>();
+		const processes = new TestTerminalProcessService([oldRead.promise]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const service = services.get(ITerminalService);
+		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, env: { OLD: 'old' }, cwd: '/workspace/old', execution: { type: 'process', program: 'first', args: [] } });
+		await waitFor(() => processes.readCursors.length === 1);
+		const output: string[] = [];
+		using listener = instance.onDidWriteData(event => output.push(new TextDecoder().decode(event.data)));
+		processes.closeGates.push(release.promise);
+		const replacing = instance.reuseTerminal({ name: 'Replacement', env: { NEW: 'new', OLD: null }, cwd: '/workspace/new', execution: { type: 'process', program: 'second', args: ['$HOME', ''] }, deferStart: true });
+		await waitFor(() => processes.closeCalls.length === 1);
+		assert.equal(processes.createCalls.length, 1, 'the replacement cannot overlap an unacknowledged old process');
+		release.resolve();
+		await replacing;
+		oldRead.resolve(readResult({ chunks: [{ sequence: 1, data: new TextEncoder().encode('OLD_OUTPUT') }], nextSequence: 1, exited: true, exitCode: 99 }));
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual({ output, state: instance.state, exitCode: instance.exitCode, id: instance.id, title: instance.title, pid: instance.processId, reads: processes.readCursors, instances: service.instances.length }, { output: [], state: 'running', exitCode: undefined, id: 'terminal-instance-1', title: 'Replacement', pid: 1002, reads: [0], instances: 1 });
+		assert.deepEqual(processes.createCalls[1], { rows: 24, cols: 80, profile: { type: 'default' }, env: { NEW: 'new', OLD: null }, cwd: '/workspace/new', execution: { type: 'process', program: 'second', args: ['$HOME', ''] } });
+		instance.start();
+		await waitFor(() => processes.readCursors.length === 2);
+		await service.closeTerminal(instance);
+		assert.deepEqual(processes.closeCalls, ['terminal-1', 'terminal-2']);
+	});
+
+	test('closing a reused terminal during replacement releases its late process before close completes', async () => {
+		const creation = deferred<void>();
+		const processes = new TestTerminalProcessService([readResult({ exited: true })]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const service = services.get(ITerminalService);
+		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => instance.state === 'exited');
+		processes.creationGates.push(creation.promise);
+		const replacing = assert.rejects(instance.reuseTerminal({ execution: { type: 'process', program: 'second', args: [] }, deferStart: true }), isCancellationError);
+		await waitFor(() => processes.createCalls.length === 2);
+		let closed = false;
+		const closing = service.closeTerminal(instance).then(() => { closed = true; });
+		await Promise.resolve();
+		assert.equal(closed, false);
+		creation.resolve();
+		await Promise.all([replacing, closing]);
+		assert.deepEqual({ closed, instances: service.instances.length, closes: processes.closeCalls, reads: processes.readCursors }, { closed: true, instances: 0, closes: ['terminal-1', 'terminal-2'], reads: [0] });
+	});
+
+	test('task reuse rejects a failed old-process release without creating a replacement', async () => {
+		const release = deferred<void>();
+		const processes = new TestTerminalProcessService([readResult({ exited: true })]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const service = services.get(ITerminalService);
+		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => instance.state === 'exited');
+		processes.closeGates.push(release.promise);
+		const replacing = assert.rejects(instance.reuseTerminal({ execution: { type: 'process', program: 'second', args: [] } }), /release failed/);
+		await waitFor(() => processes.closeCalls.length === 1);
+		release.reject(new Error('release failed'));
+		await replacing;
+		assert.deepEqual({ creates: processes.createCalls.length, state: instance.state }, { creates: 1, state: 'error' });
+		await assert.rejects(service.closeTerminal(instance), /release failed/);
+	});
+
 	test('concurrent relaunches create one replacement with the first requested dimensions', async () => {
 		const creation = deferred<void>();
 		const processService = new TestTerminalProcessService([readResult({ exited: true, exitCode: 17 })]);
@@ -1123,4 +1189,38 @@ suite('TerminalService parser failure and replacement', () => {
 			reads: [0, 0], output: ['old', 'new'], closes: ['terminal-1', 'terminal-2'],
 		});
 	});
+});
+
+
+test('TerminalService evaluates the exit display callback before exit delivery and replaces it on task reuse', async () => {
+	const processes = new TestTerminalProcessService([readResult({ exited: true, exitCode: 7 })]);
+	using workspace = folderWorkspaceContext();
+	using services = terminalServices(processes, workspace);
+	const terminals = services.get(ITerminalService);
+	const events: string[] = [];
+	const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, deferStart: true, waitOnExit: code => { events.push(`display:${code}`); return 'DISPLAY_ONLY_EXIT_NOTICE'; } });
+	using output = instance.onDidWriteData(() => events.push('process-output'));
+	using exit = instance.onDidExit(code => events.push(`exit:${code}`));
+	instance.start();
+	await waitFor(() => instance.state === 'exited');
+	assert.deepEqual(events, ['display:7', 'exit:7']);
+	processes.queueRead(readResult({ exited: true, exitCode: 0 }));
+	await instance.reuseTerminal({ name: 'Replacement', deferStart: true });
+	instance.start();
+	await waitFor(() => instance.state === 'exited');
+	assert.deepEqual({ events, writes: processes.writeCalls, closes: processes.closeCalls }, { events: ['display:7', 'exit:7', 'exit:0'], writes: [], closes: ['terminal-1'] });
+});
+
+test('TerminalService retains the spawn environment snapshot when relaunching a terminal', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using services = terminalServices(processes, workspace);
+	const service = services.get(ITerminalService);
+	const env = { MODE: 'original', REMOVE: null };
+	const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, env });
+	env.MODE = 'changed';
+	processes.emitConnectionState('crashed');
+	processes.emitConnectionState('ready');
+	await service.relaunchTerminal(instance, { rows: 25, cols: 90 });
+	assert.deepEqual(processes.createCalls.map(call => call.env), [{ MODE: 'original', REMOVE: null }, { MODE: 'original', REMOVE: null }]);
 });

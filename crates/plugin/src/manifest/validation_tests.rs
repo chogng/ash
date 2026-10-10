@@ -448,7 +448,18 @@ fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
     unsupported["contributions"]["editorExtensions"][0]["activationEvents"] =
         json!([{"type": "onLanguage", "id": "typescript"}]);
     assert!(parse(&unsupported).is_ok());
-    unsupported["contributions"]["editorExtensions"][0]["capabilities"] = json!(["taskProvider"]);
+    for (capability, event) in [
+        ("taskProvider", json!({"type": "onTaskType", "taskType": "builder"})),
+        ("debugAdapter", json!({"type": "onDebugType", "debugType": "example"})),
+    ] {
+        unsupported["contributions"]["editorExtensions"][0]["capabilities"] = json!([capability]);
+        unsupported["contributions"]["editorExtensions"][0]["activationEvents"] = json!([event]);
+        let admitted = parse(&unsupported).unwrap();
+        assert_eq!(admitted.permissions.len(), 1);
+        assert!(matches!(admitted.permissions[0], Permission::Directory { .. }));
+    }
+    unsupported["contributions"]["editorExtensions"][0]["capabilities"] = json!(["dataChannel"]);
+    unsupported["contributions"]["editorExtensions"][0]["activationEvents"] = json!([{"type": "startup"}]);
     assert!(parse(&unsupported).is_err());
     value["contributions"]["editorExtensions"][0]["entrypoint"] = json!("bin/program");
     assert!(parse(&value).is_err());
@@ -463,5 +474,65 @@ fn sdk_example_manifest_declares_the_supported_javascript_contract() {
     assert_eq!(
         manifest.contributions.editor_extensions[0].runtime,
         super::super::EditorExtensionRuntime::JavaScript
+    );
+}
+
+#[test]
+fn vscode_api_is_explicit_and_only_admits_javascript_module_entries() {
+    let mut value = valid_manifest();
+    value["contributions"]["editorExtensions"] = json!([{
+        "id": "review-runtime", "runtime": "javascript", "api": "vscode", "entrypoint": "extension.cjs",
+        "runtimeApiVersion": 1, "activationEvents": [{"type": "onTaskType", "taskType": "build"}],
+        "capabilities": ["taskProvider"]
+    }]);
+    value["permissions"] = json!([]);
+    let manifest = parse(&value).unwrap();
+    assert_eq!(
+        manifest.contributions.editor_extensions[0].api,
+        super::super::EditorExtensionApi::Vscode
+    );
+    assert_eq!(
+        serde_json::to_value(&manifest).unwrap()["contributions"]["editorExtensions"][0]["api"],
+        "vscode"
+    );
+    for entry in ["extension.js", "extension.mjs", "extension.cjs"] {
+        value["contributions"]["editorExtensions"][0]["entrypoint"] = json!(entry);
+        assert!(parse(&value).is_ok());
+    }
+    value["contributions"]["editorExtensions"][0]["api"] = json!("node");
+    assert!(parse(&value).is_err());
+    value["contributions"]["editorExtensions"][0]["api"] = json!("ash");
+    assert!(parse(&value).is_err());
+    value["contributions"]["editorExtensions"][0]["entrypoint"] = json!("extension.js");
+    let manifest = parse(&value).unwrap();
+    assert!(
+        serde_json::to_value(&manifest).unwrap()["contributions"]["editorExtensions"][0]
+            .get("api")
+            .is_none()
+    );
+    value["contributions"]["editorExtensions"][0]["api"] = json!("vscode");
+    let mut multiple = value.clone();
+    let mut second = multiple["contributions"]["editorExtensions"][0].clone();
+    second["id"] = json!("another-runtime");
+    second["entrypoint"] = json!("another.js");
+    multiple["contributions"]["editorExtensions"]
+        .as_array_mut()
+        .unwrap()
+        .push(second);
+    assert!(
+        parse(&multiple)
+            .unwrap_err()
+            .to_string()
+            .contains("only one VS Code API entry")
+    );
+    multiple["contributions"]["editorExtensions"][1]["api"] = json!("ash");
+    assert!(parse(&multiple).is_ok());
+    value["contributions"]["editorExtensions"][0]["runtime"] = json!("hostRpc");
+    value["permissions"] = json!([{"type": "process", "executable": "extension.js"}]);
+    assert!(
+        parse(&value)
+            .unwrap_err()
+            .to_string()
+            .contains("only available for JavaScript")
     );
 }

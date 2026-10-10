@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -27,7 +28,7 @@ suite('DocumentSymbolsOutline', () => {
 		services.registerInstance(ILanguageFeaturesService, features);
 		services.registerInstance(IOutlineService, outlines);
 		const opened: { options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined; }[] = [];
-		services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { }, openEditor: async (_input, options, target) => { opened.push({ options, target }); } });
+		services.registerInstance(IEditorService, { ...emptyEditorServiceState, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { }, openEditor: async (_input, options, target) => { opened.push({ options, target }); } });
 		const model = lifetime.add(new TextModel('function outer() {\n  inner();\n}', { languageId: 'typescript' }));
 		const editor = lifetime.add(createTestCodeEditor({ container: document.createElement('div'), model, languageFeaturesService: features }));
 		const pane: IEditorPane = { id: 'test', getId: () => 'test', getTitle: () => 'Test', getControl: () => editor, onDidFocus: Event.None, onDidBlur: Event.None, focus: () => editor.focus(), hasFocus: () => editor.hasTextFocus(), setInput: async () => { }, clearInput: () => { }, layout: () => { }, setVisible: () => { }, isVisible: () => true, dispose: () => { }, [Symbol.dispose]: () => { } };
@@ -53,7 +54,7 @@ suite('DocumentSymbolsOutline', () => {
 		const outlines = lifetime.add(new OutlineService());
 		services.registerInstance(ILanguageFeaturesService, features);
 		services.registerInstance(IOutlineService, outlines);
-		services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { }, openEditor: async () => { } });
+		services.registerInstance(IEditorService, { ...emptyEditorServiceState, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { }, openEditor: async () => { } });
 		const model = lifetime.add(new TextModel('pending'));
 		const editor = lifetime.add(createTestCodeEditor({ container: document.createElement('div'), model, languageFeaturesService: features }));
 		const pane: IEditorPane = { id: 'test', getId: () => 'test', getTitle: () => 'Test', getControl: () => editor, onDidFocus: Event.None, onDidBlur: Event.None, focus: () => { }, hasFocus: () => false, setInput: async () => { }, clearInput: () => { }, layout: () => { }, setVisible: () => { }, isVisible: () => true, dispose: () => { }, [Symbol.dispose]: () => { } };

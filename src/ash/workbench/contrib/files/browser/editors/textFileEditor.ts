@@ -1,6 +1,6 @@
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
-import type { IResourceEditorInput } from '../../../../common/editor.js';
+import type { IResourceEditorInput, ISaveOptions } from '../../../../common/editor.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { isRemoteResource } from '../../../../../platform/remote/common/remote.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -49,13 +49,13 @@ export class TextFileEditor extends TextResourceEditor {
 		this.getControl()?.updateOptions({ readOnly: input.readOnly || !!this.filesConfiguration.isReadonly(input.resource) });
 	}
 
-	public override async save(): Promise<void> {
+	public override async save(options?: ISaveOptions): Promise<void> {
 		if (this.fileInput && this.filesConfiguration.isReadonly(this.fileInput.resource)) {
 			const error = new Error(localize('files.configuredReadonly', 'This file is read-only because it matches the configured read-only patterns.'));
 			await this.handleSaveError(error);
 			throw error;
 		}
-		await super.save();
+		await super.save(options);
 	}
 
 	public override clearInput(): void {

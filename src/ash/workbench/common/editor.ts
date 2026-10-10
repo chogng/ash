@@ -25,7 +25,7 @@ export interface IEditorPane extends IComposite, IDisposable {
 	setVisible(visible: boolean): void;
 	isVisible(): boolean;
 	revealRange?(range: Range): void;
-	save?(): Promise<void>;
+	save?(options?: ISaveOptions): Promise<void>;
 	saveAs?(resource: URI): Promise<void>;
 }
 
@@ -61,6 +61,11 @@ export interface ISaveOptions {
 	readonly unlock?: boolean;
 	readonly reason?: SaveReason;
 	readonly skipSaveParticipants?: boolean;
+}
+
+export interface IEditorIdentifier {
+	readonly editor: IResourceEditorInput;
+	readonly groupId: string;
 }
 
 /** A resource requested through the Workbench editor service. */

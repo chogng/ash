@@ -1,3 +1,9 @@
+import { normalizeExtensionCatalog } from '../../../../../platform/extensions/common/extensionApi.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { resetNlsResolver } from '../../../../../nls.js';
+import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
@@ -16,6 +22,9 @@ import { createExtensionSnippetProvider, parseExtensionSnippetFile } from "../..
 import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
 import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapter.js";
 import { DebugAdapterFactoriesRegistry } from "../../../debug/common/debugAdapterFactory.js";
+import { parseProblemMatchers } from '../../../../contrib/tasks/common/problemMatcher.js';
+import { WatchingProblemCollector } from '../../../../contrib/tasks/common/problemCollectors.js';
+import { MarkerService } from '../../../../../platform/markers/common/markers.js';
 import type { ITextMateService } from "../../../textMate/common/textMateService.js";
 import type { TextMateGrammarDefinition } from "../../../textMate/common/textMateGrammarRegistry.js";
 import { TextMateGrammarService } from "../../../textMate/common/textMateGrammarService.js";
@@ -33,7 +42,7 @@ const descriptorManifest = JSON.stringify({
 	version: "1.0.0",
 	contributes: {
 		grammars: [{ language: "demo", scopeName: "source.demo", path: "./syntaxes/demo.tmLanguage.json" }],
-		debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter", args: ["--stdio"] } }],
+		debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter", args: ["--stdio", "", "$HOME"] } }, { type: "pure-debug", label: "Pure debug" }],
 	},
 });
 const descriptor: ExtensionDescriptor = Object.freeze({
@@ -120,6 +129,28 @@ test("parses declarative debugger contributions and rejects duplicate adapter ow
 	registry.replace([{ extensionId: "ash.demo", ...manifest.contributes.debuggers[0]! }]);
 	assert.equal(registry.get("demo")?.program, "demo-adapter");
 	assert.throws(() => registry.replace([{ extensionId: "ash.demo", ...manifest.contributes.debuggers[0]! }, { extensionId: "other.demo", ...manifest.contributes.debuggers[0]! }]), /both/);
+});
+
+test('debugger command mappings are validated and remain immutable across catalog generations', () => {
+	const parse = (variables: unknown) => parseExtensionManifest(JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { debuggers: [{ type: 'mapped', variables }] } }), descriptor);
+	const contribution = parse({ PickProcess: 'ash.demo.pick' }).contributes.debuggers[0]!;
+	assert.deepEqual(contribution.variables, { PickProcess: 'ash.demo.pick' });
+	assert.equal(contribution.program, undefined);
+	assert.equal(Object.isFrozen(contribution.variables), true);
+	using registry = new ExtensionDebugAdapterRegistry();
+	const variables = { PickProcess: 'ash.demo.pick' };
+	registry.replace([{ extensionId: 'ash.demo', ...contribution, variables }]);
+	variables.PickProcess = 'ash.demo.replacement';
+	assert.deepEqual(registry.get('mapped')?.variables, { PickProcess: 'ash.demo.pick' });
+	registry.replace([{ extensionId: 'ash.demo', ...contribution, variables }]);
+	assert.deepEqual(registry.get('mapped')?.variables, { PickProcess: 'ash.demo.replacement' });
+	registry.replace([]);
+	assert.equal(registry.get('mapped'), undefined);
+	using localization = toDisposable(resetNlsResolver);
+	initializeTestLocalization('zh-CN');
+	for (const invalid of [null, [], true, { PickProcess: '' }, { PickProcess: 1 }, { '': 'command' }, { PickProcess: 'bad\0command' }, Object.fromEntries(Array.from({ length: 65 }, (_, index) => [`pick${index}`, 'command']))]) {
+		assert.throws(() => parse(invalid), { message: '调试适配器“mapped”的命令变量映射无效。' });
+	}
 });
 
 test("disposing a declarative Debug Adapter registry revokes its catalog", () => {
@@ -234,7 +265,14 @@ test("registers extension grammars transactionally and loads resources through t
 	assert.equal(Object.isFrozen(service.debugAdapters), true);
 
 	await service.start();
+	const factory = DebugAdapterFactoriesRegistry.get('demo');
+	const previousCatalog = service.currentCatalog;
+	let changes = 0;
+	using change = service.onDidChange(() => changes++);
 	await service.reload();
+	assert.equal(DebugAdapterFactoriesRegistry.get('demo'), factory);
+	assert.equal(service.currentCatalog, previousCatalog);
+	assert.equal(changes, 0);
 
 	assert.equal(service.currentCatalog.generation, catalog.generation);
 	assert.equal(service.currentCatalog.extensions[0]?.id, descriptor.id);
@@ -242,7 +280,9 @@ test("registers extension grammars transactionally and loads resources through t
 	assert.equal("manifestJson" in service.currentCatalog.extensions[0]!, false);
 	assert.equal(definitions.length, 1);
 	assert.equal(service.debugAdapters.get("demo")?.program, "demo-adapter");
-	assert.deepEqual(DebugAdapterFactoriesRegistry.get("demo")?.createDebugAdapter(), { program: "demo-adapter", arguments: ["--stdio"] });
+	assert.equal(service.debugAdapters.get("pure-debug")?.label, "Pure debug");
+	assert.equal(DebugAdapterFactoriesRegistry.get("pure-debug"), undefined);
+	assert.deepEqual(DebugAdapterFactoriesRegistry.get("demo")?.createDebugAdapter?.(), { program: "demo-adapter", arguments: ["--stdio", "", "$HOME"] });
 	assert.equal(await definitions[0]!.loadGrammar(), '{"scopeName":"source.demo","patterns":[]}');
 	service.dispose();
 	assert.equal(DebugAdapterFactoriesRegistry.get("demo"), undefined);
@@ -377,6 +417,47 @@ test("coalesces concurrent reload requests into one queued follow-up refresh", a
 
 	assert.equal(listCalls, 2);
 	assert.equal(service.currentCatalog.generation, 2);
+});
+
+test('a superseded failed reload does not reject a caller after the latest catalog commits', async () => {
+	let rejectFirst: (error: Error) => void = () => { throw new Error('First catalog request was not started'); };
+	let requests = 0;
+	const api: IExtensionApi = {
+		list: () => ++requests === 1 ? new Promise((_resolve, reject) => { rejectFirst = reject; }) : Promise.resolve(emptyCatalog(2)),
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+	};
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	const failures: unknown[] = [];
+	using listener = service.onDidFail(failure => failures.push(failure.error));
+	const starting = service.start();
+	assert.equal(service.reload(), starting);
+	rejectFirst(new Error('Catalog generation changed during a resource read'));
+	await starting;
+	assert.deepEqual({ requests, generation: service.currentCatalog.generation, failures }, { requests: 2, generation: 2, failures: [] });
+});
+
+test('queued reloads report the final failure and retain the last committed catalog', async () => {
+	let rejectFirst: (error: Error) => void = () => { throw new Error('First reload was not started'); };
+	let requests = 0;
+	const finalFailure = new Error('Latest resource is unavailable');
+	const api: IExtensionApi = {
+		list: () => {
+			requests++;
+			if (requests === 1) return Promise.resolve(emptyCatalog(1));
+			if (requests === 2) return new Promise((_resolve, reject) => { rejectFirst = reject; });
+			return Promise.reject(finalFailure);
+		},
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+	};
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	await service.start();
+	const failures: unknown[] = [];
+	using listener = service.onDidFail(failure => failures.push(failure.error));
+	const loading = service.reload();
+	assert.equal(service.reload(), loading);
+	rejectFirst(new Error('Superseded generation'));
+	await assert.rejects(loading, error => error === finalFailure);
+	assert.deepEqual({ requests, generation: service.currentCatalog.generation, failures }, { requests: 3, generation: 1, failures: [finalFailure] });
 });
 
 test("reloads declarations for Plugin activation and Marketplace installation changes", async () => {
@@ -632,4 +713,141 @@ test('the packaged browser catalog activates Markdown grammar and configuration 
 	await service.start();
 	assert.equal(languageService.guessLanguageIdByFilepathOrFirstLine(URI.file('/notes/draft.md')), 'markdown');
 	assert.equal(languageService.createByMimeType('text/markdown').languageId, 'markdown');
+});
+
+test('extension configuration activates in the canonical owner and rolls back other contributions on schema failure', async () => {
+	let generation = 1;
+	let present = true;
+	let invalid = false;
+	const manifest = (): ExtensionDescriptor => descriptorWithManifest({
+		name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
+			configuration: { title: 'Extension configuration', properties: { 'extensionConfiguration.value': { type: 'string', default: 'default', scope: 'language-overridable' }, 'extensionConfiguration.count': { type: 'integer', default: invalid ? 'invalid' : generation } } },
+			problemMatchers: [{ name: 'extension-configuration-matcher', owner: invalid ? 'changed' : 'original', pattern: { regexp: '^(.+):(\\d+) (.+)$', file: 1, line: 2, message: 3 } }],
+		}
+	});
+	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+	const source = '{"extensionConfiguration.value":"user value"}';
+	using configuration = new WorkbenchConfigurationService({ initialSnapshot: { revision: 1, document: { version: 1, source } } });
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('No contribution resources'); }) }, textMateService: emptyTextMateService() });
+	await service.start();
+	assert.deepEqual({ value: configuration.getValue('extensionConfiguration.value'), count: configuration.getValue('extensionConfiguration.count') }, { value: 'user value', count: 1 });
+	using locale = toDisposable(resetNlsResolver);
+	initializeTestLocalization('zh-CN');
+	invalid = true; generation++;
+	await assert.rejects(service.reload(), { message: '设置“extensionConfiguration.count”不符合其声明的架构。' });
+	assert.throws(() => registry.updateConfigurations({ add: [{ properties: { 'extensionConfiguration.count': { type: 'integer', default: 1 } } }], remove: [] }), { message: '扩展贡献的设置“extensionConfiguration.count”无效或重复。' });
+	assert.throws(() => parseExtensionManifest(JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { configuration: Array.from({ length: 65 }, () => ({ properties: {} })) } }), manifest()), { message: '扩展最多可贡献 64 个配置部分。' });
+	assert.deepEqual({ count: configuration.getValue('extensionConfiguration.count'), generation: service.currentCatalog.generation, matcher: parseProblemMatchers(['$extension-configuration-matcher'])[0].owner }, { count: 1, generation: 1, matcher: 'original' });
+	invalid = false; present = false; generation++;
+	await service.reload();
+	assert.equal(configuration.getValue('extensionConfiguration.value'), undefined);
+	assert.equal(registry.owns('extensionConfiguration.count'), false);
+	assert.equal((await configuration.read()).source, source);
+	present = true; generation++;
+	await service.reload();
+	assert.equal(configuration.getValue('extensionConfiguration.count'), 4);
+	service.dispose();
+	assert.equal(registry.owns('extensionConfiguration.count'), false);
+});
+
+test('declarative extension problem contributions activate, roll back failed reloads, and retire on removal', async () => {
+	let generation = 1;
+	let present = true;
+	let invalid = false;
+	const manifest = (): ExtensionDescriptor => descriptorWithManifest({
+		name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
+			problemPatterns: [{ name: 'extension-service-pattern', regexp: '^(.+):(\\d+):(\\d+) (.+)$', file: 1, line: 2, column: 3, message: 4 }],
+			problemMatchers: [{ name: 'extension-service-matcher', owner: 'extension-service', pattern: invalid ? '$missing-pattern' : '$extension-service-pattern', background: { beginsPattern: '^BUILD$', endsPattern: '^READY$' } }],
+		},
+	});
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('Matcher declarations have no resources'); }) }, textMateService: emptyTextMateService() });
+	await service.start();
+	using markers = new MarkerService();
+	using collector = new WatchingProblemCollector(parseProblemMatchers(['$extension-service-matcher']), URI.file('/workspace'), markers, 'extension-service', () => false);
+	collector.accept(new TextEncoder().encode('BUILD\napp.ts:1:2 extension issue\nREADY\n'));
+	assert.equal(collector.isReady, true);
+	assert.equal(markers.getAll()[0].message, 'extension issue');
+	invalid = true;
+	generation++;
+	await assert.rejects(service.reload(), /Unknown problem pattern '\$missing-pattern'/);
+	assert.equal(service.currentCatalog.generation, 1);
+	assert.equal(parseProblemMatchers(['$extension-service-matcher'])[0].owner, 'extension-service');
+	invalid = false;
+	present = false;
+	generation++;
+	await service.reload();
+	assert.throws(() => parseProblemMatchers(['$extension-service-matcher']), /Unknown problem matcher/);
+	present = true;
+	generation++;
+	await service.reload();
+	service.dispose();
+	assert.throws(() => parseProblemMatchers(['$extension-service-matcher']), /Unknown problem matcher/);
+});
+
+
+for (const [targetPlatform, extensionLocation, selected, expectedProgram] of [
+	['linux-x64', 'file:///installed/extension', 'linux', '/installed/extension/linux-adapter.js'],
+	['darwin-arm64', 'file:///installed/extension', 'osx', '/installed/extension/osx-adapter.js'],
+	['win32-ia32', 'file:///C:/installed/extension', 'winx86', 'C:\\installed\\extension\\winx86-adapter.js'],
+	['win32-x64', 'file://server/share/extension', 'windows', '\\\\server\\share\\extension\\windows-adapter.js'],
+] as const) {
+	test(`standard declarative Debug executable uses package paths and the ${targetPlatform} execution host`, async () => {
+		const declaration = {
+			type: 'standard', runtime: 'runtime-command', runtimeArgs: ['--runtime', '', '$HOME'], program: 'base-adapter.js', args: ['base'],
+			linux: { program: 'linux-adapter.js', args: ['linux', '', '$HOME'] },
+			osx: { program: 'osx-adapter.js', args: ['osx', '', '$HOME'] },
+			windows: { program: 'windows-adapter.js', args: ['windows', '', '$HOME'] },
+			winx86: { program: 'winx86-adapter.js', args: ['winx86', '', '$HOME'] },
+		};
+		const manifestJson = JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { debuggers: [declaration] } });
+		let present = true;
+		let generation = 1;
+		using service = new AppServerExtensionService({
+			api: { list: async () => normalizeExtensionCatalog({ generation, extensions: present ? [{ ...descriptor, extensionLocation, targetPlatform, manifestJson, manifestSha256: digestText(manifestJson) }] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw Error('Debugger metadata must not read a resource'); }) },
+			textMateService: emptyTextMateService(),
+		});
+		await service.reload();
+		assert.deepEqual(DebugAdapterFactoriesRegistry.get('standard')?.createDebugAdapter?.(), {
+			program: 'runtime-command', arguments: ['--runtime', '', '$HOME', expectedProgram, selected, '', '$HOME'],
+		});
+		assert.equal(service.debugAdapters.get('standard')?.label, 'standard');
+		present = false;
+		generation++;
+		await service.reload();
+		assert.equal(DebugAdapterFactoriesRegistry.get('standard'), undefined);
+	});
+}
+
+test('relative Debug runtime paths use the installed package and missing host facts are localized', () => {
+	using localization = toDisposable(resetNlsResolver);
+	initializeTestLocalization('zh-CN');
+	const declaration = { type: 'standard', program: './adapter.js', runtime: './bin/runtime', runtimeArgs: ['-r'], args: [''] };
+	const manifestJson = JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { debuggers: [declaration] } });
+	const manifest = parseExtensionManifest(manifestJson, { ...descriptor, extensionLocation: 'file:///installed/extension', targetPlatform: 'linux-x64' });
+	assert.deepEqual(manifest.contributes.debuggers, [{ type: 'standard', label: 'standard', program: '/installed/extension/bin/runtime', arguments: ['-r', '/installed/extension/adapter.js', ''] }]);
+	assert.throws(() => parseExtensionManifest(manifestJson, descriptor), /无法获取调试适配器“standard”的安装位置/);
+	const platformManifest = JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { debuggers: [{ type: 'standard', linux: { program: 'adapter' } }] } });
+	assert.throws(() => parseExtensionManifest(platformManifest, descriptor), /无法获取调试适配器“standard”的执行平台/);
+});
+
+
+test('catalog refresh preserves an unchanged declarative Debug owner and retires a changed package', async () => {
+	let generation = 1;
+	let entry = descriptor;
+	let present = true;
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [entry] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode('{"scopeName":"source.demo","patterns":[]}')) }, textMateService: emptyTextMateService() });
+	await service.start();
+	const original = DebugAdapterFactoriesRegistry.get('demo');
+	assert.ok(original);
+	generation++;
+	await service.reload();
+	assert.equal(DebugAdapterFactoriesRegistry.get('demo'), original, 'scan revision changes do not revoke an unchanged package');
+	entry = { ...descriptor, packageSha256: `sha256:${'c'.repeat(64)}` };
+	generation++;
+	await service.reload();
+	assert.notEqual(DebugAdapterFactoriesRegistry.get('demo'), original, 'changed package content retires the executable owner');
+	present = false;
+	generation++;
+	await service.reload();
+	assert.equal(DebugAdapterFactoriesRegistry.get('demo'), undefined);
 });

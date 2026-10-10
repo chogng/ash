@@ -7,7 +7,7 @@ const CONTROLLED_TERMINAL_ENVIRONMENT: [(&str, &str); 3] = [
     ("TERM_PROGRAM", "ash"),
 ];
 
-/// Frozen, secret-excluding process environment inherited by interactive terminals.
+/// Frozen developer environment inherited by interactive terminals.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TerminalEnvironment {
     variables: HashMap<String, String>,
@@ -23,7 +23,7 @@ impl TerminalEnvironment {
         for (key, value) in variables {
             // Filter before converting values: unrelated or unrepresentable process
             // variables cannot panic or become different child variables through lossy conversion.
-            let Some(key) = key.to_str().and_then(normalized_allowed_environment_key) else {
+            let Some(key) = key.to_str().and_then(normalized_environment_key) else {
                 continue;
             };
             let Ok(value) = value.into_string() else {
@@ -46,73 +46,48 @@ impl TerminalEnvironment {
     }
 }
 
-/// Returns allowlisted Unicode process variables and controlled terminal identity.
+/// Returns Unicode developer process variables and controlled terminal identity.
+/// Host authentication and Electron launcher controls are not inherited.
 /// Variables with non-Unicode names or values are ignored.
 pub fn safe_process_environment() -> HashMap<String, String> {
     TerminalEnvironment::from_process().variables
 }
 
-fn normalized_allowed_environment_key(key: &str) -> Option<String> {
+fn normalized_environment_key(key: &str) -> Option<String> {
     if !is_valid_environment_name(key) {
         return None;
     }
     #[cfg(windows)]
     {
         let normalized = key.to_ascii_uppercase();
-        allowed_environment_key(&normalized).then_some(normalized)
+        inherited_environment_key(&normalized).then_some(normalized)
     }
     #[cfg(not(windows))]
     {
-        allowed_environment_key(key).then(|| key.to_owned())
+        inherited_environment_key(key).then(|| key.to_owned())
     }
 }
 
-fn allowed_environment_key(key: &str) -> bool {
-    matches!(
-        key,
-        "ALLUSERSPROFILE"
-            | "APPDATA"
-            | "COMMONPROGRAMFILES"
-            | "COMMONPROGRAMFILES(X86)"
-            | "COMSPEC"
-            | "HOME"
-            | "HOMEDRIVE"
-            | "HOMEPATH"
-            | "LANG"
-            | "LOCALAPPDATA"
-            | "LOGNAME"
-            | "NUMBER_OF_PROCESSORS"
-            | "OS"
-            | "PATH"
-            | "PATHEXT"
-            | "PROCESSOR_ARCHITECTURE"
-            | "PROCESSOR_IDENTIFIER"
-            | "PROCESSOR_LEVEL"
-            | "PROCESSOR_REVISION"
-            | "PROGRAMDATA"
-            | "PROGRAMFILES"
-            | "PROGRAMFILES(X86)"
-            | "PROGRAMW6432"
-            | "PSMODULEPATH"
-            | "PUBLIC"
-            | "SHELL"
-            | "SYSTEMDRIVE"
-            | "SYSTEMROOT"
-            | "TEMP"
-            | "TMP"
-            | "TMPDIR"
-            | "USER"
-            | "USERDOMAIN"
-            | "USERNAME"
-            | "USERPROFILE"
-            | "WINDIR"
-            | "XDG_CACHE_HOME"
-            | "XDG_CONFIG_HOME"
-            | "XDG_DATA_HOME"
-            | "XDG_RUNTIME_DIR"
-            | "XDG_STATE_HOME"
-            | "ZDOTDIR"
-    ) || key.starts_with("LC_")
+// These names carry host control-plane authority, rather than developer credentials.
+// Keep the boundary independent of KEY/SECRET/TOKEN naming so ordinary SDKs work.
+const PRIVATE_PROCESS_ENVIRONMENT_KEYS: [&str; 6] = [
+    "CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN",
+    "NODE_REPL_AUTH_TOKEN",
+    "CODEX_GUARDIAN_DECISIONS_API_KEY",
+    "OPENAI_FEDERATION_RULE_ID",
+    "OPENAI_IDENTITY_TOKEN_FILE",
+    "OPENAI_WORKLOAD_IDENTITY_CONTEXT",
+];
+
+/// Identifies launcher authentication that must also be excluded from explicit child overrides.
+pub fn is_private_process_environment_key(key: &str) -> bool {
+    PRIVATE_PROCESS_ENVIRONMENT_KEYS
+        .iter()
+        .any(|name| key.eq_ignore_ascii_case(name))
+}
+
+fn inherited_environment_key(key: &str) -> bool {
+    !is_private_process_environment_key(key) && !key.starts_with("ELECTRON_")
 }
 
 fn is_valid_environment_name(name: &str) -> bool {

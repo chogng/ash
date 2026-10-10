@@ -3,8 +3,33 @@ use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::path::PathBuf;
 
-/// Starts one connection-owned stdio Debug Adapter Protocol process.
+/// Connection endpoint for a directory-bound Debug Adapter Protocol peer.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type",
+    deny_unknown_fields
+)]
+pub enum DebugAdapterConnectionDto {
+    Server {
+        #[schemars(range(min = 1, max = 65535))]
+        port: u16,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        #[schemars(length(min = 1, max = 256))]
+        host: Option<String>,
+    },
+    NamedPipe {
+        #[schemars(length(min = 1, max = 32768))]
+        path: PathBuf,
+    },
+}
+
+/// Starts one connection-owned executable or connects to a DAP server.
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DebugAdapterStartParams {
@@ -12,9 +37,20 @@ pub struct DebugAdapterStartParams {
     #[ts(optional)]
     pub dir_id: Option<String>,
     #[schemars(length(min = 1, max = 4096))]
-    pub program: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub program: Option<String>,
     #[schemars(length(max = 128))]
     pub arguments: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub connection: Option<DebugAdapterConnectionDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub env: Option<HashMap<String, Option<String>>>,
 }
 
 /// Opaque identity allocated for one adapter process.
@@ -83,3 +119,7 @@ pub struct DebugAdapterCloseParams {
     pub dir_id: Option<String>,
     pub session_id: String,
 }
+
+#[cfg(test)]
+#[path = "debug_tests.rs"]
+mod tests;

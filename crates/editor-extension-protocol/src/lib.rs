@@ -20,11 +20,14 @@ pub use statusbar::ExtensionStatusBarAlignment;
 pub use statusbar::ExtensionStatusBarCommand;
 pub use statusbar::ExtensionStatusBarEntry;
 mod output;
+pub use client::ExtensionBackgroundClientRequest;
+pub use client::ExtensionBackgroundClientResponse;
 pub use client::ExtensionClientOperation;
 pub use client::ExtensionClientRequest;
 pub use client::ExtensionClientResponse;
 pub use client::ExtensionClientResult;
 pub use client::ExtensionConfigurationTarget;
+pub use client::ExtensionDebugSessionOptions;
 pub use client::ExtensionDiagnostic;
 pub use client::ExtensionDiagnosticEntry;
 pub use client::ExtensionDiagnosticSeverity;
@@ -149,11 +152,82 @@ pub struct InitializeResult {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ActivateParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initialization: Option<ExtensionHostInitialization>,
     pub extension_id: String,
     pub package: PackageBinding,
     pub runtime_api_version: u16,
     pub activation_events: Vec<String>,
     pub capabilities: Vec<ExtensionCapability>,
+}
+
+/// Window-owned editor facts captured before package evaluation, never execution authority.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionHostInitialization {
+    /// The initiating window's UI language, absent only for older clients.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export", ts(optional))]
+    pub language: Option<String>,
+    pub workspace_folders: Vec<ExtensionWorkspaceFolder>,
+    pub workspace_name: Option<String>,
+    pub workspace_file: Option<String>,
+    pub configuration_values: Value,
+    pub configuration_data: Value,
+}
+
+/// A workspace folder identity visible to one initiating editor window.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionWorkspaceFolder {
+    pub uri: String,
+    pub name: String,
+    pub index: u32,
+}
+
+impl ExtensionHostInitialization {
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        if self.language.as_ref().is_some_and(|language| {
+            language.is_empty()
+                || language.len() > 64
+                || !language
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        }) {
+            return Err(protocol_error("invalid extension language snapshot"));
+        }
+        if self.workspace_folders.len() > 256 {
+            return Err(ProtocolError::QuotaExceeded("workspace folders"));
+        }
+        for (index, folder) in self.workspace_folders.iter().enumerate() {
+            if folder.index as usize != index
+                || folder.name.is_empty()
+                || folder.name.len() > 512
+                || folder.uri.is_empty()
+                || folder.uri.len() > 32768
+                || folder.uri.chars().any(char::is_control)
+            {
+                return Err(protocol_error("invalid workspace folder snapshot"));
+            }
+        }
+        if self
+            .workspace_name
+            .as_ref()
+            .is_some_and(|name| name.len() > 512)
+            || self.workspace_file.as_ref().is_some_and(|uri| {
+                uri.is_empty() || uri.len() > 32768 || uri.chars().any(char::is_control)
+            })
+            || !self.configuration_values.is_object()
+            || !self.configuration_data.is_object()
+        {
+            return Err(protocol_error("invalid extension initialization snapshot"));
+        }
+        validate_encoded_size(self, 512 * 1024)
+    }
 }
 
 /// Manifest-declared ceiling on the registration kinds returned by one runtime process.
@@ -239,6 +313,8 @@ impl<'de> Deserialize<'de> for RegistrationDescriptor {
     deny_unknown_fields
 )]
 pub enum RegistrationKind {
+    /// Window facts are read-only; their configuration/workspace owners remain in the editor.
+    WorkspaceEvents {},
     /// Selects an existing saved target; distinct from a transport endpoint resolver.
     RemoteConnectionResolver {
         authority_prefix: String,
@@ -252,6 +328,10 @@ pub enum RegistrationKind {
     },
     /// Document observation shares the language capability ceiling; models remain client-owned.
     TextDocumentEvents {},
+    /// Task observers borrow client-owned execution handles and do not create processes.
+    TaskEvents {},
+    /// Debug observation borrows client-owned sessions; adapter execution stays with the client.
+    DebugEvents {},
     ExternalUriOpener {
         schemes: Vec<ExternalUriScheme>,
         label: String,
@@ -275,6 +355,13 @@ pub enum RegistrationKind {
     },
     DebugAdapter {
         debugger_type: String,
+    },
+    DebugAdapterTracker {
+        debugger_type: String,
+    },
+    DebugConfigurationProvider {
+        debugger_type: String,
+        trigger_kind: u8,
     },
     TaskProvider {
         task_type: String,
@@ -462,6 +549,7 @@ pub enum ExtensionHostStdoutFrame {
     Response(ExtensionHostResponse),
     Output(ExtensionHostOutputEvent),
     ClientRequest(ExtensionClientRequest),
+    BackgroundClientRequest(ExtensionBackgroundClientRequest),
 }
 
 impl ExtensionHostResponse {

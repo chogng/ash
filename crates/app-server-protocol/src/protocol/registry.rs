@@ -190,6 +190,8 @@ use extension_protocol::ExtensionClientResult;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionConfigurationTarget;
 #[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionDebugSessionOptions;
+#[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionDiagnostic;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionDiagnosticEntry;
@@ -199,6 +201,8 @@ use extension_protocol::ExtensionDiagnosticSeverity;
 use extension_protocol::ExtensionDocumentEdit;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionDocumentSnapshot;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionHostInitialization;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionMessageSeverity;
 #[cfg(any(test, feature = "export"))]
@@ -211,6 +215,8 @@ use extension_protocol::ExtensionStatusBarEntry;
 use extension_protocol::ExtensionTextEdit;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionTextPosition;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionWorkspaceFolder;
 #[cfg(any(test, feature = "export"))]
 use guardian_environment::CommandEvidence;
 #[cfg(any(test, feature = "export"))]
@@ -629,6 +635,8 @@ use crate::protocol::connectors::ConnectorsChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::debug::DebugAdapterCloseParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugAdapterConnectionDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::debug::DebugAdapterMessageDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::debug::DebugAdapterReadParams;
@@ -785,6 +793,8 @@ use crate::protocol::extension_host::ExtensionHostCancellationReasonDto;
 use crate::protocol::extension_host::ExtensionHostChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostCommandContributionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostDebugActivationPhaseDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostExtensionDto;
 #[cfg(any(test, feature = "export"))]
@@ -1963,6 +1973,12 @@ use crate::protocol::terminal::TerminalCreateInSessionDirectoryParams;
 use crate::protocol::terminal::TerminalCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCreateResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalEnvironmentReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalEnvironmentReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalExecution;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalLifecycle;
 #[cfg(any(test, feature = "export"))]
@@ -4789,6 +4805,11 @@ client_methods! {
         response: TerminalProfileListResult,
         serialization: GlobalSharedRead,
     },
+    TerminalEnvironmentRead => "terminal/environment/read" {
+        params: TerminalEnvironmentReadParams,
+        response: TerminalEnvironmentReadResult,
+        serialization: GlobalSharedRead,
+    },
     TerminalCreate => "terminal/create" {
         params: TerminalCreateParams,
         response: TerminalCreateResult,
@@ -5477,7 +5498,10 @@ typescript_bindings! {
     ExtensionDiagnosticSeverity,
     ExtensionClientRequestParams,
     ExtensionClientResult,
+    ExtensionHostInitialization,
+    ExtensionWorkspaceFolder,
     ExtensionConfigurationTarget,
+    ExtensionDebugSessionOptions,
     ExtensionDocumentEdit,
     ExtensionDocumentSnapshot,
     ExtensionMessageSeverity,
@@ -5733,6 +5757,7 @@ typescript_bindings! {
     ExtensionHostStartParams,
     ExtensionHostActivateParams,
     ExtensionHostActivationEventDto,
+    ExtensionHostDebugActivationPhaseDto,
     ExtensionHostActivationDto,
     ExtensionHostCommandContributionDto,
     ExtensionHostSnapshotDto,
@@ -6529,8 +6554,11 @@ typescript_bindings! {
     CloudCodebaseStatusResult,
     TerminalProfile,
     TerminalProfileListResult,
+    TerminalEnvironmentReadParams,
+    TerminalEnvironmentReadResult,
     TerminalProfileSelection,
     TerminalLifecycle,
+    TerminalExecution,
     TerminalCreateParams,
     TerminalCreateInSessionDirectoryParams,
     TerminalCreateResult,
@@ -6565,6 +6593,7 @@ typescript_bindings! {
     TestingOperationStatus,
     TestingSnapshot,
     TestingUpdate,
+    DebugAdapterConnectionDto,
     DebugAdapterStartParams,
     DebugAdapterStartResult,
     DebugAdapterSendParams,

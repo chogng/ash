@@ -281,7 +281,7 @@ export class AppServerProtocolClient {
 	private handleInboundCall(message: Record<string, unknown>): void {
 		if (Object.hasOwn(message, "id")) {
 			if (typeof message.method === 'string' && !Object.hasOwn(APP_SERVER_SERVER_REQUESTS, message.method)) {
-				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not found' } }) });
+				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not found', data: null } }) });
 				return;
 			}
 			const request = decodeAppServerServerRequest(message);
@@ -290,7 +290,7 @@ export class AppServerProtocolClient {
 			}
 			const handler = this.handlers.get(request.method);
 			if (!handler) {
-				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'Method not found' } }) });
+				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'Method not found', data: null } }) });
 				return;
 			}
 			const controller = new AbortController();
@@ -303,12 +303,12 @@ export class AppServerProtocolClient {
 			};
 			const timeout = setTimeout(() => {
 				controller.abort();
-				reply({ error: { code: -32000, message: 'Host request timed out' } });
+				reply({ error: { code: -32000, message: 'Host request timed out', data: null } });
 			}, this.options.requestTimeoutMs);
 			controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
 			void Promise.resolve().then(() => handler(request.params as never, { signal: controller.signal })).then(
 				value => reply({ result: decodeAppServerServerRequestResult(request.method, value) }),
-				error => reply({ error: { code: isCancellationError(error) ? -32800 : -32000, message: toError(error).message } }),
+				error => reply({ error: { code: isCancellationError(error) ? -32800 : -32000, message: toError(error).message, data: null } }),
 			).catch(error => this.fail(toError(error)));
 			return;
 		}
@@ -320,7 +320,7 @@ export class AppServerProtocolClient {
 				// Retire first: cancellation listeners and late promises must not send a second reply.
 				this.inbound.delete(id);
 				controller.abort();
-				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32800, message: 'Host request cancelled' } }) });
+				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32800, message: 'Host request cancelled', data: null } }) });
 			}
 			return;
 		}

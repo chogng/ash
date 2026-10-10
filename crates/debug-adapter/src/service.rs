@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -8,13 +9,16 @@ use std::sync::atomic::Ordering;
 
 use ash_file_access::Authorization;
 use serde_json::Value;
+use std::time::Duration;
+use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
 use tokio::process::Child;
-use tokio::process::ChildStdin;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
+use tokio::task::JoinHandle;
 
 use crate::framing::MAX_MESSAGE_BYTES;
 use crate::framing::encode_message;
@@ -31,6 +35,8 @@ const MAX_BUFFERED_STDERR_BYTES: usize = 256 * 1024;
 pub struct DebugAdapterCommand {
     program: String,
     arguments: Vec<String>,
+    cwd: Option<PathBuf>,
+    environment: HashMap<String, Option<String>>,
 }
 
 impl DebugAdapterCommand {
@@ -49,11 +55,74 @@ impl DebugAdapterCommand {
         {
             return Err(DebugAdapterError::InvalidCommand);
         }
-        Ok(Self { program, arguments })
+        Ok(Self {
+            program,
+            arguments,
+            cwd: None,
+            environment: HashMap::new(),
+        })
+    }
+
+    /// Environment changes apply only to this child; cwd remains inside its authorized directory.
+    pub fn with_options(
+        mut self,
+        cwd: Option<PathBuf>,
+        environment: HashMap<String, Option<String>>,
+    ) -> Result<Self, DebugAdapterError> {
+        if cwd
+            .as_ref()
+            .is_some_and(|value| value.as_os_str().len() > 32768)
+            || environment.len() > 128
+            || environment.iter().any(|(key, value)| {
+                key.is_empty()
+                    || key.len() > 256
+                    || key.contains(['=', '\0'])
+                    || value
+                        .as_ref()
+                        .is_some_and(|value| value.len() > 32768 || value.contains('\0'))
+            })
+        {
+            return Err(DebugAdapterError::InvalidCommand);
+        }
+        self.cwd = cwd;
+        self.environment = environment;
+        Ok(self)
     }
 }
 
-/// Opaque identity for one running debug adapter process.
+/// Endpoint of a DAP peer; connection IO shares the executable session owner.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DebugAdapterConnection {
+    Server { port: u16, host: Option<String> },
+    NamedPipe { path: PathBuf },
+}
+
+impl DebugAdapterConnection {
+    fn validate(&self) -> Result<(), DebugAdapterError> {
+        let valid = match self {
+            Self::Server { port, host } => {
+                *port != 0
+                    && host.as_ref().is_none_or(|host| {
+                        !host.trim().is_empty() && host.len() <= 256 && !host.contains('\0')
+                    })
+            }
+            Self::NamedPipe { path } => {
+                !path.as_os_str().is_empty()
+                    && path.as_os_str().len() <= 32768
+                    && path.to_str().is_some_and(|path| !path.contains('\0'))
+            }
+        };
+        if valid {
+            Ok(())
+        } else {
+            Err(DebugAdapterError::InvalidCommand)
+        }
+    }
+}
+
+type AdapterWriter = Box<dyn AsyncWrite + Unpin + Send>;
+
+/// Opaque identity for one running debug adapter transport.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DebugAdapterSessionId(String);
 
@@ -102,7 +171,7 @@ pub enum DebugAdapterError {
     Json(#[from] serde_json::Error),
 }
 
-/// Owns bounded DAP stdio processes under explicit config and execution authorizations.
+/// Owns bounded DAP processes and connections under config and execution authorizations.
 pub struct DebugAdapterService {
     executable_configuration: Authorization,
     process_execution: Authorization,
@@ -139,7 +208,19 @@ impl DebugAdapterService {
         Ok(Self {
             executable_configuration,
             process_execution,
-            environment,
+            environment: environment
+                .into_iter()
+                .map(|(key, value)| {
+                    (
+                        if cfg!(windows) {
+                            key.to_ascii_uppercase()
+                        } else {
+                            key
+                        },
+                        value,
+                    )
+                })
+                .collect(),
             runtime,
             sessions: Mutex::new(HashMap::new()),
             next_session_id: AtomicU64::new(1),
@@ -156,13 +237,42 @@ impl DebugAdapterService {
             return Err(DebugAdapterError::Busy);
         }
         let root = self.process_execution.dir().canonical_path();
+        let cwd = match command.cwd {
+            Some(path) => {
+                let path = root
+                    .join(path)
+                    .canonicalize()
+                    .map_err(|_| DebugAdapterError::InvalidCommand)?;
+                if !path.is_dir() || !path.starts_with(root) {
+                    return Err(DebugAdapterError::InvalidCommand);
+                }
+                path
+            }
+            None => root.to_path_buf(),
+        };
+        let mut environment = self.environment.clone();
+        for (key, value) in command.environment {
+            let key = if cfg!(windows) {
+                key.to_ascii_uppercase()
+            } else {
+                key
+            };
+            match value {
+                Some(value) => {
+                    environment.insert(key, value);
+                }
+                None => {
+                    environment.remove(&key);
+                }
+            }
+        }
         let _runtime_guard = self.runtime.enter();
         let mut process = tokio::process::Command::new(&command.program);
         process
             .args(&command.arguments)
-            .current_dir(root)
+            .current_dir(cwd)
             .env_clear()
-            .envs(&self.environment)
+            .envs(&environment)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -186,8 +296,15 @@ impl DebugAdapterService {
             .take()
             .ok_or(DebugAdapterError::OperationFailed)?;
         let state = Arc::new(Mutex::new(DebugAdapterState::default()));
-        spawn_stdout_reader(&self.runtime, stdout, Arc::clone(&state));
-        spawn_stderr_reader(&self.runtime, stderr, Arc::clone(&state));
+        let readers = vec![
+            spawn_message_reader(
+                &self.runtime,
+                stdout,
+                Arc::clone(&state),
+                ReaderLifetime::Process,
+            ),
+            spawn_stderr_reader(&self.runtime, stderr, Arc::clone(&state)),
+        ];
         let id = DebugAdapterSessionId(format!(
             "debug-adapter-{:x}",
             self.next_session_id.fetch_add(1, Ordering::Relaxed)
@@ -196,7 +313,77 @@ impl DebugAdapterService {
             id.clone(),
             DebugAdapterSession {
                 process: Arc::new(AsyncMutex::new(Some(child))),
-                stdin: Arc::new(AsyncMutex::new(stdin)),
+                stdin: Arc::new(AsyncMutex::new(Some(Box::new(stdin)))),
+                readers: Arc::new(AsyncMutex::new(readers)),
+                state,
+            },
+        );
+        Ok(id)
+    }
+
+    /// Connect before allocating an identity; failed and excess connections drop their IO.
+    pub fn connect(
+        &self,
+        connection: DebugAdapterConnection,
+    ) -> Result<DebugAdapterSessionId, DebugAdapterError> {
+        connection.validate()?;
+        self.ensure_active()?;
+        if self
+            .sessions
+            .lock()
+            .map_err(|_| DebugAdapterError::Busy)?
+            .len()
+            >= MAX_ACTIVE_SESSIONS
+        {
+            return Err(DebugAdapterError::Busy);
+        }
+        let (reader, writer): (Box<dyn AsyncRead + Unpin + Send>, AdapterWriter) =
+            self.runtime.block_on(async {
+                tokio::time::timeout(Duration::from_secs(10), async {
+                    match connection {
+                        DebugAdapterConnection::Server { port, host } => {
+                            let stream = tokio::net::TcpStream::connect((
+                                host.as_deref().unwrap_or("127.0.0.1"),
+                                port,
+                            ))
+                            .await?;
+                            stream.set_nodelay(true)?;
+                            let (reader, writer) = stream.into_split();
+                            Ok((
+                                Box::new(reader) as Box<dyn AsyncRead + Unpin + Send>,
+                                Box::new(writer) as AdapterWriter,
+                            ))
+                        }
+                        DebugAdapterConnection::NamedPipe { path } => {
+                            connect_named_pipe(path).await
+                        }
+                    }
+                })
+                .await
+                .map_err(|_| DebugAdapterError::OperationFailed)?
+            })?;
+        self.ensure_active()?;
+        let mut sessions = self.sessions.lock().map_err(|_| DebugAdapterError::Busy)?;
+        if sessions.len() >= MAX_ACTIVE_SESSIONS {
+            return Err(DebugAdapterError::Busy);
+        }
+        let state = Arc::new(Mutex::new(DebugAdapterState::default()));
+        let reader = spawn_message_reader(
+            &self.runtime,
+            reader,
+            Arc::clone(&state),
+            ReaderLifetime::Connection,
+        );
+        let id = DebugAdapterSessionId(format!(
+            "debug-adapter-{:x}",
+            self.next_session_id.fetch_add(1, Ordering::Relaxed)
+        ));
+        sessions.insert(
+            id.clone(),
+            DebugAdapterSession {
+                process: Arc::new(AsyncMutex::new(None)),
+                stdin: Arc::new(AsyncMutex::new(Some(writer))),
+                readers: Arc::new(AsyncMutex::new(vec![reader])),
                 state,
             },
         );
@@ -213,8 +400,14 @@ impl DebugAdapterService {
         let stdin = self.session(session_id)?.stdin;
         self.runtime.block_on(async move {
             let mut stdin = stdin.lock().await;
-            stdin.write_all(&framed).await?;
-            stdin.flush().await
+            let stdin = stdin.as_mut().ok_or(DebugAdapterError::NotFound)?;
+            tokio::time::timeout(Duration::from_secs(10), async {
+                stdin.write_all(&framed).await?;
+                stdin.flush().await
+            })
+            .await
+            .map_err(|_| DebugAdapterError::OperationFailed)?
+            .map_err(DebugAdapterError::Io)
         })?;
         Ok(())
     }
@@ -323,7 +516,8 @@ impl Drop for DebugAdapterService {
 #[derive(Clone)]
 struct DebugAdapterSession {
     process: Arc<AsyncMutex<Option<Child>>>,
-    stdin: Arc<AsyncMutex<ChildStdin>>,
+    stdin: Arc<AsyncMutex<Option<AdapterWriter>>>,
+    readers: Arc<AsyncMutex<Vec<JoinHandle<()>>>>,
     state: Arc<Mutex<DebugAdapterState>>,
 }
 
@@ -338,11 +532,17 @@ struct DebugAdapterState {
     protocol_error: Option<String>,
 }
 
-fn spawn_stdout_reader(
+enum ReaderLifetime {
+    Process,
+    Connection,
+}
+
+fn spawn_message_reader(
     runtime: &Runtime,
-    stdout: tokio::process::ChildStdout,
+    stdout: impl AsyncRead + Unpin + Send + 'static,
     state: Arc<Mutex<DebugAdapterState>>,
-) {
+    lifetime: ReaderLifetime,
+) -> JoinHandle<()> {
     runtime.spawn(async move {
         let mut reader = BufReader::new(stdout);
         loop {
@@ -357,14 +557,20 @@ fn spawn_stdout_reader(
                 }
             }
         }
-    });
+        // Process exit is observed from the child status; a connection has no exit code.
+        if let ReaderLifetime::Connection = lifetime {
+            if let Ok(mut state) = state.lock() {
+                state.exited = true;
+            }
+        }
+    })
 }
 
 fn spawn_stderr_reader(
     runtime: &Runtime,
     mut stderr: tokio::process::ChildStderr,
     state: Arc<Mutex<DebugAdapterState>>,
-) {
+) -> JoinHandle<()> {
     runtime.spawn(async move {
         let mut buffer = vec![0; 8192];
         while let Ok(read) = stderr.read(&mut buffer).await {
@@ -379,7 +585,7 @@ fn spawn_stderr_reader(
                     .push_str(&text[..floor_char_boundary(&text, remaining)]);
             }
         }
-    });
+    })
 }
 
 fn floor_char_boundary(value: &str, maximum_bytes: usize) -> usize {
@@ -434,15 +640,53 @@ fn refresh_process_state(
 }
 
 fn terminate(runtime: &Runtime, session: DebugAdapterSession) {
-    let process = session.process;
     runtime.block_on(async move {
-        let mut process = process.lock().await;
+        let mut process = session.process.lock().await;
         if let Some(child) = process.as_mut() {
             let _ = child.start_kill();
             let _ = child.wait().await;
         }
         *process = None;
+        // Reader halves keep sockets alive even after writer shutdown. Await their cancellation
+        // before acknowledging close, including peers which never send another byte.
+        for reader in session.readers.lock().await.drain(..) {
+            reader.abort();
+            let _ = reader.await;
+        }
+        if let Some(mut writer) = session.stdin.lock().await.take() {
+            let _ = tokio::time::timeout(Duration::from_secs(1), writer.shutdown()).await;
+        }
     });
+}
+
+async fn connect_named_pipe(
+    path: PathBuf,
+) -> Result<(Box<dyn AsyncRead + Unpin + Send>, AdapterWriter), DebugAdapterError> {
+    #[cfg(unix)]
+    {
+        let stream = tokio::net::UnixStream::connect(path).await?;
+        let (reader, writer) = stream.into_split();
+        Ok((Box::new(reader), Box::new(writer)))
+    }
+    #[cfg(windows)]
+    {
+        let client = loop {
+            match tokio::net::windows::named_pipe::ClientOptions::new().open(&path) {
+                Ok(client) => break client,
+                Err(error) if error.raw_os_error() == Some(231) => {
+                    tokio::time::sleep(Duration::from_millis(10)).await
+                }
+                Err(error) => return Err(error.into()),
+            }
+        };
+        let (reader, writer) = tokio::io::split(client);
+        Ok((Box::new(reader), Box::new(writer)))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = path;
+        Err(DebugAdapterError::OperationFailed)
+    }
 }
 
 #[cfg(test)]

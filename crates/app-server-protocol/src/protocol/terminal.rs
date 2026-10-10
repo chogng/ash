@@ -22,6 +22,23 @@ pub struct TerminalProfileListResult {
     pub profiles: Vec<TerminalProfile>,
 }
 
+/// Reads selected values from the authorized execution environment without spawning a process.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalEnvironmentReadParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[schemars(length(max = 128))]
+    pub names: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalEnvironmentReadResult {
+    pub values: std::collections::BTreeMap<String, String>,
+}
+
 /// Selects either the server default or one previously listed authorized profile.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type", deny_unknown_fields)]
@@ -42,7 +59,18 @@ pub enum TerminalLifecycle {
     Reconnectable,
 }
 
-/// Starts one interactive terminal at the server's authorized directory.
+/// Selects a one-shot execution instead of an interactive shell.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+pub enum TerminalExecution {
+    Process { program: String, args: Vec<String> },
+    Shell {
+        #[serde(rename = "commandLine")]
+        command_line: String,
+    },
+}
+
+/// Starts one terminal process in the server's authorized directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCreateParams {
@@ -55,6 +83,15 @@ pub struct TerminalCreateParams {
     pub cols: u16,
     pub profile: TerminalProfileSelection,
     pub lifecycle: TerminalLifecycle,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub env: Option<std::collections::BTreeMap<String, Option<String>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<std::path::PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub execution: Option<TerminalExecution>,
 }
 
 /// Starts one interactive terminal in a session-authorized directory.
@@ -307,4 +344,40 @@ pub struct TerminalCloseParams {
     pub dir_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_create_environment_preserves_overrides_and_removals() {
+        let value = serde_json::json!({
+            "rows": 24, "cols": 80, "profile": {"type": "default"},
+            "lifecycle": {"type": "connectionOwned"},
+            "env": {"MODE": "task value", "REMOVE": null}
+        });
+        let request: TerminalCreateParams = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), value);
+        let original = serde_json::json!({
+            "rows": 24, "cols": 80, "profile": {"type": "default"},
+            "lifecycle": {"type": "connectionOwned"}
+        });
+        let request: TerminalCreateParams = serde_json::from_value(original.clone()).unwrap();
+        assert!(request.env.is_none());
+        assert_eq!(serde_json::to_value(request).unwrap(), original);
+    }
+
+    #[test]
+    fn terminal_environment_query_has_no_process_creation_fields() {
+        let value = serde_json::json!({"names": ["HOME", "PATH"], "dirId": "workspace"});
+        let request: TerminalEnvironmentReadParams = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), value);
+        assert!(
+            serde_json::from_value::<TerminalEnvironmentReadParams>(
+                serde_json::json!({"names": [], "env": {"MODE": "changed"}})
+            )
+            .is_err()
+        );
+    }
 }

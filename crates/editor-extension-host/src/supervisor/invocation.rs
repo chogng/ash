@@ -25,16 +25,6 @@ use crate::PendingHostRequest;
 
 const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
-enum StatusBarUpdate {
-    Unchanged,
-    Rejected,
-    Replace {
-        registration_id: String,
-        revision: u64,
-        entries: Vec<extension_protocol::ExtensionStatusBarEntry>,
-    },
-}
-
 /// One brokered provider invocation. `deadline_unix_millis` is an absolute UTC deadline.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtensionInvocation {
@@ -222,7 +212,41 @@ impl ExtensionInvocationHandle {
                     CancelReason::Deadline
                 };
                 let _ = self.cancel(reason);
-                break pending.recv_timeout(self.supervisor.inner.limits.cancellation_grace);
+                let grace = Instant::now();
+                // Drain already-sent child calls with cancellation, without executing them. Their
+                // replies let the host release promises while a cooperative callback winds down.
+                break loop {
+                    let remaining = self
+                        .supervisor
+                        .inner
+                        .limits
+                        .cancellation_grace
+                        .saturating_sub(grace.elapsed());
+                    match pending.recv_next_timeout(remaining) {
+                        Ok(Some(crate::process::PendingMessage::Response(response))) => {
+                            break Ok(Some(response));
+                        }
+                        Ok(Some(crate::process::PendingMessage::ClientRequest(request))) => {
+                            if let Err(error) = self.process.respond_client(
+                                extension_protocol::ExtensionClientResponse {
+                                    context: request.context,
+                                    call_id: request.call_id,
+                                    outcome: Err(crate::HostFailure {
+                                        code: crate::HostErrorCode::Cancelled,
+                                        message: "parent invocation cancelled".into(),
+                                    }),
+                                },
+                            ) {
+                                break Err(error);
+                            }
+                        }
+                        Ok(None) => break Ok(None),
+                        Err(error) => break Err(error),
+                    }
+                    if grace.elapsed() >= self.supervisor.inner.limits.cancellation_grace {
+                        break Ok(None);
+                    }
+                };
             }
             let poll = WAIT_POLL_INTERVAL.min(self.wait_timeout.saturating_sub(elapsed));
             match pending.recv_next_timeout(poll) {
@@ -230,95 +254,17 @@ impl ExtensionInvocationHandle {
                     break Ok(Some(response));
                 }
                 Ok(Some(crate::process::PendingMessage::ClientRequest(request))) => {
-                    let remote_authorized = !matches!(
+                    let outcome = self.supervisor.inner.service_client_operation(
+                        self.incarnation,
                         request.operation,
-                        extension_protocol::ExtensionClientOperation::OpenRemoteConnection { .. }
-                    ) || {
-                        let state = self
-                            .supervisor
-                            .inner
-                            .state
-                            .lock()
-                            .map_err(|_| ExtensionHostError::HostExited)?;
-                        state.incarnation == self.incarnation && state.registrations.iter().any(|registration| matches!(registration.kind, extension_protocol::RegistrationKind::RemoteAuthorityResolver { .. } | extension_protocol::RegistrationKind::RemoteConnectionResolver { .. }))
-                    };
-                    let status_update = match &request.operation {
-                        extension_protocol::ExtensionClientOperation::SetStatusBarEntries {
-                            registration_id,
-                            revision,
-                            entries,
-                        } => {
-                            let state = self
-                                .supervisor
-                                .inner
-                                .state
-                                .lock()
-                                .map_err(|_| ExtensionHostError::HostExited)?;
-                            let valid = state.incarnation == self.incarnation
-                                && state.registrations.iter().any(|registration| {
-                                    registration.registration_id == *registration_id
-                                        && matches!(
-                                            registration.kind,
-                                            extension_protocol::RegistrationKind::StatusBar { .. }
-                                        )
-                                });
-                            if valid {
-                                StatusBarUpdate::Replace {
-                                    registration_id: registration_id.clone(),
-                                    revision: *revision,
-                                    entries: entries.clone(),
-                                }
-                            } else {
-                                StatusBarUpdate::Rejected
-                            }
-                        }
-                        _ => StatusBarUpdate::Unchanged,
-                    };
-                    let outcome = if !remote_authorized {
-                        Err(crate::HostFailure { code: crate::HostErrorCode::PermissionDenied, message: "Remote connection requests require an active Remote resolver registration".into() })
-                    } else if matches!(status_update, StatusBarUpdate::Rejected) {
-                        Err(crate::HostFailure {
-                            code: crate::HostErrorCode::RegistrationNotFound,
-                            message: "status bar registration is not owned by this incarnation"
-                                .into(),
-                        })
-                    } else {
-                        handler(
-                            request.operation,
-                            &self.client_cancellation.token(),
-                            self.wait_timeout.saturating_sub(started.elapsed()),
-                        )
-                    };
-                    // Retain only the latest acknowledged UI value for reconnects. Concurrent older
-                    // callbacks cannot restore a hidden entry or keep a history of command arguments.
-                    if matches!(outcome, Ok(extension_protocol::ExtensionClientResult::Done))
-                        && let StatusBarUpdate::Replace {
-                            registration_id,
-                            revision,
-                            entries,
-                        } = status_update
-                    {
-                        let mut state = self
-                            .supervisor
-                            .inner
-                            .state
-                            .lock()
-                            .map_err(|_| ExtensionHostError::HostExited)?;
-                        if state.incarnation == self.incarnation
-                            && let Some(registration) =
-                                state.registrations.iter_mut().find(|registration| {
-                                    registration.registration_id == registration_id
-                                })
-                            && let extension_protocol::RegistrationKind::StatusBar {
-                                revision: previous,
-                                entries: current,
-                            } = &mut registration.kind
-                            && revision > *previous
-                        {
-                            *previous = revision;
-                            *current = entries;
-                        }
-                    }
+                        |operation| {
+                            handler(
+                                operation,
+                                &self.client_cancellation.token(),
+                                self.wait_timeout.saturating_sub(started.elapsed()),
+                            )
+                        },
+                    )?;
                     if let Err(error) =
                         self.process
                             .respond_client(extension_protocol::ExtensionClientResponse {

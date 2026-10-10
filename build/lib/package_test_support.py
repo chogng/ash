@@ -29,6 +29,14 @@ def create_package_sources(root: Path) -> Path:
             root / name,
             ignore=shutil.ignore_patterns("node_modules", "__pycache__"),
         )
+    for name in (
+        "crates/js-extension-host/src/node.mjs",
+        "crates/js-extension-host/src/vscode.js",
+        "extension-sdk/index.js",
+    ):
+        destination = root / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPOSITORY_ROOT / name, destination)
     notices = [item["source"] for item in LAYOUT["licenses"]] + [
         "crates/windows-sandbox/LICENSE-APACHE",
         "crates/windows-sandbox/NOTICE",

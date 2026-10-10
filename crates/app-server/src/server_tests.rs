@@ -2057,6 +2057,282 @@ fn debug_adapter_rpc_enforces_connection_ownership_and_connection_cleanup() {
 }
 
 #[test]
+fn debug_adapter_network_rpc_exchanges_frames_and_releases_both_halves() {
+    debug_adapter_network_roundtrip(false);
+    #[cfg(unix)]
+    debug_adapter_network_roundtrip(true);
+}
+
+fn debug_adapter_network_roundtrip(named_pipe: bool) {
+    use std::io::BufRead;
+    use std::io::Read;
+    use std::io::Write;
+    let root = tempfile::Builder::new()
+        .prefix("ash-dap-")
+        .tempdir_in(if cfg!(unix) {
+            std::path::PathBuf::from("/tmp")
+        } else {
+            std::env::temp_dir()
+        })
+        .unwrap();
+    let server = server()
+        .with_debug_adapter_root(
+            dir_authorization(root.path(), DirPermission::LoadConfig),
+            dir_authorization(root.path(), DirPermission::ExecuteCommands),
+        )
+        .unwrap();
+    let tcp = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    #[cfg(unix)]
+    let pipe = std::os::unix::net::UnixListener::bind(root.path().join("dap.sock")).unwrap();
+    let endpoint = if named_pipe {
+        serde_json::json!({"type":"namedPipe","path":root.path().join("dap.sock")})
+    } else {
+        serde_json::json!({"type":"server","port":tcp.local_addr().unwrap().port()})
+    };
+    let peer = std::thread::spawn(move || {
+        trait Stream: Read + Write {}
+        impl<T: Read + Write> Stream for T {}
+        let stream: Box<dyn Stream> = if named_pipe {
+            #[cfg(unix)]
+            {
+                let (stream, _) = pipe.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                    .unwrap();
+                Box::new(stream)
+            }
+            #[cfg(not(unix))]
+            {
+                panic!("Unix socket test is unavailable");
+            }
+        } else {
+            let (stream, _) = tcp.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            Box::new(stream)
+        };
+        let mut stream = std::io::BufReader::new(stream);
+        let mut header = String::new();
+        stream.read_line(&mut header).unwrap();
+        let length: usize = header
+            .trim()
+            .strip_prefix("Content-Length: ")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let mut line = String::new();
+        stream.read_line(&mut line).unwrap();
+        assert_eq!(line, "\r\n");
+        let mut body = vec![0; length];
+        stream.read_exact(&mut body).unwrap();
+        let message: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            message,
+            serde_json::json!({"seq":0,"type":"request","command":"custom:echo","arguments":{"literal":"$HOME"}})
+        );
+        let response = serde_json::json!({"seq":0,"type":"response","request_seq":0,"command":"custom:echo","success":true,"body":message["arguments"]});
+        let body = serde_json::to_vec(&response).unwrap();
+        write!(stream.get_mut(), "Content-Length: {}\r\n\r\n", body.len()).unwrap();
+        stream.get_mut().write_all(&body).unwrap();
+        stream.get_mut().flush().unwrap();
+        let mut byte = [0];
+        // close must drop the reader half too; otherwise this blocks until its deadline.
+        assert_eq!(stream.read(&mut byte).unwrap(), 0);
+    });
+    let mut owner = server.connection();
+    let mut other = server.connection();
+    initialize(&server, &mut owner);
+    initialize(&server, &mut other);
+    let started = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"debug/adapter/start","params":{"arguments":[],"connection":endpoint}}),
+    );
+    assert!(started["error"].is_null(), "{started}");
+    let id = started["result"]["sessionId"].clone();
+    let rejected = call(
+        &server,
+        &mut other,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"debug/adapter/send","params":{"sessionId":id,"message":{"seq":0,"type":"request","command":"custom:echo"}}}),
+    );
+    assert_eq!(rejected["error"]["message"], "DebugAdapterNotOwner");
+    let sent = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"debug/adapter/send","params":{"sessionId":id,"message":{"seq":0,"type":"request","command":"custom:echo","arguments":{"literal":"$HOME"}}}}),
+    );
+    assert!(sent["error"].is_null(), "{sent}");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut request_id = 4;
+    loop {
+        let read = call(
+            &server,
+            &mut owner,
+            serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"debug/adapter/read","params":{"sessionId":id,"afterSequence":0,"maxMessages":1}}),
+        );
+        request_id += 1;
+        assert!(read["error"].is_null(), "{read}");
+        if !read["result"]["messages"].as_array().unwrap().is_empty() {
+            assert_eq!(
+                read["result"]["messages"][0]["message"]["body"],
+                serde_json::json!({"literal":"$HOME"})
+            );
+            assert_eq!(read["result"]["nextSequence"], 1);
+            assert_eq!(read["result"]["exited"], false);
+            assert!(read["result"]["exitCode"].is_null());
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "DAP response was not delivered"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    server.close_connection(owner);
+    peer.join().unwrap();
+    let missing = call(
+        &server,
+        &mut other,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"debug/adapter/read","params":{"sessionId":id,"afterSequence":0,"maxMessages":1}}),
+    );
+    assert_eq!(missing["error"]["message"], "DebugAdapterNotFound");
+}
+
+#[test]
+fn debug_adapter_network_rpc_rejects_invalid_or_mixed_descriptors_before_connecting() {
+    let root = tempfile::tempdir().unwrap();
+    let server = server()
+        .with_debug_adapter_root(
+            dir_authorization(root.path(), DirPermission::LoadConfig),
+            dir_authorization(root.path(), DirPermission::ExecuteCommands),
+        )
+        .unwrap();
+    let mut owner = server.connection();
+    initialize(&server, &mut owner);
+    for (index, params) in [
+        serde_json::json!({"arguments":[]}),
+        serde_json::json!({"arguments":[],"connection":{"type":"server","port":0}}),
+        serde_json::json!({"arguments":[],"connection":{"type":"server","port":1,"host":""}}),
+        serde_json::json!({"arguments":[],"connection":{"type":"server","port":1,"extra":true}}),
+        serde_json::json!({"arguments":[],"connection":{"type":"namedPipe","path":""}}),
+        serde_json::json!({"arguments":[],"connection":{"type":"server","port":1},"program":"adapter"}),
+        serde_json::json!({"arguments":["arg"],"connection":{"type":"server","port":1}}),
+        serde_json::json!({"arguments":[],"connection":{"type":"server","port":1},"env":{}}),
+        serde_json::json!({"arguments":[],"connection":{"type":"server","port":1},"cwd":"."}),
+    ].into_iter().enumerate() {
+        let response = call(
+            &server,
+            &mut owner,
+            serde_json::json!({"jsonrpc":"2.0","id":index + 2,"method":"debug/adapter/start","params":params}),
+        );
+        assert_eq!(response["error"]["message"], "InvalidParams", "{response}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn debug_adapter_spawn_applies_child_cwd_and_environment_without_changing_the_server() {
+    const CHILD: &str = "ASH_DEBUG_ENVIRONMENT_TEST_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let current = std::thread::current();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", current.name().unwrap(), "--nocapture"])
+            .env(CHILD, "1")
+            .env("OPENAI_API_KEY", "synthetic-developer-key")
+            .env(
+                "CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN",
+                "synthetic-host-control",
+            )
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let child = root.path().join("child");
+    std::fs::create_dir(&child).unwrap();
+    let server = server()
+        .with_debug_adapter_root(
+            dir_authorization(root.path(), DirPermission::LoadConfig),
+            dir_authorization(root.path(), DirPermission::ExecuteCommands),
+        )
+        .unwrap();
+    let mut owner = server.connection();
+    initialize(&server, &mut owner);
+    for (index, params) in [
+        serde_json::json!({"program":"/bin/sh", "arguments":["-c", "exit 0"], "cwd":"/"}),
+        serde_json::json!({"program":"/bin/sh", "arguments":["-c", "exit 0"], "env":{"VALUE":"invalid\u{0000}"}}),
+        serde_json::json!({"program":"/bin/sh", "arguments":["-c", "exit 0"], "env":{"node_repl_auth_token":"synthetic-host-control"}}),
+    ].into_iter().enumerate() {
+        let result = call(&server, &mut owner, serde_json::json!({"jsonrpc":"2.0", "id":index + 100, "method":"debug/adapter/start", "params":params}));
+        assert_eq!(result["error"]["message"], "InvalidParams");
+    }
+    let started = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"debug/adapter/start", "params":{
+                "program":"/bin/sh", "arguments":["-c", "printf '%s\\n' \"$PWD\" \"$ASH_ADAPTER_VALUE\" \"${TERM_PROGRAM-unset}\" > child-environment.txt; exec /bin/cat"],
+                "cwd":"child", "env":{"ASH_ADAPTER_VALUE":"$HOME literal", "TERM_PROGRAM":null}
+            }
+        }),
+    );
+    assert!(started["error"].is_null(), "{started}");
+    let path = child.join("child-environment.txt");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        if std::fs::read_to_string(&path).is_ok_and(|value| value.ends_with("unset\n")) {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "Adapter did not write its environment"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(
+        std::fs::read_to_string(path).unwrap(),
+        format!(
+            "{}\n$HOME literal\nunset\n",
+            child.canonicalize().unwrap().display()
+        )
+    );
+    let closed = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0", "id":5, "method":"debug/adapter/close", "params":{"sessionId":started["result"]["sessionId"]}}),
+    );
+    assert!(closed["error"].is_null(), "{closed}");
+    let next = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0", "id":6, "method":"debug/adapter/start", "params":{
+            "program":"/bin/sh", "arguments":["-c", "printf '%s\\n' \"$TERM_PROGRAM\" \"${ASH_ADAPTER_VALUE-unset}\" \"$OPENAI_API_KEY\" \"${CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN-private-excluded}\" > next-environment.txt; exec /bin/cat"], "cwd":"child"
+        }}),
+    );
+    assert!(next["error"].is_null(), "{next}");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        if std::fs::read_to_string(child.join("next-environment.txt"))
+            .is_ok_and(|value| value.ends_with("private-excluded\n"))
+        {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "Next adapter did not write its environment"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(
+        std::fs::read_to_string(child.join("next-environment.txt")).unwrap(),
+        "ash\nunset\nsynthetic-developer-key\nprivate-excluded\n"
+    );
+    server.close_connection(owner);
+}
+
+#[test]
 fn initialize_advertises_the_server_slash_command_snapshot() {
     let catalog = SlashCommandCatalog::new([SlashCommandDefinition {
         name: "diagnose".into(),
@@ -9019,4 +9295,49 @@ fn execution_defaults_are_shared_and_turn_overrides_are_frozen() {
         serde_json::json!({"jsonrpc":"2.0","id":11,"method":"config/read","params":{}}),
     );
     assert_eq!(read["result"]["execution"]["approvalMode"], "manual");
+}
+
+#[test]
+fn terminal_environment_reads_require_authorization_and_validate_names() {
+    let root = tempfile::tempdir().unwrap();
+    let server = server()
+        .with_terminal_root(dir_authorization(
+            root.path(),
+            DirPermission::ExecuteCommands,
+        ))
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let mut request_id = 1;
+    let mut read = |connection: &mut ConnectionState, params| {
+        request_id += 1;
+        call(
+            &server,
+            connection,
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": request_id, "method": "terminal/environment/read", "params": params
+            }),
+        )
+    };
+    assert_eq!(
+        read(
+            &mut connection,
+            serde_json::json!({"names": ["TERM_PROGRAM", "ASH_MISSING_VALUE"]})
+        )["result"],
+        serde_json::json!({"values": {"TERM_PROGRAM": "ash"}})
+    );
+    assert_eq!(
+        read(
+            &mut connection,
+            serde_json::json!({"names": ["HOME"], "dirId": "00000000-0000-4000-8000-000000000001"})
+        )["error"]["message"],
+        "TerminalUnavailable"
+    );
+    assert_eq!(
+        read(
+            &mut connection,
+            serde_json::json!({"names": ["INVALID=NAME"]})
+        )["error"]["message"],
+        "InvalidParams"
+    );
 }

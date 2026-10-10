@@ -5,6 +5,20 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Terminal,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('terminal.accessibility.invalidVerbosity', 'Terminal accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('terminal.accessibility.verbosityTitle', 'Terminal accessibility help'); },
+		get description() { return localize('terminal.accessibility.verbosityDescription', 'Announce how to open accessibility help when the terminal receives focus.'); },
+	},
+});
+
 for (const signal of AccessibilitySignal.allAccessibilitySignals) {
 	const hasAnnouncement = signal.announcementMessage !== undefined;
 	Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({

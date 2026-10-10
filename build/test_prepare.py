@@ -28,6 +28,9 @@ class PrepareTests(unittest.TestCase):
                 "build/source-layout.json",
                 "build/download/artifacts.py",
                 "build/prepare.py",
+                "crates/js-extension-host/src/node.mjs",
+                "crates/js-extension-host/src/vscode.js",
+                "extension-sdk/index.js",
                 "build/desktop/appServer.ts",
                 "build/lib/package-layout.json",
                 "build/lib/package.py",
@@ -47,6 +50,11 @@ class PrepareTests(unittest.TestCase):
             self.assertEqual(
                 first, prepare.package_input_digest(prepare.package_sources(root), {})
             )
+            (root / "crates/js-extension-host/src/node.mjs").write_text("updated host")
+            self.assertNotEqual(
+                first, prepare.package_input_digest(prepare.package_sources(root), {})
+            )
+            (root / "crates/js-extension-host/src/node.mjs").write_text("first")
             (root / "build/lib/package-layout.json").write_text("updated layout")
             self.assertNotEqual(
                 first, prepare.package_input_digest(prepare.package_sources(root), {})

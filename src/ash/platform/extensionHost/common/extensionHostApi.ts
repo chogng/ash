@@ -1,3 +1,7 @@
+import type { IConfigurationData, IConfigurationService } from '../../configuration/common/configuration.js';
+import { getNLSLanguage } from '../../../nls.js';
+import type { IWorkspaceContextService } from '../../workspace/common/workspace.js';
+import type { ExtensionClientOperation as ProtocolExtensionClientOperation } from '../../../../../.build/protocol/typescript/index.js';
 import { validateRemoteConnectionResolverPrefix } from '../../remote/common/remoteConnectionService.js';
 import { VSBuffer } from "../../../base/common/buffer.js";
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
@@ -35,6 +39,11 @@ export interface ExtensionHostOutputEvent {
 
 interface ExtensionHostRegistrationBase {
 	readonly registrationId: string;
+}
+
+/** Read-only window facts share the existing extension incarnation lifetime. */
+export interface ExtensionHostWorkspaceEventsRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'workspaceEvents';
 }
 
 export interface ExtensionHostCommandRegistration extends ExtensionHostRegistrationBase {
@@ -87,9 +96,28 @@ export interface ExtensionHostDebugAdapterRegistration extends ExtensionHostRegi
 	readonly debuggerType: string;
 }
 
+export interface ExtensionHostDebugConfigurationProviderRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'debugConfigurationProvider';
+	readonly debuggerType: string;
+	readonly triggerKind: 1 | 2;
+}
+
 export interface ExtensionHostTaskProviderRegistration extends ExtensionHostRegistrationBase {
 	readonly kind: "taskProvider";
 	readonly taskType: string;
+}
+
+export interface ExtensionHostDebugAdapterTrackerRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'debugAdapterTracker';
+	readonly debuggerType: string;
+}
+
+export interface ExtensionHostDebugEventsRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'debugEvents';
+}
+
+export interface ExtensionHostTaskEventsRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'taskEvents';
 }
 
 export interface ExtensionHostTestProfileProviderRegistration extends ExtensionHostRegistrationBase {
@@ -125,10 +153,33 @@ export interface ExtensionHostRemoteConnectionResolverRegistration extends Exten
 	readonly authorityPrefix: string;
 }
 
-export type ExtensionHostRegistration = ExtensionHostRemoteConnectionResolverRegistration | ExtensionHostRemoteAuthorityResolverRegistration | ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+export type ExtensionHostRegistration = ExtensionHostRemoteConnectionResolverRegistration | ExtensionHostRemoteAuthorityResolverRegistration | ExtensionHostWorkspaceEventsRegistration | ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostDebugConfigurationProviderRegistration | ExtensionHostDebugAdapterTrackerRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTaskEventsRegistration | ExtensionHostDebugEventsRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
-export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'startupFinished'; } | { readonly type: 'resolveAuthority'; readonly authorityPrefix: string; };
+export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'taskType'; readonly taskType: string | null; } | { readonly type: 'debug'; readonly phase: 'start' | 'initialConfigurations' | 'dynamicConfigurations' | 'resolveConfiguration'; readonly debugType: string | null; } | { readonly type: 'startupFinished'; } | { readonly type: 'resolveAuthority'; readonly authorityPrefix: string; };
+export interface ExtensionHostInitialization {
+	readonly language?: string;
+	readonly workspaceFolders: readonly { readonly uri: string; readonly name: string; readonly index: number; }[];
+	readonly workspaceName: string | null;
+	readonly workspaceFile: string | null;
+	readonly configurationValues: Readonly<Record<string, unknown>>;
+	readonly configurationData: IConfigurationData | null;
+}
+
+/** Collects a snapshot from the existing window owners, without retaining a second fact store. */
+export function createExtensionHostInitialization(workspace: IWorkspaceContextService, configuration: IConfigurationService): ExtensionHostInitialization {
+	const current = workspace.getWorkspace();
+	return Object.freeze({
+		language: getNLSLanguage(),
+		workspaceFolders: Object.freeze(current.folders.map(folder => Object.freeze({ uri: folder.uri.toString(), name: folder.name, index: folder.index }))),
+		workspaceName: current.name ?? null,
+		workspaceFile: current.configuration?.toString() ?? null,
+		configurationValues: configuration.getValue<Readonly<Record<string, unknown>>>(),
+		configurationData: configuration.getConfigurationData(),
+	});
+}
+
 export interface ExtensionHostActivationRequest {
+	readonly initialization?: ExtensionHostInitialization;
 	readonly extensionId: string;
 	readonly activationGeneration: number;
 	readonly event: ExtensionHostActivationEvent;
@@ -200,10 +251,22 @@ export interface ExtensionDocumentEdit {
 
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
+	| { operation: 'readInitialization'; }
 	| { operation: 'openRemoteConnection'; authority: string; }
 	| { operation: 'setStatusBarEntries'; registrationId: string; revision: number; entries: readonly ExtensionStatusBarEntry[]; }
 	| { operation: 'setDiagnostics'; collection: string; entries: ExtensionDiagnosticEntry[]; }
 	| { operation: 'executeCommand'; command: string; arguments: JsonValue[]; }
+	| { operation: 'addDebugBreakpoints'; breakpoints: readonly JsonValue[]; }
+	| { operation: 'removeDebugBreakpoints'; breakpointIds: readonly string[]; }
+	| { operation: 'getDebugProtocolBreakpoint'; sessionId: string; breakpointId: string; }
+	| { operation: 'setDebugSessionName'; sessionId: string; name: string; }
+	| { operation: 'listDebugSessions'; }
+	| (Omit<Extract<ProtocolExtensionClientOperation, { operation: 'startDebugging'; }>, 'configuration'> & { configuration: JsonValue; })
+	| { operation: 'stopDebugging'; sessionId: string | null; }
+	| { operation: 'debugCustomRequest'; sessionId: string; command: string; arguments: JsonValue; hasArguments: boolean; }
+	| { operation: 'fetchTasks'; version: string | null; taskType: string | null; }
+	| { operation: 'executeTask'; taskId: string | null; task: JsonValue | null; }
+	| { operation: 'terminateTask'; executionId: string; }
 	| { operation: 'readDocument'; uri: string; }
 	| { operation: 'listDocuments'; }
 	| { operation: 'applyEdit'; documents: ExtensionDocumentEdit[]; }
@@ -213,7 +276,13 @@ export type ExtensionClientOperation =
 	| { operation: 'showQuickPick'; items: string[]; placeholder: string; };
 
 export type ExtensionClientResult =
-	| { result: 'command'; value: JsonValue; }
+	| { result: 'initialization'; initialization: ExtensionHostInitialization; }
+	| { result: 'debugSessions'; sequence: number; sessions: readonly JsonValue[]; activeSession: string | null; breakpoints: readonly JsonValue[]; }
+	| { result: 'debugStarted'; started: boolean; }
+	| { result: 'debugResponse'; value: JsonValue; hasBody: boolean; }
+	| { result: 'command'; value: JsonValue; hasValue?: boolean; }
+	| { result: 'tasks'; sequence: number; tasks: readonly JsonValue[]; executions: readonly JsonValue[]; }
+	| { result: 'taskExecution'; sequence: number; execution: JsonValue; }
 	| { result: 'document'; document: ExtensionDocumentSnapshot; }
 	| { result: 'documents'; documents: ExtensionDocumentSnapshot[]; }
 	| { result: 'applied'; applied: boolean; }
@@ -467,7 +536,7 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, 'Extension status bar registration', ['kind', 'registrationId', 'revision', 'entries']);
 		return Object.freeze({ kind, registrationId: statusBarIdentifier(registrationId), revision: positiveSafeInteger(input.revision, 'Status bar revision'), entries: normalizeExtensionStatusBarEntries(input.entries) });
 	}
-	if (kind === 'textDocumentEvents') {
+	if (kind === 'workspaceEvents' || kind === 'textDocumentEvents' || kind === 'taskEvents' || kind === 'debugEvents') {
 		exactKeys(input, 'Extension document events registration', ['kind', 'registrationId']);
 		return Object.freeze({ kind, registrationId });
 	}
@@ -530,6 +599,15 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 	if (kind === "debugAdapter") {
 		exactKeys(input, "Extension Host Debug Adapter registration", ["debuggerType", "kind", "registrationId"]);
 		return Object.freeze({ kind, registrationId, debuggerType: boundedText(input.debuggerType, "Extension Host Debug Adapter type", 256) });
+	}
+	if (kind === 'debugAdapterTracker') {
+		exactKeys(input, 'Extension Host Debug Adapter tracker', ['debuggerType', 'kind', 'registrationId']);
+		return Object.freeze({ kind, registrationId, debuggerType: boundedText(input.debuggerType, 'Extension Host Debug Adapter tracker type', 256) });
+	}
+	if (kind === 'debugConfigurationProvider') {
+		exactKeys(input, 'Extension Host Debug configuration provider', ['debuggerType', 'kind', 'registrationId', 'triggerKind']);
+		if (input.triggerKind !== 1 && input.triggerKind !== 2) throw new TypeError('Invalid Debug configuration trigger kind');
+		return Object.freeze({ kind, registrationId, debuggerType: boundedText(input.debuggerType, 'Extension Host Debug configuration type', 256), triggerKind: input.triggerKind });
 	}
 	if (kind === "taskProvider") {
 		exactKeys(input, "Extension Host Task provider registration", ["kind", "registrationId", "taskType"]);

@@ -270,3 +270,31 @@ test('Git command and partial index requests accept reviewed intents and reject 
 	assert.throws(() => decodeAppServerRequestParams('git/indexEdit', { ...selection, selection: { kind: 'lines', start: 0, end: 2 } }), AppServerProtocolDecodeError);
 	assert.throws(() => decodeAppServerRequestParams('git/indexEdit', { ...selection, expectedModified: 'x'.repeat(2097153) }), AppServerProtocolDecodeError);
 });
+
+test('generated DAP start decoder admits connection descriptors and rejects invalid endpoint fields', () => {
+	for (const params of [
+		{ arguments: [], connection: { type: 'server', port: 4711 } },
+		{ arguments: [], connection: { type: 'server', port: 4711, host: '::1' } },
+		{ arguments: [], connection: { type: 'namedPipe', path: '/tmp/adapter.sock' } },
+	]) {
+		assert.deepEqual(decodeAppServerRequestParams('debug/adapter/start', params), params);
+	}
+	for (const params of [
+		{ arguments: [], connection: { type: 'server', port: 0 } },
+		{ arguments: [], connection: { type: 'server', port: 65536 } },
+		{ arguments: [], connection: { type: 'server', port: 4711, unknown: true } },
+		{ arguments: [], connection: { type: 'namedPipe', path: '' } },
+	]) {
+		assert.throws(() => decodeAppServerRequestParams('debug/adapter/start', params), AppServerProtocolDecodeError);
+	}
+});
+
+
+test('extension package location and execution platform survive the generated catalog response', () => {
+	const extension = { id: 'test.debugger', name: 'debugger', publisher: 'test', version: '1.0.0', displayName: 'Debugger', sourceKind: 'plugin', manifestJson: '{}', manifestSha256: 'sha256:' + 'a'.repeat(64), packageSha256: 'sha256:' + 'b'.repeat(64), extensionLocation: 'file:///installed/package%20with%20spaces', targetPlatform: 'darwin-arm64' };
+	const response = { jsonrpc: '2.0', id: 1, result: { generation: 1, extensions: [extension], diagnostics: [] } };
+	assert.deepEqual(decodeAppServerResponse('extensions/list', response), response);
+	for (const field of ['extensionLocation', 'targetPlatform']) {
+		assert.throws(() => decodeAppServerResponse('extensions/list', { ...response, result: { ...response.result, extensions: [{ ...extension, [field]: 1 }] } }), AppServerProtocolDecodeError);
+	}
+});

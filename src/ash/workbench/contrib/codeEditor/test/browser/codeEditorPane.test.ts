@@ -209,6 +209,8 @@ test('open code editor applies live view settings and actions without replacing 
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.findGlobalClipboard, false);
+	await configuration.updateValue(CodeEditorConfiguration.selectionClipboard, false);
 	await configuration.updateValue(CodeEditorConfiguration.lineNumbers, false);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
 	await configuration.updateValue(EditorMinimapConfiguration.enabled, false);
@@ -222,9 +224,13 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(control.getOption(EditorOption.fontSize), EDITOR_FONT_DEFAULTS.fontSize);
 	assert.equal(control.getRawOptions().lineHeight, 0);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
+	assert.equal(control.getOption(EditorOption.find).globalFindClipboard, false);
+	assert.equal(control.getOption(EditorOption.selectionClipboard), false);
 	assert.equal(control.getOption(EditorOption.minimap).enabled, false);
 	assert.equal(control.getOption(EditorOption.minimap).side, 'left');
 
+	await configuration.updateValue(CodeEditorConfiguration.findGlobalClipboard, true);
+	await configuration.updateValue(CodeEditorConfiguration.selectionClipboard, true);
 	await configuration.updateValue(CodeEditorConfiguration.lineNumbers, true);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.Off);
 	await configuration.updateValue(EditorMinimapConfiguration.enabled, true);
@@ -232,6 +238,8 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(pane.getControl(), control);
 	assert.equal(control.getOption(EditorOption.lineNumbers).renderType, 1);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'off');
+	assert.equal(control.getOption(EditorOption.find).globalFindClipboard, true);
+	assert.equal(control.getOption(EditorOption.selectionClipboard), true);
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
 	assert.equal(control.getOption(EditorOption.minimap).size, 'fit');
 	assert.equal(control.getOption(EditorOption.renderWhitespace), 'selection');
@@ -541,6 +549,30 @@ test('acknowledged text saves cannot replay an older crash backup before the cle
 	}
 });
 
+test('editor save cancels when a participant switches the pane input without writing either dirty model', async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	try {
+		const textFiles = new ImmediateTextFiles('original');
+		const store = new BrowserTextResourceStore(textFiles);
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+		using services = paneServices(models);
+		const first = URI.file('/project/first.txt');
+		const second = URI.file('/project/second.txt');
+		using pane = createPane(services, store, { createPart: options => {
+			options.registerBeforeSave?.(() => pane.setInput({ resource: second }, new AbortController().signal));
+			return createInertEditorPart();
+		} });
+		pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
+		await pane.setInput({ resource: first }, new AbortController().signal);
+		using firstReference = await models.acquire({ resource: first }, new AbortController().signal);
+		using secondReference = await models.acquire({ resource: second }, new AbortController().signal);
+		firstReference.model.setValue('first dirty');
+		secondReference.model.setValue('second dirty');
+		await assert.rejects(pane.save(), isCancellationError);
+		assert.deepEqual({ writes: textFiles.savedTexts, first: firstReference.isDirty, second: secondReference.isDirty }, { writes: [], first: true, second: true });
+	} finally { dom.window.close(); }
+});
+
 test("Stanza editor pane saves through the shared whitespace participant", async () => {
 	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -700,6 +732,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.defaultColorDecorators, "always");
 	assert.equal(received?.formatOnSave, true);
 	assert.deepEqual(received?.find, {
+		globalFindClipboard: false,
 		seedSearchStringFromSelection: 'never',
 		autoFindInSelection: 'always',
 		loop: false,

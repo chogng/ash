@@ -10,6 +10,7 @@ use ash_file_access::Authorization;
 use super::ExtensionHostRuntimeError;
 use super::FleetState;
 use super::MAXIMUM_FLEET_EXTENSIONS;
+use super::ReconcileScope;
 use super::RuntimeEntry;
 use super::RuntimeInner;
 use super::authority::prepare_extension;
@@ -117,6 +118,7 @@ impl RuntimeInner {
         generation: NonZeroU64,
     ) -> RuntimeEntry {
         let version = deployment.version.clone();
+        let node_deployment = deployment.command.is_vscode().then(|| deployment.clone());
         let fallback = ExtensionHostExtensionSnapshot {
             id: deployment.id.clone(),
             version: version.clone(),
@@ -133,6 +135,7 @@ impl RuntimeInner {
         };
         if let Some(message) = &deployment.activation_failure {
             return RuntimeEntry {
+                activation_gate: Arc::new(std::sync::Mutex::new(())),
                 version,
                 workspace_read: deployment.workspace_read,
                 supervisor: None,
@@ -143,12 +146,20 @@ impl RuntimeInner {
                     incarnation: None,
                 }),
                 pending_activation: None,
+                node_client: super::NodeClientScope::Unsupported,
+                node_deployment,
             };
         }
         let prepared = prepare_extension(authorization, deployment, generation);
         let supervisor = prepared.and_then(|prepared| {
             let mut limits = self.limits.clone();
-            if prepared.command.is_javascript()
+            if prepared.command.is_vscode() {
+                // prepare_extension has checked exact artifact consent and the live workspace lease.
+                limits.isolation =
+                    ash_editor_extension_host::ProcessIsolationPolicy::AuthorizedNode;
+                limits.maximum_environment_entries = 256;
+                limits.maximum_environment_bytes = 128 * 1024;
+            } else if prepared.command.is_javascript()
                 && matches!(
                     limits.isolation,
                     ash_editor_extension_host::ProcessIsolationPolicy::RequirePlatformEnforcement(
@@ -178,10 +189,20 @@ impl RuntimeInner {
         });
         match supervisor {
             Ok(supervisor) => {
-                let pending_activation = deployment
-                    .activation
-                    .clone()
-                    .filter(|plan| !plan.events.iter().any(|event| event == "*"));
+                let pending_activation =
+                    if deployment.command.is_vscode() {
+                        Some(deployment.activation.clone().unwrap_or_else(|| {
+                            source::ActivationPlan {
+                                events: Vec::new(),
+                                commands: Vec::new(),
+                            }
+                        }))
+                    } else {
+                        deployment
+                            .activation
+                            .clone()
+                            .filter(|plan| !plan.events.iter().any(|event| event == "*"))
+                    };
                 let failure = if pending_activation.is_some() {
                     None
                 } else {
@@ -191,23 +212,94 @@ impl RuntimeInner {
                         .map(|error| runtime_failure(&error, nonzero_incarnation(&supervisor)))
                 };
                 RuntimeEntry {
+                    activation_gate: Arc::new(std::sync::Mutex::new(())),
                     version,
                     workspace_read: deployment.workspace_read,
                     supervisor: Some(supervisor),
                     fallback,
                     failure,
                     pending_activation,
+                    node_deployment,
+                    node_client: if deployment.command.is_vscode() {
+                        super::NodeClientScope::Pending
+                    } else {
+                        super::NodeClientScope::Unsupported
+                    },
                 }
             }
             Err(error) => RuntimeEntry {
+                activation_gate: Arc::new(std::sync::Mutex::new(())),
                 version,
                 workspace_read: deployment.workspace_read,
                 supervisor: None,
                 fallback,
                 failure: Some(runtime_failure(&error, None)),
                 pending_activation: None,
+                node_client: super::NodeClientScope::Unsupported,
+                node_deployment,
             },
         }
+    }
+
+    pub(super) fn ensure_window_entry(
+        &self,
+        owner: u64,
+        id: &str,
+        generation: u64,
+        event: &source::ActivationEvent,
+    ) -> Result<(), ExtensionHostRuntimeError> {
+        let recipe = {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+            let base = state
+                .entries
+                .get(id)
+                .ok_or(ExtensionHostRuntimeError::Stale)?;
+            if base.fallback.activation_generation != generation {
+                return Err(ExtensionHostRuntimeError::Stale);
+            }
+            let Some(deployment) = &base.node_deployment else {
+                return Ok(());
+            };
+            // Connection IDs are assigned by the transport. A retired window cannot resurrect
+            // an instance using a delayed activation request or reuse its incarnation fence.
+            if !self.client_host.is_connected(owner) {
+                return Err(ExtensionHostRuntimeError::Stale);
+            }
+            if state
+                .windows
+                .get(&owner)
+                .is_some_and(|entries| entries.contains_key(id))
+            {
+                return Ok(());
+            }
+            if !deployment
+                .activation
+                .as_ref()
+                .is_some_and(|plan| plan.matches(event))
+            {
+                return Err(ExtensionHostRuntimeError::Stale);
+            }
+            let authorization = state.authorization.clone();
+            (authorization, deployment.clone())
+        };
+        // Recipes are immutable package facts; each window receives a fresh supervisor and lease.
+        let mut entry = self.build_entry(
+            recipe.0.as_ref(),
+            &recipe.1,
+            NonZeroU64::new(generation).ok_or(ExtensionHostRuntimeError::Stale)?,
+        );
+        entry.node_deployment = None;
+        self.state
+            .lock()
+            .map_err(|_| ExtensionHostRuntimeError::Internal)?
+            .windows
+            .entry(owner)
+            .or_default()
+            .insert(id.to_owned(), entry);
+        Ok(())
     }
 
     pub(super) fn reconcile_health_locked(
@@ -217,15 +309,9 @@ impl RuntimeInner {
             .state
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
-            .entries
-            .iter()
+            .all_entries()
             .filter(|(_, entry)| entry.pending_activation.is_none())
-            .filter_map(|(id, entry)| {
-                entry
-                    .supervisor
-                    .clone()
-                    .map(|supervisor| (id.clone(), supervisor))
-            })
+            .filter_map(|(id, entry)| entry.supervisor.clone().map(|supervisor| (id, supervisor)))
             .collect::<Vec<_>>();
         let outcomes = supervisors
             .into_iter()
@@ -240,7 +326,7 @@ impl RuntimeInner {
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
             for (id, supervisor, error) in outcomes {
-                let Some(entry) = state.entries.get_mut(&id) else {
+                let Some(entry) = state.scoped_entry_mut(&id) else {
                     continue;
                 };
                 if entry.supervisor.as_ref().is_some_and(|current| {
@@ -259,22 +345,21 @@ impl RuntimeInner {
 
     pub(super) fn restart_failed_locked(
         &self,
+        scope: ReconcileScope,
     ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
         let supervisors = self
             .state
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
-            .entries
-            .iter()
+            .all_entries()
+            .filter(|((window, _), _)| match scope {
+                ReconcileScope::All => true,
+                ReconcileScope::Window(owner) => window.is_none() || *window == Some(owner),
+            })
             .filter(|(_, entry)| entry.pending_activation.is_none())
             .filter_map(|(id, entry)| {
                 (entry.failure.is_some())
-                    .then(|| {
-                        entry
-                            .supervisor
-                            .clone()
-                            .map(|supervisor| (id.clone(), supervisor))
-                    })
+                    .then(|| entry.supervisor.clone().map(|supervisor| (id, supervisor)))
                     .flatten()
             })
             .collect::<Vec<_>>();
@@ -291,7 +376,7 @@ impl RuntimeInner {
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
             for (id, supervisor, error) in outcomes {
-                let Some(entry) = state.entries.get_mut(&id) else {
+                let Some(entry) = state.scoped_entry_mut(&id) else {
                     continue;
                 };
                 if entry.supervisor.as_ref().is_some_and(|current| {
@@ -317,7 +402,14 @@ impl RuntimeInner {
                 .state
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
-            let entries = std::mem::take(&mut state.entries);
+            let mut entries = std::mem::take(&mut state.entries)
+                .into_values()
+                .collect::<Vec<_>>();
+            entries.extend(
+                std::mem::take(&mut state.windows)
+                    .into_values()
+                    .flat_map(BTreeMap::into_values),
+            );
             let published = self.refresh_generation_locked(&mut state)?;
             (entries, published)
         };
@@ -328,7 +420,7 @@ impl RuntimeInner {
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
             .detach_all(reason);
         cancel_handles(handles, reason);
-        for entry in entries.into_values() {
+        for entry in entries {
             if let Some(supervisor) = entry.supervisor {
                 let _ = supervisor.shutdown();
             }
@@ -345,7 +437,20 @@ impl RuntimeInner {
             .values()
             .map(RuntimeEntry::projection)
             .collect::<Vec<_>>();
-        if current == state.published {
+        let windows = state
+            .windows
+            .iter()
+            .map(|(owner, entries)| {
+                (
+                    *owner,
+                    entries
+                        .values()
+                        .map(RuntimeEntry::projection)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        if current == state.published && windows == state.window_published {
             return Ok(None);
         }
         state.generation = state
@@ -353,6 +458,7 @@ impl RuntimeInner {
             .checked_add(1)
             .ok_or(ExtensionHostRuntimeError::Internal)?;
         state.published = current;
+        state.window_published = windows;
         Ok(Some(state.generation))
     }
 
@@ -370,6 +476,26 @@ impl RuntimeInner {
     pub(super) fn publish(&self, generation: Option<u64>) {
         if let Some(generation) = generation {
             self.updates.publish_extension_host_changed(generation);
+        }
+    }
+}
+
+impl FleetState {
+    fn all_entries(&self) -> impl Iterator<Item = ((Option<u64>, String), &RuntimeEntry)> {
+        self.entries
+            .iter()
+            .map(|(id, entry)| ((None, id.clone()), entry))
+            .chain(self.windows.iter().flat_map(|(owner, entries)| {
+                entries
+                    .iter()
+                    .map(move |(id, entry)| ((Some(*owner), id.clone()), entry))
+            }))
+    }
+
+    fn scoped_entry_mut(&mut self, key: &(Option<u64>, String)) -> Option<&mut RuntimeEntry> {
+        match key.0 {
+            Some(owner) => self.windows.get_mut(&owner)?.get_mut(&key.1),
+            None => self.entries.get_mut(&key.1),
         }
     }
 }

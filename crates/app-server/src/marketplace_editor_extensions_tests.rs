@@ -290,15 +290,19 @@ fn providers(provider: Arc<dyn PluginProvider>) -> ash_core_plugins::PluginProvi
     .unwrap()
 }
 
-#[cfg(any(target_os = "macos", all(windows, target_pointer_width = "64")))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    all(windows, target_pointer_width = "64")
+))]
 #[path = "marketplace_editor_extensions_web_tests.rs"]
 mod web;
 
 #[test]
-fn standard_manifest_derives_implicit_commands_and_languages_and_preserves_startup_events() {
+fn standard_manifest_derives_implicit_commands_languages_and_tasks_and_preserves_startup_events() {
     let plan = super::activation_plan(&serde_json::json!({
         "activationEvents": ["onStartupFinished", "onLanguage", "*"],
-        "contributes": { "commands": [{"command":"demo.run","title":"Run"}], "languages": [{"id":"rust"}] }
+        "contributes": { "commands": [{"command":"demo.run","title":"Run"}], "languages": [{"id":"rust"}], "taskDefinitions": [{"type":"build"}] }
     })).unwrap();
     assert_eq!(
         plan.events,
@@ -307,7 +311,8 @@ fn standard_manifest_derives_implicit_commands_and_languages_and_preserves_start
             "onCommand:demo.run",
             "onLanguage",
             "onLanguage:rust",
-            "onStartupFinished"
+            "onStartupFinished",
+            "onTaskType:build"
         ]
     );
     assert_eq!(plan.commands, [("demo.run".into(), "Run".into())]);

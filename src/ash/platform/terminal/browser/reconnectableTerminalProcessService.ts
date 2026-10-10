@@ -59,6 +59,11 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		return result.profiles;
 	}
 
+	async getEnvironment(names: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>> {
+		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/environment/read"], { names: [...names], dirId });
+		return result.values;
+	}
+
 	getConnectionState(): Promise<TerminalProcessConnectionState> {
 		return Promise.resolve(this.supervisor.state);
 	}
@@ -68,8 +73,10 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 
 	async create(params: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
+		const execution = params.execution?.type === 'process' ? { ...params.execution, args: [...params.execution.args] } : params.execution;
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/create"], {
 			...params,
+			execution,
 			lifecycle: { type: "reconnectable" },
 		});
 		let lease: TerminalReconnectLease;

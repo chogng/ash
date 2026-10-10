@@ -13,6 +13,9 @@ use serde_json::json;
 use std::time::Duration;
 use std::time::Instant;
 
+#[path = "extension_host_window_tests.rs"]
+mod windows;
+
 #[test]
 fn stable_id_combines_plugin_and_manifest_local_identity() {
     assert_eq!(
@@ -138,7 +141,74 @@ fn invocation_operations_are_brokered_by_registration_kind() {
     assert!(registration_allows_operation(&language, "hover"));
     assert!(!registration_allows_operation(&language, "rename"));
     assert!(!registration_allows_operation(&debug, "execute"));
+    assert!(registration_allows_operation(
+        &debug,
+        "createDebugAdapterDescriptor"
+    ));
+    for operation in [
+        "sendInlineDebugAdapter",
+        "readInlineDebugAdapter",
+        "closeInlineDebugAdapter",
+    ] {
+        assert!(registration_allows_operation(&debug, operation));
+        assert!(!registration_allows_operation(&command, operation));
+        assert!(!registration_allows_operation(&language, operation));
+    }
+    let tracker = RegistrationKind::DebugAdapterTracker {
+        debugger_type: "*".into(),
+    };
+    for operation in ["createDebugAdapterTracker", "debugAdapterTrackerEvent"] {
+        assert!(registration_allows_operation(&tracker, operation));
+    }
+    for operation in ["createDebugAdapterDescriptor", "debugEvent", "execute"] {
+        assert!(!registration_allows_operation(&tracker, operation));
+    }
+    let configurations = RegistrationKind::DebugConfigurationProvider {
+        debugger_type: "acme".into(),
+        trigger_kind: 1,
+    };
+    for operation in [
+        "provideDebugConfigurations",
+        "resolveDebugConfiguration",
+        "resolveDebugConfigurationWithSubstitutedVariables",
+    ] {
+        assert!(registration_allows_operation(&configurations, operation));
+    }
+    assert!(!registration_allows_operation(
+        &configurations,
+        "createDebugAdapterDescriptor"
+    ));
+    assert!(!registration_allows_operation(&configurations, "execute"));
+    let tasks = RegistrationKind::TaskProvider {
+        task_type: "builder".into(),
+    };
+    assert!(registration_allows_operation(&tasks, "provideTasks"));
+    assert!(registration_allows_operation(&tasks, "resolveTask"));
+    assert!(!registration_allows_operation(&tasks, "execute"));
+    let task_events = RegistrationKind::TaskEvents {};
+    assert!(registration_allows_operation(&task_events, "taskEvent"));
+    assert!(registration_allows_operation(
+        &task_events,
+        "createTaskTerminal"
+    ));
+    assert!(registration_allows_operation(
+        &task_events,
+        "closeTaskTerminal"
+    ));
+    assert!(!registration_allows_operation(&task_events, "provideTasks"));
+    assert!(!registration_allows_operation(&task_events, "execute"));
+    let debug_events = RegistrationKind::DebugEvents {};
+    assert!(registration_allows_operation(&debug_events, "debugEvent"));
+    assert!(!registration_allows_operation(
+        &debug_events,
+        "createDebugAdapterDescriptor"
+    ));
+    assert!(!registration_allows_operation(&debug_events, "execute"));
     let documents = RegistrationKind::TextDocumentEvents {};
+    let window = RegistrationKind::WorkspaceEvents {};
+    assert!(registration_allows_operation(&window, "workspaceEvent"));
+    assert!(!registration_allows_operation(&window, "execute"));
+    assert!(!registration_allows_operation(&window, "documentEvent"));
     assert!(registration_allows_operation(&documents, "documentEvent"));
     assert!(!registration_allows_operation(&documents, "execute"));
     let channel = RegistrationKind::DataChannel {
@@ -241,6 +311,29 @@ fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
 
 #[test]
 fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant_entries() {
+    use super::source::ActivationEvent;
+    use super::source::DebugActivationPhase;
+    for event in [
+        ActivationEvent::Command("lazy.run".into()),
+        ActivationEvent::TaskType(Some("build".into())),
+        ActivationEvent::Debug {
+            phase: DebugActivationPhase::ResolveConfiguration,
+            debug_type: Some("node".into()),
+        },
+        ActivationEvent::Debug {
+            phase: DebugActivationPhase::InitialConfigurations,
+            debug_type: None,
+        },
+        ActivationEvent::Debug {
+            phase: DebugActivationPhase::DynamicConfigurations,
+            debug_type: Some("node".into()),
+        },
+    ] {
+        assert_lazy_activation_fence(event);
+    }
+}
+
+fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
     use ash_editor_extension_host::{
         ExtensionHostLimits, ExtensionHostSupervisor, ExtensionLaunchCommand, RestartPolicy,
     };
@@ -275,6 +368,7 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
     )
     .unwrap();
     let params = ash_editor_extension_host::ActivateParams {
+        initialization: None,
         extension_id: "lazy".into(),
         package: ash_editor_extension_host::PackageBinding {
             package_id: "lazy@1".into(),
@@ -282,7 +376,13 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
             entrypoint: "main.js".into(),
         },
         runtime_api_version: 1,
-        activation_events: vec!["onCommand:lazy.run".into()],
+        activation_events: vec![
+            "onCommand:lazy.run".into(),
+            "onTaskType:build".into(),
+            "onDebugResolve:node".into(),
+            "onDebugInitialConfigurations".into(),
+            "onDebugDynamicConfigurations:node".into(),
+        ],
         capabilities: vec![ash_editor_extension_host::ExtensionCapability::Command],
     };
     let supervisor = ExtensionHostSupervisor::new(
@@ -302,12 +402,21 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
         state.entries.insert(
             "lazy".into(),
             super::RuntimeEntry {
+                activation_gate: Arc::new(std::sync::Mutex::new(())),
+                node_client: super::NodeClientScope::Unsupported,
+                node_deployment: None,
                 version: "1".into(),
                 workspace_read: super::source::WorkspaceReadAccess::Denied,
                 supervisor: Some(supervisor),
                 failure: None,
                 pending_activation: Some(super::source::ActivationPlan {
-                    events: vec!["onCommand:lazy.run".into()],
+                    events: vec![
+                        "onCommand:lazy.run".into(),
+                        "onTaskType:build".into(),
+                        "onDebugResolve:node".into(),
+                        "onDebugInitialConfigurations".into(),
+                        "onDebugDynamicConfigurations:node".into(),
+                    ],
                     commands: vec![("lazy.run".into(), "Run".into())],
                 }),
                 fallback: super::projection::ExtensionHostExtensionSnapshot {
@@ -341,14 +450,18 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
     }
     assert_eq!(launcher.0.load(Ordering::SeqCst), 0);
     for (generation, event) in [
-        (
-            6,
-            super::source::ActivationEvent::Command("lazy.run".into()),
-        ),
+        (6, event.clone()),
         (7, super::source::ActivationEvent::Language("rust".into())),
     ] {
         assert!(matches!(
-            runtime.activate_by_event("lazy", generation, event),
+            runtime.activate_by_event(
+                1,
+                "lazy",
+                generation,
+                event,
+                None,
+                Err(test_files_unavailable())
+            ),
             Err(ExtensionHostRuntimeError::Stale)
         ));
     }
@@ -357,17 +470,23 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
         let first = scope.spawn(|| {
             runtime
                 .activate_by_event(
+                    1,
                     "lazy",
                     7,
-                    super::source::ActivationEvent::Command("lazy.run".into()),
+                    event.clone(),
+                    None,
+                    Err(test_files_unavailable()),
                 )
                 .unwrap()
         });
         let second = runtime
             .activate_by_event(
+                1,
                 "lazy",
                 7,
-                super::source::ActivationEvent::Command("lazy.run".into()),
+                event.clone(),
+                None,
+                Err(test_files_unavailable()),
             )
             .unwrap();
         assert_eq!(first.join().unwrap(), second);
@@ -384,9 +503,12 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
     // A failed first attempt is observable; duplicate first-use requests do not replay startup.
     runtime
         .activate_by_event(
+            1,
             "lazy",
             7,
-            super::source::ActivationEvent::Command("lazy.run".into()),
+            event.clone(),
+            None,
+            Err(test_files_unavailable()),
         )
         .unwrap();
     assert_eq!(
@@ -397,9 +519,12 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
     assert!(
         runtime
             .activate_by_event(
+                1,
                 "lazy",
                 7,
-                super::source::ActivationEvent::Command("lazy.run".into())
+                event.clone(),
+                None,
+                Err(test_files_unavailable())
             )
             .is_err()
     );
@@ -455,14 +580,52 @@ fn directory_changes_do_not_reuse_extension_activation_generations() {
     assert!(runtime.inner.state.lock().unwrap().authority_generation > first_generation);
     assert!(matches!(
         runtime.activate_by_event(
+            1,
             "lazy",
             first_generation,
-            super::source::ActivationEvent::Command("lazy.run".into())
+            super::source::ActivationEvent::Command("lazy.run".into()),
+            None,
+            Err(test_files_unavailable()),
         ),
         Err(ExtensionHostRuntimeError::Stale)
     ));
     first_grant.revoke();
     second_grant.revoke();
+}
+
+#[test]
+fn extension_activation_accepts_authenticated_editor_transports_without_promoting_rpc_clients() {
+    use crate::server::ConnectionAuthority;
+    use crate::tests::{call, initialize, server};
+    let server = server();
+    for (mut connection, expected) in [
+        (server.connection(), "ResourceNotOwner"),
+        (server.browser_connection(), "ExtensionHostUnavailable"),
+        (server.product_host_connection(), "ExtensionHostUnavailable"),
+    ] {
+        initialize(&server, &mut connection);
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": 2, "method": "extensionHost/activate",
+                "params": { "extensionId": "acme/test:tasks", "activationGeneration": 1,
+                    "event": { "type": "taskType", "taskType": "build" } }
+            }),
+        );
+        assert_eq!(response["error"]["message"], expected);
+        assert_eq!(
+            connection.allows_product_host_capabilities(),
+            connection.authority == ConnectionAuthority::ProductHost
+        );
+    }
+}
+
+fn test_files_unavailable() -> ash_editor_extension_host::HostFailure {
+    ash_editor_extension_host::HostFailure {
+        code: ash_editor_extension_host::HostErrorCode::OperationNotSupported,
+        message: "test has no filesystem".into(),
+    }
 }
 
 #[test]
@@ -503,7 +666,14 @@ fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet()
             .is_none()
     );
     server
-        .extension_host_start(&first, &json!({"environment":{"SET":"one","REMOVE":null}}))
+        .extension_host_start(
+            &first,
+            &json!({"environment":{
+                "SET":"one", "REMOVE":null,
+                "node_repl_auth_token":"synthetic-host-control",
+                "OPENAI_IDENTITY_TOKEN_FILE":null
+            }}),
+        )
         .unwrap();
     server
         .extension_host_start(&second, &json!({"environment":{"SET":"two"}}))
@@ -542,16 +712,16 @@ fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet()
             .is_none()
     );
     server.close_connection(first);
-    assert!(one.snapshot().extensions.is_empty());
-    assert!(!two.snapshot().extensions.is_empty());
+    assert!(one.snapshot_for(0).extensions.is_empty());
+    assert!(!two.snapshot_for(0).extensions.is_empty());
     server.close_connection(second);
-    assert!(two.snapshot().extensions.is_empty());
+    assert!(two.snapshot_for(0).extensions.is_empty());
     assert!(
         !server
             .extension_hosts
             .as_ref()
             .unwrap()
-            .snapshot()
+            .snapshot_for(0)
             .extensions
             .is_empty()
     );

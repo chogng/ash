@@ -3,6 +3,7 @@ import { setupTerminalMenus } from './terminalMenus.js';
 import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
 import '../../terminalContrib/links/browser/terminal.links.contribution.js';
 import '../../terminalContrib/find/browser/terminal.find.contribution.js';
+import '../../terminalContrib/accessibility/browser/terminal.accessibility.contribution.js';
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { TERMINAL_VIEW_ID } from "../common/terminal.js";

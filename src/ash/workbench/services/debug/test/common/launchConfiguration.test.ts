@@ -21,13 +21,17 @@ test("launch configurations parse an explicit generic DAP command", () => {
 		name: "Debug app",
 		type: "example",
 		request: "launch",
+		adapterExplicit: true,
 		adapter: { program: "adapter", arguments: ["--stdio"] },
 		arguments: { program: "${workspaceFolder}/app", stopOnEntry: true },
 	}]);
 });
 
-test("launch configurations reject implicit adapter discovery", () => {
-	assert.throws(() => parseLaunchConfigurations('{"version":"0.2.0","configurations":[{"name":"Debug","type":"node","request":"launch"}]}'), /debugAdapter must be an object/);
+test("launch configurations retain a dormant type before its descriptor factory activates", () => {
+	const configuration = parseLaunchConfigurations('{"version":"0.2.0","configurations":[{"name":"Debug","type":"node","request":"launch"}]}')[0]!;
+	assert.equal(configuration.type, 'node');
+	assert.equal(configuration.adapter, undefined);
+	assert.equal(configuration.adapterExplicit, false);
 });
 
 test("launch documents keep task orchestration out of DAP arguments and resolve compounds separately", () => {
@@ -50,6 +54,7 @@ test("launch documents keep task orchestration out of DAP arguments and resolve 
 		name: "Server",
 		type: "example",
 		request: "launch",
+		adapterExplicit: true,
 		adapter: { program: "adapter", arguments: [] },
 		arguments: { program: "server" },
 		preLaunchTask: "build",
@@ -62,4 +67,11 @@ test("launch configurations resolve declarative extension debug adapters by type
 	const configurations = parseLaunchConfigurations('{"version":"0.2.0","configurations":[{"name":"Debug","type":"demo","request":"launch","program":"app"}]}', type => type === "demo" ? { program: "demo-adapter", arguments: ["--stdio"] } : undefined);
 	assert.deepEqual(configurations[0]?.adapter, { program: "demo-adapter", arguments: ["--stdio"] });
 	assert.deepEqual(configurations[0]?.arguments, { program: "app" });
+});
+
+
+test('launch compounds retain folder-qualified references and reject missing selectors', () => {
+	const document = parseLaunchConfigurationDocument(JSON.stringify({ version: '0.2.0', configurations: [], compounds: [{ name: 'Both', configurations: [{ name: 'Launch', folder: 'Server' }, 'Client'] }] }));
+	assert.deepEqual(document.compounds[0]?.configurations, [{ name: 'Launch', folder: 'Server' }, 'Client']);
+	assert.throws(() => parseLaunchConfigurationDocument(JSON.stringify({ version: '0.2.0', configurations: [], compounds: [{ name: 'Invalid', configurations: [{ name: 'Launch' }] }] })), /folder/);
 });

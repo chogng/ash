@@ -4,6 +4,7 @@ use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::catalog_budget::CatalogBudget;
@@ -49,6 +50,8 @@ pub struct ExtensionDescriptor {
     pub display_name: String,
     /// Trusted root provenance.
     pub source_kind: ExtensionSourceKind,
+    /// Canonical package directory selected by the same immutable authority snapshot.
+    pub extension_location: PathBuf,
     /// Canonical JSON representation of the complete manifest.
     pub manifest_json: String,
     /// SHA-256 digest of the canonical JSON bytes exposed in `manifest_json`.
@@ -692,6 +695,7 @@ fn discover_package(
             version,
             display_name,
             source_kind: source_kind(&root.kind),
+            extension_location: package_root,
             manifest_json: canonical_manifest,
             manifest_sha256,
             package_sha256,

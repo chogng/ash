@@ -45,7 +45,10 @@ export function validateExtensionDebugAdapterDefinitions(definitions: readonly E
 	for (const definition of definitions) {
 		const previous = byType.get(definition.type);
 		if (previous) throw new Error(`Debug adapter type '${definition.type}' is contributed by both '${previous.extensionId}' and '${definition.extensionId}'`);
-		byType.set(definition.type, Object.freeze({ ...definition, arguments: Object.freeze([...definition.arguments]) }));
+		byType.set(definition.type, Object.freeze({
+			...definition, arguments: Object.freeze([...definition.arguments]),
+			...(definition.variables === undefined ? {} : { variables: Object.freeze({ ...definition.variables }) }),
+		}));
 	}
 	return Object.freeze([...byType.values()].sort((left, right) => left.type.localeCompare(right.type)));
 }

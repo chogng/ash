@@ -41,8 +41,8 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 		(view.element.querySelector<HTMLButtonElement>(".ash-debug-frame")!).click();
 		await waitFor(() => opened.length === 2);
 		const openedInput = opened[0] as IResourceEditorInput;
-		assert.equal(openedInput.resource.scheme, "debug-source");
-		assert.deepEqual({ ...openedInput, resource: undefined }, { resource: undefined, label: "generated.ts", contentType: "text/typescript", readOnly: true, initialText: "const generated = true;" });
+		assert.equal(openedInput.resource.scheme, "debug");
+		assert.deepEqual({ ...openedInput, resource: undefined }, { resource: undefined, label: "generated.ts", readOnly: true });
 
 		const caught = view.element.querySelector<HTMLInputElement>("input[data-exception-filter='caught']")!;
 		caught.checked = true;
@@ -317,7 +317,7 @@ test("Debug variable editing respects read-only hints, retains adapter errors, a
 	}
 });
 
-test("Debug welcome creates a launch document and reopens existing configuration without overwriting it", async () => {
+test("Debug welcome creates extension launch templates and reopens existing configuration without overwriting it", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const globals = installDomGlobals(browser);
 	const opened: IResourceEditorInput[] = [];
@@ -326,6 +326,7 @@ test("Debug welcome creates a launch document and reopens existing configuration
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
 		debug.configurations = [];
+		debug.initialConfigurations = [{ name: 'Extension launch', type: 'example', request: 'launch', program: '${workspaceFolder}/app' }];
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.welcome", title: "Debug" });
@@ -334,7 +335,7 @@ test("Debug welcome creates a launch document and reopens existing configuration
 		create.click();
 		await waitFor(() => opened.length === 1);
 		const resource = URI.file("/workspace/.vscode/launch.json").toString();
-		assert.deepEqual(JSON.parse(support.documents.get(resource)!), { version: "0.2.0", configurations: [] });
+		assert.deepEqual(JSON.parse(support.documents.get(resource)!), { version: "0.2.0", configurations: debug.initialConfigurations });
 		support.documents.set(resource, "user configuration");
 		create.click();
 		await waitFor(() => opened.length === 2);
@@ -347,3 +348,39 @@ test("Debug welcome creates a launch document and reopens existing configuration
 
 async function waitFor(predicate: () => boolean): Promise<void> { const deadline = Date.now() + 2_000; while (!predicate()) { if (Date.now() > deadline) throw new Error("Timed out waiting for Debug view"); await new Promise(resolve => setTimeout(resolve, 10)); } }
 function installDomGlobals(browser: JSDOM): readonly string[] { const globals = { window: browser.window, document: browser.window.document, Node: browser.window.Node, Element: browser.window.Element, HTMLElement: browser.window.HTMLElement, Event: browser.window.Event, MouseEvent: browser.window.MouseEvent, navigator: browser.window.navigator }; for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value }); return Object.keys(globals); }
+
+
+for (const change of ['document created', 'workspace replaced', 'view disposed'] as const) {
+	test(`Debug launch creation preserves ownership when ${change} while the extension template is pending`, async () => {
+		const browser = new JSDOM("<!doctype html><body></body>");
+		const globals = installDomGlobals(browser);
+		const opened: IResourceEditorInput[] = [];
+		const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
+		try {
+			const { DebugViewPane } = await import("../../browser/debugViewPane.js");
+			using debug = new MockDebugService();
+			debug.configurations = [];
+			using support = new DebugViewTestServices();
+			using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+			using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.welcome", title: "Debug" });
+			let signal: AbortSignal | undefined;
+			const templates = new DeferredPromise<readonly import('../../../../services/debug/common/debugService.js').DebugConfiguration[]>();
+			debug.provideDebugConfigurations = async (_folder, incoming) => { signal = incoming; return templates.p; };
+			view.element.querySelector<HTMLButtonElement>(".ash-debug-welcome-content button")!.click();
+			await waitFor(() => signal !== undefined);
+			const resource = URI.file("/workspace/.vscode/launch.json").toString();
+			if (change === 'document created') support.documents.set(resource, 'user configuration');
+			else if (change === 'workspace replaced') support.workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
+			else view.dispose();
+			if (change !== 'document created') assert.equal(signal!.aborted, true);
+			await templates.complete([]);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(support.writes, 0);
+			assert.equal(opened.length, change === 'document created' ? 1 : 0);
+			assert.equal(support.documents.get(resource), change === 'document created' ? 'user configuration' : undefined);
+		} finally {
+			for (const name of globals) Reflect.deleteProperty(globalThis, name);
+			browser.window.close();
+		}
+	});
+}

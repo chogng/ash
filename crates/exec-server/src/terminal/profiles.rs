@@ -93,7 +93,7 @@ impl TerminalProfileSpec {
         }
     }
 
-    fn command_args(&self, command: &str) -> Vec<String> {
+    pub(crate) fn command_args(&self, command: &str) -> Vec<String> {
         match self.profile_id.as_str() {
             "powershell" | "windows-powershell" => vec![
                 "-NoLogo".into(),

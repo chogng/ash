@@ -36,6 +36,10 @@ pub enum ProcessIsolationPolicy {
     /// Product-owned V8 process: no direct filesystem, network or child processes;
     /// separate heap/backing-store budgets and per-request execution deadlines.
     RequireJavaScriptEnforcement(JavaScriptMemoryLimits),
+    /// Standard VS Code extensions run with user-level Node capabilities after exact-package
+    /// execution consent. The supervisor still enforces protocol quotas, deadlines and revocation;
+    /// this policy does not claim V8 confinement or a whole-process memory limit.
+    AuthorizedNode,
     /// Explicit opt-in for trusted local development. Never use for installed third-party code.
     TrustedDevelopment,
 }

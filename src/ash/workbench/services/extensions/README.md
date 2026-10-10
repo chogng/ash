@@ -59,6 +59,7 @@ Both static contribution loaders refresh on Marketplace changes, including remov
 | `themes`                 | Parsed metadata catalog; `ExtensionColorThemeService` independently owns selectable color themes            | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
 | `iconThemes`             | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme`                     | File associations and light variants; folder-specific associations are not consumed by the current file label contract       |
 | `productIconThemes`      | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork                                                                              |
+| `problemMatchers` / `problemPatterns` | Bounded named patterns, matcher inheritance and background declarations enter the task matcher registry | Search-based file locations remain incomplete |
 | `debuggers`              | Unique type, label, adapter program, and args                                                               | Discovery only; no VS Code Debug Extension API                                                                               |
 
 `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
@@ -200,3 +201,16 @@ authority, manifest NLS, or arbitrary extension runtime. Ash's executable Host R
 separate Plugin-authorized service under `workbench/services/extensionHost`; it is not an evolution
 of this loader and is not a VS Code/Node Extension Host. The executable path remains in the source pending retirement. Its existing contract and the
 TS/JS product direction are distinguished in `docs/editor-extensions.md`.
+
+Problem contributions are prepared with the complete declarative catalog. Invalid regular
+expressions, missing references, duplicate names and cyclic bases reject replacement before
+publication. A failed refresh preserves the previous matcher set. Package removal or loader
+disposal releases its registrations; already running collectors retain their execution snapshot.
+
+Tasks and Debug resolve `${extensionInstallFolder:publisher.name}` through
+`IExtensionService.getExtension`. The existing catalog preserves the validated installation URI;
+execution paths follow its host platform. Lookup waits for catalog loading, reads the current catalog
+without activating the extension, and does not retain a separate cache. Missing or disabled extensions
+have no resolvable installation folder. An unchanged package and adapter declaration retain their
+factory identity across scan revisions, so a path lookup awaiting refresh does not revoke a launch.
+Package changes or removal still retire that executable owner.

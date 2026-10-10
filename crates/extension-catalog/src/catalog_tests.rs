@@ -40,6 +40,10 @@ fn discovers_manifest_and_reads_a_grammar_resource() {
     assert_eq!(snapshot.extensions.len(), 1);
     assert_eq!(snapshot.extensions[0].id, "ash.demo");
     assert_eq!(
+        snapshot.extensions[0].extension_location,
+        fs::canonicalize(&package).expect("canonical package")
+    );
+    assert_eq!(
         snapshot.extensions[0].manifest_sha256,
         format!(
             "sha256:{:x}",

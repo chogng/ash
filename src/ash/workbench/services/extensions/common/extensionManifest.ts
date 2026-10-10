@@ -1,3 +1,8 @@
+import { localize } from '../../../../nls.js';
+import { validateJsonValue } from '../../../../base/common/jsonValue.js';
+import { ConfigurationScope, type IConfigurationNode, type IConfigurationPropertySchema } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { URI } from '../../../../base/common/uri.js';
+import { posix, win32 } from '../../../../base/common/path.js';
 import { validateTokenId, type ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
 import { getTokenClassificationRegistry, type TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import type { SemanticTokenScopeContribution } from '../../themes/common/tokenClassificationExtensionPoint.js';
@@ -40,8 +45,9 @@ export interface ExtensionThemeContribution {
 export interface ExtensionDebugAdapterContribution {
 	readonly type: string;
 	readonly label: string;
-	readonly program: string;
+	readonly program?: string;
 	readonly arguments: readonly string[];
+	readonly variables?: Readonly<Record<string, string>>;
 }
 
 export interface ExtensionCustomEditorContribution {
@@ -57,6 +63,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly configuration: readonly IConfigurationNode[];
 		readonly languages: readonly ExtensionLanguageContribution[];
 		readonly grammars: readonly ExtensionGrammarContribution[];
 		readonly snippets: readonly ExtensionSnippetContribution[];
@@ -70,6 +77,8 @@ export interface ExtensionManifest {
 		readonly semanticTokenScopes: readonly SemanticTokenScopeContribution[];
 		readonly icons: readonly ExtensionIconContribution[];
 		readonly customEditors: readonly ExtensionCustomEditorContribution[];
+		readonly problemMatchers: readonly Readonly<Record<string, unknown>>[];
+		readonly problemPatterns: readonly Readonly<Record<string, unknown>>[];
 	};
 }
 
@@ -79,6 +88,8 @@ export interface ExtensionManifestDescriptor {
 	readonly publisher: string;
 	readonly version: string;
 	readonly displayName?: string;
+	readonly extensionLocation?: string;
+	readonly targetPlatform?: string;
 }
 
 export async function verifyExtensionManifestDigest(extension: { readonly id: string; readonly manifestJson: string; readonly manifestSha256: string; }): Promise<void> {
@@ -112,6 +123,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		version,
 		displayName,
 		contributes: Object.freeze({
+			configuration: parseConfigurations(contributes.configuration),
 			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),
 			grammars: Object.freeze(contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id)),
 			snippets: Object.freeze(contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id)),
@@ -124,9 +136,41 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			semanticTokenScopes: parseSemanticScopes(contributes.semanticTokenScopes),
 			icons: parseIcons(contributes.icons),
 			customEditors: parseCustomEditors(contributes.customEditors, descriptor.id),
-			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor.id)),
+			problemMatchers: parseProblemContributions(contributes.problemMatchers, 'problemMatchers'),
+			problemPatterns: parseProblemContributions(contributes.problemPatterns, 'problemPatterns'),
+			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor)),
 		}),
 	});
+}
+
+function parseConfigurations(value: unknown): readonly IConfigurationNode[] {
+	if (value === undefined) return Object.freeze([]);
+	const scopes: Readonly<Record<string, ConfigurationScope>> = { application: ConfigurationScope.APPLICATION, machine: ConfigurationScope.MACHINE, window: ConfigurationScope.WINDOW, resource: ConfigurationScope.RESOURCE, 'language-overridable': ConfigurationScope.LANGUAGE_OVERRIDABLE, 'machine-overridable': ConfigurationScope.MACHINE_OVERRIDABLE };
+	const parseNode = (value: unknown): IConfigurationNode => {
+		const node = record(validateJsonValue(value), 'contributes.configuration');
+		const properties: Record<string, IConfigurationPropertySchema> = Object.create(null);
+		for (const [key, value] of Object.entries(node.properties === undefined ? {} : record(node.properties, 'contributes.configuration.properties'))) {
+			const schema = record(value, `contributes.configuration.properties.${key}`);
+			const scope = schema.scope === undefined ? ConfigurationScope.WINDOW : typeof schema.scope === 'string' ? scopes[schema.scope] : undefined;
+			if (scope === undefined) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", key));
+			properties[key] = Object.freeze({ ...schema, scope }) as IConfigurationPropertySchema;
+		}
+		if (node.allOf !== undefined && !Array.isArray(node.allOf)) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'allOf'));
+		return Object.freeze({ ...(typeof node.id === 'string' ? { id: node.id } : {}), ...(typeof node.title === 'string' ? { title: node.title } : {}), properties: Object.freeze(properties), ...(Array.isArray(node.allOf) ? { allOf: Object.freeze(node.allOf.map(parseNode)) } : {}) });
+	};
+	const nodes = Array.isArray(value) ? value : [value];
+	if (nodes.length > 64) throw new RangeError(localize('configuration.contributionLimit', 'An extension may contribute at most {0} configuration sections.', 64));
+	return Object.freeze(nodes.map(parseNode));
+}
+
+function parseProblemContributions(value: unknown, field: string): readonly Readonly<Record<string, unknown>>[] {
+	if (value === undefined) return Object.freeze([]);
+	if (!Array.isArray(value) || value.length > 256) throw new TypeError(localize('extensions.problemContributionArray', '{0} must be an array of at most 256 entries', field));
+	return Object.freeze(value.map(item => {
+		const contribution = record(item, field);
+		if (typeof contribution.name !== 'string' || !contribution.name.trim() || contribution.name.length > 128 || contribution.name.startsWith('$') || /[\x00-\x1f\x7f]/.test(contribution.name)) throw new TypeError(localize('extensions.problemContributionName', 'Invalid {0} name', field));
+		return Object.freeze(contribution);
+	}));
 }
 
 function parseCustomEditors(value: unknown, extensionId: string): readonly ExtensionCustomEditorContribution[] {
@@ -249,23 +293,83 @@ function extensionUiTheme(value: unknown, owner: string): string {
 	return uiTheme;
 }
 
-function parseDebuggers(value: unknown, extensionId: string): readonly ExtensionDebugAdapterContribution[] {
+function parseDebuggers(value: unknown, descriptor: ExtensionManifestDescriptor): readonly ExtensionDebugAdapterContribution[] {
+	const extensionId = descriptor.id;
 	if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' debugger contributions must be an array`);
 	if (value.length > 64) throw new RangeError(`Extension '${extensionId}' cannot contribute more than 64 debuggers`);
 	const debuggers = value.map((candidate, index) => {
 		const debuggerContribution = record(candidate, `Extension '${extensionId}' debugger ${index}`);
-		const adapter = record(debuggerContribution.debugAdapter, `Extension '${extensionId}' debugger ${index} debugAdapter`);
-		const argumentsList = adapter.args === undefined ? [] : parseDebuggerArguments(adapter.args, extensionId, index);
-		return Object.freeze({ type: languageId(debuggerContribution.type, `Extension '${extensionId}' debugger ${index} type`), label: requiredString(debuggerContribution.label, `Extension '${extensionId}' debugger ${index} label`, 256), program: requiredString(adapter.program, `Extension '${extensionId}' debugger ${index} debugAdapter program`, 4096), arguments: Object.freeze(argumentsList) });
+		const adapter = debuggerContribution.debugAdapter === undefined ? undefined : record(debuggerContribution.debugAdapter, `Extension '${extensionId}' debugger ${index} debugAdapter`);
+		const type = languageId(debuggerContribution.type, `Extension '${extensionId}' debugger ${index} type`);
+		const label = debuggerContribution.label === undefined ? type : requiredString(debuggerContribution.label, `Extension '${extensionId}' debugger ${index} label`, 256);
+		const variables = debuggerContribution.variables === undefined ? undefined : parseDebuggerVariables(debuggerContribution.variables, type);
+		if (adapter) {
+			const argumentsList = adapter.args === undefined ? [] : parseDebuggerArguments(adapter.args, extensionId, index);
+			return Object.freeze({ type, label, program: requiredString(adapter.program, `Extension '${extensionId}' debugger ${index} debugAdapter program`, 4096), arguments: Object.freeze(argumentsList), ...(variables === undefined ? {} : { variables }) });
+		}
+		const platform = descriptor.targetPlatform?.split('-')[0];
+		const overrides: Record<string, unknown> = {};
+		for (const key of ['win', 'windows', 'winx86', 'osx', 'linux']) {
+			if (debuggerContribution[key] === undefined) continue;
+			const values = record(debuggerContribution[key], `Debugger ${key}`);
+			if (Object.keys(values).length && platform === undefined) throw new Error(localize('extensions.debugAdapterPlatformUnavailable', "The execution platform for debug adapter '{0}' is unavailable.", type));
+			const selected = platform === 'darwin' && key === 'osx' || platform === 'linux' && key === 'linux'
+				|| platform === 'win32' && (key === 'win' || key === 'windows' || key === 'winx86' && descriptor.targetPlatform === 'win32-ia32');
+			if (selected) Object.assign(overrides, values);
+		}
+		const executable = { ...debuggerContribution, ...overrides };
+		const program = executable.program === undefined ? undefined : requiredString(executable.program, 'Debugger program', 4096);
+		const runtime = executable.runtime === undefined ? undefined : requiredString(executable.runtime, 'Debugger runtime', 4096);
+		const args = executable.args === undefined ? [] : parseDebuggerArguments(executable.args, extensionId, index);
+		const runtimeArgs = executable.runtimeArgs === undefined ? [] : parseDebuggerArguments(executable.runtimeArgs, extensionId, index);
+		const resolvedProgram = program === undefined ? undefined : debuggerPath(program, descriptor, type, false);
+		return Object.freeze({
+			type, label,
+			...(variables === undefined ? {} : { variables }),
+			program: runtime === undefined ? resolvedProgram : debuggerPath(runtime, descriptor, type, true),
+			arguments: Object.freeze(runtime === undefined ? args : [...runtimeArgs, ...(resolvedProgram === undefined ? [] : [resolvedProgram]), ...args]),
+		});
 	});
 	if (new Set(debuggers.map(debuggerContribution => debuggerContribution.type)).size !== debuggers.length) throw new RangeError(`Extension '${extensionId}' debugger types must be unique`);
 	return Object.freeze(debuggers);
 }
 
+function parseDebuggerVariables(value: unknown, type: string): Readonly<Record<string, string>> {
+	const invalid = () => new TypeError(localize('extensions.invalidDebuggerVariables', "The command variable mapping for debug adapter '{0}' is invalid.", type));
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid();
+	const entries = Object.entries(value);
+	if (entries.length > 64 || entries.some(([name, command]) => !name.trim() || name.length > 256 || /[\0\r\n{}]/.test(name)
+		|| typeof command !== 'string' || !command.trim() || command.length > 256 || /[\0\r\n]/.test(command))) throw invalid();
+	return Object.freeze(Object.fromEntries(entries));
+}
+
+function debuggerPath(value: string, descriptor: ExtensionManifestDescriptor, type: string, runtime: boolean): string {
+	// A runtime command may come from PATH. A program names an installed package
+	// file, even when its relative path has no separator.
+	if (runtime && !/[\\/]/.test(value)) return value;
+	const location = descriptor.extensionLocation === undefined ? undefined : URI.parse(descriptor.extensionLocation);
+	const windows = descriptor.targetPlatform?.startsWith('win32-') || location?.authority || /^\/[a-z]:\//i.test(location?.path ?? '');
+	const paths = windows ? win32 : posix;
+	if (paths.isAbsolute(value)) return paths.normalize(value);
+	if (!location || location.scheme !== 'file' || !location.path.startsWith('/') || location.query || location.fragment) {
+		throw new Error(localize('extensions.debugAdapterLocationUnavailable', "The installed location for debug adapter '{0}' is unavailable.", type));
+	}
+	let directory = location.path;
+	if (windows) {
+		directory = location.authority ? `\\\\${location.authority}${location.path.replaceAll('/', '\\')}` : location.path.replace(/^\/(?=[a-z]:)/i, '').replaceAll('/', '\\');
+	}
+	return paths.normalize(directory + paths.sep + value);
+}
+
 function parseDebuggerArguments(value: unknown, extensionId: string, index: number): readonly string[] {
 	if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' debugger ${index} debugAdapter args must be an array`);
 	if (value.length > 128) throw new RangeError(`Extension '${extensionId}' debugger ${index} debugAdapter args cannot contain more than 128 values`);
-	return value.map((argument, argumentIndex) => boundedText(argument, `Extension '${extensionId}' debugger ${index} debugAdapter arg ${argumentIndex}`, 4096));
+	return value.map((argument, argumentIndex) => {
+		if (typeof argument !== 'string' || argument.length > 4096 || argument.includes('\0')) {
+			throw new TypeError(`Extension '${extensionId}' debugger ${index} debugAdapter arg ${argumentIndex} is invalid`);
+		}
+		return argument;
+	});
 }
 
 function parseScopeMap<T>(value: unknown, extensionId: string, index: number, field: string, parseValue: (value: unknown, owner: string, maximum?: number) => T, parseKey: (value: string, owner: string) => string = scopeNameValue): Readonly<Record<string, T>> {
@@ -352,7 +456,7 @@ function requiredString(value: unknown, owner: string, maximum: number): string 
 }
 
 function boundedText(value: unknown, owner: string, maximum = 256): string {
-	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || /[\0\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
 	return value;
 }
 

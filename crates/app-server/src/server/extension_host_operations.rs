@@ -61,10 +61,15 @@ impl AppServer {
         ) {
             return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
         }
-        let params: ash_app_server_protocol::protocol::extension_host::ExtensionHostStartParams =
+        let mut params: ash_app_server_protocol::protocol::extension_host::ExtensionHostStartParams =
             decode(params)?;
         extension_protocol::validate_environment(&params.environment)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        // Explicit window overrides share the developer-process authentication boundary.
+        // A renderer cannot reintroduce host control credentials excluded by the launcher.
+        params
+            .environment
+            .retain(|key, _| !exec_server::terminal::is_private_process_environment_key(key));
         let mut state = super::connection_state(connection);
         if state.closed || state.extension_hosts.is_some() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
@@ -76,7 +81,7 @@ impl AppServer {
         let runtime = source
             .fork(params.environment)
             .map_err(|error| runtime_rpc_error(ExtensionHostRuntimeError::Host(error)))?;
-        let response = result(&fleet_dto(runtime.snapshot()))?;
+        let response = result(&fleet_dto(runtime.snapshot_for(connection.connection_id)))?;
         state.extension_hosts = Some(runtime);
         Ok(response)
     }
@@ -86,7 +91,7 @@ impl AppServer {
         connection: &ConnectionState,
     ) -> Result<Value, RpcError> {
         let runtime = self.extension_host_runtime(connection)?;
-        result(&fleet_dto(runtime.snapshot()))
+        result(&fleet_dto(runtime.snapshot_for(connection.connection_id)))
     }
 
     pub(super) fn extension_host_activate(
@@ -95,9 +100,11 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         use super::extension_host_runtime::source::ActivationEvent;
+        use super::extension_host_runtime::source::DebugActivationPhase;
         use ash_app_server_protocol::protocol::extension_host::ExtensionHostActivateParams;
         use ash_app_server_protocol::protocol::extension_host::ExtensionHostActivationEventDto;
-        if !connection.allows_product_host_capabilities()
+        use ash_app_server_protocol::protocol::extension_host::ExtensionHostDebugActivationPhaseDto;
+        if !connection.allows_extension_activation()
             && super::connection_state(connection)
                 .extension_hosts
                 .is_none()
@@ -105,6 +112,13 @@ impl AppServer {
             return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
         }
         let params: ExtensionHostActivateParams = decode(params)?;
+        if params
+            .initialization
+            .as_ref()
+            .is_some_and(|initialization| initialization.validate().is_err())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let valid_text = |value: &str, maximum: usize| {
             !value.is_empty() && value.len() <= maximum && !value.chars().any(char::is_control)
         };
@@ -113,6 +127,12 @@ impl AppServer {
             ExtensionHostActivationEventDto::Language { language_id } => {
                 valid_text(language_id, 128)
             }
+            ExtensionHostActivationEventDto::TaskType { task_type } => task_type
+                .as_ref()
+                .is_none_or(|task_type| valid_text(task_type, 128)),
+            ExtensionHostActivationEventDto::Debug { debug_type, .. } => debug_type
+                .as_ref()
+                .is_none_or(|debug_type| valid_text(debug_type, 128)),
             ExtensionHostActivationEventDto::StartupFinished {} => true,
             ExtensionHostActivationEventDto::ResolveAuthority { authority_prefix } => {
                 valid_text(authority_prefix, 64)
@@ -131,6 +151,26 @@ impl AppServer {
             ExtensionHostActivationEventDto::Language { language_id } => {
                 ActivationEvent::Language(language_id)
             }
+            ExtensionHostActivationEventDto::TaskType { task_type } => {
+                ActivationEvent::TaskType(task_type)
+            }
+            ExtensionHostActivationEventDto::Debug { phase, debug_type } => {
+                ActivationEvent::Debug {
+                    phase: match phase {
+                        ExtensionHostDebugActivationPhaseDto::Start => DebugActivationPhase::Start,
+                        ExtensionHostDebugActivationPhaseDto::InitialConfigurations => {
+                            DebugActivationPhase::InitialConfigurations
+                        }
+                        ExtensionHostDebugActivationPhaseDto::DynamicConfigurations => {
+                            DebugActivationPhase::DynamicConfigurations
+                        }
+                        ExtensionHostDebugActivationPhaseDto::ResolveConfiguration => {
+                            DebugActivationPhase::ResolveConfiguration
+                        }
+                    },
+                    debug_type,
+                }
+            }
             ExtensionHostActivationEventDto::StartupFinished {} => ActivationEvent::StartupFinished,
             ExtensionHostActivationEventDto::ResolveAuthority { authority_prefix } => {
                 ActivationEvent::ResolveAuthority(authority_prefix)
@@ -138,7 +178,19 @@ impl AppServer {
         };
         result(&fleet_dto(
             self.extension_host_runtime(connection)?
-                .activate_by_event(&params.extension_id, params.activation_generation, event)
+                .activate_by_event(
+                    connection.connection_id,
+                    &params.extension_id,
+                    params.activation_generation,
+                    event,
+                    params.initialization,
+                    self.file_system_service_for(None).map_err(|_| {
+                        ash_editor_extension_host::HostFailure {
+                            code: ash_editor_extension_host::HostErrorCode::OperationNotSupported,
+                            message: "workspace filesystem is unavailable".into(),
+                        }
+                    }),
+                )
                 .map_err(runtime_rpc_error)?,
         ))
     }
@@ -157,7 +209,7 @@ impl AppServer {
         };
         let snapshot = self
             .extension_host_runtime(connection)?
-            .reconcile(mode)
+            .reconcile_for(connection.connection_id, mode)
             .map_err(runtime_rpc_error)?;
         result(&fleet_dto(snapshot))
     }
@@ -419,9 +471,14 @@ fn registration_dto(
             RegistrationKind::StatusBar { revision, entries } => {
                 ExtensionHostRegistrationKindDto::StatusBar { revision, entries }
             }
+            RegistrationKind::WorkspaceEvents {} => {
+                ExtensionHostRegistrationKindDto::WorkspaceEvents {}
+            }
             RegistrationKind::TextDocumentEvents {} => {
                 ExtensionHostRegistrationKindDto::TextDocumentEvents {}
             }
+            RegistrationKind::TaskEvents {} => ExtensionHostRegistrationKindDto::TaskEvents {},
+            RegistrationKind::DebugEvents {} => ExtensionHostRegistrationKindDto::DebugEvents {},
             RegistrationKind::ExternalUriOpener { schemes, label } => {
                 ExtensionHostRegistrationKindDto::ExternalUriOpener {
                     schemes: schemes
@@ -459,6 +516,16 @@ fn registration_dto(
             RegistrationKind::DebugAdapter { debugger_type } => {
                 ExtensionHostRegistrationKindDto::DebugAdapter { debugger_type }
             }
+            RegistrationKind::DebugAdapterTracker { debugger_type } => {
+                ExtensionHostRegistrationKindDto::DebugAdapterTracker { debugger_type }
+            }
+            RegistrationKind::DebugConfigurationProvider {
+                debugger_type,
+                trigger_kind,
+            } => ExtensionHostRegistrationKindDto::DebugConfigurationProvider {
+                debugger_type,
+                trigger_kind,
+            },
             RegistrationKind::TaskProvider { task_type } => {
                 ExtensionHostRegistrationKindDto::TaskProvider { task_type }
             }

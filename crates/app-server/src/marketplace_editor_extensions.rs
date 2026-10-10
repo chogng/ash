@@ -134,7 +134,7 @@ pub(crate) fn deployments(
         };
         // Invalid declarations belong to this package's failure state, never the whole fleet.
         let (activation, activation_failure, activation_events) =
-            match javascript_activation_plan(&source) {
+            match javascript_activation_plan(&source.host_path()) {
                 Ok(plan) => {
                     let events = plan.events.clone();
                     (Some(plan), None, events)
@@ -146,6 +146,8 @@ pub(crate) fn deployments(
             ExtensionCapability::Command,
             ExtensionCapability::LanguageProvider,
             ExtensionCapability::StatusBar,
+            ExtensionCapability::TaskProvider,
+            ExtensionCapability::DebugAdapter,
         ];
         let binding = MarketplaceEditorExtensionBinding {
             package: source.package().clone(),
@@ -166,7 +168,7 @@ pub(crate) fn deployments(
             .to_str()
             .ok_or("invalid extension source path")?
             .to_string();
-        let command = ExtensionLaunchCommand::javascript(
+        let command = ExtensionLaunchCommand::vscode(
             executable,
             vec![
                 "--extension-id".into(),
@@ -192,6 +194,7 @@ pub(crate) fn deployments(
             workspace_read:
                 crate::server::extension_host_runtime::source::WorkspaceReadAccess::Denied,
             params: ActivateParams {
+                initialization: None,
                 extension_id,
                 package: PackageBinding {
                     package_id: format!("{}@{}", source.package().id, source.package().version),
@@ -268,6 +271,7 @@ fn deployment(
         )
         .map_err(|error| error.to_string())?,
         params: ActivateParams {
+            initialization: None,
             extension_id,
             package: PackageBinding {
                 package_id: format!("{}@{}", source.package().id, source.package().version),
@@ -443,9 +447,13 @@ impl ActivationAuthority for MarketplaceExecutableAuthority {
 }
 
 /// Reads declarations separately from the process registrations published after activation.
-fn javascript_activation_plan(source: &LocalCapabilitySource) -> Result<ActivationPlan, String> {
-    let bytes = std::fs::read(source.host_path().join("package.json"))
-        .map_err(|error| error.to_string())?;
+pub(crate) fn javascript_activation_plan(root: &std::path::Path) -> Result<ActivationPlan, String> {
+    let path = root.join("package.json");
+    let metadata = std::fs::symlink_metadata(&path).map_err(|_| "missing extension manifest")?;
+    if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 {
+        return Err("invalid extension manifest".into());
+    }
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     let manifest: serde_json::Value =
         serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
     activation_plan(&manifest)
@@ -486,6 +494,18 @@ fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, Strin
             events.insert(format!("onLanguage:{id}"));
         }
     }
+    if let Some(entries) = manifest.pointer("/contributes/taskDefinitions") {
+        for entry in entries.as_array().ok_or("invalid task definitions")? {
+            let task_type = entry
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| {
+                    !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
+                })
+                .ok_or("invalid task definition type")?;
+            events.insert(format!("onTaskType:{task_type}"));
+        }
+    }
     if events.len() > MAXIMUM_ACTIVATION_EVENTS
         || events
             .iter()
@@ -517,11 +537,8 @@ pub(crate) fn javascript_entrypoint(
     let manifest: serde_json::Value =
         serde_json::from_slice(&std::fs::read(path).map_err(|_| "missing extension manifest")?)
             .map_err(|_| "invalid extension manifest")?;
-    let entry = if manifest.get("browser").is_some() {
-        manifest.get("browser")
-    } else {
-        manifest.get("main")
-    };
+    // This is a Node extension host: the desktop entry has priority over a web bundle.
+    let entry = manifest.get("main").or_else(|| manifest.get("browser"));
     let Some(entry) = entry else {
         return Ok(None);
     };
@@ -548,7 +565,7 @@ pub(crate) fn javascript_entrypoint(
         std::path::Path::new(&entry)
             .extension()
             .and_then(|ext| ext.to_str()),
-        Some("js" | "mjs")
+        Some("js" | "mjs" | "cjs")
     ) {
         return Err("unsupported extension entry".into());
     }

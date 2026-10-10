@@ -274,6 +274,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
             cols: 80,
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::ConnectionOwned,
+            env: None,
         })
         .unwrap();
     #[cfg(windows)]
@@ -380,6 +381,7 @@ fn shared_backend_preserves_a_reconnectable_terminal_between_stdio_clients() {
             cols: 80,
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::Reconnectable,
+            env: None,
         })
         .unwrap();
     let lease = created.reconnect.unwrap();

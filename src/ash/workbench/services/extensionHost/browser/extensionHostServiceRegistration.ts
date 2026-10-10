@@ -1,3 +1,6 @@
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IExtensionService } from '../../extensions/common/extensionService.js';
 import { IExtensionHostApi } from "../../../../platform/extensionHost/common/extensionHostApi.js";
 import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import { ILogService } from "../../../../platform/log/common/log.js";
@@ -12,7 +15,7 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 
 registerWorkbenchServiceContribution({
 	service: IExtensionHostService,
-	dependencies: [IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService, IQuickInputService],
+	dependencies: [IConfigurationService, IWorkspaceContextService, IExtensionService, IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService, IQuickInputService],
 	install: context => {
 		const service = context.register(context.container.createInstance(AppServerExtensionHostService, CommandsRegistry, 30_000));
 		const ready = service.start();

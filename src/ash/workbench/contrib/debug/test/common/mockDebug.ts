@@ -1,15 +1,31 @@
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { IModelService } from '../../../../../editor/common/services/model.js';
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
+import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
+import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { DebugContentProvider } from '../../common/debugContentProvider.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import type { IDebugAdapterTrackerFactory, DebugAdapterTrackerFactoryRegistration, DebugConfiguration, DebugConfigurationProviderRegistration, IDebugConfigurationProvider } from '../../../../services/debug/common/debugService.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { createFileSystemProviderError, FileKind, FileNotFoundError, FileSystemProviderErrorCode, IFileService, type IFileStat, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../../../../platform/workspace/common/workspace.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
-import type { DebugBreakpoint, IBaseBreakpoint, IDataBreakpoint, IDataBreakpointInfoResponse, IDataBreakpointOptions, IFunctionBreakpoint, IFunctionBreakpointOptions, IInstructionBreakpoint, IInstructionBreakpointOptions, DebugEvaluateContext, DebugSessionState, DebugSteppingGranularity, IDebugBreakpoint, IDebugBreakpointUpdate, IDebugCompound, IDebugConfiguration, IDebugEvaluateResult, IDebugScope, IDebugService, IDebugSession, IDisassembledInstruction, IDebugSource, IDebugSourceContent, IDebugStackFrame, IDebugThread, IDebugVariable } from '../../../../services/debug/common/debugService.js';
+import { IDebugService } from '../../../../services/debug/common/debugService.js';
+import type { DebugBreakpoint, IBaseBreakpoint, IDataBreakpoint, IDataBreakpointInfoResponse, IDataBreakpointOptions, IFunctionBreakpoint, IFunctionBreakpointOptions, IInstructionBreakpoint, IInstructionBreakpointOptions, DebugEvaluateContext, DebugSessionState, DebugSteppingGranularity, IDebugBreakpoint, IDebugBreakpointUpdate, IDebugCompound, IDebugConfiguration, IDebugEvaluateResult, IDebugScope, IDebugSession, IDisassembledInstruction, IDebugSource, IDebugSourceContent, IDebugStackFrame, IDebugThread, IDebugVariable } from '../../../../services/debug/common/debugService.js';
 
 export class MockDebugService extends Disposable implements IDebugService {
+	public readonly onWillNewSession = Event.None;
+	public readonly onDidNewSession = Event.None;
+	public readonly onDidEndSession = Event.None;
 	private readonly configurationEmitter = this._register(new Emitter<readonly IDebugConfiguration[]>());
 	private readonly breakpointEmitter = this._register(new Emitter<readonly DebugBreakpoint[]>());
 	private readonly watchEmitter = this._register(new Emitter<readonly string[]>());
@@ -31,6 +47,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 	public exceptionBreakpoints: readonly string[] = Object.freeze(['uncaught']);
 	public readonly sessions: readonly IDebugSession[];
 	public session: IDebugSession | undefined;
+	public getSession(id: string): IDebugSession | undefined { return this.sessions.find(session => session.id === id); }
 	public readonly onDidChangeConfigurations = this.configurationEmitter.event;
 	public readonly onDidChangeBreakpoints = this.breakpointEmitter.event;
 	public readonly onDidChangeWatchExpressions = this.watchEmitter.event;
@@ -40,14 +57,29 @@ export class MockDebugService extends Disposable implements IDebugService {
 		super();
 		this.sessions = Object.freeze([this._register(new MockDebugSession('session-one', 'One', source)), this._register(new MockDebugSession('session-two', 'Two', source))]);
 	}
+	public initialConfigurations: readonly DebugConfiguration[] = [];
+	public async provideDebugConfigurations(_folder: URI, _signal?: AbortSignal): Promise<readonly DebugConfiguration[]> { return this.initialConfigurations; }
+	public registerDebugAdapterTrackerFactories(_factories: readonly IDebugAdapterTrackerFactory[]): DebugAdapterTrackerFactoryRegistration {
+		const registration = toDisposable(() => { }) as DebugAdapterTrackerFactoryRegistration;
+		registration.replace = () => { };
+		return registration;
+	}
+	public registerDebugConfigurationProviders(_providers: readonly IDebugConfigurationProvider[]): DebugConfigurationProviderRegistration {
+		const registration = toDisposable(() => { }) as DebugConfigurationProviderRegistration;
+		registration.replace = () => { };
+		return registration;
+	}
 	public async refresh(): Promise<readonly IDebugConfiguration[]> { this.configurationEmitter.fire(this.configurations); return this.configurations; }
 	public async start(): Promise<IDebugSession> { this.operations.push('start'); return this.sessions[0]!; }
+	public async startDynamicDebugging(_folder: URI, _configuration: DebugConfiguration): Promise<IDebugSession> { this.operations.push('startDynamic'); return this.sessions[0]!; }
 	public async startDebugging(): Promise<IDebugSession> { return this.sessions[0]!; }
 	public async startCompound(): Promise<readonly IDebugSession[]> { return this.sessions; }
 	public setActiveSession(session: IDebugSession): void { this.activate(session); }
 	public async restart(session = this.session): Promise<IDebugSession> { return session!; }
 	public async stop(): Promise<void> { this.operations.push('stop'); }
 	public async stopAll(): Promise<void> { }
+	public addBreakpoints(): void { throw new Error('Bulk breakpoints are unsupported in this fixture'); }
+	public removeBreakpoints(ids: readonly string[]): void { for (const id of ids) { this.removeBreakpoint(id); } }
 	public toggleBreakpoint(resource: URI, lineNumber: number): void {
 		const id = `${resource.toString()}:${lineNumber}`;
 		if (this.breakpoints.some(point => point.id === id)) this.removeBreakpoint(id);
@@ -123,6 +155,13 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	public readonly reason = 'breakpoint';
 	public readonly onDidChangeState = this.stateEmitter.event;
 	public readonly onDidOutput = this.outputEmitter.event;
+	public readonly onDidCustomEvent = Event.None;
+	public readonly onDidChangeName = Event.None;
+	public readonly onDidChangeThread = Event.None;
+	public get name(): string { return this.configuration.name; }
+	public setName(): void { throw new Error("Renaming is unsupported in this fixture"); }
+	public getDebugProtocolBreakpoint(): undefined { return undefined; }
+	public async customRequest(): Promise<never> { throw new Error("Custom requests are unsupported in this fixture"); }
 	public readonly output = '';
 	constructor(public readonly id: string, name: string, private readonly stackSource: IDebugSource) {
 		super();
@@ -168,6 +207,16 @@ export class DebugViewTestServices extends Disposable {
 	}
 
 	public register(services: ServiceCollection): ServiceCollection {
+		const modelServices = this._register(workbenchInstantiationService());
+		const identity = this._register(new TestUriIdentityServices());
+		services.set(IUriIdentityService, identity.get(IUriIdentityService));
+		services.set(ILogService, new NullLoggerService());
+		services.set(IModelService, modelServices.get(IModelService));
+		services.set(ILanguageService, modelServices.get(ILanguageService));
+		services.set(ITextModelService, modelServices.get(ITextModelService));
+		const providerServices = this._register(new InstantiationService(services));
+		services.set(ICommandService, this._register(new CommandService(providerServices)));
+		this._register(providerServices.createInstance(DebugContentProvider));
 		const stat = (resource: URI): IFileStat => ({ resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined });
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		services.set(IWorkspaceContextService, this.workspace);

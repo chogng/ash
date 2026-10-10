@@ -397,6 +397,15 @@ impl ConnectionState {
         self.authority == ConnectionAuthority::ProductHost
     }
 
+    fn allows_extension_activation(&self) -> bool {
+        // Both authenticated editor transports own first-use activation. This
+        // does not grant the product host's unrelated privileged capabilities.
+        matches!(
+            self.authority,
+            ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+        )
+    }
+
     fn allows_file_unlock(&self) -> bool {
         // Authenticated Web saves may change ordinary file attributes, but cannot elevate.
         matches!(
@@ -3013,6 +3022,9 @@ impl AppServer {
             Some(ClientMethod::CloudCodebaseSync) => self.cloud_codebase_sync(&request.params),
             Some(ClientMethod::CloudCodebaseRevoke) => self.cloud_codebase_revoke(&request.params),
             Some(ClientMethod::TerminalProfileList) => self.terminal_profile_list(&request.params),
+            Some(ClientMethod::TerminalEnvironmentRead) => {
+                self.terminal_environment_read(&request.params)
+            }
             Some(ClientMethod::TerminalCreate) => self.terminal_create(connection, &request.params),
             Some(ClientMethod::TerminalCreateInSessionDirectory) => {
                 self.terminal_create_in_session_directory(connection, &request.params)

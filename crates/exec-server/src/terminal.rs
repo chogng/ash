@@ -17,6 +17,7 @@ use ash_utils_pty::ProcessSignal;
 use ash_utils_pty::SpawnedProcess;
 use ash_utils_pty::TerminalSize;
 use ash_utils_pty::spawn_pty_process;
+pub use environment::is_private_process_environment_key;
 pub use environment::safe_process_environment;
 pub use exec_server_protocol::terminal::TerminalAttachRequest;
 pub use exec_server_protocol::terminal::TerminalAttachResult;
@@ -24,6 +25,7 @@ pub use exec_server_protocol::terminal::TerminalCommandStatus;
 pub use exec_server_protocol::terminal::TerminalCommandStatusEvent;
 pub use exec_server_protocol::terminal::TerminalCreateRequest;
 pub use exec_server_protocol::terminal::TerminalCreateResult;
+pub use exec_server_protocol::terminal::TerminalExecution;
 pub use exec_server_protocol::terminal::TerminalLifecycle;
 pub use exec_server_protocol::terminal::TerminalOutputChunk;
 pub use exec_server_protocol::terminal::TerminalProcessInfo;
@@ -100,6 +102,32 @@ impl TerminalService {
         self.profiles.list()
     }
 
+    /// Reads only requested values from the environment used to spawn this service's shells.
+    pub fn environment(&self, names: &[String]) -> Result<HashMap<String, String>, TerminalError> {
+        self.ensure_active()?;
+        if names.len() > 128
+            || names
+                .iter()
+                .any(|name| name.is_empty() || name.len() > 256 || name.contains(['=', '\0']))
+        {
+            return Err(TerminalError::InvalidInput);
+        }
+        Ok(names
+            .iter()
+            .filter_map(|name| {
+                let key = if cfg!(windows) {
+                    name.to_ascii_uppercase()
+                } else {
+                    name.clone()
+                };
+                self.profiles
+                    .environment()
+                    .get(&key)
+                    .map(|value| (name.clone(), value.clone()))
+            })
+            .collect())
+    }
+
     pub fn default_shell_command(&self, command: &str) -> (String, Vec<String>) {
         self.profiles.default_command(command)
     }
@@ -138,16 +166,106 @@ impl TerminalService {
         if sessions.len() >= MAX_ACTIVE_TERMINALS {
             return Err(TerminalError::Busy);
         }
-        let dir_root = authorization.dir().canonical_path().to_path_buf();
-        let integration = ShellIntegration::prepare(profile, self.profiles.environment())
-            .map_err(|_| TerminalError::OperationFailed)?;
+        let authorized_root = authorization.dir().canonical_path();
+        let dir_root = match params.cwd {
+            Some(path) => {
+                let path = authorized_root.join(path);
+                let path = path
+                    .canonicalize()
+                    .map_err(|_| TerminalError::InvalidInput)?;
+                if !path.is_dir() || !path.starts_with(authorized_root) {
+                    return Err(TerminalError::InvalidInput);
+                }
+                path
+            }
+            None => authorized_root.to_path_buf(),
+        };
+        let mut environment = self.profiles.environment().clone();
+        if let Some(overrides) = params.env {
+            if overrides.len() > 128 {
+                return Err(TerminalError::InvalidInput);
+            }
+            for (key, value) in overrides {
+                if key.is_empty()
+                    || key.len() > 256
+                    || key.contains(['=', '\0'])
+                    || value
+                        .as_ref()
+                        .is_some_and(|value| value.len() > 32768 || value.contains('\0'))
+                {
+                    return Err(TerminalError::InvalidInput);
+                }
+                let key = if cfg!(windows) {
+                    key.to_ascii_uppercase()
+                } else {
+                    key
+                };
+                // A client override cannot reintroduce launcher authentication.
+                if is_private_process_environment_key(&key) {
+                    continue;
+                }
+                match value {
+                    Some(value) => {
+                        environment.insert(key, value);
+                    }
+                    None => {
+                        environment.remove(&key);
+                    }
+                }
+            }
+        }
+        // Interactive shells retain their startup wrappers until output closes.
+        // Task process/shell executions preserve argv and do not source those wrappers.
+        let integration = if params.execution.is_none() {
+            Some(
+                ShellIntegration::prepare(profile, &environment)
+                    .map_err(|_| TerminalError::OperationFailed)?,
+            )
+        } else {
+            None
+        };
+        let (program, args) = match params.execution {
+            Some(TerminalExecution::Process { program, args }) => {
+                if program.trim().is_empty()
+                    || program.len() > 32768
+                    || program.contains('\0')
+                    || args.len() > 1024
+                    || args
+                        .iter()
+                        .any(|value| value.len() > 32768 || value.contains('\0'))
+                {
+                    return Err(TerminalError::InvalidInput);
+                }
+                (program, args)
+            }
+            Some(TerminalExecution::Shell { command_line }) => {
+                if command_line.trim().is_empty()
+                    || command_line.len() > 32768
+                    || command_line.contains('\0')
+                {
+                    return Err(TerminalError::InvalidInput);
+                }
+                (profile.program.clone(), profile.command_args(&command_line))
+            }
+            None => (
+                profile.program.clone(),
+                integration
+                    .as_ref()
+                    .expect("interactive shell integration was prepared")
+                    .args
+                    .clone(),
+            ),
+        };
         let spawned = self
             .runtime
             .block_on(spawn_pty_process(
-                &profile.program,
-                &integration.args,
+                &program,
+                &args,
                 &dir_root,
-                &integration.environment,
+                integration
+                    .as_ref()
+                    .map(|value| &value.environment)
+                    .unwrap_or(&environment),
                 &None,
                 TerminalSize {
                     rows: params.rows,
@@ -349,10 +467,15 @@ impl TerminalService {
             rows: params.rows,
             cols: params.cols,
         };
-        session
-            .process
-            .resize(size)
-            .map_err(|_| TerminalError::OperationFailed)?;
+        // The renderer can resize its retained terminal after the child exits,
+        // before the next output poll reports that exit. Released PTY handles
+        // must not turn a completed task into a transport failure.
+        if !session.process.has_exited()
+            && session.process.resize(size).is_err()
+            && !session.process.has_exited()
+        {
+            return Err(TerminalError::OperationFailed);
+        }
         session.size = size;
         Ok(())
     }
@@ -542,7 +665,7 @@ fn spawn_output_drainers(
     runtime: &Runtime,
     spawned: SpawnedProcess,
     state: Arc<Mutex<TerminalState>>,
-    integration: ShellIntegration,
+    integration: Option<ShellIntegration>,
 ) -> Arc<ProcessHandle> {
     let SpawnedProcess {
         session,

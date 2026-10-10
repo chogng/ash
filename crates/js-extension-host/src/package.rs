@@ -21,7 +21,7 @@ pub(crate) enum PackageOrigin {
     Product,
 }
 
-/// Immutable ESM bytes captured before extension code runs. Resolution never reads host files.
+/// Immutable package bytes captured before extension code runs. Resolution never reads host files.
 pub(crate) struct Package {
     pub(crate) origin: PackageOrigin,
     pub(crate) binding: Option<extension_protocol::PackageBinding>,
@@ -65,14 +65,14 @@ impl Package {
         root: PathBuf,
         entry: String,
     ) -> Result<Self, String> {
-        let mut package = Self::read(extension_id, root.clone(), entry.clone())?;
-        let manifest =
-            std::fs::read(root.join("package.json")).map_err(|_| "missing VS Code manifest")?;
-        if manifest.len() > MAX_MODULE_BYTES as usize {
-            return Err("VS Code manifest quota exceeded".into());
-        }
+        let mut package =
+            Self::read_package(extension_id, &root, entry.clone(), ApiContract::Vscode)?;
+        let manifest = package
+            .sources
+            .get("package.json")
+            .ok_or("missing VS Code manifest")?;
         let manifest: serde_json::Value =
-            serde_json::from_slice(&manifest).map_err(|_| "invalid VS Code manifest")?;
+            serde_json::from_str(manifest).map_err(|_| "invalid VS Code manifest")?;
         let commands = manifest
             .pointer("/contributes/commands")
             .cloned()
@@ -87,44 +87,82 @@ impl Package {
             .ok_or("missing VS Code name")?;
         let public_extension_id = format!("{publisher}.{name}");
         let configuration = serde_json::to_string(
-            &serde_json::json!({"commands": commands, "extensionId": public_extension_id}),
+            &serde_json::json!({
+                "commands": commands,
+                "extensionId": public_extension_id,
+                "debuggers": manifest.pointer("/contributes/debuggers").cloned().unwrap_or(serde_json::json!([])),
+                "extensionPath": root.to_str().ok_or("package root is not UTF-8")?,
+                "pathSeparator": std::path::MAIN_SEPARATOR.to_string(),
+                "manifest": manifest,
+            }),
         )
         .map_err(|error| error.to_string())?;
-        let source = package.sources.get(&entry).ok_or("missing VS Code entry")?;
-        // A CommonJS bundle receives only the public editor module. It cannot obtain a Node
-        // loader, host globals or package files through require, regardless of its manifest entry.
-        let source = serde_json::to_string(&format!("\"use strict\";\n{source}"))
+        // Package files are function bodies/data, not ESM imports. The loader reads only
+        // this captured map after confinement and shares one cache throughout the incarnation.
+        // Defer package evaluation until its window facts are bound and SDK activation has begun.
+        let sources = serde_json::to_string(
+            &serde_json::to_string(&package.sources).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let root = serde_json::to_string(root.to_str().ok_or("package root is not UTF-8")?)
+            .map_err(|error| error.to_string())?;
+        let entry_name = serde_json::to_string(&entry).map_err(|error| error.to_string())?;
+        let separator = serde_json::to_string(&std::path::MAIN_SEPARATOR.to_string())
             .map_err(|error| error.to_string())?;
         let wrapper = format!(
-            "import {{ createApi }} from '@ash/vscode';\nconst bridge = createApi({configuration});\nconst module = {{ exports: {{}} }};\nconst require = name => {{ if (name !== 'vscode') throw new Error('Unsupported extension module: ' + name); return bridge.api; }};\nFunction('exports', 'require', 'module', {source}).call(module.exports, module.exports, require, module);\nexport async function activate(context) {{ bridge.activate(context); const result = await module.exports.activate(context); bridge.didActivate(); return result; }}\nexport function deactivate() {{ bridge.deactivate(); return module.exports.deactivate?.(); }}\n"
+            "import {{ createApi }} from '@ash/vscode';\nimport {{ loadCommonJS }} from '@ash/commonjs';\nlet bridge, module;\nexport function activate(context, capabilities, initialization) {{ bridge = createApi({configuration}, JSON.parse(initialization)); module = loadCommonJS(JSON.parse({sources}), {root}, {separator}, {entry_name}, bridge.api); return bridge.activate(context, module.exports.activate, module.exports, JSON.parse(capabilities)); }}\nexport function deactivate() {{ bridge?.deactivate(); return module?.exports.deactivate?.(); }}\n"
         );
+        package.sources.clear();
         package.sources.insert(entry, wrapper);
+        package.sources.insert(
+            "@ash/extension".into(),
+            include_str!("../../../extension-sdk/index.js").into(),
+        );
         package
             .sources
             .insert("@ash/vscode".into(), include_str!("vscode.js").into());
-        package.api = ApiContract::Vscode;
+        package
+            .sources
+            .insert("@ash/commonjs".into(), include_str!("commonjs.js").into());
         Ok(package)
     }
 
     pub(crate) fn read(extension_id: String, root: PathBuf, entry: String) -> Result<Self, String> {
+        Self::read_package(extension_id, &root, entry, ApiContract::Ash)
+    }
+
+    fn read_package(
+        extension_id: String,
+        root: &Path,
+        entry: String,
+        api: ApiContract,
+    ) -> Result<Self, String> {
         if !root.is_absolute() || !valid_path(&entry) || extension_id.is_empty() {
             return Err("invalid extension package binding".into());
         }
         let mut sources = BTreeMap::new();
         let mut bytes = 0;
         let mut entries = 0;
-        collect(&root, &root, &mut sources, &mut bytes, &mut entries, 0)?;
-        if !sources.contains_key(&entry) {
-            return Err("extension entry must be an existing .js or .mjs module".into());
+        collect(root, root, api, &mut sources, &mut bytes, &mut entries, 0)?;
+        let extension = Path::new(&entry)
+            .extension()
+            .and_then(|value| value.to_str());
+        if !sources.contains_key(&entry)
+            || !(matches!(extension, Some("js" | "mjs"))
+                || api == ApiContract::Vscode && extension == Some("cjs"))
+        {
+            return Err("extension entry must be an existing JavaScript module".into());
         }
-        sources.insert(
-            "@ash/extension".into(),
-            include_str!("../../../extension-sdk/index.js").into(),
-        );
+        if api == ApiContract::Ash {
+            sources.insert(
+                "@ash/extension".into(),
+                include_str!("../../../extension-sdk/index.js").into(),
+            );
+        }
         Ok(Self {
             origin: PackageOrigin::Installed,
             binding: None,
-            api: ApiContract::Ash,
+            api,
             extension_id,
             entry,
             sources,
@@ -135,6 +173,7 @@ impl Package {
 fn collect(
     root: &Path,
     directory: &Path,
+    api: ApiContract,
     sources: &mut BTreeMap<String, String>,
     bytes: &mut usize,
     entries: &mut usize,
@@ -154,12 +193,16 @@ fn collect(
             return Err("extension module snapshot cannot contain symbolic links".into());
         }
         if kind.is_dir() {
-            collect(root, &entry.path(), sources, bytes, entries, depth + 1)?;
+            collect(root, &entry.path(), api, sources, bytes, entries, depth + 1)?;
         } else if kind.is_file()
-            && matches!(
+            && (matches!(
                 entry.path().extension().and_then(|value| value.to_str()),
                 Some("js" | "mjs")
-            )
+            ) || api == ApiContract::Vscode
+                && matches!(
+                    entry.path().extension().and_then(|value| value.to_str()),
+                    Some("cjs" | "json")
+                ))
         {
             let metadata = entry.metadata().map_err(|error| error.to_string())?;
             if metadata.len() > MAX_MODULE_BYTES as u64 || sources.len() >= MAX_MODULES {
@@ -184,7 +227,10 @@ fn collect(
 }
 
 pub(crate) fn resolve(referrer: &str, specifier: &str) -> Result<String, String> {
-    if matches!(specifier, "@ash/extension" | "@ash/vscode") {
+    if matches!(
+        specifier,
+        "@ash/extension" | "@ash/vscode" | "@ash/commonjs"
+    ) {
         return Ok(specifier.into());
     }
     if !specifier.starts_with("./") && !specifier.starts_with("../") {

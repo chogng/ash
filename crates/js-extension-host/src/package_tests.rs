@@ -55,3 +55,30 @@ fn bounds_package_scan_before_reading_a_large_module() {
     file.set_len(super::MAX_MODULE_BYTES as u64 + 1).unwrap();
     assert!(Package::read("example".into(), root.path().into(), "main.js".into()).is_err());
 }
+
+#[test]
+fn commonjs_snapshot_captures_data_and_modules_without_compiling_unused_files() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("package.json"),
+        "{\"publisher\":\"test\",\"name\":\"fixture\"}",
+    )
+    .unwrap();
+    std::fs::write(root.path().join("main.cjs"), "exports.activate = () => {};").unwrap();
+    std::fs::write(root.path().join("data.json"), "{\"value\":\"captured\"}").unwrap();
+    std::fs::write(root.path().join("unused.js"), "unused invalid source }").unwrap();
+    let package =
+        Package::read_vscode("example".into(), root.path().into(), "main.cjs".into()).unwrap();
+    std::fs::write(root.path().join("data.json"), "changed").unwrap();
+    assert_eq!(package.sources.len(), 4);
+    assert!(package.sources.contains_key("@ash/commonjs"));
+    assert!(package.sources["main.cjs"].contains("captured"));
+    assert!(package.sources["main.cjs"].contains("unused invalid source"));
+    assert!(!package.sources.contains_key("data.json"));
+    assert!(
+        Package::read_vscode("example".into(), root.path().into(), "data.json".into()).is_err()
+    );
+    let data = std::fs::File::create(root.path().join("oversized.json")).unwrap();
+    data.set_len(super::MAX_MODULE_BYTES as u64 + 1).unwrap();
+    assert!(Package::read_vscode("example".into(), root.path().into(), "main.cjs".into()).is_err());
+}

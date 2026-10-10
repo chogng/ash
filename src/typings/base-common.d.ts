@@ -43,7 +43,7 @@ declare class TextEncoder {
 
 declare class TextDecoder {
 	constructor(label?: string, options?: { ignoreBOM?: boolean; fatal?: boolean });
-	decode(input?: ArrayBufferView | ArrayBuffer): string;
+	decode(input?: ArrayBufferView | ArrayBuffer, options?: { stream?: boolean }): string;
 }
 
 declare class URL {
@@ -62,7 +62,8 @@ declare class URL {
 	password: string;
 }
 
-interface URLSearchParams {
+declare class URLSearchParams {
+	constructor(init?: string);
 	get(name: string): string | null;
 	has(name: string): boolean;
 	set(name: string, value: string): void;

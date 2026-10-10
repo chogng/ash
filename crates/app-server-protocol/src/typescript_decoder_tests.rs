@@ -3,6 +3,7 @@ use super::compact_definition_names;
 use super::deduplicate_definitions;
 use super::remove_annotations;
 use super::retain_decoder_definitions;
+use super::share_inline_schemas;
 use serde_json::json;
 
 #[test]
@@ -114,4 +115,30 @@ fn decoder_definitions_retain_references_and_cycles_without_following_payload_li
         schema["$defs"]["Root"]["properties"]["literal"]["const"],
         json!({"$ref": "#/$defs/LiteralData"})
     );
+}
+
+#[test]
+fn inline_schema_sharing_keeps_dispatch_and_literal_payloads_in_place() {
+    let repeated = json!({"type":"object","additionalProperties":false,"required":["value"],"properties":{"value":{"type":"string","minLength":1,"maxLength":32768,"pattern":"^[a-z]+$"}}});
+    let mut schema = json!({"$defs": {
+        "Root":{"oneOf":[
+            {"type":"object","properties":{"method":{"const":"first"},"result":repeated.clone()}},
+            {"type":"object","properties":{"method":{"const":"second"},"result":repeated.clone()}}
+        ]},
+        "Literal":{"const":repeated.clone()}
+    }});
+    share_inline_schemas(&mut schema);
+    let variants = schema["$defs"]["Root"]["oneOf"].as_array().unwrap();
+    let reference = variants[0]["properties"]["result"]["$ref"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("#/$defs/")
+        .unwrap();
+    assert_eq!(schema["$defs"][reference], repeated);
+    assert_eq!(
+        variants[1]["properties"]["result"]["$ref"],
+        variants[0]["properties"]["result"]["$ref"]
+    );
+    assert_eq!(variants[0]["properties"]["method"]["const"], "first");
+    assert_eq!(schema["$defs"]["Literal"]["const"], repeated);
 }

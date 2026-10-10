@@ -901,8 +901,6 @@ export class Workbench extends Disposable {
 			layoutService,
 		}));
 		services.registerInstance(IQuickInputService, quickInputService);
-		// Extension callbacks can open Quick Pick; install their bridge after its UI service exists.
-		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
@@ -931,8 +929,6 @@ export class Workbench extends Disposable {
 			WorkbenchContributionsRegistry.createHost(services),
 		);
 		this.contributions = contributions;
-		performance.mark('ash.workbench.services-ready');
-		contributions.advance(WorkbenchPhase.BlockStartup);
 
 		const sidebar = this._register(services.createInstance(SidebarPart, workbenchRoot, {
 			openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => {
@@ -1070,6 +1066,10 @@ export class Workbench extends Disposable {
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
+		// Extension and Debug startup require both Quick Pick and retained editor panes.
+		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
+		performance.mark('ash.workbench.services-ready');
+		contributions.advance(WorkbenchPhase.BlockStartup);
 		// The URL opener requires the completed editor service graph before the window announces readiness.
 		services.get(IURLService);
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.

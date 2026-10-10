@@ -16,6 +16,7 @@ use ash_editor_extension_host::ExtensionHostError;
 use ash_editor_extension_host::ExtensionLaunchCommand;
 use ash_editor_extension_host::PackageBinding;
 use ash_plugin::EditorExtensionActivationEvent;
+use ash_plugin::EditorExtensionApi;
 use ash_plugin::EditorExtensionCapability;
 
 use super::ExtensionHostRuntimeError;
@@ -109,6 +110,7 @@ fn product_ssh_deployment(
         .map_err(ExtensionHostRuntimeError::Host)?,
         workspace_read: WorkspaceReadAccess::Denied,
         params: ActivateParams {
+            initialization: None,
             extension_id: id,
             package: PackageBinding {
                 package_id: "ash.remote-ssh@1.0.0".into(),
@@ -153,12 +155,39 @@ pub(crate) struct ActivationPlan {
 pub(in crate::server) enum ActivationEvent {
     Command(String),
     Language(String),
+    TaskType(Option<String>),
+    Debug {
+        phase: DebugActivationPhase,
+        debug_type: Option<String>,
+    },
     StartupFinished,
     ResolveAuthority(String),
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(in crate::server) enum DebugActivationPhase {
+    Start,
+    InitialConfigurations,
+    DynamicConfigurations,
+    ResolveConfiguration,
+}
+
+impl DebugActivationPhase {
+    fn event_name(self) -> &'static str {
+        match self {
+            Self::Start => "onDebug",
+            Self::InitialConfigurations => "onDebugInitialConfigurations",
+            Self::DynamicConfigurations => "onDebugDynamicConfigurations",
+            Self::ResolveConfiguration => "onDebugResolve",
+        }
+    }
+}
+
 impl ActivationPlan {
     pub(super) fn matches(&self, event: &ActivationEvent) -> bool {
+        if self.events.iter().any(|event| event == "*") {
+            return true;
+        }
         match event {
             ActivationEvent::Command(command) => self
                 .events
@@ -168,6 +197,21 @@ impl ActivationPlan {
                 .events
                 .iter()
                 .any(|event| event == "onLanguage" || event == &format!("onLanguage:{language}")),
+            ActivationEvent::TaskType(task_type) => self.events.iter().any(|event| {
+                event == "onTaskType"
+                    || event == "onDemand:taskProvider"
+                    || task_type
+                        .as_ref()
+                        .is_some_and(|task_type| event == &format!("onTaskType:{task_type}"))
+            }),
+            ActivationEvent::Debug { phase, debug_type } => self.events.iter().any(|event| {
+                event == phase.event_name()
+                    || event == "onDemand:debugAdapter"
+                    || debug_type.as_ref().is_some_and(|debug_type| {
+                        event == &format!("{}:{debug_type}", phase.event_name())
+                            || event == &format!("onDebugType:{debug_type}")
+                    })
+            }),
             ActivationEvent::ResolveAuthority(prefix) => self.events.iter().any(|event| {
                 event == "onDemand:remoteAuthorityResolver"
                     || event == &format!("onResolveRemoteAuthority:{prefix}")
@@ -212,17 +256,20 @@ pub(super) fn plugin_deployments(
                         .to_str()
                         .ok_or(ExtensionHostRuntimeError::Internal)?
                         .to_string();
-                    (
-                        executable,
-                        vec![
+                    (executable, {
+                        let mut arguments = vec![
                             "--extension-id".into(),
                             id.clone(),
                             "--package".into(),
                             root,
                             "--entry".into(),
                             contribution.entrypoint.as_str().into(),
-                        ],
-                    )
+                        ];
+                        if contribution.api == EditorExtensionApi::Vscode {
+                            arguments.extend(["--api".into(), "vscode".into()]);
+                        }
+                        arguments
+                    })
                 }
             };
             let command = match contribution.runtime {
@@ -233,14 +280,51 @@ pub(super) fn plugin_deployments(
                     BTreeMap::new(),
                 ),
                 ash_plugin::EditorExtensionRuntime::JavaScript => {
-                    ExtensionLaunchCommand::javascript(
-                        executable,
-                        arguments,
-                        package.package_root(),
-                    )
+                    let launch = match contribution.api {
+                        EditorExtensionApi::Ash => ExtensionLaunchCommand::javascript,
+                        EditorExtensionApi::Vscode => ExtensionLaunchCommand::vscode,
+                    };
+                    launch(executable, arguments, package.package_root())
                 }
             }
             .map_err(ExtensionHostRuntimeError::Host)?;
+            let (activation, activation_failure) = match contribution.api {
+                EditorExtensionApi::Vscode => {
+                    match marketplace_editor_extensions::javascript_activation_plan(
+                        package.package_root(),
+                    ) {
+                        Ok(plan) => (Some(plan), None),
+                        Err(message) => (None, Some(message)),
+                    }
+                }
+                // SDK task/debug registrations wait for their declared first use. Other SDK
+                // entries retain their existing activation behavior.
+                EditorExtensionApi::Ash => (
+                    contribution
+                        .activation_events
+                        .iter()
+                        .all(|event| {
+                            matches!(
+                                event,
+                                EditorExtensionActivationEvent::OnTaskType { .. }
+                                    | EditorExtensionActivationEvent::OnDebugType { .. }
+                                    | EditorExtensionActivationEvent::OnDemand {
+                                        capability: EditorExtensionCapability::TaskProvider
+                                            | EditorExtensionCapability::DebugAdapter
+                                    }
+                            )
+                        })
+                        .then(|| ActivationPlan {
+                            events: contribution
+                                .activation_events
+                                .iter()
+                                .map(activation_event)
+                                .collect(),
+                            commands: Vec::new(),
+                        }),
+                    None,
+                ),
+            };
             deployments.push(EditorExtensionDeployment {
                 scope: if contribution.runtime == ash_plugin::EditorExtensionRuntime::JavaScript
                     && contribution
@@ -268,6 +352,7 @@ pub(super) fn plugin_deployments(
                     WorkspaceReadAccess::Denied
                 },
                 params: ActivateParams {
+                    initialization: None,
                     extension_id: id,
                     package: PackageBinding {
                         package_id: format!(
@@ -279,11 +364,16 @@ pub(super) fn plugin_deployments(
                         entrypoint: contribution.entrypoint.as_str().to_string(),
                     },
                     runtime_api_version: contribution.runtime_api_version.as_u16(),
-                    activation_events: contribution
-                        .activation_events
-                        .iter()
-                        .map(activation_event)
-                        .collect(),
+                    activation_events: activation
+                        .as_ref()
+                        .map(|plan| plan.events.clone())
+                        .unwrap_or_else(|| {
+                            contribution
+                                .activation_events
+                                .iter()
+                                .map(activation_event)
+                                .collect()
+                        }),
                     capabilities: contribution
                         .capabilities
                         .iter()
@@ -291,8 +381,8 @@ pub(super) fn plugin_deployments(
                         .map(extension_capability)
                         .collect(),
                 },
-                activation: None,
-                activation_failure: None,
+                activation,
+                activation_failure,
                 authority: Arc::new(PluginPackageAuthority {
                     fence: fence.clone(),
                 }),

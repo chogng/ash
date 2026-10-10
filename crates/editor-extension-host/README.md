@@ -2,7 +2,7 @@
 
 > 本 README 记录当前可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复。
 > 作者使用 [`TS SDK`](../../extension-sdk/README.md)，JS 由独立的
-> [`Rust V8 宿主`](../js-extension-host/README.md)执行；本 crate 继续承担共用的进程监管。
+> [`独立扩展宿主`](../js-extension-host/README.md)执行：Ash SDK 使用 V8，标准 VS Code 扩展使用真实 Node；本 crate 继续承担共用的进程监管。
 > 此前的 [`Rust 作者 SDK`](../extensions/README.md) 不再作为产品作者入口继续建设。
 > 共享 wire 定义属于 `ash-editor-extension-protocol`。跨 Marketplace/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
 > [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；统一远端 package 身份由
@@ -11,12 +11,25 @@
 `ash-editor-extension-host` 监管一个已经由上层解析和授权的扩展程序。每个
 `ExtensionHostSupervisor` 最多拥有一个扩展的一个活动进程 incarnation，通过有界 JSONL Host RPC v1
 完成握手、激活、调用、取消、停用和关闭，并在授权仍有效时按有界策略恢复崩溃进程。它不发现或
-安装 package，不选择 activation event，不实现 Workbench provider，也不兼容 VS Code Node Extension
-API。
+安装 package，不选择 activation event，不实现 Workbench provider，不实现 VS Code Extension API；该 API 属于产品 JS 宿主。
 
-Rust 后端继续提供授权、GitHub、Git、存储等业务能力。JS 入口和回调在独立 V8 进程执行，
-作者无需实现传输协议。新宿主的进程测试已覆盖 SDK 反向编辑器调用、Rust 文件读取、取消、超时和释放；
+Rust 后端继续提供授权、GitHub、Git、存储等业务能力。JS 入口和回调在独立 V8 或 Node 进程执行，
+作者无需实现传输协议。标准 Node 的激活和后台客户端请求由 `supervisor/client.rs` 的有界并发 pump 处理，
+每次请求取得当前授权 lease。App Server 绑定启动窗口，子进程只携带 incarnation/generation；窗口关闭、
+撤权、崩溃和 shutdown 取消请求并等待释放，再释放进程 lease。按扩展串行化激活，使激活阶段调用另一
+扩展的命令不会持有全局 fleet 锁。状态栏的注册校验和已确认快照更新仍由同一个 SupervisorState 拥有，
+回调和后台通道共用处理。新宿主的进程测试已覆盖 SDK 反向编辑器调用、Rust 文件读取、取消、超时和释放；
 这些测试不能代替生产平台隔离验收。
+
+标准 Node 的 Host RPC 使用启动前分配、带随机绑定令牌的 loopback socket。私有 `process/node.rs`
+只负责该 incarnation 的有界握手，控制 socket 与读写线程仍由现有 ProcessHandle owner 管理；
+终止时先关闭 socket，再清理进程组并 join 读取线程。stdout/stderr 合并到已有有界诊断缓冲，
+Debug 子进程继承 stdout 或直接写 fd 1 不会进入协议解析器。SDK 与独立协议程序仍使用 stdio。
+
+每个标准 Node incarnation 在加载 package 前通过已有 ClientHost 读取当前窗口 initialization，
+恢复时也重新读取。Workbench ConfigurationService 与 WorkspaceContextService 继续拥有事实；
+Supervisor 只验证并转交该次快照，不维护另一个配置或工作区更新 owner。`workspaceEvents` 是只读
+窗口观察注册，不借用 command、language、Tasks 或 Debug 执行 capability。
 
 ## 1. Crate 边界
 
@@ -24,7 +37,7 @@ Rust 后端继续提供授权、GitHub、Git、存储等业务能力。JS 入口
 | -------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Package binding      | 接收并绑定 `package_id`、digest、entrypoint 与 activation generation                     | source adapter 选择 immutable package/executable 并解析绝对路径                                 |
 | Activation authority | 每次激活和调用前获取 `ActivationLease`                                                   | Adapter 同时复核 source artifact/admission lease 与 directory capability                        |
-| Process supervision  | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启                                | 平台 launcher 安装 sandbox、hard limits 和 killable process tree                                |
+| Process supervision  | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启                                | 平台 launcher 实施选定执行策略并拥有 killable process group                                |
 | Host RPC v1          | 版本、请求相关性、严格 shape、注册 ceiling 和 byte limits                                | 扩展程序实现协议；App Server 把注册投影到领域 owner                                             |
 | Provider invocation  | 路由到精确 registration、deadline、并发取消和结果校验                                    | Command、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 定义 payload 与消费结果 |
 | Diagnostics / Output | 返回 typed `ExtensionHostError`，保留有界 stderr，并接收受配额约束的扩展命名 Output 事件 | App Server 清洗故障并把 Output 事件投影到 Workbench Output 服务                                 |
@@ -41,7 +54,7 @@ entrypoint 加载。
 | `../editor-extension-protocol/src/output.rs` | `ExtensionHostOutputEvent`、`HostOutputOperation`                         | 扩展发起的命名 Output 事件；按 incarnation/generation fencing，不属于静态 registration |
 | `authority.rs`                               | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec`       | 授权是 live gate，不是 activation 时的一次布尔判断                                     |
 | `limits.rs`                                  | `ExtensionHostLimits`、`ProcessIsolationPolicy`                           | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致                    |
-| `process.rs`                                 | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 必须在 entrypoint 执行前完成隔离，并清空继承环境                              |
+| `process.rs`                                 | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 在 entrypoint 执行前实施选定策略并应用明确的进程环境                              |
 | `supervisor.rs`                              | `ExtensionHostSupervisor`、`ExtensionHostSnapshot`                        | 一扩展一监管器；注册仅在完整 activation 成功后发布                                     |
 | `supervisor/invocation.rs`                   | `ExtensionInvocation`、`ExtensionInvocationHandle`                        | wait 与 cancel 可由不同线程并发调用；lease 持续到 terminal handling                    |
 | `restart.rs`                                 | `RestartPolicy`、`RestartTracker`                                         | 滑动窗口、指数退避和 terminal `CrashLoop`                                              |
@@ -150,7 +163,14 @@ composition 主动取消；进程中自报的 package identity 不是授权依�
 任何一项无法保证都必须返回 `IsolationUnavailable`。产品 JS 命令单独使用
 `RequireJavaScriptEnforcement`：macOS 与 64 位 Windows 的 `ProductJavaScriptLauncher` 只接受产品自带的 V8 宿主，
 子进程在执行扩展前安装系统隔离、V8 堆与堆外缓冲区预算，执行仍有截止时间。JS 预算不代表整个进程的系统内存上限。
-独立可执行扩展不能选用此策略。`TrustedDevelopmentLauncher` 只接受显式 `TrustedDevelopment` policy，
+独立可执行扩展不能选用此策略。
+标准 VS Code 命令在现有 exact-package authority gate 之后使用 `AuthorizedNode`：同一 launcher
+只启动 composition root 绑定的产品 Node executable 与 bootstrap，直接纳入监督器的进程组。
+这项策略允许当前用户的文件、网络和子进程能力，不宣称 V8 隔离或整个进程的硬资源上限；
+frame、并发、截止时间、取消和撤销仍由现有监督器执行。Node 的环境额度为 256 项 / 128 KiB，
+开发环境在 launcher 创建时冻结，排除产品内部认证变量与继承的 Electron 控制变量；Desktop
+仅向确切 Electron 子进程加入 `ELECTRON_RUN_AS_NODE=1`。旧的有限 JS 执行授权必须重新授予。
+`TrustedDevelopmentLauncher` 只接受显式 `TrustedDevelopment` policy，
 仅用于可信本地开发。所有 stdio 进程的整组清理由共享 sandboxing ProcessHandle 管理。
 
 崩溃后旧 incarnation 的 registrations 立即清除，pending request 和 lease 不得迁移到新进程。恢复会
@@ -176,8 +196,8 @@ App Server 或其他 composition root 必须：
 
 1. 从 source adapter 已规范化的 exact immutable package、digest、executable 与 live authority 构造
    `ExtensionActivationSpec`，并把 directory capability 加入同一 live gate；
-2. RPC 程序必须有 exact process permission；JS 入口必须通过 package validation，并交给产品打包的 V8 executable；
-3. 根据入口选择隔离策略：独立可执行扩展要求 `RequirePlatformEnforcement`，macOS 与 64 位 Windows JS 要求 `RequireJavaScriptEnforcement` 并使用 `ProductJavaScriptLauncher`；缺少符合所选策略的 launcher 时将生产能力标记为不可用；
+2. RPC 程序必须有 exact process permission；JS 入口必须通过 package validation，Ash SDK 交给产品 V8，标准 API 交给产品绑定的 Node executable/bootstrap；
+3. 根据入口选择隔离策略：独立可执行扩展要求 `RequirePlatformEnforcement`，macOS 与 64 位 Windows JS 要求 `RequireJavaScriptEnforcement` 并使用 `ProductJavaScriptLauncher`；标准 VS Code 扩展要求 `AuthorizedNode` 与新的确切包执行授权；缺少符合所选策略的 launcher 或 Node 资源时将生产能力标记为不可用；
 4. 定期调用 `reconcile()`，把 snapshot 变化原子投影到 provider owners；
 5. 使用异步 invocation session 或后台 waiter 暴露调用，使 cancel request 不被一个阻塞 RPC 串行化；
 6. connection 断开、authority 撤销和 shutdown 时取消 owned invocations 并调用 `shutdown()`；
@@ -218,11 +238,11 @@ crash recovery 已实现。
 
 当前限制：
 
-- macOS 与 64 位 Windows JS 产品 launcher 已接入；其他系统 JS 执行和独立可执行扩展的生产平台 launcher 尚未开放；
+- Ash SDK 的 V8 launcher 支持 macOS 与 64 位 Windows；标准 Node 路径接入支持 Node 的产品平台，独立可执行扩展的生产平台 launcher 尚未开放；
 - activation-event matching 和 lazy activation 属于上层 composition，监管器只接收 activation facts；
 - 空闲崩溃检测依赖上层 health loop；
 - v1 的 extension-originated event 目前只覆盖命名 Output channel；其他事件必须先明确领域 owner 与背压语义；
-- 没有 generic Node/WASM loader、VS Code Extension API、Marketplace compatibility 或多扩展共享进程；
+- 本 crate 不实现 Node/WASM 模块加载、VS Code API 或 Marketplace 兼容解析；产品 Node 宿主与 source adapter 负责这些工作，仍为每扩展一个进程；
 - 没有 publisher signature、revocation feed、跨平台 artifact selector 或 binary ABI 检查；这些属于 package
   supply-chain 与平台 launchability 演进，不应加入协议解析器。
 

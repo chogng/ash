@@ -219,6 +219,8 @@ def package_sources(root: Path) -> list[Path]:
         root / "build/prepare.py",
         root / "Cargo.toml",
         # The JS host embeds this module; SDK edits must rebuild the backend package.
+        root / "crates/js-extension-host/src/node.mjs",
+        root / "crates/js-extension-host/src/vscode.js",
         root / "extension-sdk/index.js",
     ]
     sources += [

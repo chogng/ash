@@ -13,6 +13,7 @@ use crate::ExtensionHostRequest;
 use crate::ExtensionHostResponse;
 use crate::ProcessIsolationPolicy;
 
+mod node;
 mod stdio;
 
 use stdio::StdioExtensionHostProcess;
@@ -45,6 +46,7 @@ impl std::fmt::Debug for ExtensionLaunchCommand {
 enum LaunchRuntime {
     Executable,
     JavaScript,
+    Vscode,
     ProductJavaScript,
 }
 
@@ -82,6 +84,17 @@ impl ExtensionLaunchCommand {
         Ok(command)
     }
 
+    /// Selects the product Node host after the existing package authority gate.
+    pub fn vscode(
+        executable: impl Into<PathBuf>,
+        arguments: impl IntoIterator<Item = impl Into<OsString>>,
+        working_directory: impl Into<PathBuf>,
+    ) -> Result<Self, ExtensionHostError> {
+        let mut command = Self::javascript(executable, arguments, working_directory)?;
+        command.runtime = LaunchRuntime::Vscode;
+        Ok(command)
+    }
+
     /// These values reach extension code during handshake, never the OS loader or host process.
     pub fn with_extension_environment(
         mut self,
@@ -100,8 +113,12 @@ impl ExtensionLaunchCommand {
     pub fn is_javascript(&self) -> bool {
         matches!(
             self.runtime,
-            LaunchRuntime::JavaScript | LaunchRuntime::ProductJavaScript
+            LaunchRuntime::JavaScript | LaunchRuntime::Vscode | LaunchRuntime::ProductJavaScript
         )
+    }
+
+    pub fn is_vscode(&self) -> bool {
+        self.runtime == LaunchRuntime::Vscode
     }
 
     /// Executes only modules compiled into the product host, without a side-loaded package root.
@@ -169,9 +186,9 @@ impl ExtensionLaunchCommand {
 
 /// Platform process boundary used by the shared supervisor.
 ///
-/// Implementations must install `limits.isolation` before the extension entry point can execute,
-/// create a killable process tree, clear inherited environment state, and connect dedicated stdio
-/// pipes. They must fail closed when any requested hard limit cannot be enforced.
+/// Implementations must apply the selected `limits.isolation` policy before the extension entry
+/// point can execute, create a killable process group, apply the explicit environment and connect
+/// dedicated protocol pipes. They must fail closed when requested hard limits cannot be enforced.
 pub trait ExtensionHostLauncher: Send + Sync {
     fn spawn(
         &self,
@@ -190,6 +207,17 @@ pub trait ExtensionHostProcess: Send + Sync {
         &self,
         response: extension_protocol::ExtensionClientResponse,
     ) -> Result<(), ExtensionHostError>;
+    /// Drains bounded lifecycle calls; non-Node peers reject these frames.
+    fn drain_background_client_requests(
+        &self,
+    ) -> Vec<extension_protocol::ExtensionBackgroundClientRequest>;
+
+    /// Completes a lifecycle call admitted by this exact process incarnation.
+    fn respond_background_client(
+        &self,
+        response: extension_protocol::ExtensionBackgroundClientResponse,
+    ) -> Result<(), ExtensionHostError>;
+
     fn dispatch(
         &self,
         request: ExtensionHostRequest,
@@ -279,33 +307,67 @@ struct PendingEntry {
     request: ExtensionHostRequest,
     sender: mpsc::SyncSender<Result<PendingMessage, PendingFailure>>,
     client_ids: std::collections::BTreeSet<u64>,
+    last_client_id: u64,
     control: bool,
 }
 
 /// Explicitly unsafe-for-production launcher for trusted local runtime development.
 ///
 /// This launcher refuses the default fail-closed isolation policy. Installed third-party code must
-/// use a platform launcher that implements [`ExtensionHostLauncher`] and enforces hard limits.
+/// use its product launcher and the policy selected after execution authorization.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TrustedDevelopmentLauncher;
 
-/// Launches only the product's exact JS executable. The child applies OS confinement
-/// after loading its immutable package and V8, before serving Initialize or running code.
+/// Launches only product-bound runtimes: the confined V8 executable for the Ash SDK,
+/// or the frozen Node executable/bootstrap for authorized standard extensions.
 pub struct ProductJavaScriptLauncher {
     executable: PathBuf,
+    node: Option<NodeHost>,
+}
+
+struct NodeHost {
+    executable: PathBuf,
+    bootstrap: PathBuf,
+    environment: BTreeMap<OsString, OsString>,
 }
 
 impl ProductJavaScriptLauncher {
-    /// Platforms with an implemented product JavaScript isolation boundary.
+    /// Platforms with an implemented supervised product Node runtime.
     pub const fn supports_platform() -> bool {
         cfg!(any(
             target_os = "macos",
+            target_os = "linux",
             all(windows, target_pointer_width = "64")
         ))
     }
 
     pub fn new(executable: PathBuf) -> Self {
-        Self { executable }
+        Self {
+            executable,
+            node: None,
+        }
+    }
+
+    /// Freezes the installation's runtime and bootstrap, never an extension-selected executable.
+    pub fn with_node_runtime(
+        mut self,
+        executable: PathBuf,
+        bootstrap: PathBuf,
+        environment: BTreeMap<OsString, OsString>,
+    ) -> Result<Self, ExtensionHostError> {
+        if !executable.is_absolute()
+            || !executable.is_file()
+            || !bootstrap.is_absolute()
+            || !bootstrap.is_file()
+        {
+            return Err(ExtensionHostError::SpawnFailed);
+        }
+        self.node = Some(NodeHost {
+            executable,
+            bootstrap,
+            environment,
+        });
+        Ok(self)
     }
 }
 
@@ -316,6 +378,27 @@ impl ExtensionHostLauncher for ProductJavaScriptLauncher {
         limits: &ExtensionHostLimits,
     ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
         limits.validate()?;
+        if command.is_vscode() {
+            let node = self
+                .node
+                .as_ref()
+                .ok_or(ExtensionHostError::IsolationUnavailable)?;
+            if command.executable() != self.executable
+                || limits.isolation != ProcessIsolationPolicy::AuthorizedNode
+            {
+                return Err(ExtensionHostError::IsolationUnavailable);
+            }
+            let mut command = command.clone();
+            command.executable = node.executable.clone();
+            command
+                .arguments
+                .insert(0, node.bootstrap.as_os_str().to_owned());
+            command.environment = node.environment.clone();
+            command.validate_limits(limits)?;
+            // Spawn Node itself in the supervisor's process group. No second process owner.
+            return StdioExtensionHostProcess::spawn(&command, limits)
+                .map(|process| Arc::new(process) as _);
+        }
         let ProcessIsolationPolicy::RequireJavaScriptEnforcement(memory) = limits.isolation else {
             return Err(ExtensionHostError::IsolationUnavailable);
         };

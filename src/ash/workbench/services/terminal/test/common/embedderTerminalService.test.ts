@@ -182,7 +182,7 @@ function createServices(owner: DisposableStore): { services: InstantiationServic
 		[IEmbedderTerminalService, descriptor],
 		[IWorkspaceContextService, workspace],
 		[ITerminalProcessService, {
-			listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend,
+			getEnvironment: async () => ({}), listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend,
 			getConnectionState: async () => 'crashed', onConnectionState: Event.None,
 		}],
 		[IViewsService, { openView: async (id: string) => { reveals.push(id); return null; } } as IViewsService],

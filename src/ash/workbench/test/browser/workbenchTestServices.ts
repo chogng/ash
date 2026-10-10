@@ -1,5 +1,6 @@
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
+import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
 import { JSDOM } from 'jsdom';
 import { Event } from '../../../base/common/event.js';
 import { BrowserTextModelService } from '../../services/textmodelResolver/browser/browserTextModelService.js';
@@ -26,6 +27,17 @@ import { IFileTextModelService, ITextModelResourceService } from '../../services
 import { IOutputService } from '../../services/output/common/output.js';
 import { OutputService } from '../../contrib/output/browser/outputServices.js';
 import { IStatusbarService, StatusbarService } from '../../services/statusbar/browser/statusbar.js';
+import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
+import { WorkbenchQuickInputService } from '../../services/quickinput/browser/quickInputService.js';
+import { NotificationService } from '../../services/notification/common/notificationService.js';
+import { ViewsService } from '../../services/views/browser/viewsService.js';
+import { IViewsService } from '../../services/views/common/viewsService.js';
+import { WorkbenchViewRegistry } from '../../common/views.js';
+import { ViewDescriptorService } from '../../services/views/browser/viewDescriptorService.js';
+import { IFileSearchService } from '../../../platform/search/common/fileSearch.js';
+import { BrowserFileSearchService } from '../../../platform/search/browser/browserFileSearchService.js';
 
 /** Real Output and resolver assembly; filesystem acquisition is an explicit scenario boundary. */
 class TestWorkbenchServices extends InstantiationService {
@@ -37,6 +49,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	owner?.add(services);
 	const resources = services.resources;
 	const uriIdentityServices = resources.add(new TestUriIdentityServices());
+	services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 	const configuration = resources.add(new WorkbenchConfigurationService());
 	const languages = resources.add(new LanguageService());
 	const features = overrides.languageFeatures ?? resources.add(new LanguageFeaturesService());
@@ -67,4 +80,26 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 		services.registerSingleton(IOutputService, () => services.createInstance(OutputService));
 	}
 	return services;
+}
+
+
+/** Registers the real window owners used by interactive workflow services. */
+export function registerTestWorkbenchInteractionServices(owner: DisposableStore, services: InstantiationService): void {
+	services.registerSingleton(IFileSearchService, () => services.createInstance(BrowserFileSearchService));
+	const viewContext = owner.add(new ContextKeyService());
+	const descriptors = owner.add(new ViewDescriptorService({ registry: owner.add(new WorkbenchViewRegistry()) }, viewContext));
+	// Service scenarios have no UI Parts. The real view owner returns null for
+	// unregistered views; Web/Electron scenarios exercise their actual containers.
+	services.registerInstance(IViewsService, owner.add(new ViewsService(descriptors, {
+		onDidPaneCompositeOpen: Event.None, onDidPaneCompositeClose: Event.None,
+		getActivePaneComposite: () => undefined, getLastActivePaneCompositeId: () => undefined,
+		getPartId: () => { throw new Error('UI Parts are not registered in this service scenario'); },
+		openPaneComposite: async () => { throw new Error('UI Parts are not registered in this service scenario'); },
+		hideActivePaneComposite: () => { throw new Error('UI Parts are not registered in this service scenario'); },
+	}, viewContext)));
+
+	const window = new JSDOM('', { url: 'https://ash.test' });
+	owner.add(toDisposable(() => window.window.close()));
+	services.registerInstance(IQuickInputService, owner.add(new WorkbenchQuickInputService({ container: window.window.document.body, contextKeyService: owner.add(new ContextKeyService()) })));
+	services.registerInstance(INotificationService, owner.add(new NotificationService()));
 }

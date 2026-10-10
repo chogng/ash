@@ -274,6 +274,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
 	paneServices.registerInstance(IEditorService, {
+		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
 		openEditor: async () => { throw new Error('Unexpected editor navigation'); }, focusActiveEditor: () => { },
 	});

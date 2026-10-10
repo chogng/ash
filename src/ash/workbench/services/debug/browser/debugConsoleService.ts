@@ -1,15 +1,15 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { combinedDisposable, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IDebugConsoleService, IDebugConsoleSession } from "../common/debugConsoleService.js";
-import type { IDebugService, IDebugSession } from "../common/debugService.js";
+import { DebugConsoleMode, type IDebugService, type IDebugSession } from "../common/debugService.js";
 
 interface DebugConsoleRecord {
 	readonly id: string;
-	readonly label: string;
+	label: string;
 	state: IDebugConsoleSession["state"];
 	output: string;
 	session: IDebugSession | undefined;
-	listener: IDisposable | undefined;
+	readonly members: Map<string, { readonly session: IDebugSession; readonly listener: IDisposable; }>;
 }
 
 const MAXIMUM_CONSOLE_SESSIONS = 20;
@@ -26,7 +26,7 @@ export class DebugConsoleService extends Disposable implements IDebugConsoleServ
 		super();
 		this._register(debug.onDidChangeSession(() => this.synchronize()));
 		this._register(toDisposable(() => {
-			for (const record of this.records.values()) record.listener?.dispose();
+			for (const record of this.records.values()) for (const member of record.members.values()) member.listener.dispose();
 			this.records.clear();
 		}));
 		this.synchronize();
@@ -74,31 +74,45 @@ export class DebugConsoleService extends Disposable implements IDebugConsoleServ
 	private synchronize(): void {
 		const active = new Map(this.debug.sessions.map(session => [session.id, session]));
 		for (const record of this.records.values()) {
-			if (active.has(record.id) || !record.session) continue;
-			record.listener?.dispose();
-			record.listener = undefined;
-			record.session = undefined;
-			if (record.state !== "error") record.state = "terminated";
+			for (const [id, member] of record.members) {
+				if (active.get(id) === member.session) continue;
+				member.listener.dispose();
+				record.members.delete(id);
+			}
 		}
 		for (const session of active.values()) this.ensureRecord(session);
-		if (this.debug.session) this.activeSessionId = this.debug.session.id;
+		for (const record of this.records.values()) {
+			const selected = this.debug.session;
+			record.session = selected && record.members.has(selected.id)
+				? selected : record.members.get(record.id)?.session ?? [...record.members.values()].at(-1)?.session;
+			if (record.session) record.state = record.session.state;
+			else if (record.state !== 'error') record.state = 'terminated';
+		}
+		if (this.debug.session) this.activeSessionId = consoleOwner(this.debug.session).id;
 		else if (!this.activeSessionId || !this.records.has(this.activeSessionId)) this.activeSessionId = [...this.records.keys()].at(-1);
 		this.trimRecords();
 		this.changeEmitter.fire();
 	}
 
 	private ensureRecord(session: IDebugSession): DebugConsoleRecord {
-		const existing = this.records.get(session.id);
-		if (existing) {
-			existing.state = session.state;
-			existing.session = session;
-			return existing;
+		const owner = consoleOwner(session);
+		let record = this.records.get(owner.id);
+		if (!record) {
+			record = { id: owner.id, label: owner.name, state: owner.state, output: '', session, members: new Map() };
+			this.records.set(owner.id, record);
 		}
-		const record: DebugConsoleRecord = { id: session.id, label: session.configuration.name, state: session.state, output: session.output, session, listener: undefined };
-		const output = session.onDidOutput(value => this.append(record, value));
-		const state = session.onDidChangeState(value => { record.state = value; this.changeEmitter.fire(); });
-		record.listener = this._register(combinedDisposable(output, state));
-		this.records.set(session.id, record);
+		if (record.members.has(session.id)) return record;
+		// Each adapter contributes its retained output once, then only new events.
+		// Listener ownership follows the emitting session even for a shared console.
+		const target = record;
+		this.append(target, session.output);
+		const output = session.onDidOutput(value => this.append(target, value));
+		const state = session.onDidChangeState(() => this.synchronize());
+		const name = session.onDidChangeName(value => {
+			if (session.id === target.id) target.label = value;
+			this.changeEmitter.fire();
+		});
+		record.members.set(session.id, { session, listener: combinedDisposable(output, state, name) });
 		return record;
 	}
 
@@ -112,7 +126,7 @@ export class DebugConsoleService extends Disposable implements IDebugConsoleServ
 		while (this.records.size > MAXIMUM_CONSOLE_SESSIONS) {
 			const candidate = [...this.records.values()].find(record => !record.session && record.id !== this.activeSessionId);
 			if (!candidate) return;
-			candidate.listener?.dispose();
+			for (const member of candidate.members.values()) member.listener.dispose();
 			this.records.delete(candidate.id);
 		}
 	}
@@ -124,4 +138,15 @@ function snapshot(record: DebugConsoleRecord): IDebugConsoleSession {
 
 function message(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+
+function consoleOwner(session: IDebugSession): IDebugSession {
+	let owner = session;
+	const seen = new Set<IDebugSession>();
+	while (owner.parentSession && owner.sessionOptions?.consoleMode === DebugConsoleMode.MergeWithParent && !seen.has(owner)) {
+		seen.add(owner);
+		owner = owner.parentSession;
+	}
+	return owner;
 }

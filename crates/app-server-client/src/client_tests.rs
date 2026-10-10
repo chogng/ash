@@ -362,6 +362,9 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
             cols: 80,
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::Reconnectable,
+            env: None,
+            cwd: None,
+            execution: None,
         })
         .unwrap();
     assert_eq!(created.terminal_id, "terminal-1");

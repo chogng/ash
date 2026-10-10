@@ -1,5 +1,6 @@
+import { normalizeDebugAdapterDescriptor } from './debugAdapterFactory.js';
 import { parseJsonc } from "../../../../base/common/jsonc.js";
-import { type IDebugCompound, type IDebugConfiguration } from "./debugService.js";
+import { type IDebugCompound, type IDebugConfiguration, type IResolvedDebugConfiguration } from "./debugService.js";
 
 const MAX_CONFIGURATIONS = 64;
 
@@ -8,7 +9,8 @@ export function parseLaunchConfigurations(source: string, resolveAdapter?: Debug
 	return parseLaunchConfigurationDocument(source, resolveAdapter).configurations;
 }
 
-export type DebugAdapterResolver = (type: string) => IDebugConfiguration["adapter"] | undefined;
+/** null admits a registered dynamic type whose descriptor is resolved only at dispatch. */
+export type DebugAdapterResolver = (type: string) => IResolvedDebugConfiguration["adapter"] | null | undefined;
 
 export interface ParsedLaunchConfigurationDocument {
 	readonly configurations: readonly IDebugConfiguration[];
@@ -34,27 +36,52 @@ function parseConfiguration(value: unknown, index: number, resolveAdapter: Debug
 	const type = boundedString(input.type, `configurations[${index}].type`, 128);
 	const request = input.request;
 	if (request !== "launch" && request !== "attach") throw new TypeError(`configurations[${index}].request must be 'launch' or 'attach'`);
-	const adapter = input.debugAdapter === undefined ? resolveAdapter?.(type) : parseAdapter(input.debugAdapter, index);
-	if (!adapter) throw new TypeError(`configurations[${index}].debugAdapter must be an object or type '${type}' must be contributed by an installed extension`);
+	const adapter = input.debugServer !== undefined
+		? normalizeDebugAdapterDescriptor({ connection: { type: 'server', port: input.debugServer } }, `configurations[${index}].debugServer`)
+		: input.debugAdapter === undefined ? resolveAdapter?.(type) : parseAdapter(input.debugAdapter, index);
+	// A dormant type registers its descriptor after onDebugResolve activation.
+	// Discovery validates configuration data; DebugService checks its factory at launch.
 	const preLaunchTask = optionalBoundedString(input.preLaunchTask, `configurations[${index}].preLaunchTask`, 256);
 	const postDebugTask = optionalBoundedString(input.postDebugTask, `configurations[${index}].postDebugTask`, 256);
 	const launchArguments = Object.fromEntries(Object.entries(input).filter(([key]) => !["name", "type", "request", "debugAdapter", "preLaunchTask", "postDebugTask"].includes(key)));
 	ensureJsonCompatible(launchArguments, `configurations[${index}]`, 0);
-	return Object.freeze({ id: `launch:${index}:${stableId(name)}`, name, type, request, adapter: Object.freeze({ program: adapter.program, arguments: Object.freeze([...adapter.arguments]) }), arguments: Object.freeze(launchArguments), ...(preLaunchTask ? { preLaunchTask } : {}), ...(postDebugTask ? { postDebugTask } : {}) });
+	return Object.freeze({ id: `launch:${index}:${stableId(name)}`, name, type, request, adapterExplicit: input.debugAdapter !== undefined || input.debugServer !== undefined, ...(adapter ? { adapter: adapter.connection || adapter.inline ? adapter : Object.freeze({ ...adapter, arguments: Object.freeze([...adapter.arguments]), ...(adapter.env === undefined ? {} : { env: Object.freeze({ ...adapter.env }) }) }) } : {}), arguments: Object.freeze(launchArguments), ...(preLaunchTask ? { preLaunchTask } : {}), ...(postDebugTask ? { postDebugTask } : {}) });
 }
 
-function parseAdapter(value: unknown, index: number): IDebugConfiguration["adapter"] {
+function parseAdapter(value: unknown, index: number): IResolvedDebugConfiguration["adapter"] {
 	const adapter = record(value, `configurations[${index}].debugAdapter`);
+	if (adapter.connection !== undefined) {
+		if (Object.keys(adapter).some(key => !['connection', 'args'].includes(key))) { throw new TypeError('Debug Adapter connection cannot include executable options'); }
+		return normalizeDebugAdapterDescriptor({ connection: adapter.connection, arguments: adapter.args }, `configurations[${index}].debugAdapter`);
+	}
 	const program = boundedString(adapter.program, `configurations[${index}].debugAdapter.program`, 4096);
-	const argumentsList = adapter.args === undefined ? [] : array(adapter.args, `configurations[${index}].debugAdapter.args`).map((argument, argumentIndex) => boundedString(argument, `configurations[${index}].debugAdapter.args[${argumentIndex}]`, 4096));
+	const argumentsList = adapter.args === undefined ? [] : array(adapter.args, `configurations[${index}].debugAdapter.args`).map((argument, argumentIndex) => {
+		if (typeof argument !== 'string' || argument.length > 4096 || argument.includes('\0')) throw new TypeError(`configurations[${index}].debugAdapter.args[${argumentIndex}] must be a bounded string without NUL`);
+		return argument;
+	});
 	if (argumentsList.length > 128) throw new RangeError(`configurations[${index}].debugAdapter.args cannot contain more than 128 values`);
-	return Object.freeze({ program, arguments: Object.freeze(argumentsList) });
+	const cwd = optionalBoundedString(adapter.cwd, `configurations[${index}].debugAdapter.cwd`, 32768);
+	const env: Record<string, string | null> | undefined = adapter.env === undefined ? undefined : {};
+	if (env) {
+		const input = record(adapter.env, `configurations[${index}].debugAdapter.env`);
+		if (Object.keys(input).length > 128) throw new RangeError('Debug adapter environment has too many entries');
+		for (const [key, value] of Object.entries(input)) {
+			if (!key || key.length > 256 || /[=\0]/.test(key) || value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))) throw new TypeError('Invalid debug adapter environment');
+			env[key] = value as string | null;
+		}
+	}
+	return Object.freeze({ program, arguments: Object.freeze(argumentsList), ...(cwd === undefined ? {} : { cwd }), ...(env === undefined ? {} : { env: Object.freeze(env) }) });
 }
 
 function parseCompound(value: unknown, index: number): IDebugCompound {
 	const input = record(value, `compounds[${index}]`);
 	const name = boundedString(input.name, `compounds[${index}].name`, 256);
-	const configurations = array(input.configurations, `compounds[${index}].configurations`).map((configuration, configurationIndex) => boundedString(configuration, `compounds[${index}].configurations[${configurationIndex}]`, 256));
+	const configurations = array(input.configurations, `compounds[${index}].configurations`).map((configuration, configurationIndex) => {
+		const path = `compounds[${index}].configurations[${configurationIndex}]`;
+		if (typeof configuration === "string") return boundedString(configuration, path, 256);
+		const reference = record(configuration, path);
+		return Object.freeze({ name: boundedString(reference.name, `${path}.name`, 256), folder: boundedString(reference.folder, `${path}.folder`, 256) });
+	});
 	if (configurations.length === 0) throw new TypeError(`compounds[${index}].configurations must not be empty`);
 	if (configurations.length > MAX_CONFIGURATIONS) throw new RangeError(`compounds[${index}].configurations cannot contain more than ${MAX_CONFIGURATIONS} values`);
 	const preLaunchTask = optionalBoundedString(input.preLaunchTask, `compounds[${index}].preLaunchTask`, 256);

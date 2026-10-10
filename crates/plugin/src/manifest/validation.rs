@@ -172,6 +172,16 @@ fn validate_editor_extensions(manifest: &PluginManifest) -> Result<(), PluginErr
             "plugin manifest may declare at most {MAX_EDITOR_EXTENSION_CONTRIBUTIONS} Editor Extensions"
         ));
     }
+    if extensions
+        .iter()
+        .filter(|extension| extension.api == super::EditorExtensionApi::Vscode)
+        .count()
+        > 1
+    {
+        return invalid(
+            "A Plugin package may declare only one VS Code API entry for its package-root manifest",
+        );
+    }
 
     let mut entrypoints = BTreeSet::new();
     for extension in extensions {
@@ -200,14 +210,23 @@ fn validate_editor_extensions(manifest: &PluginManifest) -> Result<(), PluginErr
 }
 
 fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<(), PluginError> {
+    if extension.runtime == super::EditorExtensionRuntime::HostRpc
+        && extension.api != super::EditorExtensionApi::Ash
+    {
+        return invalid("Editor Extension api is only available for JavaScript entries");
+    }
     if extension.runtime == super::EditorExtensionRuntime::JavaScript {
-        if !matches!(
-            std::path::Path::new(extension.entrypoint.as_str())
-                .extension()
-                .and_then(|extension| extension.to_str()),
-            Some("js" | "mjs")
-        ) {
-            return invalid("JavaScript Editor Extension entrypoint must be .js or .mjs");
+        let suffix = std::path::Path::new(extension.entrypoint.as_str())
+            .extension()
+            .and_then(|extension| extension.to_str());
+        let supported = match extension.api {
+            super::EditorExtensionApi::Ash => matches!(suffix, Some("js" | "mjs")),
+            super::EditorExtensionApi::Vscode => matches!(suffix, Some("js" | "mjs" | "cjs")),
+        };
+        if !supported {
+            return invalid(
+                "JavaScript Editor Extension entrypoint has an unsupported module format",
+            );
         }
         if extension.capabilities.iter().any(|capability| {
             !matches!(
@@ -216,10 +235,12 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
                     | super::EditorExtensionCapability::Command
                     | super::EditorExtensionCapability::LanguageProvider
                     | super::EditorExtensionCapability::StatusBar
+                    | super::EditorExtensionCapability::TaskProvider
+                    | super::EditorExtensionCapability::DebugAdapter
             )
         }) {
             return invalid(
-                "JavaScript SDK v1 supports only command, language provider, status bar and Remote resolver registrations",
+                "JavaScript SDK v1 supports command, language provider, status bar, Task provider, Debug and Remote resolver registrations",
             );
         }
     }

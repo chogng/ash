@@ -9,6 +9,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use extension_protocol::CancelReason;
 use extension_protocol::ExtensionClientOperation;
 use extension_protocol::ExtensionClientRequest;
 use extension_protocol::ExtensionHostRequest;
@@ -23,6 +24,7 @@ use extension_protocol::ProtocolLimits;
 use extension_protocol::RequestContext;
 use serde_json::Value;
 
+use crate::package::ApiContract;
 use crate::package::Package;
 
 pub(crate) struct MemoryLimits {
@@ -38,7 +40,7 @@ type ActiveRequests = Arc<Mutex<BTreeMap<u64, RequestContext>>>;
 
 struct ClientCall {
     context: RequestContext,
-    resolver: v8::Global<v8::PromiseResolver>,
+    resolver: Option<v8::Global<v8::PromiseResolver>>,
 }
 
 struct Bridge {
@@ -56,6 +58,7 @@ struct Job {
     request: ExtensionHostRequest,
     promise: v8::Global<v8::Promise>,
     deadline: u64,
+    cancelled: bool,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -188,6 +191,10 @@ pub(crate) fn run(package: Package, confinement: Option<MemoryLimits>) -> Result
             });
             if let Ok(Some(ExtensionHostStdinFrame::Request(request))) = &message
                 && let HostRequestKind::Cancel(cancel) = &request.request
+                && matches!(
+                    cancel.reason,
+                    CancelReason::AuthorityRevoked | CancelReason::Shutdown
+                )
                 && request.validate(&ProtocolLimits::default()).is_ok()
                 && reader_active.lock().is_ok_and(|active| {
                     active.get(&cancel.target_request_id).is_some_and(|target| {
@@ -196,8 +203,8 @@ pub(crate) fn run(package: Package, confinement: Option<MemoryLimits>) -> Result
                     })
                 })
             {
-                // Cancellation retires this extension's entire isolate: no captured callback can
-                // continue with an old invocation's authority. The supervisor recovers a new incarnation.
+                // Authority revocation cannot wait for extension cooperation. Caller cancellation
+                // instead reaches the token below; the supervisor bounds uncooperative callbacks.
                 handle.terminate_execution();
             }
             let done = !matches!(message, Ok(Some(_)));
@@ -281,6 +288,11 @@ fn run_engine(
         )
         .ok_or("cannot install invocation bridge")?;
     for (name, text) in &package.sources {
+        // V8 prints uncaught compilation failures to stdout, which is exclusively
+        // the Host protocol. Catch them here and let main report the failure on stderr.
+        let compilation = std::pin::pin!(v8::TryCatch::new(scope));
+        let mut compilation = compilation.init();
+        let scope = &mut compilation;
         let source = v8::String::new(scope, text).ok_or("cannot allocate module source")?;
         let resource = v8::String::new(scope, name).ok_or("cannot allocate module name")?;
         let origin = v8::ScriptOrigin::new(
@@ -297,8 +309,13 @@ fn run_engine(
             None,
         );
         let mut source = v8::script_compiler::Source::new(source, Some(&origin));
-        let module = v8::script_compiler::compile_module(scope, &mut source)
-            .ok_or_else(|| format!("cannot compile module '{name}'"))?;
+        let module = v8::script_compiler::compile_module(scope, &mut source).ok_or_else(|| {
+            let exception = scope
+                .exception()
+                .map(|exception| exception.to_rust_string_lossy(scope))
+                .unwrap_or_else(|| "JavaScript compilation failed".into());
+            format!("cannot compile module '{name}': {exception}")
+        })?;
         let id = module.script_id().ok_or("module has no script identity")?;
         let module = v8::Global::new(scope, module);
         let bridge = scope
@@ -341,13 +358,18 @@ fn run_engine(
             if bridge
                 .calls
                 .values()
-                .any(|call| call.context.request_id == id)
+                .any(|call| call.context.request_id == id && call.resolver.is_some())
             {
                 return Err("callback returned with unfinished SDK requests".into());
             }
             let promise = v8::Local::new(scope, &job.promise);
             let value = promise.result(scope);
-            let outcome = if promise.state() == v8::PromiseState::Rejected {
+            let outcome = if job.cancelled {
+                Err(HostFailure {
+                    code: HostErrorCode::Cancelled,
+                    message: "extension invocation cancelled".into(),
+                })
+            } else if promise.state() == v8::PromiseState::Rejected {
                 Err(HostFailure {
                     code: HostErrorCode::Internal,
                     message: value.to_rust_string_lossy(scope),
@@ -414,12 +436,18 @@ fn run_engine(
                     .calls
                     .remove(&response.call_id)
                     .ok_or("unknown or duplicate SDK response")?;
-                if pending.context != response.context
-                    || !bridge.contexts.contains_key(&pending.context.request_id)
-                {
+                if pending.context != response.context {
                     return Err("SDK response belongs to a retired invocation".into());
                 }
-                let resolver = v8::Local::new(scope, pending.resolver);
+                // Cancellation already rejected this promise. Retain only the authenticated call
+                // identity until its in-flight response arrives, so it cannot affect another job.
+                let Some(resolver) = pending.resolver else {
+                    continue;
+                };
+                if !bridge.contexts.contains_key(&pending.context.request_id) {
+                    return Err("SDK response belongs to a retired invocation".into());
+                }
+                let resolver = v8::Local::new(scope, resolver);
                 match response.outcome {
                     Ok(value) => {
                         let text =
@@ -538,7 +566,25 @@ fn run_engine(
                         let namespace =
                             v8::Local::<v8::Object>::try_from(entry.get_module_namespace())
                                 .map_err(|_| "invalid extension namespace")?;
-                        let result = call(scope, namespace, "activate", &[context])?;
+                        let result = match package.api {
+                            ApiContract::Ash => call(scope, namespace, "activate", &[context])?,
+                            ApiContract::Vscode => {
+                                let initialization = serde_json::to_string(&params.initialization)
+                                    .map_err(|error| error.to_string())?;
+                                let initialization = v8::String::new(scope, &initialization)
+                                    .ok_or("cannot allocate activation initialization")?;
+                                let capabilities = serde_json::to_string(&params.capabilities)
+                                    .map_err(|error| error.to_string())?;
+                                let capabilities = v8::String::new(scope, &capabilities)
+                                    .ok_or("cannot allocate activation capabilities")?;
+                                call(
+                                    scope,
+                                    namespace,
+                                    "activate",
+                                    &[context, capabilities.into(), initialization.into()],
+                                )?
+                            }
+                        };
                         let promise = as_promise(scope, result)?;
                         jobs.insert(
                             request.context.request_id,
@@ -546,6 +592,7 @@ fn run_engine(
                                 request,
                                 promise,
                                 deadline,
+                                cancelled: false,
                             },
                         );
                         watchdog.set(None)?;
@@ -559,6 +606,25 @@ fn run_engine(
                                     | "hover"
                                     | "completion"
                                     | "documentEvent"
+                                    | "taskEvent"
+                                    | "debugEvent"
+                                    | "provideTasks"
+                                    | "resolveTask"
+                                    | "createDebugAdapterDescriptor"
+                                    | "sendInlineDebugAdapter"
+                                    | "readInlineDebugAdapter"
+                                    | "closeInlineDebugAdapter"
+                                    | "createDebugAdapterTracker"
+                                    | "debugAdapterTrackerEvent"
+                                    | "provideDebugConfigurations"
+                                    | "resolveDebugConfiguration"
+                                    | "resolveDebugConfigurationWithSubstitutedVariables"
+                                    | "createTaskTerminal"
+                                    | "openTaskTerminal"
+                                    | "readTaskTerminal"
+                                    | "inputTaskTerminal"
+                                    | "resizeTaskTerminal"
+                                    | "closeTaskTerminal"
                                     | "resolveConnection"
                                     | "resolveAuthority"
                                     | "getCanonicalURI"
@@ -620,16 +686,48 @@ fn run_engine(
                                 request,
                                 promise,
                                 deadline,
+                                cancelled: false,
                             },
                         );
                         watchdog.set(None)?;
                     }
                     HostRequestKind::Ping => respond(writer, &request, Ok(HostSuccess::Pong))?,
                     HostRequestKind::Cancel(cancel) => {
-                        let is_active = jobs.contains_key(&cancel.target_request_id);
                         respond(writer, &request, Ok(HostSuccess::Cancelled))?;
-                        if is_active {
-                            return Err("extension incarnation cancelled".into());
+                        if let Some(job) = jobs.get_mut(&cancel.target_request_id) {
+                            if !matches!(cancel.reason, CancelReason::Caller)
+                                || !matches!(job.request.request, HostRequestKind::Invoke(_))
+                            {
+                                return Err("extension incarnation cancelled".into());
+                            }
+                            if job.cancelled {
+                                continue;
+                            }
+                            job.cancelled = true;
+                            let bridge = scope.get_slot_mut::<Bridge>().expect("bridge exists");
+                            bridge.contexts.remove(&cancel.target_request_id);
+                            let resolvers: Vec<_> = bridge
+                                .calls
+                                .values_mut()
+                                .filter(|call| call.context.request_id == cancel.target_request_id)
+                                .filter_map(|call| call.resolver.take())
+                                .collect();
+                            for resolver in resolvers {
+                                let resolver = v8::Local::new(scope, resolver);
+                                let message =
+                                    v8::String::new(scope, "extension invocation cancelled")
+                                        .ok_or("cannot allocate cancellation error")?;
+                                let error = v8::Exception::error(scope, message);
+                                resolver
+                                    .reject(scope, error)
+                                    .ok_or("cannot reject cancelled SDK request")?;
+                            }
+                            let runtime =
+                                v8::Local::new(scope, runtime.as_ref().ok_or("runtime missing")?);
+                            let id = v8::Number::new(scope, cancel.target_request_id as f64);
+                            watchdog.set(Some(job.deadline))?;
+                            call(scope, runtime, "cancel", &[id.into()])?;
+                            watchdog.set(None)?;
                         }
                     }
                     HostRequestKind::Deactivate | HostRequestKind::Shutdown => {
@@ -847,12 +945,24 @@ fn dispatch_client(
     }
     let operation: ExtensionClientOperation =
         serde_json::from_str(&text).map_err(|error| error.to_string())?;
-    // Only the supported document/UI/diagnostic operations cross this bridge. Arbitrary commands
-    // and editor writes remain unavailable even if extension code forges the request JSON.
+    // Only supported editor operations cross this bridge. Authenticated Task calls
+    // are validated and dispatched by the Workbench Tasks owner.
     if !matches!(
         operation,
         ExtensionClientOperation::OpenRemoteConnection { .. }
             | ExtensionClientOperation::ReadDocument { .. }
+            | ExtensionClientOperation::ExecuteCommand { .. }
+            | ExtensionClientOperation::AddDebugBreakpoints { .. }
+            | ExtensionClientOperation::RemoveDebugBreakpoints { .. }
+            | ExtensionClientOperation::GetDebugProtocolBreakpoint { .. }
+            | ExtensionClientOperation::SetDebugSessionName { .. }
+            | ExtensionClientOperation::ListDebugSessions {}
+            | ExtensionClientOperation::StartDebugging { .. }
+            | ExtensionClientOperation::StopDebugging { .. }
+            | ExtensionClientOperation::DebugCustomRequest { .. }
+            | ExtensionClientOperation::FetchTasks { .. }
+            | ExtensionClientOperation::ExecuteTask { .. }
+            | ExtensionClientOperation::TerminateTask { .. }
             | ExtensionClientOperation::ReadWorkspaceFile { .. }
             | ExtensionClientOperation::ShowMessage { .. }
             | ExtensionClientOperation::ShowQuickPick { .. }
@@ -885,9 +995,13 @@ fn dispatch_client(
         .validate(&ProtocolLimits::default())
         .map_err(|error| error.to_string())?;
     write(&bridge.writer, &request)?;
-    bridge
-        .calls
-        .insert(request.call_id, ClientCall { context, resolver });
+    bridge.calls.insert(
+        request.call_id,
+        ClientCall {
+            context,
+            resolver: Some(resolver),
+        },
+    );
     result.set(promise.into());
     Ok(())
 }

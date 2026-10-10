@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { Emitter } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { DebugEvaluateContext, DebugSessionState, IDebugConfiguration, IDebugEvaluateResult, IDebugService, IDebugSession } from "../../common/debugService.js";
 import { DebugConsoleService } from "../../browser/debugConsoleService.js";
@@ -60,6 +60,13 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	state: DebugSessionState = "running";
 	readonly onDidChangeState = this.stateEmitter.event;
 	readonly onDidOutput = this.outputEmitter.event;
+	public readonly onDidCustomEvent = Event.None;
+	public readonly onDidChangeName = Event.None;
+	public readonly onDidChangeThread = Event.None;
+	public readonly name = "One";
+	public setName(): void { throw new Error("Renaming is unsupported in this fixture"); }
+	public getDebugProtocolBreakpoint(): undefined { return undefined; }
+	public async customRequest(): Promise<never> { throw new Error("Custom requests are unsupported in this fixture"); }
 	private retainedOutput = "";
 	get output(): string { return this.retainedOutput; }
 	emitOutput(value: string): void { this.retainedOutput += value; this.outputEmitter.fire(value); }

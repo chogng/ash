@@ -80,6 +80,8 @@ test("Tasks projects its refresh action into the Panel title", async () => {
 		registerTaskProviders: () => ({ replace() { }, dispose() { }, [Symbol.dispose]() { } }),
 		refresh: async () => { refreshCount += 1; return []; },
 		run: async () => { throw new Error("Task execution is not expected"); },
+		rerun: async () => undefined,
+		runProvidedTask: async () => { throw new Error('Provided task execution is not expected in this fixture'); },
 		terminate: async () => undefined,
 		dispose() { },
 		[Symbol.dispose]() { },

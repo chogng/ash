@@ -1,6 +1,6 @@
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
-import type { IResourceEditorInput } from '../../../../../common/editor.js';
+import { SaveReason, type IResourceEditorInput, type ISaveOptions } from '../../../../../common/editor.js';
 import { WorkbenchWindowBarHeight } from '../../../workbenchPartDimensions.js';
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
 import { EditorInputSerializerRegistry } from '../../../../../services/editor/common/editorInputSerializer.js';
@@ -16,7 +16,23 @@ import type {
 	IDimension,
 } from "../../../../../../base/browser/dom.js";
 import { Emitter, Event } from "../../../../../../base/common/event.js";
-import type { IAccessibilityService } from "../../../../../../platform/accessibility/common/accessibility.js";
+import { IAccessibilityService } from "../../../../../../platform/accessibility/common/accessibility.js";
+import { AccessibilityService } from '../../../../../../platform/accessibility/browser/accessibilityService.js';
+import { IEditorService } from '../../../../../services/editor/common/editorService.js';
+import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
+import { CodeEditorService } from '../../../../../services/editor/browser/codeEditorService.js';
+import { IConfigurationResolverService } from '../../../../../services/configurationResolver/common/configurationResolver.js';
+import { ConfigurationResolverService } from '../../../../../services/configurationResolver/browser/configurationResolverService.js';
+import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
+import { IPathService } from '../../../../../../platform/path/common/pathService.js';
+import { IRendererHostService } from '../../../../../../platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
+import { ITerminalProcessService } from '../../../../../../platform/terminal/common/terminal.js';
+import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { OperatingSystem } from '../../../../../../base/common/platform.js';
+import { initializeTestLocalization } from '../../../../../services/localization/test/common/localizationTestUtils.js';
+import { resetNlsResolver } from '../../../../../../nls.js';
 import { BreadcrumbsService } from "../../breadcrumbs.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicEditorConfigurations, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration } from "../../editorConfiguration.js";
 import { createDiffEditorInput } from "../../../../../common/editor/diffEditorInput.js";
@@ -37,7 +53,6 @@ import { URI } from "../../../../../../base/common/uri.js";
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { FileService } from '../../../../../../platform/files/common/fileService.js';
 import { AppServerFileSystemProvider } from '../../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
-import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
 import type { FsReadPathCaseSensitivityResult } from '../../../../../../../../.build/protocol/typescript/index.js';
 import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { TextModelSaveCompletionError, type TextModelReference } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -56,6 +71,7 @@ import { MenuService } from "../../../../../../platform/actions/common/menuServi
 import { IEditorGroupsService } from "../../../../../services/editor/common/editorGroupsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../../platform/instantiation/common/serviceCollection.js';
 import { highContrastDarkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../../../../../platform/storage/common/storage.js';
@@ -2652,6 +2668,84 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	reopenedPopup.window.close();
 });
 
+test('saveAll saves retained inactive panes without changing selection and respects sticky and untitled filters', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using resources = new DisposableStore();
+		const registry = resources.add(new EditorPaneRegistry());
+		const copies: TestWorkingCopy[] = [];
+		const saved: { resource: string; options?: ISaveOptions; }[] = [];
+		registry.registerEditorPane({
+			id: 'test.save-all', name: 'Save All', canOpen: () => EditorPaneMatch.Default,
+			create: () => {
+				const copy = resources.add(new TestWorkingCopy(URI.file(`/project/${copies.length}.txt`)));
+				copies.push(copy);
+				return Object.assign(new TestEditorPane('test.save-all', copy), { save: async (options?: ISaveOptions) => { saved.push({ resource: copy.resource.toString(), options }); await copy.save(); } });
+			},
+		});
+		const part = resources.add(createEditorPart(dom.window.document.body, { registry }));
+		const first = input('/project/first.txt');
+		const second = input('/project/second.txt');
+		const untitled = { resource: URI.parse('untitled:/Draft') };
+		await part.openEditor(first, { pinned: true });
+		await part.openEditor(second, { pinned: true });
+		await part.openEditor(untitled, { pinned: true });
+		part.activeGroup.stickEditor(second);
+		for (const copy of copies) { copy.markDirty(); }
+		const active = part.activeInput;
+		const service = resources.add(new BrowserEditorService(part));
+		assert.deepEqual(await service.saveAll({ reason: SaveReason.AUTO, excludeSticky: true }), { success: true, editors: [first] });
+		assert.deepEqual({ saved, active: part.activeInput, dirty: copies.map(copy => copy.isDirty) }, {
+			saved: [{ resource: copies[0]!.resource.toString(), options: { reason: SaveReason.AUTO } }], active, dirty: [false, true, true],
+		});
+		assert.deepEqual(await service.saveAll(), { success: true, editors: [second] });
+	} finally { dom.window.close(); }
+});
+
+test('saveAll returns the saved untitled replacement and reports a cancelled Save As', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using resources = new DisposableStore();
+		const registry = resources.add(new EditorPaneRegistry());
+		const untitled = { resource: URI.parse('untitled:/Draft'), label: 'Draft' };
+		const destination = URI.file('/project/draft.txt');
+		const copy = resources.add(new TestWorkingCopy(untitled.resource));
+		copy.markDirty();
+		let target: URI | undefined;
+		registry.registerEditorPane({ id: 'test.save-as', name: 'Save As', canOpen: () => EditorPaneMatch.Default,
+			create: () => Object.assign(new TestEditorPane('test.save-as', copy), { saveAs: async () => { await copy.saveAs(); } }),
+		});
+		const part = resources.add(createEditorPart(dom.window.document.body, { registry,
+			saveAsResource: async () => target,
+			replaceEditorResource: async (group, input, replacement) => { await group.replaceEditor(input, replacement); },
+		}));
+		await part.openEditor(untitled);
+		const service = resources.add(new BrowserEditorService(part));
+		assert.deepEqual(await service.saveAll({ includeUntitled: true }), { success: false, editors: [] });
+		assert.equal(copy.isDirty, true);
+		target = destination;
+		assert.deepEqual(await service.saveAll({ includeUntitled: true }), { success: true, editors: [{ resource: destination, label: 'draft.txt' }] });
+		assert.equal(part.activeInput?.resource.toString(), destination.toString());
+	} finally { dom.window.close(); }
+});
+
+test('saveAll reports a still-dirty pane and propagates pane save failures', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using copy = new TestWorkingCopy(URI.file('/project/dirty.txt'));
+		copy.markDirty();
+		const pane = new TestEditorPane('test.save-failure', copy);
+		registry.registerEditorPane({ id: pane.id, name: 'Save', canOpen: () => EditorPaneMatch.Default, create: () => pane });
+		using part = createEditorPart(dom.window.document.body, { registry });
+		await part.openEditor({ resource: copy.resource });
+		using service = new BrowserEditorService(part);
+		assert.deepEqual(await service.saveAll(), { success: false, editors: [] });
+		pane.save = async () => { throw new Error('Save failed'); };
+		await assert.rejects(service.saveAll(), /Save failed/);
+	} finally { dom.window.close(); }
+});
+
 test('workspace shutdown saves an untitled editor through Save As before accepting the transition', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
@@ -3144,6 +3238,64 @@ test('a missing file offers creation and retries into the same pinned tab', asyn
 function createEditorParts(main: ConstructorParameters<typeof EditorParts>[0], windows: ConstructorParameters<typeof EditorParts>[1], factory: ConstructorParameters<typeof EditorParts>[2], accessibility: ConstructorParameters<typeof EditorParts>[3], storage: ConstructorParameters<typeof EditorParts>[4]): InstanceType<typeof EditorParts> {
 	const services = editorTestServices.add(createTestComponentServices(storage));
 	return services.createInstance(EditorParts, main, windows, factory, accessibility, storage);
+}
+
+for (const scenario of [
+	{ root: URI.file('/work/client'), file: URI.file('/work/client/src/first.test.ts'), os: OperatingSystem.Linux, path: '/work/client/src/first.test.ts', relative: 'src/first.test.ts', directory: 'src', folder: '/work/client', filename: 'first.test.ts', stem: 'first.test' },
+	{ root: URI.from({ scheme: 'file', path: '/C:/work/client' }), file: URI.from({ scheme: 'file', path: '/c:/WORK/client/src/first.test.ts' }), os: OperatingSystem.Windows, path: 'C:\\WORK\\client\\src\\first.test.ts', relative: 'src\\first.test.ts', directory: 'src', folder: 'C:\\work\\client', filename: 'first.test.ts', stem: 'first.test' },
+	{ root: URI.from({ scheme: 'file', authority: 'build', path: '/share/client' }), file: URI.from({ scheme: 'file', authority: 'build', path: '/share/client/src/first.test.ts' }), os: OperatingSystem.Windows, path: '\\\\build\\share\\client\\src\\first.test.ts', relative: 'src\\first.test.ts', directory: 'src', folder: '\\\\build\\share\\client', filename: 'first.test.ts', stem: 'first.test' },
+	{ root: URI.from({ scheme: 'ash-remote', authority: 'build', path: '/srv/client' }), file: URI.from({ scheme: 'ash-remote', authority: 'build', path: '/srv/client/src/file\\name.ts' }), os: OperatingSystem.Linux, path: '/srv/client/src/file\\name.ts', relative: 'src/file\\name.ts', directory: 'src', folder: '/srv/client', filename: 'file\\name.ts', stem: 'file\\name' },
+]) {
+	test(`execution file variables retain the active editor snapshot while host data awaits for ${scenario.file.toString()}`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+		try {
+			using registry = new EditorPaneRegistry();
+			using registration = registry.registerEditorPane(descriptor('ash.test.executionFile', '.ts', () => new TestEditorPane('ash.test.executionFile')));
+			using services = createTestEditorServices(undefined, undefined, dom.window.document);
+			using main = createEditorPart(dom.window.document.body, { registry }, services);
+			using windows = new TestAuxiliaryWindowService();
+			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'execution-file', flushInterval: 0 });
+			using accessibility = new AccessibilityService({ root: dom.window.document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService) });
+			using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), accessibility, storage);
+			using editors = new BrowserEditorService(parts);
+			using codeEditors = new CodeEditorService(parts);
+			using workspace = new WorkspaceContextService({ id: 'execution-file', folders: [{ id: 'client', name: 'Client', uri: scenario.root, index: 0 }] });
+			const base = createDisconnectedRendererApi();
+			const entered = new DeferredPromise<void>();
+			const environment = new DeferredPromise<Record<string, string>>();
+			using executionServices = services.createChild(new ServiceCollection(
+				[IRendererHostService, { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: scenario.os } }],
+				[IWorkspaceContextService, workspace], [IEditorService, editors], [ICodeEditorService, codeEditors],
+				[ITerminalProcessService, { getEnvironment: async () => { void entered.complete(undefined); return environment.p; } }],
+			));
+			executionServices.registerSingleton(IPathService, () => executionServices.createInstance(BrowserPathService));
+			executionServices.registerSingleton(ICommandService, () => new CommandService(executionServices));
+			executionServices.registerSingleton(IConfigurationResolverService, () => executionServices.createInstance(ConfigurationResolverService));
+			const resolver = executionServices.get(IConfigurationResolverService);
+			using localization = toDisposable(resetNlsResolver);
+			initializeTestLocalization('zh-CN');
+			await assert.rejects(resolver.resolveAsync(workspace.getWorkspace().folders[0], '${file}'), { message: '无法解析“file”：请在活动编辑器中打开文件。' });
+			await editors.openEditor({ resource: scenario.file });
+			const pending = resolver.resolveAsync(workspace.getWorkspace().folders[0], {
+				file: '${file}', relative: '${relativeFile:Client}', directory: '${relativeFileDirname}',
+				folder: '${fileWorkspaceFolder}', folderName: '${fileWorkspaceFolderBasename}', parent: '${fileDirnameBasename}',
+				filename: '${fileBasename}', stem: '${fileBasenameNoExtension}', extension: '${fileExtname}', environment: '${env:MODE}',
+			});
+			await entered.p;
+			await editors.openEditor({ resource: URI.joinPath(scenario.root, 'changed.ts') });
+			void environment.complete({ MODE: '${file}' });
+			// Nested environment values use the same expression and captured file
+			// even after the active editor changes while this resolution awaits IO.
+			assert.deepEqual(await pending, { file: scenario.path, relative: scenario.relative, directory: scenario.directory, folder: scenario.folder, folderName: 'client', parent: 'src', filename: scenario.filename, stem: scenario.stem, extension: '.ts', environment: scenario.path });
+			assert.equal(editors.activeEditor?.resource.toString(), URI.joinPath(scenario.root, 'changed.ts').toString());
+			assert.equal(await resolver.resolveAsync(workspace.getWorkspace().folders[0], '${relativeFileDirname}'), '.');
+			await assert.rejects(resolver.resolveAsync(workspace.getWorkspace().folders[0], '${selectedText}'), { message: '无法解析“selectedText”：请在活动文本编辑器中选择文本或位置。' });
+			await editors.openEditor({ resource: URI.joinPath(scenario.root, '..', 'outside.ts') });
+			await assert.rejects(resolver.resolveAsync(workspace.getWorkspace().folders[0], '${fileWorkspaceFolder}'), { message: '无法解析“fileWorkspaceFolder”：活动文件不属于已打开的工作区文件夹。' });
+		} finally {
+			dom.window.close();
+		}
+	});
 }
 
 test('recent file history retains closed resources and restores workspace history', async () => {

@@ -14,6 +14,8 @@ test('Tasks view clears an execution error when external configuration updates i
 	const changes = resources.add(new Emitter<readonly IWorkspaceTask[]>());
 	let catalog: readonly IWorkspaceTask[] = [{ id: 'test', label: 'Check', command: 'check', source: 'vscode', group: 'other', unsupportedFeatures: ['options.cwd'] }];
 	const tasks: ITaskService = {
+		rerun: async () => undefined,
+		runProvidedTask: async () => { throw new Error('Provided task execution is outside this fixture'); },
 		get tasks() { return catalog; }, activeRuns: [], lastRun: undefined,
 		onDidChangeTasks: changes.event, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
 		registerTaskProvider: () => Disposable.None,

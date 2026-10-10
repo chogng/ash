@@ -236,7 +236,57 @@ impl PluginActivationAuthority {
         persistence: Persistence,
     ) -> Result<Self, PluginError> {
         persisted.validate()?;
-        let persisted = persisted.migrate();
+        let mut persisted = persisted.migrate();
+        let legacy_node_consent = persisted.node_execution_contract_version == 0;
+        if persisted.node_execution_contract_version > 1 {
+            return Err(authority_error(
+                PluginErrorKind::PackageConflict,
+                "Unsupported Node execution consent contract",
+            ));
+        }
+        if legacy_node_consent {
+            let mut node_packages = Vec::new();
+            for package in &persisted.granted {
+                if store
+                    .read(package)?
+                    .manifest()
+                    .contributions
+                    .editor_extensions
+                    .iter()
+                    .any(|extension| extension.api == ash_plugin::EditorExtensionApi::Vscode)
+                {
+                    node_packages.push(package.clone());
+                }
+            }
+            let removed_node_grants = !node_packages.is_empty();
+            persisted
+                .granted
+                .retain(|package| !node_packages.contains(package));
+            persisted
+                .active
+                .retain(|record| !node_packages.contains(&record.package));
+            persisted.node_execution_contract_version = 1;
+            if removed_node_grants {
+                // Retiring the old authority also invalidates its command receipts and generations.
+                persisted.revision = persisted.revision.checked_add(1).ok_or_else(|| {
+                    authority_error(
+                        PluginErrorKind::PackageConflict,
+                        "Plugin revision exhausted",
+                    )
+                })?;
+                persisted.activation_generation = persisted
+                    .activation_generation
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        authority_error(
+                            PluginErrorKind::PackageConflict,
+                            "Plugin generation exhausted",
+                        )
+                    })?;
+                persisted.receipts.clear();
+            }
+        }
+        let migration_record = legacy_node_consent.then(|| persisted.clone());
         let mut installed = BTreeMap::new();
         for package in persisted.installed {
             store.read(&package)?;
@@ -284,6 +334,9 @@ impl PluginActivationAuthority {
             ));
         }
         let activation = resolve_activation(persisted.activation_generation, &store, &active)?;
+        if let Some(record) = migration_record {
+            persistence.persist(&record)?;
+        }
         Ok(Self {
             inner: Arc::new(PluginActivationAuthorityInner {
                 store,

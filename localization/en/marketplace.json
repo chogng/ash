@@ -33,7 +33,7 @@
     "operationFailed": "Marketplace operation failed.",
     "filterEditorExtensions": "Editor extensions (Open VSX)",
     "declarativeOnly": "Installation loads supported themes, syntax and snippets without running scripts. Use Manage Marketplace extension execution to enable and authorize JavaScript separately.",
-    "accessibilityHelp": "Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. Open VSX editor extensions load supported declarative contributions. Use Manage Marketplace extension execution in the command palette to enable and authorize JavaScript separately on macOS. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help. Use the command palette to Install extension from workspace and Manage local extensions. Installing a local SDK package does not enable it or grant permissions.",
+    "accessibilityHelp": "Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. Open VSX editor extensions load supported declarative contributions. Use Manage Marketplace extension execution in the command palette to enable and authorize Node extension execution separately. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help. Use the command palette to Install extension from workspace and Manage local extensions. Installing a local SDK package does not enable it or grant permissions.",
     "installLocalExtension": "Install extension from workspace",
     "localExtensionPath": "Enter the extension package path relative to the selected workspace directory.",
     "localExtensionInstallNotice": "The package must contain .ash-plugin/plugin.json. Installation copies the package into your profile; enablement and permissions are managed separately.",
@@ -48,7 +48,7 @@
     "grantLocalExtension": "Grant permissions",
     "localExtensionPermissions": "Requested permissions: {0}",
     "noPermissions": "None",
-    "localExtensionDocumentNotice": "Editor extension callbacks can receive the document being used, including unsaved text. Workspace file access still requires directory authorization. JavaScript extensions run on macOS with direct filesystem access, networking and child processes blocked.",
+    "localExtensionDocumentNotice": "VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Ash SDK extensions retain the confined V8 host. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.",
     "localExtensionDigest": "Package digest: {0}",
     "yes": "Yes",
     "no": "No",
@@ -62,6 +62,6 @@
     "marketplaceExtensionState": "Enabled: {0}. Execution authorized: {1}.",
     "grantMarketplaceExecution": "Authorize execution",
     "revokeMarketplaceExecution": "Revoke execution authorization",
-    "marketplaceExecutionNotice": "Authorize commands, hover providers and editor document access, including unsaved text. This JavaScript host supports a subset of the VS Code API; Node modules, direct file access, networking and child processes are unavailable. Unsupported APIs fail explicitly. Disable execution before uninstalling. A new package version requires new authorization."
+    "marketplaceExecutionNotice": "Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Disable execution before uninstalling. Package or execution-contract changes require new authorization."
   }
 }

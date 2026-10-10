@@ -17,7 +17,7 @@ Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并�
 | SSH Remote 调试             | ✅ adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal                                                                       | stdio 不需要额外 Tunnel；socket/server adapter 尚未实现              |
 | 调试任务                    | ✅ `preLaunchTask`、`postDebugTask`                                                                                                                                                     | Tasks 负责执行和退出状态                                             |
 | 适配器发现                  | ✅ 声明式 `contributes.debuggers`，仍可显式写 `debugAdapter`                                                                                                                            | 不执行扩展 JavaScript                                                |
-| 完整 VS Code Debug 扩展 API | 非目标                                                                                                                                                                                  | Ash Host RPC v1 不是 VS Code/Node Extension API；兼容层需独立立项    |
+| 完整 VS Code Debug 扩展 API | 对齐目标，尚未完成                                                                                                                                                                                  | 已接入配置 provider 与 executable descriptor；完整会话 API、tracker 和其他传输仍需实现    |
 
 ## 一次调试如何执行
 
@@ -72,4 +72,4 @@ compound 启动中任一配置失败时，已经启动的会话会回滚。自�
 
 当前已实现：已授权 stdio adapter、连接级归属、有界 framing/分页、显式和声明式适配器解析、初始化与请求配对、持久行断点和函数断点、变量数据断点、指令断点、异常断点、线程/栈/递归变量、Watch/`evaluate`、调试控制台、虚拟源码、多会话、compound、restart、Tasks 生命周期、`runInTerminal`、Code-only 组装和断点 gutter。Remote Workbench 复用相同协议让 App Server 在远端启动 adapter，并保持 Workspace 变量、断点、调用栈源码和集成终端都映射到同一个远端 Environment。
 
-仍属于后续扩展：socket/server adapter，跨进程会话恢复，以及 VS Code Debug Extension API 兼容层。Ash Host v1 的 runtime core 已存在，但 production enforcing launcher 和跨层 Debug factory bridge 未完成验证前，不能把声明式适配器发现描述成可执行第三方扩展运行时。
+仍属于后续扩展：socket/server adapter，跨进程会话恢复，以及完整 VS Code Debug Extension API 兼容层。已授权 JavaScript 扩展可提供初始 launch 配置、在变量替换前后修改配置，并返回 executable adapter descriptor；Select and Start 已支持 Dynamic provider 选择；配置类型重定向会先激活目标扩展，再执行目标配置回调与 descriptor。仍不具备完整 Node Extension Host、tracker、公开会话 API，以及 socket、pipe 或 inline adapter。生产运行仍遵守安装、启用、权限和进程隔离边界。

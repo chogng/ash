@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../../../../../test/common/testEditorService.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
@@ -143,6 +144,7 @@ test('title service shares the resolved title with its registered part and relea
 	const activeChanged = resources.add(new Emitter<void>());
 	let activeEditor: import('../../../../../common/editor.js').IResourceEditorInput | undefined;
 	const editors: import('../../../../../services/editor/common/editorService.js').IEditorService = {
+		...emptyEditorServiceState,
 		get activeEditor() { return activeEditor; },
 		visibleEditors: [],
 		onDidActiveEditorChange: activeChanged.event,

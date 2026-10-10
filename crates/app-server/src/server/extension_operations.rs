@@ -157,6 +157,24 @@ fn extension_descriptor(value: ExtensionDescriptor) -> ExtensionDto {
         publisher: value.publisher,
         version: value.version,
         display_name: value.display_name,
+        extension_location: url::Url::from_file_path(value.extension_location)
+            .ok()
+            .map(String::from),
+        target_platform: Some(format!(
+            "{}-{}",
+            match std::env::consts::OS {
+                "windows" => "win32",
+                "macos" => "darwin",
+                operating_system => operating_system,
+            },
+            match std::env::consts::ARCH {
+                "x86_64" => "x64",
+                "x86" => "ia32",
+                "aarch64" => "arm64",
+                "arm" => "armhf",
+                architecture => architecture,
+            }
+        )),
         source_kind: match value.source_kind {
             ExtensionSourceKind::BuiltIn => ExtensionSourceKindDto::BuiltIn,
             ExtensionSourceKind::Plugin => ExtensionSourceKindDto::Plugin,

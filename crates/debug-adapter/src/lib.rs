@@ -8,6 +8,7 @@ mod framing;
 mod service;
 
 pub use service::DebugAdapterCommand;
+pub use service::DebugAdapterConnection;
 pub use service::DebugAdapterError;
 pub use service::DebugAdapterMessage;
 pub use service::DebugAdapterRead;

@@ -123,3 +123,48 @@ fn stale_extension_generations_have_a_distinct_rpc_error() {
         AppServerErrorName::ExtensionGenerationConflict
     );
 }
+
+#[test]
+fn extension_catalog_exposes_its_authorized_package_location_and_execution_platform() {
+    use crate::local::ProviderModelService;
+    use crate::server::AppServer;
+    use ash_core::InMemoryThreadStore;
+    use ash_core::ThreadController;
+    use ash_model_provider::EchoModel;
+    use extension_catalog::ExtensionRoot;
+    use std::sync::Arc;
+    let root = tempfile::tempdir().unwrap();
+    let package = root.path().join("package with spaces");
+    std::fs::create_dir(&package).unwrap();
+    std::fs::write(package.join("package.json"), r#"{"name":"debugger","publisher":"test","version":"1.0.0","contributes":{"debuggers":[{"type":"test","program":"adapter.js","runtime":"node"}]}}"#).unwrap();
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+    )
+    .with_extension_roots(vec![ExtensionRoot::user(root.path())]);
+    let catalog = server
+        .extension_list(&serde_json::json!({"reload":"refresh"}))
+        .unwrap();
+    let extension = &catalog["extensions"][0];
+    let location = url::Url::parse(extension["extensionLocation"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        location.to_file_path().unwrap(),
+        std::fs::canonicalize(&package).unwrap()
+    );
+    let expected_os = match std::env::consts::OS {
+        "macos" => "darwin",
+        "windows" => "win32",
+        value => value,
+    };
+    assert!(
+        extension["targetPlatform"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("{expected_os}-"))
+    );
+    let wire: ash_app_server_protocol::protocol::extensions::ExtensionListResult =
+        serde_json::from_value(catalog).unwrap();
+    assert_eq!(wire.extensions[0].id, "test.debugger");
+}

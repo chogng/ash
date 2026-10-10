@@ -110,6 +110,7 @@ struct TestProcess {
     hang_invocations: AtomicBool,
     cancels: AtomicUsize,
     output_events: Mutex<Vec<ExtensionHostOutputEvent>>,
+    initializations: Mutex<Vec<Option<extension_protocol::ExtensionHostInitialization>>>,
 }
 
 impl ExtensionHostProcess for TestProcess {
@@ -134,15 +135,21 @@ impl ExtensionHostProcess for TestProcess {
                     runtime_api_version: params.runtime_api_version,
                 }))
             }
-            HostRequestKind::Activate(_) => Some(HostSuccess::Activated(ActivateResult {
-                registrations: vec![RegistrationDescriptor {
-                    registration_id: "review.command".into(),
-                    kind: RegistrationKind::Command {
-                        command: "acme.review".into(),
-                        title: "Review".into(),
-                    },
-                }],
-            })),
+            HostRequestKind::Activate(params) => {
+                self.initializations
+                    .lock()
+                    .unwrap()
+                    .push(params.initialization.clone());
+                Some(HostSuccess::Activated(ActivateResult {
+                    registrations: vec![RegistrationDescriptor {
+                        registration_id: "review.command".into(),
+                        kind: RegistrationKind::Command {
+                            command: "acme.review".into(),
+                            title: "Review".into(),
+                        },
+                    }],
+                }))
+            }
             HostRequestKind::Invoke(_) if self.hang_invocations.load(Ordering::Acquire) => None,
             HostRequestKind::Invoke(_) => Some(HostSuccess::Invoked(InvokeResult {
                 payload: json!({"ok": true}),
@@ -183,6 +190,21 @@ impl ExtensionHostProcess for TestProcess {
         String::new()
     }
 
+    fn drain_background_client_requests(
+        &self,
+    ) -> Vec<extension_protocol::ExtensionBackgroundClientRequest> {
+        Vec::new()
+    }
+
+    fn respond_background_client(
+        &self,
+        _: extension_protocol::ExtensionBackgroundClientResponse,
+    ) -> Result<(), ExtensionHostError> {
+        Err(ExtensionHostError::InvalidProtocol(
+            "test process has no background call".into(),
+        ))
+    }
+
     fn drain_output_events(&self) -> Vec<ExtensionHostOutputEvent> {
         self.output_events
             .lock()
@@ -196,6 +218,7 @@ fn supervisor(
     authority: Arc<TestAuthority>,
 ) -> ExtensionHostSupervisor {
     let params = ActivateParams {
+        initialization: None,
         extension_id: "acme.review".into(),
         package: PackageBinding {
             package_id: "acme/review@1.0.0".into(),
@@ -455,4 +478,36 @@ fn fenced_invoke_never_replays_on_a_new_incarnation() {
         supervisor.snapshot().incarnation,
         advertised.incarnation + 1
     );
+}
+
+#[test]
+fn initialization_is_bound_once_and_replayed_after_an_idle_crash() {
+    let launcher = Arc::new(TestLauncher::default());
+    let authority = Arc::new(TestAuthority::authorized());
+    let supervisor = supervisor(Arc::clone(&launcher), authority);
+    let initial = extension_protocol::ExtensionHostInitialization {
+        language: None,
+        workspace_folders: Vec::new(),
+        workspace_name: None,
+        workspace_file: None,
+        configuration_values: json!({"debug":{"saveBeforeStart":"none"}}),
+        configuration_data: json!({"defaults":{}}),
+    };
+    supervisor
+        .start_with_initialization(Some(initial.clone()))
+        .unwrap();
+    let mut replacement = initial.clone();
+    replacement.configuration_values = json!({"different":true});
+    supervisor
+        .start_with_initialization(Some(replacement))
+        .unwrap();
+    let first = Arc::clone(&launcher.processes.lock().unwrap()[0]);
+    assert_eq!(
+        *first.initializations.lock().unwrap(),
+        vec![Some(initial.clone())]
+    );
+    first.exited.store(true, Ordering::Release);
+    supervisor.reconcile().unwrap();
+    let second = Arc::clone(&launcher.processes.lock().unwrap()[1]);
+    assert_eq!(*second.initializations.lock().unwrap(), vec![Some(initial)]);
 }

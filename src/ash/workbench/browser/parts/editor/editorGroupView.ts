@@ -23,6 +23,8 @@ import type { IDocumentCollaborationApi } from "../../../../platform/collaborati
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { EditorOpenOptions } from "./editorInput.js";
 import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
+import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
+import { Schemas } from '../../../../base/common/network.js';
 import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
@@ -77,7 +79,7 @@ export interface EditorGroupOptions {
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
-	readonly onSave?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane) => Promise<boolean>;
+	readonly onSave?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane) => Promise<IResourceEditorInput | undefined>;
 	readonly onWillCloseEditor?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane, closingGroups?: readonly EditorGroupId[]) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
@@ -143,7 +145,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly documentCollaborationApi: IDocumentCollaborationApi | undefined;
 	private readonly serverEvents: IServerEventApi | undefined;
 	private readonly workingCopyService: IWorkingCopyService | undefined;
-	private readonly onSave: ((group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
+	private readonly onSave: EditorGroupOptions['onSave'];
 	private readonly onWillCloseEditor: EditorGroupOptions['onWillCloseEditor'];
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined;
@@ -526,7 +528,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				...(this.onSave ? {
 					onSave: () => {
 						if (!createdPane) return Promise.reject(new Error("Editor save is unavailable"));
-						return this.onSave!(this, input, createdPane);
+						return this.onSave!(this, input, createdPane).then(result => !!result);
 					},
 				} : {}),
 			});
@@ -642,6 +644,20 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const entry = this.requireEntry(input);
 		this.activateEntry(entry, false);
 		return entry.paneInstance.pane;
+	}
+
+	async saveEditor(input: IResourceEditorInput, options: ISaveEditorsOptions = {}): Promise<IResourceEditorInput | undefined> {
+		const entry = this.entry(input);
+		if (!entry || this.isDisposed) { return undefined; }
+		const pane = entry.paneInstance.pane;
+		if (options.saveAs || input.resource.scheme === Schemas.untitled) {
+			return this.onSave?.(this, entry.input, pane);
+		}
+		if (!pane.workingCopy?.isDirty) { return entry.input; }
+		if (!pane.save) { return undefined; }
+		const { saveAs, ...saveOptions } = options;
+		await pane.save(saveOptions);
+		return !this.isDisposed && this.entry(input) === entry && !pane.workingCopy.isDirty ? entry.input : undefined;
 	}
 
 	async confirmCloseEditor(input: IResourceEditorInput, closingGroups?: readonly EditorGroupId[]): Promise<boolean> {

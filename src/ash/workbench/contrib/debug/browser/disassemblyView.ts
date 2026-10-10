@@ -7,7 +7,10 @@ import { alert, status } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../base/browser/ui/hover/hoverDelegate.js';
-import { URI } from '../../../../base/common/uri.js';
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { getUriFromSource } from '../common/debugSource.js';
+import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import { Table } from '../../../../base/browser/ui/table/tableWidget.js';
 import type { ITableColumn, ITableRenderer } from '../../../../base/browser/ui/table/table.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
@@ -63,6 +66,9 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
+		@ILogService private readonly logService: ILogService,
+		@ITextModelService private readonly textModels: ITextModelService,
 	) { super(DISASSEMBLY_VIEW_ID, themeService, storageService); }
 
 	public override create(parent: HTMLElement): void {
@@ -300,14 +306,12 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 			const generation = this.generation;
 			const location = instruction.location;
 			const selection = new Range(instruction.line, instruction.column || 1, instruction.endLine || instruction.line, instruction.endColumn || instruction.column || 1);
-			if (location.resource) { await this.editors.openEditor({ resource: location.resource, label: location.name }, { selection, pinned: true }); }
-			else if (location.sourceReference && location.sourceReference > 0) {
-				const source = await session.source(location);
-				if (!this.isCurrent(session, generation)) { return; }
-				const name = location.name ?? `source-${location.sourceReference}`;
-				const resource = URI.parse(`debug-source://session/${encodeURIComponent(session.id)}/${location.sourceReference}/${encodeURIComponent(name)}`);
-				await this.editors.openEditor({ resource, label: name, contentType: source.mimeType, readOnly: true, initialText: source.content }, { selection, pinned: true });
-			}
+			if (location.sourceReference && location.sourceReference > 0) {
+				const resource = getUriFromSource(location, location.path, session.id, this.uriIdentity, this.logService);
+				using reference = await this.textModels.createModelReference(resource);
+				if (!this.isCurrent(session, generation)) return;
+				await this.editors.openEditor({ resource, label: location.name, readOnly: true }, { selection, pinned: true });
+			} else if (location.resource) { await this.editors.openEditor({ resource: location.resource, label: location.name }, { selection, pinned: true }); }
 		} catch (error) { this.showError(error); }
 	}
 	private renderControls(): void {

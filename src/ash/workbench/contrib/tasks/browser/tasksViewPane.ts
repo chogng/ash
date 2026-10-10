@@ -1,4 +1,5 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
@@ -67,7 +68,8 @@ export class TasksViewPane extends ViewPane {
 		const taskIndex = Number(target.closest<HTMLButtonElement>(".ash-tasks-run")?.dataset.taskIndex);
 		if (Number.isSafeInteger(taskIndex) && this.renderedTasks[taskIndex]) {
 			this.error = undefined;
-			void this.taskService.run(this.renderedTasks[taskIndex]!).then(() => this.viewsService.focusView(TERMINAL_VIEW_ID)).catch(error => {
+			void this.taskService.run(this.renderedTasks[taskIndex]!).catch(error => {
+				if (isCancellationError(error)) return;
 				this.error = error instanceof Error ? error.message : "Could not run task.";
 				this.render();
 			});

@@ -1,6 +1,6 @@
 {
   "ash.marketplace": {
-    "accessibilityHelp": "使用 /marketplace [关键词] 搜索，或使用 /plugins 管理已安装的软件包。可按软件包、能力、语言名称、别名或文件扩展名搜索。能力筛选包含插件捆绑的能力。安装 Open VSX 编辑器扩展时加载受支持的声明式贡献，脚本执行需要另外启用和授权。语言服务器 ID 筛选要求该语言具有可执行程序，并排除仅提供语法资源的软件包。目录不可用时，已安装列表仍显示本地软件包。安装、更新和卸载作用于整个软件包。用 Tab 和 Shift+Tab 切换控件，用方向键选择软件包，按 Escape 关闭帮助。 在命令面板中使用“从工作区安装扩展”和“管理本地扩展”；安装 SDK 扩展包后，需要分别启用和授权。 在 macOS 上，可通过命令面板的“管理市场扩展执行”单独启用并授权市场扩展脚本。",
+    "accessibilityHelp": "使用 /marketplace [关键词] 搜索，或使用 /plugins 管理已安装的软件包。可按软件包、能力、语言名称、别名或文件扩展名搜索。能力筛选包含插件捆绑的能力。安装 Open VSX 编辑器扩展时加载受支持的声明式贡献，脚本执行需要另外启用和授权。语言服务器 ID 筛选要求该语言具有可执行程序，并排除仅提供语法资源的软件包。目录不可用时，已安装列表仍显示本地软件包。安装、更新和卸载作用于整个软件包。用 Tab 和 Shift+Tab 切换控件，用方向键选择软件包，按 Escape 关闭帮助。 在命令面板中使用“从工作区安装扩展”和“管理本地扩展”；安装 SDK 扩展包后，需要分别启用和授权。 可通过命令面板的“管理市场扩展执行”单独启用并授权 Node 扩展执行。",
     "searchMarketplace": "搜索 Marketplace",
     "searchLanguageExtensions": "搜索语言扩展",
     "searchPackages": "搜索插件、技能、MCP…",
@@ -48,7 +48,7 @@
     "grantLocalExtension": "授予权限",
     "localExtensionPermissions": "请求的权限：{0}",
     "noPermissions": "无",
-    "localExtensionDocumentNotice": "扩展回调可以取得正在使用的文档，包括未保存的文本。读取工作区文件仍需要目录授权。JS 扩展目前可在 macOS 运行，禁止直接访问文件、联网或创建子进程。",
+    "localExtensionDocumentNotice": "VS Code 扩展使用产品 Node 宿主，可访问当前用户的文件、网络和子进程，并继承开发环境变量。Ash SDK 扩展继续使用受限 V8 宿主。编辑器回调可接收未保存的文本。请只向可信的包授予权限。",
     "localExtensionDigest": "扩展包摘要：{0}",
     "yes": "是",
     "no": "否",
@@ -62,7 +62,7 @@
     "marketplaceExtensionState": "已启用：{0}。已授权执行：{1}。",
     "grantMarketplaceExecution": "授权执行",
     "revokeMarketplaceExecution": "撤销执行授权",
-    "marketplaceExecutionNotice": "授权命令、悬停服务和编辑器文档访问，包括未保存的文本。此 JS 宿主支持部分 VS Code API，不提供 Node 模块、直接文件访问、网络访问或子进程。未支持的 API 会明确报错。卸载前请先停用。新版本需要重新授权。"
+    "marketplaceExecutionNotice": "授权这个确切版本的扩展在产品 Node 宿主中运行，可使用当前用户的文件、网络和子进程权限，并继承开发环境变量。编辑器 API 可接收文档，包括未保存的文本。卸载前请先停用。包版本或执行契约变化后需重新授权。"
   },
   "ash.workbench": {
     "command.OpenMarketplace": "打开市场",

@@ -12,6 +12,7 @@ pub(crate) fn generate(schema: &Value) -> String {
     // the renderer's bounded chunk. Public schema names and wire validation stay unchanged.
     runtime_schema.sort_all_objects();
     deduplicate_definitions(&mut runtime_schema, DECODER_ROOTS);
+    share_inline_schemas(&mut runtime_schema);
     compact_definition_names(&mut runtime_schema, DECODER_ROOTS);
     // With preserve_order, removing annotations can swap the remaining object keys.
     runtime_schema.sort_all_objects();
@@ -89,6 +90,58 @@ fn deduplicate_definitions(schema: &mut Value, roots: &[&str]) {
         .as_object_mut()
         .expect("decoder schema must contain definitions")
         .retain(|name, _| !aliases.contains_key(name));
+}
+
+/// Factor repeated validation subtrees, including inline result fields. Dispatch envelopes
+/// stay inline because the decoder indexes their method property before validation.
+fn share_inline_schemas(schema: &mut Value) {
+    let mut counts = BTreeMap::<String, usize>::new();
+    visit_schema(schema, &mut |object| {
+        if object
+            .get("properties")
+            .and_then(Value::as_object)
+            .is_some_and(|properties| properties.contains_key("method"))
+        {
+            return;
+        }
+        let fingerprint = serde_json::to_string(object).expect("schema object must serialize");
+        // A local reference and its definition must save bytes even with only two uses.
+        if fingerprint.len() >= 120 {
+            *counts.entry(fingerprint).or_default() += 1;
+        }
+    });
+    let factors: BTreeMap<String, String> = counts
+        .into_iter()
+        .filter(|(_, count)| *count > 1)
+        .enumerate()
+        .map(|(index, (fingerprint, _))| (fingerprint, format!("shared{index}")))
+        .collect();
+    let rewrite = |object: &mut Map<String, Value>| {
+        let fingerprint = serde_json::to_string(object).expect("schema object must serialize");
+        if let Some(name) = factors.get(&fingerprint) {
+            object.clear();
+            object.insert("$ref".into(), Value::String(format!("#/$defs/{name}")));
+        }
+    };
+    let mut definitions = Map::new();
+    for (fingerprint, name) in &factors {
+        let mut definition: Value =
+            serde_json::from_str(fingerprint).expect("schema fingerprint must parse");
+        let mut root = true;
+        visit_schema(&mut definition, &mut |object| {
+            if root {
+                root = false;
+            } else {
+                rewrite(object);
+            }
+        });
+        definitions.insert(name.clone(), definition);
+    }
+    visit_schema(schema, &mut |object| rewrite(object));
+    schema["$defs"]
+        .as_object_mut()
+        .expect("decoder definitions must exist")
+        .extend(definitions);
 }
 
 /// Only decoder entry points need public names; internal references never enter the wire contract.

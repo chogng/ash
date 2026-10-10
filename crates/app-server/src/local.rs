@@ -1278,7 +1278,7 @@ pub fn open_app_server_with_codebase_providers(
     let marketplace_language_runtime = plugins_manager.as_ref().map(|manager| {
         crate::server::marketplace_language_runtime::MarketplaceLanguageRuntime::new(
             Arc::clone(manager),
-            managed_node,
+            managed_node.clone(),
             options.language_server_providers.clone(),
         )
     });
@@ -1895,15 +1895,34 @@ pub fn open_app_server_with_codebase_providers(
         let directory = executable
             .parent()
             .ok_or_else(|| OpenAppServerError("missing product executable directory".into()))?;
+        let mut launcher =
+            ash_editor_extension_host::ProductJavaScriptLauncher::new(directory.join(format!(
+                "ash-js-extension-host{}",
+                std::env::consts::EXE_SUFFIX
+            )));
+        if let Some(node) = &managed_node {
+            let bootstrap = InstallContext::current()
+                .bundled_resource("extension-host/node.mjs")
+                .ok_or_else(|| {
+                    OpenAppServerError("missing Node extension host bootstrap".into())
+                })?;
+            let mut environment: BTreeMap<std::ffi::OsString, std::ffi::OsString> =
+                exec_server::terminal::safe_process_environment()
+                    .into_iter()
+                    .map(|(key, value)| (key.into(), value.into()))
+                    .collect();
+            if node.source() == ash_lsp_server_provider::ManagedNodeRuntimeSource::ElectronRunAsNode
+            {
+                environment.insert("ELECTRON_RUN_AS_NODE".into(), "1".into());
+            }
+            launcher = launcher
+                .with_node_runtime(node.executable().to_path_buf(), bootstrap, environment)
+                .map_err(|error| OpenAppServerError(error.to_string()))?;
+        }
         server = server
             .with_built_in_editor_extensions()
             .with_extension_host_runtime(
-                Arc::new(ash_editor_extension_host::ProductJavaScriptLauncher::new(
-                    directory.join(format!(
-                        "ash-js-extension-host{}",
-                        std::env::consts::EXE_SUFFIX
-                    )),
-                )),
+                Arc::new(launcher),
                 ash_editor_extension_host::ExtensionHostLimits::default(),
                 ash_editor_extension_host::RestartPolicy::default(),
             )

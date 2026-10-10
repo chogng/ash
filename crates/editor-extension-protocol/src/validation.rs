@@ -17,6 +17,9 @@ use super::RegistrationKind;
 use crate::ProtocolError;
 
 pub(super) fn validate_activation(params: &ActivateParams) -> Result<(), ProtocolError> {
+    if let Some(initialization) = &params.initialization {
+        initialization.validate()?;
+    }
     validate_identifier(&params.extension_id)?;
     validate_identifier(&params.package.package_id)?;
     validate_digest(&params.package.package_digest)?;
@@ -76,6 +79,7 @@ pub(super) fn validate_registrations(
             return Err(protocol_error("registration IDs must be unique"));
         }
         let required = match &registration.kind {
+            RegistrationKind::WorkspaceEvents {} => continue,
             RegistrationKind::RemoteAuthorityResolver { authority_prefix }
             | RegistrationKind::RemoteConnectionResolver { authority_prefix } => {
                 if authority_prefix.is_empty()
@@ -100,6 +104,8 @@ pub(super) fn validate_registrations(
                 ExtensionCapability::RemoteAuthorityResolver
             }
             RegistrationKind::TextDocumentEvents {} => ExtensionCapability::LanguageProvider,
+            RegistrationKind::TaskEvents {} => ExtensionCapability::TaskProvider,
+            RegistrationKind::DebugEvents {} => ExtensionCapability::DebugAdapter,
             RegistrationKind::ExternalUriOpener { schemes, label } => {
                 if schemes.is_empty()
                     || schemes.len() > 2
@@ -181,6 +187,20 @@ pub(super) fn validate_registrations(
             RegistrationKind::DebugAdapter { debugger_type } => {
                 validate_selector(debugger_type, "debugger type")?;
                 require_unique(&mut debugger_types, debugger_type, "debugger types")?;
+                ExtensionCapability::DebugAdapter
+            }
+            RegistrationKind::DebugAdapterTracker { debugger_type } => {
+                validate_selector(debugger_type, "debugger type")?;
+                ExtensionCapability::DebugAdapter
+            }
+            RegistrationKind::DebugConfigurationProvider {
+                debugger_type,
+                trigger_kind,
+            } => {
+                validate_selector(debugger_type, "debugger type")?;
+                if !matches!(trigger_kind, 1 | 2) {
+                    return Err(protocol_error("invalid Debug configuration trigger kind"));
+                }
                 ExtensionCapability::DebugAdapter
             }
             RegistrationKind::TaskProvider { task_type } => {

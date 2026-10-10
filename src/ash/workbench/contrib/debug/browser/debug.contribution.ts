@@ -1,6 +1,7 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { DebugTitleContribution } from './debugTitle.js';
+import { DebugContentProvider } from '../common/debugContentProvider.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
@@ -19,6 +20,32 @@ import { DisassemblyView } from './disassemblyView.js';
 import './debugActions.js';
 import './debugService.js';
 import './media/debug.css';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<string>({
+	key: 'debug.saveBeforeStart', defaultValue: 'allEditorsInActiveGroup', scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+	parse(value: unknown): string {
+		if (value !== 'allEditorsInActiveGroup' && value !== 'nonUntitledEditorsInActiveGroup' && value !== 'none') {
+			throw new TypeError(localize('debug.invalidSaveBeforeStart', 'Invalid debug save-before-start policy.'));
+		}
+		return value;
+	},
+	schema: {
+		type: 'string', enum: ['allEditorsInActiveGroup', 'nonUntitledEditorsInActiveGroup', 'none'],
+		description: localize('debug.saveBeforeStart', 'Controls which editors are saved before starting a debug session.'),
+	},
+	setting: {
+		valueType: 'select',
+		options: [
+			{ value: 'allEditorsInActiveGroup', get label() { return localize('debug.saveBeforeStartAll', 'Save files and the active untitled editor'); } },
+			{ value: 'nonUntitledEditorsInActiveGroup', get label() { return localize('debug.saveBeforeStartFiles', 'Save files'); } },
+			{ value: 'none', get label() { return localize('debug.saveBeforeStartNone', 'Do not save'); } },
+		],
+		get title() { return localize('debug.saveBeforeStartTitle', 'Save before debugging'); },
+		get description() { return localize('debug.saveBeforeStart', 'Controls which editors are saved before starting a debug session.'); },
+	},
+});
 
 registerEditorPane({
 	id: DISASSEMBLY_VIEW_ID,
@@ -62,3 +89,6 @@ registerEditorContribution({
 
 registerWorkbenchContribution('workbench.contrib.debugTitle', WorkbenchPhase.AfterRestored, accessor =>
 	accessor.get(IInstantiationService).createInstance(DebugTitleContribution));
+
+registerWorkbenchContribution('workbench.contrib.debugContentProvider', WorkbenchPhase.BlockRestore, accessor =>
+	accessor.get(IInstantiationService).createInstance(DebugContentProvider));

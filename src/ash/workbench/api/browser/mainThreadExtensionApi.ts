@@ -1,3 +1,7 @@
+import { MainThreadDebugService } from './mainThreadDebugService.js';
+import { MainThreadConfiguration } from './mainThreadConfiguration.js';
+import { MainThreadWorkspace } from './mainThreadWorkspace.js';
+import { DebugAdapterFactoriesRegistry, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from '../../services/debug/common/debugAdapterFactory.js';
 import { IHostService } from '../../services/host/browser/host.js';
 import { getRemoteAuthorityPrefix } from '../../../platform/remote/common/remoteAuthorityResolver.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -8,13 +12,15 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../
 import { MenuId, MenusRegistry, type IMenuItem } from '../../../platform/actions/common/actions.js';
 import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
-import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { createExtensionHostInitialization, IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/extensionHost/common/extensionHostApi.js';
 import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../../editor/common/services/languageFeatures.js';
 import { ITaskService, type TaskProvider, type TaskProviderRegistration } from '../../services/tasks/common/taskService.js';
 import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from '../../services/testing/common/testingService.js';
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
 import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProviderId, unsupportedExtensionHostLanguageOperations, type ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
-import { createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from './extensionHostWorkflowBridge.js';
+import { createExtensionHostDebugAdapterFactory, createExtensionHostDebugAdapterTrackerFactory, createExtensionHostDebugConfigurationProvider, createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from './extensionHostWorkflowBridge.js';
+import { IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../services/debug/common/debugService.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { MainThreadCustomEditors } from './mainThreadCustomEditors.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
@@ -34,6 +40,7 @@ import { CancellationError } from '../../../base/common/errors.js';
 import type { ExtensionClientOperation, ExtensionClientResult, ExtensionClientSource } from '../../../platform/extensionHost/common/extensionHostApi.js';
 import { MainThreadDocuments, extensionDocumentSnapshot } from './mainThreadDocuments.js';
 import { MainThreadDiagnostics } from './mainThreadDiagnostics.js';
+import { MainThreadTask } from './mainThreadTask.js';
 
 export interface ExtensionApiIssue {
 	readonly extensionId: string;
@@ -41,15 +48,22 @@ export interface ExtensionApiIssue {
 	readonly message: string;
 }
 
-interface ContributionSet {
+interface ExtensionContributionSet {
 	readonly menus: readonly { readonly id: MenuId; readonly item: IMenuItem; }[];
 	readonly commands: readonly CommandDefinition[];
 	readonly languages: Required<LanguageProviderBatch>;
 	readonly tasks: readonly TaskProvider[];
+	readonly debugAdapters: readonly DebugAdapterFactory[];
+	readonly debugConfigurations: readonly IDebugConfigurationProvider[];
+	readonly debugTrackers: readonly IDebugAdapterTrackerFactory[];
 	readonly tests: readonly TestProfileProvider[];
 	readonly remoteResolvers: readonly RemoteConnectionResolver[];
 	readonly issues: readonly ExtensionApiIssue[];
 	readonly controller: AbortController;
+}
+
+interface ContributionSet extends Omit<ExtensionContributionSet, 'controller'> {
+	readonly owners: ReadonlyMap<string, { readonly identity: string; readonly contributions: ExtensionContributionSet; }>;
 }
 
 interface ExtensionOutputCursor {
@@ -71,6 +85,11 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly commandMenus = this._register(new DisposableStore());
 	private readonly languageRegistration: LanguageProviderBatchRegistration;
 	private readonly taskRegistration: TaskProviderRegistration;
+	private readonly debugAdapterRegistration: DebugAdapterFactoryRegistration;
+	private readonly debugConfigurationRegistration: DebugConfigurationProviderRegistration;
+	private readonly configurationApi: MainThreadConfiguration;
+	private readonly workspaceApi: MainThreadWorkspace;
+	private readonly debugTrackerRegistration: DebugAdapterTrackerFactoryRegistration;
 	private readonly testRegistration: TestProfileProviderRegistration;
 	private readonly remoteRegistration: RemoteConnectionResolverRegistration;
 	private activeContributions: ContributionSet | undefined;
@@ -84,6 +103,8 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly documents: MainThreadDocuments;
 	private readonly diagnostics: MainThreadDiagnostics;
 	private readonly statusbar: MainThreadStatusBar;
+	private readonly taskApi: MainThreadTask;
+	private readonly debugApi: MainThreadDebugService;
 	private readonly remoteSources = new Map<string, ExtensionHostRuntime>();
 
 	constructor(
@@ -93,6 +114,8 @@ export class MainThreadExtensionApi extends Disposable {
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
 		@ILanguageFeaturesService languageFeatures: ILanguageFeaturesService,
 		@ITaskService tasks: ITaskService,
+		@IDebugService debug: IDebugService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ITestingService testing: ITestingService,
 		@IOutputService private readonly outputService: IOutputService,
 		@IInstantiationService instantiation: IInstantiationService,
@@ -108,20 +131,27 @@ export class MainThreadExtensionApi extends Disposable {
 		@IHostService private readonly host: IHostService,
 	) {
 		super();
+		this.configurationApi = this._register(instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
+		this.workspaceApi = this._register(instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		const clientHandler = this.api.registerClientHandler((operation, signal, source) => this.handleClientOperation(operation, signal, source));
 		this._register(toDisposable(() => clientHandler.dispose()));
 		this.customEditors = this._register(instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis));
 		this.diagnostics = this._register(instantiation.createInstance(MainThreadDiagnostics));
 		this.statusbar = this._register(instantiation.createInstance(MainThreadStatusBar, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.documents = this._register(instantiation.createInstance(MainThreadDocuments, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
+		this.taskApi = this._register(instantiation.createInstance(MainThreadTask, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
+		this.debugApi = this._register(instantiation.createInstance(MainThreadDebugService, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));
+		this.debugAdapterRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
+		this.debugConfigurationRegistration = this._register(debug.registerDebugConfigurationProviders([]));
+		this.debugTrackerRegistration = this._register(debug.registerDebugAdapterTrackerFactories([]));
 		this.testRegistration = this._register(testing.registerTestProfileProviders([]));
 		this.remoteRegistration = this._register(this.remoteConnections.registerResolvers([]));
 		this._register(toDisposable(() => {
 			this.activationController.abort('Extension API was disposed');
-			this.activeContributions?.controller.abort('Extension API was disposed');
+			this.retireContributions(this.activeContributions, undefined, 'Extension API was disposed');
 			this.activeContributions = undefined;
 			this.remoteSources.clear();
 			this.outputCursors.clear();
@@ -137,6 +167,17 @@ export class MainThreadExtensionApi extends Disposable {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
+			case 'addDebugBreakpoints':
+			case 'removeDebugBreakpoints':
+			case 'getDebugProtocolBreakpoint':
+			case 'setDebugSessionName':
+			case 'listDebugSessions':
+			case 'startDebugging':
+			case 'stopDebugging':
+			case 'debugCustomRequest': return this.debugApi.handle(operation, signal);
+			case 'fetchTasks':
+			case 'executeTask':
+			case 'terminateTask': return this.taskApi.handle(operation, signal, source);
 			case 'openRemoteConnection': {
 				const runtime = this.remoteSources.get(source.extensionId);
 				if (!runtime || runtime.incarnation !== source.incarnation || runtime.activationGeneration !== source.activationGeneration) { throw new Error('Remote extension authority was revoked'); }
@@ -165,7 +206,7 @@ export class MainThreadExtensionApi extends Disposable {
 				return { result: 'done' };
 			case 'executeCommand': {
 				const value = await this.commandService.executeCommand(operation.command, ...operation.arguments);
-				return { result: 'command', value: value === undefined ? null : normalizeExtensionHostPayload(value) };
+				return { result: 'command', value: value === undefined ? null : normalizeExtensionHostPayload(value), hasValue: value !== undefined };
 			}
 			case 'listDocuments':
 				return { result: 'documents', documents: this.models.getModels().map(extensionDocumentSnapshot) };
@@ -193,6 +234,8 @@ export class MainThreadExtensionApi extends Disposable {
 				const result = await this.bulkEdits.apply(edits, { token: signal });
 				return { result: 'applied', applied: result.isApplied };
 			}
+			case 'readInitialization':
+				return { result: 'initialization', initialization: createExtensionHostInitialization(this.workspace, this.configuration) };
 			case 'readConfiguration': {
 				const value = this.configuration.getValue(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
 				return { result: 'configuration', value: value === undefined ? null : normalizeExtensionHostPayload(value) };
@@ -227,11 +270,7 @@ export class MainThreadExtensionApi extends Disposable {
 
 	public update(snapshot: ExtensionHostFleetSnapshot): readonly ExtensionApiIssue[] {
 		this.assertNotDisposed();
-		const identity = JSON.stringify(snapshot.extensions.map(runtime => ({
-			id: runtime.id, version: runtime.version, packageDigest: runtime.packageDigest, runtimeApiVersion: runtime.runtimeApiVersion,
-			activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, activation: runtime.activation, failure: runtime.failure,
-			registrations: runtime.registrations.filter(registration => registration.kind !== 'statusBar'),
-		})));
+		const identity = JSON.stringify(snapshot.extensions.map(runtimeContributionIdentity));
 		// Status values and Output events can change during a command. Only executable
 		// registrations and runtime identity may invalidate that command's lifetime.
 		if (this.contributionIdentity !== identity) {
@@ -239,7 +278,7 @@ export class MainThreadExtensionApi extends Disposable {
 			try {
 				this.replaceContributions(contributions);
 			} catch (error) {
-				contributions.controller.abort(error);
+				this.retireContributions(contributions, this.activeContributions, error);
 				throw error;
 			}
 			this.contributionIdentity = identity;
@@ -252,6 +291,10 @@ export class MainThreadExtensionApi extends Disposable {
 		this.customEditors.update(snapshot);
 		this.diagnostics.update(snapshot);
 		this.documents.update(snapshot);
+		this.configurationApi.update(snapshot);
+		this.workspaceApi.update(snapshot);
+		this.taskApi.update(snapshot);
+		this.debugApi.update(snapshot);
 		this.statusbar.update(snapshot);
 		return this.activeContributions?.issues ?? [];
 	}
@@ -264,6 +307,10 @@ export class MainThreadExtensionApi extends Disposable {
 		this.contributionIdentity = undefined;
 		this.customEditors.clear();
 		this.documents.clear();
+		this.configurationApi.clear();
+		this.workspaceApi.clear();
+		this.taskApi.clear();
+		this.debugApi.clear();
 		this.diagnostics.clear();
 		this.statusbar.clear();
 		for (const key of this.namedOutputChannels.keys()) {
@@ -273,11 +320,54 @@ export class MainThreadExtensionApi extends Disposable {
 	}
 
 	private buildContributions(snapshot: ExtensionHostFleetSnapshot): ContributionSet {
+		const owners = new Map<string, { readonly identity: string; readonly contributions: ExtensionContributionSet; }>();
+		try {
+			for (const runtime of snapshot.extensions) {
+				const identity = runtimeContributionIdentity(runtime);
+				const previous = this.activeContributions?.owners.get(runtime.id);
+				owners.set(runtime.id, previous?.identity === identity ? previous : {
+					identity, contributions: this.buildExtensionContributions({ ...snapshot, extensions: [runtime] }),
+				});
+			}
+		} catch (error) {
+			for (const [id, owner] of owners) {
+				if (owner !== this.activeContributions?.owners.get(id)) owner.contributions.controller.abort(error);
+			}
+			throw error;
+		}
+		const contributions = [...owners.values()].map(owner => owner.contributions);
+		const languages = mutableLanguageBatch();
+		for (const entry of contributions) appendLanguageBatch(languages, entry.languages);
+		return Object.freeze({
+			owners, languages: freezeLanguageBatch(languages),
+			menus: Object.freeze(contributions.flatMap(entry => entry.menus)),
+			commands: Object.freeze(contributions.flatMap(entry => entry.commands)),
+			tasks: Object.freeze(contributions.flatMap(entry => entry.tasks)),
+			debugAdapters: Object.freeze(contributions.flatMap(entry => entry.debugAdapters)),
+			debugConfigurations: Object.freeze(contributions.flatMap(entry => entry.debugConfigurations)),
+			debugTrackers: Object.freeze(contributions.flatMap(entry => entry.debugTrackers)),
+			tests: Object.freeze(contributions.flatMap(entry => entry.tests)),
+			remoteResolvers: Object.freeze(contributions.flatMap(entry => entry.remoteResolvers)),
+			issues: Object.freeze(contributions.flatMap(entry => entry.issues)),
+		});
+	}
+
+	private retireContributions(previous: ContributionSet | undefined, current: ContributionSet | undefined, reason: unknown): void {
+		if (!previous) return;
+		for (const [id, owner] of previous.owners) {
+			if (owner !== current?.owners.get(id)) owner.contributions.controller.abort(reason);
+		}
+	}
+
+	private buildExtensionContributions(snapshot: ExtensionHostFleetSnapshot): ExtensionContributionSet {
 		const controller = new AbortController();
 		const commands: CommandDefinition[] = [];
 		const menus: { id: MenuId; item: IMenuItem; }[] = [];
 		const languages = mutableLanguageBatch();
 		const tasks: TaskProvider[] = [];
+		const debugAdapters: DebugAdapterFactory[] = [];
+		const debugConfigurations: IDebugConfigurationProvider[] = [];
+		const debugTrackers: IDebugAdapterTrackerFactory[] = [];
 		const tests: TestProfileProvider[] = [];
 		const remoteResolvers: RemoteConnectionResolver[] = [];
 		const issues: ExtensionApiIssue[] = [];
@@ -296,7 +386,9 @@ export class MainThreadExtensionApi extends Disposable {
 					commands.push({
 						id: command.command, metadata: { description: command.title }, handler: async (_accessor, ...args) => {
 							signal.throwIfAborted();
-							const activated = await this.api.activateByEvent({ extensionId, activationGeneration, event: { type: 'command', command: command.command } });
+							const activated = await this.api.activateByEvent({
+								extensionId, activationGeneration, event: { type: 'command', command: command.command }, initialization: createExtensionHostInitialization(this.workspace, this.configuration)
+							});
 							signal.throwIfAborted();
 							const current = activated.extensions.find(candidate => candidate.id === extensionId && candidate.activationGeneration === activationGeneration && candidate.lifecycle === 'ready');
 							const registration = current?.registrations.find(candidate => candidate.kind === 'command' && candidate.command === command.command);
@@ -310,7 +402,7 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'statusBar' || registration.kind === 'textDocumentEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
+				if (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'workspaceEvents' || registration.kind === 'statusBar' || registration.kind === 'textDocumentEvents' || registration.kind === 'taskEvents' || registration.kind === 'debugEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
@@ -369,7 +461,7 @@ export class MainThreadExtensionApi extends Disposable {
 					continue;
 				}
 				if (registration.kind === "taskProvider") {
-					tasks.push(createExtensionHostTaskProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke));
+					tasks.push(createExtensionHostTaskProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace, registration.taskType));
 					continue;
 				}
 				if (registration.kind === "testProfileProvider") {
@@ -381,10 +473,18 @@ export class MainThreadExtensionApi extends Disposable {
 					}));
 					continue;
 				}
-				issues.push({ extensionId: runtime.id, registrationId: registration.registrationId, message: `Debug Adapter registration '${registration.debuggerType}' is active, but this Workbench has no asynchronous Host-broker DAP session seam` });
+				if (registration.kind === 'debugAdapterTracker') {
+					debugTrackers.push(createExtensionHostDebugAdapterTrackerFactory(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace));
+					continue;
+				}
+				if (registration.kind === 'debugConfigurationProvider') {
+					debugConfigurations.push(createExtensionHostDebugConfigurationProvider(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), registration.triggerKind, invoke, this.workspace));
+					continue;
+				}
+				debugAdapters.push(createExtensionHostDebugAdapterFactory(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace));
 			}
 		}
-		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), issues: Object.freeze(issues), controller });
+		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), debugAdapters: Object.freeze(debugAdapters), debugConfigurations: Object.freeze(debugConfigurations), debugTrackers: Object.freeze(debugTrackers), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), issues: Object.freeze(issues), controller });
 	}
 
 	private registrationInvoker(runtime: ExtensionHostRuntime, registration: ExtensionHostRegistration, generationSignal: AbortSignal): ExtensionHostProviderInvoker {
@@ -416,29 +516,51 @@ export class MainThreadExtensionApi extends Disposable {
 
 	private replaceContributions(next: ContributionSet): void {
 		const previous = this.activeContributions;
+		// Activating a task-only owner must preserve a debug launch already waiting
+		// for that task. Registry updates and invocation cancellation belong only
+		// to domains whose executable owners actually changed.
+		const changed = {
+			commands: !sameContributions(previous?.commands, next.commands),
+			languages: !previous || (Object.keys(next.languages) as (keyof LanguageProviderBatch)[]).some(key => !sameContributions(previous.languages[key], next.languages[key])),
+			tasks: !sameContributions(previous?.tasks, next.tasks),
+			debugAdapters: !sameContributions(previous?.debugAdapters, next.debugAdapters),
+			debugConfigurations: !sameContributions(previous?.debugConfigurations, next.debugConfigurations),
+			debugTrackers: !sameContributions(previous?.debugTrackers, next.debugTrackers),
+			tests: !sameContributions(previous?.tests, next.tests),
+			remoteResolvers: !sameContributions(previous?.remoteResolvers, next.remoteResolvers),
+		};
 		try {
-			this.commandRegistration.replace(next.commands);
-			this.languageRegistration.replace(next.languages);
-			this.taskRegistration.replace(next.tasks);
-			this.testRegistration.replace(next.tests);
-			this.remoteRegistration.replace(next.remoteResolvers);
+			if (changed.commands) this.commandRegistration.replace(next.commands);
+			if (changed.languages) this.languageRegistration.replace(next.languages);
+			if (changed.tasks) this.taskRegistration.replace(next.tasks);
+			if (changed.debugAdapters) this.debugAdapterRegistration.replace(next.debugAdapters);
+			if (changed.debugConfigurations) this.debugConfigurationRegistration.replace(next.debugConfigurations);
+			if (changed.debugTrackers) this.debugTrackerRegistration.replace(next.debugTrackers);
+			if (changed.tests) this.testRegistration.replace(next.tests);
+			if (changed.remoteResolvers) this.remoteRegistration.replace(next.remoteResolvers);
 		} catch (error) {
 			try {
-				this.commandRegistration.replace(previous?.commands ?? []);
-				this.languageRegistration.replace(previous?.languages ?? {});
-				this.taskRegistration.replace(previous?.tasks ?? []);
-				this.testRegistration.replace(previous?.tests ?? []);
-				this.remoteRegistration.replace(previous?.remoteResolvers ?? []);
+				if (changed.commands) this.commandRegistration.replace(previous?.commands ?? []);
+				if (changed.languages) this.languageRegistration.replace(previous?.languages ?? {});
+				if (changed.tasks) this.taskRegistration.replace(previous?.tasks ?? []);
+				if (changed.debugAdapters) this.debugAdapterRegistration.replace(previous?.debugAdapters ?? []);
+				if (changed.debugConfigurations) this.debugConfigurationRegistration.replace(previous?.debugConfigurations ?? []);
+				if (changed.debugTrackers) this.debugTrackerRegistration.replace(previous?.debugTrackers ?? []);
+				if (changed.tests) this.testRegistration.replace(previous?.tests ?? []);
+				if (changed.remoteResolvers) this.remoteRegistration.replace(previous?.remoteResolvers ?? []);
 				this.activeContributions = previous;
 			} catch (rollbackError) {
 				this.commandRegistration.replace([]);
 				this.commandMenus.clear();
 				this.languageRegistration.replace({});
 				this.taskRegistration.replace([]);
+				this.debugAdapterRegistration.replace([]);
+				this.debugConfigurationRegistration.replace([]);
+				this.debugTrackerRegistration.replace([]);
 				this.testRegistration.replace([]);
 				this.remoteRegistration.replace([]);
 				this.activeContributions = undefined;
-				previous?.controller.abort(rollbackError);
+				this.retireContributions(previous, undefined, rollbackError);
 				throw new AggregateError([error, rollbackError], "Extension Host contribution commit and rollback both failed");
 			}
 			throw error;
@@ -450,7 +572,7 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 		// Menu declarations belong to the activated package, and disappear with its command authority.
 		this.commandMenus.add(MenusRegistry.appendMenuItems(next.menus));
-		previous?.controller.abort("Extension Host fleet generation was replaced");
+		this.retireContributions(previous, next, "Extension Host fleet generation was replaced");
 	}
 
 	private revokeContributions(): void {
@@ -460,10 +582,13 @@ export class MainThreadExtensionApi extends Disposable {
 		this.commandMenus.clear();
 		this.languageRegistration.replace({});
 		this.taskRegistration.replace([]);
+		this.debugAdapterRegistration.replace([]);
+		this.debugConfigurationRegistration.replace([]);
+		this.debugTrackerRegistration.replace([]);
 		this.testRegistration.replace([]);
 		this.remoteRegistration.replace([]);
 		this.remoteSources.clear();
-		active?.controller.abort("Extension Host authority was revoked");
+		this.retireContributions(active, undefined, "Extension Host authority was revoked");
 	}
 
 	private projectOutput(snapshot: ExtensionHostFleetSnapshot): void {
@@ -558,6 +683,18 @@ function runtimeLifecycleMessage(runtime: ExtensionHostRuntime): string {
 
 function unsupportedLanguageIssue(runtime: ExtensionHostRuntime, registration: ExtensionHostLanguageRegistration, operations: readonly string[]): ExtensionApiIssue {
 	return { extensionId: runtime.id, registrationId: registration.registrationId, message: `Language registration '${registration.registrationId}' operation(s) ${operations.join(", ")} were not projected because they do not yet have strict Workbench codecs; supported operations remain active` };
+}
+
+function runtimeContributionIdentity(runtime: ExtensionHostRuntime): string {
+	return JSON.stringify({
+		id: runtime.id, version: runtime.version, packageDigest: runtime.packageDigest, runtimeApiVersion: runtime.runtimeApiVersion,
+		activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, activation: runtime.activation, failure: runtime.failure,
+		registrations: runtime.registrations.filter(registration => registration.kind !== 'statusBar'),
+	});
+}
+
+function sameContributions(previous: readonly unknown[] | undefined, current: readonly unknown[]): boolean {
+	return previous !== undefined && previous.length === current.length && current.every((value, index) => value === previous[index]);
 }
 
 type MutableLanguageBatch = { -readonly [K in keyof Required<LanguageProviderBatch>]: NonNullable<LanguageProviderBatch[K]>[number][]; };

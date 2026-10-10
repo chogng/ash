@@ -4,8 +4,43 @@ export class ExtensionError extends Error {
 	constructor(code, message) { super(message); this.name = 'ExtensionError'; this.code = code; }
 }
 const registrations = new Map();
+const invocations = new Map();
 let phase = 'new';
 let activation;
+
+export class CancellationTokenSource {
+	#cancelled = false;
+	#disposed = false;
+	#listeners = new Set();
+	constructor() {
+		const source = this;
+		this.token = Object.freeze({
+			get isCancellationRequested() { return source.#cancelled; },
+			onCancellationRequested(listener, thisArg, disposables) {
+				if (typeof listener !== 'function') throw new TypeError('Cancellation listener must be a function');
+				const entry = { listener, thisArg };
+				let active = true;
+				const disposable = Object.freeze({ dispose() { active = false; source.#listeners.delete(entry); } });
+				if (source.#cancelled) {
+					// Late listeners run asynchronously and can be disposed before delivery.
+					void Promise.resolve().then(() => { if (active) listener.call(thisArg, undefined); });
+				} else if (!source.#disposed) source.#listeners.add(entry);
+				disposables?.push(disposable);
+				return disposable;
+			},
+		});
+	}
+	cancel() {
+		if (this.#cancelled || this.#disposed) return;
+		this.#cancelled = true;
+		const listeners = [...this.#listeners];
+		this.#listeners.clear();
+		let failure;
+		for (const entry of listeners) { try { entry.listener.call(entry.thisArg, undefined); } catch (error) { failure ??= error; } }
+		if (failure) throw failure;
+	}
+	dispose() { this.#disposed = true; this.#listeners.clear(); }
+}
 
 function register(registration) {
 	if (phase !== 'activating') { throw new Error('Registrations must be created during activation'); }
@@ -185,6 +220,10 @@ function bytesFromHex(hex) {
 }
 
 export const workspace = Object.freeze({
+    registerWorkspaceEvents(registrationId, listener) {
+        if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Workspace events require an ID and listener');
+        return register({ registrationId, kind: 'workspaceEvents', operation: 'workspaceEvent', callback: listener });
+    },
 	registerRemoteAuthorityResolver(authorityPrefix, resolver) {
 		if (typeof authorityPrefix !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(authorityPrefix) || typeof resolver?.resolve !== 'function') throw new TypeError('Invalid Remote resolver');
 		if (resolver.getCanonicalURI !== undefined && typeof resolver.getCanonicalURI !== 'function') throw new TypeError('Invalid canonical URI provider');
@@ -299,6 +338,225 @@ export const workspace = Object.freeze({
 	},
 });
 
+// Providers and explicit Tasks share one bounded PTY handle owner.
+function registerTaskCallbacks(registration, provider) {
+	const terminals = new Map();
+	let sequence = 0;
+	function release(id) {
+		const state = terminals.get(id);
+		if (!state) return;
+		terminals.delete(id);
+		let failure;
+		for (const listener of state.listeners) { try { listener?.dispose?.(); } catch (error) { failure ??= error; } }
+		if (!state.closed) { state.closed = true; try { state.pty.close(); } catch (error) { failure ??= error; } }
+		if (failure) throw failure;
+	}
+	const handle = register({
+		...registration, operation: [
+			...(registration.kind === 'taskEvents' ? ['taskEvent'] : ['provideTasks', 'resolveTask']),
+			'createTaskTerminal', 'openTaskTerminal', 'readTaskTerminal', 'inputTaskTerminal', 'resizeTaskTerminal', 'closeTaskTerminal',
+		],
+		async callback(context, payload, operation) {
+			if (operation === 'taskEvent') return await provider.onTaskEvent(context, payload);
+			if (operation === 'provideTasks') return { tasks: await provider.provideTasks(context) ?? [] };
+			if (operation === 'resolveTask') {
+				const task = await provider.resolveTask?.(context, payload.task);
+				return task === undefined ? null : { task };
+			}
+			if (operation === 'createTaskTerminal') {
+				if (terminals.size >= 64 || typeof provider.createTaskTerminal !== 'function') throw new Error('Custom task terminal is unavailable');
+				const pty = await provider.createTaskTerminal(context, payload.executionId, payload.definition);
+				if (typeof pty?.onDidWrite !== 'function' || typeof pty.open !== 'function' || typeof pty.close !== 'function') throw new TypeError('CustomExecution requires a Pseudoterminal');
+				const id = `pty.${++sequence}`;
+				const state = { pty, listeners: [], events: [], bytes: 0, closed: false, opened: false };
+				function enqueue(event) {
+					if (state.events.length >= 1024 || state.bytes + JSON.stringify(event).length > 262144) {
+						state.events = [{ type: 'close', code: 1 }]; state.bytes = 0;
+						if (!state.closed) { state.closed = true; pty.close(); }
+						return;
+					}
+					state.bytes += JSON.stringify(event).length;
+					state.events.push(event);
+				}
+				terminals.set(id, state);
+				try {
+					state.listeners.push(pty.onDidWrite(data => { if (!state.closed) { if (typeof data !== 'string') throw new TypeError('Pseudoterminal output must be a string'); enqueue({ type: 'data', data }); } }));
+					if (pty.onDidClose) state.listeners.push(pty.onDidClose(code => {
+						if (!state.closed) {
+							if (code !== undefined && (!Number.isSafeInteger(code) || code < 0 || code > 2147483647)) throw new TypeError('Invalid custom task exit code');
+							enqueue({ type: 'close', code: code ?? null }); state.closed = true;
+						}
+					}));
+					if (pty.onDidChangeName) state.listeners.push(pty.onDidChangeName(name => { if (!state.closed && typeof name === 'string') enqueue({ type: 'name', name }); }));
+					if (state.listeners.some(listener => typeof listener?.dispose !== 'function')) throw new TypeError('Pseudoterminal events require disposable listeners');
+				} catch (error) { try { release(id); } finally { throw error; } }
+				return { ptyId: id, acceptsInput: typeof pty.handleInput === 'function' };
+			}
+			const state = terminals.get(payload.ptyId);
+			if (operation === 'closeTaskTerminal') { release(payload.ptyId); return null; }
+			if (!state) throw new Error('Custom task terminal has been released');
+			if (operation === 'openTaskTerminal' && !state.opened && !state.closed) { state.opened = true; state.pty.open(payload.dimensions ?? undefined); }
+			if (operation === 'inputTaskTerminal' && !state.closed) {
+				if (typeof payload.data !== 'string' || payload.data.length > 32768) throw new TypeError('Invalid task input');
+				state.pty.handleInput?.(payload.data);
+			}
+			if (operation === 'resizeTaskTerminal' && !state.closed) {
+				if (!Number.isInteger(payload.dimensions?.columns) || !Number.isInteger(payload.dimensions?.rows) || payload.dimensions.columns < 1 || payload.dimensions.rows < 1 || payload.dimensions.columns > 65535 || payload.dimensions.rows > 65535) throw new TypeError('Invalid task dimensions');
+				state.pty.setDimensions?.(payload.dimensions);
+			}
+			const events = state.events.splice(0);
+			state.bytes = 0;
+			return { events };
+		},
+	});
+	const disposable = Object.freeze({
+		dispose() {
+			let failure;
+			for (const id of [...terminals.keys()]) { try { release(id); } catch (error) { failure ??= error; } }
+			handle.dispose();
+			if (failure) throw failure;
+		}
+	});
+	activation.subscriptions.push(disposable);
+	return disposable;
+}
+
+export const tasks = Object.freeze({
+	registerTaskEvents(registrationId, listener, createTaskTerminal) {
+		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Task events require an ID and listener');
+		if (createTaskTerminal !== undefined && typeof createTaskTerminal !== 'function') throw new TypeError('Custom task terminal requires a factory');
+		return registerTaskCallbacks({ registrationId, kind: 'taskEvents' }, { onTaskEvent: listener, createTaskTerminal });
+	},
+	registerTaskProvider(registrationId, taskType, provider) {
+		if (typeof provider?.provideTasks !== 'function' || typeof taskType !== 'string' || !taskType) throw new TypeError('Task providers require a type and provideTasks');
+		return registerTaskCallbacks({ registrationId, kind: 'taskProvider', taskType }, provider);
+	},
+});
+
+export const debug = Object.freeze({
+	registerDebugEvents(registrationId, listener) {
+		if (typeof listener !== 'function') throw new TypeError('Debug event observer requires a callback');
+		return register({ registrationId, kind: 'debugEvents', operation: 'debugEvent', callback: listener });
+	},
+	registerDebugConfigurationProvider(registrationId, debuggerType, provider, triggerKind = 1) {
+		const operations = ['provideDebugConfigurations', 'resolveDebugConfiguration', 'resolveDebugConfigurationWithSubstitutedVariables'];
+		if (typeof debuggerType !== 'string' || !debuggerType || ![1, 2].includes(triggerKind) || !operations.some(operation => typeof provider?.[operation] === 'function') || operations.some(operation => provider?.[operation] !== undefined && typeof provider[operation] !== 'function')) throw new TypeError('Debug configuration providers require a type, trigger kind and callbacks');
+		return register({
+			registrationId, kind: 'debugConfigurationProvider', debuggerType, triggerKind, operation: operations,
+			async callback(context, payload, operation) {
+				if (operation === 'provideDebugConfigurations') return { configurations: await provider.provideDebugConfigurations?.(context, payload.folder ?? undefined) ?? [] };
+				const callback = provider[operation];
+				const configuration = callback ? await callback.call(provider, context, payload.folder ?? undefined, payload.configuration) : payload.configuration;
+				// JSON cannot encode undefined; cancellation must survive the Host boundary.
+				return configuration === undefined ? { cancelled: true } : { configuration };
+			},
+		});
+	},
+	registerDebugAdapterTrackerFactory(registrationId, debuggerType, factory) {
+		if (typeof debuggerType !== 'string' || !debuggerType || typeof factory?.createDebugAdapterTracker !== 'function') { throw new TypeError('Debug Adapter trackers require a type and factory'); }
+		const trackers = new Map();
+		const operations = ['onWillStartSession', 'onWillReceiveMessage', 'onDidSendMessage', 'onWillStopSession', 'onError', 'onExit'];
+		let enabled = true;
+		let sequence = 0;
+		const registration = register({
+			registrationId, kind: 'debugAdapterTracker', debuggerType, operation: ['createDebugAdapterTracker', 'debugAdapterTrackerEvent'],
+			async callback(context, payload, operation) {
+				if (operation === 'createDebugAdapterTracker') {
+					if (!enabled) { return null; }
+					const tracker = await factory.createDebugAdapterTracker(context, payload.session);
+					if (!enabled || tracker === undefined || tracker === null) { return null; }
+					if (typeof tracker !== 'object' || operations.some(key => tracker[key] !== undefined && typeof tracker[key] !== 'function')) { throw new TypeError('Invalid Debug Adapter tracker'); }
+					const trackerId = String(++sequence);
+					trackers.set(trackerId, tracker);
+					return { trackerId, operations: operations.filter(key => typeof tracker[key] === 'function') };
+				}
+				const tracker = trackers.get(payload.trackerId);
+				if (payload.event === 'dispose') {
+					trackers.delete(payload.trackerId);
+					if (!enabled && !trackers.size) { registration.dispose(); }
+					return null;
+				}
+				if (!operations.includes(payload.event)) { throw new TypeError('Unknown Debug Adapter tracker event'); }
+				if (!tracker) { return null; }
+				try {
+					const args = payload.event === 'onError' ? [Object.assign(new Error(payload.message), { name: payload.name })]
+						: payload.event === 'onExit' ? [payload.code ?? undefined, payload.signal ?? undefined]
+							: payload.event === 'onWillReceiveMessage' || payload.event === 'onDidSendMessage' ? [payload.message] : [];
+					await tracker[payload.event]?.call(tracker, context, ...args);
+				} finally {
+					if (payload.event === 'onExit') {
+						trackers.delete(payload.trackerId);
+						if (!enabled && !trackers.size) { registration.dispose(); }
+					}
+				}
+				return null;
+			},
+		});
+		// Disposing a factory stops creation; existing sessions keep their hooks.
+		return Object.freeze({ dispose() { enabled = false; if (!trackers.size) { registration.dispose(); } } });
+	},
+	registerDebugAdapterDescriptorFactory(registrationId, debuggerType, factory) {
+		if (typeof factory?.createDebugAdapterDescriptor !== 'function' || typeof debuggerType !== 'string' || !debuggerType) throw new TypeError('Debug adapter factories require a type and createDebugAdapterDescriptor');
+		const adapters = new Map();
+		let enabled = true;
+		let sequence = 0;
+		async function release(id, context) {
+			const state = adapters.get(id);
+			if (!state) { return; }
+			adapters.delete(id);
+			try { state.listener?.dispose(); }
+			finally { state.messages = []; state.bytes = 0; try { await state.implementation.dispose(context); } finally { if (!enabled && !adapters.size) { registration.dispose(); } } }
+		}
+		const registration = register({ registrationId, kind: 'debugAdapter', debuggerType,
+			operation: ['createDebugAdapterDescriptor', 'sendInlineDebugAdapter', 'readInlineDebugAdapter', 'closeInlineDebugAdapter'],
+			async callback(context, payload, operation) {
+				if (operation === 'createDebugAdapterDescriptor') {
+					if (!enabled) { throw new Error('Debug Adapter factory is disposed'); }
+					const descriptor = await factory.createDebugAdapterDescriptor(context, payload.configuration, payload.session, payload.executable);
+					if (descriptor === undefined || descriptor === null) return null;
+					if (!descriptor?.implementation) { return descriptor; }
+					const implementation = descriptor.implementation;
+					if (!enabled || adapters.size >= 8) { await implementation.dispose(context); throw new Error('Inline Debug Adapter is unavailable'); }
+					if (typeof implementation.handleMessage !== 'function' || typeof implementation.onDidSendMessage !== 'function' || typeof implementation.dispose !== 'function') { throw new TypeError('Inline Debug Adapter requires messages, an event and disposal'); }
+					const id = `inline.${++sequence}`;
+					const state = { implementation, listener: undefined, messages: [], bytes: 0, next: 0, delivered: 0, protocolError: null };
+					adapters.set(id, state);
+					try {
+						state.listener = implementation.onDidSendMessage(message => {
+							if (!adapters.has(id) || state.protocolError) { return; }
+							try {
+								const encoded = JSON.stringify(message);
+								if (typeof encoded !== 'string' || state.messages.length >= 512 || state.bytes + encoded.length * 3 > 262144) { throw new Error('Inline Debug Adapter message queue exceeded its limit'); }
+								const snapshot = JSON.parse(encoded);
+								if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) { throw new TypeError('Invalid inline Debug Adapter message'); }
+								state.bytes += encoded.length * 3;
+								state.messages.push({ sequence: state.next++, message: snapshot, bytes: encoded.length * 3 });
+							} catch (error) { state.protocolError = String(error); state.messages = []; state.bytes = 0; }
+						});
+						if (typeof state.listener?.dispose !== 'function') { throw new TypeError('Inline Debug Adapter event requires a disposable listener'); }
+					} catch (error) { try { await release(id, context); } finally { throw error; } }
+					return { inlineAdapterId: id };
+				}
+				if (operation === 'closeInlineDebugAdapter') { await release(payload.inlineAdapterId, context); return null; }
+				const state = adapters.get(payload.inlineAdapterId);
+				if (!state) { throw new Error('Inline Debug Adapter has retired'); }
+				if (operation === 'sendInlineDebugAdapter') {
+					if (state.protocolError) { throw new Error(state.protocolError); }
+					await state.implementation.handleMessage(context, payload.message); return null;
+				}
+				if (!Number.isSafeInteger(payload.afterSequence) || payload.afterSequence !== state.delivered || !Number.isInteger(payload.maxMessages) || payload.maxMessages < 1 || payload.maxMessages > 128) { throw new TypeError('Invalid inline Debug Adapter cursor'); }
+				const messages = state.messages.splice(0, payload.maxMessages);
+				state.delivered += messages.length;
+				state.bytes -= messages.reduce((sum, message) => sum + message.bytes, 0);
+				return { messages: messages.map(({ sequence, message }) => ({ sequence, message })), nextSequence: state.delivered, exited: state.protocolError !== null, protocolError: state.protocolError };
+			}
+		});
+		// Factory disposal cannot revoke IO already owned by a running session.
+		activation.subscriptions.push({ async dispose() { enabled = false; let failure; for (const id of [...adapters.keys()]) { try { await release(id); } catch (error) { failure ??= error; } } registration.dispose(); if (failure) { throw failure; } } });
+		return Object.freeze({ dispose() { enabled = false; if (!adapters.size) { registration.dispose(); } } });
+	},
+});
+
 function checkedPosition(position, text) {
 	if (!Number.isSafeInteger(position?.line) || position.line < 0 || !Number.isSafeInteger(position?.character) || position.character < 0) { throw new TypeError('Invalid UTF-16 position'); }
 	const line = text.split('\n')[position.line];
@@ -313,8 +571,9 @@ function checkedRange(range, text) {
 	return { start: { lineIndex: start.line, columnIndex: start.character }, end: { lineIndex: end.line, columnIndex: end.character } };
 }
 
-function commandContext(requestId) {
+function commandContext(requestId, cancellationToken) {
 	async function request(operation, resultKind) {
+		if (cancellationToken.isCancellationRequested) throw new ExtensionError('cancelled', 'Invocation has been cancelled');
 		let result;
 		try { result = JSON.parse(await globalThis.__ashRequest(requestId, JSON.stringify(operation))); }
 		catch (error) {
@@ -328,6 +587,7 @@ function commandContext(requestId) {
 		await request({ operation: 'showMessage', message, severity }, 'done');
 	}
 	return Object.freeze({
+		cancellationToken,
 		languages: Object.freeze({
 			async setDiagnostics(collection, entries) {
 				await request({ operation: 'setDiagnostics', collection, entries }, 'done');
@@ -380,26 +640,39 @@ export const __runtime = Object.freeze({
 		if (phase !== 'active') { throw new Error('Extension is not active'); }
 		const registration = registrations.get(registrationId);
 		if (!registration) { throw new Error(`Registration '${registrationId}' is disposed`); }
-		if (!registration.dispatch && registration.operation !== operation) { throw new TypeError('Invocation operation does not match its registration'); }
+		if (!registration.dispatch && (Array.isArray(registration.operation) ? !registration.operation.includes(operation) : registration.operation !== operation)) { throw new TypeError('Invocation operation does not match its registration'); }
 		const payload = JSON.parse(payloadJson);
-		let result;
-		if (registration.dispatch) {
-			result = await registration.dispatch(payload, operation);
-		} else if (operation === 'execute') {
-			if (!Array.isArray(payload.arguments)) { throw new TypeError('Command arguments must be an array'); }
-			result = await registration.callback(commandContext(requestId), ...payload.arguments);
-		} else {
-			result = await registration.callback(commandContext(requestId), payload);
+		const source = new CancellationTokenSource();
+		invocations.set(requestId, source);
+		try {
+			const context = commandContext(requestId, source.token);
+			let result;
+			if (registration.dispatch) {
+				result = await registration.dispatch(payload, operation);
+			} else if (operation === 'execute') {
+				if (!Array.isArray(payload.arguments)) { throw new TypeError('Command arguments must be an array'); }
+				result = await registration.callback(context, ...payload.arguments);
+			} else {
+				result = await registration.callback(context, payload, operation);
+			}
+			const encoded = JSON.stringify(result === undefined ? null : result);
+			if (encoded === undefined) { throw new TypeError('Command result must be a JSON value'); }
+			return encoded;
+		} finally {
+			invocations.delete(requestId);
+			source.dispose();
 		}
-		const encoded = JSON.stringify(result === undefined ? null : result);
-		if (encoded === undefined) { throw new TypeError('Command result must be a JSON value'); }
-		return encoded;
+	},
+	cancel(requestId) {
+		// Listener failures must not prevent revocation or cancellation of other listeners.
+		try { invocations.get(requestId)?.cancel(); } catch (error) { return String(error); }
+		return undefined;
 	},
 	async deactivate(callback) {
 		try { if (typeof callback === 'function') { await callback(); } }
-		finally { this.dispose(); }
+		finally { await this.dispose(); }
 	},
-	dispose() {
+	async dispose() {
 		phase = 'disposed';
 		let failure;
 		for (const registration of registrations.values()) {
@@ -407,7 +680,7 @@ export const __runtime = Object.freeze({
 		}
 		registrations.clear();
 		for (const subscription of activation?.subscriptions.splice(0).reverse() ?? []) {
-			try { subscription.dispose(); } catch (error) { failure ??= error; }
+			try { await subscription.dispose(); } catch (error) { failure ??= error; }
 		}
 		activation = undefined;
 		if (failure) { throw failure; }

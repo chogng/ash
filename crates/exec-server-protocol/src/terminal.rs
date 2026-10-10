@@ -24,6 +24,13 @@ pub enum TerminalLifecycle {
     Reconnectable,
 }
 
+/// Executes a program with literal arguments or a command through the selected shell.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum TerminalExecution {
+    Process { program: String, args: Vec<String> },
+    Shell { command_line: String },
+}
+
 /// Starts one interactive terminal at the server's authorized directory.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalCreateRequest {
@@ -31,6 +38,12 @@ pub struct TerminalCreateRequest {
     pub cols: u16,
     pub profile: TerminalProfileSelection,
     pub lifecycle: TerminalLifecycle,
+    #[serde(default)]
+    pub env: Option<std::collections::HashMap<String, Option<String>>>,
+    #[serde(default)]
+    pub cwd: Option<std::path::PathBuf>,
+    #[serde(default)]
+    pub execution: Option<TerminalExecution>,
 }
 
 /// One short-lived bearer lease used to reattach a detached terminal.

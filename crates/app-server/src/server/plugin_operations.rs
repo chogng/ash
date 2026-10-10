@@ -45,7 +45,8 @@ impl AppServer {
                     digest: package.digest.as_str().to_owned(),
                     display_name: manifest.display_name,
                     permissions: manifest.permissions.into_iter().map(permission).collect(),
-                    has_editor_extensions: !manifest.contributions.editor_extensions.is_empty(),
+                    has_editor_extensions: !manifest.contributions.editor_extensions.is_empty()
+                        || !manifest.contributions.declarative_extensions.is_empty(),
                     enabled: snapshot.enabled().contains(package),
                     granted: snapshot.granted().contains(package),
                     revoked: snapshot.revoked().contains(package),

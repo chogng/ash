@@ -365,15 +365,25 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			if (operation.operation === 'readWorkspaceFile') {
 				throw new Error('Workspace file requests must be handled by App Server');
 			}
-			const request = operation.operation === 'setStatusBarEntries' ? normalizeExtensionStatusBarUpdate(operation) : operation.operation === 'executeCommand'
-				? { ...operation, arguments: operation.arguments.map(normalizeExtensionHostPayload) }
-				: operation.operation === 'updateConfiguration'
-					? { ...operation, value: normalizeExtensionHostPayload(operation.value) }
-					: operation;
+			const request = operation.operation === 'addDebugBreakpoints' ? { ...operation, breakpoints: operation.breakpoints.map(normalizeExtensionHostPayload) }
+				: operation.operation === 'startDebugging' ? { ...operation, configuration: normalizeExtensionHostPayload(operation.configuration) }
+					: operation.operation === 'debugCustomRequest' ? { ...operation, arguments: normalizeExtensionHostPayload(operation.arguments) }
+						: operation.operation === 'setStatusBarEntries' ? normalizeExtensionStatusBarUpdate(operation) : operation.operation === 'executeCommand'
+							? { ...operation, arguments: operation.arguments.map(normalizeExtensionHostPayload) }
+							: operation.operation === 'executeTask'
+								? { ...operation, task: operation.task === null ? null : normalizeExtensionHostPayload(operation.task) }
+								: operation.operation === 'updateConfiguration'
+									? { ...operation, value: normalizeExtensionHostPayload(operation.value) }
+									: operation;
 			const result = await handler(request, context.signal, source);
 			// Domain payloads are immutable; the transport owns a separate mutable wire value.
 			switch (result.result) {
-				case 'command':
+				case 'initialization': return { result: result.result, initialization: { ...result.initialization, workspaceFolders: result.initialization.workspaceFolders.map(folder => ({ ...folder })), configurationValues: protocolJsonValue(normalizeExtensionHostPayload(result.initialization.configurationValues)), configurationData: protocolJsonValue(normalizeExtensionHostPayload(result.initialization.configurationData)) } };
+				case 'debugSessions': return { ...result, sessions: result.sessions.map(protocolJsonValue), breakpoints: result.breakpoints.map(protocolJsonValue) };
+				case 'debugResponse': return { ...result, value: protocolJsonValue(result.value) };
+				case 'tasks': return { ...result, tasks: result.tasks.map(protocolJsonValue), executions: result.executions.map(protocolJsonValue) };
+				case 'taskExecution': return { ...result, execution: protocolJsonValue(result.execution) };
+				case 'command': return { ...result, value: protocolJsonValue(result.value), hasValue: result.hasValue ?? true };
 				case 'configuration': return { ...result, value: protocolJsonValue(result.value) };
 				default: return result;
 			}
@@ -382,7 +392,15 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 		isAvailable: () => Promise.resolve(connection.capabilities?.extensionHost === true),
 		list: async () => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/list", {})),
 		reconcile: async mode => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/reconcile", { mode })),
-		activateByEvent: async request => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/activate", request)),
+		activateByEvent: async request => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/activate", {
+			...request,
+			initialization: request.initialization ? {
+				...request.initialization,
+				workspaceFolders: request.initialization.workspaceFolders.map(folder => ({ ...folder })),
+				configurationValues: protocolJsonValue(normalizeExtensionHostPayload(request.initialization.configurationValues)),
+				configurationData: protocolJsonValue(normalizeExtensionHostPayload(request.initialization.configurationData)),
+			} : undefined,
+		})),
 		invoke: (request, signal) => invokeExtensionHost(transport, request, signal),
 		getConnectionState: () => Promise.resolve(connection.state),
 		onDidChange: listener => connection.onNotification(event => {

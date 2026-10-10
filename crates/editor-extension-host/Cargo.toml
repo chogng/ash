@@ -14,6 +14,7 @@ path = "src/lib.rs"
 ash-async-utils = { workspace = true }
 ash-sandboxing.workspace = true
 extension-protocol = { workspace = true }
+getrandom = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 

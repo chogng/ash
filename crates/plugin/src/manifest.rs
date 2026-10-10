@@ -3,6 +3,7 @@ mod model;
 mod validation;
 
 pub use editor_extension::EditorExtensionActivationEvent;
+pub use editor_extension::EditorExtensionApi;
 pub use editor_extension::EditorExtensionCapability;
 pub use editor_extension::EditorExtensionContribution;
 pub use editor_extension::EditorExtensionRuntimeApiVersion;

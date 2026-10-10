@@ -4,6 +4,8 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
+use std::net::Shutdown;
+use std::net::TcpStream;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
@@ -17,6 +19,7 @@ use super::PendingEntry;
 use super::PendingFailure;
 use super::PendingHostRequest;
 use super::PendingMessage;
+use super::node::NodeControlBinding;
 use super::reserve_pending;
 use crate::ExtensionHostError;
 use crate::ExtensionHostLimits;
@@ -31,6 +34,14 @@ struct OutputEventQueue {
     bytes: usize,
 }
 
+#[derive(Default)]
+struct BackgroundClientQueue {
+    context: Option<extension_protocol::HostEventContext>,
+    last_call_id: u64,
+    queued: VecDeque<extension_protocol::ExtensionBackgroundClientRequest>,
+    outstanding: BTreeMap<u64, extension_protocol::HostEventContext>,
+}
+
 pub(super) struct StdioExtensionHostProcess {
     child: Mutex<Option<ash_sandboxing::ProcessHandle>>,
     writer: Mutex<Option<BufWriter<Box<dyn Write + Send>>>>,
@@ -38,8 +49,11 @@ pub(super) struct StdioExtensionHostProcess {
     exited: Arc<AtomicBool>,
     stderr: Arc<Mutex<Vec<u8>>>,
     output_events: Arc<Mutex<OutputEventQueue>>,
+    background: Arc<Mutex<BackgroundClientQueue>>,
     stdout_thread: Mutex<Option<JoinHandle<()>>>,
     stderr_thread: Mutex<Option<JoinHandle<()>>>,
+    diagnostic_stdout_thread: Mutex<Option<JoinHandle<()>>>,
+    control: Option<TcpStream>,
     limits: ExtensionHostLimits,
 }
 
@@ -60,11 +74,19 @@ impl StdioExtensionHostProcess {
             );
             let child = windows_sandbox::spawn_locked_process(&command)
                 .map_err(|_| ExtensionHostError::IsolationUnavailable)?;
-            return Self::from_child(child, limits);
+            return Self::from_child(child, limits, None);
+        }
+        let binding = launch
+            .is_vscode()
+            .then(NodeControlBinding::new)
+            .transpose()?;
+        let mut arguments = launch.arguments().to_vec();
+        if let Some(binding) = &binding {
+            arguments.extend(binding.arguments()?);
         }
         let command = ash_sandboxing::SandboxCommand::new(
             launch.executable(),
-            launch.arguments().iter().cloned(),
+            arguments,
             launch.working_directory(),
         );
         let environment = launch
@@ -81,12 +103,13 @@ impl StdioExtensionHostProcess {
         let child = ash_sandboxing::PreparedCommand::unrestricted(&command)
             .spawn(&environment)
             .map_err(|_| ExtensionHostError::SpawnFailed)?;
-        Self::from_child(child, limits)
+        Self::from_child(child, limits, binding)
     }
 
     fn from_child(
         mut child: ash_sandboxing::ProcessHandle,
         limits: &ExtensionHostLimits,
+        binding: Option<NodeControlBinding>,
     ) -> Result<Self, ExtensionHostError> {
         let stdin = child.take_stdin().ok_or(ExtensionHostError::SpawnFailed)?;
         let stdout = child.take_stdout().ok_or(ExtensionHostError::SpawnFailed)?;
@@ -95,11 +118,34 @@ impl StdioExtensionHostProcess {
         let exited = Arc::new(AtomicBool::new(false));
         let stderr = Arc::new(Mutex::new(Vec::new()));
         let output_events = Arc::new(Mutex::new(OutputEventQueue::default()));
+        let background = Arc::new(Mutex::new(BackgroundClientQueue::default()));
+        let control = binding
+            .map(|binding| binding.accept(&mut child, limits.startup_timeout))
+            .transpose()?;
+        let node = control.is_some();
+        let (stdin, stdout, diagnostic_stdout_thread): (
+            Box<dyn Write + Send>,
+            Box<dyn Read + Send>,
+            Option<JoinHandle<()>>,
+        ) = if let Some(control) = &control {
+            // Closing the socket wakes the protocol reader even if extension children retain IO.
+            control.set_write_timeout(Some(limits.request_timeout))?;
+            drop(stdin);
+            let writer = Box::new(control.try_clone()?);
+            let reader = Box::new(control.try_clone()?);
+            let diagnostic =
+                spawn_stderr_reader(stdout, Arc::clone(&stderr), limits.maximum_stderr_bytes);
+            (writer, reader, Some(diagnostic))
+        } else {
+            (stdin, stdout, None)
+        };
         let stdout_thread = spawn_stdout_reader(
             stdout,
             Arc::clone(&pending),
             Arc::clone(&exited),
             Arc::clone(&output_events),
+            Arc::clone(&background),
+            node,
             limits.clone(),
         );
         let stderr_thread = spawn_stderr_reader(
@@ -114,8 +160,11 @@ impl StdioExtensionHostProcess {
             exited,
             stderr,
             output_events,
+            background,
             stdout_thread: Mutex::new(Some(stdout_thread)),
             stderr_thread: Mutex::new(Some(stderr_thread)),
+            diagnostic_stdout_thread: Mutex::new(diagnostic_stdout_thread),
+            control,
             limits: limits.clone(),
         })
     }
@@ -130,19 +179,81 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
         &self,
         response: extension_protocol::ExtensionClientResponse,
     ) -> Result<(), ExtensionHostError> {
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?;
+        let entry = pending
+            .get_mut(&response.context.request_id)
+            .ok_or(ExtensionHostError::HostExited)?;
+        if entry.request.context != response.context
+            || !entry.client_ids.contains(&response.call_id)
+        {
+            return Err(ExtensionHostError::InvalidProtocol(
+                "unknown invocation client reply".into(),
+            ));
+        }
         let mut writer = self
             .writer
             .lock()
             .map_err(|_| ExtensionHostError::HostExited)?;
         let writer = writer.as_mut().ok_or(ExtensionHostError::HostExited)?;
         extension_protocol::write_frame(writer, &response, self.limits.maximum_frame_bytes)?;
+        entry.client_ids.remove(&response.call_id);
         Ok(())
     }
+    fn drain_background_client_requests(
+        &self,
+    ) -> Vec<extension_protocol::ExtensionBackgroundClientRequest> {
+        self.background
+            .lock()
+            .map(|mut queue| queue.queued.drain(..).collect())
+            .unwrap_or_default()
+    }
+
+    fn respond_background_client(
+        &self,
+        response: extension_protocol::ExtensionBackgroundClientResponse,
+    ) -> Result<(), ExtensionHostError> {
+        let mut queue = self
+            .background
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?;
+        if queue.outstanding.get(&response.call_id) != Some(&response.context) {
+            return Err(ExtensionHostError::InvalidProtocol(
+                "unknown background client reply".into(),
+            ));
+        }
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?;
+        let writer = writer.as_mut().ok_or(ExtensionHostError::HostExited)?;
+        extension_protocol::write_frame(writer, &response, self.limits.maximum_frame_bytes)?;
+        queue.outstanding.remove(&response.call_id);
+        Ok(())
+    }
+
     fn dispatch(
         &self,
         request: ExtensionHostRequest,
     ) -> Result<PendingHostRequest, ExtensionHostError> {
         request.validate(&self.limits.protocol_limits())?;
+        if matches!(request.request, crate::HostRequestKind::Initialize(_)) {
+            let mut queue = self
+                .background
+                .lock()
+                .map_err(|_| ExtensionHostError::HostExited)?;
+            if queue.context.is_some() {
+                return Err(ExtensionHostError::InvalidProtocol(
+                    "process already initialized".into(),
+                ));
+            }
+            queue.context = Some(extension_protocol::HostEventContext::new(
+                request.context.incarnation,
+                request.context.activation_generation,
+            ));
+        }
         if self.has_exited() {
             return Err(ExtensionHostError::HostExited);
         }
@@ -164,6 +275,7 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
                 &mut pending,
                 PendingEntry {
                     client_ids: std::collections::BTreeSet::new(),
+                    last_client_id: 0,
                     request,
                     sender,
                     control,
@@ -211,6 +323,9 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
 
     fn terminate(&self) -> Result<(), ExtensionHostError> {
         self.exited.store(true, Ordering::Release);
+        if let Some(control) = &self.control {
+            let _ = control.shutdown(Shutdown::Both);
+        }
         self.writer
             .lock()
             .map_err(|_| ExtensionHostError::HostExited)?
@@ -225,6 +340,7 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
         self.fail_pending(PendingFailure::Exited);
         join_thread(&self.stdout_thread);
         join_thread(&self.stderr_thread);
+        join_thread(&self.diagnostic_stdout_thread);
         Ok(())
     }
 
@@ -257,6 +373,8 @@ fn spawn_stdout_reader(
     pending: Arc<Mutex<BTreeMap<u64, PendingEntry>>>,
     exited: Arc<AtomicBool>,
     output_events: Arc<Mutex<OutputEventQueue>>,
+    background: Arc<Mutex<BackgroundClientQueue>>,
+    node: bool,
     limits: ExtensionHostLimits,
 ) -> JoinHandle<()> {
     thread::Builder::new()
@@ -282,6 +400,35 @@ fn spawn_stdout_reader(
                         break;
                     }
                 };
+                if let ExtensionHostStdoutFrame::BackgroundClientRequest(request) = frame {
+                    let forwarded = (|| {
+                        request
+                            .validate(&limits.protocol_limits())
+                            .map_err(|error| error.to_string())?;
+                        let mut queue = background
+                            .lock()
+                            .map_err(|_| "background queue lock poisoned".to_owned())?;
+                        if !node || queue.context != Some(request.context) {
+                            return Err(
+                                "background call belongs to an unbound Node activation".to_owned()
+                            );
+                        }
+                        if request.call_id <= queue.last_call_id
+                            || queue.outstanding.len() >= limits.maximum_in_flight_requests
+                        {
+                            return Err("background client quota exceeded or ID reused".to_owned());
+                        }
+                        queue.last_call_id = request.call_id;
+                        queue.outstanding.insert(request.call_id, request.context);
+                        queue.queued.push_back(request);
+                        Ok(())
+                    })();
+                    if let Err(error) = forwarded {
+                        fail_all_pending(&pending, PendingFailure::Protocol(error));
+                        break;
+                    }
+                    continue;
+                }
                 if let ExtensionHostStdoutFrame::ClientRequest(request) = frame {
                     let forwarded = (|| {
                         request
@@ -299,10 +446,12 @@ fn spawn_stdout_reader(
                             return Err("client call belongs to a different invocation".to_owned());
                         }
                         if entry.client_ids.len() >= limits.maximum_in_flight_requests
-                            || !entry.client_ids.insert(request.call_id)
+                            || request.call_id <= entry.last_client_id
                         {
                             return Err("client call quota exceeded or ID reused".to_owned());
                         }
+                        entry.last_client_id = request.call_id;
+                        entry.client_ids.insert(request.call_id);
                         entry
                             .sender
                             .try_send(Ok(PendingMessage::ClientRequest(request)))

@@ -1,4 +1,5 @@
 use ash_app_server_protocol::protocol::debug::DebugAdapterCloseParams;
+use ash_app_server_protocol::protocol::debug::DebugAdapterConnectionDto;
 use ash_app_server_protocol::protocol::debug::DebugAdapterMessageDto;
 use ash_app_server_protocol::protocol::debug::DebugAdapterReadParams;
 use ash_app_server_protocol::protocol::debug::DebugAdapterReadResult;
@@ -7,6 +8,7 @@ use ash_app_server_protocol::protocol::debug::DebugAdapterStartParams;
 use ash_app_server_protocol::protocol::debug::DebugAdapterStartResult;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_debug_adapter::DebugAdapterCommand;
+use ash_debug_adapter::DebugAdapterConnection;
 use ash_debug_adapter::DebugAdapterError;
 use serde_json::Value;
 
@@ -26,12 +28,39 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: DebugAdapterStartParams = decode(params)?;
         let dir_id = params.dir_id.clone();
-        let command = DebugAdapterCommand::new(params.program, params.arguments)
-            .map_err(debug_runtime_error)?;
-        let session_id = self
-            .debug_adapter_service_for(dir_id.as_deref())?
-            .start(connection.connection_id, command)
-            .map_err(debug_runtime_error)?;
+        let service = self.debug_adapter_service_for(dir_id.as_deref())?;
+        let session_id = match (params.program, params.connection) {
+            (Some(program), None) => {
+                if params.env.as_ref().is_some_and(|environment| {
+                    environment
+                        .keys()
+                        .any(|name| exec_server::terminal::is_private_process_environment_key(name))
+                }) {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                let command = DebugAdapterCommand::new(program, params.arguments)
+                    .and_then(|command| {
+                        command.with_options(params.cwd, params.env.unwrap_or_default())
+                    })
+                    .map_err(debug_runtime_error)?;
+                service.start(connection.connection_id, command)
+            }
+            (None, Some(endpoint))
+                if params.arguments.is_empty() && params.cwd.is_none() && params.env.is_none() =>
+            {
+                let endpoint = match endpoint {
+                    DebugAdapterConnectionDto::Server { port, host } => {
+                        DebugAdapterConnection::Server { port, host }
+                    }
+                    DebugAdapterConnectionDto::NamedPipe { path } => {
+                        DebugAdapterConnection::NamedPipe { path }
+                    }
+                };
+                service.connect(connection.connection_id, endpoint)
+            }
+            _ => return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
+        }
+        .map_err(debug_runtime_error)?;
         result(&DebugAdapterStartResult { session_id })
     }
 

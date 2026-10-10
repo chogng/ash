@@ -138,3 +138,7 @@ just rust-warnings ash-exec-server
 # 固定为缺少 PSEC 的测试环境使用 absent，验证执行前拒绝：
 ./scripts/test-psec.ps1 -Capability absent
 ```
+
+## 交互终端环境
+
+`TerminalService` 在创建时持有冻结的授权执行环境与 Shell profiles。`environment(names)` 重新校验执行授权，只返回请求的开发环境值；不创建进程。Windows 查询和覆盖使用不区分大小写的变量名。终端创建的可选 `env` 在环境副本上应用字符串覆盖与 `null` 删除，先校验数量、名称和值再分配 PTY，不修改 profiles 的冻结环境。Tasks、Debug 和普通终端共享进程启动与释放路径。开发执行继承 Unicode 主机环境，包括用户开发凭据、代理和工具链变量；排除已知的宿主控制面认证变量和 Electron 启动控制变量。显式覆盖也不能重新注入控制面认证变量。Agent 命令执行继续使用自己的环境策略。环境快照在服务创建时冻结，重建服务后才读取主机环境的变化，已启动的子进程不受影响。

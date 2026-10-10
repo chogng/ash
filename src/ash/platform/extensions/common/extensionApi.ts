@@ -1,3 +1,4 @@
+import { URI } from '../../../base/common/uri.js';
 import type { IExtensionResourceLoaderService } from '../../extensionResourceLoader/common/extensionResourceLoader.js';
 
 export type ExtensionCatalogReload = "cached" | "refresh";
@@ -11,6 +12,8 @@ export interface ExtensionDescriptor {
 	readonly version: string;
 	readonly displayName: string;
 	readonly sourceKind: ExtensionSourceKind;
+	readonly extensionLocation?: string;
+	readonly targetPlatform?: string;
 	readonly manifestJson: string;
 	readonly manifestSha256: string;
 	readonly packageSha256: string;
@@ -54,6 +57,13 @@ export function normalizeExtensionCatalog(value: unknown): ExtensionCatalog {
 
 function normalizeExtension(value: unknown): ExtensionDescriptor {
 	const extension = record(value, "extension");
+	const extensionLocation = extension.extensionLocation === undefined ? undefined : boundedText(extension.extensionLocation, 'extension location', 32768);
+	if (extensionLocation !== undefined) {
+		const location = URI.parse(extensionLocation);
+		if (location.scheme !== 'file' || !location.path.startsWith('/') || location.query || location.fragment || location.path.includes('\0')) throw new TypeError('extension location is invalid');
+	}
+	const targetPlatform = extension.targetPlatform === undefined ? undefined : boundedText(extension.targetPlatform, 'extension target platform', 128);
+	if (targetPlatform !== undefined && !/^[a-z0-9]+-[a-z0-9_]+$/.test(targetPlatform)) throw new TypeError('extension target platform is invalid');
 	return Object.freeze({
 		id: boundedText(extension.id, "extension id", 160),
 		name: boundedText(extension.name, "extension name", 256),
@@ -61,6 +71,8 @@ function normalizeExtension(value: unknown): ExtensionDescriptor {
 		version: boundedText(extension.version, "extension version", 256),
 		displayName: boundedText(extension.displayName, "extension display name", 256),
 		sourceKind: stringEnum(extension.sourceKind, "extension source kind", ["builtIn", "plugin", "marketplace", "user"] as const),
+		...(extensionLocation === undefined ? {} : { extensionLocation }),
+		...(targetPlatform === undefined ? {} : { targetPlatform }),
 		manifestJson: boundedText(extension.manifestJson, "extension manifest", 4 * 1024 * 1024),
 		manifestSha256: sha256Digest(extension.manifestSha256, "extension manifest digest"),
 		packageSha256: sha256Digest(extension.packageSha256, "extension package digest"),

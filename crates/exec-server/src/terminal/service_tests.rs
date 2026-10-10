@@ -11,6 +11,9 @@ fn revoked_directory_terminates_detached_sessions_and_rejects_new_work() {
     let service =
         TerminalService::new(grant.authorize(Permission::ExecuteCommands).unwrap()).unwrap();
     let request = TerminalCreateRequest {
+        env: None,
+        cwd: None,
+        execution: None,
         rows: 24,
         cols: 80,
         profile: TerminalProfileSelection::Default,
@@ -347,6 +350,9 @@ fn terminal_service_for(path: &std::path::Path) -> TerminalService {
 
 fn terminal_request(lifecycle: TerminalLifecycle) -> TerminalCreateRequest {
     TerminalCreateRequest {
+        env: None,
+        cwd: None,
+        execution: None,
         rows: 24,
         cols: 80,
         profile: TerminalProfileSelection::Default,
@@ -447,6 +453,9 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         .create(
             1,
             TerminalCreateRequest {
+                env: None,
+                cwd: None,
+                execution: None,
                 profile: TerminalProfileSelection::Profile {
                     profile_id: profile_id.clone(),
                 },
@@ -823,4 +832,188 @@ impl PowerShellObservation {
             std::thread::sleep(Duration::from_millis(10));
         }
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn terminal_process_execution_preserves_literal_arguments_cwd_and_exit_status() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("child")).unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.cwd = Some("child".into());
+    request.execution = Some(TerminalExecution::Process {
+        program: "/bin/sh".into(),
+        args: vec![
+            "-c".into(),
+            "printf 'ARG:<%s>\\nCWD:<%s>\\nDONE\\n' \"$1\" \"$PWD\"; exit 7".into(),
+            "test".into(),
+            "$(touch ../injected) $HOME ; spaces".into(),
+        ],
+    });
+    let created = service.create(1, request).unwrap();
+    let output = read_until(&service, &created.terminal_id, "DONE\r\n");
+    let text = String::from_utf8_lossy(&output);
+    assert!(text.contains("ARG:<$(touch ../injected) $HOME ; spaces>"));
+    assert!(text.contains(&format!(
+        "CWD:<{}>",
+        root.path().join("child").canonicalize().unwrap().display()
+    )));
+    assert!(!root.path().join("injected").exists());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let result = service
+            .read(
+                1,
+                TerminalReadRequest {
+                    terminal_id: created.terminal_id.clone(),
+                    after_sequence: 0,
+                    after_command_sequence: 0,
+                    max_chunks: 128,
+                },
+            )
+            .unwrap();
+        if result.exited {
+            assert_eq!(result.exit_code, Some(7));
+            service
+                .resize(
+                    1,
+                    TerminalResizeRequest {
+                        terminal_id: created.terminal_id.clone(),
+                        rows: 40,
+                        cols: 120,
+                    },
+                )
+                .expect("retained output remains resizable after process exit");
+            assert_eq!(
+                service.resize(
+                    2,
+                    TerminalResizeRequest {
+                        terminal_id: created.terminal_id.clone(),
+                        rows: 40,
+                        cols: 120,
+                    }
+                ),
+                Err(TerminalError::NotOwner)
+            );
+            assert_eq!(
+                service.resize(
+                    1,
+                    TerminalResizeRequest {
+                        terminal_id: created.terminal_id.clone(),
+                        rows: 0,
+                        cols: 120,
+                    }
+                ),
+                Err(TerminalError::InvalidInput)
+            );
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    service.close(1, &created.terminal_id).unwrap();
+}
+
+#[test]
+fn terminal_execution_rejects_invalid_arguments_and_cwd_before_spawning() {
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.cwd = Some(outside.path().into());
+    assert_eq!(service.create(1, request), Err(TerminalError::InvalidInput));
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.execution = Some(TerminalExecution::Process {
+        program: "unused".into(),
+        args: vec!["invalid\0argument".into()],
+    });
+    assert_eq!(service.create(1, request), Err(TerminalError::InvalidInput));
+    assert_eq!(service.active_count(), 0);
+}
+
+#[test]
+fn environment_reads_requested_spawn_values_without_allocating_a_terminal() {
+    let root = tempfile::tempdir().unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        ash_file_access::Dir::open_local(root.path()).unwrap(),
+        ash_file_access::GrantSource::HostConfiguration,
+        ash_file_access::Permissions::new([Permission::ExecuteCommands]),
+    );
+    let service =
+        TerminalService::new(grant.authorize(Permission::ExecuteCommands).unwrap()).unwrap();
+    assert_eq!(
+        service
+            .environment(&["TERM_PROGRAM".into(), "ASH_MISSING_VALUE".into()])
+            .unwrap(),
+        HashMap::from([("TERM_PROGRAM".into(), "ash".into())])
+    );
+    assert_eq!(service.active_count(), 0);
+    assert_eq!(
+        service.environment(&["INVALID=NAME".into()]),
+        Err(TerminalError::InvalidInput)
+    );
+    assert_eq!(
+        service.environment(&vec!["HOME".into(); 129]),
+        Err(TerminalError::InvalidInput)
+    );
+    let expected = if cfg!(windows) {
+        HashMap::from([("term_program".into(), "ash".into())])
+    } else {
+        HashMap::new()
+    };
+    assert_eq!(
+        service.environment(&["term_program".into()]).unwrap(),
+        expected
+    );
+    grant.revoke();
+    assert_eq!(
+        service.environment(&["HOME".into()]),
+        Err(TerminalError::OperationFailed)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn environment_overrides_apply_at_spawn_without_changing_the_host_snapshot() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.env = Some(HashMap::from([
+        ("ASH_TASK_MODE".into(), Some("literal value".into())),
+        ("COLORTERM".into(), None),
+        (
+            "NODE_REPL_AUTH_TOKEN".into(),
+            Some("synthetic-host-control".into()),
+        ),
+    ]));
+    let created = service.create(1, request).unwrap();
+    service
+        .write(
+            1,
+            TerminalWriteRequest {
+                terminal_id: created.terminal_id.clone(),
+                data: "printf '\nENV_RESULT:%s:%s:%s\n' \"$ASH_TASK_MODE\" \"${COLORTERM-unset}\" \"${NODE_REPL_AUTH_TOKEN-private-excluded}\"\n"
+                    .into(),
+            },
+        )
+        .unwrap();
+    let output = read_until(
+        &service,
+        &created.terminal_id,
+        "ENV_RESULT:literal value:unset:private-excluded",
+    );
+    assert!(
+        String::from_utf8_lossy(&output)
+            .contains("ENV_RESULT:literal value:unset:private-excluded")
+    );
+    assert_eq!(
+        service.environment(&["COLORTERM".into()]).unwrap(),
+        HashMap::from([("COLORTERM".into(), "truecolor".into())])
+    );
+    service.close(1, &created.terminal_id).unwrap();
+    let mut invalid = terminal_request(TerminalLifecycle::ConnectionOwned);
+    invalid.env = Some(HashMap::from([("BAD=NAME".into(), Some("value".into()))]));
+    assert_eq!(service.create(1, invalid), Err(TerminalError::InvalidInput));
+    assert_eq!(service.active_count(), 0);
 }

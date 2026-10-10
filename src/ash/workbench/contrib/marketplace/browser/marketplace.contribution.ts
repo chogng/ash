@@ -94,7 +94,7 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 				message: `${selected.id} · ${selected.version}`,
 				detail: [
 					localize({ bundle: 'ash.marketplace', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', selected.permissions.length ? selected.permissions.map(describePermission).join('; ') : localize({ bundle: 'ash.marketplace', key: 'noPermissions' }, 'None')),
-					localize({ bundle: 'ash.marketplace', key: 'localExtensionDocumentNotice' }, 'Editor extension callbacks can receive the document being used, including unsaved text. Workspace file access still requires directory authorization. JavaScript extensions run on macOS with direct filesystem access, networking and child processes blocked.'),
+					localize({ bundle: 'ash.marketplace', key: 'localExtensionDocumentNotice' }, 'VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Ash SDK extensions retain the confined V8 host. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
 					localize({ bundle: 'ash.marketplace', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.digest),
 				].join('\n\n'),
 				buttons,
@@ -133,7 +133,7 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 			}
 			await dialogs.prompt({
 				title: selected.package.id, message: selected.package.version,
-				detail: [localize({ bundle: 'ash.marketplace', key: 'marketplaceExecutionNotice' }, 'Authorize commands, hover providers and editor document access, including unsaved text. This JavaScript host supports a subset of the VS Code API; Node modules, direct file access, networking and child processes are unavailable. Unsupported APIs fail explicitly. Disable execution before uninstalling. A new package version requires new authorization.'),
+				detail: [localize({ bundle: 'ash.marketplace', key: 'marketplaceExecutionNotice' }, 'Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Disable execution before uninstalling. Package or execution-contract changes require new authorization.'),
 				localize({ bundle: 'ash.marketplace', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.package.digest)].join('\n\n'),
 				buttons: [
 					...(selected.enabled || selected.entrypoint !== null ? [{ label: selected.enabled ? localize({ bundle: 'ash.marketplace', key: 'disableLocalExtension' }, 'Disable') : localize({ bundle: 'ash.marketplace', key: 'enableLocalExtension' }, 'Enable'), run: () => marketplace.setEditorExtensionPolicy(selected, selected.enabled ? 'disable' : 'enable', catalog.revision) }] : []),

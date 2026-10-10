@@ -218,13 +218,14 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 `terminal/attach` 返回同一进程的启动信息并旋转短期 bearer token。cwd 是启动时实际使用的目录，
 不是窗口 Workspace 的猜测，也不是当前目录。
 
-| Method                 | 当前协议语义                                                                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `terminal/processInfo` | 按 terminalId/dirId 查询 ready、当前 cwd 和最后成功应用的 rows/cols；当前 cwd 在 macOS/Linux 查询，在无法查询的平台或退出后为 null。 |
-| `terminal/write`       | 1–65536 字节 UTF-8 输入，保留现有命令状态检测。                                                                                      |
-| `terminal/writeBinary` | base64 包装的 1–65536 个原始字节；编码长度最多 87384，不解码成文本，不推断命令。                                                     |
-| `terminal/sendSignal`  | signal 为 interrupt；Unix PTY 中断当前前台进程组，Windows 返回 TerminalUnsupported（-32066）。                                       |
-| `terminal/resize`      | 成功应用字符尺寸后更新进程属性；非法尺寸不更新。                                                                                     |
+| Method                      | 当前协议语义                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `terminal/environment/read` | 可选 dirId 和最多 128 个 names；返回 `{values}`，仅包含已存在的冻结终端环境值。按目录执行授权校验，不创建进程或租约。                |
+| `terminal/processInfo`      | 按 terminalId/dirId 查询 ready、当前 cwd 和最后成功应用的 rows/cols；当前 cwd 在 macOS/Linux 查询，在无法查询的平台或退出后为 null。 |
+| `terminal/write`            | 1–65536 字节 UTF-8 输入，保留现有命令状态检测。                                                                                      |
+| `terminal/writeBinary`      | base64 包装的 1–65536 个原始字节；编码长度最多 87384，不解码成文本，不推断命令。                                                     |
+| `terminal/sendSignal`       | signal 为 interrupt；Unix PTY 中断当前前台进程组，Windows 返回 TerminalUnsupported（-32066）。                                       |
+| `terminal/resize`           | 成功应用字符尺寸后更新进程属性；非法尺寸不更新。                                                                                     |
 
 以上查询与控制只允许当前附着 connection，并重新检查目录执行授权；错误连接返回 TerminalNotOwner。
 非法 base64、超大输入和未知 signal 返回 InvalidParams。decoder、method map 和 schema 从 Rust 定义生成。
@@ -317,3 +318,15 @@ the current profile default. An explicit mode overrides it and remains frozen on
 the resulting Turn. Queue entries and explicit client choices continue to carry
 an approval mode. Workflows without their own approval mode use the same default.
 Directory permissions remain editable only through a trusted host connection.
+
+`terminal/create.env` 可选对象在冻结环境副本上覆盖变量；`null` 删除该变量，不修改后端环境快照。最多 128 项，变量名为 1–256 字符且不能包含 `=`/NUL，值最多 32768 字符且不能包含 NUL；无效数据在分配 PTY 前返回 InvalidParams。查询变量名使用同一规则，Windows 名称不区分大小写。开发环境由 exec-server 继承并过滤产品内部认证变量，显式覆盖也不能重新引入这些变量；缺失项不返回。
+
+`terminal/create` 支持可选 `cwd` 和 `execution`。`cwd` 相对于授权根目录解析并 canonicalize，必须为根目录内的目录。`execution.type = process` 使用 `program` 与原样 `args`，包括空参数；`shell` 使用 `commandLine` 和所选可信 shell profile。省略 execution 保留交互 shell 行为。无效配置在分配 PTY 前拒绝；进程输出、退出、取消和资源释放继续归 Terminal owner。
+
+`debug/adapter/start` 支持可选 `cwd` 与 `env`。cwd 保持相同授权目录约束，env 在冻结环境副本上覆盖或删除变量，验证边界与 Terminal 相同。该选项不修改服务环境，也不替代 `launch` 请求中的 debuggee 配置。
+
+`debug/adapter/start` 保留 executable 的 `program` 与 `arguments`，也接受可选的
+`connection: { type: "server", port, host? }` 或 `{ type: "namedPipe", path }`。
+连接模式要求 `arguments: []` 并拒绝 program/cwd/env；两种模式共用 connection-owned
+sessionId、send/read/close 与有限 DAP 缓冲。生成 decoder 通过本地 schema 引用共享
+重复的校验子树，保留所有规则、公共入口和 method 分派对象，不扩大 renderer chunk 上限。

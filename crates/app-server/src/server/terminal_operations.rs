@@ -30,6 +30,17 @@ impl AppServer {
         })
     }
 
+    pub(super) fn terminal_environment_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: wire::TerminalEnvironmentReadParams = decode(params)?;
+        let values = self
+            .terminal_service_for(params.dir_id.as_deref())?
+            .environment(&params.names)
+            .map_err(terminal_error)?;
+        result(&wire::TerminalEnvironmentReadResult {
+            values: values.into_iter().collect(),
+        })
+    }
+
     pub(super) fn terminal_create(
         &self,
         connection: &ConnectionState,
@@ -68,6 +79,9 @@ impl AppServer {
                     cols: params.cols,
                     profile: profile_selection(params.profile),
                     lifecycle: lifecycle(params.lifecycle),
+                    env: None,
+                    cwd: None,
+                    execution: None,
                 },
                 authorization,
             )
@@ -258,6 +272,16 @@ fn create_request(params: TerminalCreateParams) -> exec_server::terminal::Termin
         cols: params.cols,
         profile: profile_selection(params.profile),
         lifecycle: lifecycle(params.lifecycle),
+        env: params.env.map(|values| values.into_iter().collect()),
+        cwd: params.cwd,
+        execution: params.execution.map(|execution| match execution {
+            wire::TerminalExecution::Process { program, args } => {
+                exec_server::terminal::TerminalExecution::Process { program, args }
+            }
+            wire::TerminalExecution::Shell { command_line } => {
+                exec_server::terminal::TerminalExecution::Shell { command_line }
+            }
+        }),
     }
 }
 

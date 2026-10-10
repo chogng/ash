@@ -1,3 +1,10 @@
+import { URI } from "../../../../base/common/uri.js";
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { registerProblemMatcherContributions, type ProblemMatcherContributions } from '../../../contrib/tasks/common/problemMatcher.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { ColorExtensionPoint } from '../../themes/common/colorExtensionPoint.js';
 import { IconExtensionPoint } from '../../themes/common/iconExtensionPoint.js';
 import { TokenClassificationExtensionPoint, type SemanticTokenScopeContribution } from '../../themes/common/tokenClassificationExtensionPoint.js';
@@ -71,16 +78,20 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		diagnostics: Object.freeze([]),
 	});
 	private loading: Promise<void> | undefined;
+	private activeCatalogSignature: string | undefined;
+	private activationHandler: ((event: string, signal?: AbortSignal) => Promise<void>) | undefined;
 	private reloadQueued = false;
 	private readonly grammarRegistration: TextMateGrammarRegistration;
 	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
 	private languageConfigurationRegistrations = new DisposableStore();
 	private readonly completionRegistration: LanguageCompletionProviderRegistration | undefined;
+	private readonly problemMatcherRegistration = this._register(registerProblemMatcherContributions({ matchers: [], patterns: [] }));
 	private readonly debugAdapterFactoryRegistration: DebugAdapterFactoryRegistration;
 	private readonly themeRegistry: ExtensionThemeRegistry;
 	private readonly fileTemplateRegistry: ExtensionFileTemplateRegistry;
 	private readonly debugAdapterRegistry: ExtensionDebugAdapterRegistry;
 	private activeGrammars: readonly TextMateGrammarDefinition[] = Object.freeze([]);
+	private activeConfigurations: IConfigurationNode[] = [];
 	private activeLanguages: readonly LanguageDescriptionContribution[] = Object.freeze([]);
 	private activeLanguageConfigurations: readonly LanguageConfigurationContribution[] = Object.freeze([]);
 	private activeCompletionProviders: readonly LanguageCompletionProvider[] = Object.freeze([]);
@@ -98,7 +109,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 
 	constructor(private readonly options: AppServerExtensionServiceOptions) {
 		super();
-		this._register(toDisposable(() => { this.reloadQueued = false; }));
+		this._register(toDisposable(() => { this.reloadQueued = false; this.activationHandler = undefined; }));
+		this._register(toDisposable(() => {
+			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).updateConfigurations({ add: [], remove: this.activeConfigurations });
+			this.activeConfigurations = [];
+		}));
 		this._register(toDisposable(() => this.languageConfigurationRegistrations.dispose()));
 		this.themeRegistry = this._register(new ExtensionThemeRegistry());
 		this.fileTemplateRegistry = this._register(new ExtensionFileTemplateRegistry());
@@ -175,20 +190,44 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		return operation;
 	}
 
-	private async drainReloads(): Promise<void> {
-		let firstFailure: { readonly error: unknown; } | undefined;
-		while (!this.isDisposed && this.reloadQueued) {
-			this.reloadQueued = false;
-			try {
-				await this.loadAndRegister();
-			} catch (error) {
-				firstFailure ??= { error };
-			}
-		}
-		if (!this.isDisposed && firstFailure) throw firstFailure.error;
+	public async getExtension(id: string): Promise<ExtensionDescriptor | undefined> {
+		this.assertNotDisposed();
+		// Await the catalog owner, without rescanning packages for every variable.
+		if (this.loading) await this.loading;
+		else if (this.activeCatalogSignature === undefined) await this.reload();
+		this.assertNotDisposed();
+		return this.catalog.extensions.find(extension => extension.id.toLowerCase() === id.toLowerCase());
 	}
 
-	private async loadAndRegister(): Promise<void> {
+	async activateByEvent(event: string, signal?: AbortSignal): Promise<void> {
+		this.assertNotDisposed();
+		if (signal) throwIfCancelled(signal);
+		const activation = this.activationHandler?.(event, signal);
+		if (activation) await (signal ? raceCancellationError(activation, signal) : activation);
+	}
+
+	registerActivationHandler(handler: (event: string, signal?: AbortSignal) => Promise<void>): IDisposable {
+		this.assertNotDisposed();
+		if (this.activationHandler) throw new Error('An executable extension activation owner is already registered');
+		this.activationHandler = handler;
+		return toDisposable(() => { if (this.activationHandler === handler) this.activationHandler = undefined; });
+	}
+
+	private async drainReloads(): Promise<void> {
+		let failure: ExtensionServiceFailure | undefined;
+		while (!this.isDisposed && this.reloadQueued) {
+			this.reloadQueued = false;
+			// A source may change while generation-bound resources are loading. Callers
+			// await the final queued catalog, including its successful atomic commit.
+			failure = await this.loadAndRegister();
+		}
+		if (!this.isDisposed && failure) {
+			this.failureEmitter.fire(failure);
+			throw failure.error;
+		}
+	}
+
+	private async loadAndRegister(): Promise<ExtensionServiceFailure | undefined> {
 		const themeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [], scopes: [] };
 		const languages: LanguageDescriptionContribution[] = [];
 		const languageConfigurations: LanguageConfigurationContribution[] = [];
@@ -202,17 +241,25 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const productIconThemes: IWorkbenchProductIconTheme[] = [];
 		const fileTemplates: ExtensionFileTemplateDefinition[] = [];
 		const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
+		const problemMatchers: unknown[] = [];
+		const configurations: IConfigurationNode[] = [];
+		const problemPatterns: unknown[] = [];
 		const editorPanes: IEditorPaneDescriptor[] = [];
 		let activeExtension: ExtensionDescriptor | undefined;
 		try {
 			const transportCatalog = await this.options.api.list("refresh");
 			if (this.isDisposed) return;
+			// Frozen package digests identify every resource in this snapshot. An
+			// unchanged scan must preserve factory identities and pending Debug launches.
+			const signature = getNLSLanguage() + '\0' + JSON.stringify(transportCatalog);
+			if (signature === this.activeCatalogSignature) return;
 			const catalog = projectExtensionCatalog(transportCatalog);
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
 				await verifyExtensionManifestDigest(extension);
 				if (this.isDisposed) return;
 				const manifest = parseExtensionManifest(extension.manifestJson, extension);
+				configurations.push(...manifest.contributes.configuration);
 				if (extension.sourceKind === 'builtIn') {
 					for (const editor of manifest.contributes.customEditors) {
 						const create = getBuiltinEditorPaneFactory(extension.id, editor.viewType);
@@ -315,6 +362,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						path => this.loadResource(resources, catalog.generation, extension.id, directory + path), document));
 					if (this.isDisposed) return;
 				}
+				problemMatchers.push(...manifest.contributes.problemMatchers);
+				problemPatterns.push(...manifest.contributes.problemPatterns);
 				for (const debuggerContribution of manifest.contributes.debuggers) debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
 				for (const grammar of manifest.contributes.grammars) {
 					const content = await this.loadGrammar(resources, catalog.generation, extension.id, grammar.path);
@@ -334,7 +383,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				}
 			}
 			this.validateContributions(themes, fileTemplates, debugAdapters);
-			const debugAdapterFactories = debugAdapters.map(definition => createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments }));
+			const debugAdapterFactories = debugAdapters.flatMap(definition => {
+				if (definition.program === undefined) return [];
+				const previousDefinition = this.debugAdapterRegistry.get(definition.type);
+				const previousExtension = this.catalog.extensions.find(extension => extension.id === definition.extensionId);
+				const nextExtension = catalog.extensions.find(extension => extension.id === definition.extensionId);
+				const retained = this.activeDebugAdapterFactories.find(factory => factory.type === definition.type);
+				// Scan revisions may change while a launch waits for an installation path.
+				// Preserve executable identity only while both package and declaration match.
+				if (retained && previousExtension && nextExtension
+					&& JSON.stringify(previousExtension) === JSON.stringify(nextExtension)
+					&& JSON.stringify(previousDefinition) === JSON.stringify(definition)) return [retained];
+				return [createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments })];
+			});
 			const previousGrammars = this.activeGrammars;
 			const preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);
 			if (this.isDisposed) return;
@@ -342,7 +403,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				runWithBufferedEvents(() => {
 					preparedGrammars.commit();
 					this.editorPaneRegistration.replace(editorPanes);
-					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions);
+					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations);
 					this.activeThemeContributions = themeContributions;
 					this.activeGrammars = Object.freeze([...grammars]);
 					this.activeLanguages = Object.freeze([...languages]);
@@ -352,6 +413,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					this.activeProductIconThemes = Object.freeze([...productIconThemes]);
 					this.activeDebugAdapterFactories = Object.freeze([...debugAdapterFactories]);
 					this.catalog = catalog;
+					this.activeCatalogSignature = signature;
 					this.changeEmitter.fire(catalog);
 				});
 			} catch (error) {
@@ -362,15 +424,15 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.activeEditorPanes = editorPanes;
 		} catch (error) {
 			if (this.isDisposed) return;
-			this.failureEmitter.fire(Object.freeze({ extension: activeExtension, error }));
-			throw error;
+			return Object.freeze({ extension: activeExtension, error });
 		}
 	}
 
-	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions): void {
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[]): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;
 		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
 		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
+		const previousProblemContributions = this.problemMatcherRegistration.contributions;
 		try {
 			this.replaceThemeContributions(themeContributions);
 			this.languageRegistration?.replace(languages);
@@ -382,6 +444,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.debugAdapterFactoryRegistration.replace(debugAdapterFactories);
 			this.fileIconRegistration.replace(fileIconThemes);
 			this.productIconRegistration.replace(productIconThemes);
+			this.problemMatcherRegistration.replace(problemContributions);
+			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).updateConfigurations({ add: configurations, remove: this.activeConfigurations });
+			this.activeConfigurations = configurations;
 		} catch (error) {
 			try {
 				this.replaceThemeContributions(this.activeThemeContributions);
@@ -394,6 +459,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				this.debugAdapterFactoryRegistration.replace(this.activeDebugAdapterFactories);
 				this.fileIconRegistration.replace(this.activeFileIconThemes);
 				this.productIconRegistration.replace(this.activeProductIconThemes);
+				this.problemMatcherRegistration.replace(previousProblemContributions);
 			} catch (rollbackError) {
 				throw new AggregateError([error, rollbackError], "Extension contribution activation and rollback both failed");
 			}
@@ -501,6 +567,7 @@ function projectExtensionDescriptor(extension: TransportExtensionDescriptor): Ex
 		version: extension.version,
 		displayName: extension.displayName,
 		sourceKind: extension.sourceKind,
+		...(extension.extensionLocation === undefined ? {} : { extensionLocation: URI.parse(extension.extensionLocation) }),
 		manifestSha256: extension.manifestSha256,
 		packageSha256: extension.packageSha256,
 	});

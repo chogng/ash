@@ -72,11 +72,13 @@ export class TerminalService extends Disposable implements ITerminalService {
 		}
 		if (options.config) {
 			const instanceNumber = this.nextInstanceId++;
+			const workspaceFolder = options.dirId === undefined ? undefined : this.requireWorkspaceFolder(options.dirId);
 			const name = options.title ?? options.config.name ?? '';
 			const instance = this.instantiationService.createInstance(TerminalInstance,
 				`terminal-instance-${instanceNumber}`,
-				'',
-				undefined,
+				instanceNumber,
+				workspaceFolder?.id ?? '',
+				workspaceFolder && this.workspaceContext.getWorkspace().folders.length > 1 ? workspaceFolder.id : undefined,
 				'',
 				{ pid: -1, cwd: '' },
 				name,
@@ -85,12 +87,17 @@ export class TerminalService extends Disposable implements ITerminalService {
 				name,
 				() => this.connectionState,
 				() => this.removeInstance(instance),
+				() => this._onDidChangeInstances.fire(),
 				{
 					create: options.config.customPtyImplementation,
 					instanceNumber,
 					dimensions: options.dimensions,
 					onTitleChanged: () => this._onDidChangeInstances.fire(),
 				},
+				undefined,
+				options.initialText ?? options.config.initialText,
+				options.waitOnExit ?? options.config.waitOnExit,
+				options.dimensions,
 			);
 			this.ownedInstances.set(instance.id, instance);
 			this._instances.push(instance);
@@ -105,7 +112,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 				throw new CancellationError();
 			}
 			this.setActiveInstance(instance);
-			instance.start();
+			if (!options.deferStart) instance.start();
 			this._onDidChangeInstances.fire();
 			return instance;
 		}
@@ -113,11 +120,23 @@ export class TerminalService extends Disposable implements ITerminalService {
 		const processWorkspaceFolderId = this.workspaceContext.getWorkspace().folders.length > 1
 			? workspaceFolder.id
 			: undefined;
+		const environment = options.env === undefined ? undefined : Object.freeze({ ...options.env });
+		const execution = options.execution === undefined ? undefined : Object.freeze(options.execution.type === 'process'
+			? { ...options.execution, args: Object.freeze([...options.execution.args]) }
+			: { ...options.execution });
+		const launch = Object.freeze({
+			...(environment === undefined ? {} : { env: environment }),
+			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+			...(execution === undefined ? {} : { execution }),
+		});
 		const created = await this.processService.create({
 			...processWorkspaceFolder(processWorkspaceFolderId),
 			rows: options.dimensions.rows,
 			cols: options.dimensions.cols,
 			profile: options.profile,
+			...(environment === undefined ? {} : { env: environment }),
+			...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
+			...(execution === undefined ? {} : { execution }),
 		});
 		// A completed backend request still owns a PTY even if its window has closed.
 		if (this.isDisposed) {
@@ -127,6 +146,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		const instanceNumber = this.nextInstanceId++;
 		const instance = this.instantiationService.createInstance(TerminalInstance,
 			`terminal-instance-${instanceNumber}`,
+			instanceNumber,
 			workspaceFolder.id,
 			processWorkspaceFolderId,
 			created.terminalId,
@@ -137,14 +157,20 @@ export class TerminalService extends Disposable implements ITerminalService {
 			options.title,
 			() => this.connectionState,
 			() => this.removeInstance(instance),
+			() => this._onDidChangeInstances.fire(),
 			undefined,
+			launch,
+			options.initialText,
+			options.waitOnExit,
+			options.dimensions,
 		);
 		this.ownedInstances.set(instance.id, instance);
 		this._instances.push(instance);
 		this.refreshInstanceTitles();
+		if (options.deferStart && this.connectionState !== 'ready') instance.loseConnection();
 		this._onDidCreateInstance.fire(instance);
 		this.setActiveInstance(instance);
-		instance.start();
+		if (!options.deferStart) instance.start();
 		this._onDidChangeInstances.fire();
 		return instance;
 	}

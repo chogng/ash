@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -29,6 +30,7 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 	}
 	const opened: IResourceEditorInput[] = [];
 	const editor = {
+		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None,
 		onDidVisibleEditorsChange: Event.None,
 		get activeEditor() { return opened.at(-1); },
@@ -74,6 +76,7 @@ test('Welcome waits for restored editors and accepts only implemented startup mo
 	await assert.rejects(configuration.updateValue(StartupEditorConfigurationKey, 'readme'), /Unknown startup editor/);
 	const opened: IResourceEditorInput[] = [{ resource: URI.file('/restored.txt') }];
 	const editor = {
+		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None,
 		onDidVisibleEditorsChange: Event.None,
 		get activeEditor() { return opened.at(-1); },

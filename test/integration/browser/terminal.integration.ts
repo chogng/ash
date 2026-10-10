@@ -15,7 +15,6 @@ import { IUserDataProfileService } from '../../../src/ash/workbench/services/use
 import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import '../../../src/ash/workbench/contrib/commands/common/commands.contribution.js';
-import type { IProcessDataEvent } from '../../../src/ash/platform/terminal/common/terminal.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
@@ -44,8 +43,6 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const store = new DisposableStore();
-const output = store.add(new Emitter<IProcessDataEvent>());
-const exit = store.add(new Emitter<number | undefined>());
 const writes: string[] = [];
 const binaryWrites: number[][] = [];
 const resizes: ITerminalDimensions[] = [];
@@ -62,10 +59,13 @@ function createFixtureInstance(id: string): ITerminalInstance {
 		profile: { profileId: 'shell', title: 'Shell', isDefault: true },
 		state: new URLSearchParams(location.search).has('exited') ? 'exited' : 'running',
 		exitCode: undefined,
-		onDidWriteData: output.event,
-		onDidExit: exit.event,
+		onDidWriteData: Event.None,
+		onDidExit: Event.None,
 		onDidChangeCommandStatus: Event.None,
 		onDidChangeState: Event.None,
+		start: () => { },
+		clearBuffer: () => screen?.clearBuffer(),
+		reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },
 		sendText: async (data, shouldExecute) => { writes.push(data + (shouldExecute ? '\r' : '')); },
 		processBinary: async data => { binaryWrites.push(Array.from(data, character => character.charCodeAt(0))); },
 		resize: dimensions => { resizes.push(dimensions); },
@@ -97,6 +97,7 @@ function createFixtureInstance(id: string): ITerminalInstance {
 }
 const instance = createFixtureInstance('test-terminal');
 const widgetServices = store.add(createCodeEditorServices(store).createChild());
+widgetServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const themeService = store.add(new TestThemeService(darkColorTheme));
 if (new URLSearchParams(location.search).has('find')) { store.add(bindColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
@@ -115,8 +116,7 @@ window.ashTerminalIntegration = {
 	binaryWrites,
 	resizes,
 	fit: () => widget.fit(),
-	write: text => output.fire({ data: new TextEncoder().encode(text), trackCommit: false }),
-	exit: () => exit.fire(0),
+	write: text => widget.write(text),
 	start: () => {
 		void instance.xtermReadyPromise;
 		completion = widget.initialize();
@@ -137,7 +137,6 @@ declare global {
 			readonly resizes: readonly ITerminalDimensions[];
 			fit(): void;
 			write(text: string): void;
-			exit(): void;
 			start(): boolean;
 			ready(): Promise<void>;
 			dispose(): void;
@@ -359,7 +358,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 			getConnectionState: async () => 'ready',
 			onConnectionState: () => Disposable.None,
-			listProfiles: async () => [instance.profile],
+			getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
 			create: async () => {
 				const terminalId = `backend-${nextProcess++}`;
 				calls.push(`create:${terminalId}`);
@@ -437,7 +436,7 @@ if (new URLSearchParams(location.search).has('embedder')) {
 	const services = store.add(widgetServices.createChild(new ServiceCollection(
 		[IEmbedderTerminalService, descriptor],
 		[IWorkspaceContextService, workspace],
-		[ITerminalProcessService, { listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend, getConnectionState: async () => 'crashed', onConnectionState: Event.None }],
+		[ITerminalProcessService, { getEnvironment: async () => ({}), listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend, getConnectionState: async () => 'crashed', onConnectionState: Event.None }],
 	)));
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
@@ -511,9 +510,10 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const events: string[] = [];
 	let closes = 0;
 	const bytes = new TextEncoder().encode('中文🙂\r\n');
+	const overflow = new URLSearchParams(location.search).has('overflow');
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
-		listProfiles: async () => [profile],
+		getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => ({ terminalId: 'stream-shell', ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
 		write: async () => { },
 		resize: async () => { },
@@ -525,14 +525,17 @@ if (new URLSearchParams(location.search).has('stream')) {
 			const first = options.afterSequence === 0;
 			return {
 				terminalId: options.terminalId,
-				chunks: [{ sequence: first ? 1 : 2, data: first ? bytes.slice(0, 2) : bytes.slice(2) }],
-				nextSequence: first ? 1 : 2,
+				chunks: overflow ? Array.from({ length: Math.min(options.maxChunks, 4100 - options.afterSequence) }, (_, offset) => {
+					const index = options.afterSequence + offset;
+					return { sequence: index + 1, data: new TextEncoder().encode(`line-${index}\r\n`) };
+				}) : [{ sequence: first ? 1 : 2, data: first ? bytes.slice(0, 2) : bytes.slice(2) }],
+				nextSequence: overflow ? Math.min(4100, options.afterSequence + options.maxChunks) : first ? 1 : 2,
 				outputGap: false,
-				commandEvents: first ? [{ sequence: 1, commandId: 'command', status: 'succeeded', exitCode: 0, afterOutputSequence: 2 }] : [],
+				commandEvents: options.afterCommandSequence === 0 ? [{ sequence: 1, commandId: 'command', status: 'succeeded', exitCode: 0, afterOutputSequence: 2 }] : [],
 				nextCommandSequence: 1,
 				commandEventGap: false,
-				exited: !first,
-				exitCode: first ? undefined : 0,
+				exited: overflow || !first,
+				exitCode: overflow || !first ? 0 : undefined,
 			};
 		},
 	};
@@ -540,18 +543,28 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
-	let screen!: XtermTerminal;
+	let screen: XtermTerminal | undefined;
+	const deferred = new URLSearchParams(location.search).has('deferred');
+	const observed: number[] = [];
 	store.add(terminals.onDidCreateInstance(instance => {
-		instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
-		screen = instance.xterm!;
-		screen.setVisible(!new URLSearchParams(location.search).has('hidden'));
+		store.add(instance.onDidWriteData(event => observed.push(...event.data)));
+		if (!deferred) {
+			instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
+			screen = instance.xterm!;
+			screen.setVisible(!new URLSearchParams(location.search).has('hidden'));
+		}
 		store.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
 		store.add(instance.onDidExit(() => events.push('exit')));
 	}));
 	const terminal = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 	window.ashTerminalStreamIntegration = {
 		status: () => ({ reads, events, closes, state: terminal.state, remaining: terminals.instances.length }),
-		start: async () => { await screen.initialize(); screen.focus(); },
+		start: async () => {
+			if (!screen) { terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!); screen = terminal.xterm!; screen.setVisible(true); }
+			await screen.initialize(); screen.focus();
+		},
+		observed: () => new TextDecoder().decode(new Uint8Array(observed)),
+		snapshot: () => screen?.getBufferText(100_000, new AbortController().signal) ?? Promise.resolve(undefined),
 		close: async () => { await terminal.close(); store.dispose(); },
 	};
 }
@@ -560,6 +573,8 @@ declare global {
 	interface Window {
 		ashTerminalStreamIntegration: {
 			status(): { reads: number[]; events: string[]; closes: number; state: string; remaining: number; };
+			observed(): string;
+			snapshot(): Promise<string | undefined>;
 			start(): Promise<void>;
 			close(): Promise<void>;
 		};
@@ -581,7 +596,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	let sequence = 0;
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
-		listProfiles: async () => [profile],
+		getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => ({ terminalId: 'input-shell', ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
 		write: async options => { writes.push(typeof options.data === 'string' ? options.data : [...options.data]); },
 		resize: async () => { }, close: async () => { }, getConnectionState: async () => 'ready', onConnectionState: Event.None,

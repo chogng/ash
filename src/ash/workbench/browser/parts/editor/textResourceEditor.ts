@@ -2,6 +2,7 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import { Schemas } from '../../../../base/common/network.js';
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { TextResourceEditorInput } from '../../../common/editor/textResourceEditorInput.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
@@ -197,6 +198,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				minimap?: IEditorOptions['minimap'];
 				renderWhitespace?: IEditorOptions['renderWhitespace'];
 				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
+				selectionClipboard?: IEditorOptions['selectionClipboard'];
+				find?: IEditorOptions['find'];
 			} = {};
 			if (this.options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily')) {
 				update.fontFamily = this.configurationService.getValue<string>('editor.fontFamily') || undefined;
@@ -231,8 +234,24 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			if (event.affectsConfiguration(renderControlCharactersConfiguration)) {
 				update.renderControlCharacters = this.configurationService.getValue(renderControlCharactersConfiguration);
 			}
+			if (event.affectsConfiguration('editor.find')) {
+				update.find = this.readFindOptions();
+			}
+			if (event.affectsConfiguration('editor.selectionClipboard')) {
+				update.selectionClipboard = this.configurationService.getValue<boolean>('editor.selectionClipboard');
+			}
 			if (Object.keys(update).length > 0) part.updateOptions(update);
 		}));
+	}
+
+	private readFindOptions(): IEditorOptions['find'] {
+		return {
+			seedSearchStringFromSelection: this.configurationService.getValue<boolean>('editor.find.seedSearchStringFromSelection') === false ? 'never' : 'always',
+			autoFindInSelection: this.configurationService.getValue<boolean>('editor.find.autoFindInSelection') ? 'always' : 'never',
+			globalFindClipboard: this.configurationService.getValue<boolean>('editor.find.globalFindClipboard'),
+			loop: this.configurationService.getValue<boolean>('editor.find.loop'),
+			...this.options.find,
+		};
 	}
 
 	private readMinimapOptions(): IEditorOptions['minimap'] {
@@ -319,7 +338,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				colorDecoratorsLimit: this.options.colorDecoratorsLimit,
 				defaultColorDecorators: this.options.defaultColorDecorators,
 				formatOnSave: this.options.formatOnSave,
-				find: this.options.find,
+				find: this.readFindOptions(),
+				selectionClipboard: this.configurationService.getValue<boolean>('editor.selectionClipboard'),
 				indentation: this.options.indentation,
 				textDirection: this.options.textDirection,
 				onExecuteEditorCommand: this.options.onExecuteEditorCommand,
@@ -418,11 +438,17 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		return this.workingCopy?.hasExternalChange ?? false;
 	}
 
-	async save(): Promise<void> {
+	async save(options?: ISaveOptions): Promise<void> {
+		const workingCopy = this.workingCopy;
 		try {
-			for (const hook of [...this.beforeSaveHooks]) await hook();
-			await this.workingCopy?.save(new AbortController().signal);
+			if (!options?.skipSaveParticipants) {
+				for (const hook of [...this.beforeSaveHooks]) await hook();
+			}
+			// A participant may await while this pane is reused for another input.
+			if (this.workingCopy !== workingCopy) { throw new CancellationError(); }
+			await workingCopy?.save(new AbortController().signal, options);
 		} catch (error) {
+			if (isCancellationError(error)) { throw error; }
 			if (await this.handleSaveError(error)) { return; }
 			throw error;
 		}

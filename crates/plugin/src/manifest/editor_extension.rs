@@ -16,6 +16,8 @@ pub struct EditorExtensionContribution {
     pub id: ManifestLocalId,
     pub entrypoint: PluginPath,
     pub runtime: EditorExtensionRuntime,
+    #[serde(default, skip_serializing_if = "EditorExtensionApi::is_ash")]
+    pub api: EditorExtensionApi,
     pub runtime_api_version: EditorExtensionRuntimeApiVersion,
     pub activation_events: Vec<EditorExtensionActivationEvent>,
     pub capabilities: Vec<EditorExtensionCapability>,
@@ -28,6 +30,21 @@ pub enum EditorExtensionRuntime {
     #[serde(rename = "javascript")]
     JavaScript,
     HostRpc,
+}
+
+/// Author API loaded by the isolated JavaScript host, independent of the process protocol version.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorExtensionApi {
+    #[default]
+    Ash,
+    Vscode,
+}
+
+impl EditorExtensionApi {
+    fn is_ash(&self) -> bool {
+        *self == Self::Ash
+    }
 }
 
 /// Version of the out-of-process Editor Extension runtime API requested by an entry point.

@@ -12,7 +12,7 @@ use crate::PackageRef;
 
 // Increment when the executable API's authority ceiling changes. A package digest alone
 // must not let an old consent acquire newly introduced host capabilities.
-const CONTRACT_VERSION: u16 = 3;
+const CONTRACT_VERSION: u16 = 5;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EditorExtensionPolicyAction {

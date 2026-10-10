@@ -38,6 +38,9 @@ pub(super) struct PersistedAuthority {
     schema_version: u32,
     pub revision: u64,
     pub activation_generation: u64,
+    // Version zero records predate user-level Node execution and cannot authorize it.
+    #[serde(default)]
+    pub node_execution_contract_version: u16,
     pub installed: Vec<InstalledPluginRef>,
     #[serde(default)]
     pub enabled: Vec<InstalledPluginRef>,
@@ -67,6 +70,7 @@ impl PersistedAuthority {
             schema_version: AUTHORITY_SCHEMA_VERSION,
             revision: 0,
             activation_generation: 1,
+            node_execution_contract_version: 1,
             installed: Vec::new(),
             enabled: Vec::new(),
             granted: Vec::new(),
@@ -81,6 +85,7 @@ impl PersistedAuthority {
             schema_version: AUTHORITY_SCHEMA_VERSION,
             revision: state.revision,
             activation_generation: state.activation_generation,
+            node_execution_contract_version: 1,
             installed: state.installed.values().cloned().collect(),
             enabled: state.enabled.values().cloned().collect(),
             granted: state.granted.values().cloned().collect(),

@@ -20,3 +20,7 @@
 后端链路是 `app-server/src/server/terminal_operations.rs` → `exec-server/src/terminal.rs` → `utils/pty`；App Server 只校验和分发协议，`exec-server` 拥有交互进程，PTY 工具层拥有操作系统句柄、原始字节、尺寸和进程终止。协议及 decoder 由 `app-server-protocol` 生成，不能在此手改生成物。
 
 重连测试当前仍位于 `test/electron-main/reconnectableTerminalMainService.test.ts`，正文已经测试 Renderer 实现；路径与职责不一致，迁移涉及旧文件退出，须取得准确路径确认。
+
+`getEnvironment(names, dirId?)` 通过 `terminal/environment/read` 查询选定执行宿主的冻结终端环境，最多 128 个变量；查询不创建进程，不读取 Renderer 或客户端机器的环境。缺失项省略，配置解析器将其替换为空字符串。后台仍采用已有环境白名单，不返回无关进程凭证。目录执行授权撤销后查询失败。
+
+终端创建支持可选 `env`：字符串覆盖子进程环境，`null` 删除继承变量；最多 128 项，变量名最多 256 字符且不能包含 `=`/NUL，值最多 32768 字符且不能包含 NUL。Rust 在分配 PTY 前校验；应用于冻结环境的副本，后续终端不受影响。TerminalService 在首次创建前捕获调用方对象，TerminalInstance 重启复用同一快照。Tasks 和 DAP `runInTerminal` 共用此契约。

@@ -85,20 +85,75 @@ struct FleetState {
     authorization: Option<Authorization>,
     entries: BTreeMap<String, RuntimeEntry>,
     published: Vec<ExtensionHostExtensionSnapshot>,
+    // Standard extension instances belong to the renderer connection that supplied their facts.
+    windows: BTreeMap<u64, BTreeMap<String, RuntimeEntry>>,
+    window_published: BTreeMap<u64, Vec<ExtensionHostExtensionSnapshot>>,
+}
+
+impl FleetState {
+    fn entry(&self, owner: u64, id: &str) -> Option<&RuntimeEntry> {
+        let entry = self.entries.get(id)?;
+        if entry.node_deployment.is_some() {
+            self.windows.get(&owner).and_then(|entries| entries.get(id))
+        } else {
+            Some(entry)
+        }
+    }
+
+    fn entry_mut(&mut self, owner: u64, id: &str) -> Option<&mut RuntimeEntry> {
+        if self.entries.get(id)?.node_deployment.is_some() {
+            self.windows
+                .get_mut(&owner)
+                .and_then(|entries| entries.get_mut(id))
+        } else {
+            self.entries.get_mut(id)
+        }
+    }
+
+    fn snapshot_for(&self, owner: u64) -> ExtensionHostFleetSnapshot {
+        let window = self.window_published.get(&owner);
+        ExtensionHostFleetSnapshot {
+            generation: self.generation,
+            extensions: self
+                .published
+                .iter()
+                .map(|base| {
+                    window
+                        .and_then(|entries| entries.iter().find(|entry| entry.id == base.id))
+                        .unwrap_or(base)
+                        .clone()
+                })
+                .collect(),
+        }
+    }
+}
+
+enum NodeClientScope {
+    Unsupported,
+    Pending,
+    Bound { owner: u64 },
 }
 
 struct RuntimeEntry {
+    activation_gate: Arc<Mutex<()>>,
     version: String,
     workspace_read: source::WorkspaceReadAccess,
     supervisor: Option<ExtensionHostSupervisor>,
     fallback: ExtensionHostExtensionSnapshot,
     failure: Option<ExtensionHostRuntimeFailure>,
     pending_activation: Option<source::ActivationPlan>,
+    node_client: NodeClientScope,
+    node_deployment: Option<source::EditorExtensionDeployment>,
 }
 
 pub(super) enum ExtensionHostReconcileMode {
     Refresh,
     RestartFailed,
+}
+
+enum ReconcileScope {
+    All,
+    Window(u64),
 }
 
 pub(super) struct ExtensionHostInvocationRequest {
@@ -180,6 +235,8 @@ impl ExtensionHostRuntime {
                 authorization: None,
                 entries: BTreeMap::new(),
                 published: Vec::new(),
+                windows: BTreeMap::new(),
+                window_published: BTreeMap::new(),
             }),
             reconcile_gate: Mutex::new(()),
             sessions: Mutex::new(InvocationSessionStore::new(
@@ -315,6 +372,23 @@ impl ExtensionHostRuntime {
         &self,
         mode: ExtensionHostReconcileMode,
     ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
+        self.reconcile_in_scope(ReconcileScope::All, mode)
+    }
+
+    pub(super) fn reconcile_for(
+        &self,
+        owner: u64,
+        mode: ExtensionHostReconcileMode,
+    ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
+        self.reconcile_in_scope(ReconcileScope::Window(owner), mode)?;
+        Ok(self.snapshot_for(owner))
+    }
+
+    fn reconcile_in_scope(
+        &self,
+        scope: ReconcileScope,
+        mode: ExtensionHostReconcileMode,
+    ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
         let _gate = self
             .inner
             .reconcile_gate
@@ -325,40 +399,69 @@ impl ExtensionHostRuntime {
                 self.inner.reconcile_authority_locked(false)?;
                 self.inner.reconcile_health_locked()
             }
-            ExtensionHostReconcileMode::RestartFailed => self.inner.restart_failed_locked(),
+            ExtensionHostReconcileMode::RestartFailed => self.inner.restart_failed_locked(scope),
         }
     }
 
     pub(super) fn activate_by_event(
         &self,
+        owner: u64,
         extension_id: &str,
         generation: u64,
         event: source::ActivationEvent,
+        initialization: Option<extension_protocol::ExtensionHostInitialization>,
+        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
     ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
-        let _gate = self
+        // Serialize duplicate first-use calls per extension. Holding the fleet gate while
+        // activate awaits editor IO would deadlock commands that activate another extension.
+        let activation_gate = {
+            let _gate = self
+                .inner
+                .reconcile_gate
+                .lock()
+                .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+            self.inner.reconcile_authority_locked(false)?;
+            self.inner
+                .ensure_window_entry(owner, extension_id, generation, &event)?;
+            self.inner
+                .state
+                .lock()
+                .map_err(|_| ExtensionHostRuntimeError::Internal)?
+                .entry(owner, extension_id)
+                .ok_or(ExtensionHostRuntimeError::Stale)?
+                .activation_gate
+                .clone()
+        };
+        let _activation = activation_gate
+            .lock()
+            .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+        let gate = self
             .inner
             .reconcile_gate
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
         self.inner.reconcile_authority_locked(false)?;
-        let supervisor = {
+        let (supervisor, handler) = {
             let mut state = self
                 .inner
                 .state
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
             let entry = state
-                .entries
-                .get_mut(extension_id)
+                .entry_mut(owner, extension_id)
                 .ok_or(ExtensionHostRuntimeError::Stale)?;
             if entry.fallback.activation_generation != generation {
                 return Err(ExtensionHostRuntimeError::Stale);
             }
             let Some(plan) = &entry.pending_activation else {
-                return Ok(ExtensionHostFleetSnapshot {
-                    generation: state.generation,
-                    extensions: state.published.clone(),
-                });
+                // A fresh window instance may fail its authority check before a host starts.
+                // Publish that result before returning, including when no health tick ran yet.
+                let published = self.inner.refresh_generation_locked(&mut state)?;
+                let snapshot = state.snapshot_for(owner);
+                drop(state);
+                drop(gate);
+                self.inner.publish(published);
+                return Ok(snapshot);
             };
             if !plan.matches(&event) {
                 return Err(ExtensionHostRuntimeError::Stale);
@@ -367,13 +470,62 @@ impl ExtensionHostRuntime {
                 .supervisor
                 .clone()
                 .ok_or_else(|| entry_host_error(entry))?;
+            let handler = match entry.node_client {
+                NodeClientScope::Pending => {
+                    let client_host = Arc::clone(&self.inner.client_host);
+                    let extension_id = extension_id.to_owned();
+                    let workspace_read = entry.workspace_read;
+                    let binding = EditorClientBinding {
+                        client_host,
+                        owner,
+                        extension_id,
+                        workspace_read,
+                        files,
+                    };
+                    let handler: Arc<ash_editor_extension_host::ExtensionBackgroundClientHandler> =
+                        Arc::new(move |context, operation, token, timeout| {
+                            binding.request(context, operation, token, timeout)
+                        });
+                    entry.node_client = NodeClientScope::Bound { owner };
+                    Some(handler)
+                }
+                NodeClientScope::Unsupported => None,
+                NodeClientScope::Bound { .. } => return Err(ExtensionHostRuntimeError::Stale),
+            };
             entry.pending_activation = None;
-            supervisor
+            (supervisor, handler)
         };
+        drop(gate);
         let failure = supervisor
-            .start()
+            .start_with_client(initialization, handler)
             .err()
             .map(|error| projection::runtime_failure(&error, nonzero_incarnation(&supervisor)));
+        let gate = self
+            .inner
+            .reconcile_gate
+            .lock()
+            .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+        let current = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| ExtensionHostRuntimeError::Internal)?
+            .entry(owner, extension_id)
+            .is_some_and(|entry| {
+                entry.fallback.activation_generation == generation
+                    && match entry.node_client {
+                        NodeClientScope::Unsupported => true,
+                        NodeClientScope::Pending => false,
+                        NodeClientScope::Bound {
+                            owner: bound_owner, ..
+                        } => owner == bound_owner,
+                    }
+            });
+        if !current {
+            drop(gate);
+            let _ = supervisor.shutdown();
+            return Err(ExtensionHostRuntimeError::Stale);
+        }
         let published = {
             let mut state = self
                 .inner
@@ -381,18 +533,21 @@ impl ExtensionHostRuntime {
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
             state
-                .entries
-                .get_mut(extension_id)
+                .entry_mut(owner, extension_id)
                 .ok_or(ExtensionHostRuntimeError::Stale)?
                 .failure = failure;
             self.inner.refresh_generation_locked(&mut state)?
         };
         self.inner.publish(published);
-        Ok(self.inner.snapshot())
+        Ok(self.snapshot_for(owner))
     }
 
-    pub(super) fn snapshot(&self) -> ExtensionHostFleetSnapshot {
-        self.inner.snapshot()
+    pub(super) fn snapshot_for(&self, owner: u64) -> ExtensionHostFleetSnapshot {
+        self.inner
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .snapshot_for(owner)
     }
 
     pub(super) fn start_invocation(
@@ -429,6 +584,26 @@ impl ExtensionHostRuntime {
     }
 
     pub(super) fn close_owner(&self, owner: u64) {
+        let Ok(_gate) = self.inner.reconcile_gate.lock() else {
+            return;
+        };
+        let entries = self
+            .inner
+            .state
+            .lock()
+            .map(|mut state| state.windows.remove(&owner).unwrap_or_default())
+            .unwrap_or_default();
+        for entry in entries.into_values() {
+            if let Some(supervisor) = entry.supervisor {
+                let _ = supervisor.shutdown();
+            }
+        }
+        if let Ok(mut state) = self.inner.state.lock() {
+            if let Ok(published) = self.inner.refresh_generation_locked(&mut state) {
+                drop(state);
+                self.inner.publish(published);
+            }
+        }
         let handles = self
             .inner
             .sessions
@@ -511,6 +686,61 @@ impl ExtensionHostRuntime {
     }
 }
 
+struct EditorClientBinding {
+    client_host: Arc<crate::client_host::ClientHost>,
+    owner: u64,
+    extension_id: String,
+    workspace_read: source::WorkspaceReadAccess,
+    files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
+}
+
+impl EditorClientBinding {
+    fn request(
+        &self,
+        context: ash_editor_extension_host::HostEventContext,
+        operation: extension_protocol::ExtensionClientOperation,
+        token: &ash_async_utils::CancellationToken,
+        timeout: Duration,
+    ) -> Result<extension_protocol::ExtensionClientResult, ash_editor_extension_host::HostFailure>
+    {
+        if let extension_protocol::ExtensionClientOperation::ReadWorkspaceFile { path } = &operation
+        {
+            return client::read_workspace_file(self.workspace_read, &self.files, path, token);
+        }
+        self.client_host
+            .request_with_timeout(
+                self.owner,
+                ash_app_server_protocol::protocol::registry::HostMethod::ExtensionClientRequest,
+                &ash_app_server_protocol::protocol::extension_host::ExtensionClientRequestParams {
+                    extension_id: self.extension_id.clone(),
+                    activation_generation: context.activation_generation,
+                    incarnation: context.incarnation,
+                    operation,
+                },
+                token,
+                timeout,
+            )
+            .map_err(|error| {
+                use crate::client_host::ClientHostError;
+                let code = match error {
+                    ClientHostError::Cancelled(_) | ClientHostError::CapabilityUnavailable => {
+                        ash_editor_extension_host::HostErrorCode::Cancelled
+                    }
+                    ClientHostError::TimedOut => {
+                        ash_editor_extension_host::HostErrorCode::DeadlineExceeded
+                    }
+                    ClientHostError::Failed(_) => {
+                        ash_editor_extension_host::HostErrorCode::Internal
+                    }
+                };
+                ash_editor_extension_host::HostFailure {
+                    code,
+                    message: "editor service request failed".into(),
+                }
+            })
+    }
+}
+
 impl RuntimeInner {
     fn start_invocation(
         self: &Arc<Self>,
@@ -528,8 +758,7 @@ impl RuntimeInner {
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
             let entry = state
-                .entries
-                .get(&request.extension_id)
+                .entry(owner, &request.extension_id)
                 .ok_or(ExtensionHostRuntimeError::Stale)?;
             let supervisor = entry
                 .supervisor
@@ -603,26 +832,26 @@ impl RuntimeInner {
         let extension_id = request.extension_id;
         let activation_generation = request.activation_generation;
         let incarnation = request.incarnation;
+        let binding = EditorClientBinding {
+            client_host,
+            owner,
+            extension_id,
+            workspace_read,
+            files,
+        };
         if std::thread::Builder::new()
             .name("ash-extension-invocation".into())
             .spawn(move || {
                 let result = handle.wait_with_client(|operation, token, remaining| {
-                    if let extension_protocol::ExtensionClientOperation::ReadWorkspaceFile { path } = &operation {
-                        return client::read_workspace_file(workspace_read, &files, path, token);
-                    }
-                    client_host.request_with_timeout(owner,
-                        ash_app_server_protocol::protocol::registry::HostMethod::ExtensionClientRequest,
-                        &ash_app_server_protocol::protocol::extension_host::ExtensionClientRequestParams {
-                            extension_id: extension_id.clone(), activation_generation, incarnation, operation,
-                        }, token, remaining).map_err(|error| {
-                            use crate::client_host::ClientHostError;
-                            let code = match error {
-                                ClientHostError::Cancelled(_) | ClientHostError::CapabilityUnavailable => ash_editor_extension_host::HostErrorCode::Cancelled,
-                                ClientHostError::TimedOut => ash_editor_extension_host::HostErrorCode::DeadlineExceeded,
-                                ClientHostError::Failed(_) => ash_editor_extension_host::HostErrorCode::Internal,
-                            };
-                            ash_editor_extension_host::HostFailure { code, message: "editor service request failed".into() }
-                        })
+                    binding.request(
+                        ash_editor_extension_host::HostEventContext::new(
+                            incarnation,
+                            activation_generation,
+                        ),
+                        operation,
+                        token,
+                        remaining,
+                    )
                 });
                 if let Some(runtime) = weak.upgrade() {
                     runtime.complete_invocation(&invocation_id, result);
@@ -693,9 +922,19 @@ impl Drop for RuntimeInner {
         let entries = self
             .state
             .get_mut()
-            .map(|state| std::mem::take(&mut state.entries))
+            .map(|state| {
+                let mut entries = std::mem::take(&mut state.entries)
+                    .into_values()
+                    .collect::<Vec<_>>();
+                entries.extend(
+                    std::mem::take(&mut state.windows)
+                        .into_values()
+                        .flat_map(BTreeMap::into_values),
+                );
+                entries
+            })
             .unwrap_or_default();
-        for entry in entries.into_values() {
+        for entry in entries {
             if let Some(supervisor) = entry.supervisor {
                 let _ = supervisor.shutdown();
             }
@@ -718,7 +957,19 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "remoteRelease"
         ),
         RegistrationKind::StatusBar { .. } => false,
+        RegistrationKind::WorkspaceEvents {} => operation == "workspaceEvent",
         RegistrationKind::TextDocumentEvents {} => operation == "documentEvent",
+        RegistrationKind::DebugEvents {} => operation == "debugEvent",
+        RegistrationKind::TaskEvents {} => matches!(
+            operation,
+            "taskEvent"
+                | "createTaskTerminal"
+                | "openTaskTerminal"
+                | "readTaskTerminal"
+                | "inputTaskTerminal"
+                | "resizeTaskTerminal"
+                | "closeTaskTerminal"
+        ),
         RegistrationKind::ExternalUriOpener { .. } => {
             matches!(operation, "canOpenExternalUri" | "openExternalUri")
         }
@@ -726,8 +977,36 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
         RegistrationKind::LanguageProvider { operations, .. } => operations
             .iter()
             .any(|candidate| language_operation_name(*candidate) == operation),
-        RegistrationKind::DebugAdapter { .. } => false,
-        RegistrationKind::TaskProvider { .. } => operation == "provideTasks",
+        RegistrationKind::DebugAdapter { .. } => matches!(
+            operation,
+            "createDebugAdapterDescriptor"
+                | "sendInlineDebugAdapter"
+                | "readInlineDebugAdapter"
+                | "closeInlineDebugAdapter"
+        ),
+        RegistrationKind::DebugAdapterTracker { .. } => {
+            matches!(
+                operation,
+                "createDebugAdapterTracker" | "debugAdapterTrackerEvent"
+            )
+        }
+        RegistrationKind::DebugConfigurationProvider { .. } => matches!(
+            operation,
+            "provideDebugConfigurations"
+                | "resolveDebugConfiguration"
+                | "resolveDebugConfigurationWithSubstitutedVariables"
+        ),
+        RegistrationKind::TaskProvider { .. } => matches!(
+            operation,
+            "provideTasks"
+                | "resolveTask"
+                | "createTaskTerminal"
+                | "openTaskTerminal"
+                | "readTaskTerminal"
+                | "inputTaskTerminal"
+                | "resizeTaskTerminal"
+                | "closeTaskTerminal"
+        ),
         RegistrationKind::TestProfileProvider { .. } => operation == "provideTestProfiles",
         RegistrationKind::DataChannel { .. } => operation == "receiveData",
         RegistrationKind::LinkPresentationProvider { .. } => operation == "provideLinkPresentation",

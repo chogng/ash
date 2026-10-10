@@ -61,6 +61,11 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		this.onError = options.onError ?? (error => console.error('Failed to apply configuration', error));
 		this.hasAuthoritativeSnapshot = this.api === undefined;
 		this.rebuildValues();
+		this._register(this.registry.onDidUpdateConfiguration(event => {
+			const previous = this.snapshot();
+			this.rebuildValues();
+			this.changeEmitter.fire(configurationChangeEvent({ keys: [...event.properties], overrides: [] }, previous, this.snapshot(), ConfigurationTarget.DEFAULT));
+		}));
 		if (options.initialSnapshot) this.acceptSnapshot(validateConfigurationSnapshot(options.initialSnapshot));
 		if (this.api) {
 			const subscription = this.api.onDidChange(candidate => {
@@ -257,7 +262,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		this.rebuildValues();
 		this.resourceChangeEmitter.fire(this.resourceSnapshot());
 		if (change.keys.length === 0 && change.overrides.length === 0) return;
-		this.changeEmitter.fire(configurationChangeEvent(change, previous, this.snapshot(), this.registry));
+		this.changeEmitter.fire(configurationChangeEvent(change, previous, this.snapshot()));
 	}
 
 	private rebuildValues(): void {
@@ -359,19 +364,19 @@ function configurationChangeEvent(
 	change: IConfigurationChange,
 	previous: ConfigurationState,
 	current: ConfigurationState,
-	registry: IConfigurationRegistry,
+	source: ConfigurationTarget = ConfigurationTarget.USER_LOCAL,
 ): IConfigurationChangeEvent {
 	const affectedKeys = new Set([...change.keys, ...change.overrides.flatMap(([, keys]) => keys)]);
 	return Object.freeze({
-		source: ConfigurationTarget.USER_LOCAL,
+		source,
 		affectedKeys,
 		change,
 		affectsConfiguration(configuration: string, overrides?: IConfigurationOverrides): boolean {
 			if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
 			if (![...affectedKeys].some(key => key === configuration || key.startsWith(`${configuration}.`))) return false;
 			if (!overrides) return true;
-			const before = resolveSection(previous, registry, configuration, overrides.overrideIdentifier);
-			const after = resolveSection(current, registry, configuration, overrides.overrideIdentifier);
+			const before = resolveSection(previous, configuration, overrides.overrideIdentifier);
+			const after = resolveSection(current, configuration, overrides.overrideIdentifier);
 			return !equals(before, after);
 		},
 	});
@@ -484,14 +489,13 @@ function equalIdentifierSets(left: readonly string[], right: readonly string[]):
 
 function resolveSection(
 	state: ConfigurationState,
-	registry: IConfigurationRegistry,
 	section: string,
 	overrideIdentifier: string | null | undefined,
 ): unknown {
-	if (registry.owns(section)) return resolveRegisteredValue(state, section, overrideIdentifier);
+	if (state.values.has(section)) return resolveRegisteredValue(state, section, overrideIdentifier);
 	const result: Record<string, unknown> = {};
 	let found = false;
-	for (const key of registry.getConfigurations()) {
+	for (const key of state.values.keys()) {
 		if (!key.startsWith(`${section}.`)) continue;
 		setConfigurationValue(result, key.slice(section.length + 1), resolveRegisteredValue(state, key, overrideIdentifier));
 		found = true;

@@ -7,11 +7,59 @@ The cross-layer direction and installation boundary are documented in
 [`docs/editor-extensions.md`](../docs/editor-extensions.md).
 
 API v1 supports commands, hover and completion providers, ordered document events, diagnostics, immutable editor document snapshots, bounded UTF-8 workspace file
-reads, notifications and Quick Pick. Register commands and providers during activation and put their disposables
+reads, notifications, Quick Pick, Task providers, Debug configuration providers, executable/server/pipe descriptors and adapter tracker factories. Register commands and providers during activation and put their disposables
 in `context.subscriptions`. Each callback receives a context bound to its own invocation; do not retain
 it for background calls after the command returns. Command IDs and callback JSON results are bounded
-by the shared host protocol. Disposing a registration immediately makes its callback unavailable;
-the activation's advertised registration set is replaced when the host deactivates or restarts.
+by the shared host protocol. Disposing a registration revokes new callbacks; tracker factories retain hooks owned by active sessions.
+The activation's advertised registration set is replaced when the host deactivates or restarts.
+
+`tasks.registerTaskProvider(id, type, provider)` advertises `taskProvider` and supports
+`provideTasks` plus dispatch-time `resolveTask`. Descriptors contain process argv, shell
+command lines or structured quoted arguments, optional shell executable/arguments/quoting,
+cwd, env, definitions, background state and matchers. Groups preserve build, test, clean and
+rebuild identity plus the optional `groupIsDefault` flag in discovery, resolution and events.
+Environment values may be strings
+or null removals. Custom descriptors
+reference `createTaskTerminal` callbacks: the host owns opaque PTY handles and bounded
+event queues; the Terminal owns rendering, input and task state. Open, read, input,
+resize and close are invocation-bound operations. Provider disposal releases every
+PTY even if one disposer fails. Declare `taskProvider` capability.
+
+`debug.registerDebugAdapterDescriptorFactory(id, type, factory)` advertises `debugAdapter`.
+Callbacks return an executable program, literal arguments and optional cwd/env,
+or `{ connection: { type: 'server', port, host? } }` / `{ connection: { type: 'namedPipe', path } }`.
+Connected descriptors cannot include executable options. The existing Debug transport
+owner validates and launches or connects; the extension receives no raw socket.
+Inline callbacks return `{ implementation }` with `onDidSendMessage`,
+`handleMessage(context, message)` and `dispose(context?)`. The SDK owns up to eight
+opaque handles, snapshots messages at emission and bounds their queue to 512 messages
+and 256 KiB. Send/read/close remain finite invocation-bound operations; DebugAdapterSession
+owns protocol state and awaits listener/implementation cleanup before ending the session.
+Factory disposal retains handles already in use, and deactivation releases every handle.
+The cleanup context is present for explicit session close; deactivation provides no service
+authority. Declare `debugAdapter` capability. Node modules remain unavailable.
+
+`debug.registerDebugAdapterTrackerFactory(id, type, factory)` advertises
+`debugAdapterTracker` under the same capability. `*` observes all adapter types;
+multiple factories may register the same type. An asynchronous factory receives the
+prepared session snapshot and returns optional lifecycle/message hooks. Every hook
+receives its own invocation context before its public arguments. Factory disposal
+stops new creation and keeps existing tracker handles until exit or cleanup. Sending
+waits for `onWillReceiveMessage`; ordered `onDidSendMessage` delivery leaves the DAP
+reader free for callback custom requests. The receive queue permits 2,048 pending
+messages; overflow stops message observation and reports an error. Stop precedes
+process close; exit follows acknowledgement and preserves unknown code/signal.
+All factories share a one-second creation deadline; late handles are released.
+
+`debug.registerDebugConfigurationProvider(id, type, provider, triggerKind?)` advertises
+`debugConfigurationProvider` under the same `debugAdapter` capability. Optional callbacks
+provide initial templates or resolve configuration before/after variable substitution.
+Folder metadata contains the canonical URI, name and index. Initial (1) templates create
+launch.json; Dynamic (2) configurations appear in Select and Start Debugging without
+being saved to launch.json. Both kinds resolve launches. Undefined cancels startup; null
+also opens the selected workspace folder's launch.json. The Host result envelope preserves
+the distinction in both phases. The Debug owner validates results and cancels pending
+callbacks when the registration retires.
 
 There is no `require`, `process`, Node module access, direct filesystem/network access, Electron,
 DOM, arbitrary command execution or raw App Server connection. Node-dependent packages require
@@ -35,7 +83,11 @@ for an editor without a resource. Positions and ranges use zero-based `line` and
 the SDK converts them to the transport format and rejects positions outside the snapshot or reversed ranges.
 Return `undefined` for no result, or `{ contents, range? }` with text or language-tagged code blocks.
 The editor owns rendering and accessible hover controls. Disposal rejects new calls to the provider;
-cancelling an invocation retires the entire extension isolate and recovery creates a fresh instance.
+each invocation exposes `call.cancellationToken`, with an event and a current cancellation flag.
+A cooperative callback can release its local resources and return after cancellation while other calls
+keep running in the same isolate. Cancelled calls lose service authority immediately, including queued
+child requests. Ignoring cancellation, exceeding a deadline, or losing activation authority retires the
+isolate; recovery creates a fresh instance.
 
 `languages.registerCompletionProvider(id, languageIds, provider, triggerCharacters?)` receives the same
 immutable document snapshot and UTF-16 position, plus the invocation, trigger-character or incomplete-refresh
@@ -106,6 +158,10 @@ OS confinement on macOS or 64-bit Windows. The immutable compiled SSH module als
 systems with the same V8 budgets and execution deadlines; it cannot load external package code. Compatible Open VSX bundles have separate explicit execution
 consent, documented in [the extension system](../docs/editor-extensions.md#06-已支持的-vs-code-javascript-接口).
 Independent executables do not gain JS admission. The trusted development launcher remains for explicitly trusted local verification.
+
+A Debug descriptor factory may return `undefined` or `null`; the SDK encodes either
+as JSON `null`. The Debug owner rejects startup without falling back to a package
+executable, and releases the prepared session.
 
 `workspace.registerRemoteAuthorityResolver(prefix, resolver)` registers a standard endpoint resolver.
 Its `resolve(authority, { resolveAttempt })` returns `new ResolvedAuthority(host, port, connectionToken)`

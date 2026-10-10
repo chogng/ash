@@ -11,6 +11,10 @@ export class DisconnectedTerminalProcessService implements ITerminalProcessServi
 		return this.unavailable("terminal.listProfiles");
 	}
 
+	getEnvironment(_names: readonly string[], _dirId?: string): Promise<Readonly<Record<string, string>>> {
+		return this.unavailable("terminal.getEnvironment");
+	}
+
 	create(_options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
 		return this.unavailable("terminal.create");
 	}

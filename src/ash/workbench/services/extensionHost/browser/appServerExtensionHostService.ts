@@ -1,11 +1,17 @@
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { localize } from '../../../../nls.js';
+import { IExtensionService } from '../../extensions/common/extensionService.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
 import { ILifecycleService, LifecyclePhase } from '../../lifecycle/common/lifecycle.js';
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
-import { getErrorMessage } from "../../../../base/common/errors.js";
+import { CancellationError, getErrorMessage } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CommandRegistry } from "../../../../platform/commands/common/commands.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type ExtensionHostActivationEvent } from "../../../../platform/extensionHost/common/extensionHostApi.js";
+import { createExtensionHostInitialization, IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type ExtensionHostActivationEvent } from "../../../../platform/extensionHost/common/extensionHostApi.js";
 import type { AppServerConnectionState } from "../../../../platform/agentHost/common/appServerApi.js";
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from "../../output/common/output.js";
 import { MainThreadExtensionApi, type ExtensionApiIssue } from "../../../api/browser/mainThreadExtensionApi.js";
@@ -43,11 +49,15 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		@IOutputService output: IOutputService,
 		@IModelService private readonly models: IModelService,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@IExtensionService extensions: IExtensionService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super();
 		const timeout = normalizeTimeout(invocationTimeoutMillis);
 		this.fleetOutput = this._register(output.createChannel({ id: "extension-host", label: "Extension Host", kind: "log", source: "core" }));
 		this.extensionApi = this._register(instantiationService.createInstance(MainThreadExtensionApi, commands, timeout, this.fleetOutput));
+		this._register(extensions.registerActivationHandler((event, signal) => this.activateByEvent(event, signal)));
 		this._register(models.onModelAdded(() => this.activateEditorEvents()));
 		this._register(models.onModelLanguageChanged(() => this.activateEditorEvents()));
 		void lifecycle.when(LifecyclePhase.Restored).then(() => this.activateEditorEvents());
@@ -209,21 +219,53 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== 'dormant') { continue; }
 			const language = [...languages].find(id => runtime.activation!.events.includes('onLanguage') || runtime.activation!.events.includes(`onLanguage:${id}`));
-			if (language) { this.activateRuntime(runtime, { type: 'language', languageId: language }); }
-			else if (this.lifecycle.phase >= LifecyclePhase.Restored && runtime.activation!.events.includes('onStartupFinished')) { this.activateRuntime(runtime, { type: 'startupFinished' }); }
+			if (language) { void this.activateRuntime(runtime, { type: 'language', languageId: language }).catch(reportExtensionHostError); }
+			else if (runtime.activation!.events.includes('*') || this.lifecycle.phase >= LifecyclePhase.Restored && runtime.activation!.events.includes('onStartupFinished')) { void this.activateRuntime(runtime, { type: 'startupFinished' }).catch(reportExtensionHostError); }
 		}
 	}
 
-	private activateRuntime(runtime: ExtensionHostRuntime, event: ExtensionHostActivationEvent): void {
-		const key = `${runtime.id}:${runtime.activationGeneration}`;
-		if (this.pendingActivations.has(key)) { return; }
+	private async activateByEvent(event: string, signal?: AbortSignal): Promise<void> {
+		this.assertNotDisposed();
+		if (signal) throwIfCancelled(signal);
 		const revision = this.authorityRevision;
-		const pending = this.api.activateByEvent({ extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event }).then(snapshot => {
+		// A plugin mutation can precede its notification. Discover dormant owners
+		// from current authority before selecting an activation fence.
+		await this.reload();
+		if (signal) throwIfCancelled(signal);
+		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
+		const snapshot = await this.api.list();
+		if (signal) throwIfCancelled(signal);
+		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
+		if (snapshot.generation < this.snapshot.fleetGeneration) throw new CancellationError();
+		this.acceptSnapshot(snapshot);
+		const activations = snapshot.extensions.flatMap(runtime => {
+			if (runtime.lifecycle !== 'dormant') return [];
+			const activation = selectActivationEvent(runtime.activation!.events, event);
+			return activation ? [this.activateRuntime(runtime, activation)] : [];
+		});
+		const operation = Promise.all(activations);
+		await (signal ? raceCancellationError(operation, signal) : operation);
+		if (signal) throwIfCancelled(signal);
+		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
+	}
+
+	private activateRuntime(runtime: ExtensionHostRuntime, event: ExtensionHostActivationEvent): Promise<void> {
+		const key = `${runtime.id}:${runtime.activationGeneration}`;
+		const existing = this.pendingActivations.get(key);
+		if (existing) { return existing; }
+		const revision = this.authorityRevision;
+		const pending = this.api.activateByEvent({
+			extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event, initialization: createExtensionHostInitialization(this.workspace, this.configuration)
+		}).then(snapshot => {
 			if (!this.isDisposed && this.started && this.connectionReady && revision === this.authorityRevision && snapshot.generation >= this.snapshot.fleetGeneration) { this.acceptSnapshot(snapshot); }
+			const activated = snapshot.extensions.find(extension => extension.id === runtime.id && extension.activationGeneration === runtime.activationGeneration);
+			if (activated?.lifecycle !== 'ready') throw new Error(localize('extensionHost.activationFailed', "Extension '{0}' failed to activate: {1}", runtime.id, activated?.failure?.message ?? activated?.lifecycle ?? 'unavailable'));
 		}).catch(error => {
 			if (!this.isDisposed && this.started && revision === this.authorityRevision) { this.failureEmitter.fire({ extensionId: runtime.id, code: 'activationFailed', incarnation: undefined, message: errorMessage(error) }); }
+			throw error;
 		}).finally(() => { if (this.pendingActivations.get(key) === pending) { this.pendingActivations.delete(key); } });
 		this.pendingActivations.set(key, pending);
+		return pending;
 	}
 
 	private publishSnapshotFailures(snapshot: ExtensionHostFleetSnapshot, issues: readonly ExtensionApiIssue[]): void {
@@ -254,6 +296,24 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		this.stateEmitter.fire(state);
 	}
 
+}
+
+function selectActivationEvent(declarations: readonly string[], event: string): ExtensionHostActivationEvent | undefined {
+	if (event === 'onTaskType' || event.startsWith('onTaskType:')) {
+		const requested = event === 'onTaskType' ? undefined : event.slice('onTaskType:'.length);
+		const declared = declarations.find(value => value.startsWith('onTaskType:'));
+		const matches = declarations.includes('onTaskType') || declarations.includes('onDemand:taskProvider') || (requested ? declarations.includes(event) : declared !== undefined);
+		if (matches) {
+			return { type: 'taskType', taskType: requested ?? declared?.slice('onTaskType:'.length) ?? null };
+		}
+		return undefined;
+	}
+	const phases = { onDebug: 'start', onDebugInitialConfigurations: 'initialConfigurations', onDebugDynamicConfigurations: 'dynamicConfigurations', onDebugResolve: 'resolveConfiguration' } as const;
+	const [name, debugType] = event.split(':', 2);
+	if (!name || !Object.hasOwn(phases, name)) return undefined;
+	const declaredType = !debugType && name === 'onDebugDynamicConfigurations' ? declarations.find(value => value.startsWith(`${name}:`))?.slice(name.length + 1) : undefined;
+	if (!declarations.includes(event) && !declarations.includes(name) && !declarations.includes('onDemand:debugAdapter') && !(debugType && declarations.includes(`onDebugType:${debugType}`)) && !declaredType) return undefined;
+	return { type: 'debug', phase: phases[name as keyof typeof phases], debugType: debugType ?? declaredType ?? null };
 }
 
 function projectSnapshot(snapshot: ExtensionHostFleetSnapshot): ExtensionHostSnapshot {

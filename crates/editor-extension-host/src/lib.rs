@@ -57,6 +57,7 @@ pub use process::TrustedDevelopmentLauncher;
 pub use restart::RestartDecision;
 pub use restart::RestartPolicy;
 pub use restart::RestartTracker;
+pub use supervisor::ExtensionBackgroundClientHandler;
 pub use supervisor::ExtensionHostSnapshot;
 pub use supervisor::ExtensionHostStatus;
 pub use supervisor::ExtensionHostSupervisor;

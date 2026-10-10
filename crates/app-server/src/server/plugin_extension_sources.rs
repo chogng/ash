@@ -1,9 +1,10 @@
 use ash_core_plugins::PluginActivationAuthority;
+use ash_plugin::EditorExtensionApi;
 use extension_catalog::DynamicExtensionPackageSource;
 use extension_catalog::DynamicExtensionSourceProvider;
 use extension_catalog::DynamicExtensionSourceSnapshot;
 
-/// Projects exact effective Plugin declarative Extension packages into the static catalog.
+/// Selects declarative and standard API package manifests from the same effective Plugin snapshot.
 pub(super) struct PluginExtensionSourceProvider {
     authority: PluginActivationAuthority,
 }
@@ -19,6 +20,20 @@ impl DynamicExtensionSourceProvider for PluginExtensionSourceProvider {
         let activation = self.authority.snapshot().activation().clone();
         let mut packages = Vec::new();
         for package in activation.packages() {
+            if let Some(contribution) = package
+                .manifest()
+                .contributions
+                .editor_extensions
+                .iter()
+                .find(|contribution| contribution.api == EditorExtensionApi::Vscode)
+            {
+                // The standard module and its declarations share this immutable package root;
+                // discovery must not require another independently enabled contribution.
+                packages.push(DynamicExtensionPackageSource::plugin(
+                    format!("{}:{}", package.manifest().id, contribution.id.as_str()),
+                    package.package_root(),
+                ));
+            }
             for contribution in &package.manifest().contributions.declarative_extensions {
                 let root = package
                     .resolve_directory(&contribution.path)

@@ -4,6 +4,7 @@ import type { IEditorGroup } from '../../../services/editor/common/editorGroupsS
 import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import type { EditorGroupId, EditorInstanceId } from '../../../services/editor/common/editorState.js';
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
+import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 
 /** Shared presentation marker for editor tabs connected to their pane. */
 export const CONNECTED_EDITOR_TABS_CLASS = "ash-connected-editor-tabs";
@@ -13,6 +14,7 @@ export const CONNECTED_EDITOR_TABS_SELECTOR = `.${CONNECTED_EDITOR_TABS_CLASS}`;
 export interface IEditorGroupView extends IEditorGroup {
 	readonly domNode: HTMLElement;
 	readonly activePane: IEditorPane | undefined;
+	saveEditor(input: IResourceEditorInput, options?: ISaveEditorsOptions): Promise<IResourceEditorInput | undefined>;
 	saveEditorViewState(input: IResourceEditorInput): SerializedEditorViewState | undefined;
 	restoreEditorViewState(input: IResourceEditorInput, state: SerializedEditorViewState | undefined): boolean;
 	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, instanceId?: EditorInstanceId): Promise<IEditorPane>;
