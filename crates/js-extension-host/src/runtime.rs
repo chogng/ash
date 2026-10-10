@@ -150,7 +150,12 @@ pub(crate) fn run(package: Package, confinement: Option<MemoryLimits>) -> Result
             .array_buffer_allocator(v8_runtime::bounded_array_buffer_allocator(memory.1))
             .heap_limits(0, memory.0),
     );
-    if confinement.is_some() {
+    // Portable product modules are compiled into this executable and cannot load package files.
+    // Installed code always requires OS confinement; supported platforms confine product code too.
+    if confinement.is_some()
+        && (package.origin == crate::package::PackageOrigin::Installed
+            || cfg!(any(target_os = "macos", windows)))
+    {
         crate::isolation::restrict_javascript_process()?;
     }
     let handle = isolate.thread_safe_handle();
