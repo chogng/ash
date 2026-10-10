@@ -61,6 +61,8 @@ if (new URLSearchParams(location.search).has('breakpoints')) {
 let activeInput: IResourceEditorInput | undefined;
 const openedSources: unknown[] = [];
 const editors: IEditorService = {
+	save: async () => { throw new Error('Saving is outside this fixture'); },
+	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, get activeEditor() { return activeInput; }, visibleEditors: [],
 	openEditor: async (_input, options?: EditorOpenOptions) => {
 		activeInput = _input;

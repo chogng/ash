@@ -4,8 +4,9 @@ import { build } from 'vite';
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
 
-test('keeps the generated App Server decoder separate from shared renderer code', async () => {
+test('keeps generated App Server schema modules separate from the decoder and shared renderer code', async () => {
 	const decoder = 'fixture/.build/protocol/typescript/AppServerProtocolDecoder.ts';
+	const schemas = [0, 1, 2].map(index => `fixture/.build/protocol/typescript/AppServerProtocolSchema${index}.ts`);
 	const sharedService = 'fixture/sharedService.ts';
 	const source = `import { schema } from '${decoder}';\nimport { service } from '${sharedService}';\nglobalThis.fixture = [schema, service];`;
 	const result = await build({
@@ -13,10 +14,12 @@ test('keeps the generated App Server decoder separate from shared renderer code'
 		logLevel: 'silent',
 		plugins: [{
 			name: 'fixture',
-			resolveId(id) { return id === 'browser-entry' || id === 'desktop-entry' || id === decoder || id === sharedService ? `\0/${id}` : undefined; },
+			resolveId(id) { return id === 'browser-entry' || id === 'desktop-entry' || id === decoder || id === sharedService || schemas.includes(id) ? `\0/${id}` : undefined; },
 			load(id) {
 				if (id === '\0/browser-entry' || id === '\0/desktop-entry') return source;
-				if (id === `\0/${decoder}`) return `export const schema = ${JSON.stringify('s'.repeat(460_000))};`;
+				if (id === `\0/${decoder}`) return schemas.map((schema, index) => `import { definitions as definitions${index} } from '${schema}';`).join('\n') + '\nexport const schema = [definitions0, definitions1, definitions2];';
+				const index = schemas.findIndex(schema => id === `\0/${schema}`);
+				if (index >= 0) return `export const definitions = ${JSON.stringify(String(index).repeat(200_000))};`;
 				if (id === `\0/${sharedService}`) return `export const service = ${JSON.stringify('v'.repeat(80_000))};`;
 				return undefined;
 			},
@@ -28,6 +31,10 @@ test('keeps the generated App Server decoder separate from shared renderer code'
 	const protocol = chunks.find(chunk => chunk.fileName.startsWith('assets/app-server-protocol-'));
 	assert.ok(protocol);
 	assert.deepEqual(Object.keys(protocol.modules), [`\0/${decoder}`]);
+	const schemaChunks = chunks.filter(chunk => chunk.fileName.startsWith('assets/AppServerProtocolSchema'));
+	assert.equal(schemaChunks.length, schemas.length);
+	assert.deepEqual(schemaChunks.flatMap(chunk => Object.keys(chunk.modules)).sort(), schemas.map(schema => `\0/${schema}`).sort());
+	assert.ok(schemaChunks.every(chunk => Object.keys(chunk.modules).length === 1));
 	assert.ok(chunks.every(chunk => Buffer.byteLength(chunk.code) <= 500_000));
 });
 

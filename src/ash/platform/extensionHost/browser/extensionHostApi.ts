@@ -365,6 +365,10 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			if (operation.operation === 'readWorkspaceFile') {
 				throw new Error('Workspace file requests must be handled by App Server');
 			}
+			// Core HTTP and secret services belong to the backend's authorized extension scope.
+			if (operation.operation === 'coreService') {
+				throw new Error('Core service requests must be handled by App Server');
+			}
 			const request = operation.operation === 'addDebugBreakpoints' ? { ...operation, breakpoints: operation.breakpoints.map(normalizeExtensionHostPayload) }
 				: operation.operation === 'startDebugging' ? { ...operation, configuration: normalizeExtensionHostPayload(operation.configuration) }
 					: operation.operation === 'debugCustomRequest' ? { ...operation, arguments: normalizeExtensionHostPayload(operation.arguments) }

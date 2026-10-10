@@ -1021,6 +1021,29 @@ test('extension disk requests are rejected before reaching a renderer service', 
 	} finally { registration.dispose(); }
 });
 
+for (const request of [
+	{ service: 'secretLoad', key: 'token' },
+	{ service: 'httpExecute', method: 'get', url: 'https://api.github.com/user', headers: [], body: [] },
+] as const) {
+	test(`extension coreService ${request.service} requests are rejected before reaching a renderer service`, async () => {
+		const transport = new FakeTransport();
+		const connected = await connectWebRendererApi(transport, connectorHostServices);
+		using cleanup = toDisposable(() => connected.dispose());
+		let calls = 0;
+		const registration = connected.api.extensionHost.registerClientHandler(async () => {
+			calls += 1;
+			return { result: 'done' };
+		});
+		try {
+			transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-core-service', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'coreService', request } } }) });
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(calls, 0);
+			assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Core service requests must be handled by App Server', data: null });
+			assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
+		} finally { registration.dispose(); }
+	});
+}
+
 test('file glob uses the shared backend and maps root-relative paths to renderer resources', async () => {
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);

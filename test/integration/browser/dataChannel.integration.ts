@@ -30,7 +30,6 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public readonly delivery = document.createElement('output');
 	public readonly uriDelivery = document.createElement('output');
 	public isAvailable(): Promise<boolean> { return Promise.resolve(true); }
-	public start(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Fleet startup is outside this preinitialized fixture'); }
 	public list(): Promise<ExtensionHostFleetSnapshot> {
 		return Promise.resolve(normalizeExtensionHostSnapshot({
 			generation: this.incarnation, extensions: [{
@@ -44,6 +43,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 			}]
 		}));
 	}
+	public start(): Promise<ExtensionHostFleetSnapshot> { return this.list(); }
 	public reconcile(): Promise<ExtensionHostFleetSnapshot> { return this.list(); }
 	public activateByEvent(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Activation is outside this fixture'); }
 	public getConnectionState(): Promise<AppServerConnectionState> { return Promise.resolve(this.state); }

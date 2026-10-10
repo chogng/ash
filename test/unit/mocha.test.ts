@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { join, relative, resolve } from 'node:path';
 import { after, test } from 'node:test';
 
@@ -33,6 +34,14 @@ function run(args: readonly string[], entrypoint = 'test/unit/run.ts'): { status
 	if (result.error) { throw result.error; }
 	return { status: result.status, output: result.stdout + result.stderr };
 }
+
+test('unit runner sources use syntax supported by Node type stripping', () => {
+	// The typecheck also follows frontend type imports whose implementations are
+	// compiled separately. Node's syntax restriction belongs to the runner files.
+	for (const file of readdirSync(import.meta.dirname).filter(file => file.endsWith('.ts'))) {
+		assert.doesNotThrow(() => stripTypeScriptTypes(readFileSync(join(import.meta.dirname, file), 'utf8')), file);
+	}
+});
 
 test('a missing required file fails even when another required file exists', () => {
 	const result = run([], requiredRunner);

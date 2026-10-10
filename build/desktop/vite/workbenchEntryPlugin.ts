@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { normalizePath, type Connect, type Plugin } from "vite";
 import type { ICSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
@@ -32,6 +32,7 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 	const inputFilter = inputs.size ? new RegExp(`^(?:${[...inputs.keys()].map(path => path.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('|')})$`, 'u') : undefined;
 	let root: string;
 	let development = false;
+	let preserveSymlinks = false;
 	async function readPage(page: ProductPage): Promise<string> {
 		if ('html' in page) { return page.html; }
 		const html = await readFile(page.sourceFile, 'utf8');
@@ -46,18 +47,21 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 		configResolved(config) {
 			root = config.root;
 			development = config.command === 'serve';
+			preserveSymlinks = config.resolve.preserveSymlinks;
 		},
 		transformIndexHtml: {
 			order: 'pre',
 			async handler(html) {
 				if (!development || !cssDevelopment?.service.isEnabled) return html;
-				const modules = (await cssDevelopment.service.getCssModules()).map(module => {
-					const file = resolve(cssDevelopment.sourceRoot, module);
+				const modules = await Promise.all((await cssDevelopment.service.getCssModules()).map(async module => {
+					const source = resolve(cssDevelopment.sourceRoot, module);
+					// Match Vite's resolved module identity, including symlinked source roots.
+					const file = preserveSymlinks ? source : await realpath(source);
 					const path = normalizePath(relative(root, file));
 					const url = path.startsWith('../') ? `/@fs/${normalizePath(file).replace(/^\/+/, '')}` : `/${path}`;
 					const encoded = encodeURI(url).replaceAll('#', '%23').replaceAll('?', '%3F');
 					return { specifiers: [encoded, `${encoded}?import`], stylesheet: `${encoded}?direct` };
-				});
+				}));
 				const template = await readFile(resolve(import.meta.dirname, '../../../src/ash/code/browser/workbench/workbench-dev.html'), 'utf8');
 				// Escape HTML delimiters before putting source paths in an executable page.
 				const prelude = template.replace('{{WORKBENCH_DEV_CSS_MODULES}}', JSON.stringify(modules).replaceAll('<', '\\u003c'));

@@ -9,7 +9,8 @@ import { desktopBuildPath } from './paths.ts';
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = repositoryRoot;
 const outputRoot = desktopBuildPath(repositoryRoot);
-const compiler = join(sourceRoot, 'node_modules/typescript/bin/tsc');
+// Invoke TS7's Node launcher, which selects the installed platform executable.
+const compiler = join(sourceRoot, 'node_modules/@ash/typescript-compiler/bin/tsc');
 const preload = join(outputRoot, 'preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs');
 const projects = ['tsconfig.main.json', 'tsconfig.preload.json'] as const;
 

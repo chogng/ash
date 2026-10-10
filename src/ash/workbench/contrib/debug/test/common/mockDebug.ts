@@ -6,7 +6,11 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
-import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
+import { ModelService } from '../../../../../editor/common/services/modelService.js';
+import { LanguageService } from '../../../../../editor/common/services/languageService.js';
+import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
+import { TextModelResolverService } from '../../../../services/textmodelResolver/common/textModelResolverService.js';
 import { DebugContentProvider } from '../../common/debugContentProvider.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { IDebugAdapterTrackerFactory, DebugAdapterTrackerFactoryRegistration, DebugConfiguration, DebugConfigurationProviderRegistration, IDebugConfigurationProvider } from '../../../../services/debug/common/debugService.js';
@@ -207,13 +211,21 @@ export class DebugViewTestServices extends Disposable {
 	}
 
 	public register(services: ServiceCollection): ServiceCollection {
-		const modelServices = this._register(workbenchInstantiationService());
+		// This fixture also runs in a real browser; model resolution must not load jsdom or editor widgets.
+		const configuration = this._register(new WorkbenchConfigurationService());
+		const languages = this._register(new LanguageService());
+		const models = this._register(new ModelService(configuration, { _serviceBrand: undefined, getEOL: () => '\n' }, languages));
 		const identity = this._register(new TestUriIdentityServices());
+		const fileModels = this._register(identity.createInstance(BrowserTextModelService, {
+			onDidChange: Event.None,
+			resolve: async () => { throw new Error('Filesystem acquisition is outside this Debug scenario'); },
+			save: async () => { throw new Error('Filesystem acquisition is outside this Debug scenario'); },
+		}, {}));
 		services.set(IUriIdentityService, identity.get(IUriIdentityService));
 		services.set(ILogService, new NullLoggerService());
-		services.set(IModelService, modelServices.get(IModelService));
-		services.set(ILanguageService, modelServices.get(ILanguageService));
-		services.set(ITextModelService, modelServices.get(ITextModelService));
+		services.set(IModelService, models);
+		services.set(ILanguageService, languages);
+		services.set(ITextModelService, new TextModelResolverService(fileModels));
 		const providerServices = this._register(new InstantiationService(services));
 		services.set(ICommandService, this._register(new CommandService(providerServices)));
 		this._register(providerServices.createInstance(DebugContentProvider));

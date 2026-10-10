@@ -131,7 +131,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.deepEqual(await Promise.all(outputs.map(async file => (await stat(join(generated, file), { bigint: true })).mtimeNs)), before);
 	for (const target of ['main', 'test']) {
 		const output = `.build/desktop/${target}`;
-		run([join(repository, 'node_modules/typescript/bin/tsc'), '--module', 'NodeNext', '--target', 'ES2022', '--rootDir', '.', '--outDir', output, '--types', 'node', '--skipLibCheck', entry]);
+		run([join(repository, 'node_modules/@ash/typescript-compiler/bin/tsc'), '--module', 'NodeNext', '--target', 'ES2022', '--rootDir', '.', '--outDir', output, '--types', 'node', '--skipLibCheck', entry]);
 		const catalogs = JSON.parse(run(['--input-type=module', '--eval', `import { builtinLanguagePackCatalogs } from './${output}/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify(builtinLanguagePackCatalogs.map(catalog => [catalog.locale, catalog.bundles.ash.hello])));`]));
 		assert.deepEqual(catalogs, [['en', 'Hello'], ['zh-CN', '你好']]);
 	}

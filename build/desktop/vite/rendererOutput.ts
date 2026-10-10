@@ -9,8 +9,12 @@ export const rendererOutput: Rolldown.OutputOptions = {
 			// Languages grow independently; keep each catalog separate from Workbench code and other languages.
 			test: id => /\/\.build\/desktop\/localization\/localizationCatalog\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),
 		}, {
+			name: id => id.replaceAll('\\', '/').split('/').at(-1)!.slice(0, -3),
+			// Generated schema modules have their own byte budget; keep their data independently splittable.
+			test: id => /\/\.build\/protocol\/typescript\/AppServerProtocolSchema\d+\.ts$/u.test(id.replaceAll('\\', '/')),
+		}, {
 			name: 'app-server-protocol',
-			// The generated validator is shared by both renderers and nearly fills one output chunk.
+			// Keep the shared decoder separate from Workbench contributions and validation data.
 			test: id => id.replaceAll('\\', '/').endsWith('/.build/protocol/typescript/AppServerProtocolDecoder.ts'),
 		}, {
 			name: 'shared',

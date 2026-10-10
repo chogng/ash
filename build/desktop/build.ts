@@ -5,7 +5,8 @@ import { generateProtocol } from '../protocol/generate.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = resolve(repositoryRoot, '.');
-const compiler = resolve(sourceRoot, 'node_modules/typescript/bin/tsc');
+// The compiler alias supplies TS7; `typescript` remains the TS6 API used by build tools.
+const compiler = resolve(sourceRoot, 'node_modules/@ash/typescript-compiler/bin/tsc');
 const bundler = resolve(repositoryRoot, 'build/node_modules/vite/bin/vite.js');
 const config = resolve(import.meta.dirname, 'vite/vite.config.ts');
 const [command = 'all', ...extra] = process.argv.slice(2);

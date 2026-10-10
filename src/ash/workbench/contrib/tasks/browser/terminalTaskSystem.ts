@@ -18,7 +18,7 @@ import { type IOutputChannel, type OutputEntrySeverity } from '../../../services
 import { ShellQuoting, type ITaskRun, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../../../services/tasks/common/taskService.js';
 import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalService } from '../../terminal/browser/terminal.js';
 import { parseShellExecution } from '../../../services/tasks/common/workspaceTasks.js';
-import { parseProblemMatchers, type ProblemMatcher } from '../common/problemMatcher.js';
+import { parseProblemMatchers, type ProblemMatcher } from '../../../services/tasks/common/problemMatcher.js';
 import { WatchingProblemCollector } from '../common/problemCollectors.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';

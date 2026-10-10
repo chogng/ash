@@ -4,7 +4,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { URI } from '../../../../../base/common/uri.js';
 import { MarkerService } from '../../../../../platform/markers/common/markers.js';
 import { WatchingProblemCollector } from '../../common/problemCollectors.js';
-import { parseProblemMatchers, registerProblemMatcherContributions } from '../../common/problemMatcher.js';
+import { parseProblemMatchers, registerProblemMatcherContributions } from '../../../../services/tasks/common/problemMatcher.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';

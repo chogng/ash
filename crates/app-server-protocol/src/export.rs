@@ -275,10 +275,6 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
             generated_server_request_map(),
         ),
         (
-            PathBuf::from("AppServerProtocolDecoder.ts"),
-            typescript_decoder::generate(&schema),
-        ),
-        (
             PathBuf::from("AppServerListenInfo.ts"),
             generated_listen_info(),
         ),
@@ -290,6 +286,7 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
         (PathBuf::from("index.ts"), generated_index()),
     ];
 
+    files.extend(typescript_decoder::generate(&schema));
     for binding in TYPESCRIPT_BINDINGS {
         files.push((
             PathBuf::from("types").join(binding_output_path(binding)),

@@ -8,7 +8,7 @@ import test from 'node:test';
 test('Desktop build stops at the failed host or renderer step before bundling', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-build-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
-	for (const directory of ['build/protocol', 'build/resources', 'build/desktop', 'build/lib', 'build/node_modules/vite/bin', 'node_modules/typescript/bin']) {
+	for (const directory of ['build/protocol', 'build/resources', 'build/desktop', 'build/lib', 'build/node_modules/vite/bin', 'node_modules/@ash/typescript-compiler/bin']) {
 		await mkdir(join(root, directory), { recursive: true });
 	}
 	for (const file of ['build/desktop/build.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts']) {
@@ -17,7 +17,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 	await writeFile(join(root, 'build/protocol/generate.ts'), `import { appendFile } from 'node:fs/promises'; export async function generateProtocol() { await appendFile(new URL('../../operations.log', import.meta.url), 'protocol\\n'); if (process.env.FAILURE === 'protocol') throw new Error('export failed'); }`);
 	await writeFile(join(root, 'build/resources/localization.ts'), `import { appendFile } from 'node:fs/promises'; export async function generateLocalization() { await appendFile(new URL('../../operations.log', import.meta.url), 'localization\\n'); }`);
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
-	await writeFile(join(root, 'node_modules/typescript/bin/tsc'), `
+	await writeFile(join(root, 'node_modules/@ash/typescript-compiler/bin/tsc'), `
     const fs = require('node:fs');
     const path = require('node:path');
     for (const project of process.argv.filter(value => value.startsWith('tsconfig.'))) {

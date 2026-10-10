@@ -225,6 +225,7 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/README.md)和 [Code 构建](../build/code/README.md)。
 
 `just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
+类型检查、Electron 主进程/preload 编译和开发 watch 使用 TypeScript 7.0.2。工作区将编译器固定在 `@ash/typescript-compiler` npm 别名下，`pnpm exec tsc` 和现有构建/测试脚本均调用 TS7。`typescript` 别名保留 `@typescript/typescript6@6.0.2` 兼容包提供的 TS6 JavaScript API，供本地化提取、热更新分析、格式化和架构测试使用；它提供独立的 `tsc6` 命令。升级时同步根目录和 `build/` 的编译器/API 依赖、`test/scenario/` 的编译器依赖及锁文件，并验证 host watch 的失败与恢复、preload 导入限制和 Web/Electron 启动。
 
 前端与构建工具直接消费 `.build/protocol/typescript/` 的共享生成协议，产物不提交到 Git。正常前端、Rust Just 和打包入口自动准备协议：优先复用本地缓存或源码匹配的后端包，缺少匹配产物时需要 Rust 工具链重新生成。修改后端协议后可运行 `just generate-protocol`，再运行 `pnpm typecheck:protocol`；直接 Cargo 构建前必须先准备。协议生成器与开发后端统一使用 `dev-small` profile，复用相同配置的依赖产物；生成器的 `export` feature 仍保留独立编译变体。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
 

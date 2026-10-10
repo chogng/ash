@@ -4,7 +4,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
 import { MarkerSeverity, type IMarkerService, type MarkerInput } from '../../../../platform/markers/common/markers.js';
-import type { ProblemMatcher } from './problemMatcher.js';
+import type { ProblemMatcher } from '../../../services/tasks/common/problemMatcher.js';
 
 interface MatcherState {
 	readonly matcher: ProblemMatcher;

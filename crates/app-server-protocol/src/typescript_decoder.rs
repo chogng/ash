@@ -2,8 +2,9 @@ use serde_json::Map;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 
-pub(crate) fn generate(schema: &Value) -> String {
+pub(crate) fn generate(schema: &Value) -> Vec<(PathBuf, String)> {
     // The decoder validates named definitions, never the exported schema's aggregate root.
     let mut runtime_schema = serde_json::json!({ "$defs": schema["$defs"] });
     retain_decoder_definitions(&mut runtime_schema, DECODER_ROOTS);
@@ -16,13 +17,69 @@ pub(crate) fn generate(schema: &Value) -> String {
     compact_definition_names(&mut runtime_schema, DECODER_ROOTS);
     // With preserve_order, removing annotations can swap the remaining object keys.
     runtime_schema.sort_all_objects();
-    let schema =
-        serde_json::to_string(&runtime_schema).expect("protocol schema must serialize as JSON");
-    let schema_literal =
-        serde_json::to_string(&schema).expect("protocol schema JSON must serialize as a string");
-    include_str!("typescript_decoder.template.ts")
-        .replace("__PROTOCOL_SCHEMA__", &schema_literal)
-        .replace("\r\n", "\n")
+    // Keep validation data in separate modules so the renderer can split growing contracts
+    // without changing validation or putting the complete schema in one bounded chunk.
+    let definitions = runtime_schema["$defs"].as_object().unwrap();
+    let shards = schema_shards(definitions, 200_000);
+    let mut files = Vec::new();
+    let mut imports = String::new();
+    let mut spreads = Vec::new();
+    for (index, literal) in shards.into_iter().enumerate() {
+        let name = format!("AppServerProtocolSchema{index}");
+        imports.push_str(&format!(
+            "import {{ definitions as definitions{index} }} from './{name}.js';\n"
+        ));
+        spreads.push(format!(
+            "...definitions{index} as Readonly<Record<string, JsonSchema>>"
+        ));
+        files.push((
+            PathBuf::from(format!("{name}.ts")),
+            format!(
+                "{}export const definitions: unknown = JSON.parse({literal});\n",
+                crate::export::GENERATED_TYPESCRIPT_HEADER
+            ),
+        ));
+    }
+    files.push((
+        PathBuf::from("AppServerProtocolDecoder.ts"),
+        include_str!("typescript_decoder.template.ts")
+            .replace("__SCHEMA_IMPORTS__", &imports)
+            .replace("__SCHEMA_DEFINITIONS__", &spreads.join(", "))
+            .replace("\r\n", "\n"),
+    ));
+    files
+}
+
+/// Bound the encoded source, including JSON string escaping. Each definition stays intact
+/// so cross-module references continue to resolve through the decoder's single definition map.
+fn schema_shards(definitions: &Map<String, Value>, max_bytes: usize) -> Vec<String> {
+    let mut shards = Vec::new();
+    let mut entries = Vec::new();
+    let mut bytes = 4; // Encoded empty object: "{}".
+    for (name, definition) in definitions {
+        let entry = format!(
+            "{}:{}",
+            serde_json::to_string(name).unwrap(),
+            serde_json::to_string(definition).unwrap()
+        );
+        let encoded_bytes = serde_json::to_string(&entry).unwrap().len() - 2;
+        assert!(
+            encoded_bytes + 4 <= max_bytes,
+            "decoder definition {name} exceeds its module budget"
+        );
+        let separator = usize::from(!entries.is_empty());
+        if bytes + separator + encoded_bytes > max_bytes {
+            shards.push(serde_json::to_string(&format!("{{{}}}", entries.join(","))).unwrap());
+            entries.clear();
+            bytes = 4;
+        }
+        bytes += usize::from(!entries.is_empty()) + encoded_bytes;
+        entries.push(entry);
+    }
+    if !entries.is_empty() {
+        shards.push(serde_json::to_string(&format!("{{{}}}", entries.join(","))).unwrap());
+    }
+    shards
 }
 
 /// Documentation remains in the exported schema; decoding only ships validation data.

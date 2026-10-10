@@ -2885,6 +2885,8 @@ window.ashStandaloneIntegration = {
 		services.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([[callerModel.uri, 'value']]), [callerModel.uri.scheme]));
 		services.registerInstance(IDialogService, new TestDialogService());
 		services.registerInstance(IEditorService, {
+			save: async () => { throw new Error('Saving is outside this fixture'); },
+			saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 			onDidActiveEditorChange: EventUtils.None, onDidVisibleEditorsChange: EventUtils.None,
 			activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { },
 			openEditor: async input => {

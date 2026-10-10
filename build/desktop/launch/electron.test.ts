@@ -17,7 +17,7 @@ for (const profile of ['default', 'custom'] as const) {
 			// Publish complete phases so the compiler cannot read a truncated file as a valid build.
 			await rename(temporary, join(desktop, 'phase'));
 		}
-		for (const directory of ['build/desktop/launch', 'node_modules/typescript/bin', 'node_modules/electron']) {
+		for (const directory of ['build/desktop/launch', 'node_modules/@ash/typescript-compiler/bin', 'node_modules/electron']) {
 			await mkdir(join(root, directory), { recursive: true });
 		}
 		for (const name of ['build/source-layout.json', 'build/desktop/launch/electron.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/python.ts', 'build/protocol/generate.ts']) {
@@ -31,7 +31,7 @@ for (const profile of ['default', 'custom'] as const) {
       require('node:fs').appendFileSync('launches.log', JSON.stringify({ pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2), runAsNode: process.env.ELECTRON_RUN_AS_NODE, home: process.env.ASH_HOME }) + '\\n');
       setInterval(() => {}, 1000);
     `);
-		await writeFile(join(desktop, 'node_modules/typescript/bin/tsc'), `
+		await writeFile(join(desktop, 'node_modules/@ash/typescript-compiler/bin/tsc'), `
       const fs = require('node:fs');
       const path = require('node:path');
       fs.appendFileSync('compilers.log', JSON.stringify({ pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2) }) + '\\n');

@@ -11,8 +11,8 @@
     "@playwright/test": "1.61.1"
   },
   "devDependencies": {
+    "@ash/typescript-compiler": "npm:typescript@7.0.2",
     "@types/node": "^24.0.0",
-    "esbuild": "^0.27.0",
-    "typescript": "^5.9.0"
+    "esbuild": "^0.27.0"
   }
 }

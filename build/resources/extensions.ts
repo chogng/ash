@@ -11,7 +11,14 @@ const directory = resolve(root, 'extensions/theme-defaults');
 export const browserExtensionRoots = [resolve(root, 'extensions'), ...String(process.env.ASH_WEB_EXTENSION_PATHS ?? '').split(delimiter).filter(Boolean).map(path => resolve(path))];
 
 export async function prepareBrowserExtensions(): Promise<void> {
-	const packages = (await readdir(browserExtensionRoots[0], { withFileTypes: true })).filter(entry => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name)).map(entry => resolve(browserExtensionRoots[0], entry.name));
+	const packages: string[] = [];
+	for (const entry of (await readdir(browserExtensionRoots[0], { withFileTypes: true })).filter(entry => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+		const packageRoot = resolve(browserExtensionRoots[0], entry.name);
+		const files = await readdir(packageRoot);
+		// Rust capability processes are packaged separately from browser extension modules.
+		if (!files.includes('package.json') && files.includes('Cargo.toml')) { continue; }
+		packages.push(packageRoot);
+	}
 	const builtInCount = packages.length;
 	packages.push(...browserExtensionRoots.slice(1));
 	const extensions = [];

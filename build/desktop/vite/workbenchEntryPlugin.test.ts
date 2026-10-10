@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import test from "node:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { build, createServer, type Connect } from "vite";
@@ -87,46 +87,51 @@ test('Sessions HTML is served and built from its owning layer with working modul
 	}
 });
 
-test('Development pages receive CSS import maps while production keeps bundled styles', async () => {
-	const directory = await mkdtemp(join(tmpdir(), 'ash-css-development-'));
-	const root = join(directory, 'code');
-	const css = join(directory, 'shared/style.css');
-	const output = join(directory, 'output');
-	await mkdir(root);
-	await mkdir(dirname(css));
-	await writeFile(css, '.css-test { color: red; }');
-	await writeFile(join(root, 'index.html'), '<html><head></head><body><script type="module" src="./entry.ts"></script></body></html>');
-	await writeFile(join(root, 'entry.ts'), 'import "../shared/style.css";');
-	const service = new CSSDevelopmentService({ sourceRoot: directory, isBuilt: false });
-	const plugin = () => workbenchEntryPlugin(undefined, undefined, { service, sourceRoot: directory });
-	let server: Awaited<ReturnType<typeof createServer>> | undefined;
-	try {
-		server = await createServer({ configFile: false, root, plugins: [plugin()], server: { host: '127.0.0.1', port: 0 } });
-		await server.listen();
-		const address = server.httpServer!.address();
-		assert.ok(address && typeof address !== 'string');
-		const origin = `http://127.0.0.1:${address.port}`;
-		const html = await (await fetch(`${origin}/index.html`)).text();
-		assert.match(html, /ash-workbench-css-modules/u);
-		const data = /type="application\/json">\s*([^<]+)<\/script>/u.exec(html)?.[1];
-		assert.ok(data, html);
-		const modules = JSON.parse(data) as { specifiers: string[]; stylesheet: string; }[];
-		assert.equal(modules.length, 1);
-		const transformed = await (await fetch(`${origin}/entry.ts`)).text();
-		assert.ok(modules[0].specifiers.some(specifier => transformed.includes(specifier)), transformed);
-		assert.match(await (await fetch(new URL(modules[0].stylesheet, origin))).text(), /color: red/u);
-		await server.close();
-		server = undefined;
-		await build({ configFile: false, root, plugins: [plugin()], build: { outDir: output, emptyOutDir: true } });
-		const built = await readFile(join(output, 'index.html'), 'utf8');
-		assert.doesNotMatch(built, /ash-workbench-css-modules|_ASH_CSS_LOAD|importmap/u);
-		assert.match(built, /rel="stylesheet"/u);
-	} finally {
-		await server?.close();
-		assert.equal(dirname(directory), tmpdir());
-		await rm(directory, { recursive: true, force: true });
-	}
-});
+for (const preserveSymlinks of [false, true]) {
+	test(`Development CSS maps match Vite module paths with preserveSymlinks=${preserveSymlinks}`, async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-css-development-'));
+		const source = join(directory, 'source');
+		const linkedSource = join(directory, 'linked-source');
+		const root = join(linkedSource, 'code');
+		const css = join(source, 'shared/style.css');
+		const output = join(directory, 'output');
+		await mkdir(join(source, 'code'), { recursive: true });
+		await symlink(source, linkedSource, process.platform === 'win32' ? 'junction' : 'dir');
+		await mkdir(dirname(css));
+		await writeFile(css, '.css-test { color: red; }');
+		await writeFile(join(root, 'index.html'), '<html><head></head><body><script type="module" src="./entry.ts"></script></body></html>');
+		await writeFile(join(root, 'entry.ts'), 'import "../shared/style.css";');
+		const service = new CSSDevelopmentService({ sourceRoot: linkedSource, isBuilt: false });
+		const plugin = () => workbenchEntryPlugin(undefined, undefined, { service, sourceRoot: linkedSource });
+		let server: Awaited<ReturnType<typeof createServer>> | undefined;
+		try {
+			server = await createServer({ configFile: false, root, resolve: { preserveSymlinks }, plugins: [plugin()], server: { host: '127.0.0.1', port: 0 } });
+			await server.listen();
+			const address = server.httpServer!.address();
+			assert.ok(address && typeof address !== 'string');
+			const origin = `http://127.0.0.1:${address.port}`;
+			const html = await (await fetch(`${origin}/index.html`)).text();
+			assert.match(html, /ash-workbench-css-modules/u);
+			const data = /type="application\/json">\s*([^<]+)<\/script>/u.exec(html)?.[1];
+			assert.ok(data, html);
+			const modules = JSON.parse(data) as { specifiers: string[]; stylesheet: string; }[];
+			assert.equal(modules.length, 1);
+			const transformed = await (await fetch(`${origin}/entry.ts`)).text();
+			assert.ok(modules[0].specifiers.some(specifier => transformed.includes(specifier)), transformed);
+			assert.match(await (await fetch(new URL(modules[0].stylesheet, origin))).text(), /color: red/u);
+			await server.close();
+			server = undefined;
+			await build({ configFile: false, root: await realpath(join(source, 'code')), plugins: [plugin()], build: { outDir: output, emptyOutDir: true } });
+			const built = await readFile(join(output, 'index.html'), 'utf8');
+			assert.doesNotMatch(built, /ash-workbench-css-modules|_ASH_CSS_LOAD|importmap/u);
+			assert.match(built, /rel="stylesheet"/u);
+		} finally {
+			await server?.close();
+			assert.equal(dirname(directory), tmpdir());
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+}
 
 test('CSS discovery caches relative sorted paths and skips filesystem access in builds', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-css-modules-'));

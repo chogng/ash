@@ -141,6 +141,8 @@ instantiation.registerInstance(IDialogService, editing.dialogs);
 instantiation.registerInstance(ISearchHistoryService, store.add(instantiation.createInstance(SearchHistoryService)));
 instantiation.registerInstance(IReplaceService, instantiation.createInstance(ReplaceService));
 instantiation.registerInstance(IEditorService, {
+	save: async () => { throw new Error('Saving is outside this fixture'); },
+	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
 	openEditor: async (input, options, target) => { opened.push({ resource: input.resource.toString(), options, target }); },
 	focusActiveEditor() { },

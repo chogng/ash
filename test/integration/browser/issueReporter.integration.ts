@@ -112,6 +112,8 @@ const opened: string[] = [];
 services.registerInstance(IOpenerService, { open: async target => { opened.push(String(target)); return true; } } as IOpenerService);
 let pane: IEditorPane | undefined;
 services.registerInstance(IEditorService, {
+	save: async () => { throw new Error('Saving is outside this fixture'); },
+	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
 	openEditor: async input => {
 		if (pane) { pane.dispose(); }

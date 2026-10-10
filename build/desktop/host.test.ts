@@ -39,7 +39,7 @@ for (const mode of ['build', 'watch'] as const) {
 		});
 		const desktop = join(root, '.');
 		const output = join(root, '.build/desktop');
-		const compiler = resolve(import.meta.dirname, '../../node_modules/typescript/bin/tsc');
+		const compiler = resolve(import.meta.dirname, '../../node_modules/@ash/typescript-compiler/bin/tsc');
 		const preloadSource = 'src/ash/base/parts/sandbox/electron-browser/preload.cts';
 		const preloadOutput = join(output, 'preload', preloadSource.replace(/\.cts$/u, '.cjs'));
 		await mkdir(join(desktop, 'src/ash/base/parts/sandbox/electron-browser'), { recursive: true });

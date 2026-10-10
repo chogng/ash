@@ -43,6 +43,8 @@ const tasks: ITaskService = {
 	onDidChangeTasks: Event.None, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
 	registerTaskProvider: () => toDisposable(() => { }),
 	registerTaskProviders: () => Object.assign(toDisposable(() => { }), { replace: () => { } }),
+	rerun: async () => { throw new Error('Rerunning is outside this fixture'); },
+	runProvidedTask: async () => { throw new Error('Extension tasks are outside this fixture'); },
 	refresh: async () => tasks.tasks,
 	run: async () => { scriptRuns++; throw new Error('Script invoked'); }, terminate: async () => { },
 };
@@ -50,6 +52,8 @@ const debug = store.add(new TestDebugService());
 const service = store.add(new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service));
 const opened: { path: string; line: number | undefined; }[] = [];
 const editors: IEditorService = {
+	save: async () => { throw new Error('Saving is outside this fixture'); },
+	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
 	openEditor: async (input, options?: EditorOpenOptions) => { opened.push({ path: input.resource.path, line: options?.selection?.startLineNumber }); },
 	focusActiveEditor: () => { },

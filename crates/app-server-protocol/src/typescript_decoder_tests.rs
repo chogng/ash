@@ -3,8 +3,31 @@ use super::compact_definition_names;
 use super::deduplicate_definitions;
 use super::remove_annotations;
 use super::retain_decoder_definitions;
+use super::schema_shards;
 use super::share_inline_schemas;
 use serde_json::json;
+
+#[test]
+fn schema_modules_preserve_definitions_references_and_escaped_literals_within_the_byte_budget() {
+    let definitions = json!({
+        "0": {"type":"object", "properties":{"child":{"$ref":"#/$defs/1"}}},
+        "1": {"const":{"$ref":"literal reference", "__proto__":"literal property", "text":"quotes \" and \\ escapes"}},
+        "Root": {"anyOf":[{"$ref":"#/$defs/0"},{"type":"null"}]}
+    });
+    let shards = schema_shards(definitions.as_object().unwrap(), 180);
+    assert!(shards.len() > 1);
+    let mut restored = serde_json::Map::new();
+    for literal in shards {
+        assert!(literal.len() <= 180);
+        let json: String = serde_json::from_str(&literal).unwrap();
+        let shard: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(&json).unwrap();
+        for (name, definition) in shard {
+            assert!(restored.insert(name, definition).is_none());
+        }
+    }
+    assert_eq!(serde_json::Value::Object(restored), definitions);
+}
 
 #[test]
 fn deduplication_keeps_public_roots_and_rewrites_schema_references_without_changing_literals() {
