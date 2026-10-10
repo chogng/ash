@@ -51,7 +51,7 @@ pub(super) struct AppContainer {
 unsafe impl Send for AppContainer {}
 
 impl AppContainer {
-    pub(super) fn new(package: &Path) -> io::Result<Self> {
+    pub(super) fn new(package: &Path, sources: crate::LockedProcessSources) -> io::Result<Self> {
         let name = format!(
             "Ash.JavaScript.{}",
             win::random_hex(16).map_err(io::Error::other)?
@@ -79,7 +79,12 @@ impl AppContainer {
             sid,
             paths: Vec::new(),
         };
-        container.grant_package(package, 0)?;
+        // The working directory of an embedded host can be the entire product or
+        // Cargo output tree. Its sources need no disk reads or recursive ACL edits.
+        match sources {
+            crate::LockedProcessSources::Package => container.grant_package(package, 0)?,
+            crate::LockedProcessSources::Embedded => {}
+        }
         Ok(container)
     }
 

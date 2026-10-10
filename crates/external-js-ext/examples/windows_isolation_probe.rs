@@ -40,10 +40,17 @@ mod probe {
         print_profile_sid();
         assert_only_stdio_inherits();
         assert_child_creation_denied(&config);
-        assert_eq!(
-            std::fs::read(config["secret"].as_str().unwrap()).unwrap(),
-            b"host-only"
-        );
+        match config["sources"].as_str().unwrap() {
+            "package" => assert_eq!(
+                std::fs::read(config["secret"].as_str().unwrap()).unwrap(),
+                b"host-only"
+            ),
+            "embedded" => assert!(
+                std::fs::read(config["secret"].as_str().unwrap()).is_err(),
+                "embedded startup read an unrelated working-directory file"
+            ),
+            _ => panic!("unknown source policy"),
+        }
         // std's first Winsock initialization panics if registry/provider loading is
         // denied. Initialize it while trusted, so later attempts test socket access.
         let _ = std::net::TcpListener::bind("127.0.0.1:0");

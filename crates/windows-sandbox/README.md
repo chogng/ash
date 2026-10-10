@@ -9,6 +9,8 @@
 JS 扩展使用独立的 `spawn_locked_process` / `finish_locked_process_startup` 路径：64 位 Windows
 上组合无网络能力的 AppContainer、每次启动独立的限制 SID、禁止子进程的创建策略和单进程 Job。
 只给初始线程临时读取扩展包的权限，V8 初始化后释放；工作线程从创建时即使用受限主令牌。
+启动方通过 `LockedProcessSources` 区分安装包和内置模块。安装包仍只授权工作目录中的包文件；
+内置模块的源文件已编译进宿主，不授予包文件读取权限，也不遍历或修改工作目录的 ACL。
 这条路径不安装账户或服务，不需要管理员权限，不修改产品安装目录；进程结束后移除本次包 ACL
 授权和 AppContainer 配置。执行错误不弹系统错误窗口。它不替代下文的 Shell 账户执行策略。
 

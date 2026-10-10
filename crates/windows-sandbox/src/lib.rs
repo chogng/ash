@@ -7,12 +7,23 @@ pub(crate) mod windows;
 
 pub mod provisioning;
 
+/// Sources the trusted startup thread must load before releasing its authority.
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+pub enum LockedProcessSources {
+    /// Read the installed package rooted at the command's working directory.
+    Package,
+    /// Use only module bytes compiled into the executable, without filesystem grants.
+    Embedded,
+}
+
 /// Starts a product-owned 64-bit process with a private restricted token, an AppContainer
 /// without capabilities and a single-process kill-on-close job. Only the initial thread
 /// receives temporary startup authority to read the package. The trusted entry point must
 /// call [`finish_locked_process_startup`] before evaluating third-party code. No account
 /// provisioning, administrator rights or product-install ACL changes are required.
 /// The process handle removes the launch's package ACL grants and AppContainer on drop.
+/// Embedded sources require no package ACL changes, regardless of the working directory.
 #[cfg(windows)]
 pub use windows::locked_process::spawn as spawn_locked_process;
 

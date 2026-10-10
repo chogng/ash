@@ -23,6 +23,15 @@ use std::time::Instant;
 
 #[test]
 fn locked_process_blocks_host_io_on_initial_existing_and_new_threads() {
+    verify_locked_process(windows_sandbox::LockedProcessSources::Package);
+}
+
+#[test]
+fn embedded_process_never_grants_its_working_directory_and_still_blocks_host_io() {
+    verify_locked_process(windows_sandbox::LockedProcessSources::Embedded);
+}
+
+fn verify_locked_process(sources: windows_sandbox::LockedProcessSources) {
     let root = tempfile::tempdir().unwrap();
     let secret = root.path().join("secret.txt");
     std::fs::write(&secret, "host-only").unwrap();
@@ -51,11 +60,15 @@ fn locked_process_blocks_host_io_on_initial_existing_and_new_threads() {
         "build the windows_isolation_probe example before this test"
     );
     let command = SandboxCommand::new(&executable, std::iter::empty::<String>(), root.path());
-    let mut child = spawn(&command).unwrap();
+    let mut child = spawn(&command, sources).unwrap();
     let config = serde_json::json!({
         "secret":secret, "directory":root.path(), "executable":executable,
         "endpoint":listener.local_addr().unwrap().to_string(),
         "parentPid":std::process::id(),
+        "sources": match sources {
+            windows_sandbox::LockedProcessSources::Package => "package",
+            windows_sandbox::LockedProcessSources::Embedded => "embedded",
+        },
     });
     writeln!(child.take_stdin().unwrap(), "{config}").unwrap();
     let until = Instant::now() + Duration::from_secs(10);
@@ -93,6 +106,16 @@ fn locked_process_blocks_host_io_on_initial_existing_and_new_threads() {
         .find_map(|line| line.strip_prefix("app-sid="))
         .unwrap();
     let profile = profile_folder(sid);
+    if matches!(sources, windows_sandbox::LockedProcessSources::Embedded) {
+        // The handle still owns the launch. Equal ACLs here prove that cleanup is
+        // not concealing temporary access to unrelated build/install files.
+        assert_eq!(
+            dacl(root.path()),
+            root_dacl,
+            "working directory ACL changed"
+        );
+        assert_eq!(dacl(&secret), secret_dacl, "unrelated file ACL changed");
+    }
     drop(child);
     assert_eq!(dacl(root.path()), root_dacl, "package ACL was not restored");
     assert_eq!(

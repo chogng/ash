@@ -55,6 +55,8 @@ impl Harness {
                 // user's real home on Unix rather than isolating it from this fixture.
                 .env("HOME", self.root.path())
                 .env("USERPROFILE", self.root.path())
+                // ZCode can override the home directory with its own credential root.
+                .env("ZCODE_DATA_BASE_DIR", self.root.path())
                 .env("ASH_HOME", &self.profile)
                 .env("CODEX_HOME", self.root.path().join("codex"))
                 .env_remove("ASH_WORKSPACE_ROOT")
@@ -96,6 +98,7 @@ impl Harness {
             .current_dir(self.root.path())
             .env("HOME", self.root.path())
             .env("USERPROFILE", self.root.path())
+            .env("ZCODE_DATA_BASE_DIR", self.root.path())
             .env("ASH_HOME", &self.profile)
             .env("CODEX_HOME", self.root.path().join("codex"))
             .env("ASH_APP_SERVER_PATH", &self.backend)
@@ -126,6 +129,7 @@ impl Harness {
                 .with_argument("connect")
                 .with_environment_variable("HOME", self.root.path().as_os_str())
                 .with_environment_variable("USERPROFILE", self.root.path().as_os_str())
+                .with_environment_variable("ZCODE_DATA_BASE_DIR", self.root.path().as_os_str())
                 .with_environment_variable("ASH_HOME", self.profile.as_os_str())
                 .with_environment_variable(
                     "CODEX_HOME",
@@ -440,6 +444,7 @@ fn selected_managed_cli_ensures_the_local_daemon_without_a_pinned_cli_switching_
             .current_dir(harness.root.path())
             .env("HOME", harness.root.path())
             .env("USERPROFILE", harness.root.path())
+            .env("ZCODE_DATA_BASE_DIR", harness.root.path())
             .env("ASH_HOME", &harness.profile)
             .env("CODEX_HOME", harness.root.path().join("codex"))
             .env(

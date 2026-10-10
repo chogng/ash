@@ -72,7 +72,16 @@ impl StdioExtensionHostProcess {
                 launch.arguments().iter().cloned(),
                 launch.working_directory(),
             );
-            let child = windows_sandbox::spawn_locked_process(&command)
+            let sources = match launch.runtime {
+                super::LaunchRuntime::ProductJavaScript => {
+                    windows_sandbox::LockedProcessSources::Embedded
+                }
+                super::LaunchRuntime::JavaScript => windows_sandbox::LockedProcessSources::Package,
+                super::LaunchRuntime::Executable => {
+                    return Err(ExtensionHostError::IsolationUnavailable);
+                }
+            };
+            let child = windows_sandbox::spawn_locked_process(&command, sources)
                 .map_err(|_| ExtensionHostError::IsolationUnavailable)?;
             return Self::from_child(child, limits, None);
         }

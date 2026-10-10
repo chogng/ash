@@ -84,6 +84,8 @@ the child attests the launch restrictions, disables Win32k calls, lowers integri
 permanently releases startup authority. Package read grants and the AppContainer profile
 are owned by the process handle and removed after termination. The product install directory
 is not modified; no administrator privileges or account provisioning are required.
+Compiled product modules need no package read grants; their working directory is never
+traversed or granted access, so build and install artifacts do not delay host startup.
 Unsupported systems refuse installed-package execution. The immutable compiled product module
 can run there with the same V8 budgets and deadlines, without loading external sources. Supported
 systems also confine the product module. The trusted development launcher is for trusted tests.

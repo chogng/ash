@@ -231,7 +231,7 @@ class CiWorkflowTests(unittest.TestCase):
             ("ash-cli", "ash"),
             ("ash-app-server", "ash-app-server"),
             ("ash-remote-server", "ash-remote-server"),
-            ("ash-js-extension-host", "ash-js-extension-host"),
+            ("ash-external-js-ext", "ash-external-js-ext"),
         ):
             self.assertIn(f"-p {package} --bin {executable}", lifecycle)
 

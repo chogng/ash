@@ -433,14 +433,17 @@ fn command_line(launch: &SandboxCommand) -> Vec<u16> {
     line
 }
 
-pub fn spawn(launch: &SandboxCommand) -> io::Result<ash_sandboxing::ProcessHandle> {
+pub fn spawn(
+    launch: &SandboxCommand,
+    sources: crate::LockedProcessSources,
+) -> io::Result<ash_sandboxing::ProcessHandle> {
     if !cfg!(target_pointer_width = "64") {
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
             "locked processes require 64-bit Windows",
         ));
     }
-    let container = app_container::AppContainer::new(launch.working_directory())
+    let container = app_container::AppContainer::new(launch.working_directory(), sources)
         .map_err(|error| io::Error::other(format!("AppContainer creation: {error}")))?;
     let (lockdown, startup_token, desktop, object_descriptor) = tokens(&container.sid_text()?)?;
     container.grant_internal_objects(&lockdown)?;

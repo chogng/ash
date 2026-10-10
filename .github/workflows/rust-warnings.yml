@@ -153,7 +153,7 @@ jobs:
           -p ash-cli --bin ash
           -p ash-app-server --bin ash-app-server
           -p ash-remote-server --bin ash-remote-server
-          -p ash-js-extension-host --bin ash-js-extension-host
+          -p ash-external-js-ext --bin ash-external-js-ext
           --profile ci-test --locked
 
       - name: Compile stdio and connection library tests

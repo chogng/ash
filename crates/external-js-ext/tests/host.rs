@@ -325,6 +325,13 @@ fn product_params() -> ActivateParams {
 fn start_product(params: ActivateParams) -> Result<Running, ExtensionHostError> {
     // The product loader must work without a package directory or workspace grant.
     let directory = tempfile::tempdir().unwrap();
+    start_product_in(params, directory)
+}
+
+fn start_product_in(
+    params: ActivateParams,
+    directory: tempfile::TempDir,
+) -> Result<Running, ExtensionHostError> {
     let executable = PathBuf::from(env!("CARGO_BIN_EXE_ash-external-js-ext"));
     let authority = Arc::new(Authority(AtomicBool::new(true)));
     let running = Running {
@@ -392,6 +399,26 @@ fn compiled_ssh_rejects_a_stale_release_binding() {
     let mut params = product_params();
     params.package.package_digest = format!("sha256:{}", "a".repeat(64));
     assert!(start_product(params).is_err());
+}
+
+#[cfg(windows)]
+#[test]
+fn compiled_ssh_does_not_traverse_its_working_directory() {
+    let directory = tempfile::tempdir().unwrap();
+    // Product sources are embedded. Unrelated build/install artifacts must not be
+    // treated as a package, even when they exceed the installed-package depth limit.
+    let mut nested = directory.path().to_path_buf();
+    for _ in 0..34 {
+        nested.push("a");
+        std::fs::create_dir(&nested).unwrap();
+    }
+    std::fs::write(nested.join("unrelated.txt"), "host-only").unwrap();
+    let running = start_product_in(product_params(), directory).unwrap();
+    assert_eq!(
+        running.supervisor.invoke(ssh_invocation()).unwrap().payload,
+        json!({"connectionName": "build"})
+    );
+    running.supervisor.shutdown().unwrap();
 }
 
 #[test]
