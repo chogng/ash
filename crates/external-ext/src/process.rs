@@ -427,6 +427,36 @@ impl ExtensionHostLauncher for ProductJavaScriptLauncher {
     }
 }
 
+/// Launches one frozen product executable; package data cannot replace its path.
+pub struct ProductExecutableLauncher {
+    executable: PathBuf,
+}
+impl ProductExecutableLauncher {
+    pub fn new(executable: PathBuf) -> Result<Self, ExtensionHostError> {
+        if !executable.is_absolute() || !executable.is_file() {
+            return Err(ExtensionHostError::SpawnFailed);
+        }
+        Ok(Self { executable })
+    }
+}
+impl ExtensionHostLauncher for ProductExecutableLauncher {
+    fn spawn(
+        &self,
+        command: &ExtensionLaunchCommand,
+        limits: &ExtensionHostLimits,
+    ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
+        limits.validate()?;
+        command.validate_limits(limits)?;
+        if command.runtime != LaunchRuntime::Executable
+            || command.executable() != self.executable
+            || limits.isolation != ProcessIsolationPolicy::AuthorizedProduct
+        {
+            return Err(ExtensionHostError::IsolationUnavailable);
+        }
+        StdioExtensionHostProcess::spawn(command, limits).map(|process| Arc::new(process) as _)
+    }
+}
+
 impl ExtensionHostLauncher for TrustedDevelopmentLauncher {
     fn spawn(
         &self,

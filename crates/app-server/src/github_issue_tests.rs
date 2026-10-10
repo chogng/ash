@@ -270,12 +270,13 @@ fn repository_credentials() -> Arc<Credentials> {
 #[test]
 fn github_account_rpc_connects_without_oauth_selects_host_credentials_and_logs_out_one_account() {
     let http = Arc::new(RepositoryHttp::default());
-    let accounts = github::GitHubOAuth::tokens(
+    let accounts = github_authentication::GitHubOAuth::tokens(
         http.clone(),
         Arc::new(ash_secrets::MemorySecretStore::default()),
     );
     let login = Arc::new(ash_login::LoginService::deferred(accounts.clone()));
-    accounts.install_login_service(&login).unwrap();
+    let events: Arc<dyn ash_login::extension::AuthenticationEvents> = login.clone();
+    accounts.install_events(&events);
     let server = server()
         .with_login_service(login)
         .with_github_accounts(accounts.clone())

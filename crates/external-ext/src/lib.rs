@@ -52,6 +52,7 @@ pub use process::ExtensionHostLauncher;
 pub use process::ExtensionHostProcess;
 pub use process::ExtensionLaunchCommand;
 pub use process::PendingHostRequest;
+pub use process::ProductExecutableLauncher;
 pub use process::ProductJavaScriptLauncher;
 pub use process::TrustedDevelopmentLauncher;
 pub use restart::RestartDecision;

@@ -18,7 +18,7 @@ use ash_login::LoginErrorKind;
 use ash_login::LoginFailure;
 use ash_login::LoginId;
 use ash_login::LoginMethod;
-use ash_login::LoginService;
+use ash_login::extension::AuthenticationEvents;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
@@ -47,7 +47,12 @@ use url::Url;
 use url::form_urlencoded;
 use zeroize::Zeroize;
 
-pub const GITHUB_PROVIDER_ID: &str = "github";
+use github::GITHUB_PROVIDER_ID;
+use github::GitHubAccount;
+use github::GitHubAccountManager;
+use github::GitHubAuthorization;
+use github::GitHubBrowserConfig;
+use github::GitHubCredentialProvider;
 
 const USER_URL: &str = "https://api.github.com/user";
 const CREDENTIAL_KEY: &str = "provider/github/current/oauth";
@@ -55,62 +60,6 @@ const ACCOUNTS_KEY: &str = "provider/github/accounts";
 const REFRESH_MARGIN: u64 = 300;
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(600);
-
-/// Identifies the exact grant captured by a repository operation, without credential material.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GitHubAuthorization {
-    pub host: String,
-    pub account_id: String,
-    pub grant_id: String,
-}
-
-/// Supplies credentials only while the captured authorization remains current.
-pub trait GitHubCredentialProvider: Send + Sync {
-    fn authorization(&self) -> Result<GitHubAuthorization, LoginError>;
-    fn token(&self, authorization: &GitHubAuthorization) -> Result<SecretValue, LoginError>;
-
-    /// Selects an exact account, without changing another window's default account.
-    fn authorization_for(&self, account_id: &str) -> Result<GitHubAuthorization, LoginError> {
-        let grant = self.authorization()?;
-        if grant.account_id != account_id {
-            return Err(error(
-                LoginErrorKind::ExternalLoginRequired,
-                "GitHub account is not connected",
-            ));
-        }
-        Ok(grant)
-    }
-}
-
-/// Redacted GitHub account metadata; host is part of the credential authority.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GitHubAccount {
-    pub id: String,
-    pub host: String,
-    pub login: String,
-    pub status: AccountStatus,
-    pub credential_revision: u64,
-}
-
-/// Manages the provider-owned catalog and connects host-bound user tokens.
-pub trait GitHubAccountManager: Send + Sync {
-    /// The primary grant is first; remaining accounts have stable identity order.
-    fn accounts(&self) -> Result<Vec<GitHubAccount>, LoginError>;
-    fn connect_token(
-        &self,
-        host: &str,
-        token: SecretValue,
-        cancellation: &CancellationToken,
-    ) -> Result<GitHubAccount, LoginError>;
-}
-
-/// Public OAuth settings for one GitHub host. The broker owns its app secret.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GitHubBrowserConfig {
-    pub host: String,
-    pub client_id: String,
-    pub broker_base_url: Url,
-}
 
 struct BrowserAuthorization {
     client_id: String,
@@ -124,7 +73,7 @@ pub struct GitHubOAuth {
     http: Arc<dyn HttpClient>,
     secrets: Arc<dyn SecretStore>,
     self_weak: Weak<Self>,
-    login_service: Mutex<Weak<LoginService>>,
+    events: Mutex<Option<Weak<dyn AuthenticationEvents>>>,
     active: Mutex<BTreeMap<LoginId, Arc<AtomicBool>>>,
     credential_lock: Mutex<()>,
 }
@@ -209,15 +158,22 @@ impl GitHubOAuth {
             http,
             secrets,
             self_weak: self_weak.clone(),
-            login_service: Mutex::new(Weak::new()),
+            events: Mutex::new(None),
             active: Mutex::new(BTreeMap::new()),
             credential_lock: Mutex::new(()),
         })
     }
 
-    pub fn install_login_service(&self, service: &Arc<LoginService>) -> Result<(), LoginError> {
-        *self.login_service.lock().map_err(lock_error)? = Arc::downgrade(service);
-        Ok(())
+    pub(crate) fn stop(&self) {
+        let mut active = self.active.lock().expect("GitHub login state lock");
+        for cancelled in active.values() {
+            cancelled.store(true, Ordering::Release);
+        }
+        active.clear();
+    }
+
+    pub fn install_events(&self, events: &Arc<dyn AuthenticationEvents>) {
+        *self.events.lock().expect("GitHub events lock") = Some(Arc::downgrade(events));
     }
 
     fn credential_key() -> SecretKey {
@@ -343,7 +299,12 @@ impl GitHubOAuth {
                     credential.replace_token(token);
                     catalog.accounts.insert(id, credential.clone());
                     self.save_credentials(&catalog)?;
-                    if let Some(service) = self.login_service.lock().map_err(lock_error)?.upgrade()
+                    if let Some(service) = self
+                        .events
+                        .lock()
+                        .map_err(lock_error)?
+                        .as_ref()
+                        .and_then(Weak::upgrade)
                     {
                         service.update_account(credential.snapshot())?;
                     }
@@ -605,10 +566,11 @@ impl GitHubOAuth {
         active.remove(&login_id);
         drop(active);
         if let Some(service) = self
-            .login_service
+            .events
             .lock()
             .expect("GitHub login service lock")
-            .upgrade()
+            .as_ref()
+            .and_then(Weak::upgrade)
         {
             let _ = service.complete(CompleteLogin { login_id, outcome });
         }
@@ -793,7 +755,7 @@ impl GitHubAccountManager for GitHubOAuth {
         cancellation: &CancellationToken,
     ) -> Result<GitHubAccount, LoginError> {
         let host = host.trim().to_ascii_lowercase();
-        crate::Repository::new(host.clone(), "account".into(), "identity".into())
+        github::Repository::new(host.clone(), "account".into(), "identity".into())
             .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub host is invalid"))?;
         let access_token = std::str::from_utf8(token.expose())
             .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub token is invalid"))?;
@@ -864,7 +826,13 @@ impl GitHubAccountManager for GitHubOAuth {
         let credential = self
             .credential_for(Some(&credential.identity()))?
             .ok_or_else(|| error(LoginErrorKind::Driver, "GitHub account was removed"))?;
-        if let Some(service) = self.login_service.lock().map_err(lock_error)?.upgrade() {
+        if let Some(service) = self
+            .events
+            .lock()
+            .map_err(lock_error)?
+            .as_ref()
+            .and_then(Weak::upgrade)
+        {
             service.update_account(credential.snapshot())?;
         }
         Ok(credential.account())
@@ -1218,7 +1186,7 @@ mod tests;
 
 fn normalized_host(host: &str) -> Result<String, LoginError> {
     let host = host.trim().to_ascii_lowercase();
-    crate::Repository::new(host.clone(), "account".into(), "identity".into())
+    github::Repository::new(host.clone(), "account".into(), "identity".into())
         .map_err(|_| error(LoginErrorKind::InvalidInput, "Invalid GitHub host"))?;
     Ok(host)
 }

@@ -1,0 +1,13 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "github-authentication",
+    crate_name = "github_authentication",
+)
+
+ash_rust_binary(
+    name = "ash-github-authentication",
+    crate_name = "github_authentication",
+    crate_root = "src/main.rs",
+    deps = [":github-authentication"],
+)

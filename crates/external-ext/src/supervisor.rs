@@ -164,11 +164,6 @@ impl ExtensionHostSupervisor {
         initialization: Option<external_ext_protocol::ExtensionHostInitialization>,
         handler: Option<Arc<ExtensionBackgroundClientHandler>>,
     ) -> Result<ExtensionHostSnapshot, ExtensionHostError> {
-        if handler.is_some() && !self.inner.command.is_vscode() {
-            return Err(ExtensionHostError::InvalidProtocol(
-                "background editor calls require the Node host".into(),
-            ));
-        }
         let _lifecycle = self
             .inner
             .lifecycle

@@ -77,7 +77,12 @@ def build_package_directory(
     livekit: Optional[Dict[str, str]] = None,
     remote_runtime_bundle: Optional[Path] = None,
     remote_runtime_release: Optional[Dict[str, str]] = None,
+    github_authentication_binary: Optional[Path] = None,
 ) -> None:
+    if github_authentication_binary is None:
+        raise RuntimeError(
+            "GitHub authentication extension executable is required in product packages"
+        )
     if spec.is_windows != (windows_sandbox_binary is not None) or spec.is_windows != (
         windows_sandbox_service_binary is not None
     ):
@@ -118,6 +123,7 @@ def build_package_directory(
             "appServerDaemon": str(app_server_daemon_binary),
             "codeModeHost": str(code_mode_host_binary),
             "jsExtensionHost": str(js_extension_host_binary),
+            "githubAuthentication": str(github_authentication_binary),
             "voiceHost": str(voice_host_binary),
             "collaborationServer": str(collaboration_server_binary),
             "livekit": livekit["executable"],
@@ -266,7 +272,19 @@ def copy_builtin_extensions(source_root: Path, destination: Path) -> None:
             entry,
             destination / entry.name,
             "extension package",
-            excluded_names=("node_modules",),
+            excluded_names=(
+                "node_modules",
+                "Cargo.toml",
+                "Cargo.lock",
+                "BUILD.bazel",
+                "tests",
+                "src",
+            )
+            if json.loads(manifest.read_text(encoding="utf-8"))
+            .get("ashRuntime", {})
+            .get("kind")
+            == "rust"
+            else ("node_modules",),
         )
 
 
@@ -346,7 +364,9 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     ):
         source_path = source_root / source
         if source_path.is_symlink() or not source_path.is_file():
-            raise RuntimeError(f"Invalid product extension host resource: {source_path}")
+            raise RuntimeError(
+                f"Invalid product extension host resource: {source_path}"
+            )
         shutil.copyfile(source_path, extension_host / destination)
     node = inputs.get("node")
     if node is not None:
@@ -675,6 +695,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
         "jsExtensionHost": package / "bin" / spec.js_extension_host_name,
+        "githubAuthentication": package
+        / "bin"
+        / ("ash-github-authentication" + spec.executable_suffix),
         "voiceHost": package / "bin" / ("ash-voice-host" + spec.executable_suffix),
         "collaborationServer": package
         / "bin"
@@ -744,6 +767,7 @@ def record_system_signing(
             "cli",
             "codeModeHost",
             "jsExtensionHost",
+            "githubAuthentication",
             "voiceHost",
             "collaborationServer",
             "livekit",

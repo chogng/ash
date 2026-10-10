@@ -86,6 +86,8 @@ struct BrokerState {
     session_scopes: BTreeMap<SessionId, u64>,
     interaction_assignments: BTreeMap<RequestId, u64>,
     pending_interactions: BTreeMap<RequestId, AgentRequestEnvelope>,
+    // Login IDs belong to a directory service; connections are profile-wide.
+    login_owners: BTreeMap<(u64, String), u64>,
 }
 
 struct Subscriber {
@@ -173,7 +175,60 @@ impl UpdateBroker {
     }
 
     pub(super) fn publish_account_login_completed(&self, completed: AccountLoginCompleted) {
-        self.broadcast_notification(ServerNotificationMethod::AccountLoginCompleted, &completed);
+        let mut state = self.state.lock().expect("update broker state");
+        if let Some(owner) = state
+            .login_owners
+            .remove(&(self.scope_id, completed.login_id.clone()))
+            && let Some(queue) = state
+                .subscribers
+                .get(&owner)
+                .and_then(|subscriber| subscriber.queue.upgrade())
+        {
+            queue.push(notification(
+                ServerNotificationMethod::AccountLoginCompleted,
+                &completed,
+            ));
+        }
+    }
+
+    pub(super) fn register_login_owner(&self, login_id: &str, connection_id: u64) {
+        self.state
+            .lock()
+            .expect("update broker state")
+            .login_owners
+            .insert((self.scope_id, login_id.to_owned()), connection_id);
+    }
+
+    pub(super) fn owns_login(&self, login_id: &str, connection_id: u64) -> bool {
+        self.state
+            .lock()
+            .expect("update broker state")
+            .login_owners
+            .get(&(self.scope_id, login_id.to_owned()))
+            == Some(&connection_id)
+    }
+
+    pub(super) fn forget_login_owner(&self, login_id: &str) {
+        self.state
+            .lock()
+            .expect("update broker state")
+            .login_owners
+            .remove(&(self.scope_id, login_id.to_owned()));
+    }
+
+    pub(super) fn take_connection_logins(&self, connection_id: u64) -> Vec<String> {
+        let mut state = self.state.lock().expect("update broker state");
+        let logins = state
+            .login_owners
+            .iter()
+            .filter_map(|((scope, login), owner)| {
+                (*scope == self.scope_id && *owner == connection_id).then_some(login.clone())
+            })
+            .collect::<Vec<_>>();
+        for login in &logins {
+            state.login_owners.remove(&(self.scope_id, login.clone()));
+        }
+        logins
     }
 
     pub(super) fn publish_account_updated(&self, updated: AccountUpdated) {

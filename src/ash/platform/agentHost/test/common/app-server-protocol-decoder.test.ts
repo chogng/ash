@@ -298,3 +298,13 @@ test('extension package location and execution platform survive the generated ca
 		assert.throws(() => decodeAppServerResponse('extensions/list', { ...response, result: { ...response.result, extensions: [{ ...extension, [field]: 1 }] } }), AppServerProtocolDecodeError);
 	}
 });
+
+test('backend credential services are rejected at the renderer extension boundary', () => {
+    const params = {
+        extensionId: 'ash.github-authentication', activationGeneration: 1, incarnation: 1,
+        operation: { operation: 'coreService', request: { service: 'secretLoad', key: 'provider/github/accounts' } },
+    };
+    const envelope = { jsonrpc: '2.0', id: 'core-service', method: 'extensionClient/request', params: { ...params, operation: { operation: 'readInitialization' } } };
+    assert.deepEqual(decodeAppServerServerRequest(envelope), envelope);
+    assert.throws(() => decodeAppServerServerRequest({ ...envelope, params }), AppServerProtocolDecodeError);
+});

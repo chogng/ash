@@ -3,7 +3,8 @@ import { addDisposableListener, h, isHTMLElement } from '../../../base/browser/d
 import { observeResize } from '../../../base/browser/observer.js';
 import { setAriaAttribute, setRole } from '../../../base/browser/ui/aria/aria.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { CancellationToken } from '../../../base/common/cancellation.js';
 import { localize } from '../../../nls.js';
 import type { IInputOptions, IQuickPick, IQuickPickItem } from '../common/quickInput.js';
 import { QuickPick, type BrowserQuickInputHostOptions, type IBrowserQuickInputHost } from './quickInput.js';
@@ -65,12 +66,15 @@ export class QuickInputController extends Disposable {
 		return quickPick;
 	}
 
-	public input(options: IInputOptions): Promise<string | undefined> {
+	public input(options: IInputOptions, token: CancellationToken = CancellationToken.None): Promise<string | undefined> {
 		this.assertNotDisposed();
+		if (token.isCancellationRequested) return Promise.resolve(undefined);
+		let cancellation: IDisposable | undefined;
 		const input = new InputQuickInput(this.host, options, {
 			onShow: candidate => this.show(candidate),
 			onHide: candidate => this.hide(candidate),
 			onDispose: candidate => {
+				cancellation?.dispose();
 				this.quickInputs.delete(candidate);
 				this.hide(candidate);
 			},
@@ -97,6 +101,11 @@ export class QuickInputController extends Disposable {
 			input.onDidAccept(value => finish(value));
 			input.onDidHide(() => finish(undefined));
 			input.onDidError(fail);
+			cancellation = token.onCancellationRequested(() => finish(undefined));
+			if (token.isCancellationRequested) {
+				finish(undefined);
+				return;
+			}
 			input.show();
 		});
 	}

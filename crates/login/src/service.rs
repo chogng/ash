@@ -213,6 +213,16 @@ impl LoginService {
     }
 
     pub fn begin(&self, method: LoginMethod) -> Result<BeginLogin, LoginError> {
+        self.begin_with_identity(method, |_| Ok(()))
+    }
+
+    /// Registers the caller's routing before a driver can complete synchronously.
+    /// The caller must retire that routing if starting the driver fails.
+    pub fn begin_with_identity(
+        &self,
+        method: LoginMethod,
+        register: impl FnOnce(&LoginId) -> Result<(), LoginError>,
+    ) -> Result<BeginLogin, LoginError> {
         let provider = method.provider_id();
         let driver = self.drivers.get(provider).ok_or_else(|| {
             LoginError::new(
@@ -227,6 +237,14 @@ impl LoginService {
             .map_err(lock_error)?
             .active_logins
             .insert(login_id.clone(), provider.to_owned());
+        if let Err(error) = register(&login_id) {
+            self.state
+                .lock()
+                .map_err(lock_error)?
+                .active_logins
+                .remove(&login_id);
+            return Err(error);
+        }
         let started = match driver.begin(BeginLoginRequest {
             login_id: login_id.clone(),
             method,

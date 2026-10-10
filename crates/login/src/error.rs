@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// Stable category for a redacted login-control-plane failure.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LoginErrorKind {
     InvalidInput,
     Unavailable,
@@ -12,7 +12,7 @@ pub enum LoginErrorKind {
 }
 
 /// A login failure safe to expose without provider credential material.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LoginError {
     kind: LoginErrorKind,
     message: String,

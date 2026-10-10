@@ -52,6 +52,20 @@ impl Client {
         }
     }
 
+    /// Calls a granted core service on this invocation's cancellation and deadline.
+    pub fn core_service(
+        &self,
+        request: crate::services::CoreServiceRequest,
+        token: &CancellationToken,
+    ) -> Result<crate::services::CoreServiceResponse, ExtensionError> {
+        let result = self.call(ExtensionClientOperation::CoreService { request }, token)?;
+        if let ExtensionClientResult::CoreService { response } = result {
+            Ok(response)
+        } else {
+            Err(unexpected_result())
+        }
+    }
+
     pub fn execute_command(
         &self,
         command: impl Into<String>,

@@ -126,6 +126,7 @@ def create_runtime_package(root: Path, target: str) -> Path:
         )
         if bwrap is not None
         else None,
+        github_authentication_binary=executable("ash-github-authentication"),
         windows_sandbox_binary=executable("ash-windows-sandbox")
         if spec.is_windows
         else None,

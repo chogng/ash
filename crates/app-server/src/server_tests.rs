@@ -6392,6 +6392,8 @@ fn account_rpc_projects_login_completion_without_credentials() {
     let server = server().with_login_service(Arc::clone(&login));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
+    let mut observer = server.connection();
+    initialize(&server, &mut observer);
 
     let initial = call(
         &server,
@@ -6408,6 +6410,14 @@ fn account_rpc_projects_login_completion_without_credentials() {
         }),
     );
     let login_id = LoginId::new(started["result"]["loginId"].as_str().unwrap()).unwrap();
+    let foreign_cancel = call(
+        &server,
+        &mut observer,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"account/login/cancel","params":{"loginId":login_id.as_str()}
+        }),
+    );
+    assert_eq!(foreign_cancel["result"]["status"], "notFound");
     login
         .complete(CompleteLogin {
             login_id,
@@ -6429,6 +6439,17 @@ fn account_rpc_projects_login_completion_without_credentials() {
         .unwrap();
 
     let notifications = server.drain_notifications(&mut connection);
+    let observed = server.drain_notifications(&mut observer);
+    assert!(
+        observed
+            .iter()
+            .any(|value| value.contains("\"method\":\"account/updated\""))
+    );
+    assert!(
+        observed
+            .iter()
+            .all(|value| !value.contains("\"method\":\"account/login/completed\""))
+    );
     assert!(notifications.iter().any(|value| {
         value.contains("\"method\":\"account/login/completed\"")
             && value.contains("\"accountId\":\"acct_redacted\"")
@@ -9340,4 +9361,42 @@ fn terminal_environment_reads_require_authorization_and_validate_names() {
         )["error"]["message"],
         "InvalidParams"
     );
+}
+
+#[test]
+fn disconnect_cancels_only_the_connections_pending_login() {
+    let driver = Arc::new(TestLoginDriver::default());
+    let login = Arc::new(LoginService::new(driver).unwrap());
+    let server = server().with_login_service(login.clone());
+    let mut first = server.connection();
+    let mut second = server.connection();
+    initialize(&server, &mut first);
+    initialize(&server, &mut second);
+    let start = |connection: &mut ConnectionState| {
+        let response = call(
+            &server,
+            connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":2,"method":"account/login/start",
+                "params":{"method":{"type":"openAiChatGptBrowser"}}
+            }),
+        );
+        LoginId::new(response["result"]["loginId"].as_str().unwrap()).unwrap()
+    };
+    let first_id = start(&mut first);
+    let second_id = start(&mut second);
+    server.close_connection(first);
+    assert_eq!(
+        login.cancel(&first_id).unwrap(),
+        CancelLoginOutcome::NotFound
+    );
+    let cancelled = call(
+        &server,
+        &mut second,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"account/login/cancel","params":{"loginId":second_id.as_str()}
+        }),
+    );
+    assert_eq!(cancelled["result"]["status"], "cancelled");
+    server.close_connection(second);
 }

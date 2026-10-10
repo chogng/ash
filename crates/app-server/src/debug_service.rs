@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use ash_debug_adapter::DebugAdapterCommand;
+use ash_debug_adapter::DebugAdapterConnection;
 use ash_debug_adapter::DebugAdapterError;
 use ash_debug_adapter::DebugAdapterRead;
 use ash_debug_adapter::DebugAdapterService as Runtime;
@@ -33,6 +34,23 @@ impl DebugAdapterService {
         command: DebugAdapterCommand,
     ) -> Result<String, DebugAdapterError> {
         let session_id = self.runtime.start(command)?;
+        self.own(owner_connection_id, session_id)
+    }
+
+    pub(crate) fn connect(
+        &self,
+        owner_connection_id: u64,
+        connection: DebugAdapterConnection,
+    ) -> Result<String, DebugAdapterError> {
+        let session_id = self.runtime.connect(connection)?;
+        self.own(owner_connection_id, session_id)
+    }
+
+    fn own(
+        &self,
+        owner_connection_id: u64,
+        session_id: DebugAdapterSessionId,
+    ) -> Result<String, DebugAdapterError> {
         let mut owners = match self.owners.lock() {
             Ok(owners) => owners,
             Err(_) => {

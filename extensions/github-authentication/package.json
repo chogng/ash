@@ -1,0 +1,21 @@
+{
+  "name": "github-authentication",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "GitHub Authentication",
+  "description": "Profile-scoped GitHub authentication for Ash App.",
+  "engines": {
+    "vscode": "*"
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-github-authentication",
+    "scope": "profile",
+    "capabilities": [
+      "authentication.github"
+    ],
+    "clients": [
+      "app"
+    ]
+  }
+}

@@ -275,6 +275,12 @@ pub struct ExtensionDebugSessionOptions {
     deny_unknown_fields
 )]
 pub enum ExtensionClientOperation {
+    /// Granted only by profile hosts, never forwarded to a window.
+    #[cfg_attr(feature = "json-schema", schemars(skip))]
+    #[cfg_attr(feature = "export", ts(skip))]
+    CoreService {
+        request: crate::services::CoreServiceRequest,
+    },
     /// The initiating client confirms the saved target before handing it to the connection host.
     OpenRemoteConnection {
         authority: String,
@@ -474,6 +480,11 @@ pub enum ExtensionDiagnosticSeverity {
     deny_unknown_fields
 )]
 pub enum ExtensionClientResult {
+    #[cfg_attr(feature = "json-schema", schemars(skip))]
+    #[cfg_attr(feature = "export", ts(skip))]
+    CoreService {
+        response: crate::services::CoreServiceResponse,
+    },
     Command {
         value: Value,
         /// Older clients always returned a JSON value, including null for void.
@@ -547,6 +558,7 @@ pub struct ExtensionClientResponse {
 pub enum ExtensionHostStdinFrame {
     Request(crate::ExtensionHostRequest),
     ClientResponse(ExtensionClientResponse),
+    BackgroundClientResponse(ExtensionBackgroundClientResponse),
 }
 
 #[cfg(test)]

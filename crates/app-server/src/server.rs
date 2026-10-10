@@ -994,10 +994,21 @@ impl AppServer {
     pub(crate) fn cancel_connection_requests(&self, connection: &ConnectionState) {
         self.request_cancellations
             .cancel_connection(connection.connection_id);
+        self.cancel_connection_logins(connection.connection_id);
         self.request_scheduler
             .cancel_connection(connection.connection_id);
         // Pending host calls must be woken before joining their request workers.
         self.browser_host.unregister(connection.connection_id);
+    }
+
+    fn cancel_connection_logins(&self, connection_id: u64) {
+        if let Some(login) = &self.login {
+            for id in self.updates.take_connection_logins(connection_id) {
+                if let Ok(id) = ash_login::LoginId::new(id) {
+                    let _ = login.cancel(&id);
+                }
+            }
+        }
     }
 
     /// Releases connection-scoped subscriptions and runtime resources.
@@ -1005,6 +1016,7 @@ impl AppServer {
         if !connection.mark_closed() {
             return;
         }
+        self.cancel_connection_logins(connection.connection_id);
         self.memory_diagnostics
             .close_owner(connection.connection_id);
         self.feedback.close(connection.connection_id);
@@ -2572,8 +2584,12 @@ impl AppServer {
             Some(ClientMethod::AccountRateLimitsRead) => {
                 self.account_rate_limits_read(&request.params, cancellation)
             }
-            Some(ClientMethod::AccountLoginStart) => self.account_login_start(&request.params),
-            Some(ClientMethod::AccountLoginCancel) => self.account_login_cancel(&request.params),
+            Some(ClientMethod::AccountLoginStart) => {
+                self.account_login_start(connection, &request.params)
+            }
+            Some(ClientMethod::AccountLoginCancel) => {
+                self.account_login_cancel(connection, &request.params)
+            }
             Some(ClientMethod::AccountLogout) => self.account_logout(&request.params),
             Some(ClientMethod::ConnectorList) => self.connector_list(),
             Some(ClientMethod::ConnectorApiTokenConnect) => {

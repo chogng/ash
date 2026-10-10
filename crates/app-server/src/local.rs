@@ -1,6 +1,8 @@
 use crate::AppServer;
 use crate::CodebaseModels;
 use crate::SlashCommandCatalog;
+use crate::github_authentication::GitHubAuthenticationProvider;
+use crate::github_authentication::GitHubAuthenticationRuntime;
 use crate::model_catalog::ModelCatalog;
 use crate::model_provider_error::map_model_provider_error;
 use crate::server::DirGrantPolicy;
@@ -79,7 +81,6 @@ use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink as CoreModelStreamSink;
 use extension_catalog::ExtensionRoot;
-use github::GitHubOAuth;
 use model_provider_info::ModelProviderConfig;
 use model_provider_info::ProviderAccessMode;
 use model_provider_info::ProviderConfigRegistry;
@@ -123,6 +124,7 @@ pub struct AppServerOptions {
     plugins_manager: Option<Arc<ash_core_plugins::PluginsManager>>,
     language_server_providers: ash_lsp_server_provider::LspServerProviders,
     product_services: Option<crate::LocalProductServicesConfig>,
+    github_authentication_extension: Option<PathBuf>,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
     trace_exporter: Option<otel_trace_websocket::Exporter>,
     pty_helper: Option<std::path::PathBuf>,
@@ -183,6 +185,7 @@ impl AppServerOptions {
             plugins_manager: None,
             language_server_providers: ash_lsp_server_provider::LspServerProviders::new(),
             product_services: None,
+            github_authentication_extension: None,
             profile_runtime: None,
             trace_exporter: None,
             pty_helper: None,
@@ -380,6 +383,13 @@ impl AppServerOptions {
         self
     }
 
+    /// Selects the product authentication extension. Embedded clients, including TUI,
+    /// leave it absent unless they explicitly request GitHub authentication.
+    pub fn with_github_authentication_extension(mut self, executable: impl Into<PathBuf>) -> Self {
+        self.github_authentication_extension = Some(executable.into());
+        self
+    }
+
     /// Installs distribution-pinned Marketplace roots and public OAuth product adapters.
     pub fn with_product_services(mut self, services: crate::LocalProductServicesConfig) -> Self {
         self.product_services = Some(services);
@@ -516,6 +526,7 @@ impl PartialEq for AppServerOptions {
             && self
                 .language_server_providers
                 .ptr_eq(&other.language_server_providers)
+            && self.github_authentication_extension == other.github_authentication_extension
             && self.product_services == other.product_services
             && self.pty_helper == other.pty_helper
     }
@@ -795,6 +806,7 @@ pub struct LocalProfileRuntime {
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
     marketplace: Mutex<Option<ProfileMarketplaceAuthority>>,
+    github_authentication: Mutex<Option<Arc<GitHubAuthenticationRuntime>>>,
 }
 
 struct ProfileMarketplaceAuthority {
@@ -915,6 +927,7 @@ impl LocalProfileRuntime {
             updates: Arc::new(UpdateBroker::default()),
             update_scopes: Mutex::new(BTreeMap::new()),
             marketplace: Mutex::new(None),
+            github_authentication: Mutex::new(None),
         })
     }
 
@@ -1568,12 +1581,43 @@ pub fn open_app_server_with_codebase_providers(
             broker_base_url: config.broker_base_url,
         });
     }
-    let github_oauth = GitHubOAuth::configured(
-        github_browser_configurations,
-        Arc::clone(&application_http),
-        Arc::clone(&profile_secrets),
-    )
-    .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let github_oauth = if let Some(executable) = options.github_authentication_extension.take() {
+        let runtime = if let Some(profile) = &profile_runtime {
+            let mut shared = profile
+                .github_authentication
+                .lock()
+                .map_err(|_| open_error("GitHub authentication authority unavailable"))?;
+            if let Some(runtime) = shared.as_ref() {
+                if !runtime.matches(&executable, &github_browser_configurations) {
+                    return Err(open_error(
+                        "GitHub authentication profile configuration conflict",
+                    ));
+                }
+                runtime.clone()
+            } else {
+                let runtime = GitHubAuthenticationRuntime::open(
+                    executable,
+                    github_browser_configurations,
+                    application_http.clone(),
+                    profile_secrets.clone(),
+                )
+                .map_err(open_error)?;
+                *shared = Some(runtime.clone());
+                runtime
+            }
+        } else {
+            GitHubAuthenticationRuntime::open(
+                executable,
+                github_browser_configurations,
+                application_http.clone(),
+                profile_secrets.clone(),
+            )
+            .map_err(open_error)?
+        };
+        Some(GitHubAuthenticationProvider::new(runtime))
+    } else {
+        None
+    };
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
         chatgpt_plan.clone(),
         chatgpt_oauth.clone(),
@@ -1586,7 +1630,9 @@ pub fn open_app_server_with_codebase_providers(
             .cloned()
             .map(|auth| auth as Arc<dyn InteractiveLoginDriver>),
     );
-    login_drivers.push(github_oauth.clone());
+    if let Some(github) = &github_oauth {
+        login_drivers.push(github.clone());
+    }
     let metadata_refreshers: Vec<Arc<dyn AccountMetadataRefresher>> =
         vec![kimi_oauth.clone(), supergrok_oauth.clone()];
     let login_service = Arc::new(
@@ -1610,9 +1656,9 @@ pub fn open_app_server_with_codebase_providers(
     supergrok_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    github_oauth
-        .install_login_service(&login_service)
-        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    if let Some(github) = &github_oauth {
+        github.install_login_service(&login_service);
+    }
     let subscription_connections = vec![
         ash_chatgpt::CHATGPT_PLAN_PROVIDER_ID,
         ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
@@ -1684,10 +1730,12 @@ pub fn open_app_server_with_codebase_providers(
     .with_cloud_codebase_storage_root(cloud_codebase_root)
     .with_cloud_codebase_providers(providers.cloud)
     .with_extension_roots(extension_roots);
-    server = server
-        .with_github_accounts(github_oauth.clone())
-        .with_github_credentials(github_oauth, application_http.clone())
-        .map_err(open_error)?;
+    if let Some(github) = github_oauth {
+        server = server
+            .with_github_accounts(github.clone())
+            .with_github_credentials(github, application_http.clone())
+            .map_err(open_error)?;
+    }
     if let Some(target) = report_issue_url {
         server = server.with_issue_reporter(
             github::GitHubIssueReporter::new(&target, application_http.clone())

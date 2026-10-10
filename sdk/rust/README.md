@@ -1,9 +1,11 @@
-# `ash-external-ext-sdk`：此前的 Rust 作者 SDK
+# `ash-external-ext-sdk`：Rust 作者 SDK 与能力扩展复用
 
-产品扩展方向已改为 TS/JS 扩展、TS SDK 与 Rust 后端业务接口。本 crate 不再作为产品作者 SDK
-继续建设，当前源码和 Cargo 成员仍在，尚未完成退场。扩展作者不应以它为新扩展的开发入口。
+目标产品同时支持 Electron / Rust-V8 宿主中的 TS/JS 扩展与独立 Rust 程序中的能力扩展。Rust 扩展承接从共享核心拆出的可选业务，通过公开版本化契约供 App 和 TUI 按需使用，不需要 Node/V8，也不链接到核心进程。
+本 crate 的公共 `Extension`、typed DataChannels、activation-scoped Services 和 stdio runtime 已用于 [`GitHub authentication`](../../extensions/github-authentication/README.md) 的独立 Rust 试点。具体 Provider 不链接进 App Server；通用认证契约由 `ash-login::extension` 定义，GitHub 消费者契约保留在 `ash-github`。
 确定的职责、GitHub 示例和权限边界见
-[`编辑器扩展系统`](../../docs/editor-extensions.md#0-确定的产品方向)。
+[`扩展架构与编辑器接入`](../../docs/editor-extensions.md#0-确定的产品方向)。
+
+本 crate 保持 Rust 作者 SDK 职责。两类扩展共享产品侧包管理、授权、协议与进程监管，TS/JS 的 VS Code/Node API 兼容由 JS 宿主实现，不并入本 SDK，也不使 Rust 扩展依赖 V8 或 App Server。建议的组织与现有 owner 见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)；这是组织建议，本次没有重组源码。
 
 ## 当前源码及验证状态
 
@@ -11,23 +13,21 @@
 [`src/bin/review.rs`](src/bin/review.rs) 与 [`tests/host.rs`](tests/host.rs) 保留独立扩展进程的示例和测试，
 基础能力曾通过真实 Supervisor 和 stdio 调用验证。
 
-之后追加的扩展反向调用服务代码已暂停，尚未完成协议生成和端到端验证；这些改动不能计为可用作者 API。
-本 README 不再提供 Rust 作者入门步骤，也不再把补齐 Rust SDK 当作后续计划。
+`data_channels.rs` 复用现有 DataChannel 注册和 `receiveData` 调用，要求闭合的请求／响应类型。`services.rs` 复用有界反向请求，绑定 profile activation 的 incarnation／generation；Host 逐 Provider 授予秘密命名空间与 HTTP 端点，不开放完整后端连接。现有 `client.rs` 的窗口编辑器调用仍需按各自能力独立验证。
 
-| 现有部分                                  | 当前职责                               | 目标处理                                                                  |
-| ----------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------- |
-| `src/lib.rs`、`languages.rs`、`window.rs` | Rust 回调、注册与 Output 接口          | 作者能力改由 TS SDK 承担                                                  |
-| `runtime.rs`、`cancellation.rs`           | Rust 程序的 stdio 分发、并发回调与取消 | 扩展入口由独立 JS 运行环境执行，生命周期由 TS 宿主管理                    |
-| `client.rs`                               | 尚未完成验证的反向服务请求补充         | 不再沿 Rust 作者 SDK 扩展，权限与业务调用在 TS SDK / 宿主 / Rust 服务接入 |
-| `ash-external-ext-protocol`           | 现有可执行 Host v1 的共享 wire 定义    | 按生产调用方清理；目标业务协议继续由 Rust owner 生成                      |
+| 现有部分                                  | 当前职责                               | 目标处理                                                       |
+| ----------------------------------------- | -------------------------------------- | -------------------------------------------------------------- |
+| `src/lib.rs`、`languages.rs`、`window.rs` | Rust 回调、注册与 Output 接口          | 能力注册用于 Rust Provider；编辑器模型与 UI 保持客户端所有权             |
+| `runtime.rs`、`cancellation.rs`           | Rust 程序的 stdio 分发、并发回调与取消 | 独立 Rust 程序 runtime 已供产品 Provider 复用；进程监管与权限由共享宿主拥有  |
+| `client.rs`                               | 绑定发起窗口的编辑器服务调用           | 按公开能力接口补验证；不开放 App Server 私有方法或完整后端连接 |
+| `ash-external-ext-protocol`           | 现有可执行 Host v1 的共享 wire 定义    | 按生产调用方清理；目标业务协议继续由 Rust owner 生成           |
 
-包安装、授权记录、资源目录和 Rust 领域业务具有独立用途。SDK 退场不等于删除这些能力，也不把
-GitHub、Git、存储或凭据逻辑搬回扩展包。静态目录实现属于
-[`ash-extension-catalog`](../../crates/extension-catalog/README.md)；现有进程 Host 的记录属于
-[`ash-external-ext`](../../crates/external-ext/README.md)。
+包安装、授权记录和资源目录继续由共享基础设施拥有。GitHub 认证已进入产品 Rust 扩展，API 业务拆分仍是后续工作；通用 Git、存储、SecretStore 和最终授权仍由共享服务拥有。静态目录实现属于
+[`ash-extension-catalog`](../extension-catalog/README.md)；现有进程 Host 的记录属于
+[`ash-external-ext`](../crates/external-ext/README.md)。
 
-## 源码退场时的同步要求
+## 迁移与验证要求
 
-清理本 crate 时，同批处理 Cargo workspace 和 lockfile、Bazel、CI、Host 的依赖和调用方、示例与测试。
+只有具体模块的消费者已经迁移后才清理旧源码；是否继续使用此 crate 名称由实际接口职责决定。迁移同批处理 Cargo workspace 和 lockfile、Bazel、CI、Host 的依赖和调用方、示例与测试。
 保留其他领域的系统工具和外部进程能力，不以新方向为由删除无关运行时。
-验证应覆盖真实 TS/JS 扩展的注册、调用、取消、释放和授权拒绝，不能用旧 Rust 示例通过来证明新运行方式完成。
+验证应分别覆盖真实 TS/JS 包与独立 Rust 程序的注册、调用、取消、释放和授权拒绝；现有 Node 路径按当前实现验证，不能当作目标 Rust/V8 兼容层已经完成。Rust Provider 需检查 App/TUI 共用语义，以及未启用可选登录扩展时 TUI 没有启动依赖；旧 Rust 命令或 Hover 示例通过不能证明认证能力完成。

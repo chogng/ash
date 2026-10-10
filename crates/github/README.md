@@ -1,8 +1,10 @@
 # GitHub
 
-Git 与 GitHub 分别拥有独立能力。`ash-git` 负责本地仓库、提交、分支、差异及 fetch/pull/push，支持不同托管平台；本 crate 负责 GitHub 账号授权与 Issue、PR 等 API 操作。Git 的 SSH/HTTPS 凭据不等同于 GitHub API 授权，两者没有相互依赖。
+Git 与 GitHub 分别拥有独立能力。`ash-git` 负责本地仓库、提交、分支、差异及 fetch/pull/push，支持不同托管平台；本 crate 保留 GitHub 账号／grant 消费者契约与 Issue、PR 等 API 操作；认证实现由根目录的 Rust 扩展拥有。Git 的 SSH/HTTPS 凭据不等同于 GitHub API 授权，两者没有相互依赖。
 
-GitHub 是 Ash 内置的后端领域能力。Workbench 界面通过领域接口与 App Server 使用它，基础功能不依赖 Extension 的安装或激活。扩展可以调用产品公开的能力；账户授权、GitHub 执行与共享业务状态由后端负责。
+GitHub 认证已拆到 [`extensions/github-authentication`](../../extensions/github-authentication/README.md) 的独立 Rust executable。App 使用 profile 级唯一实例，所有目录和窗口通过现有账号接口共享它；默认 TUI 组合不加载。此 crate 不包含 OAuth、token 存储、刷新或 loopback 回调实现。
+
+REST／GraphQL 业务当前仍由 App Server 的 GitHub processor 使用本 crate 实现，下一步再评估 API Provider 的拆分。认证试点复用公共 Rust 扩展 SDK、Host RPC v1、进程监管和受限的核心 SecretStore／HTTP 服务；通用机制与服务商业务的边界见 [GitHub 分工](../../docs/editor-extensions.md#02-github-的具体分工)。
 
 - 通过 `ash-http-client` 的 REST / GraphQL 请求读写 Issue、评论、标签、负责人和 PR，共用产品的代理、TLS 和取消能力。不打包或依赖 `gh`，也不读取 GitHub CLI 登录配置或环境变量 token。
 - 保留 GitHub 参数与返回值校验，不拥有 Agent、Thread、工作目录或模型调用。
@@ -10,7 +12,7 @@ GitHub 是 Ash 内置的后端领域能力。Workbench 界面通过领域接口�
 - 不维护 Issue Workflow、assignment、领取租约、执行阶段或交付状态机。
 - Issue 浏览缓存由 `ash-state` 维护；执行通过通用 Session/Agent API，Agent 使用获准的 Plugin 工具处理外部操作。
 
-`GitHub::for_selected_account` 接收明确账号、共享 HTTP 客户端和请求取消令牌，捕获供应商验证过的主机、账号与授权身份。每次请求重新核对授权，并通过 Authorization 头发送对应主机的 token。登出、重新登录或 token 替换后，旧对象不能发起请求，读取结果也会被丢弃。已经确认的写入结果仍表示已完成的修改。GitHub.com 与 Enterprise Server 的同名账号分别保存，主机不匹配时不会发送凭据；登录由 `ash-login` 调用本 crate 的授权实现，密钥复用 `ash-secrets`。浏览器登录使用配置的 GitHub App 或 OAuth App；个人访问令牌连接不要求浏览器授权服务配置，通过目标主机的 `/user` 验证账号后保存。
+`GitHub::for_selected_account` 接收明确账号、共享 HTTP 客户端和请求取消令牌，捕获供应商验证过的主机、账号与授权身份。每次请求重新核对授权，并通过 Authorization 头发送对应主机的 token。登出、重新登录或 token 替换后，旧对象不能发起请求，读取结果也会被丢弃。已经确认的写入结果仍表示已完成的修改。GitHub.com 与 Enterprise Server 的同名账号分别保存，主机不匹配时不会发送凭据；登录由 `ash-login` 经认证能力代理调用独立 Rust Provider，密钥通过核心 `ash-secrets` 服务保存。浏览器登录使用配置的 GitHub App 或 OAuth App；个人访问令牌连接不要求浏览器授权服务配置，通过目标主机的 `/user` 验证账号后保存。
 
 账号目录把主账号排在首位。连接 GitHub.com 账号会更新主账号；连接 Enterprise 不替换已有的 GitHub.com 主账号。未提供账号的消费者通过 `GitHub::for_account` 使用主账号；管理界面选择账号仅影响当前窗口，每个仓库请求携带该账号。按账号登出只移除对应授权，提供方登出移除其全部授权。旧单账号密钥在第一次读取时迁入账号目录并删除。
 

@@ -441,13 +441,13 @@ dependencies = [
  "ash-debug-adapter",
  "ash-diagnostics",
  "ash-diff",
- "ash-external-ext",
- "ash-external-ext-protocol",
  "ash-exec-server",
  "ash-exec-server-protocol",
  "ash-execpolicy",
  "ash-extension-api",
  "ash-extension-catalog",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
  "ash-features",
  "ash-feedback",
  "ash-file-access",
@@ -457,6 +457,7 @@ dependencies = [
  "ash-git",
  "ash-git-attribution",
  "ash-github",
+ "ash-github-authentication",
  "ash-glm",
  "ash-goal",
  "ash-grep",
@@ -619,9 +620,9 @@ dependencies = [
  "ash-call-contract",
  "ash-collaboration-contract",
  "ash-diagnostics",
- "ash-external-ext-protocol",
  "ash-environment",
  "ash-extension-items",
+ "ash-external-ext-protocol",
  "ash-features",
  "ash-feedback-contract",
  "ash-file-access",
@@ -1236,30 +1237,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-external-ext"
-version = "0.1.0"
-dependencies = [
- "ash-async-utils",
- "ash-external-ext-protocol",
- "ash-sandboxing",
- "ash-windows-sandbox",
- "getrandom 0.2.17",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "ash-external-ext-protocol"
-version = "0.1.0"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "ts-rs",
-]
-
-[[package]]
 name = "ash-environment"
 version = "0.1.0"
 dependencies = [
@@ -1367,6 +1344,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-external-ext"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-external-ext-protocol",
+ "ash-sandboxing",
+ "ash-windows-sandbox",
+ "getrandom 0.2.17",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-external-ext-protocol"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "ts-rs",
+]
+
+[[package]]
 name = "ash-external-ext-sdk"
 version = "0.1.0"
 dependencies = [
@@ -1375,6 +1376,25 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-external-js-ext"
+version = "0.1.0"
+dependencies = [
+ "ash-external-ext",
+ "ash-external-ext-protocol",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-sandboxing",
+ "ash-v8-runtime",
+ "ash-windows-sandbox",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "v8",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1539,11 +1559,30 @@ dependencies = [
  "ash-login",
  "ash-secrets",
  "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "ash-github-authentication"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
+ "ash-external-ext-sdk",
+ "ash-github",
+ "ash-http-client",
+ "ash-install-context",
+ "ash-login",
+ "ash-secrets",
+ "base64 0.22.1",
  "getrandom 0.2.17",
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "tokio",
  "url",
  "zeroize",
 ]
@@ -1786,25 +1825,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-external-js-ext"
-version = "0.1.0"
-dependencies = [
- "ash-external-ext",
- "ash-external-ext-protocol",
- "ash-file-access",
- "ash-file-system",
- "ash-sandboxing",
- "ash-v8-runtime",
- "ash-windows-sandbox",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "v8",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "ash-keybinding"
 version = "0.1.0"
 dependencies = [
@@ -1889,6 +1909,7 @@ name = "ash-login"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "serde",
 ]
 
 [[package]]

@@ -145,7 +145,7 @@ impl StdioExtensionHostProcess {
             Arc::clone(&exited),
             Arc::clone(&output_events),
             Arc::clone(&background),
-            node,
+            node || limits.isolation == crate::ProcessIsolationPolicy::AuthorizedProduct,
             limits.clone(),
         );
         let stderr_thread = spawn_stderr_reader(
@@ -410,7 +410,7 @@ fn spawn_stdout_reader(
                             .map_err(|_| "background queue lock poisoned".to_owned())?;
                         if !node || queue.context != Some(request.context) {
                             return Err(
-                                "background call belongs to an unbound Node activation".to_owned()
+                                "background call belongs to an unbound activation".to_owned()
                             );
                         }
                         if request.call_id <= queue.last_call_id

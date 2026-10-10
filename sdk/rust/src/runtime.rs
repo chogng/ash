@@ -95,10 +95,12 @@ enum Phase {
 
 struct Runtime<E> {
     client: crate::client::Client,
+    services: crate::services::Services,
     extension: E,
     writer: Writer,
     options: RuntimeOptions,
     phase: Phase,
+    environment: Option<BTreeMap<String, Option<String>>>,
     fence: Option<HostEventContext>,
     context: Option<ExtensionContext>,
     registrations: BTreeMap<String, Registration>,
@@ -146,10 +148,15 @@ fn run<E: Extension>(
     };
     let mut runtime = Runtime {
         client: crate::client::Client::new(writer.clone(), options.maximum_in_flight_requests),
+        services: crate::services::Services::new(
+            writer.clone(),
+            options.maximum_in_flight_requests,
+        ),
         extension,
         writer,
         options,
         phase: Phase::New,
+        environment: None,
         fence: None,
         context: None,
         registrations: BTreeMap::new(),
@@ -165,6 +172,12 @@ fn run<E: Extension>(
                     .map_err(|error| ProtocolError::InvalidProtocol(error.to_string()))?;
             let request = match frame {
                 external_ext_protocol::ExtensionHostStdinFrame::Request(request) => request,
+                external_ext_protocol::ExtensionHostStdinFrame::BackgroundClientResponse(
+                    response,
+                ) => {
+                    runtime.services.respond(response)?;
+                    continue;
+                }
                 external_ext_protocol::ExtensionHostStdinFrame::ClientResponse(response) => {
                     runtime.client.respond(response)?;
                     continue;
@@ -182,6 +195,7 @@ fn run<E: Extension>(
     // EOF and malformed input end the activation just as explicit shutdown does.
     // Join cooperative work before releasing Output handles or extension-owned resources.
     runtime.client.close();
+    runtime.services.close();
     let cleanup = runtime.deactivate();
     result.and(cleanup)
 }
@@ -214,6 +228,7 @@ impl<E: Extension> Runtime<E> {
                         "unsupported extension runtime API version",
                     ))
                 } else {
+                    self.environment = params.environment.clone();
                     self.fence = Some(fence);
                     self.phase = Phase::Initialized;
                     Ok(HostSuccess::Initialized(InitializeResult {
@@ -237,10 +252,17 @@ impl<E: Extension> Runtime<E> {
                 } else {
                     let mut context = ExtensionContext {
                         client: self.client.clone(),
+                        services: self.services.bound(HostEventContext {
+                            protocol_version: request.context.protocol_version,
+                            incarnation: request.context.incarnation,
+                            activation_generation: request.context.activation_generation,
+                        }),
+                        data_channels: crate::data_channels::DataChannels::default(),
                         commands: Commands::default(),
                         languages: Languages::default(),
                         window: Window::new(self.writer.clone(), fence, self.options.protocol),
                         activation: params.clone(),
+                        environment: self.environment.clone().unwrap_or_default(),
                     };
                     let activated = self
                         .extension

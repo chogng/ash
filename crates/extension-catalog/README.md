@@ -147,3 +147,9 @@ provider 上游的 `ash-core-plugins` authority 完成。Executable Editor Exten
 未来若 App 需要同一静态 package 语义，应直接依赖本 crate；这只是明确的 extension point，当前
 仓库没有 App consumer。安装与信任控制面若需要演进，应与 Manager/legacy Plugin authority 明确对接，
 不得把 mutable download 或 runtime process 塞入 `ExtensionCatalog`。
+
+The catalog descriptor retains the canonical directory of the exact authorized package.
+The App Server publishes it as an optional `extensionLocation` file URI together with
+its execution host `targetPlatform`. Workbench uses these facts for relative declarative
+Debug programs and platform overrides; executable selection stays in the frontend.
+Manifest and resource digests still describe the frozen package snapshot.

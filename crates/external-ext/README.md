@@ -3,7 +3,7 @@
 > 本 README 记录当前可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复。
 > 作者使用 [`TS SDK`](../../sdk/typescript/README.md)，JS 由独立的
 > [`独立扩展宿主`](../external-js-ext/README.md)执行：Ash SDK 使用 V8，标准 VS Code 扩展使用真实 Node；本 crate 继续承担共用的进程监管。
-> 此前的 [`Rust 作者 SDK`](../extensions/README.md) 不再作为产品作者入口继续建设。
+> [`Rust 作者 SDK`](../../sdk/rust/README.md) 已被 GitHub 认证的独立程序复用；产品 Rust launcher 已接通，通用第三方 Rust 安装与隔离仍待完成。
 > 共享 wire 定义属于 `ash-external-ext-protocol`。跨 Marketplace/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
 > [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；统一远端 package 身份由
 > [`crates/core-plugins/README.md`](../core-plugins/README.md) 维护。
@@ -13,7 +13,7 @@
 完成握手、激活、调用、取消、停用和关闭，并在授权仍有效时按有界策略恢复崩溃进程。它不发现或
 安装 package，不选择 activation event，不实现 Workbench provider，不实现 VS Code Extension API；该 API 属于产品 JS 宿主。
 
-Rust 后端继续提供授权、GitHub、Git、存储等业务能力。JS 入口和回调在独立 V8 或 Node 进程执行，
+当前 Rust 后端仍提供授权、GitHub、Git、存储等能力；目标核心保留通用机制，GitHub 认证与 API 由可选 TS/JS 或 Rust Provider 拥有。这个 supervisor 共用两类扩展的进程监管；语言 API 兼容和作者 SDK 保持独立，建议的 crate 分工见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。它不拥有具体业务和会话，也不能用旧 Host RPC 示例证明新认证能力可用。JS 入口和回调目前在独立 V8 或 Node 进程执行，
 作者无需实现传输协议。标准 Node 的激活和后台客户端请求由 `supervisor/client.rs` 的有界并发 pump 处理，
 每次请求取得当前授权 lease。App Server 绑定启动窗口，子进程只携带 incarnation/generation；窗口关闭、
 撤权、崩溃和 shutdown 取消请求并等待释放，再释放进程 lease。按扩展串行化激活，使激活阶段调用另一
@@ -31,13 +31,15 @@ Debug 子进程继承 stdout 或直接写 fd 1 不会进入协议解析器。SDK
 Supervisor 只验证并转交该次快照，不维护另一个配置或工作区更新 owner。`workspaceEvents` 是只读
 窗口观察注册，不借用 command、language、Tasks 或 Debug 执行 capability。
 
+GitHub 认证试点已复用本 Host 的独立进程监管与 Host RPC v1。`ProductExecutableLauncher` 绑定选定的产品 Rust executable，`AuthorizedProduct` 表示受信任产品程序，不宣称 OS 沙箱；第三方程序仍需其自身明确的授权与隔离策略。背景核心服务也可由 profile Provider 使用，宿主绑定命名空间／端点，窗口服务不自动向它开放。运行链与共享 scope 见 [认证扩展](../../extensions/github-authentication/README.md)。
+
 ## 1. Crate 边界
 
 | 能力                 | 本 crate 的职责                                                                          | 上层或平台职责                                                                                  |
 | -------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Package binding      | 接收并绑定 `package_id`、digest、entrypoint 与 activation generation                     | source adapter 选择 immutable package/executable 并解析绝对路径                                 |
 | Activation authority | 每次激活和调用前获取 `ActivationLease`                                                   | Adapter 同时复核 source artifact/admission lease 与 directory capability                        |
-| Process supervision  | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启                                | 平台 launcher 实施选定执行策略并拥有 killable process group                                |
+| Process supervision  | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启                                | 平台 launcher 实施选定执行策略并拥有 killable process group                                     |
 | Host RPC v1          | 版本、请求相关性、严格 shape、注册 ceiling 和 byte limits                                | 扩展程序实现协议；App Server 把注册投影到领域 owner                                             |
 | Provider invocation  | 路由到精确 registration、deadline、并发取消和结果校验                                    | Command、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 定义 payload 与消费结果 |
 | Diagnostics / Output | 返回 typed `ExtensionHostError`，保留有界 stderr，并接收受配额约束的扩展命名 Output 事件 | App Server 清洗故障并把 Output 事件投影到 Workbench Output 服务                                 |
@@ -54,7 +56,7 @@ entrypoint 加载。
 | `../external-ext-protocol/src/output.rs` | `ExtensionHostOutputEvent`、`HostOutputOperation`                         | 扩展发起的命名 Output 事件；按 incarnation/generation fencing，不属于静态 registration |
 | `authority.rs`                               | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec`       | 授权是 live gate，不是 activation 时的一次布尔判断                                     |
 | `limits.rs`                                  | `ExtensionHostLimits`、`ProcessIsolationPolicy`                           | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致                    |
-| `process.rs`                                 | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 在 entrypoint 执行前实施选定策略并应用明确的进程环境                              |
+| `process.rs`                                 | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 在 entrypoint 执行前实施选定策略并应用明确的进程环境                          |
 | `supervisor.rs`                              | `ExtensionHostSupervisor`、`ExtensionHostSnapshot`                        | 一扩展一监管器；注册仅在完整 activation 成功后发布                                     |
 | `supervisor/invocation.rs`                   | `ExtensionInvocation`、`ExtensionInvocationHandle`                        | wait 与 cancel 可由不同线程并发调用；lease 持续到 terminal handling                    |
 | `restart.rs`                                 | `RestartPolicy`、`RestartTracker`                                         | 滑动窗口、指数退避和 terminal `CrashLoop`                                              |

@@ -62,6 +62,15 @@ fn chatgpt_login_entries_are_independent_in_local_app_server() {
         }),
     );
     assert_eq!(cancelled["result"]["status"], "cancelled");
+    // The embedded/TUI composition does not opt into a product extension.
+    let github = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"account/login/start","params":{"method":{"type":"gitHubBrowser"}}
+        }),
+    );
+    assert_eq!(github["error"]["data"]["kind"], "AccountUnavailable");
     assert!(!codex_home.path().join("auth.json").exists());
     let providers = local_call(
         &server,

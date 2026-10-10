@@ -108,6 +108,7 @@ class PackageTests(unittest.TestCase):
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
                 "ash-external-js-ext",
+                "ash-github-authentication",
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-remote",
@@ -236,6 +237,7 @@ class PackageTests(unittest.TestCase):
         "css",
         "diff",
         "git-base",
+        "github-authentication",
         "go",
         "html",
         "ini",
@@ -360,6 +362,9 @@ class PackageTests(unittest.TestCase):
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,
+                github_authentication_binary=executable_file(
+                    root / "github-authentication", b"github-authentication"
+                ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
                 ),
@@ -441,6 +446,21 @@ class PackageTests(unittest.TestCase):
                 ).read_text(encoding="utf-8"),
             )
             self.assertTrue((output / "ash-resources" / "extensions").is_dir())
+            authentication = (
+                output / "ash-resources" / "extensions" / "github-authentication"
+            )
+            self.assertEqual(
+                "rust",
+                json.loads((authentication / "package.json").read_text())["ashRuntime"][
+                    "kind"
+                ],
+            )
+            self.assertFalse((authentication / "Cargo.toml").exists())
+            self.assertFalse((authentication / "src").exists())
+            self.assertEqual(
+                b"github-authentication",
+                (output / "bin" / "ash-github-authentication").read_bytes(),
+            )
             product_services = json.loads(
                 (
                     output
@@ -571,6 +591,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 None,
                 protocol_metadata=generated_protocol,
+                github_authentication_binary=executable_file(
+                    root / "github-authentication", b"github-authentication"
+                ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
                 ),
@@ -807,6 +830,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 node,
                 bubblewrap,
+                github_authentication_binary=executable_file(
+                    root / "github-authentication", b"github-authentication"
+                ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
                 ),
@@ -883,6 +909,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 windows_sandbox_service_binary=executable_file(
                     root / "sandbox-service-source.exe", b"sandbox-service"
+                ),
+                github_authentication_binary=executable_file(
+                    root / "github-authentication", b"github-authentication"
                 ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"

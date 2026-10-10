@@ -40,6 +40,8 @@ pub enum ProcessIsolationPolicy {
     /// execution consent. The supervisor still enforces protocol quotas, deadlines and revocation;
     /// this policy does not claim V8 confinement or a whole-process memory limit.
     AuthorizedNode,
+    /// Frozen product-owned Rust executable. This does not claim OS sandbox enforcement.
+    AuthorizedProduct,
     /// Explicit opt-in for trusted local development. Never use for installed third-party code.
     TrustedDevelopment,
 }

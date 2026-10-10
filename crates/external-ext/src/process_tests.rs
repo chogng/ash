@@ -483,12 +483,17 @@ exports.activate = async context => {
     }
     let handler: std::sync::Arc<crate::ExtensionBackgroundClientHandler> =
         std::sync::Arc::new(move |context, operation, token, _timeout| {
-            assert_eq!(context, crate::HostEventContext::new(1, 3));
+            assert_eq!(context.activation_generation, 3);
+            assert_ne!(context.incarnation, 0);
             match operation {
                 external_ext_protocol::ExtensionClientOperation::ReadInitialization {} => Ok(
                     external_ext_protocol::ExtensionClientResult::Initialization {
                         initialization: window_facts(1),
-                    })
+                    },
+                ),
+                external_ext_protocol::ExtensionClientOperation::ShowMessage { .. } => {
+                    sent.send("startup").unwrap();
+                    Ok(external_ext_protocol::ExtensionClientResult::Done)
                 }
                 external_ext_protocol::ExtensionClientOperation::ExecuteCommand {
                     command, ..
@@ -538,7 +543,7 @@ exports.activate = async context => {
         .unwrap()
         .wait_with_client(|operation, token, timeout| {
             handler(
-                crate::HostEventContext::new(1, 3),
+                crate::HostEventContext::new(snapshot.incarnation, snapshot.activation_generation),
                 operation,
                 token,
                 timeout,

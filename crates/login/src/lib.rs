@@ -33,3 +33,5 @@ pub use types::LogoutOutcome;
 #[cfg(test)]
 #[path = "login_tests.rs"]
 mod tests;
+
+pub mod extension;

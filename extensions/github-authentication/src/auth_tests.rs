@@ -1,6 +1,7 @@
 use super::*;
 use ash_http_client::HttpClientError;
 use ash_http_client::HttpResponse;
+use ash_login::LoginService;
 use ash_secrets::MemorySecretStore;
 use std::collections::VecDeque;
 
@@ -257,7 +258,7 @@ fn login_service_receives_the_completed_github_account() {
         http.push(r#"{"access_token":"private-access","refresh_token":"private-refresh","expires_in":28800,"refresh_token_expires_in":15724800,"token_type":"bearer"}"#);
         http.push(r#"{"id":42,"login":"octocat"}"#);
         let service = Arc::new(LoginService::deferred(driver.clone()));
-        driver.install_login_service(&service).unwrap();
+        driver.install_events(&(service.clone() as Arc<dyn AuthenticationEvents>));
         let started = service.begin(method).unwrap();
         let BeginLogin::Browser {
             authorization_url, ..
@@ -317,7 +318,7 @@ fn login_service_receives_the_completed_github_account() {
 fn account_catalog_keeps_cloud_and_enterprise_grants_independent_and_logout_is_exact() {
     let (driver, http, _) = driver();
     let service = Arc::new(LoginService::deferred(driver.clone()));
-    driver.install_login_service(&service).unwrap();
+    driver.install_events(&(service.clone() as Arc<dyn AuthenticationEvents>));
     let cancellation = ash_async_utils::CancellationSource::new().token();
     http.push(r#"{"id":42,"login":"cloud-user"}"#);
     let cloud = driver

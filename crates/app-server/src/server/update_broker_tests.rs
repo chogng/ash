@@ -754,3 +754,28 @@ fn thread_update(
         },
     }
 }
+
+#[test]
+fn login_completion_routing_keeps_directory_local_ids_separate() {
+    let first = UpdateBroker::default();
+    let second = first.fork_scope();
+    let first_queue = NotificationQueue::default();
+    let second_queue = NotificationQueue::default();
+    first.register(1, false, &first_queue);
+    second.register(2, false, &second_queue);
+    first.register_login_owner("login-1", 1);
+    second.register_login_owner("login-1", 2);
+    first.publish_account_login_completed(AccountLoginCompleted {
+        login_id: "login-1".into(),
+        status:
+            ash_app_server_protocol::protocol::account::AccountLoginCompletionStatusDto::Succeeded,
+        account: ash_app_server_protocol::protocol::account::AccountReadResult {
+            revision: "1".into(),
+            accounts: vec![],
+        },
+    });
+    assert_eq!(first_queue.drain().len(), 1);
+    assert!(second_queue.drain().is_empty());
+    assert!(second.owns_login("login-1", 2));
+    assert_eq!(second.take_connection_logins(2), ["login-1"]);
+}

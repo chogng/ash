@@ -15,6 +15,7 @@ const MAX_PROVIDER_OPERATIONS: usize = 32;
 const MAX_DISPLAY_TEXT_BYTES: usize = 512;
 
 mod client;
+pub mod services;
 mod statusbar;
 pub use statusbar::ExtensionStatusBarAlignment;
 pub use statusbar::ExtensionStatusBarCommand;

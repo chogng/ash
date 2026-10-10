@@ -15,16 +15,18 @@ The declarative loader reads resources without executing package code. Packages 
 entry, including `markdown-language-features`, are separately bundled and executed by the TS
 browser extension host. This directory holds packages, not the SDK or runtime implementation.
 
-Authors use the [`TS SDK`](../sdk/typescript/README.md); compiled JavaScript runs in a separate
-[`Rust V8 host`](../crates/external-js-ext/README.md) without Node. Editor and UI services remain
-in TS; GitHub requests, Git, credentials, storage, and authorized system operations use Rust
-backend APIs. The existing trusted Worker path does not yet establish third-party permission
-isolation. See the [architecture decision](../docs/editor-extensions.md#0-确定的产品方向).
+TS/JS packages use the selected extension runtime and public compatibility API. Independent Rust
+capabilities use the [`Rust SDK`](../../sdk/rust/README.md), the same versioned host transport,
+and granted core services. [`github-authentication`](github-authentication/README.md) is the first
+profile-scoped Rust capability: it owns GitHub sessions for App without becoming a default TUI
+startup dependency. See the [architecture decision](../docs/editor-extensions.md#0-确定的产品方向)
+for the two extension categories and current compatibility paths.
 
 ## Source and distribution boundary
 
 This directory is a runtime input, not a download endpoint. Built-in packages committed here are
-copied into `ash-resources/extensions/` during development and production packaging. Ash reads
+copied into `ash-resources/extensions/` during development and production packaging. Rust source
+packages also build an independent executable in `bin/`; the runtime does not compile their sources. Ash reads
 that trusted package directory through `ash-extension-catalog`; App is only a future consumer extension
 point. A running application does not authenticate to a Git repository to load built-in extensions.
 

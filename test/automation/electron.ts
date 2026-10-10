@@ -10,6 +10,8 @@ export interface ElectronLaunchOptions {
 	readonly startupTimeout?: number;
 	readonly userDataDirectory: string;
 	readonly profileDirectory?: string;
+	/** Public product configuration, selected before the profile daemon starts. */
+	readonly productServicesPath?: string;
 	readonly workspaceDirectory?: string;
 	readonly workspacePermissions?: "development";
 	readonly extraArgs?: readonly string[];
@@ -57,6 +59,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		delete environment.ASH_DESKTOP_UI_ONLY;
 	}
 	environment.ASH_HOME = options.profileDirectory ?? resolve(options.userDataDirectory, "profile");
+	if (options.productServicesPath) environment.ASH_PRODUCT_SERVICES_PATH = options.productServicesPath;
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;

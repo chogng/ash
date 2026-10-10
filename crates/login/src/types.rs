@@ -2,8 +2,21 @@ use crate::LoginError;
 use crate::LoginErrorKind;
 
 /// Stable identity for one interactive login attempt within a service incarnation.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[serde(try_from = "String", into = "String")]
 pub struct LoginId(String);
+
+impl TryFrom<String> for LoginId {
+    type Error = LoginError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+impl From<LoginId> for String {
+    fn from(value: LoginId) -> Self {
+        value.0
+    }
+}
 
 impl LoginId {
     pub fn new(value: impl Into<String>) -> Result<Self, LoginError> {
@@ -31,14 +44,14 @@ impl fmt::Display for LoginId {
 use std::fmt;
 
 /// Provider-owned account identity without credential material.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct AccountRef {
     pub provider: String,
     pub account_id: String,
 }
 
 /// User-visible status of one redacted account.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AccountStatus {
     Ready,
     ReauthenticationRequired,
@@ -46,7 +59,7 @@ pub enum AccountStatus {
 }
 
 /// Redacted account metadata safe for product UI and RPC projection.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct AccountSnapshot {
     pub account: AccountRef,
     pub email: Option<String>,
@@ -58,14 +71,14 @@ pub struct AccountSnapshot {
 }
 
 /// Revisioned redacted account state owned by the login control plane.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct AccountState {
     pub revision: u64,
     pub accounts: Vec<AccountSnapshot>,
 }
 
 /// Interactive login flow selected by a product client.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum LoginMethod {
     /// A missing account starts a new registration; an ID reuses only that registration.
     ChatGptPlanBrowser {
@@ -102,14 +115,14 @@ impl LoginMethod {
 }
 
 /// Provider-driver request carrying the service-owned login identity.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct BeginLoginRequest {
     pub login_id: LoginId,
     pub method: LoginMethod,
 }
 
 /// Redacted UI instruction returned when a login starts.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum BeginLogin {
     Connected {
         login_id: LoginId,
@@ -137,35 +150,35 @@ impl BeginLogin {
 }
 
 /// Result of cancelling one exact login identity.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CancelLoginOutcome {
     Cancelled,
     NotFound,
 }
 
 /// Redacted provider failure delivered when an asynchronous login ends.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LoginFailure {
     pub code: String,
     pub message: String,
 }
 
 /// Terminal result of an interactive login attempt.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum LoginCompletionOutcome {
     Succeeded { account: AccountSnapshot },
     Failed { failure: LoginFailure },
 }
 
 /// Provider-to-control-plane completion for one exact login attempt.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CompleteLogin {
     pub login_id: LoginId,
     pub outcome: LoginCompletionOutcome,
 }
 
 /// Revision-bound completion event emitted to product hosts.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LoginCompletion {
     pub login_id: LoginId,
     pub outcome: LoginCompletionOutcome,
@@ -173,7 +186,7 @@ pub struct LoginCompletion {
 }
 
 /// Result of a logout request.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LogoutOutcome {
     LoggedOut,
     AlreadyLoggedOut,

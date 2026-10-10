@@ -1,4 +1,5 @@
 use super::AppServer;
+use super::ConnectionState;
 use super::RpcError;
 use super::UpdateBroker;
 use super::decode;
@@ -124,7 +125,11 @@ impl AppServer {
         result(&account_state_dto(login.refresh().map_err(login_error)?))
     }
 
-    pub(super) fn account_login_start(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn account_login_start(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
         let params: AccountLoginStartParams = decode(params)?;
         let method = match params.method {
             AccountLoginMethodDto::ChatGptPlanBrowser { account_id } => {
@@ -146,7 +151,19 @@ impl AppServer {
             }
         };
         let login = self.login_service()?;
-        let started = login.begin(method).map_err(login_error)?;
+        let mut assigned = None;
+        let started = login.begin_with_identity(method, |id| {
+            self.updates
+                .register_login_owner(id.as_str(), connection.connection_id);
+            assigned = Some(id.clone());
+            Ok(())
+        });
+        if started.is_err()
+            && let Some(id) = assigned
+        {
+            self.updates.forget_login_owner(id.as_str());
+        }
+        let started = started.map_err(login_error)?;
         result(&match started {
             BeginLogin::Connected { login_id, .. } => AccountLoginStartResult::Connected {
                 login_id: login_id.to_string(),
@@ -170,9 +187,21 @@ impl AppServer {
         })
     }
 
-    pub(super) fn account_login_cancel(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn account_login_cancel(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
         let params: AccountLoginCancelParams = decode(params)?;
         let login_id = LoginId::new(params.login_id).map_err(login_error)?;
+        if !self
+            .updates
+            .owns_login(login_id.as_str(), connection.connection_id)
+        {
+            return result(&AccountLoginCancelResult {
+                status: AccountLoginCancelStatusDto::NotFound,
+            });
+        }
         let status = match self
             .login_service()?
             .cancel(&login_id)
@@ -181,6 +210,7 @@ impl AppServer {
             CancelLoginOutcome::Cancelled => AccountLoginCancelStatusDto::Cancelled,
             CancelLoginOutcome::NotFound => AccountLoginCancelStatusDto::NotFound,
         };
+        self.updates.forget_login_owner(login_id.as_str());
         result(&AccountLoginCancelResult { status })
     }
 

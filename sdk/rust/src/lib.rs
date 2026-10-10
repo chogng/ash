@@ -17,8 +17,10 @@ use serde_json::Value;
 
 mod cancellation;
 pub mod client;
+pub mod data_channels;
 pub mod languages;
 mod runtime;
+pub mod services;
 pub mod window;
 
 pub use cancellation::CancellationToken;
@@ -157,13 +159,21 @@ impl Commands {
 /// v1 does not permit changing the registration set after activation has been published.
 pub struct ExtensionContext {
     pub client: client::Client,
+    pub services: services::Services,
+    pub data_channels: data_channels::DataChannels,
     pub commands: Commands,
     pub languages: languages::Languages,
     pub window: window::Window,
     activation: ActivateParams,
+    environment: BTreeMap<String, Option<String>>,
 }
 
 impl ExtensionContext {
+    /// Product configuration delivered after the runtime process has started.
+    pub fn environment(&self) -> &BTreeMap<String, Option<String>> {
+        &self.environment
+    }
+
     pub fn extension_id(&self) -> &str {
         &self.activation.extension_id
     }
@@ -174,7 +184,12 @@ impl ExtensionContext {
 
     pub(crate) fn registrations(&self) -> Result<BTreeMap<String, Registration>, ExtensionError> {
         let mut registrations = self.commands.registrations.clone();
-        for (id, registration) in &self.languages.registrations {
+        for (id, registration) in self
+            .languages
+            .registrations
+            .iter()
+            .chain(self.data_channels.registrations.iter())
+        {
             if registrations
                 .insert(id.clone(), registration.clone())
                 .is_some()

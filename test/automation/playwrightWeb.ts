@@ -14,8 +14,13 @@ export interface WebLaunchResult {
 	close(): Promise<void>;
 }
 
+export interface GitHubBrowserTestConfiguration {
+	readonly clientId: string;
+	readonly brokerBaseUrl: string;
+}
+
 /** Owns the authenticated Web backend and profile for one smoke scenario. */
-export async function launchWeb(workspaceDirectory: string, options: { readonly reportIssueUrl?: string; readonly backendConfiguration?: string; } = {}): Promise<WebLaunchResult> {
+export async function launchWeb(workspaceDirectory: string, options: { readonly reportIssueUrl?: string; readonly backendConfiguration?: string; readonly githubAccount?: GitHubBrowserTestConfiguration; } = {}): Promise<WebLaunchResult> {
 	const root = resolve(import.meta.dirname, '../..');
 	const profileDirectory = await mkdtemp(join(tmpdir(), 'ash-w-'));
 	const productServicesPath = join(profileDirectory, 'product-services.json');
@@ -40,7 +45,7 @@ export async function launchWeb(workspaceDirectory: string, options: { readonly 
 		}
 	};
 	try {
-		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 2, reportIssueUrl: options.reportIssueUrl }) + '\n');
+		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 2, reportIssueUrl: options.reportIssueUrl, githubAccount: options.githubAccount }) + '\n');
 		if (options.backendConfiguration) { await writeFile(join(profileDirectory, 'config.toml'), options.backendConfiguration); }
 		const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
 		if (languageServer) {

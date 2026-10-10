@@ -7,6 +7,7 @@ import './contrib/github/browser/githubLinkPresentation.contribution.js';
 import './contrib/github/browser/github.contribution.js';
 import './services/dialogs/common/dialogService.js';
 import './services/path/browser/pathService.js';
+import './services/configurationResolver/browser/configurationResolverService.js';
 import './services/dataChannel/browser/dataChannelService.js';
 import './api/browser/mainThreadDataChannels.contribution.js';
 import './api/browser/mainThreadUriOpeners.js';

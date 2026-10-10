@@ -707,6 +707,15 @@ impl EditorClientBinding {
         {
             return client::read_workspace_file(self.workspace_read, &self.files, path, token);
         }
+        if matches!(
+            operation,
+            external_ext_protocol::ExtensionClientOperation::CoreService { .. }
+        ) {
+            return Err(external_ext_protocol::HostFailure {
+                code: external_ext_protocol::HostErrorCode::PermissionDenied,
+                message: "profile services are not available to editor extensions".into(),
+            });
+        }
         self.client_host
             .request_with_timeout(
                 self.owner,

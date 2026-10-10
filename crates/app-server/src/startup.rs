@@ -357,6 +357,9 @@ pub(super) fn open_server(host: &StartupOptions) -> Result<AppServer, String> {
             GrantSource::HostConfiguration => options.with_dir_root(dir_root),
         };
     }
+    if let Some(executable) = crate::github_authentication::product_executable() {
+        options = options.with_github_authentication_extension(executable);
+    }
     if let Some(path) = host.product_services() {
         options = options.with_product_services(
             LocalProductServicesConfig::load(path, host.profile_root())

@@ -60,6 +60,8 @@ When a request mentions Workbench, Sessions, or another frontend concept, locate
 
 ## Cross-system ownership
 
+扩展能力设计或从后端拆分能力时，使用 [扩展架构 skill](../.agents/skills/extension-architecture/SKILL.md) 并遵守 [核心与两类扩展边界](../docs/editor-extensions.md#0-确定的产品方向)及[运行时职责与兼容契约](../docs/editor-extensions.md#运行时职责与兼容契约)。App/TUI 按公开契约消费同一 Provider。核心保留通用机制、Agent 权威状态与最终授权，具体服务商认证/API 属于可选扩展；后台存活、Rust 实现或 App 预装不构成进入核心的理由。已有 Node/V8/Worker、旧 Rust SDK 和进程内 Agent 贡献按当前实现与迁移缺口记录，不能当作新架构已完成。
+
 Workspace owns source scanning, ignore rules, reads, chunking, revision, and chunk identity. A cloud CodeIndex may prepare model input, perform vector retrieval, call rerank, and sort/filter/truncate by model score, but it may consume only exact Workspace-authorized chunks. `model-provider` owns model invocation, not indexing or retrieval policy; cross-source result fusion belongs to retrieval.
 
 Callable Skills use the dedicated `$name` selector, such as `$commit`. Slash Commands remain product or server commands, while `@` remains the selector prefix for files and Plugin-provided context. `/skills` owns browsing, enablement, and diagnostics. Skill lists load metadata only; full `SKILL.md` content loads after selection or automatic activation.

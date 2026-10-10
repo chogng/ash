@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchBrowser } from "./playwrightBrowser.js";
 import { launchElectron } from "./playwrightElectron.js";
-import { launchWeb, type WebLaunchResult } from './playwrightWeb.js';
+import { launchWeb, type WebLaunchResult, type GitHubBrowserTestConfiguration } from './playwrightWeb.js';
 import type { PlaywrightApplication, PlaywrightDriver, WorkbenchDiagnostics } from "./playwrightDriver.js";
 import { playwrightTargetForProject, type PlaywrightTarget } from "./testTarget.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "./testWorkspace.js";
@@ -31,6 +31,7 @@ interface PlaywrightFixtures {
 	readonly gitMergeConflict: boolean;
 	readonly openWorkspace: boolean;
 	readonly reportIssueUrl: string | undefined;
+	readonly githubAccount: GitHubBrowserTestConfiguration | undefined;
 	/** Isolated config.toml contents installed before the owning App Server starts. */
 	readonly backendConfiguration: string | undefined;
 	readonly target: PlaywrightTarget;
@@ -46,15 +47,16 @@ export const test = base.extend<PlaywrightFixtures>({
 	gitMergeConflict: [false, { option: true }],
 	openWorkspace: [true, { option: true }],
 	reportIssueUrl: [undefined, { option: true }],
+	githubAccount: [undefined, { option: true }],
 	backendConfiguration: [undefined, { option: true }],
 	// Workspace options may depend on the platform. Connection addresses belong
 	// to the later launch, otherwise target -> server -> workspace -> target cycles.
 	target: async ({ }, use, testInfo) => {
 		await use(playwrightTargetForProject(testInfo.project.name));
 	},
-	webAppServer: [async ({ testWorkspace, reportIssueUrl, backendConfiguration }, use, testInfo) => {
+	webAppServer: [async ({ testWorkspace, reportIssueUrl, backendConfiguration, githubAccount }, use, testInfo) => {
 		if (testInfo.project.name !== 'browser-app-server') { await use(undefined); return; }
-		const server = await launchWeb(testWorkspace.directory, { reportIssueUrl, backendConfiguration });
+		const server = await launchWeb(testWorkspace.directory, { reportIssueUrl, backendConfiguration, githubAccount });
 		try { await use(server); } finally { await server.close(); }
 	}, { timeout: 75_000 }],
 	testWorkspace: async ({ includeLargeTestFile, gitRepository, gitMergeConflict }, use) => {
@@ -67,7 +69,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, video }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, githubAccount, video }, use, testInfo) => {
 		// Evidence scenarios opt into full recording; the launchers own every page until cleanup.
 		const videoOptions = typeof video === 'string' ? { mode: video, size: undefined } : video;
 		const recordVideo = videoOptions.mode === 'on' ? { directory: testInfo.outputPath('recordings'), size: videoOptions.size ?? { width: 1440, height: 900 } } : undefined;
@@ -136,10 +138,14 @@ export const test = base.extend<PlaywrightFixtures>({
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
 		const options = {
 			appServerMode: target.appServerMode, userDataDirectory, recordVideo,
+			productServicesPath: githubAccount ? join(userDataDirectory, 'product-services.json') : undefined,
 			workspaceDirectory: openWorkspace ? testWorkspace.directory : undefined,
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,
 		};
 		try {
+			if (options.productServicesPath) {
+				await writeFile(options.productServicesPath, JSON.stringify({ schemaVersion: 2, githubAccount }) + '\n');
+			}
 			// Startup-only backend options must be present before the daemon is composed.
 			if (backendConfiguration) {
 				const profileDirectory = join(userDataDirectory, 'profile');

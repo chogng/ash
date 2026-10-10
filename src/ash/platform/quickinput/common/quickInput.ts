@@ -1,4 +1,5 @@
 import type { Event } from "../../../base/common/event.js";
+import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import {
 	createServiceIdentifier,
@@ -84,7 +85,7 @@ export interface IInputOptions {
 export interface IQuickInputService {
 	readonly currentQuickInput?: IQuickPick<IQuickPickItem>;
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem>;
-	input(options: IInputOptions): Promise<string | undefined>;
+	input(options: IInputOptions, token?: CancellationToken): Promise<string | undefined>;
 }
 
 export const IQuickInputService =

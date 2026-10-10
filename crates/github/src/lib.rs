@@ -4,7 +4,7 @@
 //! bind shared HTTP requests to one explicit Ash authorization.
 
 mod api;
-mod auth;
+mod credentials;
 mod error;
 mod forks;
 mod issues;
@@ -12,13 +12,12 @@ mod notifications;
 mod pull_requests;
 mod reporter;
 mod reviews;
-pub use auth::GITHUB_PROVIDER_ID;
-pub use auth::GitHubAccount;
-pub use auth::GitHubAccountManager;
-pub use auth::GitHubAuthorization;
-pub use auth::GitHubBrowserConfig;
-pub use auth::GitHubCredentialProvider;
-pub use auth::GitHubOAuth;
+pub use credentials::GITHUB_PROVIDER_ID;
+pub use credentials::GitHubAccount;
+pub use credentials::GitHubAccountManager;
+pub use credentials::GitHubAuthorization;
+pub use credentials::GitHubBrowserConfig;
+pub use credentials::GitHubCredentialProvider;
 pub use error::Error;
 pub use forks::CreateFork;
 pub use forks::ForkBranches;
@@ -560,3 +559,6 @@ impl GitHub {
 #[cfg(test)]
 #[path = "github_tests.rs"]
 mod tests;
+
+pub use credentials::GitHubAuthenticationRequest;
+pub use credentials::GitHubAuthenticationResponse;

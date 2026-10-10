@@ -47,6 +47,7 @@ members = [
     "crates/agent-environment",
     "crates/agent-graph-store",
     "crates/github",
+    "extensions/github-authentication",
     "crates/external-agent-migration",
     "crates/agent-roles",
     "crates/ash-home",

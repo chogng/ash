@@ -1,4 +1,5 @@
 import "./media/quickInput.css";
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { QuickInputController } from "../../../../platform/quickinput/browser/quickInputController.js";
 import type {
@@ -49,8 +50,8 @@ export class WorkbenchQuickInputService
 		return this.controller.createQuickPick<TItem>();
 	}
 
-	input(options: IInputOptions): Promise<string | undefined> {
-		return this.controller.input(options);
+	input(options: IInputOptions, token?: CancellationToken): Promise<string | undefined> {
+		return this.controller.input(options, token);
 	}
 
 	private updateLayout(): void {

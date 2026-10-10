@@ -160,6 +160,7 @@ ash-typst = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]
+github-authentication = { package = "ash-github-authentication", path = "../../extensions/github-authentication" }
 mxc-sandbox = { workspace = true }
 ash-app-server-client = { workspace = true }
 tokio-tungstenite = { workspace = true }
