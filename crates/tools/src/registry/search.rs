@@ -192,10 +192,21 @@ impl SearchIndex {
         limit: usize,
     ) -> Vec<(usize, u64)> {
         let query_text = query.to_lowercase();
-        let mut ranked = self
-            .engine
-            .search(query, limit)
+        // BM25 leaves equal-score matches in hash-set order. Resolve ties before
+        // limiting or converting positions to reciprocal ranks, including ties
+        // across the cutoff that a truncated upstream result would hide.
+        let mut matches = self.engine.search(query, None);
+        matches.sort_by(|left, right| {
+            right.score.total_cmp(&left.score).then_with(|| {
+                entries[left.document.id]
+                    .definition
+                    .name()
+                    .cmp(entries[right.document.id].definition.name())
+            })
+        });
+        let mut ranked = matches
             .into_iter()
+            .take(limit)
             .enumerate()
             .map(|(rank, result)| {
                 let entry_index = result.document.id;

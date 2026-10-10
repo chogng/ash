@@ -134,6 +134,72 @@ fn registry_rejects_reserved_and_duplicate_names() {
 }
 
 #[test]
+fn rebuilt_search_indexes_preserve_ranking_and_isolate_generations() {
+    let query =
+        ToolSearchQuery::new("repository issues", ToolSearchLimit::new(2).unwrap()).unwrap();
+    let build = |generation, names: &[&str]| {
+        let mut builder = ToolRegistryBuilder::new(ToolRegistryGeneration::new(generation));
+        for name in names {
+            builder
+                .register(registration(
+                    name,
+                    "List repository issues",
+                    ToolExposure::Deferred,
+                ))
+                .unwrap();
+        }
+        builder.build().unwrap()
+    };
+    let first = build(20, &["issue_b", "issue_a"]);
+    let rebuilt = build(21, &["issue_a", "issue_b"]);
+    let replacement = build(22, &["issue_c"]);
+    let matched_names = |snapshot: &ToolRegistrySnapshot| {
+        snapshot
+            .search(&query)
+            .matches()
+            .iter()
+            .map(|item| item.loadable().definition().name().as_str().to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(matched_names(&first), matched_names(&rebuilt));
+    assert_eq!(matched_names(&first), ["issue_a", "issue_b"]);
+    let single =
+        ToolSearchQuery::new("repository issues", ToolSearchLimit::new(1).unwrap()).unwrap();
+    for snapshot in [&first, &rebuilt] {
+        assert_eq!(
+            snapshot.search(&single).matches()[0]
+                .loadable()
+                .definition()
+                .name()
+                .as_str(),
+            "issue_a"
+        );
+        assert_eq!(
+            snapshot
+                .search_excluding(&single, &[ToolName::new("issue_a").unwrap()])
+                .matches()[0]
+                .loadable()
+                .definition()
+                .name()
+                .as_str(),
+            "issue_b"
+        );
+    }
+    assert_eq!(matched_names(&replacement), ["issue_c"]);
+    assert_eq!(
+        first.search(&query).registry_generation(),
+        ToolRegistryGeneration::new(20)
+    );
+    assert_eq!(
+        rebuilt.search(&query).registry_generation(),
+        ToolRegistryGeneration::new(21)
+    );
+    let excluded = [ToolName::new("issue_a").unwrap()];
+    assert_eq!(first.search_excluding(&query, &excluded).matches().len(), 1);
+    assert_eq!(matched_names(&first), matched_names(&rebuilt));
+}
+
+#[test]
 fn search_inputs_and_metadata_are_bounded() {
     assert!(matches!(
         ToolSearchQuery::new("q".repeat(1_025), ToolSearchLimit::default(),),
