@@ -168,6 +168,7 @@ for (const os of ['windows', 'mac', 'linux'] as const) {
 				shareParent: URI.joinPath(share, '..', '..', 'item.txt').toString(),
 				backslashChild: URI.joinPath(drive, 'nested\\\\item.txt').toString(),
 				driveRoot: dirname(URI.parse('file:///C:/item.txt')).toString(),
+				driveRootParent: dirname(URI.parse('file:///C:/?rev=1#anchor')).toString(),
 				shareRoot: dirname(URI.parse('file://server/share/item.txt')).toString(),
 				shareRootParent: dirname(URI.parse('file://server/share/')).toString(),
 				singleNameParent: URI.parse('file://server/share/').joinPathSegment('..').toString(),
@@ -183,7 +184,9 @@ for (const os of ['windows', 'mac', 'linux'] as const) {
 			driveParent: windows ? 'file:///C:/item.txt?rev=1#anchor' : 'file:///item.txt?rev=1#anchor',
 			shareParent: windows ? 'file://server/share/item.txt?rev=1#anchor' : 'file://server/item.txt?rev=1#anchor',
 			backslashChild: windows ? 'file:///C:/workspace/nested/item.txt?rev=1#anchor' : 'file:///C:/workspace/nested%5Citem.txt?rev=1#anchor',
-			driveRoot: windows ? 'file:///C:/' : 'file:///C:',
+			// URI dirname retains drive roots even when a renderer runs on another OS.
+			driveRoot: 'file:///C:/',
+			driveRootParent: 'file:///C:/?rev=1#anchor',
 			shareRoot: windows ? 'file://server/share/' : 'file://server/share',
 			shareRootParent: windows ? 'file://server/share/' : 'file://server/',
 			singleNameParent: windows ? 'file://server/share/' : 'file://server/',

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { parseTunnelMachineStatus, TUNNEL_MACHINE_STATUS_PREFIX } from '../../common/tunnelMachineStatus.js';
+import { parseTunnelMachineStatus, TUNNEL_MACHINE_STATUS_PREFIX } from '../../node/tunnelMachineStatus.js';
 
 suite('Inbound tunnel machine status', () => {
 	const record = { relayHost: 'ash-relay', relayPort: 43123, web: { endpoint: 'http://127.0.0.1:5174/', ticket: 'a'.repeat(64), pid: 42 } };

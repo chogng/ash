@@ -10,7 +10,7 @@ export type TunnelMachineStatus = {
 	readonly domain?: string;
 } | { readonly type: 'tokenError'; readonly message: string; };
 
-/** Converts the helper's generated launch contract to the frontend tunnel domain. */
+/** Decodes the helper's launch contract at the process boundary into the tunnel domain. */
 export function parseTunnelMachineStatus(message: string): TunnelMachineStatus | undefined {
 	if (!message.startsWith(TUNNEL_MACHINE_STATUS_PREFIX)) {
 		return undefined;

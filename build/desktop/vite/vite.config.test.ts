@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolve } from 'node:path';
+import { access } from 'node:fs/promises';
 import { loadConfigFromFile } from 'vite';
+
+test('Desktop and Web development warmup reads existing source files', async () => {
+	const path = resolve(import.meta.dirname, 'vite.config.ts');
+	for (const mode of ['development', 'web']) {
+		const { config } = (await loadConfigFromFile({ command: 'serve', mode }, path))!;
+		const files = config.server!.warmup!.clientFiles!;
+		assert.ok(files.length > 0);
+		await Promise.all(files.map(file => access(file)));
+	}
+});
 
 test('Web development and builds use only browser entries and preserve Desktop output', async () => {
 	const path = resolve(import.meta.dirname, 'vite.config.ts');

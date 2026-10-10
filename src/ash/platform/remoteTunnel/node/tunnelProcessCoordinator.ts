@@ -6,7 +6,7 @@ import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { ILogService, type LogLevel } from '../../log/common/log.js';
 import type { TunnelMode, TunnelStatus } from '../common/remoteTunnel.js';
 import { INACTIVE_TUNNEL_MODE } from '../common/remoteTunnel.js';
-import { parseTunnelMachineStatus, type TunnelMachineStatus } from '../common/tunnelMachineStatus.js';
+import { parseTunnelMachineStatus, type TunnelMachineStatus } from './tunnelMachineStatus.js';
 
 export type TunnelProcessMode = 'none' | 'remoteAccess' | 'service';
 export type TunnelProcessConnectionState = 'disconnected' | 'connecting' | 'connected';

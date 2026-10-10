@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
 import type * as Stanza from '../../../../src/ash/editor/editor.main.js';
-import { createServer } from 'vite';
+import { createLogger, createServer } from 'vite';
 import { createServer as createHttpServer } from 'node:http';
 import type { DisposableStore } from '../../../../src/ash/base/common/lifecycle.js';
 import type { ChatInputTipPresenter } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
@@ -517,10 +517,18 @@ test('development Sessions applies successive CSS saves without reloading its pa
 	const profile = await mkdtemp(join(tmpdir(), 'ash-css-hmr-'));
 	let electron: ElectronApplication | undefined;
 	let browser: Awaited<ReturnType<typeof playwright.chromium.launch>> | undefined;
+	const warmupErrors: string[] = [];
+	const logger = createLogger();
+	const logError = logger.error.bind(logger);
+	logger.error = (message, options) => {
+		if (message.includes('Pre-transform error')) warmupErrors.push(message);
+		logError(message, options);
+	};
 	const server = await createServer({
 		configFile: resolve(desktopDirectory, 'build/desktop/vite/vite.config.ts'),
 		mode: isBrowser ? 'web' : 'development',
-		server: { port: 5197, strictPort: true, warmup: { clientFiles: [] } },
+		customLogger: logger,
+		server: { port: 5197, strictPort: true },
 	});
 	try {
 		await server.listen();
@@ -561,6 +569,7 @@ test('development Sessions applies successive CSS saves without reloading its pa
 			await expect(page.locator('body')).toHaveAttribute('data-css-hot-reload-retained', 'true');
 			await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
 		}
+		expect(warmupErrors).toEqual([]);
 	} finally {
 		const current = await readFile(sourceFile, 'utf8');
 		if (current === written) await writeFile(sourceFile, original);

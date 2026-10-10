@@ -119,7 +119,7 @@ export class SymphonyTasksView extends ViewPane {
 				row.metadata.textContent = metrics(item);
 				row.node.setAttribute('aria-label', `${item.title}, ${metrics(item)}`);
 				row.node.setAttribute('aria-selected', String(item.id === state.selected));
-
+				row.node.classList.toggle('selected', item.id === state.selected);
 			}
 			empty.hidden = state.conversations.length > 0;
 			list.setAttribute('aria-activedescendant', state.selected ? `symphony-${state.selected}` : '');

@@ -96,6 +96,14 @@ export class ExtUri implements IExtUri {
 		}
 		const separator = path.lastIndexOf('/');
 		const parent = separator <= 0 ? '/' : path.slice(0, separator);
+		if (isWindows && uri.scheme === 'file' && uri.authority) {
+			// A UNC share is a filesystem root; its parent cannot escape to the server.
+			const shareSeparator = path.indexOf('/', 1);
+			const shareRoot = shareSeparator === -1 ? path : path.slice(0, shareSeparator);
+			if (parent === '/' || parent === shareRoot) {
+				return uri.withEncodedPath(`${shareRoot}/`);
+			}
+		}
 		return uri.withEncodedPath(uri.scheme === 'file' && !uri.authority && /^\/[a-z]:$/i.test(parent) ? `${parent}/` : parent);
 	}
 

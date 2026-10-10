@@ -26,7 +26,7 @@ test("BinaryEditorPane renders a bounded hexadecimal and ascii preview", async (
 	using services = new InstantiationService();
 	services.registerSingleton(IFileService, () => createTestFileService(new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);
-	const pane = binaryEditorDescriptor().create({ instantiationService: services });
+	const pane = await binaryEditorDescriptor().create({ instantiationService: services });
 	pane.create(dom.window.document.body);
 	await pane.setInput({ resource, label: 'sample.bin' }, new AbortController().signal);
 
@@ -68,7 +68,7 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 		using services = new InstantiationService();
 		services.registerSingleton(IFileService, () => createTestFileService(new OversizedFileService(new Uint8Array())));
 		registerTestComponentServices(services, dom.window.document);
-		using pane = binaryEditorDescriptor().create({ instantiationService: services });
+		using pane = await binaryEditorDescriptor().create({ instantiationService: services });
 		pane.create(dom.window.document.body);
 		await assert.rejects(pane.setInput({ resource: URI.file('/oversized.bin') }, new AbortController().signal), /too large/);
 		assert.equal(reads, 0);

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { AgentTraceViewModel, recordingLabel, relationLabel } from '../../browser/agentTraceModel.js';
+import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { AgentTraceViewModel, evidenceLabel, hookStatusLabel, recordingLabel, relationLabel } from '../../browser/agentTraceModel.js';
 import type { AgentTrace } from '../../../../services/trace/common/agentTrace.js';
 
 suite('Execution Trace saved execution flow', () => {
@@ -32,11 +32,14 @@ suite('Execution Trace saved execution flow', () => {
 		}
 	});
 
-	test('reports pending evidence and accounting relations using the shipped Chinese catalog', () => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('localization/zh-CN/chat.json', 'utf8')));
+	test('reports pending evidence, accounting relations and Hook outcomes using the shipped Chinese catalog', () => {
+		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		setNlsMessages(catalog.locale, catalog.bundles);
 		try {
 			assert.equal(recordingLabel({ formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [], diagnostics: { formatVersion: 2, captureId: 'c', recordingStatus: 'incomplete', droppedRecords: 2, pendingRecords: 3, events: [] } }), '诊断证据不完整 · 已省略 2 条记录 · 3 条记录待写入。');
 			assert.equal(relationLabel('accountsFor'), '已提交的模型账目');
+			assert.equal(evidenceLabel('hookExecution'), 'Hook 命令与有界的进程输入／输出');
+			assert.deepEqual(['running', 'continued', 'denied', 'failed', 'cancelled'].map(hookStatusLabel), ['运行中', '已继续', '已阻止', '失败', '已取消']);
 		} finally { resetNlsResolver(); }
 	});
 	test('associates Hook bodies with the exact Thread, Turn and run, and filters blocked runs as errors', () => {

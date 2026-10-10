@@ -130,7 +130,12 @@ export default defineConfig(({ mode, command }) => {
 			warmup: {
 				clientFiles: Object.entries(inputs)
 					.filter(([entry]) => !entry.startsWith('electron-browser/remote-runtime-install/'))
-					.map(([entry, path]) => entry === sessionsWebEntry ? resolve(repositoryRoot, 'src/ash/sessions/sessions.web.main.internal.ts') : path),
+					.map(([entry, path]) => {
+						// HTML warmup reads disk directly, bypassing the virtual product-page loader.
+						if (entry === sessionsWebEntry) return resolve(repositoryRoot, 'src/ash/sessions/sessions.web.main.internal.ts');
+						if (entry === 'sessions/electron-browser/sessions') return resolve(repositoryRoot, 'src/ash/sessions/electron-browser/sessions.ts');
+						return path;
+					}),
 			},
 		},
 		build: {

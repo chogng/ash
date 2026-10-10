@@ -1162,7 +1162,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			};
 		},
 	});
-	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: remoteAgentService/);
+	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: appServerRemoteAgentService/);
 	const connectionChanged = disposables.add(new Emitter<RemoteConnectionState>());
 	const connectionIdentityChanged = disposables.add(new Emitter<RemoteAgentConnection>());
 	let connectionIdentity: RemoteAgentConnection = { kind: 'local', generation: 1 };
@@ -1247,7 +1247,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
-	const missingHooks = disposables.add(descriptor.create({ instantiationService: editorServices }));
+	const missingHooks = disposables.add(await descriptor.create({ instantiationService: editorServices }));
 	assert.throws(() => missingHooks.create(h(ownerDocument, 'div')), /Unknown service: hooksService/);
 	missingHooks.dispose();
 	services.registerInstance(IHooksService, hooksService);

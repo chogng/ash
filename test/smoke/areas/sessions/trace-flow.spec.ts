@@ -298,58 +298,71 @@ test('Execution Trace retains real model failure and cancellation during concurr
 });
 
 for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
-	test(`Hook results reach Chat and Execution Trace through real scripts and survive reopening (${outcome})`, async ({ target, application, workbench, testWorkspace }) => {
+	test(`Hook outcomes reach Chat and Execution Trace through real scripts and survive reopening (${outcome})`, async ({ target, application, workbench, testWorkspace }) => {
 		test.skip(target.appServerMode !== 'required', 'Needs the product App Server.');
 		const page = await workbench.openAgentsWindow(target.kind);
 		const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
 		const { client } = connection;
 		try {
-			const script = outcome === 'continued' ? 'console.log(JSON.stringify({decision:"continue"}))' : outcome === 'denied' ? 'console.log(JSON.stringify({decision:"deny",reason:"hook-trace-denied"}))' : outcome === 'failed' ? 'console.error("hook-trace-stderr"); process.exit(7)' : 'setInterval(() => {}, 1000)';
+			const marker = join(testWorkspace.directory, 'hook-started');
+			const action = outcome === 'continued' ? 'console.log(JSON.stringify({decision:"continue"}))' : outcome === 'denied' ? 'console.log(JSON.stringify({decision:"deny",reason:"hook-trace-denied"}))' : outcome === 'failed' ? 'console.error("hook-trace-stderr"); process.exit(7)' : 'setInterval(() => {}, 1000)';
+			const script = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'running'); ${action}`;
+			const initialConfig = await client.request(APP_SERVER_METHODS['config/read'], {});
+			await client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], {
+				commandId: `hook-policy-${outcome}`, expectedRevision: initialConfig.revision,
+				rule: { id: 'hook-trace', selector: { type: 'source', source: 'user', sourceId: 'user:hook:trace-test' }, effect: { type: 'allowUnsandboxed' }, justification: 'The controlled Hook only writes readiness in the isolated test workspace and returns a scripted outcome.' },
+			});
 			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
-			await client.request(APP_SERVER_METHODS['hook/upsert'], { commandId: `hook-config-${outcome}`, expectedRevision: config.revision, hook: { id: 'user:hook:trace-test', event: 'preToolUse', enablement: 'enabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: process.execPath, args: ['-e', script] } } });
+			await client.request(APP_SERVER_METHODS['hook/upsert'], { commandId: `hook-config-${outcome}`, expectedRevision: config.revision, hook: { id: 'user:hook:trace-test', event: 'beforeTool', enablement: 'enabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: process.execPath, args: ['-e', script] } } });
 			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `hook-session-${outcome}`, title: `Hook ${outcome}`, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0].threadId;
 			const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
 			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `hook-start-${outcome}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'hook-trace-fixture' }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct' } });
 			await page.locator('.ash-sessions-list-item').filter({ hasText: `Hook ${outcome}` }).click();
+			// The process owns readiness; Thread snapshots no longer carry Hook runtime records.
+			await expect.poll(() => readFile(marker, 'utf8').catch(error => {
+				if (error.code === 'ENOENT') { return undefined; }
+				throw error;
+			})).toBe('running');
 			if (outcome === 'cancelled') {
-				await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.hookRuns.at(-1)?.status.type).toBe('running');
 				const running = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
 				await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'hook-interrupt', sessionId, request: { type: 'interruptTurn', threadId, turnId: running.thread.turns.at(-1)!.turnId, expectedSequence: running.thread.sequence } });
 			}
-			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.hookRuns.at(-1)?.status.type).toBe(outcome);
+			const status = outcome === 'cancelled' ? 'interrupted' : outcome === 'failed' ? 'failed' : 'completed';
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)?.status).toBe(status);
 			const completed = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
-			const run = completed.thread.hookRuns.at(-1)!;
-			expect(run.toolCallId).toBe('fixture-hook-tool');
-			expect(run.turnId).toBe(completed.thread.turns.at(-1)!.turnId);
-			const feedback = page.locator('.ash-chat-hook');
-			if (outcome === 'continued') { await expect(feedback).toHaveCount(0); }
-			else {
-				await expect(feedback).toHaveCount(1);
-				const summary = feedback.locator('summary');
-				await summary.focus();
-				await summary.press('Enter');
-				await expect(feedback).toHaveAttribute('open', '');
-				expect(run.status.type).not.toBe('running');
-				await expect(feedback.locator('p')).toHaveText(run.status.type === 'failed' ? run.status.message : run.status.type === 'denied' || run.status.type === 'cancelled' ? run.status.reason : '');
+			const turn = completed.thread.turns.at(-1)!;
+			expect(await readFile(marker, 'utf8')).toBe('running');
+			const result = turn.items.find(item => item.type === 'toolResult' && item.toolCallId === 'fixture-hook-tool');
+			const transcript = page.getByRole('log', { name: 'Chat transcript', exact: true }).filter({ visible: true });
+			if (outcome === 'continued' || outcome === 'denied') {
+				const text = outcome === 'continued' ? 'hook-trace-tool-executed' : 'hook-trace-denied';
+				expect(result).toMatchObject({ isError: outcome === 'denied', text: expect.stringContaining(text) });
+				await expect(transcript).toContainText(text);
+			} else if (outcome === 'failed') {
+				expect(turn.error).toBeDefined();
+				await expect(transcript).toContainText(turn.error!.message);
 			}
 			await new QuickAccess(page).runCommand('sessions.trace.open');
 			const viewer = page.locator('.ash-agent-trace');
 			const capture = parseAgentTrace((await client.request(APP_SERVER_METHODS['session/trace/read'], { sessionId, after: {}, limit: 500 })).trace);
-			const event = capture.threads.flatMap(thread => thread.events).find(record => record.event.type === 'hookRunUpdated' && (record.event.run as { status: { type: string; }; }).status.type === outcome)!;
+			const events = capture.threads.find(thread => thread.threadId === threadId)!.events;
+			completedItem(events, 'toolCall', 'fixture-hook-tool');
+			expect(events.some(record => record.event.type === 'toolExecutionStarted')).toBe(outcome === 'continued');
+			const type = outcome === 'cancelled' ? 'turnInterrupted' : outcome === 'failed' ? 'turnFailed' : 'turnCompleted';
+			const event = events.find(record => record.event.type === type)!;
+			expect(event.event.turnId).toBe(turn.turnId);
 			await selectRecord(viewer, event.eventId);
 			await viewer.getByRole('tab', { name: 'Overview', exact: true }).click();
-			await expect(viewer.getByRole('tabpanel')).toContainText(run.runId);
-			await expect(viewer.getByRole('tabpanel')).toContainText('shell-command');
-			await viewer.getByRole('tab', { name: 'Output', exact: true }).click();
-			await viewer.getByRole('button', { name: 'Saved body', exact: true }).click();
-			await expect(viewer.locator('.view-lines')).toContainText('exitCode');
-			if (outcome === 'failed') { await expect(viewer.locator('.view-lines')).toContainText('hook-trace-stderr'); }
+			await expect(viewer.getByRole('tabpanel')).toContainText(turn.turnId);
+			await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
+			await expect(viewer.getByRole('tabpanel')).toContainText(type);
 			await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
 			await new QuickAccess(page).runCommand('sessions.trace.open');
 			await selectRecord(viewer, event.eventId);
-			await expect(viewer.getByRole('tabpanel')).toContainText(run.runId);
+			await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
+			await expect(viewer.getByRole('tabpanel')).toContainText(type);
 			await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
 		} finally { await connection.close(); }
 	});
