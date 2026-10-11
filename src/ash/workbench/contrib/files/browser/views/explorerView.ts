@@ -26,7 +26,10 @@ import { IContextKeyService, type IScopedContextKeyService } from '../../../../.
 import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { MenuId } from '../../../../../platform/actions/common/actions.js';
+import { IMenuService, MenuId, type IMenu } from '../../../../../platform/actions/common/actions.js';
+import { getActionBarActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import type { IAction } from '../../../../../base/common/actions.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { explorerFileContribRegistry } from '../explorerFileContrib.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -64,6 +67,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly contextCanCreate: IContextKey<boolean>;
 	private compressedFocusIndex = 0;
 	private readonly hasCutFiles: IContextKey<boolean>;
+	private readonly titleMenu: IMenu;
+	private readonly titleActions = this._register(new MutableDisposable<WorkbenchToolBar>());
 
 	constructor(
 		container: HTMLElement,
@@ -80,6 +85,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		@IContextMenuService protected readonly contextMenuService: IContextMenuService,
 		@ICommandService protected readonly commandService: ICommandService,
 		@IStorageService private readonly storageService: IStorageService,
+		@IMenuService menuService: IMenuService,
 	) {
 		super(container, options);
 		this._register(toDisposable(() => this.selectionCancellation.value?.cancel()));
@@ -150,6 +156,14 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
 		this._register(new ExplorerFindProvider(this.tree, this.headerElement));
 		this.scopedContext = this._register(contextKeyService.createScoped(this.element));
+		this.scopedContext.setContext('view', options.id);
+		this.titleMenu = this._register(menuService.createMenu(MenuId.for('ViewTitle'), this.scopedContext));
+		this._register(this.titleMenu.onDidChange(() => {
+			this.renderHeaderActions();
+			this.updateTitleArea();
+		}));
+		this.headerActionsElement.setAttribute('aria-label', localize('files.explorerActions', 'Explorer Actions'));
+		this.renderHeaderActions();
 		ExplorerFocusedContext.bindTo(this.scopedContext).set(true);
 		this.hasContextResource = this.scopedContext.createKey<boolean>('ashExplorerHasResource', false);
 		this.contextIsFile = this.scopedContext.createKey<boolean>('ashExplorerIsFile', false);
@@ -393,6 +407,47 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	public collapseAll(): void {
 		this.tree.collapseAll();
+	}
+
+	public async refresh(recursive: boolean, item?: ExplorerItem): Promise<void> {
+		await this.initialization;
+		await this.fileChangeProcessing;
+		if (this.isDisposed) { return; }
+		const generation = this.workspaceGeneration;
+		const roots = item ? [item] : this.root?.children ?? (this.root ? [this.root] : []);
+		for (const root of roots) {
+			if (this.isDisposed || generation !== this.workspaceGeneration) { return; }
+			await this.refreshItem(root, recursive);
+		}
+	}
+
+	public override getActions(): readonly IAction[] {
+		if (this.partTitleProjection?.actions) { return []; }
+		return getActionBarActions(this.titleMenu.getActions(), 'navigation').primary;
+	}
+
+	public override getSecondaryActions(): readonly IAction[] {
+		if (this.partTitleProjection?.actions) { return []; }
+		return getActionBarActions(this.titleMenu.getActions(), 'navigation').secondary;
+	}
+
+	public override setHeaderVisible(visible: boolean): void {
+		super.setHeaderVisible(visible);
+		this.renderHeaderActions();
+	}
+
+	private renderHeaderActions(): void {
+		// A host-provided title surface owns its action renderer and command list.
+		if (!this.isHeaderVisible() || this.partTitleProjection?.actions) {
+			this.titleActions.clear();
+			return;
+		}
+		if (!this.titleActions.value) {
+			this.titleActions.value = new WorkbenchToolBar(this.headerActionsElement, this.contextMenuService, {
+				ariaLabel: localize('files.explorerActions', 'Explorer Actions'),
+			});
+		}
+		this.titleActions.value.setActions(this.getActions(), this.getSecondaryActions());
 	}
 
 	public getAccessibleContent(): string {

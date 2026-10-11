@@ -52,6 +52,10 @@ export class ExplorerService extends Disposable implements IExplorerService {
 
 	public getRoot(): ExplorerItem | undefined { return this.model.root; }
 
+	public async refresh(): Promise<void> {
+		await this.view?.refresh(true);
+	}
+
 	public getToCopy(): IExplorerClipboard { return this.clipboard; }
 	public setToCopy(items: readonly IExplorerClipboardItem[], cut: boolean): void {
 		this.clipboard = { items: items.map(({ resource, name, kind }) => ({ resource, name, kind })), cut };

@@ -628,7 +628,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	private handleEditorScroll(index: number, source: CodeEditorWidget): void {
-		if (this.syncingEditorScroll || this.projecting) return;
+		// Unfocused children can clamp their scroll while models or hidden regions refresh.
+		// The outer viewport owns restoration; only focused editor input may move it.
+		if (this.syncingEditorScroll || this.projecting || !source.hasTextFocus()) return;
 		if (source.getScrollTop() === 0 && this.scrollView.getLogicalScrollTop() < this.layouts[index]!.top) return;
 		const desiredScroll = this.layouts[index]!.top + source.getScrollTop();
 		if (Math.abs(this.scrollView.getLogicalScrollTop() - desiredScroll) > 1) this.scrollView.setLogicalScrollTop(desiredScroll);

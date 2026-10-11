@@ -176,7 +176,7 @@ async function openEditor(): Promise<void> {
 	}, {}));
 	reference = lifetime.add(await models.acquire({ resource: URI.file('/snapshots/one.ts') }, new AbortController().signal));
 	const original = lifetime.add(new TextModel('before\n'));
-	const computation = lifetime.add(new DiffService().createComputationService());
+	const computation = lifetime.add(editorServices.createInstance(DiffService).createComputationService());
 	comparison = lifetime.add(new DiffModel({ original, modified: reference.model, diffProvider: computation, diffOptions: { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false } }));
 	editor = lifetime.add(editorServices.createInstance(DiffEditorWidget, { container: document.getElementById('editor')!, model: comparison }));
 	editor.layout({ width: 900, height: 400 });

@@ -1,11 +1,11 @@
 import './media/dirtydiffDecorator.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+import { EmbeddedDiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/embeddedDiffEditorWidget.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { type View } from '../../../../editor/browser/view.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { EditorOption, RenderLineNumbersType } from '../../../../editor/common/config/editorOptions.js';
+import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
@@ -161,18 +161,13 @@ class QuickDiffPeekView extends Disposable {
 		this._register(addDisposableListener(previous, 'click', showPrevious));
 		this._register(addDisposableListener(next, 'click', showNext));
 		this._register(addDisposableListener(closeButton, 'click', close));
-		const diffWidget = this._register(instantiationService.createInstance(DiffEditorWidget, {
+		const diffWidget = this._register(instantiationService.createInstance(EmbeddedDiffEditorWidget, {
 			container: diffContainer,
 			model: change.comparison.model,
 			readOnly: true,
-			lineHeight: editor.getOption(EditorOption.fontInfo).lineHeight,
-			fontFamily: editor.getOption(EditorOption.fontInfo).fontFamily,
-			fontSize: editor.getOption(EditorOption.fontInfo).fontSize,
-			fontLigatures: editor.getRawOptions().fontLigatures === true,
-			showLineNumbers: editor.getOption(EditorOption.lineNumbers).renderType !== RenderLineNumbersType.Off,
 			originalAriaLabel: change.comparison.original.label,
 			modifiedAriaLabel: editor.getOption(EditorOption.ariaLabel),
-		}));
+		}, editor));
 		const reveal = (): void => {
 			if (!change.comparison.model.diff) return;
 			try {

@@ -38,7 +38,10 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import type { IContextMenuMenuDelegate, IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { IExplorerService } from '../../browser/files.js';
 
 test("ExplorerView opens workspace files on single click", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -264,6 +267,9 @@ test("ExplorerView opens workspace files on single click", async () => {
 		services.registerInstance(ILabelService, labels);
 		services.registerInstance(IPathService, paths);
 		using storageService = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: workspaceContextService.getWorkspace().id, flushInterval: 0, onError: () => { } });
+		using commands = new CommandService(services);
+		const menus = new MenuService(commands, contextKeyService);
+		services.registerInstance(IExplorerService, explorerService);
 		using pane = new ExplorerView(
 			browser.window.document.body,
 			{
@@ -280,9 +286,14 @@ test("ExplorerView opens workspace files on single click", async () => {
 			contextKeyService,
 			accessibleViewService,
 			{ showContextMenu: delegate => { contextMenu = delegate as IContextMenuMenuDelegate; } } as IContextMenuService,
-			{ executeCommand: async () => undefined } as unknown as ICommandService,
+			commands,
 			storageService,
+			menus,
 		);
+		services.registerInstance(IViewsService, {
+			openView: async () => pane,
+			getViewWithId: () => pane,
+		} as unknown as IViewsService);
 		browser.window.document.body.append(pane.element);
 		pane.setVisible(true);
 		assert.equal(
@@ -302,6 +313,17 @@ test("ExplorerView opens workspace files on single click", async () => {
 			true,
 		);
 		assert.deepEqual(rowLabels(pane.element), ["src", "README.md"]);
+		assert.deepEqual(pane.getActions().map(action => action.id), [
+			'workbench.files.action.createFileFromExplorer',
+			'workbench.files.action.createFolderFromExplorer',
+			'workbench.files.action.refreshFilesExplorer',
+			'workbench.files.action.collapseExplorerFolders',
+		]);
+		pane.setHeaderVisible(false);
+		assert.equal(pane.element.querySelector('[data-action-id="workbench.files.action.createFileFromExplorer"]'), null);
+		assert.equal(pane.getActions().length, 4, 'The merged title keeps the same actions');
+		pane.setHeaderVisible(true);
+		assert.equal(pane.element.querySelectorAll('[data-action-id="workbench.files.action.createFileFromExplorer"]').length, 1);
 		assert.equal(pane.element.querySelector('.ash-icon-label-description'), null);
 		assert.match(explorerService.getAccessibleContent() ?? '', /README\.md/);
 		assert.match(pane.element.querySelector('.ash-tree')?.getAttribute('aria-label') ?? '', /Alt\+F1/);
@@ -633,9 +655,11 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.equal(browser.window.document.activeElement, treeElement);
 		directoryReads.length = 0;
 		addedRootFile = true;
-		fileChanges.fire({ resources: [URI.file("/project/new.txt")] });
+		const refreshButton = pane.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.files.action.refreshFilesExplorer"] button');
+		assert.ok(refreshButton);
+		refreshButton.click();
 		await waitFor(() => rowLabels(pane.element).includes("new.txt"));
-		assert.deepEqual(directoryReads, [root.toString()]);
+		assert.deepEqual(directoryReads, [root.toString(), URI.file('/project/src').toString()]);
 		assert.equal(browser.window.document.activeElement, treeElement);
 		assert.deepEqual(rowLabels(pane.element), ["src", "main.ts", "new.txt", "README.md"]);
 		directoryReads.length = 0;

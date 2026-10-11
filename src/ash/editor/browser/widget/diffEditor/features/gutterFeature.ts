@@ -2,6 +2,9 @@ import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { observeResize } from '../../../../../base/browser/observer.js';
 import { StandardWheelEvent } from '../../../../../base/browser/mouseEvent.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { observableValue } from '../../../../../base/common/observable.js';
+import { appendRemoveOnDispose } from '../utils.js';
+import { EditorGutter, type IGutterItemInfo, type IGutterItemView } from '../utils/editorGutter.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { URI } from '../../../../../base/common/uri.js';
@@ -26,16 +29,22 @@ export interface DiffEditorSelectionHunkToolbarContext {
 	originalUri: URI;
 }
 
-/** Owns hunk controls positioned through the paired editors' line geometry. */
+interface DiffGutterItem extends IGutterItemInfo {
+	readonly mapping: DetailedLineRangeMapping;
+	readonly isSelection: boolean;
+	height: number;
+}
+
+/** Owns hunk actions; their attached views and line geometry belong to EditorGutter. */
 export class DiffEditorGutter extends Disposable {
 	private readonly domNode: HTMLDivElement;
-	private readonly toolbars = this._register(new DisposableStore());
 	private readonly scope: IContextKeyService;
-	private readonly items: { domNode: HTMLElement; mapping: DetailedLineRangeMapping; height: number; }[] = [];
+	private readonly items: DiffGutterItem[] = [];
+	private readonly renderedItems = observableValue<readonly DiffGutterItem[]>(this, []);
+	private nextItemId = 0;
 	private enabled = false;
 	private renderRevert = false;
 	private available = false;
-	private height = 0;
 	private readonly contentHeightEmitter = this._register(new Emitter<void>());
 	public readonly onDidChangeContentHeight = this.contentHeightEmitter.event;
 
@@ -52,8 +61,7 @@ export class DiffEditorGutter extends Disposable {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-diff-gutter';
-		container.append(this.domNode);
-		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(appendRemoveOnDispose(container, this.domNode));
 		this.scope = this._register(contextKeys.createScoped(this.domNode));
 		EditorContextKeys.diffEditorOriginalUri.bindTo(this.scope).set(model.original.uri.toString());
 		EditorContextKeys.diffEditorModifiedUri.bindTo(this.scope).set(model.modified.uri.toString());
@@ -65,9 +73,16 @@ export class DiffEditorGutter extends Disposable {
 				if (this.width !== width) this.onDidChangeWidth();
 			}));
 		}
-		this._register(editor.onDidChangeCursorSelection(() => this.update(this.enabled, { renderRevert: this.renderRevert })));
-		this._register(editor.onDidScrollChange(() => this.positionItems()));
-		this._register(editor.onDidLayoutChange(() => this.positionItems()));
+		this._register(editor.onDidChangeCursorSelection(() => {
+			if (this.items.some(item => item.isSelection) || editor.getSelections()?.some(selection => !selection.isEmpty())) {
+				this.update(this.enabled, { renderRevert: this.renderRevert });
+			}
+		}));
+		this._register(new EditorGutter(editor, this.domNode, {
+			// Keep keyed views across scroll so keyboard focus and menu state survive.
+			getIntersectingGutterItems: (_range, reader) => this.renderedItems.read(reader),
+			createView: (item, target) => this.createToolbar(item.get(), target),
+		}));
 		this._register(addDisposableListener(this.domNode, 'wheel', event => {
 			if (editor.getOption(EditorOption.scrollbar).handleMouseWheel) editor.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event));
 		}, { passive: false }));
@@ -85,7 +100,7 @@ export class DiffEditorGutter extends Disposable {
 			this.menus.getMenuActions(id, undefined, this.scope).some(([, actions]) => actions.length > 0));
 		this.domNode.hidden = this.width === 0;
 		const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
-		this.toolbars.clear();
+		this.renderedItems.set([]);
 		this.items.length = 0;
 		const diff = this.model.diff;
 		if (this.width === 0 || !diff) {
@@ -104,10 +119,7 @@ export class DiffEditorGutter extends Disposable {
 		for (const change of diff.changes) {
 			if (!ranges.some(range => change.innerChanges?.includes(range))) this.addToolbar(change, MenuId.DiffEditorHunkToolbar);
 		}
-		for (const item of this.items) {
-			item.height = item.domNode.offsetHeight;
-		}
-		this.positionItems();
+		this.renderedItems.set([...this.items]);
 		if (previousHeight !== this.getContentHeight()) this.contentHeightEmitter.fire();
 		if (hadFocus) this.editor.focus();
 	}
@@ -135,23 +147,26 @@ export class DiffEditorGutter extends Disposable {
 		return lines.join(original.getEOL());
 	}
 
-	public layout(left: number, height: number): void {
-		this.height = height;
+	public layout(left: number): void {
 		this.domNode.style.left = `${left}px`;
 		this.domNode.style.width = `${this.width}px`;
-		this.positionItems();
 	}
 
 	public getContentHeight(): number {
-		return this.items.reduce((height, item) => Math.max(height, this.getTop(item.mapping) + item.height), 0);
+		// Short file previews need enough room for a complete toolbar, independent of its hunk's offset.
+		return this.items.reduce((height, item) => Math.max(height, item.height), 0);
 	}
 
 	private addToolbar(mapping: DetailedLineRangeMapping, menuId: MenuId): void {
-		const node = h(this.domNode.ownerDocument, 'div');
+		this.items.push({ id: String(++this.nextItemId), range: mapping.modified, mapping, isSelection: menuId === MenuId.DiffEditorSelectionToolbar, height: 0 });
+	}
+
+	private createToolbar(item: DiffGutterItem, node: HTMLElement): IGutterItemView {
+		const { mapping, isSelection } = item;
+		const menuId = isSelection ? MenuId.DiffEditorSelectionToolbar : MenuId.DiffEditorHunkToolbar;
+		const store = new DisposableStore();
 		node.className = 'ash-diff-gutter-item';
 		node.classList.toggle('ash-diff-revert', this.canRevert);
-		this.domNode.append(node);
-		this.toolbars.add(toDisposable(() => node.remove()));
 		const context: DiffEditorSelectionHunkToolbarContext = {
 			mapping,
 			originalWithModifiedChanges: this.computeStagedValue(mapping),
@@ -159,7 +174,7 @@ export class DiffEditorGutter extends Disposable {
 			modifiedUri: this.model.modified.uri,
 		};
 		const revertLabel = menuId === MenuId.DiffEditorSelectionToolbar ? localize('diffEditor.revertSelection', 'Revert selected changes') : localize('diffEditor.revertChange', 'Revert change');
-		this.toolbars.add(new MenuWorkbenchToolBar(node, this.menus, this.contextMenu, menuId, {
+		const toolbar = store.add(new MenuWorkbenchToolBar(node, this.menus, this.contextMenu, menuId, {
 			leadingActions: this.canRevert ? [{
 				id: 'diffEditor.revert',
 				label: revertLabel,
@@ -174,31 +189,25 @@ export class DiffEditorGutter extends Disposable {
 			menuOptions: { arg: context, shouldForwardArgs: true },
 			toolbarOptions: { primaryGroup: group => group.startsWith('primary') || group === 'navigation' },
 		}));
-		const item = { domNode: node, mapping, height: 0 };
-		this.items.push(item);
-		this.toolbars.add(observeResize(node, () => {
+		item.height = toolbar.element.offsetHeight;
+		store.add(observeResize(toolbar.element, () => {
 			if (node.hidden) return;
-			const height = node.offsetHeight;
+			const height = toolbar.element.offsetHeight;
 			if (height === item.height) return;
 			item.height = height;
+			this.renderedItems.set([...this.items]);
 			this.contentHeightEmitter.fire();
 		}));
-	}
-
-	private getTop(mapping: DetailedLineRangeMapping): number {
-		// A deletion occupies an alignment zone, before the next modified-model line.
-		const source = mapping.modified.isEmpty ? this.widget.originalEditor : this.editor;
-		const range = mapping.modified.isEmpty ? mapping.original : mapping.modified;
-		const lineNumber = Math.min(source.getModel()!.getLineCount(), range.startLineNumber);
-		return source.getTopForLineNumber(lineNumber);
-	}
-
-	private positionItems(): void {
-		const scrollTop = this.editor.getScrollTop();
-		for (const item of this.items) {
-			const top = this.getTop(item.mapping) - scrollTop;
-			item.domNode.hidden = top < -36 || top >= this.height;
-			item.domNode.style.top = `${top}px`;
-		}
+		return {
+			...toDisposable(() => store.dispose()),
+			layout: (itemRange, viewport) => {
+				const cursor = this.editor.getPosition();
+				node.classList.toggle('active', isSelection || !!cursor && mapping.modified.contains(cursor.lineNumber));
+				const visibleTop = Math.max(viewport.start, itemRange.start);
+				const visibleBottom = Math.min(viewport.endExclusive, itemRange.endExclusive);
+				const toolbarTop = Math.max(viewport.start, Math.min(Math.max(viewport.start, viewport.endExclusive - item.height), (visibleTop + visibleBottom - item.height) / 2));
+				toolbar.element.style.top = `${toolbarTop - itemRange.start}px`;
+			},
+		};
 	}
 }

@@ -701,7 +701,7 @@ export class Workbench extends Disposable {
 		// are authorized by the server for the authenticated workspace.
 		const languageDirPermissions = nativeHostApi ? dirPermissionsService : undefined;
 		if (api.hasAppServer) { this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: languageDirPermissions, events: api.events })); }
-		const diffService = new DiffService();
+		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
 		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);

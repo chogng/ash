@@ -1,7 +1,7 @@
 import './style.css';
 import { addDisposableListener, getClientArea, h, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { localize } from '../../../../nls.js';
@@ -10,22 +10,23 @@ import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { diffEditorDefaultOptions, type HideUnchangedRegionsOptions } from '../../../common/config/diffEditor.js';
 import { Range } from '../../../common/core/range.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
-import { LineDiffKind, toLineDiff, type LineDiff, type LineDiffRow } from '../../../common/diff/lineDiff.js';
+import { LineDiffKind, type LineDiff, type LineDiffRow } from '../../../common/diff/lineDiff.js';
 import { LineRangeMapping, type RangeMapping } from '../../../common/diff/rangeMapping.js';
 import type { MovedText } from '../../../common/diff/linesDiffComputer.js';
 import { LineRange } from '../../../common/core/ranges/lineRange.js';
 import { EditorOption, type IDiffEditorOptions } from '../../../common/config/editorOptions.js';
-import { ScrollType, type IContentSizeChangedEvent, type IEditorDecorationsCollection } from '../../../common/editorCommon.js';
-import { TrackedRangeStickiness } from '../../../common/model.js';
+import { ScrollType, type IContentSizeChangedEvent } from '../../../common/editorCommon.js';
 import { type ICodeEditor, type IDiffEditor } from '../../editorBrowser.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
-import { EditorExtensionsRegistry } from '../../editorExtensions.js';
-import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../codeEditor/codeEditorWidget.js';
+import { type CodeEditorWidget } from '../codeEditor/codeEditorWidget.js';
 import { AccessibleDiffViewer } from './components/accessibleDiffViewer.js';
 import { DiffEditorDecorations } from './components/diffEditorDecorations.js';
 import { DiffEditorSash } from './components/diffEditorSash.js';
+import { DiffEditorEditors } from './components/diffEditorEditors.js';
 import { DiffEditorViewZones } from './components/diffEditorViewZones/diffEditorViewZones.js';
 import { DiffEditorOptions, type DiffEditorWidgetOptions } from './diffEditorOptions.js';
+import { DiffEditorViewModel } from './diffEditorViewModel.js';
+import { DelegatingEditor } from './delegatingEditorImpl.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { OverviewRulerFeature } from './features/overviewRulerFeature.js';
 import { HideUnchangedRegionsFeature } from './features/hideUnchangedRegionsFeature.js';
@@ -37,7 +38,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 let diffEditorId = 0;
 
 /** Owns two editor views over caller-owned source models and one versioned diff. */
-export class DiffEditorWidget extends Disposable implements IDiffEditor {
+export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 	private readonly contentSizeEmitter = this._register(new Emitter<IContentSizeChangedEvent>());
 	public readonly onDidContentSizeChange = this.contentSizeEmitter.event;
 	private reportedContentWidth = 0;
@@ -45,6 +46,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	public readonly element: HTMLDivElement;
 	public readonly originalEditor: CodeEditorWidget;
 	public readonly modifiedEditor: CodeEditorWidget;
+	private readonly editors: DiffEditorEditors;
 	private readonly id = `ash-diff-editor-${++diffEditorId}`;
 	private readonly model: DiffModel;
 	private readonly diffOptions: DiffEditorOptions;
@@ -61,9 +63,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private readonly revertButtons: RevertButtonsFeature;
 	private readonly gutter: DiffEditorGutter;
 	private readonly movedBlocks: MovedBlocksLinesFeature;
-	private readonly originalMoveAnchor: IEditorDecorationsCollection;
-	private readonly modifiedMoveAnchor: IEditorDecorationsCollection;
-	private movedTextToCompare: MovedText | undefined;
+	private readonly viewModel: DiffEditorViewModel;
 	private showInlineChanges: boolean;
 	private loopChanges: boolean;
 	private readonly originalLabel: string;
@@ -115,38 +115,17 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		options.container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 
-		const editorOptions: Pick<CodeEditorWidgetOptions, 'contributions' | 'isSimpleWidget' | 'minimap' | 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'lineNumbers' | 'wordWrap' | 'scrollBeyondLastLine'> = {
-			// Diff owns its comparison UI; line navigation uses the shared editor controller.
-			contributions: EditorExtensionsRegistry.getEditorContributions().filter(contribution => contribution.id === 'editor.contrib.quickAccess'),
-			isSimpleWidget: true,
-			minimap: { enabled: false },
-			lineHeight: options.lineHeight,
-			fontFamily: options.fontFamily,
-			fontSize: options.fontSize,
-			fontLigatures: options.fontLigatures,
-			lineNumbers: options.showLineNumbers === false ? 'off' : 'on',
-			wordWrap: this.wordWrap ? 'on' : 'off',
-			scrollBeyondLastLine: options.scrollBeyondLastLine ?? true,
-		};
-		this.originalEditor = this._register(instantiationService.createInstance(CodeEditorWidget, {
-			...editorOptions,
-			container: this.originalContainer,
-			model: this.model.original,
-			ariaLabel: this.originalLabel,
-			readOnly: true,
+		this.editors = this._register(instantiationService.createInstance(DiffEditorEditors, this.originalContainer, this.modifiedContainer, {
+			...options,
+			wordWrap: this.wordWrap,
+			originalAriaLabel: this.originalLabel,
+			modifiedAriaLabel: this.modifiedLabel,
+			renderMarginRevertIcon: this.diffOptions.renderMarginRevertIcon,
 		}));
-		this.modifiedEditor = this._register(instantiationService.createInstance(CodeEditorWidget, {
-			...editorOptions,
-			container: this.modifiedContainer,
-			model: this.model.modified,
-			ariaLabel: this.modifiedLabel,
-			readOnly: options.readOnly ?? false,
-			glyphMargin: this.diffOptions.renderMarginRevertIcon && !options.readOnly,
-		}));
+		this.originalEditor = this.editors.original;
+		this.modifiedEditor = this.editors.modified;
 		this.diffDecorations = this._register(new DiffEditorDecorations(this.originalEditor, this.modifiedEditor));
-		this.originalMoveAnchor = this.originalEditor.createDecorationsCollection();
-		this.modifiedMoveAnchor = this.modifiedEditor.createDecorationsCollection();
-		this._register(toDisposable(() => { this.originalMoveAnchor.clear(); this.modifiedMoveAnchor.clear(); }));
+		this.viewModel = this._register(new DiffEditorViewModel(this.model, this.originalEditor, this.modifiedEditor));
 		this.diffViewZones = this._register(instantiationService.createInstance(DiffEditorViewZones, this.originalEditor, this.modifiedEditor, this.model));
 		this.overviewRuler = this._register(new OverviewRulerFeature(this.element, this.originalEditor, this.modifiedEditor));
 		this.revertButtons = this._register(new RevertButtonsFeature(this.modifiedEditor, this.model, this));
@@ -235,12 +214,11 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	private get displayedDiff(): LineDiff | undefined {
-		const diff = this.model.diff;
-		const move = this.movedTextToCompare;
-		if (!diff || !move) {
-			return diff;
-		}
-		return toLineDiff({ changes: move.changes, moves: [move] }, this.model.original.lineCount, this.model.modified.lineCount, move.lineRangeMapping);
+		return this.viewModel.diff.get();
+	}
+
+	private get movedTextToCompare(): MovedText | undefined {
+		return this.viewModel.movedTextToCompare.get();
 	}
 
 	private compareMove(move: MovedText): void {
@@ -248,8 +226,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			return;
 		}
 		this.accessibleDiffViewer.close();
-		this.movedTextToCompare = move;
-		this.trackComparedMove(move);
+		this.viewModel.movedTextToCompare.set(move);
 		this.refresh();
 		const top = this.originalEditor.getTopForLineNumber(move.lineRangeMapping.original.startLineNumber);
 		this.originalEditor.setScrollTop(top, ScrollType.Immediate);
@@ -265,7 +242,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		if (!this.movedTextToCompare) {
 			return;
 		}
-		const line = this.modifiedMoveAnchor.getRange(0)?.startLineNumber;
+		const line = this.viewModel.getComparedRange()?.modified.startLineNumber;
 		this.accessibleDiffViewer.close();
 		this.clearComparedMove();
 		this.refresh();
@@ -276,28 +253,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.modifiedEditor.announceAccessibilityStatus(localize('diffEditor.stoppedComparingMovedCode', 'Returned to the full comparison'));
 	}
 
-	private trackComparedMove(move: MovedText): void {
-		for (const [anchor, side] of [[this.originalMoveAnchor, 'original'], [this.modifiedMoveAnchor, 'modified']] as const) {
-			anchor.set([{
-				range: move.lineRangeMapping[side].toInclusiveRange()!,
-				options: { description: 'diff-move-comparison-anchor', stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges },
-			}]);
-		}
-	}
-
 	private clearComparedMove(): void {
-		this.movedTextToCompare = undefined;
-		this.originalMoveAnchor.clear();
-		this.modifiedMoveAnchor.clear();
-	}
-
-	private get comparedRange(): LineRangeMapping | undefined {
-		if (!this.movedTextToCompare) {
-			return undefined;
-		}
-		const original = this.originalMoveAnchor.getRange(0)!;
-		const modified = this.modifiedMoveAnchor.getRange(0)!;
-		return new LineRangeMapping(LineRange.fromRangeInclusive(original), LineRange.fromRangeInclusive(modified));
+		this.viewModel.movedTextToCompare.set(undefined);
 	}
 
 	public get currentChangeRow(): number {
@@ -308,12 +265,12 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		return this.inlineView ? 'inline' : 'sideBySide';
 	}
 
-	public focus(): void {
-		this.modifiedEditor.focus();
+	protected get _targetEditor(): CodeEditorWidget {
+		return this.modifiedEditor;
 	}
 
 	public getContentHeight(): number {
-		return this.movedBlocks.headerHeight + Math.max(this.originalEditor.getContentHeight(), this.modifiedEditor.getContentHeight(), this.gutter.getContentHeight());
+		return this.movedBlocks.headerHeight + Math.max(this.editors.getContentHeight(), this.gutter.getContentHeight());
 	}
 
 	private updateContentSize(): void {
@@ -411,9 +368,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.diffOptions.updateOptions(options);
 		this.showInlineChanges = options.showInlineChanges ?? this.showInlineChanges;
 		this.loopChanges = options.loopChanges ?? this.loopChanges;
-		const { readOnly, ...sharedOptions } = options;
-		this.originalEditor.updateOptions(sharedOptions);
-		this.modifiedEditor.updateOptions({ ...sharedOptions, ...(readOnly !== undefined ? { readOnly } : {}) });
+		this.editors.updateOptions(options);
 		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 		this.updateFeatures();
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
@@ -475,13 +430,13 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		try {
 			this.originalEditor.layout({ width: inlineView ? contentWidth : originalWidth, height: editorHeight });
 			this.modifiedEditor.layout({ width: inlineView ? contentWidth : contentWidth - originalWidth, height: editorHeight });
-			this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? [], this.diffOptions.renderIndicators, this.comparedRange);
+			this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? [], this.diffOptions.renderIndicators, this.viewModel.getComparedRange());
 			this.modifiedEditor.setScrollTop(scrollTop, ScrollType.Immediate);
 		} finally {
 			this.syncingScroll = wasSyncingScroll;
 		}
 		this.synchronizeScroll(this.modifiedEditor, this.originalEditor);
-		this.gutter.layout(inlineView ? 0 : originalWidth, editorHeight);
+		this.gutter.layout(inlineView ? 0 : originalWidth);
 		this.movedBlocks.layout(originalWidth + this.gutter.width, editorHeight);
 		this.overviewRuler.layout({ width: size.width, height: editorHeight });
 		this.updateOverview();
@@ -512,7 +467,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.revealChangeRow(first);
 		const row = rows[first]!;
 		const line = Math.min(this.model.modified.lineCount, (row.modifiedLineIndex ?? row.originalLineIndex ?? 0) + 1);
-		this.modifiedEditor.setPosition({ lineNumber: line, column: 1 });
+		this.setPosition({ lineNumber: line, column: 1 });
 		if (row.modifiedLineIndex !== undefined) {
 			this.modifiedEditor.revealRangeInCenter(new Range(line, 1, line, 1), ScrollType.Immediate);
 		}
@@ -584,17 +539,6 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	private refresh(): void {
 		this.activeChangeRow = -1;
-		if (this.model.diff && this.movedTextToCompare) {
-			const range = this.comparedRange!;
-			const next = this.model.diff.moves.find(move => move.lineRangeMapping.original.intersect(range.original)?.isEmpty === false
-				&& move.lineRangeMapping.modified.intersect(range.modified)?.isEmpty === false);
-			if (next) {
-				this.movedTextToCompare = next;
-				this.trackComparedMove(next);
-			} else {
-				this.clearComparedMove();
-			}
-		}
 		this.accessibilityStatusElement.textContent = this.model.state.kind === 'loading'
 			? localize('diffEditor.computing', 'Computing differences')
 			: this.model.state.kind === 'error'
@@ -704,7 +648,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			}
 		}
 		this.updateOverview();
-		this.gutter.layout(this.inlineView ? 0 : this.sash.left, Math.max(0, this.viewportHeight - this.movedBlocks.headerHeight));
+		this.gutter.layout(this.inlineView ? 0 : this.sash.left);
 	}
 
 	private updateOverview(): void {

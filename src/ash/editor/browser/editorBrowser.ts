@@ -222,8 +222,8 @@ export interface ICodeEditor extends IEditor {
 	hasPendingScrollAnimation(): boolean;
 	getVisibleRanges(): Range[];
 	getTopForPosition(lineNumber: number, column: number): number;
-	getTopForLineNumber(lineNumber: number): number;
-	getBottomForLineNumber(lineNumber: number): number;
+	getTopForLineNumber(lineNumber: number, includeViewZones?: boolean): number;
+	getBottomForLineNumber(lineNumber: number, includeViewZones?: boolean): number;
 	setScrollTop(newScrollTop: number, scrollType?: ScrollType): void;
 	setScrollLeft(newScrollLeft: number, scrollType?: ScrollType): void;
 	setScrollPosition(position: INewScrollPosition, scrollType?: ScrollType): void;

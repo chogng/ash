@@ -5,6 +5,76 @@ import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 import type { Workbench } from '../../../automation/workbench.js';
 
+test('Explorer title actions create files and folders, refresh and collapse from the keyboard', async ({ target, workbench, application, restartWorkbench, restartMessage }, testInfo) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires browser folder access');
+	const page = workbench.page;
+	const folderName = await page.evaluate(async () => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`explorer-actions-${crypto.randomUUID()}`, { create: true });
+		await folder.getDirectoryHandle('nested', { create: true });
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		return folder.name;
+	});
+	await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const explorer = sidebar.locator('.ash-explorer');
+	const labels = ['New File...', 'New Folder...', 'Refresh Explorer', 'Collapse Folders in Explorer'];
+	const openMenu = () => sidebar.locator('.ash-pane-composite-title-actions').getByRole('button', { name: 'More Actions', exact: true }).click();
+	const toolbar = sidebar.getByRole('toolbar', { name: 'Explorer Actions', exact: true });
+	for (const label of labels) {
+		await expect(toolbar.getByRole('button', { name: label, exact: true })).toBeVisible();
+	}
+	const newFile = toolbar.getByRole('button', { name: labels[0], exact: true });
+	await newFile.focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(toolbar.getByRole('button', { name: labels[1], exact: true })).toBeFocused();
+	await page.keyboard.press('ArrowLeft');
+	await expect(newFile).toBeFocused();
+	await page.keyboard.press('Enter');
+	const input = page.getByRole('dialog', { name: 'New File Name', exact: true }).getByRole('textbox');
+	await input.fill('created.txt');
+	await input.press('Enter');
+	await expect(explorer.getByRole('treeitem', { name: 'created.txt', exact: true })).toBeVisible();
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	await toolbar.getByRole('button', { name: labels[1], exact: true }).click();
+	const folderInput = page.getByRole('dialog', { name: 'New Folder Name', exact: true }).getByRole('textbox');
+	await folderInput.fill('created-folder');
+	await folderInput.press('Enter');
+	await expect(explorer.getByRole('treeitem', { name: 'created-folder', exact: true })).toBeVisible();
+	await page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		await folder.getFileHandle('external.txt', { create: true });
+		const nested = await folder.getDirectoryHandle('nested');
+		await nested.getFileHandle('inside.txt', { create: true });
+	}, folderName);
+	await toolbar.getByRole('button', { name: labels[2], exact: true }).click();
+	await expect(explorer.getByRole('treeitem', { name: 'external.txt', exact: true })).toBeVisible();
+	const nested = explorer.getByRole('treeitem', { name: 'nested', exact: true });
+	await nested.locator('.ash-tree-twistie').click();
+	await expect(explorer.getByRole('treeitem', { name: 'nested/inside.txt', exact: true })).toBeVisible();
+	await toolbar.getByRole('button', { name: labels[3], exact: true }).focus();
+	await page.keyboard.press('Enter');
+	await expect(nested).toHaveAttribute('aria-expanded', 'false');
+	await expect(explorer.getByRole('treeitem', { name: 'nested/inside.txt', exact: true })).toHaveCount(0);
+	await workbench.menus.select(application, openMenu, ['Open Editors']);
+	const header = sidebar.locator('[data-view-id="ash.explorer"] .ash-pane-view-header');
+	for (const label of labels) {
+		await expect(header.getByRole('button', { name: label, exact: true })).toBeVisible();
+	}
+	await expect(sidebar.getByRole('button', { name: labels[0], exact: true })).toHaveCount(1);
+	await page.screenshot({ path: testInfo.outputPath('explorer-actions-en.png') });
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
+	await expect.poll(restartMessage).toBe('Restart Ash to use 简体中文?');
+	const restarted = await restartWorkbench();
+	const localizedSidebar = restarted.workbench.page.locator('[data-part="sidebar"]');
+	for (const label of ['新建文件...', '新建文件夹...', '刷新资源管理器', '折叠资源管理器中的文件夹']) {
+		await expect(localizedSidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
+	}
+	await restarted.workbench.page.screenshot({ path: testInfo.outputPath('explorer-actions-zh.png') });
+});
+
 test('browser picked folders refresh expanded directories and clean editors on resume while preserving unsaved edits', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires browser folder access');
 	const page = workbench.page;

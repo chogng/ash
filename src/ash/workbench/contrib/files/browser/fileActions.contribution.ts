@@ -10,7 +10,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
@@ -27,7 +27,10 @@ import { copyFilePath, copyRelativeFilePath, resolveFileResource, revealInExplor
 import { cancelExplorerCut, CANCEL_CUT_COMMAND_ID, copyExplorerItems, COPY_FILE_COMMAND_ID, createNewFile, createNewFolder, CUT_FILE_COMMAND_ID, deleteExplorerItem, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, openExplorerItemToSide, OPEN_TO_SIDE_COMMAND_ID, pasteExplorerItems, PASTE_FILE_COMMAND_ID, renameExplorerItem, RENAME_FILE_COMMAND_ID } from './fileActions.js';
 import { FileDownload } from './fileImportExport.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
-import { ExplorerFocusedContext } from './files.js';
+import { ExplorerFocusedContext, IExplorerService } from './files.js';
+import { VIEW_ID } from '../common/files.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
+import type { ExplorerView } from './views/explorerView.js';
 
 interface BinaryComparisonItem extends IQuickPickItem {
 	readonly input: IResourceEditorInput;
@@ -165,6 +168,65 @@ const selectedResourceWhen = ContextKeyExpr.and(ContextKeyExpr.has('ashExplorerH
 const canModifyWhen = ContextKeyExpr.has('ashExplorerCanModify');
 const explorerShortcutWhen = ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canModifyWhen);
 const downloadWhen = ContextKeyExpr.and(selectedFileWhen, ContextKeyExpr.or(IsWebContext.isEqualTo(true), ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME)));
+
+const explorerTitleWhen = ContextKeyExpr.equals('view', VIEW_ID);
+for (const action of [
+	{
+		id: 'workbench.files.action.createFileFromExplorer',
+		commandId: NEW_FILE_COMMAND_ID,
+		title: localize2({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...'),
+		icon: Lxicon.newFile,
+		order: 10,
+	},
+	{
+		id: 'workbench.files.action.createFolderFromExplorer',
+		commandId: NEW_FOLDER_COMMAND_ID,
+		title: localize2({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...'),
+		icon: Lxicon.newFolder,
+		order: 20,
+	},
+]) {
+	CommandsRegistry.register(action.id, accessor => accessor.get(ICommandService).executeCommand(action.commandId));
+	MenusRegistry.appendMenuItem(MenuId.for('ViewTitle'), {
+		command: { id: action.id, title: action.title, icon: action.icon },
+		when: explorerTitleWhen,
+		group: 'navigation',
+		order: action.order,
+	});
+}
+
+registerAction2(class RefreshExplorerAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.files.action.refreshFilesExplorer',
+			title: localize2('files.refreshExplorer', 'Refresh Explorer'),
+			icon: Lxicon.refresh,
+			f1: true,
+			menu: { id: MenuId.for('ViewTitle'), group: 'navigation', when: explorerTitleWhen, order: 30 },
+		});
+	}
+
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IViewsService).openView(VIEW_ID);
+		await accessor.get(IExplorerService).refresh();
+	}
+});
+
+registerAction2(class CollapseExplorerFoldersAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.files.action.collapseExplorerFolders',
+			title: localize2('files.collapseExplorerFolders', 'Collapse Folders in Explorer'),
+			icon: Lxicon.collapseAll,
+			f1: true,
+			menu: { id: MenuId.for('ViewTitle'), group: 'navigation', when: explorerTitleWhen, order: 40 },
+		});
+	}
+
+	public override run(accessor: ServicesAccessor): void {
+		accessor.get(IViewsService).getViewWithId<ExplorerView>(VIEW_ID)?.collapseAll();
+	}
+});
 
 CommandsRegistry.registerMany([
 	{ id: NEW_FILE_COMMAND_ID, handler: createNewFile },

@@ -653,7 +653,7 @@ export abstract class Workbench extends Disposable {
 			openConversation: async (sessionId, threadId) => { await this.showChat(); await view.openThread(sessionId, threadId); },
 		});
 
-		const diffService = new DiffService();
+		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
 		const editor = this._register(services.createInstance(EditorPart, this.domNode, {
 			configurationService,

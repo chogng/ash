@@ -381,6 +381,40 @@
 	justify-content: center;
 }
 
+.ash-diff-gutter-item {
+	--ash-toolbar-actionSize: 20px;
+	--ash-actionBar-gap: 0px;
+	opacity: 0;
+}
+
+.ash-diff-gutter-item.active,
+.ash-diff-gutter:hover > .ash-diff-gutter-item,
+.ash-diff-gutter-item:focus-within {
+	opacity: 1;
+}
+
+.ash-diff-gutter-item::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	border-left: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	pointer-events: none;
+}
+
+.ash-diff-gutter-item > .ash-toolbar {
+	position: absolute;
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
+}
+
+[data-color-scheme="hcDark"] .ash-diff-gutter-item::before,
+[data-color-scheme="hcLight"] .ash-diff-gutter-item::before {
+	border-color: var(--ash-contrastBorder);
+}
+
 .ash-diff-moved-links > svg {
 	width: 100%;
 	height: 100%;

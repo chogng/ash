@@ -20,6 +20,7 @@ import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeSty
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { DiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/diffEditorWidget.js';
+import { EmbeddedDiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/embeddedDiffEditorWidget.js';
 import '../../../src/ash/editor/contrib/diffEditorBreadcrumbs/browser/contribution.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
@@ -119,7 +120,7 @@ const symbolProvider = resources.add(editorServices.languageFeaturesService.docu
 	}],
 }));
 const diffOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
-const service = new DiffService();
+const service = editorServices.createInstance(DiffService);
 const computation = resources.add(service.createComputationService());
 const original = resources.add(new TextModel('same\nbefore 😀 after\nlast', { languageConfigurationService: editorServices.languageConfigurationService }));
 const modified = resources.add(new TextModel('same\nbefore 🤖 after\nlast', { languageConfigurationService: editorServices.languageConfigurationService }));
@@ -128,6 +129,7 @@ const secondOriginal = resources.add(new TextModel('one\n'));
 const secondModified = resources.add(new TextModel('one'));
 const second = resources.add(new DiffModel({ original: secondOriginal, modified: secondModified, diffProvider: computation, diffOptions }));
 const single = resources.add(editorServices.createInstance(DiffEditorWidget, { container: document.getElementById('single')!, model }));
+const embedded = resources.add(new MutableDisposable<EmbeddedDiffEditorWidget>());
 let layoutEventCount = 0;
 resources.add(single.modifiedEditor.onDidLayoutChange(() => layoutEventCount++));
 const multi = resources.add(editorServices.createInstance(MultiDiffEditorWidget, {
@@ -213,6 +215,7 @@ let focusedHistoryView: string | undefined;
 function createSessionChangesPane(): SessionChangesEditor {
 	if (!sessionServices) {
 		sessionServices = resources.add(editorServices.createChild());
+		sessionServices.registerInstance(IMultiDiffSourceResolverService, resources.add(new MultiDiffSourceResolverService()));
 		sessionServices.registerInstance(IThemeService, editorServices.themeService);
 		sessionServices.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'diff-integration', flushInterval: 0 })));
 		sessionServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
@@ -523,6 +526,15 @@ const harness = {
 	setEditorFeatures(options: IDiffEditorOptions): void {
 		single.updateOptions(options);
 	},
+	showEmbeddedComparison(): void {
+		embedded.value = editorServices.createInstance(EmbeddedDiffEditorWidget, { container: document.getElementById('many')!, model, readOnly: true }, single.modifiedEditor);
+	},
+	updateEmbeddedComparison(options: IDiffEditorOptions): void {
+		embedded.value!.updateOptions(options);
+	},
+	closeEmbeddedComparison(): void {
+		embedded.clear();
+	},
 	setGuides(options: Pick<IDiffEditorOptions, 'guides'>): void {
 		single.originalEditor.updateOptions(options);
 		single.modifiedEditor.updateOptions(options);
@@ -542,7 +554,7 @@ const harness = {
 			lastHunkAction = { text: context.originalWithModifiedChanges, originalStart: context.mapping.original.startLineNumber, modifiedStart: context.mapping.modified.startLineNumber };
 		}));
 		resources.add(MenusRegistry.appendMenuItem(selection ? MenuId.DiffEditorSelectionToolbar : MenuId.DiffEditorHunkToolbar, {
-			command: { id: command, title: selection ? 'Apply selected change' : 'Apply change' }, group: 'primary',
+			command: { id: command, title: selection ? 'Apply selected change' : 'Apply change', icon: Icon.fromId('add') }, group: 'primary',
 		}));
 	},
 	get lastHunkAction() { return lastHunkAction; },

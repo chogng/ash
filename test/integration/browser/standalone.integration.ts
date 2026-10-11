@@ -2907,7 +2907,7 @@ window.ashStandaloneIntegration = {
 				actionPreviewResources.add(toDisposable(() => host.remove()));
 				const diff = actionPreviewResources.add(registerTestComponentServices(services).createInstance(MultiDiffEditor, {
 					modelService: services.get(ITextModelResourceService),
-					createComputationService: () => new DiffService().createComputationService(),
+					createComputationService: () => services.createInstance(DiffService).createComputationService(),
 				}));
 				diff.create(host);
 				diff.layout({ width: 800, height: 320 });

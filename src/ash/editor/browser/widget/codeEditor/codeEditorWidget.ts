@@ -885,16 +885,25 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return this.view.getPositionContentCoordinates(position).top;
 	}
 
-	getTopForLineNumber(lineNumber: number): number {
-		return this.getTopForPosition(lineNumber, 1);
+	getTopForLineNumber(lineNumber: number, includeViewZones = false): number {
+		if (!this.currentModel) return 0;
+		const model = this.view.textModel;
+		if (lineNumber > model.getLineCount()) {
+			// An empty range at EOF spans the trailing zones, rather than the last text line.
+			const last = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(model.getLineCount(), model.getLineMaxColumn(model.getLineCount()));
+			return this.viewModel.viewLayout.getVerticalOffsetAfterLineNumber(last, !includeViewZones);
+		}
+		const position = model.validatePosition(new Position(lineNumber, 1));
+		const viewLine = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(position.lineNumber, position.column);
+		return this.viewModel.viewLayout.getVerticalOffsetForLineNumber(viewLine, includeViewZones);
 	}
 
-	getBottomForLineNumber(lineNumber: number): number {
+	getBottomForLineNumber(lineNumber: number, includeViewZones = false): number {
 		if (!this.currentModel) return 0;
 		const model = this.view.textModel;
 		const position = model.validatePosition(new Position(lineNumber, model.getLineMaxColumn(lineNumber)));
-		const coordinates = this.view.getPositionContentCoordinates(position);
-		return coordinates.top + coordinates.height;
+		const viewLine = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(position.lineNumber, position.column);
+		return this.viewModel.viewLayout.getVerticalOffsetAfterLineNumber(viewLine, includeViewZones);
 	}
 
 	setScrollTop(newScrollTop: number, scrollType: ScrollType = ScrollType.Immediate): void {

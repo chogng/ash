@@ -710,7 +710,87 @@ test('diff feature gutter menus receive hunk and selection edits and follow scro
 	await expect(page.locator('#single .ash-diff-revert')).toHaveCount(1);
 });
 
+test('diff gutter spans deletion zones before the first line and at EOF', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => {
+		window.ashDiffIntegration.setComparisonText('removed head\nsame\nremoved tail', 'same');
+		window.ashDiffIntegration.setViewMode(true, false, 900);
+	});
+	const items = page.locator('#single .ash-diff-gutter-item');
+	await expect(items).toHaveCount(2);
+	const positions = await page.evaluate(() => [window.ashDiffIntegration.linePositions(1, 1), window.ashDiffIntegration.linePositions(3, 1)]);
+	for (const [index, position] of positions.entries()) {
+		await expect.poll(() => items.nth(index).evaluate(node => ({ top: parseFloat((node as HTMLElement).style.top), height: parseFloat((node as HTMLElement).style.height) }))).toEqual({ top: position.originalTop, height: position.originalBottom - position.originalTop });
+	}
+	await items.nth(1).getByRole('button', { name: 'Revert change', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('same\nremoved tail');
+});
+
+for (const [originalLength, modifiedLength] of [[6, 2], [2, 6]]) {
+	test(`diff gutter covers the taller side of a replacement (${originalLength}, ${modifiedLength})`, async ({ page }) => {
+		await openDiffPage(page);
+		await page.evaluate(([left, right]) => {
+			window.ashDiffIntegration.setViewMode(true, false, 900);
+			window.ashDiffIntegration.setComparisonText(
+				['first', ...Array.from({ length: left }, (_, index) => `original ${index}`), 'last'].join('\n'),
+				['first', ...Array.from({ length: right }, (_, index) => `changed ${index}`), 'last'].join('\n'),
+			);
+		}, [originalLength!, modifiedLength!]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const start = await page.evaluate(() => window.ashDiffIntegration.linePositions(2, 2));
+		const end = await page.evaluate(([left, right]) => window.ashDiffIntegration.linePositions(left + 1, right + 1), [originalLength!, modifiedLength!]);
+		const item = page.locator('#single .ash-diff-gutter-item');
+		await expect(item).toHaveCount(1);
+		await expect.poll(() => item.evaluate(node => Number.parseFloat((node as HTMLElement).style.height))).toBe(Math.max(end.originalBottom, end.modifiedBottom) - start.modifiedTop);
+	});
+}
+
 for (const locale of ['en', 'zh-CN'] as const) {
+	for (const theme of ['vs', 'hc-black']) {
+		test(`diff gutter centers controls in the visible hunk and reveals on intent (${locale}, ${theme})`, async ({ page }, testInfo) => {
+			await openDiffPage(page, locale);
+			await page.evaluate(themeId => {
+				window.ashDiffIntegration.setTheme(themeId);
+				window.ashDiffIntegration.setViewMode(true, false, 900);
+				window.ashDiffIntegration.setComparisonText(
+					['first', ...Array.from({ length: 50 }, (_, index) => `original ${index}`), 'last'].join('\n'),
+					['first', ...Array.from({ length: 50 }, (_, index) => `changed ${index}`), 'last'].join('\n'),
+				);
+				window.ashDiffIntegration.registerHunkAction();
+			}, theme);
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+			const gutter = page.locator('#single .ash-diff-gutter');
+			const item = gutter.locator('.ash-diff-gutter-item');
+			const toolbar = item.getByRole('toolbar');
+			await page.mouse.move(0, 0);
+			await expect(item).toHaveCSS('opacity', '0');
+			await gutter.hover();
+			await expect(item).toHaveCSS('opacity', '1');
+			for (const scrollTop of [0, 500]) {
+				await page.evaluate(top => window.ashDiffIntegration.scrollModified(top), scrollTop);
+				await expect.poll(async () => {
+					const [block, controls, viewport] = await Promise.all([item.boundingBox(), toolbar.boundingBox(), gutter.boundingBox()]);
+					if (!block || !controls || !viewport) return Infinity;
+					const visibleTop = Math.max(block.y, viewport.y);
+					const visibleBottom = Math.min(block.y + block.height, viewport.y + viewport.height);
+					return Math.abs(controls.y + controls.height / 2 - (visibleTop + visibleBottom) / 2);
+				}).toBeLessThanOrEqual(1);
+			}
+			await testInfo.attach('diff-gutter-scrolled', { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+			await page.mouse.move(0, 0);
+			await expect(item).toHaveCSS('opacity', '0');
+			const revert = gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true });
+			await revert.focus();
+			await expect(item).toHaveCSS('opacity', '1');
+			await expect(revert).toBeFocused();
+			expect(await item.evaluate(node => {
+				window.ashDiffIntegration.selectModified([25, 1, 25, 1]);
+				return node === document.querySelector('#single .ash-diff-gutter-item');
+			})).toBe(true);
+			await expect(item).toHaveClass(/active/);
+		});
+	}
+
 	test(`diff center gutter retains revert alongside contributed actions (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.registerHunkAction());
@@ -1405,6 +1485,30 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(margins).toHaveCount(0);
 		await page.evaluate(() => window.ashDiffIntegration.dispose());
 		await expect(editor).toHaveCount(0);
+	});
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`inline deletion copies source tabs, blank lines and CRLF in either selection direction (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => {
+			window.ashDiffIntegration.setComparisonText('head\r\n\tdeleted😀\r\n\r\nsecond deleted\r\nend', 'head\r\nend');
+			window.ashDiffIntegration.setViewMode(false, false, 900);
+		});
+		await expect(page.locator('#single .stanza-diff-inline-original-line')).toHaveCount(3);
+		for (const reverse of [false, true]) {
+			const copied = await page.evaluate(reverse => {
+				const lines = document.querySelectorAll('#single .stanza-diff-inline-original-line');
+				const first = document.createTreeWalker(lines[0]!, NodeFilter.SHOW_TEXT).nextNode()!;
+				const last = document.createTreeWalker(lines[2]!, NodeFilter.SHOW_TEXT).nextNode()!;
+				document.getSelection()!.setBaseAndExtent(reverse ? last : first, reverse ? 5 : 0, reverse ? first : last, reverse ? 0 : 5);
+				const clipboardData = new DataTransfer();
+				const event = new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true });
+				document.dispatchEvent(event);
+				return { text: clipboardData.getData('text/plain'), handled: event.defaultPrevented };
+			}, reverse);
+			expect(copied).toEqual({ text: '\tdeleted😀\r\n\r\nsecon', handled: true });
+		}
 	});
 }
 
@@ -2133,6 +2237,28 @@ test('unsaved input updates Diff and Quick Diff locally using the existing basel
 	expect(after.baselineRequests).toBe(before.baselineRequests);
 	await expect(page.locator('#single .stanza-diff-inline-added')).toHaveCount(0);
 	await expect(page.locator('#multi .stanza-diff-inline-added')).toHaveCount(0);
+});
+
+test('embedded diff follows parent fonts, retains overrides and releases its editor pair', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.showEmbeddedComparison());
+	const editor = page.locator('#many .stanza-diff-editor');
+	await expect(editor).toBeVisible();
+	await page.evaluate(() => window.ashDiffIntegration.setFontOptions({ fontSize: 21, lineHeight: 32 }));
+	await expect(editor.locator('.modified .view-line').first()).toHaveCSS('font-size', '21px');
+	await expect(editor.locator('.original .view-line').first()).toHaveCSS('line-height', '32px');
+	await expect(editor.locator('.modified textarea')).toHaveAttribute('readonly', '');
+	await page.evaluate(() => {
+		window.ashDiffIntegration.updateEmbeddedComparison({ fontSize: 17 });
+		window.ashDiffIntegration.setFontOptions({ fontSize: 24, lineHeight: 36 });
+	});
+	await expect(editor.locator('.modified .view-line').first()).toHaveCSS('font-size', '17px');
+	await expect(editor.locator('.original .view-line').first()).toHaveCSS('line-height', '36px');
+	await page.evaluate(() => {
+		window.ashDiffIntegration.closeEmbeddedComparison();
+		window.ashDiffIntegration.setFontOptions({ fontSize: 18 });
+	});
+	await expect(editor).toHaveCount(0);
 });
 
 test('Quick Diff inherits whitespace settings without reading the baseline again', async ({ page }) => {
