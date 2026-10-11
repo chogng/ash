@@ -2750,7 +2750,6 @@ impl AppServer {
         value: &serde_json::Value,
         cancellation: &ash_async_utils::CancellationToken,
     ) -> Result<serde_json::Value, RpcError> {
-        use ash_async_utils::FutureCancellationExt;
         let params: ash_app_server_protocol::protocol::git::GitInitParams = super::decode(value)?;
         let _gate = self
             .env_runtime_gate
@@ -2774,24 +2773,18 @@ impl AppServer {
         authorization
             .ensure_active()
             .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
-        let executor = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
-        executor
-            .block_on(
-                ash_git::GitClient::system()
-                    .initialize_repository(
-                        authorization.dir().canonical_path(),
-                        &params.initial_branch,
-                    )
-                    .with_cancellation(cancellation.clone()),
-            )
-            .map_err(|_| RpcError::new(-32800, AppServerErrorName::RequestCancelled))?
-            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
         let git = self.git_runtime_service()?;
+        git.initialize(
+            authorization.dir().canonical_path(),
+            &params.initial_branch,
+            cancellation,
+        )
+        .map_err(super::git_operations::git_error)?;
         git.reconcile().map_err(super::git_operations::git_error)?;
-        super::result(&git.repositories())
+        super::result(
+            &git.repositories()
+                .map_err(super::git_operations::git_error)?,
+        )
     }
 
     pub(super) fn git_runtime_service(&self) -> Result<Arc<GitRuntime>, RpcError> {

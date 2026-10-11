@@ -6,27 +6,27 @@ use crate::client::validate_argument;
 use crate::error::invalid_command as invalid;
 
 /// Git-owned integration state survives renderer and server restarts.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum GitIntegration {
     Merge,
     Rebase,
     CherryPick,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum GitCommandOutcome {
     Completed,
     Conflicted,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum GitStashMode {
     Tracked,
     IncludeUntracked,
 }
 
 /// Reviewed repository intents, never arbitrary Git arguments.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum GitCommand {
     CreateBranchAt {
         name: String,
@@ -113,7 +113,7 @@ pub enum GitCommand {
 }
 
 /// Displayable ref identities omit remote URLs and credentials.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GitCatalog {
     pub tags: Vec<(String, String)>,
     pub stashes: Vec<(String, String)>,

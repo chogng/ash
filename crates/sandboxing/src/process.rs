@@ -102,8 +102,7 @@ impl CommandProcess {
     fn spawn(mut command: Command) -> io::Result<Self> {
         #[cfg(unix)]
         {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
+            ash_utils_pty::process_group::configure_command_session(&mut command);
         }
         Ok(Self {
             child: command.spawn()?,
@@ -140,6 +139,9 @@ impl CommandProcess {
         if self.closed {
             return Ok(());
         }
+        #[cfg(unix)]
+        let tree = ash_utils_pty::process_group::kill_process_session(self.child.id());
+        #[cfg(not(unix))]
         let tree = ash_utils_pty::process_group::kill_process_group(self.child.id());
         let _ = self.child.kill();
         let reaped = self.child.wait();

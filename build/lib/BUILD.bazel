@@ -21,6 +21,7 @@ filegroup(
     srcs = glob(["*.py"], exclude = ["test_*.py", "package_test_support.py"]) + [
         "//build:__init__.py",
         "//build/download:python_sources",
+        "//build/builtin:python_sources",
     ],
 )
 
@@ -29,6 +30,7 @@ filegroup(
     srcs = [
         "package-layout.json",
         "package.py",
+        "tree.py",
         "livekit.py",
         "//third_party/livekit:runtime-lock.json",
         "//third_party/livekit:LICENSE",
@@ -37,6 +39,7 @@ filegroup(
         "//third_party/livekit:NOTICE",
         "//third_party/livekit:pkg/sfu/NOTICE",
         "//build/download:python_sources",
+        "//build/builtin:python_sources",
     ],
 )
 

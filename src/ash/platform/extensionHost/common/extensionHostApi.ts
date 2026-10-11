@@ -153,7 +153,14 @@ export interface ExtensionHostRemoteConnectionResolverRegistration extends Exten
 	readonly authorityPrefix: string;
 }
 
-export type ExtensionHostRegistration = ExtensionHostRemoteConnectionResolverRegistration | ExtensionHostRemoteAuthorityResolverRegistration | ExtensionHostWorkspaceEventsRegistration | ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostDebugConfigurationProviderRegistration | ExtensionHostDebugAdapterTrackerRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTaskEventsRegistration | ExtensionHostDebugEventsRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+/** Browser SCM callbacks and snapshots share one activation fence. */
+export interface ExtensionHostSCMRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'sourceControl';
+	readonly revision: number;
+	readonly providers: readonly JsonValue[];
+}
+
+export type ExtensionHostRegistration = ExtensionHostSCMRegistration | ExtensionHostRemoteConnectionResolverRegistration | ExtensionHostRemoteAuthorityResolverRegistration | ExtensionHostWorkspaceEventsRegistration | ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostDebugConfigurationProviderRegistration | ExtensionHostDebugAdapterTrackerRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTaskEventsRegistration | ExtensionHostDebugEventsRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
 export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'taskType'; readonly taskType: string | null; } | { readonly type: 'debug'; readonly phase: 'start' | 'initialConfigurations' | 'dynamicConfigurations' | 'resolveConfiguration'; readonly debugType: string | null; } | { readonly type: 'startupFinished'; } | { readonly type: 'resolveAuthority'; readonly authorityPrefix: string; };
 export interface ExtensionHostInitialization {
@@ -251,6 +258,10 @@ export interface ExtensionDocumentEdit {
 
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
+	| { operation: 'scmUpdate'; registrationId: string; revision: number; providers: readonly JsonValue[]; }
+	| { operation: 'backendRequest'; capability: string; method: string; params: JsonValue; }
+	| { operation: 'backendState'; capability: string; after: number; }
+	| { operation: 'editorOperation'; payload: JsonValue; }
 	| Extract<ProtocolExtensionClientOperation, { operation: "readResourceFile" | "statResource" | "readResourceDirectory"; }>
 	| { operation: 'readInitialization'; }
 	| { operation: 'openRemoteConnection'; authority: string; }
@@ -277,6 +288,7 @@ export type ExtensionClientOperation =
 	| { operation: 'showQuickPick'; items: string[]; placeholder: string; };
 
 export type ExtensionClientResult =
+	| { result: 'value'; value: JsonValue; }
 	| { readonly result: "resourceFile"; readonly bytes: readonly number[]; }
 	| { readonly result: "resourceStat"; readonly fileType: number; readonly size: number; readonly mtime: number; }
 	| { readonly result: "resourceDirectory"; readonly entries: readonly (readonly [string, number])[]; }
@@ -535,6 +547,9 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, 'Remote resolver registration', ['kind', 'registrationId', 'authorityPrefix']);
 		const authorityPrefix = validateRemoteConnectionResolverPrefix(boundedText(input.authorityPrefix, 'Remote prefix', 64));
 		return Object.freeze({ kind, registrationId, authorityPrefix });
+	}
+	if (kind === 'sourceControl') {
+		return Object.freeze({ kind, registrationId, revision: positiveSafeInteger(input.revision, 'SCM revision'), providers: boundedArray(input.providers, 'SCM providers', 128).map(normalizeExtensionHostPayload) });
 	}
 	if (kind === 'statusBar') {
 		exactKeys(input, 'Extension status bar registration', ['kind', 'registrationId', 'revision', 'entries']);

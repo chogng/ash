@@ -54,7 +54,7 @@ impl GitPathspecSet {
 }
 
 /// Validated commit message passed to Git over stdin rather than argv.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct GitCommitRequest {
     message: String,
     scope: CommitScope,
@@ -63,23 +63,44 @@ pub struct GitCommitRequest {
     expected_head: Option<GitHead>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 enum CommitScope {
     Staged,
     Tracked,
     IncludeUntracked,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 enum CommitMode {
     Create,
     Amend,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 enum CommitSignoff {
     None,
     Add,
+}
+
+impl<'de> serde::Deserialize<'de> for GitCommitRequest {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Fields {
+            message: String,
+            scope: CommitScope,
+            mode: CommitMode,
+            signoff: CommitSignoff,
+            expected_head: Option<GitHead>,
+        }
+        let fields = Fields::deserialize(deserializer)?;
+        let mut request = Self::new(fields.message).map_err(serde::de::Error::custom)?;
+        request.scope = fields.scope;
+        request.mode = fields.mode;
+        request.signoff = fields.signoff;
+        request.expected_head = fields.expected_head;
+        Ok(request)
+    }
 }
 
 impl GitCommitRequest {

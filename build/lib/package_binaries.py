@@ -31,15 +31,12 @@ _BINARIES = {
     "ash-app-server": ("ash-app-server", "--server-bin"),
     "ash-app-server-daemon": ("ash-app-server-daemon", "--app-server-daemon-bin"),
     "ash-code-mode-host": ("ash-code-mode-host", "--code-mode-host-bin"),
-    "ash-github-authentication": (
-        "ash-github-authentication",
-        "--github-authentication-bin",
-    ),
     "ash-remote-ssh-extension": (
         "ash-remote-ssh-extension",
         "--remote-ssh-extension-bin",
     ),
     "ash-external-js-ext": ("ash-external-js-ext", "--external-js-ext-bin"),
+    "ash-git-extension": ("ash-git-extension", "--git-extension-bin"),
     "ash-github-authentication": (
         "ash-github-authentication",
         "--github-authentication-bin",

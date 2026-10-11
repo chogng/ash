@@ -250,6 +250,8 @@ class BrowserExtensionWorker extends Disposable {
 					const payload = normalizeExtensionHostPayload(message.request);
 					// The generated Rust contract validates both Worker and backend client requests.
 					// These fields validate shape only; the window binding supplies the actual fence.
+					const browserOperation = normalizeBrowserClientOperation(payload);
+					if (browserOperation) { return await clientHandler(browserOperation, AbortSignal.any([lifetime.signal, client.signal])) as unknown as JsonValue; }
 					const { operation } = decodeAppServerServerRequestParams('extensionClient/request', { extensionId, activationGeneration: 1, incarnation: 1, operation: payload });
 					if (operation.operation === 'readWorkspaceFile') throw new TypeError('Workspace file requests belong to the backend');
 					return await clientHandler(operation as ExtensionClientOperation, AbortSignal.any([lifetime.signal, client.signal])) as unknown as JsonValue;
@@ -402,4 +404,24 @@ function protocolJsonValue(value: JsonValue): ProtocolJsonValue {
 	if (value === null || typeof value !== 'object') { return value; }
 	if (Array.isArray(value)) { return value.map(protocolJsonValue); }
 	return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, protocolJsonValue(entry)]));
+}
+
+function normalizeBrowserClientOperation(value: JsonValue): ExtensionClientOperation | undefined {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) { return undefined; }
+	const input = value as Record<string, JsonValue>;
+	const identifier = (entry: JsonValue): string => {
+		if (typeof entry !== 'string' || !entry || entry.length > 256 || entry.includes('\0')) { throw new TypeError('Invalid browser extension identifier'); }
+		return entry;
+	};
+	if (input.operation === 'scmUpdate') {
+		if (!Number.isSafeInteger(input.revision) || Number(input.revision) < 1 || !Array.isArray(input.providers) || input.providers.length > 128) { throw new TypeError('Invalid SCM update'); }
+		return { operation: 'scmUpdate', registrationId: identifier(input.registrationId), revision: Number(input.revision), providers: input.providers };
+	}
+	if (input.operation === 'backendRequest') { return { operation: 'backendRequest', capability: identifier(input.capability), method: identifier(input.method), params: input.params }; }
+	if (input.operation === 'backendState') {
+		if (!Number.isSafeInteger(input.after) || Number(input.after) < 0) { throw new TypeError('Invalid backend event cursor'); }
+		return { operation: 'backendState', capability: identifier(input.capability), after: Number(input.after) };
+	}
+	if (input.operation === 'editorOperation') { return { operation: 'editorOperation', payload: input.payload }; }
+	return undefined;
 }

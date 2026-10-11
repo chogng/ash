@@ -48,6 +48,12 @@ User-installed extensions are a separate profile-level root. Extensions packages
 
 ## Bundled packages
 
+[`git`](git/README.md) owns local Git repository state, history, file watchers and automatic fetch
+in a directory-scoped Rust SDK process. App Server keeps authorization and transport adapters;
+Desktop and TUI use the existing Git domain contracts. `build/builtin` stages builtin resources,
+while the shared runtime package ships `ash-git-extension` separately in `bin/`.
+
+
 `remote-ssh` registers the product's `ssh` authority resolver through the TS SDK in the Rust V8
 host. Its `main` entry and SDK are compiled into the executable; App Server verifies their release
 binding. It selects a saved connection name; the Remote service validates the target and the

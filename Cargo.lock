@@ -529,7 +529,6 @@ dependencies = [
  "getrandom 0.2.17",
  "git-turn-changes",
  "iana-time-zone",
- "ignore",
  "image",
  "log",
  "pollster 1.0.1",
@@ -619,6 +618,7 @@ dependencies = [
  "ash-features",
  "ash-feedback-contract",
  "ash-file-access",
+ "ash-git",
  "ash-guardian-environment",
  "ash-memories",
  "ash-memory-diagnostics",
@@ -1509,10 +1509,13 @@ dependencies = [
  "ash-diff",
  "ash-install-context",
  "ash-utils-pty",
+ "dirs",
  "dunce",
+ "fs2",
  "futures",
  "pretty_assertions",
  "serde",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
 ]
@@ -1523,6 +1526,32 @@ version = "0.1.0"
 dependencies = [
  "ash-extension-api",
  "ash-protocol",
+]
+
+[[package]]
+name = "ash-git-extension"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server-protocol",
+ "ash-async-utils",
+ "ash-config",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
+ "ash-external-ext-sdk",
+ "ash-file-access",
+ "ash-file-watcher",
+ "ash-git",
+ "ash-install-context",
+ "ash-protocol",
+ "dunce",
+ "getrandom 0.2.17",
+ "ignore",
+ "log",
+ "serde_json",
+ "sha2 0.10.9",
+ "sysinfo",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -3105,6 +3134,7 @@ dependencies = [
  "portable-pty",
  "pretty_assertions",
  "rustix 1.1.4",
+ "sysinfo",
  "tokio",
  "winapi",
 ]

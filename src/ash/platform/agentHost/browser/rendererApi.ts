@@ -63,6 +63,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		language: createDisconnectedLanguageApi(unavailableOperation),
 		languageServers: createDisconnectedLanguageServerService(unavailableOperation),
 		git: createDisconnectedGitApi(unavailableOperation),
+		extensionBackend: { request: () => unavailableOperation('extensionBackend.request') },
 		fileSearch: createDisconnectedFileSearchApi(unavailableOperation),
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
 		contentSearchConfiguration: createDisconnectedContentSearchConfigurationApi(unavailableOperation),

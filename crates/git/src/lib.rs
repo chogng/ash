@@ -37,6 +37,8 @@ pub use objects::GitTreeChange;
 pub use objects::GitTreeChangeKind;
 pub use objects::GitTreeId;
 pub use objects::GitTreeTextDiff;
+pub use operation_lock::RepositoryOperationGuard;
+pub use operation_lock::RepositoryOperationLock;
 pub use operation_lock::repository_operation_lock;
 pub use references::GitBranch;
 pub use references::GitCatalog;

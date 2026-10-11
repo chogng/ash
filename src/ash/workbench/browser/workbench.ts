@@ -1,3 +1,5 @@
+import { IExtensionBackendApi } from '../../platform/extensionHost/common/extensionBackendApi.js';
+import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { ITraceService } from '../services/trace/common/traceService.js';
 import { AppServerTraceService } from '../services/trace/browser/appServerTraceService.js';
 import { ISearchService } from '../services/search/common/search.js';
@@ -529,6 +531,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IRendererHostService, api);
 		services.registerInstance(IExtensionResourceLoaderService, api.extensions.resources);
+		services.registerInstance(IExtensionApi, api.extensions);
+		services.registerInstance(IExtensionBackendApi, api.extensionBackend);
 		const workspaceContext = this._register(new WorkspaceContextService(workspace));
 		this.workspaceContext = workspaceContext;
 		services.registerInstance(IWorkspaceContextService, workspaceContext);

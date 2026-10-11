@@ -64,8 +64,6 @@ use ash_app_server_protocol::protocol::git::GitWorktreeResolveParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
 use ash_async_utils::CancellationToken;
-use ash_async_utils::FutureCancellationExt;
-use ash_git::GitClient;
 use ash_git::GitError;
 use ash_protocol::HookEvent;
 use core_api::HookEventDecision;
@@ -204,25 +202,51 @@ impl AppServer {
         if !parent.is_absolute() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
-        let path = runtime
-            .block_on(
-                GitClient::system()
-                    .clone_repository(&params.url, parent)
-                    .with_cancellation(cancellation.clone()),
+        let provider = crate::git_provider::GitProviderClient::open(
+            crate::git_provider::product_executable().map_err(|error| {
+                git_error(GitRuntimeError::Service(
+                    crate::git_provider::service_error(error),
+                ))
+            })?,
+            Vec::new(),
+        )
+        .map_err(|error| {
+            git_error(GitRuntimeError::Service(
+                crate::git_provider::service_error(error),
+            ))
+        })?;
+        let response = provider
+            .call(
+                ash_app_server_protocol::git_provider::GitProviderRequest::Clone {
+                    url: params.url,
+                    parent: parent.to_path_buf(),
+                },
+                Some(cancellation),
             )
-            .map_err(|_| RpcError::new(-32800, AppServerErrorName::RequestCancelled))?
-            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+            .map_err(|error| {
+                git_error(GitRuntimeError::Service(
+                    crate::git_provider::service_error(error),
+                ))
+            })?;
+        let ash_app_server_protocol::git_provider::GitProviderResponse::Path(path) = response
+        else {
+            return Err(RpcError::new(
+                -32061,
+                AppServerErrorName::GitOperationFailed,
+            ));
+        };
         result(&GitCloneResult {
             repository_path: path.to_string_lossy().into_owned(),
         })
     }
 
     pub(super) fn git_repositories(&self) -> Result<Value, RpcError> {
-        result(&self.git_runtime_service()?.repositories())
+        result(
+            &self
+                .git_runtime_service()?
+                .repositories()
+                .map_err(git_error)?,
+        )
     }
 
     pub(super) fn git_status(&self, value: &Value) -> Result<Value, RpcError> {

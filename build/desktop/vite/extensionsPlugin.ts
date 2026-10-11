@@ -1,6 +1,6 @@
 import { isAbsolute, relative } from 'node:path';
 import type { Plugin } from 'vite';
-import { browserExtensionRoots, prepareBrowserExtensions } from '../../resources/extensions.ts';
+import { browserExtensionRoots, prepareBrowserExtensions } from '../../builtin/extensions.ts';
 
 /** Publishes package snapshots before compilation and reloads after an extension source changes. */
 export function browserExtensionsPlugin(): Plugin {

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 const MAXIMUM_BYTES: usize = 2 * 1024 * 1024;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum GitIndexSelection {
     Hunk { index: usize },
     Lines { start: usize, end: usize },
@@ -28,6 +28,7 @@ pub struct GitIndexDiff {
 }
 
 /// Exact reviewed contents bind the selection to one index/worktree comparison.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct GitIndexEdit {
     pub path: PathBuf,
     pub comparison: GitChangeFileComparison,

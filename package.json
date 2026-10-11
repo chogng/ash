@@ -20,7 +20,7 @@
     "icons:check": "node build/resources/icons/generate.ts --check",
     "protocol:generate": "node build/protocol/generate.ts",
     "prepare:generated": "pnpm run prepare:extensions && pnpm run typecheck:common && pnpm run icons:check",
-    "prepare:extensions": "node build/resources/extensions.ts",
+    "prepare:extensions": "node build/builtin/extensions.ts",
     "rebuild:native": "electron-rebuild -w native-keymap",
     "prepare:output": "node build/desktop/build.ts prepare",
     "prepare:backend": "node build/python.ts -B build/prepare.py && node build/python.ts -B build/desktop/develop.py --select-prepared",

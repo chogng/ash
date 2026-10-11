@@ -1,0 +1,5 @@
+filegroup(
+    name = "python_sources",
+    srcs = ["__init__.py"],
+    visibility = ["//visibility:public"],
+)

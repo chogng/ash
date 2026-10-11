@@ -8,14 +8,19 @@ import test from 'node:test';
 test('browser packaging excludes Rust-only extensions and rejects missing JS manifests', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-browser-extensions-'));
 	try {
-		await mkdir(join(directory, 'build/resources'), { recursive: true });
-		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/resources/extensions.ts'));
+		await mkdir(join(directory, 'build/builtin'), { recursive: true });
+		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(directory, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/capability'));
 		await writeFile(join(directory, 'extensions/capability/Cargo.toml'), '[package]\nname = "capability"\nversion = "1.0.0"\n');
-		const run = () => spawnSync(process.execPath, ['build/resources/extensions.ts'], {
+		await mkdir(join(directory, 'extensions/git/src'), { recursive: true });
+		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', ashRuntime: { kind: 'rust', entrypoint: 'ash-git-extension' } }));
+		await writeFile(join(directory, 'extensions/git/src/main.rs'), 'fn main() {}');
+		await writeFile(join(directory, 'extensions/git/Cargo.toml'), '[package]');
+		await writeFile(join(directory, 'extensions/git/package.nls.zh-CN.json'), JSON.stringify({ displayName: 'Git 支持' }));
+		const run = () => spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
 			cwd: directory, encoding: 'utf8', timeout: 15_000,
 			// This fixture owns its catalog, including any externally configured roots.
 			env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' },
@@ -24,7 +29,8 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 		assert.ifError(packaged.error);
 		assert.equal(packaged.status, 0, packaged.stderr);
 		const bundle = JSON.parse(await readFile(join(directory, 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
-		assert.deepEqual(bundle.catalog.extensions.map((extension: { id: string; }) => extension.id), ['test.theme-defaults']);
+		assert.deepEqual(bundle.catalog.extensions.map((extension: { id: string; }) => extension.id), ['test.git', 'test.theme-defaults']);
+		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['package.json', 'package.nls.zh-CN.json']);
 		await mkdir(join(directory, 'extensions/broken-js'));
 		const broken = run();
 		assert.ifError(broken.error);
@@ -45,7 +51,7 @@ for (const resource of ['manifest', 'file'] as const) {
 			const file = await open(path, 'w');
 			try { await file.truncate((resource === 'manifest' ? 4 : 16) * 1024 * 1024 + 1); }
 			finally { await file.close(); }
-			const result = spawnSync(process.execPath, ['build/resources/extensions.ts'], {
+			const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
 				cwd: resolve(import.meta.dirname, '../..'),
 				env: { ...process.env, ASH_WEB_EXTENSION_PATHS: directory },
 				encoding: 'utf8', timeout: 30_000,

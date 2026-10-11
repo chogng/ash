@@ -1,3 +1,4 @@
+import type { IExtensionBackendApi } from '../../extensionHost/common/extensionBackendApi.js';
 import type { ISymphonyBackend } from '../../symphony/common/symphonyService.js';
 import type { IInstructionService } from '../../instructions/common/instructionService.js';
 import type { IFileSearchService } from '../../search/common/fileSearch.js';
@@ -105,6 +106,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly resource: IResourceApi;
 	readonly extensions: IExtensionApi;
 	readonly extensionHost: IExtensionHostApi;
+	readonly extensionBackend: IExtensionBackendApi;
 	readonly fs: IFileApi;
 	readonly diff: IDiffApi;
 	readonly syntax: ISyntaxApi;

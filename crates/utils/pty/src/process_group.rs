@@ -19,6 +19,45 @@ use std::io;
 
 use tokio::process::Child;
 
+#[cfg(unix)]
+/// Gives a pipe-backed capability process an owned session, including child-created groups.
+pub fn configure_command_session(command: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
+        });
+    }
+}
+
+#[cfg(unix)]
+/// Kills an owned session while its leader PID is still reserved by an unreaped child.
+pub fn kill_process_session(session_id: u32) -> io::Result<()> {
+    let session_id = session_id as libc::pid_t;
+    // Stop the leader first, so its children cannot be replenished during cleanup.
+    let group = kill_process_group(session_id as u32);
+    let mut system = sysinfo::System::new();
+    for _ in 0..3 {
+        system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::All,
+            true,
+            sysinfo::ProcessRefreshKind::nothing(),
+        );
+        for pid in system.processes().keys() {
+            let pid = pid.as_u32() as libc::pid_t;
+            // A second kernel check avoids targeting a recycled PID from the inventory.
+            if unsafe { libc::getsid(pid) } == session_id {
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+            }
+        }
+    }
+    group
+}
+
 #[cfg(target_os = "linux")]
 /// Ensure the child receives SIGTERM when the original parent dies.
 ///

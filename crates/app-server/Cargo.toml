@@ -77,7 +77,6 @@ ash-symphony.workspace = true
 base64 = { workspace = true }
 dunce = { workspace = true }
 getrandom = { workspace = true }
-ignore = { workspace = true }
 log = { workspace = true }
 pollster = { workspace = true }
 serde = { workspace = true }

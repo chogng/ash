@@ -1,3 +1,5 @@
+import { IExtensionBackendApi } from '../../platform/extensionHost/common/extensionBackendApi.js';
+import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { ITraceService } from '../../workbench/services/trace/common/traceService.js';
 import { AppServerTraceService } from '../../workbench/services/trace/browser/appServerTraceService.js';
 import { IContentSearchService } from '../../platform/search/common/search.js';
@@ -330,6 +332,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(AppServerApiId, options.api.appServer);
 		services.registerInstance(IRendererHostService, options.api);
 		services.registerInstance(IExtensionResourceLoaderService, options.api.extensions.resources);
+		services.registerInstance(IExtensionApi, options.api.extensions);
+		services.registerInstance(IExtensionBackendApi, options.api.extensionBackend);
 		services.registerInstance(ModelApiId, options.api.model);
 		services.registerInstance(ISessionApi, options.api.session);
 		services.registerInstance(IThreadApi, options.api.thread);

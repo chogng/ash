@@ -20,6 +20,7 @@ path = "src/bin/generate_protocol.rs"
 required-features = ["export"]
 
 [dependencies]
+ash-git = { workspace = true }
 external-ext-protocol = { workspace = true }
 slash-commands = { package = "ash-slash-commands", path = "../slash-commands" }
 noop-macros = { package = "ash-app-server-protocol-noop-macros", path = "../app-server-protocol-noop-macros" }

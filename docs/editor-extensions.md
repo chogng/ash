@@ -53,7 +53,7 @@ Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链�
 V8 的第三方系统隔离在 macOS 与 64 位 Windows 实现；标准 Node 包需单独的精确包执行授权。独立可执行扩展仍要求整个进程的系统硬限制，目前产品 launcher 拒绝启动它们。
 后续章节说明这些流程、所有权、信任与失败边界、完成度及演进。
 
-Web 和 Electron 的工作台共用可信浏览器扩展入口：`build/resources/extensions.ts` 将内置包及显式配置的
+Web 和 Electron 的工作台共用可信浏览器扩展入口：`build/builtin/extensions.ts` 将内置包及显式配置的
 `ASH_WEB_EXTENSION_PATHS` 冻结为 Browser catalog 和资源快照。`platform/extensions/browser/extensionApi.ts`
 提供目录与 `IExtensionResourceLoaderService` 资源契约；`platform/extensionHost/browser/extensionHostApi.ts` 持有每个可执行包的 Worker，
 `extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口。
@@ -385,7 +385,7 @@ V8 宿主保留 macOS Seatbelt 和 64 位 Windows AppContainer 的限制：读�
 | GitHub OAuth/设备码策略、scope 解释、Enterprise issuer、身份校验、令牌交换/刷新/撤销、会话有效性 | GitHub 认证扩展；TS/JS 或 Rust 实现二选一                                  |
 | PR/Issue 查询、分页、限流、Review 与合并语义                                                     | GitHub API 能力扩展，消费认证 Provider                                     |
 | 账号选择、浏览器打开/回调接入、列表、评论输入、文件和 Diff                                       | App 的通用 UI/编辑器服务与 TS 扩展贡献；TUI 有需求时提供自己的交互 adapter |
-| 本地 Git、文件事务、进程与通用 HTTP                                                              | 相应共享服务；不依赖 GitHub 登录扩展                                       |
+| Git 执行原语、文件事务、进程与通用 HTTP                                                              | 相应共享服务；不依赖 GitHub 登录扩展                                       |
 
 认证 Provider 拥有会话权威状态；SecretStore 只保存凭据，broker 只保存 Provider registration 与消费者授权，不建立第二份会话或刷新任务。登录请求从客户端到认证 broker，经有效授权调用 Provider；Provider 使用公开浏览器/回调和秘密存储接口完成认证并发布会话变化。GitHub API Provider 经同一访问控制取得所需授权，客户端显示账号描述与结果。
 
@@ -437,7 +437,7 @@ App 可预装并按认证请求激活 GitHub 扩展；TUI 默认不加载、不�
 | 受限 V8 执行与系统隔离                              | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放          |
 | 完整 TS API                                         | 尚未完成；现有可信 Worker 仍接入通用命令，不属于第三方扩展权限边界                                                |
 | Open VSX 搜索、下载、安装、更新和卸载               | 已接入 Rust Manager 与 Extensions 界面；支持 universal 正式版本、已有静态贡献及分别授权的基础 CommonJS API 子集  |
-| Rust 能力扩展与作者接口                             | GitHub 认证已用公共 Rust SDK／Host RPC v1、受限核心服务和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成 |
+| Rust 能力扩展与作者接口                             | GitHub 认证与本地 Git 已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成 |
 
 后续实现必须通过真实扩展入口验证：正常授权操作成功；伪造扩展身份、越界文件或仓库、未授权命令、
 受限 V8 的直接 Node 访问及所有扩展的产品 IPC/后端越权访问失败；授权 Node 包的真实文件、网络和子进程调用成功；撤销授权后在途和后续调用停止；关闭窗口释放注册与任务；文档编辑
@@ -919,3 +919,14 @@ ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm run test:smoke:desktop test/smoke/areas/chat/exte
 卸载后贡献移除；JavaScript 场景检查原包命令、独立授权、重启恢复和撤销。浏览器集成测试覆盖英文和中文的市场筛选、安装确认、启用、授权、撤销、停用与卸载。
 
 声明式 debugger 的默认可执行程序与同类型动态 descriptor factory 共用一个注册表；默认程序不会阻止动态工厂注册。工厂接收已解析的默认 DebugAdapterExecutable，实际 descriptor 决定执行路径；debugServer 和显式 debugAdapter 优先。只声明类型的 debugger 可用于动态工厂激活。标准 package.json 的 program/runtime/runtimeArgs/args 默认执行链已接入；win、windows、winx86、osx 和 linux 覆盖使用扩展执行主机的平台。程序相对路径基于目录服务验证的扩展包位置，带路径的相对 runtime 同样基于该包，普通 runtime 名称通过执行主机 PATH 查找。runtimeArgs、程序路径、args 按顺序组合，空参数和美元符号保持字面值。目录协议传递 extensionLocation 和 targetPlatform，前端不根据 Web/Electron 客户端 OS 猜测这些值。跨扩展同类型声明合并、Node 运行时特殊选择与完整 DebugSessionOptions 仍需继续对齐。父会话、受父会话管理的重启/停止、noDebug 继承与覆盖、父子控制台合并已接入标准 API 和同一会话 owner；工厂、tracker 与事件使用相同父会话标识。noDebug 不安装各类断点，合并控制台保留各适配器输出并向当前选中的存活会话求值。无目录配置启动保持 workspaceFolder 为空，绝对适配器/源路径与执行主机环境变量可用；无目录时未限定目录的工作区变量会拒绝。UI 抑制选项与测试运行关联仍待补齐。
+
+## Git 内置能力与构建
+
+[`extensions/git`](../extensions/git/README.md) 是目录 scope 的 Rust 能力扩展，使用公共 SDK
+DataChannel 提供本地 Git 产品业务。App Server 保留目录授权、监管与现有 `git/*` adapter；
+仓库发现、状态版本、历史游标、监听、忽略规则通知和自动 fetch 只有扩展一份 owner。
+Desktop 的 SCM 展示与编辑器交互留在客户端；公共 `vscode.scm` extension-host API 仍是接入缺口。
+
+[`build/builtin`](../build/builtin) 统一拥有内置扩展资源打包与浏览器快照。Rust 扩展的 manifest、
+NLS 和资源随 catalog 发布，Rust 源码及 Cargo 构建输入不进入资源包；可执行文件由共享后端
+构建、签名和包布局装配。Desktop 开发包、Remote 和 Code 发布包使用同一 Git 可执行组件。

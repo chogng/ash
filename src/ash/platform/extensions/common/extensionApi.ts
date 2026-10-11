@@ -1,7 +1,9 @@
 import { URI } from '../../../base/common/uri.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IExtensionResourceLoaderService } from '../../extensionResourceLoader/common/extensionResourceLoader.js';
 
 export type ExtensionCatalogReload = "cached" | "refresh";
+export const IExtensionApi = createServiceIdentifier<IExtensionApi>('extensionCatalogApi');
 export type ExtensionSourceKind = "builtIn" | "plugin" | "registry" | "user";
 export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | "duplicateExtension" | "pathEscapesRoot" | "resourceNotFound" | "resourceTooLarge";
 

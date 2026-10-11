@@ -236,7 +236,7 @@ fn repository_admission_preserves_alias_order_without_blocking_other_requests() 
     .unwrap();
     let server = Arc::new(server().with_git_root(authorization).unwrap());
     let git = server.git_runtime_service().unwrap();
-    let repositories = git.repositories().repositories;
+    let repositories = git.repositories().unwrap().repositories;
     let root_id = repositories
         .iter()
         .find(|repo| repo.path.is_empty())

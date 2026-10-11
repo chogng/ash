@@ -25,7 +25,7 @@ pub enum GitFileRevision {
 }
 
 /// Selects the canonical two-sided comparison for one current repository change.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum GitChangeFileComparison {
     /// Compares the current `HEAD` commit with the index.
     Staged,

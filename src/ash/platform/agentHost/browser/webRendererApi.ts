@@ -1,3 +1,4 @@
+import { createExtensionBackendApi } from '../../extensionHost/browser/extensionBackendApi.js';
 import { createAppServerExecutionSettingsApi } from '../../execution/browser/executionSettingsApi.js';
 import { AppServerSymphonyService } from '../../symphony/browser/appServerSymphonyService.js';
 import { createAppServerInstructionService } from '../../instructions/browser/appServerInstructionService.js';
@@ -117,6 +118,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		resource,
 		extensions: createAppServerExtensionApi(connection, resource, createBrowserExtensionApi()),
 		extensionHost: createAppServerExtensionHostApi(connection),
+		extensionBackend: createExtensionBackendApi(connection),
 		fs: createAppServerFileApi(connection),
 		diff: createAppServerDiffApi(connection),
 		syntax: createAppServerSyntaxApi(connection),

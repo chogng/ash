@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from build.builtin import copy_builtin_extensions
 from build.lib.targets import TARGETS
 from build.code.package import build_code_package
 from build.app_server import main as build_main
@@ -21,7 +22,6 @@ from build.app_server import parse_arguments as parse_build_arguments
 from build.lib.bubblewrap import load_vendored_source, resolve_bubblewrap
 from build.lib.package import (
     build_package_directory,
-    copy_builtin_extensions,
     file_sha256,
     load_protocol_metadata,
     validate_product_services,
@@ -109,6 +109,7 @@ class PackageTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-external-js-ext",
                 "ash-github-authentication",
+                "ash-git-extension",
                 "ash-remote-ssh-extension",
                 "ash-voice-host",
                 "ash-collaboration-server",
@@ -237,6 +238,7 @@ class PackageTests(unittest.TestCase):
         "bazel",
         "css",
         "diff",
+        "git",
         "git-base",
         "github-authentication",
         "go",
@@ -369,6 +371,9 @@ class PackageTests(unittest.TestCase):
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
                 ),
+                git_extension_binary=executable_file(
+                    root / "git-extension", b"git-extension"
+                ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
                 ),
@@ -464,6 +469,24 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(
                 b"github-authentication",
                 (output / "bin" / "ash-github-authentication").read_bytes(),
+            )
+            git_extension = output / "ash-resources" / "extensions" / "git"
+            self.assertEqual(
+                "ash-git-extension",
+                json.loads((git_extension / "package.json").read_text())["ashRuntime"][
+                    "entrypoint"
+                ],
+            )
+            self.assertFalse((git_extension / "src").exists())
+            self.assertFalse((git_extension / "Cargo.toml").exists())
+            self.assertEqual(
+                b"git-extension", (output / "bin" / "ash-git-extension").read_bytes()
+            )
+            self.assertIn(
+                "仓库",
+                json.loads((git_extension / "package.nls.zh-CN.json").read_text())[
+                    "description"
+                ],
             )
             product_services = json.loads(
                 (
@@ -600,6 +623,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
+                ),
+                git_extension_binary=executable_file(
+                    root / "git-extension", b"git-extension"
                 ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
@@ -843,6 +869,9 @@ class PackageTests(unittest.TestCase):
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
                 ),
+                git_extension_binary=executable_file(
+                    root / "git-extension", b"git-extension"
+                ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
                 ),
@@ -926,6 +955,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
+                ),
+                git_extension_binary=executable_file(
+                    root / "git-extension", b"git-extension"
                 ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"

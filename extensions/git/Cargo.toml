@@ -1,0 +1,44 @@
+[package]
+name = "ash-git-extension"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "git_extension"
+
+[[bin]]
+name = "ash-git-extension"
+path = "src/main.rs"
+
+[dependencies]
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
+ash-app-server-protocol.workspace = true
+ash-async-utils.workspace = true
+ash-file-access.workspace = true
+ash-file-watcher.workspace = true
+ash-git.workspace = true
+ash-protocol.workspace = true
+ignore.workspace = true
+log.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+dunce.workspace = true
+getrandom.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+
+[dev-dependencies]
+ash-config.workspace = true
+sysinfo.workspace = true
+ash-external-ext.workspace = true
+external-ext-protocol.workspace = true
+ash-install-context.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.cargo-shear]
+# tests/runtime.rs compiles the product adapter through #[path], exercising these APIs.
+ignored = ["ash-external-ext", "external-ext-protocol"]

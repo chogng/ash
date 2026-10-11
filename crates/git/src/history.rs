@@ -49,14 +49,14 @@ impl GitCommitFile {
 }
 
 /// Whether history compares two trees or changes since their common ancestor.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum GitComparisonMode {
     Direct,
     MergeBase,
 }
 
 /// Commit metadata and first-parent change totals, read only when details are requested.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GitCommitDetails {
     pub author_name: String,
     pub author_email: String,
@@ -66,7 +66,7 @@ pub struct GitCommitDetails {
 }
 
 /// Binary paths contribute to the file count, but have no added or deleted line count.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GitCommitStatistics {
     pub files: usize,
     pub additions: u64,

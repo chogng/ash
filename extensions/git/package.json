@@ -1,0 +1,15 @@
+{
+  "name": "git",
+  "publisher": "ash",
+  "version": "0.1.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": { "vscode": "*" },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-git-extension",
+    "scope": "directory",
+    "clients": ["app", "tui"],
+    "capabilities": ["git.repository"]
+  }
+}

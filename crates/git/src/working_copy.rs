@@ -23,7 +23,7 @@ pub enum GitChangeStatus {
 }
 
 /// Upstream tracking state attached to a local branch.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GitUpstream {
     name: String,
     ahead: usize,
@@ -45,7 +45,7 @@ impl GitUpstream {
 }
 
 /// Current HEAD state, including unborn and detached repositories.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum GitHead {
     Branch {
         name: String,

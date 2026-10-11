@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import urlsplit
 
+from build.builtin import (
+    copy_builtin_extensions as _copy_builtin_extensions,
+    validate_builtin_extensions as _validate_builtin_extensions,
+)
+from build.lib.tree import copy_regular_tree
+
 from .bubblewrap import BubblewrapResolution
 from .node import NodeResolution
 from .ripgrep import RipgrepResolution
@@ -79,12 +85,15 @@ def build_package_directory(
     remote_runtime_release: Optional[Dict[str, str]] = None,
     symbols_dir: Optional[Path] = None,
     github_authentication_binary: Optional[Path] = None,
+    git_extension_binary: Optional[Path] = None,
     remote_ssh_extension_binary: Optional[Path] = None,
 ) -> None:
     if remote_ssh_extension_binary is None:
         raise RuntimeError(
             "Remote SSH extension executable is required in product packages"
         )
+    if git_extension_binary is None:
+        raise RuntimeError("Git extension executable is required in product packages")
     if github_authentication_binary is None:
         raise RuntimeError(
             "GitHub authentication extension executable is required in product packages"
@@ -130,6 +139,7 @@ def build_package_directory(
             "codeModeHost": str(code_mode_host_binary),
             "jsExtensionHost": str(js_extension_host_binary),
             "githubAuthentication": str(github_authentication_binary),
+            "gitExtension": str(git_extension_binary),
             "remoteSshExtension": str(remote_ssh_extension_binary),
             "voiceHost": str(voice_host_binary),
             "collaborationServer": str(collaboration_server_binary),
@@ -212,28 +222,6 @@ def build_package_directory(
         raise
 
 
-def copy_regular_tree(
-    source: Path, destination: Path, kind: str, *, excluded_names: tuple[str, ...] = ()
-) -> None:
-    metadata = source.lstat()
-    if not stat.S_ISDIR(metadata.st_mode):
-        raise RuntimeError(f"Built-in {kind} source is not a real directory: {source}")
-    destination.mkdir()
-    for entry in source.iterdir():
-        if entry.name in excluded_names:
-            continue
-        target = destination / entry.name
-        metadata = entry.lstat()
-        if stat.S_ISDIR(metadata.st_mode):
-            copy_regular_tree(entry, target, kind, excluded_names=excluded_names)
-        elif stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1:
-            shutil.copyfile(entry, target)
-        else:
-            raise RuntimeError(
-                f"Built-in {kind} asset is not a regular unlinked file: {entry}"
-            )
-
-
 def copy_builtin_skills(source_root: Path, destination: Path) -> None:
     source = source_root / "crates/skills/assets"
     if not stat.S_ISDIR(source.lstat().st_mode):
@@ -251,49 +239,6 @@ def copy_builtin_skills(source_root: Path, destination: Path) -> None:
         if not (entry / "SKILL.md").is_file():
             raise RuntimeError(f"Built-in Skill is missing SKILL.md: {entry.name}")
         copy_regular_tree(entry, destination / entry.name, "Skill")
-
-
-def copy_builtin_extensions(source_root: Path, destination: Path) -> None:
-    source = source_root / "extensions"
-    if not stat.S_ISDIR(source.lstat().st_mode):
-        raise RuntimeError(
-            f"Built-in extension source is not a real directory: {source}"
-        )
-    entries = [
-        entry
-        for entry in source.iterdir()
-        if entry.name not in ("README.md", "BUILD.bazel")
-    ]
-    if not entries:
-        raise RuntimeError("Built-in extension source is empty")
-    destination.mkdir(parents=True)
-    for entry in entries:
-        if not stat.S_ISDIR(entry.lstat().st_mode):
-            raise RuntimeError(f"Invalid built-in extension package: {entry.name}")
-        manifest = entry / "package.json"
-        if not stat.S_ISREG(manifest.lstat().st_mode):
-            raise RuntimeError(
-                f"Built-in extension package.json is not a regular file: {entry.name}"
-            )
-        # Browser libraries are compiled into renderer assets, not backend package dependencies.
-        copy_regular_tree(
-            entry,
-            destination / entry.name,
-            "extension package",
-            excluded_names=(
-                "node_modules",
-                "Cargo.toml",
-                "Cargo.lock",
-                "BUILD.bazel",
-                "tests",
-                "src",
-            )
-            if json.loads(manifest.read_text(encoding="utf-8"))
-            .get("ashRuntime", {})
-            .get("kind")
-            == "rust"
-            else ("node_modules",),
-        )
 
 
 def copy_executable(source: Path, destination: Path, is_windows: bool) -> None:
@@ -320,7 +265,7 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     binary_dir.mkdir(parents=True)
     (staging / LAYOUT["pathDir"]).mkdir(parents=True)
     copy_builtin_skills(source_root, resources / "skills")
-    copy_builtin_extensions(source_root, resources / "extensions")
+    _copy_builtin_extensions(source_root, resources / "extensions")
     copy_regular_tree(
         source_root / "resources/product-services",
         resources / "product-services",
@@ -657,7 +602,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         if node_license.is_symlink() or not node_license.is_file():
             raise RuntimeError("Missing Node.js license: {}".format(node_license))
     validate_builtin_skills(package / "ash-resources" / "skills")
-    validate_builtin_extensions(package / "ash-resources" / "extensions")
+    _validate_builtin_extensions(package / "ash-resources" / "extensions")
     validate_product_services(package / "ash-resources" / "product-services")
     remote_catalog = metadata.get("remoteRuntimeCatalog")
     if remote_catalog is not None:
@@ -723,6 +668,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
         "jsExtensionHost": package / "bin" / spec.js_extension_host_name,
+        "gitExtension": package
+        / "bin"
+        / ("ash-git-extension" + spec.executable_suffix),
         "githubAuthentication": package
         / "bin"
         / ("ash-github-authentication" + spec.executable_suffix),
@@ -799,6 +747,7 @@ def record_system_signing(
             "codeModeHost",
             "jsExtensionHost",
             "githubAuthentication",
+            "gitExtension",
             "remoteSshExtension",
             "voiceHost",
             "collaborationServer",
@@ -883,27 +832,6 @@ def validate_builtin_skills(skills_directory: Path) -> None:
         ):
             raise RuntimeError(
                 "Package contains an invalid built-in Skill: {}".format(skill_directory)
-            )
-
-
-def validate_builtin_extensions(extensions_directory: Path) -> None:
-    if extensions_directory.is_symlink() or not extensions_directory.is_dir():
-        raise RuntimeError("Package is missing built-in extensions")
-    extension_directories = sorted(
-        extensions_directory.iterdir(), key=lambda path: path.name
-    )
-    if not extension_directories:
-        raise RuntimeError("Package contains no built-in extensions")
-    for extension_directory in extension_directories:
-        if (
-            extension_directory.is_symlink()
-            or not extension_directory.is_dir()
-            or not (extension_directory / "package.json").is_file()
-        ):
-            raise RuntimeError(
-                "Package contains an invalid built-in extension: {}".format(
-                    extension_directory
-                )
             )
 
 

@@ -13,6 +13,9 @@ path = "src/lib.rs"
 [dependencies]
 dunce = { workspace = true }
 futures = { workspace = true }
+fs2 = { workspace = true }
+dirs = { workspace = true }
+sha2 = { workspace = true }
 install-context = { package = "ash-install-context", path = "../install-context" }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync", "time"] }

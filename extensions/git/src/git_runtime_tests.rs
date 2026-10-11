@@ -1,6 +1,6 @@
 use super::GitRuntime;
-use crate::server::notification_queue::NotificationQueue;
-use crate::server::update_broker::UpdateBroker;
+use crate::updates::GitUpdates as UpdateBroker;
+use crate::updates::test_support::NotificationQueue;
 use ash_config::ConfigCommandRequest;
 use ash_config::ConfigRevision;
 use ash_config::ConfigStore;
@@ -423,7 +423,7 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
     let runtime = GitRuntime::new(mutation_authorization(consumer.root()), broker).unwrap();
     runtime.status().unwrap();
     queue.drain();
-    let watcher = runtime.start_watching(Some(Arc::clone(&config)));
+    let watcher = runtime.start_watching(Some(config.clone()));
     config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("enable-autofetch").unwrap(),
