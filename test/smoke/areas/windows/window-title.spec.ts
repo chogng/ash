@@ -4,7 +4,7 @@ import { expect, test } from '../../../automation/test.js';
 test.beforeEach(async ({ workbench }) => {
 	await workbench.page.keyboard.press('F1');
 	const command = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('Close All Editors');
+	await command.fill('Close All Tabs');
 	await command.press('Enter');
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
 });

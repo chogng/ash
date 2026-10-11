@@ -1,6 +1,7 @@
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { mapScrollAnchor, type ICompressedVirtualizedItemRange } from './compressedVirtualizedScrollLayout.js';
 import { VirtualizedItemManager } from './virtualizedItemManager.js';
 
@@ -16,6 +17,7 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 	public readonly domNode: HTMLDivElement;
 	public readonly contentDomNode: HTMLDivElement;
 	public readonly sections: VirtualizedItemManager<TItem>;
+	private readonly scrollable: ScrollableElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
 	private previousRanges: readonly ICompressedVirtualizedItemRange[] = [];
 	private logicalContentHeight = 0;
@@ -28,21 +30,19 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 		releaseItem: (index: number, item: TItem) => void,
 	) {
 		super();
-		const ownerDocument = container.ownerDocument;
-		this.domNode = h(ownerDocument, 'div');
-		this.domNode.className = 'stanza-multi-diff-editor';
-		this.contentDomNode = h(ownerDocument, 'div');
+		this.scrollable = this._register(new ScrollableElement(container, { tabIndex: -1 }));
+		this.scrollable.element.classList.add('stanza-multi-diff-editor-scrollbar');
+		this.domNode = this.scrollable.scrollableElement;
+		this.domNode.classList.add('stanza-multi-diff-editor');
+		this.contentDomNode = this.scrollable.contentElement;
 		this.contentNode = new FastDomNode(this.contentDomNode);
-		this.contentNode.setClassName('stanza-multi-diff-editor-content');
+		this.contentDomNode.classList.add('stanza-multi-diff-editor-content');
 		this.sections = this._register(new VirtualizedItemManager(
 			this.contentDomNode,
 			index => createItem(this.contentDomNode, index),
 			releaseItem,
 		));
-		this.domNode.append(this.contentDomNode);
-		container.append(this.domNode);
 		this._register(addDisposableListener(this.domNode, 'wheel', event => this.handleWheel(event), { capture: true, passive: false }));
-		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	public resetItems(): void {
@@ -84,6 +84,7 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 		}
 		this.setLogicalScrollTop(mappedScrollTop);
 		this.previousRanges = ranges.slice();
+		this.scrollable.layout();
 	}
 
 	public project(overscan: number): IVisibleItemRange {
@@ -113,13 +114,12 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 	}
 
 	private handleWheel(event: WheelEvent): void {
-		if (!this.isCompressed || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.deltaY === 0) return;
-		// Native wheel scrolling moves physical pixels, which would amplify each step as the logical list grows.
+		if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+		// The outer viewport owns vertical gestures even over a child editor. Logical pixels also avoid amplifying compressed scrolling.
 		const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 20
 			: event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? this.viewportHeight : 1;
 		const previous = this.getLogicalScrollTop();
 		this.setLogicalScrollTop(previous + event.deltaY * unit);
-		if (this.getLogicalScrollTop() === previous) return;
 		event.preventDefault();
 		event.stopPropagation();
 	}

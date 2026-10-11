@@ -190,8 +190,6 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	layout(size: number, _offset: number, orthogonalSize: number): void {
 		this.didLayout = true;
-		// Neighbouring headers already use the new allocation while the wrapper height is still animating.
-		this.element.style.maxHeight = `${size}px`;
 		if (!this.collapsed) {
 			const bodyHeight = Math.max(0, size - this.headerSize);
 			// Keep the body at its allocated size while the outer pane clips the transition.
@@ -267,7 +265,9 @@ export class PaneView extends Disposable {
 		this.element.className = "ash-pane-view-container";
 		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
-		this.splitView = this._register(new SplitView(this.element, "vertical"));
+		this.splitView = this._register(new SplitView(this.element, "vertical", {
+			styles: { separatorBorder: "var(--ash-border)" },
+		}));
 		this.onDidSashChange = this.splitView.onDidChangeViewSizes;
 		this.onDidSashReset = this.splitView.onDidSashReset;
 		this._register(this.onDidSashReset(index => this.splitView.resetSash(index)));

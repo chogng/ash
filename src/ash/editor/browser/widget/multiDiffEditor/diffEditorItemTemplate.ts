@@ -3,7 +3,7 @@ import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
-import { type CodeEditorViewState } from '../codeEditor/codeEditorWidget.js';
+import { type CodeEditorViewState, type CodeEditorWidget } from '../codeEditor/codeEditorWidget.js';
 import { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
 import { type IDocumentDiffItem } from './model.js';
 import { type IWorkbenchUIElementFactory } from './workbenchUIElementFactory.js';
@@ -43,6 +43,7 @@ export class DiffEditorItemTemplate extends Disposable {
 		activate: () => void,
 		workbenchUIElementFactory: IWorkbenchUIElementFactory | undefined,
 		private readonly onLayoutChange?: () => void,
+		private readonly onScrollChange?: (source: CodeEditorWidget) => void,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -128,6 +129,10 @@ export class DiffEditorItemTemplate extends Disposable {
 	public mount(editor: DiffEditorWidget): void {
 		this.editorListeners.clear();
 		this.editorSlot.value = editor;
+		if (this.onScrollChange) {
+			this.editorListeners.add(editor.originalEditor.onDidScrollChange(() => this.onScrollChange?.(editor.originalEditor)));
+			this.editorListeners.add(editor.modifiedEditor.onDidScrollChange(() => this.onScrollChange?.(editor.modifiedEditor)));
+		}
 		if (this.onLayoutChange) {
 			// Hidden-region reveal controls change content height without changing the file model.
 			let contentHeight = editor.getContentHeight();

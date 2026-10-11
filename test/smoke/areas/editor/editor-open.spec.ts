@@ -423,7 +423,7 @@ test("Show All Editors searches recent editors and restores editor focus", async
 	await expect(search).toHaveValue("edt mru ");
 	await search.fill("edt mru main");
 	const otherEditor = picker.locator('.ash-quick-pick-row-content').filter({ hasText: 'main.rs' });
-	await otherEditor.getByRole('button', { name: 'Close Editor' }).click();
+	await otherEditor.getByRole('button', { name: 'Close Tab' }).click();
 	await expect(otherEditor).toHaveCount(0);
 	await expect(picker).toBeVisible();
 	await expect(group.tabs).toHaveCount(1);
@@ -452,8 +452,8 @@ test("Editor tabs support modifier selection and close the selected set", async 
 	await page.keyboard.press("F1");
 	const picker = page.locator(".ash-quick-pick");
 	const search = picker.getByRole("combobox");
-	await search.fill(">Close Editor");
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Close Editor" })).toBeVisible();
+	await search.fill(">Close Tab");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: /^Close Tab$/u })).toBeVisible();
 	await search.press("Enter");
 	await expect(group.tabs).toHaveCount(0);
 });
@@ -849,8 +849,8 @@ test("Close Editor command closes the active tab", async ({ target, workbench })
 
 	await page.keyboard.press("F1");
 	const picker = page.locator(".ash-quick-pick");
-	await picker.getByRole("combobox").fill(">Close Editor");
-	await picker.locator(".ash-quick-pick-row-label", { hasText: /^Close Editor$/u }).click();
+	await picker.getByRole("combobox").fill(">Close Tab");
+	await picker.locator(".ash-quick-pick-row-label", { hasText: /^Close Tab$/u }).click();
 	await expect(group.tabs).toHaveCount(0);
 });
 

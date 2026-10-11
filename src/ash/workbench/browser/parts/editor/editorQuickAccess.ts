@@ -26,7 +26,7 @@ export class AllEditorsByMostRecentlyUsedQuickAccess implements IQuickAccessProv
 				className: editorState.get(editor.instanceId)?.isDirty
 					? 'ash-editor-quick-pick-item dirty'
 					: 'ash-editor-quick-pick-item',
-				buttons: [{ id: 'close', label: localize('workbench.closeEditor', 'Close Editor') }],
+				buttons: [{ id: 'close', label: localize('workbench.closeEditor', 'Close Tab') }],
 				label: editorInputLabel(editor.input),
 				description: localize(
 					"workbench.editorGroupNumber",

@@ -3,6 +3,7 @@ import { type IDisposable, Disposable, DisposableStore, toDisposable } from "../
 import { clamp, isFiniteNumber } from "../../../common/numbers.js";
 import { Sash, SashState, type SashDragEvent, type SashPresentation } from "../sash/sash.js";
 import { h } from "../../dom.js";
+import { animateElement, isReducedMotion, UI_ANIMATION_DURATION } from "../animations/animations.js";
 
 export type SplitViewOrientation = "horizontal" | "vertical";
 export type SplitViewLayoutPriority = "low" | "normal" | "high";
@@ -93,6 +94,7 @@ export class SplitView extends Disposable {
 	private readonly items: ViewItem[] = [];
 	private readonly sashes = this._register(new DisposableStore());
 	private readonly sashItems: SashItem[] = [];
+	private readonly geometryAnimations = this._register(new DisposableStore());
 	private readonly _onDidChangeViewSizes = this._register(new Emitter<void>());
 	private readonly _onDidSashReset = this._register(new Emitter<number>());
 	private size = 0;
@@ -430,6 +432,14 @@ export class SplitView extends Disposable {
 	}
 
 	private render(): void {
+		const animated = this.element.classList.contains("animated") && !isReducedMotion(this.element) && typeof this.element.animate === "function";
+		const axis = this.orientation === "horizontal" ? "left" : "top";
+		const extent = this.orientation === "horizontal" ? "width" : "height";
+		const nodes = [...this.items.filter(item => item.visible).map(item => item.container), ...this.sashItems.map(item => item.sash.element)];
+		// Read every current boundary before cancelling an interrupted animation or changing its target.
+		const origin = animated ? this.element.getBoundingClientRect()[axis] : 0;
+		const previousBounds = animated ? nodes.map(node => node.getBoundingClientRect()) : [];
+		this.geometryAnimations.clear();
 		let offset = 0;
 		for (const item of this.items) {
 			if (!item.visible) continue;
@@ -449,6 +459,25 @@ export class SplitView extends Disposable {
 			offset += primarySize;
 		}
 		this.positionSashes();
+		if (!animated) { return; }
+		const startTime = this.element.ownerDocument.timeline.currentTime;
+		for (const [index, node] of nodes.entries()) {
+			const previous = previousBounds[index]!;
+			const isSash = node.classList.contains("ash-sash");
+			const previousPosition = previous[axis] - origin + (isSash ? previous[extent] / 2 : 0);
+			const from = { [axis]: `${previousPosition}px` };
+			const to = { [axis]: node.style[axis] };
+			if (!isSash) {
+				from[extent] = `${previous[extent]}px`;
+				to[extent] = node.style[extent];
+			}
+			// A shared clock and easing preserve adjoining edges even when several panes reverse together.
+			const animation = animateElement(node, [from, to], { duration: UI_ANIMATION_DURATION.fast, fill: "none" });
+			if (animation) {
+				animation.startTime = startTime;
+				this.geometryAnimations.add(toDisposable(() => animation.cancel()));
+			}
+		}
 	}
 
 	private rebuildSashes(): void {
@@ -479,6 +508,7 @@ export class SplitView extends Disposable {
 		let dragState: SashDragState | undefined;
 		this.sashes.add(sash.onDidStart(() => {
 			this.element.classList.remove("animated");
+			this.geometryAnimations.clear();
 			dragState = { snapshot: this.getResizeItems(), baseline: 0, altKey: undefined };
 		}));
 		this.sashes.add(sash.onDidChange((event) => {

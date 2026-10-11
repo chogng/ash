@@ -30,29 +30,60 @@ test('Panel lays out active and retained panes before resize or activation retur
 });
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-	test(`pane headers and resize handles reach their click targets immediately with ${reducedMotion} motion`, async ({ page }) => {
+	test(`pane headers and resize handles move together with ${reducedMotion} motion`, async ({ page }) => {
 		await page.emulateMedia({ reducedMotion });
 		await page.goto('/composite.html?paneTransitions');
 		await page.waitForFunction(() => !!window.ashCompositeIntegration);
 		const host = page.locator('#pane-transitions');
+		// A theme change must reach resting pane boundaries without hovering a resize handle.
+		for (const color of ['rgb(40, 50, 60)', 'rgb(210, 220, 230)']) {
+			const borders = await host.evaluate((element, color) => {
+				element.style.setProperty('--ash-border', color);
+				return [...element.querySelectorAll<HTMLElement>('.ash-split-view-pane')].map(pane => {
+					const style = getComputedStyle(pane, '::before');
+					return { content: style.content, height: style.height, width: style.width, color: style.backgroundColor, pointerEvents: style.pointerEvents };
+				});
+			}, color);
+			expect(borders[0]!.content).toBe('none');
+			for (const border of borders.slice(1)) {
+				expect(border).toEqual({ content: '""', height: '1px', width: '300px', color, pointerEvents: 'none' });
+			}
+		}
+		await host.evaluate(element => element.style.removeProperty('--ash-border'));
 		for (const title of ['Changes', 'Graph', 'Agent Review', 'Changes']) {
 			const button = host.getByRole('button', { name: title, exact: true });
 			const expanded = await button.getAttribute('aria-expanded') === 'true';
 			await button.click();
 			await expect(button).toHaveAttribute('aria-expanded', String(!expanded));
-			const positions = await host.evaluate(async element => {
-				await new Promise(resolve => requestAnimationFrame(resolve));
+			const frames = await host.evaluate(async element => {
 				const split = element.querySelector<HTMLElement>('.ash-split-view')!;
 				const origin = split.getBoundingClientRect().top;
-				return [...split.children].filter(child => child instanceof HTMLElement && child.style.top && child.getClientRects().length > 0).map(child => {
-					const node = child as HTMLElement;
-					const bounds = node.getBoundingClientRect();
-					const actual = bounds.top - origin + (node.classList.contains('ash-sash') ? bounds.height / 2 : 0);
-					return { actual, allocated: Number.parseFloat(node.style.top) };
-				});
+				const panes = [...split.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')];
+				const sashes = [...split.querySelectorAll<HTMLElement>(':scope > .ash-sash')];
+				const frames = [];
+				for (let frame = 0; frame < 48; frame++) {
+					await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+					const positions = panes.map(pane => ({ actual: pane.getBoundingClientRect().top - origin, allocated: Number.parseFloat(pane.style.top) }));
+					const edges = panes.slice(0, -1).map((pane, index) => {
+						const sash = sashes[index]!.getBoundingClientRect();
+						return { bottom: pane.getBoundingClientRect().bottom, nextTop: panes[index + 1]!.getBoundingClientRect().top, sash: sash.top + sash.height / 2 };
+					});
+					frames.push({ positions, edges });
+					if ([...panes, ...sashes].every(node => node.getAnimations().length === 0)) { break; }
+				}
+				return frames;
 			});
-			for (const position of positions) {
+			for (const frame of frames) {
+				for (const edge of frame.edges) {
+					expect(edge.bottom).toBeCloseTo(edge.nextTop, 0);
+					expect(edge.sash).toBeCloseTo(edge.nextTop, 0);
+				}
+			}
+			for (const position of frames.at(-1)!.positions) {
 				expect(position.actual).toBeCloseTo(position.allocated, 0);
+			}
+			if (title === 'Changes') {
+				expect(frames.some(frame => frame.positions.some(position => Math.abs(position.actual - position.allocated) > 1))).toBe(reducedMotion === 'no-preference');
 			}
 		}
 		const graph = host.getByRole('button', { name: 'Graph', exact: true });
@@ -248,7 +279,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 		const samples = await page.locator('#pane-transitions').evaluate(async host => {
 			const panes = [...host.querySelectorAll<HTMLElement>('.ash-pane-view')];
 			const buttons = panes.map(pane => pane.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!);
-			const samples: { title: string; paintedBottom: number; nextHeaderTop: number; }[] = [];
+			const samples: { title: string; paintedBottom: number; nextHeaderTop: number; paneBottom: number; sash: number; }[] = [];
 			for (let index = 0; index < 12; index++) {
 				buttons[index % buttons.length]!.click();
 				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -258,7 +289,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 					if (body.hidden) { continue; }
 					const paintedBottom = Math.min(body.getBoundingClientRect().bottom, pane.getBoundingClientRect().bottom, pane.parentElement!.getBoundingClientRect().bottom);
 					const nextHeaderTop = panes[paneIndex + 1]!.querySelector('.ash-pane-view-header')!.getBoundingClientRect().top;
-					samples.push({ title: buttons[paneIndex]!.textContent!, paintedBottom, nextHeaderTop });
+					const sash = host.querySelectorAll('.ash-sash')[paneIndex]!.getBoundingClientRect();
+					samples.push({ title: buttons[paneIndex]!.textContent!, paintedBottom, nextHeaderTop, paneBottom: pane.parentElement!.getBoundingClientRect().bottom, sash: sash.top + sash.height / 2 });
 				}
 			}
 			return samples;
@@ -266,6 +298,42 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 		expect(samples.length).toBeGreaterThan(0);
 		for (const sample of samples) {
 			expect(sample.paintedBottom, JSON.stringify(sample)).toBeLessThanOrEqual(sample.nextHeaderTop + 1);
+			expect(sample.paneBottom, JSON.stringify(sample)).toBeCloseTo(sample.nextHeaderTop, 0);
+			expect(sample.sash, JSON.stringify(sample)).toBeCloseTo(sample.nextHeaderTop, 0);
 		}
 	});
 }
+
+test('keyboard resizing cancels an in-progress pane transition and keeps the focused separator', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.goto('/composite.html?paneTransitions');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const result = await page.locator('#pane-transitions').evaluate(host => {
+		const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button')];
+		for (const button of buttons) {
+			if (button.getAttribute('aria-expanded') === 'false') { button.click(); }
+		}
+		const panes = [...host.querySelectorAll<HTMLElement>('.ash-split-view-pane')];
+		const sash = host.querySelector<HTMLElement>('.ash-sash')!;
+		const before = Number.parseFloat(panes[0]!.style.height);
+		const wasAnimating = panes.some(pane => pane.getAnimations().length > 0);
+		sash.focus();
+		sash.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+		const boundary = sash.getBoundingClientRect();
+		return {
+			wasAnimating,
+			animating: panes.some(pane => pane.getAnimations().length > 0),
+			focused: sash === document.activeElement,
+			delta: Number.parseFloat(panes[0]!.style.height) - before,
+			bottom: panes[0]!.getBoundingClientRect().bottom,
+			nextTop: panes[1]!.getBoundingClientRect().top,
+			sash: boundary.top + boundary.height / 2,
+		};
+	});
+	expect(result.wasAnimating).toBe(true);
+	expect(result.animating).toBe(false);
+	expect(result.focused).toBe(true);
+	expect(result.delta).toBe(-10);
+	expect(result.bottom).toBeCloseTo(result.nextTop, 0);
+	expect(result.sash).toBeCloseTo(result.nextTop, 0);
+});

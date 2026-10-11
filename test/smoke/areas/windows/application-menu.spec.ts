@@ -9,7 +9,7 @@ test('File menu keeps close commands visible and closes single and all editors',
 	const page = workbench.page;
 	const systemMenu = target.kind === 'electron' && process.platform === 'darwin';
 	const electron = application as ElectronApplication;
-	const closeLabels = ['Close All Editors', 'Close Editor'];
+	const closeLabels = ['Close All Tabs', 'Close Tab'];
 	const openFileMenu = async () => {
 		await page.getByRole('button', { name: 'Application menu' }).click();
 		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File', exact: true }).click();
@@ -40,7 +40,7 @@ test('File menu keeps close commands visible and closes single and all editors',
 	const tabs = workbench.editors.element.getByRole('tab');
 	await expect(tabs).toHaveText(['Welcome']);
 	if (await tabs.count() > 0) {
-		await runMenuCommand('Close All Editors');
+		await runMenuCommand('Close All Tabs');
 	}
 	await expect(tabs).toHaveCount(0);
 	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: false })));
@@ -49,9 +49,9 @@ test('File menu keeps close commands visible and closes single and all editors',
 	await runMenuCommand('New Untitled Text Editor');
 	await expect(tabs).toHaveCount(2);
 	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: true })));
-	await runMenuCommand('Close Editor');
+	await runMenuCommand('Close Tab');
 	await expect(tabs).toHaveCount(1);
-	await runMenuCommand('Close All Editors');
+	await runMenuCommand('Close All Tabs');
 	await expect(tabs).toHaveCount(0);
 	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: false })));
 });

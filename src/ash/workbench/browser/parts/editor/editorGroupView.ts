@@ -26,7 +26,7 @@ import type { EditorCloseOptions } from '../../../services/editor/common/editorG
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { IEditorGroupView } from './editor.js';
-import { ActiveEditorContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
+import { ActiveEditorContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 
 import { getEditorWorkingCopies, EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput, isEditorPaneWithStatus, type IEditorPane } from '../../../common/editor.js';
@@ -332,6 +332,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			menuContext.setContext(MultipleEditorsSelectedInGroupContext.key, this.selectedInputs.includes(input) && this.selectedInputs.length > 1);
 			menuContext.setContext(ActiveEditorPinnedContext.key, !entry.preview);
 			menuContext.setContext(ActiveEditorStickyContext.key, entry.sticky);
+			menuContext.setContext(ActiveEditorFirstInGroupContext.key, editorIndex === 0);
 			menuContext.setContext(ActiveEditorLastInGroupContext.key, editorIndex === this.inputs.length - 1);
 			menuContext.setContext(EditorGroupEditorsCountContext.key, this.inputs.length);
 		});

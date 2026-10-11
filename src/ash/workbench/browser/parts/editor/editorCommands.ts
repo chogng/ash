@@ -20,7 +20,7 @@ registerAction2(class CloseActiveEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: CLOSE_EDITOR_COMMAND_ID,
-			title: localize2({ bundle: "ash", key: "workbench.closeEditor" }, "Close Editor"),
+			title: localize2({ bundle: "ash", key: "workbench.closeEditor" }, "Close Tab"),
 			f1: true,
 			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: [
@@ -203,7 +203,7 @@ registerAction2(class CloseOtherEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID,
-			title: localize2({ bundle: 'ash', key: 'workbench.closeOtherEditors' }, 'Close Other Editors'),
+			title: localize2({ bundle: 'ash', key: 'workbench.closeOtherEditors' }, 'Close Other Tabs in Group'),
 			f1: true,
 			precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ContextKeyExpr.notEquals(EditorGroupEditorsCountContext.key, 1)),
 			menu: { id: MenuId.EditorTitleContext, group: '1_close', order: 20 },
@@ -226,9 +226,9 @@ export const CLOSE_SAVED_EDITORS_COMMAND_ID = 'workbench.action.closeUnmodifiedE
 export const CLOSE_EDITORS_IN_GROUP_COMMAND_ID = 'workbench.action.closeEditorsInGroup';
 
 for (const definition of [
-	{ id: CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, key: 'workbench.closeEditorsToTheRight', title: 'Close to the Right', order: 30, precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorLastInGroupContext.isEqualTo(false), ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)) },
-	{ id: CLOSE_SAVED_EDITORS_COMMAND_ID, key: 'workbench.closeSavedEditors', title: 'Close Saved', order: 40, precondition: EditorsVisibleContext.isEqualTo(true) },
-	{ id: CLOSE_EDITORS_IN_GROUP_COMMAND_ID, key: 'workbench.closeEditorsInGroup', title: 'Close All in Group', order: 50, precondition: EditorsVisibleContext.isEqualTo(true) },
+	{ id: CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, key: 'workbench.closeEditorsToTheRight', title: 'Close Tabs to the Right', order: 30, precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorLastInGroupContext.isEqualTo(false), ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)) },
+	{ id: CLOSE_SAVED_EDITORS_COMMAND_ID, key: 'workbench.closeSavedEditors', title: 'Close Saved Tabs in Group', order: 40, precondition: EditorsVisibleContext.isEqualTo(true) },
+	{ id: CLOSE_EDITORS_IN_GROUP_COMMAND_ID, key: 'workbench.closeEditorsInGroup', title: 'Close All Tabs in Group', order: 50, precondition: EditorsVisibleContext.isEqualTo(true) },
 ]) {
 	registerAction2(class CloseEditorsInGroupAction extends Action2 {
 		constructor() {

@@ -15,6 +15,7 @@ import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
 import { FontMeasurements } from '../../config/fontMeasurements.js';
+import type { CodeEditorWidget } from '../codeEditor/codeEditorWidget.js';
 import { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
 import { type DiffEditorWidgetOptions } from '../diffEditor/diffEditorOptions.js';
 import { computeDiffRowLayout, type DiffRowLayout } from './compressedVirtualizedScrollLayout.js';
@@ -122,6 +123,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				const section = new DiffEditorItemTemplate(
 					contentDomNode, item, () => this.toggleItem(item.id),
 					() => this.activateItem(item.id), this.workbenchUIElementFactory, () => this.scheduleLayoutRefresh(),
+					source => this.handleEditorScroll(index, source),
 				);
 				section.setCollapsed(this.viewModel.isCollapsed(item.id));
 				section.domNode.classList.toggle('active', this.viewModel.activeItemId === item.id);
@@ -148,7 +150,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.accessibilityStatusDomNode.setAttribute('aria-live', 'polite');
 		this.accessibilityStatusDomNode.setAttribute('aria-atomic', 'true');
 		this.domNode.append(this.accessibilityStatusDomNode);
-		this._register(addDisposableListener(this.domNode, 'scroll', event => this.handleScroll(event), true));
+		this._register(addDisposableListener(this.domNode, 'scroll', event => {
+			if (event.target === this.domNode) this.project();
+		}));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeydown(event), true));
 		this.bindItems();
 		this._register(configuration.onDidChangeConfiguration(event => {
@@ -456,6 +460,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 						wordWrap: this.wordWrap,
 						...this.editorOptions,
 					}));
+					section.editor!.updateOptions({ scrollbar: { vertical: 'hidden' }, renderOverviewRuler: false });
 					// Restore the file cursor before hiding regions so mounting does not expand them.
 					section.editor!.setHideUnchangedRegionsOptions(this.getHideUnchangedRegionsOptions());
 					section.layoutEditor(this.viewportWidth);
@@ -622,17 +627,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		}
 	}
 
-	private handleScroll(event: Event): void {
-		if (event.target === this.domNode) {
-			this.project();
-			return;
-		}
-		if (this.syncingEditorScroll) return;
-		const target = event.target as Node;
-		const index = [...this.sections.entries()].find(([_, section]) => section.editor?.element.contains(target))?.[0] ?? -1;
-		if (index < 0) return;
-		const editor = this.sections.get(index)!.editor!;
-		const source = editor.originalEditor.getDomNode().contains(target) ? editor.originalEditor : editor.modifiedEditor;
+	private handleEditorScroll(index: number, source: CodeEditorWidget): void {
+		if (this.syncingEditorScroll || this.projecting) return;
 		if (source.getScrollTop() === 0 && this.scrollView.getLogicalScrollTop() < this.layouts[index]!.top) return;
 		const desiredScroll = this.layouts[index]!.top + source.getScrollTop();
 		if (Math.abs(this.scrollView.getLogicalScrollTop() - desiredScroll) > 1) this.scrollView.setLogicalScrollTop(desiredScroll);
@@ -660,8 +656,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			this.toggleWordWrap();
 			return;
 		}
-		if (event.target === this.domNode && this.scrollView.isCompressed && !event.altKey && !event.ctrlKey && !event.metaKey) {
-			// The focused outer region must navigate by logical lines and pages, even when DOM height is capped.
+		if (event.target === this.domNode && !event.altKey && !event.ctrlKey && !event.metaKey) {
+			// Keep keyboard paging in the same logical scroll owner as wheel and scrollbar input.
 			let distance: number | undefined;
 			if (event.key === ' ') distance = event.shiftKey ? -this.viewportHeight : this.viewportHeight;
 			else if (!event.shiftKey) {
@@ -670,6 +666,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 					case 'ArrowUp': distance = -this.lineHeight; break;
 					case 'PageDown': distance = this.viewportHeight; break;
 					case 'PageUp': distance = -this.viewportHeight; break;
+					case 'Home': distance = -Number.MAX_SAFE_INTEGER; break;
+					case 'End': distance = Number.MAX_SAFE_INTEGER; break;
 				}
 			}
 			if (distance !== undefined) {

@@ -12,7 +12,7 @@ import type { ExtensionFileTemplateDefinition } from "../../../services/extensio
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
 import { IUntitledTextEditorService } from "../../../services/untitled/common/untitledTextEditorService.js";
 import { UntitledTextEditorInput } from "../../../services/untitled/common/untitledTextEditorInput.js";
-import { EditorsVisibleContext } from "../../../common/contextkeys.js";
+import { ActiveEditorFirstInGroupContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext } from "../../../common/contextkeys.js";
 import { IEditorPartsService } from "./editorParts.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
 import { IBreadcrumbsService } from "./breadcrumbs.js";
@@ -159,15 +159,44 @@ async function splitEditors(accessor: ServicesAccessor, args: readonly unknown[]
 	}
 }
 
+registerAction2(class CloseLeftEditorsInGroupAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.closeEditorsToTheLeft',
+			title: localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close Tabs to the Left'),
+			f1: true,
+			precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorFirstInGroupContext.isEqualTo(false), MultipleEditorsSelectedInGroupContext.isEqualTo(false)),
+			menu: { id: MenuId.EditorTitleContext, group: '1_close', order: 25 },
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+		for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
+			if (editors.length !== 1) {
+				continue;
+			}
+			const boundary = group.inputs.indexOf(editors[0]!);
+			for (const input of group.inputs.slice(0, boundary)) {
+				if (!group.isSticky(input) && !await group.closeEditor(input)) {
+					return;
+				}
+			}
+		}
+	}
+});
+
 export const CloseAllEditorsCommandId = "workbench.action.closeAllEditors";
 
 registerAction2(class CloseAllEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: CloseAllEditorsCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.closeAllEditors" }, "Close All Editors"),
+			title: localize2({ bundle: "ash", key: "workbench.closeAllEditors" }, "Close All Tabs"),
 			f1: true,
-			menu: { id: MenuId.MenubarFileMenu, group: "6_close", order: 1 },
+			menu: [
+				{ id: MenuId.MenubarFileMenu, group: "6_close", order: 1 },
+				{ id: MenuId.EditorTitleContext, group: '1_close', order: 60, when: EditorsVisibleContext.isEqualTo(true) },
+			],
 			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("w", { primaryKey: true })) },
 		});
 	}
@@ -183,9 +212,12 @@ registerAction2(class ReopenClosedEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: ReopenClosedEditorCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.reopenClosedEditor" }, "Reopen Closed Editor"),
+			title: localize2({ bundle: "ash", key: "workbench.reopenClosedEditor" }, "Reopen Closed Tab"),
 			f1: true,
-			menu: { id: MenuId.MenubarFileMenu, group: "4_close", order: 3 },
+			menu: [
+				{ id: MenuId.MenubarFileMenu, group: "4_close", order: 3 },
+				{ id: MenuId.EditorTitleContext, group: '1_open', order: 10 },
+			],
 			keybinding: { primary: Keybinding.single(logicalKey("t", { primaryKey: true, shiftKey: true })) },
 		});
 	}

@@ -1866,6 +1866,53 @@ test('multi diff wraps editable columns and repositions sections through resize 
 	await expect(sections.first().locator('.stanza-diff-editor')).not.toHaveClass(/word-wrapped/);
 });
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`multi diff uses one shared vertical scrollbar without clipping file editors (${locale})`, async ({ page }, testInfo) => {
+		await openDiffPage(page, locale);
+		const original = Array.from({ length: 180 }, (_, index) => `original line ${index}`).join('\n');
+		const modified = Array.from({ length: 180 }, (_, index) => `modified line ${index}`).join('\n');
+		await page.evaluate(([left, right]) => window.ashDiffIntegration.setComparisonText(left, right), [original, modified]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const host = page.locator('#multi');
+		const editor = host.locator('.stanza-multi-diff-editor');
+		const track = host.locator('.stanza-multi-diff-editor-scrollbar > .ash-scrollbar-track-vertical');
+		await editor.hover();
+		await expect(track).toBeVisible();
+		await expect(host.locator('.ash-scrollbar-track-vertical:visible')).toHaveCount(1);
+		await expect(editor.locator('.stanza-diff-overview')).toBeHidden();
+		expect(await editor.evaluate(node => node.getBoundingClientRect().width - node.clientWidth)).toBe(0);
+		for (const width of [800, 400, 700]) {
+			await host.evaluate((node, width) => { node.style.width = `${width}px`; }, width);
+			await expect.poll(() => editor.locator('.stanza-diff-editor').first().evaluate(node => {
+				const slot = node.parentElement!.getBoundingClientRect();
+				return Math.abs(node.getBoundingClientRect().right - slot.right);
+			})).toBeLessThan(1);
+			expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
+		}
+		for (const side of ['original', 'modified']) {
+			await editor.locator(`.stanza-diff-editor-side.${side}`).first().hover();
+			const before = await editor.evaluate(node => node.scrollTop);
+			await page.mouse.wheel(0, 120);
+			await expect.poll(() => editor.evaluate(node => node.scrollTop)).toBe(before + 120);
+		}
+		await editor.focus();
+		const beforePage = await editor.evaluate(node => node.scrollTop);
+		await page.keyboard.press('PageDown');
+		await expect.poll(() => editor.evaluate(node => node.scrollTop)).toBeGreaterThan(beforePage);
+		await track.focus();
+		await track.press('Home');
+		await expect.poll(() => editor.evaluate(node => node.scrollTop)).toBe(0);
+		const thumb = track.locator('.ash-scrollbar-thumb');
+		const bounds = (await thumb.boundingBox())!;
+		await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 60);
+		await page.mouse.up();
+		await expect.poll(() => editor.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+		await testInfo.attach(`multi-diff-scrollbar-${locale}`, { body: await host.screenshot(), contentType: 'image/png' });
+	});
+}
+
 test('multi diff keeps one outer scroll and remounts only visible file editors', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => window.ashDiffIntegration.toggleMultiUnchangedRegions());
