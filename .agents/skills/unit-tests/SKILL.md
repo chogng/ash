@@ -9,29 +9,33 @@ Unit tests run in Node/jsdom through Mocha. Use the Node version in `.nvmrc` and
 
 ## Scripts
 
-| Scope | Command |
-| --- | --- |
-| Frontend and architecture units | `pnpm test:unit` |
+| Scope                                 | Command                 |
+| ------------------------------------- | ----------------------- |
+| Frontend and architecture units       | `pnpm test:unit`        |
 | Editor and its Workbench integrations | `pnpm test:editor:unit` |
-| Extension units | `pnpm test:extensions` |
-| Build tools | `pnpm --dir build test` |
+| Extension units                       | `pnpm test:extensions`  |
+| Build tools                           | `pnpm --dir build test` |
 
 The frontend, editor, and extension commands prepare resources and compile tests before running them. Build-tool tests use Node's test runner and do not accept the Mocha options below.
 
 ## Common options
 
-| Option | Meaning |
-| --- | --- |
-| `--run <path>` | A source `.ts` or emitted `.js` path relative to the repository root; starts with `src/` or `test/`. Repeat for multiple files. |
-| `--runGlob <pattern>` | Match emitted `.js` paths relative to `.build/desktop/test`. Cannot be combined with `--run`. |
-| `--grep <pattern>` | Match full Mocha test titles in the selected files. |
-| `--timeout <milliseconds>` | Positive integer; default 60,000 per test. |
+| Option                     | Meaning                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `--run <path>`             | A source `.ts` or emitted `.js` path relative to the repository root; starts with `src/` or `test/`. Repeat for multiple files. |
+| `--runGlob <pattern>`      | Match emitted `.js` paths relative to `.build/desktop/test`. Cannot be combined with `--run`.                                   |
+| `--grep <pattern>`         | Match full Mocha test titles in the selected files.                                                                             |
+| `--timeout <milliseconds>` | Positive integer; default 60,000 per test.                                                                                      |
 
 ```bash
 pnpm test:unit --run src/ash/workbench/contrib/preferences/test/browser/settings.test.ts --grep 'Models Settings'
 pnpm test:unit --runGlob '**/localizationService.test.js'
 ```
 
-Use `--run` for file paths; bare positional paths and `--coverage` are unsupported. The runner fails if no tests execute. Check the selected suite's final test count and exit code; `test:unit` also runs the runner regression tests, which have their own summary.
+A single leading package-manager `--` separator is accepted. Unknown options, misplaced separators, and empty grep patterns fail before tests start. Use `--run` for file paths; bare positional paths and `--coverage` are unsupported. The runner fails if no tests execute. Check the selected suite's final test count and exit code; `test:unit` also runs the runner regression tests, which have their own summary.
 
 For test design and cleanup, read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) and [TypeScript Testing](../../../.github/instructions/typescript-testing.instructions.md). Real layout and input behavior belong in the Playwright browser integration suite; complete product flows belong in [smoke-tests](../smoke-tests/SKILL.md).
+
+## Stopping and reusing validation
+
+The runner owns each isolated Mocha child asynchronously. Ctrl-C / SIGINT or SIGTERM stops the current child and its descendants and prevents the next file from starting. Interrupt again to skip the graceful wait. Wait for the actual command to exit before reporting it stopped. Reuse passing results whose inputs still cover the changes; do not rerun tests merely for a commit or push. `test:editor` is an unfiltered combined target; use the individual editor commands for filtering.

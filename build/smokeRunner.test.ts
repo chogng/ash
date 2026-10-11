@@ -55,7 +55,7 @@ test('failure second', async () => { await appendFile(process.env.ASH_RUNNER_MAR
 	t.after(() => rm(fixture.directory, { recursive: true, force: true }));
 	const matched = await invoke(fixture, ['--grep', 'selected$']);
 	assert.equal(matched.code, 0, matched.output);
-	assert.match(matched.output, /Smoke selection: 1 tests/u);
+	assert.match(matched.output, /Test selection: 1 tests/u);
 	assert.equal(await readFile(fixture.marker, 'utf8'), 'selected\n');
 	const failed = await invoke(fixture, ['--grep', 'failure', '--max-failures=1']);
 	assert.equal(failed.code, 1, failed.output);
@@ -69,9 +69,9 @@ for (const [signal, exitCode] of [['SIGINT', 130], ['SIGTERM', 143]] as const) {
 import { test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
-import { registerSmokeResource } from ${JSON.stringify(join(repository, 'test/automation/smokeProcess.ts'))};
+import { registerRunResource } from ${JSON.stringify(join(repository, 'build/processes.ts'))};
 test('running', async () => {
-  const resource = await registerSmokeResource();
+  const resource = await registerRunResource();
   const source = ${JSON.stringify(`
     const { spawn } = require('node:child_process');
     process.on('SIGINT', () => {}); process.on('SIGTERM', () => {});

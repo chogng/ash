@@ -7,7 +7,7 @@ import { startWeb } from '../../build/desktop/web.ts';
 import { developmentAshPackagePath } from '../../build/desktop/runtimeStore.ts';
 import { decodeWebSessionInfo } from '../../.build/protocol/typescript/WebProtocolDecoder.ts';
 import { createTestEnvironment } from './testEnvironment.js';
-import { registerSmokeResource } from './smokeProcess.js';
+import { registerRunResource } from '../../build/processes.ts';
 
 export interface WebLaunchResult {
 	readonly profileDirectory: string;
@@ -31,7 +31,7 @@ export async function launchWeb(workspaceDirectory: string, options: { readonly 
 		ASH_WORKSPACE_ROOT: workspaceDirectory,
 		ASH_PRODUCT_SERVICES_PATH: productServicesPath,
 	};
-	const resource = await registerSmokeResource(() => {
+	const resource = await registerRunResource(() => {
 		const packageRoot = developmentAshPackagePath(root, 'packaged-node');
 		return { executable: join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon'), profile: profileDirectory };
 	});

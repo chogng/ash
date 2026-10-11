@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { ProcessRun } from '../../../build/processes.ts';
 import { launchBrowser } from '../../automation/playwrightBrowser.ts';
 import { launchElectron } from '../../automation/playwrightElectron.ts';
 import type { PlaywrightApplication, PlaywrightDriver } from '../../automation/playwrightDriver.ts';
@@ -63,8 +64,8 @@ export class ApplicationService {
 		if (!running) {
 			return;
 		}
-		this.running = undefined;
 		await running.close();
+		if (this.running === running) this.running = undefined;
 	}
 
 	private async startDesktop(options: ApplicationLaunchOptions, videoDirectory: string): Promise<RunningApplication> {
@@ -111,7 +112,9 @@ export class ApplicationService {
 			join(repositoryRoot, 'build/desktop/launch/web.ts'),
 			join(repositoryRoot, '.build/desktop/renderer/ash'),
 			String(port),
-		], { cwd: repositoryRoot, env: { ...process.env, ASH_WEB_APP_SERVER: '0' }, stdio: ['ignore', 'ignore', 'pipe'] });
+		], { cwd: repositoryRoot, env: { ...process.env, ASH_WEB_APP_SERVER: '0' }, stdio: ['ignore', 'ignore', 'pipe'], detached: process.platform !== 'win32' });
+		const serverRun = new ProcessRun(repositoryRoot, undefined, 5_000);
+		await serverRun.own(server);
 		let serverErrors = '';
 		server.stderr?.on('data', chunk => serverErrors = `${serverErrors}${String(chunk)}`.slice(-16_384));
 		try {
@@ -129,12 +132,12 @@ export class ApplicationService {
 				target: 'web',
 				close: async () => {
 					await launched.application.close();
-					await stopProcess(server);
+					await serverRun.stop('SIGTERM');
 				},
 				dispose: async () => undefined,
 			});
 		} catch (error) {
-			await stopProcess(server);
+			await serverRun.stop('SIGTERM');
 			throw new Error(`${String(error)}${serverErrors ? `\nWeb server:\n${serverErrors}` : ''}`, { cause: error });
 		}
 	}
@@ -205,7 +208,7 @@ async function availablePort(): Promise<number> {
 async function waitForServer(url: string, process: ChildProcess): Promise<void> {
 	const deadline = Date.now() + 120_000;
 	while (Date.now() < deadline) {
-		if (process.exitCode !== null) throw new Error(`Web server exited with code ${process.exitCode}.`);
+		if (process.exitCode !== null || process.signalCode !== null) throw new Error(`Web server exited with code ${process.exitCode}.`);
 		try {
 			const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
 			if (response.ok) return;
@@ -213,13 +216,4 @@ async function waitForServer(url: string, process: ChildProcess): Promise<void> 
 		await new Promise(resolveWait => setTimeout(resolveWait, 100));
 	}
 	throw new Error(`Web server did not become ready at ${url}.`);
-}
-
-async function stopProcess(process: ChildProcess): Promise<void> {
-	if (process.exitCode !== null || process.signalCode !== null) return;
-	await new Promise<void>(resolveStop => {
-		const timeout = setTimeout(() => process.kill('SIGKILL'), 5_000);
-		process.once('close', () => { clearTimeout(timeout); resolveStop(); });
-		process.kill('SIGTERM');
-	});
 }

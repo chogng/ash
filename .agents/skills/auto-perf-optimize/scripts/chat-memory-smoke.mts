@@ -2,8 +2,8 @@
  * Chat memory smoke runner.
  *
  * Intended workflow:
- * - Run `node .github/skills/auto-perf-optimize/scripts/chat-memory-smoke.mts --iterations 3 --no-heap-snapshots` for a fast health check.
- * - Run `node .github/skills/auto-perf-optimize/scripts/chat-memory-smoke.mts --iterations 8 --heap-snapshot-label 03-iteration-01 --heap-snapshot-label 03-iteration-08` when comparing post-warmup heap snapshots.
+ * - Run `node .agents/skills/auto-perf-optimize/scripts/chat-memory-smoke.mts --iterations 3 --no-heap-snapshots` for a fast health check.
+ * - Run `node .agents/skills/auto-perf-optimize/scripts/chat-memory-smoke.mts --iterations 8 --heap-snapshot-label 03-iteration-01 --heap-snapshot-label 03-iteration-08` when comparing post-warmup heap snapshots.
  * - Inspect the output folder's summary.json, screenshots, and optional heap/*.heapsnapshot files.
  *
  * The default profile is persistent at .build/auto-perf-optimize/user-data so auth can be reused across performance runners.
@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { setTimeout as timeout } from 'node:timers/promises';
-import { StopWatch } from '../../../../src/vs/base/common/stopwatch.ts';
+import { StopWatch } from '../../../../src/ash/base/common/stopwatch.ts';
 import { prepareUserDataProfile } from './userDataProfile.mts';
 
 const root = path.resolve(import.meta.dirname, '..', '..', '..', '..');
@@ -119,7 +119,7 @@ if (options.help) {
 	process.exit(0);
 }
 
-await main();
+throw new Error('This legacy Chat runner requires VS Code UI and scripts/code.sh. It is not an Ash runner. Use test/scenario/src/runScenario.ts with an Ash scenario; see ../SKILL.md.');
 
 async function main(): Promise<void> {
 	const outputDir = path.resolve(options.outputDir);
@@ -820,33 +820,5 @@ function parseIntegerArg(flag: string, value: string, min: number): number {
 }
 
 function printHelp(): void {
-	const tmp = path.join(os.tmpdir(), 'vscode-chat-memory-smoke');
-	console.log([
-		'Usage: node .github/skills/auto-perf-optimize/scripts/chat-memory-smoke.mts [options]',
-		'',
-		'Launches Code - OSS, opens Chat with Playwright, runs a small chat scenario, and writes renderer heap snapshots plus summary.json.',
-		'',
-		'Options:',
-		'  --workspace <path>              Workspace to open. Default: repo root',
-		'  --output <path>                 Output folder. Default: .build/chat-memory-smoke/<timestamp>',
-		'  --port <number>                 Remote debugging port. Default: 9224',
-		'  --iterations <number>           Chat send iterations. Default: 3',
-		'  --message <text>                Prompt template. Use {iteration} for the loop number',
-		'  --skip-send                     Type prompts but do not press Enter',
-		'  --no-heap-snapshots             Only record small heap-size metrics',
-		'  --heap-snapshot-label <label>   Only snapshot matching sample labels. Repeatable or comma-separated',
-		'  --reuse                         Attach to an already-running --enable-smoke-test-driver window',
-		'  --skip-prelaunch                Set VSCODE_SKIP_PRELAUNCH=1 for the launched Code process',
-		'  --temporary-user-data           Use an output-local clean user-data-dir and delete it when the run completes',
-		'  --seed-user-data-dir <path>     Copy a logged-in profile into a fresh target user-data-dir before launch',
-		'  --keep-user-data                Preserve the generated temporary user-data-dir',
-		'  --keep-open                     Leave launched Code open',
-		'  --runtime-arg <arg>             Forward one extra argument to scripts/code.sh. Repeatable',
-		'',
-		'Example:',
-		`  node .github/skills/auto-perf-optimize/scripts/chat-memory-smoke.mts --iterations 5 --output ${tmp}`,
-		'',
-		'Watch/login/retry example:',
-		'  node .github/skills/auto-perf-optimize/scripts/chat-memory-smoke.mts --keep-open --iterations 1 --no-heap-snapshots',
-	].join('\n'));
+	console.log('Legacy VS Code Chat runner: unavailable for Ash. Use node test/scenario/out/runScenario.js <scenario.cjs>; see .agents/skills/auto-perf-optimize/SKILL.md.');
 }

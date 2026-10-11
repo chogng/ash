@@ -3,10 +3,11 @@
  * workflows. Writes raw rounds, medians, and screenshots to an output folder.
  */
 
+import { ProcessRun, registerRunResource, withProcessRun } from '../../../../build/processes.ts';
 import { chromium, type Browser, type CDPSession, type Page } from 'playwright-core';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, readlinkSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readlinkSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
@@ -86,6 +87,7 @@ interface LaunchedCode {
 	failedBeforeConnect: Promise<Error>;
 	markConnected(): void;
 	terminate(): Promise<void>;
+	release(): Promise<void>;
 }
 
 if (options.help) {
@@ -93,7 +95,11 @@ if (options.help) {
 	process.exit(0);
 }
 
-await main();
+if (!existsSync(path.join(options.codeRoot, 'src/vs')) || !existsSync(path.join(options.codeRoot, 'product.json'))) throw new Error('This comparison runner requires --code-root pointing to a VS Code checkout. Use the Ash scenario workflow for Ash measurements.');
+if (process.env.ASH_CSS_PERF_WORKER === '1') await main();
+else await withProcessRun(root, async (run, environment) => {
+	process.exitCode = (await run.command(process.execPath, [process.argv[1], ...process.argv.slice(2)], { ...environment, ASH_CSS_PERF_WORKER: '1' })).code;
+});
 
 async function main(): Promise<void> {
 	const outputDir = path.resolve(options.outputDir);
@@ -130,7 +136,6 @@ async function main(): Promise<void> {
 	let launchedCode: LaunchedCode | undefined;
 	let browser: Browser | undefined;
 	let session: CDPSession | undefined;
-	let processExitError: Error | undefined;
 	try {
 		summary.state.sourceRevision = getSourceRevision();
 		await transpileClient();
@@ -158,7 +163,7 @@ async function main(): Promise<void> {
 			throw new Error(`Port ${options.port} already exposes CDP.`);
 		}
 
-		launchedCode = launchCode(userDataDir, extensionsDir, workspace);
+		launchedCode = await launchCode(userDataDir, extensionsDir, workspace);
 		browser = await connectToCode(options.port, launchedCode.failedBeforeConnect);
 		launchedCode.markConnected();
 		const page = await findWorkbenchPage(browser);
@@ -212,22 +217,16 @@ async function main(): Promise<void> {
 		await session?.detach().catch(() => undefined);
 		await settleWithin(browser?.close() ?? Promise.resolve(), 2000);
 		if (launchedCode && !options.keepOpen) {
-			if (!await waitForChildExit(launchedCode.child, 10000)) {
-				await launchedCode.terminate();
-				if (!await waitForChildExit(launchedCode.child, 5000)) {
-					processExitError = new Error(`Code process tree did not exit after termination. pid=${launchedCode.child.pid}`);
-				}
-			}
+			await waitForChildExit(launchedCode.child, 10000);
+			// The root can exit while helpers remain in its owned group.
+			await launchedCode.terminate();
 		}
+
+		if (options.keepOpen) await launchedCode?.release();
 		if (!options.keepOpen) {
 			await rm(userDataDir, { recursive: true, force: true, maxRetries: 3 }).catch(() => undefined);
 			await rm(extensionsDir, { recursive: true, force: true, maxRetries: 3 }).catch(() => undefined);
 		}
-	}
-	if (processExitError) {
-		summary.error = processExitError.stack ?? processExitError.message;
-		await writeSummary(outputDir, summary);
-		throw processExitError;
 	}
 }
 
@@ -470,7 +469,9 @@ async function writeSummary(outputDir: string, summary: Summary): Promise<void> 
 	await writeFile(path.join(outputDir, 'summary.json'), JSON.stringify(summary, undefined, '\t'));
 }
 
-function launchCode(userDataDir: string, extensionsDir: string, workspace: string): LaunchedCode {
+async function launchCode(userDataDir: string, extensionsDir: string, workspace: string): Promise<LaunchedCode> {
+	const resource = await registerRunResource();
+	const run = new ProcessRun(root, undefined, 5_000);
 	let failBeforeConnect: (error: Error) => void = () => undefined;
 	let connected = false;
 	let terminating = false;
@@ -499,7 +500,7 @@ function launchCode(userDataDir: string, extensionsDir: string, workspace: strin
 			ELECTRON_ENABLE_LOGGING: '1',
 			ELECTRON_ENABLE_STACK_DUMPING: '1',
 		},
-		detached: options.keepOpen,
+		detached: process.platform !== 'win32',
 		stdio: options.verbose ? 'inherit' : 'ignore',
 	});
 	if (options.keepOpen) {
@@ -512,14 +513,18 @@ function launchCode(userDataDir: string, extensionsDir: string, workspace: strin
 			failBeforeConnect(new Error(`Code exited before CDP connected. code=${code} signal=${signal}`));
 		}
 	});
+	await run.own(child);
+	await resource.process(child);
 	return {
 		child,
 		failedBeforeConnect,
 		markConnected: () => connected = true,
 		terminate: async () => {
 			terminating = true;
-			await terminateProcessTree(child);
+			await run.stop('SIGTERM');
+			await resource.dispose();
 		},
+		release: () => resource.dispose(),
 	};
 }
 
@@ -599,22 +604,6 @@ async function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<
 		promise.catch(() => undefined),
 		timeout(timeoutMs).then(() => undefined),
 	]);
-}
-
-function terminateProcessTree(child: ChildProcess): Promise<void> {
-	if (child.pid === undefined) {
-		return Promise.resolve();
-	}
-	if (process.platform !== 'win32') {
-		child.kill('SIGTERM');
-		return Promise.resolve();
-	}
-
-	return new Promise((resolve, reject) => {
-		const taskkill = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' });
-		taskkill.once('error', reject);
-		taskkill.once('exit', code => code === 0 ? resolve() : reject(new Error(`taskkill failed with exit code ${code}`)));
-	});
 }
 
 async function connectToCode(port: number, launchFailure: Promise<Error>): Promise<Browser> {

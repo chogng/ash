@@ -14,7 +14,7 @@ Run from the repository root:
 - `pnpm run smoketest` — prepares the backend, builds Desktop, typechecks the automation, then runs the Electron App Server project.
 - `pnpm run smoketest-no-compile` — runs that project against existing preparation. CI uses this after an explicit preparation step.
 
-The smoke commands use `test/smoke/run.ts` and Playwright. Pass file filters and options directly after the script name, without `--`. The runner accepts one leading npm-style separator for compatibility, but rejects separators between Playwright arguments: Playwright excludes everything after `--` from test selection.
+The smoke commands use `test/smoke/run.ts` and Playwright, with the shared `build/processes.ts` lifecycle owner. Pass file filters and options directly after the script name, without `--`. The runner accepts one leading npm-style separator for compatibility, but rejects separators between Playwright arguments: Playwright excludes everything after `--` from test selection.
 
 For a specific target:
 
@@ -48,7 +48,7 @@ pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/home.spec.ts --list
 pnpm run smoketest --grep "<test title>"
 ```
 
-A grep pattern can select more than one test. Check the selected list when the title is not unique. Before launching product processes, the runner collects tests and prints the selected count. Invalid options, empty grep patterns, misplaced separators, and zero matches fail; they must never trigger a fallback to the full suite. An unfiltered command intentionally selects the entire owning project. The runner exits nonzero if a selected test fails.
+A grep pattern can select more than one test. Check the selected list when the title is not unique. Before launching product processes, the runner collects tests and prints the selected count. Invalid options, empty grep patterns, misplaced separators, and zero matches fail; they must never trigger a fallback to the full suite. An unfiltered command intentionally selects the entire owning project. The runner exits nonzero if a selected test fails. Packaged Windows/macOS verification, release Desktop verification, and the Academic CI smoke step use this same entrypoint; packaged verification keeps its fixed spec selection.
 
 Use `--debug` for interactive debugging. The runner rejects Playwright's `--ui` mode because it bypasses the collection-only preflight.
 

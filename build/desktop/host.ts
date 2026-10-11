@@ -4,6 +4,7 @@ import { createReadStream } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import { ProcessRun } from '../processes.ts';
 import { desktopBuildPath } from './paths.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
@@ -89,8 +90,10 @@ export async function watchHost(onReady: (ready: boolean) => void): Promise<{ cl
 	let closing: Promise<void> | undefined;
 
 	const child = spawn(process.execPath, [compiler, '--build', ...projects, '--watch', '--preserveWatchOutput', '--pretty', 'false'], {
-		cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+		cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
 	});
+	const run = new ProcessRun(sourceRoot, undefined, 5_000);
+	await run.own(child);
 	const stdout = createInterface({ input: child.stdout });
 	const stderr = createInterface({ input: child.stderr });
 	stdout.on('line', line => {
@@ -113,6 +116,8 @@ export async function watchHost(onReady: (ready: boolean) => void): Promise<{ cl
 		if (!closing) fail(new Error(`host watcher ${signal ? `stopped by ${signal}` : `exited with status ${code}`}`));
 	});
 
+	if (child.exitCode !== null || child.signalCode !== null) fail(new Error('Host watcher exited during startup.'));
+
 	async function validate(current: number): Promise<void> {
 		if (closing || current !== revision) return;
 		try {
@@ -131,12 +136,7 @@ export async function watchHost(onReady: (ready: boolean) => void): Promise<{ cl
 
 	function close(): Promise<void> {
 		if (closing) return closing;
-		closing = new Promise<void>(done => {
-			if (child.exitCode !== null || child.signalCode !== null) { done(); return; }
-			const timeout = setTimeout(() => child.kill('SIGKILL'), 5_000);
-			child.once('close', () => { clearTimeout(timeout); done(); });
-			child.kill('SIGTERM');
-		}).then(() => { completion.resolve(); });
+		closing = run.stop('SIGTERM').then(() => { completion.resolve(); });
 		return closing;
 	}
 

@@ -1,85 +1,87 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { watchHost } from '../host.ts';
+import { ProcessRun, withProcessRun } from '../../processes.ts';
 import { prepareAppServer } from '../appServer.ts';
 
-const sourceRoot = resolve(import.meta.dirname, '../../..');
-const require = createRequire(resolve(sourceRoot, 'package.json'));
-const executable: string = require('electron');
-const args = process.argv.slice(2);
-const watch = args[0] === '--watch';
-if (watch) args.shift();
-const environment = { ...process.env };
-delete environment.ELECTRON_RUN_AS_NODE;
-if (watch) {
-	environment.ASH_HOME ??= resolve(sourceRoot, '.build/desktop/dev/profile');
-	if (!args.some(argument => argument.startsWith('--user-data-dir='))) args.push(`--user-data-dir=${resolve(sourceRoot, '.build/desktop/dev/user-data')}`);
-}
-
-let electron: ChildProcess | undefined;
-let watcher: Awaited<ReturnType<typeof watchHost>> | undefined;
-let ready = false;
-let restarting = false;
-let stopped = false;
-
-function launch(): void {
-	const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: 'inherit' });
-	electron = child;
-	child.once('error', error => { console.error(error); process.exitCode = 1; void stop(); });
-	child.once('exit', code => {
-		if (electron === child) electron = undefined;
-		if (!watch) process.exitCode = code ?? 1;
+if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
+	await withProcessRun(resolve(import.meta.dirname, '../../..'), async (run, environment) => {
+		process.exitCode = (await run.command(process.execPath, [process.argv[1], ...process.argv.slice(2)], { ...environment, ASH_ELECTRON_LAUNCH_WORKER: '1' })).code;
 	});
-}
-
-async function restart(): Promise<void> {
-	if (restarting) return;
-	restarting = true;
-	try {
-		while (ready && !stopped) {
-			if (electron) await stopElectron(electron);
-			if (!ready || stopped) break;
-			ready = false;
-			launch();
-		}
-	} finally {
-		restarting = false;
-	}
-}
-
-function stopElectron(child: ChildProcess): Promise<void> {
-	if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
-	return new Promise(resolvePromise => {
-		const timeout = setTimeout(() => child.kill('SIGKILL'), 5_000);
-		child.once('close', () => { clearTimeout(timeout); resolvePromise(); });
-		child.kill('SIGTERM');
-	});
-}
-
-async function stop(): Promise<void> {
-	if (stopped) return;
-	stopped = true;
-	await Promise.all([watcher?.close(), electron ? stopElectron(electron) : undefined]);
-}
-
-process.once('SIGINT', () => { void stop(); });
-process.once('SIGTERM', () => { void stop(); });
-if (environment.ASH_DESKTOP_UI_ONLY !== '1') await prepareAppServer('host-provided-node');
-if (stopped) process.exit(1);
-if (watch) {
-	watcher = await watchHost(current => {
-		ready = current;
-		if (ready) void restart();
-	});
-	if (stopped) await watcher.close();
-	try {
-		await watcher.done;
-	} catch (error) {
-		console.error(error);
-		process.exitCode = 1;
-		await stop();
-	}
 } else {
-	launch();
+	const sourceRoot = resolve(import.meta.dirname, '../../..');
+	const require = createRequire(resolve(sourceRoot, 'package.json'));
+	const executable: string = require('electron');
+	const args = process.argv.slice(2);
+	const watch = args[0] === '--watch';
+	if (watch) args.shift();
+	const environment = { ...process.env };
+	delete environment.ELECTRON_RUN_AS_NODE;
+	if (watch) {
+		environment.ASH_HOME ??= resolve(sourceRoot, '.build/desktop/dev/profile');
+		if (!args.some(argument => argument.startsWith('--user-data-dir='))) args.push(`--user-data-dir=${resolve(sourceRoot, '.build/desktop/dev/user-data')}`);
+	}
+
+	let electronRun: ProcessRun | undefined;
+	let watcher: Awaited<ReturnType<typeof watchHost>> | undefined;
+	let ready = false;
+	let restarting = false;
+	let stopped = false;
+
+	async function launch(): Promise<void> {
+		if (stopped) return;
+		const run = new ProcessRun(sourceRoot, undefined, 5_000);
+		electronRun = run;
+		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: 'inherit', detached: process.platform !== 'win32' });
+		child.once('error', error => { console.error(error); process.exitCode = 1; void stop(); });
+		child.once('exit', code => {
+			if (!watch) process.exitCode = code ?? 1;
+			void run.close().catch(error => { console.error(error); process.exitCode = 1; });
+		});
+		await run.own(child);
+	}
+
+	async function restart(): Promise<void> {
+		if (restarting) return;
+		restarting = true;
+		try {
+			while (ready && !stopped) {
+				if (electronRun) await electronRun.stop('SIGTERM');
+				if (!ready || stopped) break;
+				ready = false;
+				await launch();
+			}
+		} finally {
+			restarting = false;
+		}
+	}
+
+	async function stop(): Promise<void> {
+		if (stopped) return;
+		stopped = true;
+		await Promise.all([watcher?.close(), electronRun?.stop('SIGTERM')]);
+	}
+
+	process.once('SIGINT', () => { void stop(); });
+	process.once('SIGTERM', () => { void stop(); });
+	if (environment.ASH_DESKTOP_UI_ONLY !== '1') await prepareAppServer('host-provided-node');
+	if (stopped) process.exit(1);
+	if (watch) {
+		watcher = await watchHost(current => {
+			ready = current;
+			if (ready) void restart();
+		});
+		if (stopped) await watcher.close();
+		try {
+			await watcher.done;
+		} catch (error) {
+			console.error(error);
+			process.exitCode = 1;
+			await stop();
+		}
+	} else {
+		await launch();
+	}
+
 }

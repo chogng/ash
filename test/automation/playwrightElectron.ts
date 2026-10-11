@@ -7,7 +7,7 @@ import { _electron, type ElectronApplication, type Request } from "@playwright/t
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { WorkbenchDiagnostics } from './playwrightDriver.js';
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
-import { registerSmokeResource } from './smokeProcess.js';
+import { registerRunResource } from '../../build/processes.ts';
 
 export interface ElectronApplicationLaunchResult {
 	readonly application: ElectronApplication;
@@ -29,7 +29,7 @@ export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window
 export async function launchElectronApplication(options: ElectronLaunchOptions): Promise<ElectronApplicationLaunchResult> {
 	const configuration = resolveElectronConfiguration(options);
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
-	const resource = await registerSmokeResource(options.appServerMode === 'required' && options.profileDirectory === undefined ? () => ({
+	const resource = await registerRunResource(options.appServerMode === 'required' && options.profileDirectory === undefined ? () => ({
 		executable: appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath }),
 		profile: resolve(options.userDataDirectory, 'profile'),
 	}) : undefined);

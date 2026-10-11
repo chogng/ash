@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { withProcessRun } from '../processes.ts';
 import { pythonCommand } from '../python.ts';
 
 type Product = 'ash-desktop' | 'ash-code' | 'ash-app-server';
@@ -133,8 +134,8 @@ async function verifyRuntime(identity: ReleaseIdentity, archive: string, directo
 }
 
 async function verifyDesktop(identity: ReleaseIdentity, archive: string, previous: { archive: string; version: string; } | undefined, output: string): Promise<void> {
-	const cli = join(root, 'node_modules/@playwright/test/cli.js');
-	await run(process.execPath, [cli, 'test', '--config', 'playwright.config.ts', 'test/smoke/areas/windows/release-package.spec.ts', '--project=electron-release', '--output', join(output, 'playwright')], {
+	const cli = join(root, 'test/smoke/run.ts');
+	await run(process.execPath, [cli, 'electron-release', 'test/smoke/areas/windows/release-package.spec.ts', '--output', join(output, 'playwright')], {
 		...process.env,
 		ASH_RELEASE_ARCHIVE: archive,
 		ASH_RELEASE_VERSION: identity.version,
@@ -203,4 +204,9 @@ async function main(args: string[]): Promise<void> {
 	}
 }
 
-if (import.meta.main) await main(process.argv.slice(2));
+if (import.meta.main) {
+	if (process.env.ASH_RELEASE_SANITY_WORKER === '1') await main(process.argv.slice(2));
+	else await withProcessRun(root, async (run, environment) => {
+		process.exitCode = (await run.command(process.execPath, [process.argv[1], ...process.argv.slice(2)], { ...environment, ASH_RELEASE_SANITY_WORKER: '1' })).code;
+	});
+}

@@ -6,6 +6,8 @@ import type { AppServerTestMode } from "./testTarget.js";
 
 export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
+	/** Scenario-specific host inputs; the launcher still isolates the test home/profile. */
+	readonly environment?: Readonly<NodeJS.ProcessEnv>;
 	/** Total budget for process launch and Workbench restoration. */
 	readonly startupTimeout?: number;
 	readonly userDataDirectory: string;
@@ -41,7 +43,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	const electronExecutablePath = bundle
 		? process.platform === 'darwin' ? join(bundle, 'Contents', 'MacOS', 'Ash') : join(bundle, 'Ash.exe')
 		: createRequire(resolve(desktopDirectory, "package.json"))("electron") as string;
-	const environment = createTestEnvironment(options.userDataDirectory, process.env);
+	const environment = createTestEnvironment(options.userDataDirectory, options.environment ?? process.env);
 	if (process.platform === 'win32') {
 		// Windows cannot begin a Jump List transaction without its destination stores
 		// beneath the isolated USERPROFILE. Keep Shell data inside the test home too.

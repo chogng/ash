@@ -1,7 +1,8 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
@@ -13,18 +14,17 @@ interface ProcessIdentity {
 	readonly started: string;
 }
 
-interface SmokeResource {
+interface RunResource {
 	process?: ProcessIdentity;
 	daemon?: { readonly executable: string; readonly profile: string; };
 }
 
 /** Registers resources that can outlive a Playwright worker, before they start. */
-export async function registerSmokeResource(daemon?: SmokeResource['daemon'] | (() => NonNullable<SmokeResource['daemon']>)): Promise<{ process(child: ChildProcess): Promise<void>; dispose(): Promise<void>; }> {
-	const directory = process.env.ASH_SMOKE_RUN_DIRECTORY;
+export async function registerRunResource(daemon?: RunResource['daemon'] | (() => NonNullable<RunResource['daemon']>), directory = process.env.ASH_SMOKE_RUN_DIRECTORY): Promise<{ process(child: ChildProcess): Promise<void>; dispose(): Promise<void>; }> {
 	const path = directory ? join(directory, `resource-${randomUUID()}.json`) : undefined;
 	// Other launcher consumers can prepare their package during launch. Resolve
-	// the pre-launch executable only for a prepared smoke run that owns cleanup.
-	const resource: SmokeResource = { daemon: directory ? typeof daemon === 'function' ? daemon() : daemon : undefined };
+	// the pre-launch executable only for a prepared process run that owns cleanup.
+	const resource: RunResource = { daemon: directory ? typeof daemon === 'function' ? daemon() : daemon : undefined };
 	const save = async (): Promise<void> => {
 		if (!path) return;
 		// Cancellation may read the registry while a worker registers its process.
@@ -43,7 +43,7 @@ export async function registerSmokeResource(daemon?: SmokeResource['daemon'] | (
 }
 
 /** Owns sequential runner commands and cancellation, including detached product resources. */
-export class SmokeTestRun {
+export class ProcessRun {
 	private child: ChildProcess | undefined;
 	private exited: Promise<void> | undefined;
 	private closing: Promise<void> | undefined;
@@ -52,11 +52,12 @@ export class SmokeTestRun {
 	public stopped = false;
 
 	private readonly cwd: string;
-	private readonly directory: string;
-	constructor(cwd: string, directory: string) { this.cwd = cwd; this.directory = directory; }
+	private readonly directory: string | undefined;
+	private readonly graceMs: number;
+	constructor(cwd: string, directory?: string, graceMs = 45_000) { this.cwd = cwd; this.directory = directory; this.graceMs = graceMs; }
 
 	public async command(command: string, args: readonly string[], env: NodeJS.ProcessEnv, capture = false): Promise<{ code: number; output: string; }> {
-		if (this.stopped) throw new Error('Smoke test run was stopped; refusing to start another command.');
+		if (this.stopped) throw new Error('Process run was stopped; refusing to start another command.');
 		const child = spawn(command, args, { cwd: this.cwd, env, stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit', detached: process.platform !== 'win32', windowsHide: true });
 		this.child = child;
 		let output = '';
@@ -66,8 +67,21 @@ export class SmokeTestRun {
 			child.once(capture ? 'close' : 'exit', (code, signal) => resolveExit({ code: signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1, output }));
 		});
 		this.exited = result.then(() => undefined, () => undefined);
-		try { return await result; }
-		finally { if (this.child === child) this.child = undefined; }
+		// Retain the last command for cleanup even if metadata collection fails or
+		// its root exits while descendants still hold the process group.
+		await this.rememberTree(child.pid);
+		return await result;
+	}
+
+	public async own(child: ChildProcess): Promise<void> {
+		if (this.stopped) throw new Error('Process run was stopped; refusing to own another process.');
+		this.child = child;
+		let spawnError: Error | undefined;
+		child.once('error', error => { spawnError = error; });
+		this.exited = child.exitCode !== null || child.signalCode !== null || !child.pid
+			? Promise.resolve() : new Promise<void>(resolveExit => { child.once('exit', () => resolveExit()); child.once('error', () => resolveExit()); });
+		await this.rememberTree(child.pid);
+		if (spawnError) throw spawnError;
 	}
 
 	public stop(signal: NodeJS.Signals): Promise<void> {
@@ -82,25 +96,27 @@ export class SmokeTestRun {
 			// Playwright first stops scheduling and runs fixture teardown. Electron
 			// and managed daemons have separate process groups, so a group signal alone
 			// cannot clean the run. Retain their identities before the worker exits.
-			if (child?.exitCode === null && child.signalCode === null) child.kill(signal);
+			if (child?.pid && child.exitCode === null && child.signalCode === null) child.kill(signal);
 			let timeout: ReturnType<typeof setTimeout> | undefined;
 			try {
-				timeout = setTimeout(() => this.finishGrace?.(), 45_000);
+				timeout = setTimeout(() => this.finishGrace?.(), this.graceMs);
 				await Promise.race([exited, interruptedAgain]);
 			} finally { clearTimeout(timeout); this.finishGrace = undefined; }
 			try { await this.rememberTree(child?.pid); } catch (error) { errors.push(error); }
 			try { await this.cleanup(); } catch (error) { errors.push(error); }
-			if (errors.length) throw new AggregateError(errors, 'Smoke test cancellation failed');
+			if (errors.length) throw new AggregateError(errors, 'Process cancellation failed');
 		})();
 	}
 
 	public close(): Promise<void> {
+		this.stopped = true;
 		return this.closing ??= this.cleanup();
 	}
 
-	private async resources(): Promise<SmokeResource[]> {
+	private async resources(): Promise<RunResource[]> {
+		if (!this.directory) return [];
 		const names = (await readdir(this.directory)).filter(name => name.startsWith('resource-') && name.endsWith('.json'));
-		const resources: SmokeResource[] = [];
+		const resources: RunResource[] = [];
 		for (const name of names) {
 			try { resources.push(JSON.parse(await readFile(join(this.directory, name), 'utf8'))); }
 			catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
@@ -131,7 +147,7 @@ export class SmokeTestRun {
 
 	private async cleanup(): Promise<void> {
 		const errors: unknown[] = [];
-		try { await this.rememberTree(); } catch (error) { errors.push(error); }
+		try { await this.rememberTree(this.child?.pid); } catch (error) { errors.push(error); }
 		const resources = await this.resources();
 		const current = await processes();
 		if (process.platform !== 'win32') {
@@ -160,7 +176,7 @@ export class SmokeTestRun {
 			const remaining = await processes();
 			const alive = [...this.owned.values()].filter(identity => remaining.get(identity.pid)?.started === identity.started);
 			if (!alive.length) break;
-			if (Date.now() >= deadline) { errors.push(new Error(`Smoke processes did not exit: ${alive.map(identity => identity.pid).join(', ')}`)); break; }
+			if (Date.now() >= deadline) { errors.push(new Error(`Owned processes did not exit: ${alive.map(identity => identity.pid).join(', ')}`)); break; }
 			await new Promise<void>(resolveDelay => setTimeout(resolveDelay, 50));
 		}
 		// End workers and renderers before stopping daemons, so clients cannot
@@ -171,7 +187,7 @@ export class SmokeTestRun {
 			await execute(resource.daemon!.executable, ['stop'], { env: { ...process.env, ASH_HOME: resource.daemon!.profile }, windowsHide: true, timeout: 30_000 });
 		}));
 		for (const result of stops) if (result.status === 'rejected') errors.push(result.reason);
-		if (errors.length) throw new AggregateError(errors, 'Smoke test resource cleanup failed');
+		if (errors.length) throw new AggregateError(errors, 'Process resource cleanup failed');
 	}
 }
 
@@ -189,4 +205,32 @@ async function processes(): Promise<Map<number, ProcessIdentity>> {
 		if (match && !match[4].startsWith('Z')) entries.set(Number(match[1]), { pid: Number(match[1]), parent: Number(match[2]), group: Number(match[3]), started: match[5].trim() });
 	}
 	return entries;
+}
+
+/** Installs cancellation before any work starts and owns the cross-process registry. */
+export async function withProcessRun(cwd: string, action: (run: ProcessRun, environment: NodeJS.ProcessEnv) => Promise<void>): Promise<void> {
+	const inherited = process.env.ASH_SMOKE_RUN_DIRECTORY;
+	const directory = inherited ?? await mkdtemp(join(tmpdir(), 'ash-process-run-'));
+	const run = new ProcessRun(cwd, directory);
+	let interruption: number | undefined;
+	const interrupt = (signal: NodeJS.Signals): void => {
+		interruption ??= signal === 'SIGINT' ? 130 : 143;
+		void run.stop(signal).catch(() => { /* close reports cancellation errors. */ });
+	};
+	const onInterrupt = (): void => interrupt('SIGINT');
+	const onTerminate = (): void => interrupt('SIGTERM');
+	process.on('SIGINT', onInterrupt);
+	process.on('SIGTERM', onTerminate);
+	try {
+		await action(run, { ...process.env, ASH_SMOKE_RUN_DIRECTORY: directory });
+	} catch (error) {
+		if (!run.stopped) throw error;
+	} finally {
+		try { await run.close(); if (interruption) process.exitCode = interruption; }
+		finally {
+			process.off('SIGINT', onInterrupt);
+			process.off('SIGTERM', onTerminate);
+			if (!inherited) await rm(directory, { force: true, recursive: true });
+		}
+	}
 }

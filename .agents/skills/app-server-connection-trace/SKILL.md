@@ -11,12 +11,12 @@ Use this skill to find which boundary delays a Desktop App Server connection. Th
 
 Read the current call path before adding marks:
 
-| Boundary | Owner | Source |
-| --- | --- | --- |
-| Acquire a port, run protocol `initialize`, acknowledge initialization | Renderer | `src/ash/platform/native/electron-browser/rendererApi.ts` and `src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts` |
-| Validate and launch the command carrier, attach its port, relay frames | Electron Main | `src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts` |
-| Start or reuse the managed App Server, wait for its endpoint, probe `initialize` | Rust daemon | `crates/app-server-daemon/src/client.rs` and `process.rs` |
-| Open the managed runtime and serve protocol `initialize` | Rust App Server | `crates/app-server/src/managed/registry.rs` and `crates/app-server/src/local.rs` |
+| Boundary                                                                         | Owner           | Source                                                                                                                                       |
+| -------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Acquire a port, run protocol `initialize`, acknowledge initialization            | Renderer        | `src/ash/platform/native/electron-browser/rendererApi.ts` and `src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts` |
+| Validate and launch the command carrier, attach its port, relay frames           | Electron Main   | `src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts`                                                                       |
+| Start or reuse the managed App Server, wait for its endpoint, probe `initialize` | Rust daemon     | `crates/app-server-daemon/src/client.rs` and `process.rs`                                                                                    |
+| Open the managed runtime and serve protocol `initialize`                         | Rust App Server | `crates/app-server/src/managed/registry.rs` and `crates/app-server/src/local.rs`                                                             |
 
 On initial startup, Main's `startAppServerWithRecovery` precedes window creation, but the relay usually launches the command carrier when the Renderer acquires its connection. On reconnect, the Renderer disconnects its client, acquires a new port, and initializes again. Recheck these paths when they change. The Renderer's nonce identifies its exchange with Main; current code does not carry that nonce into the Rust daemon, so do not claim end-to-end correlation from it alone.
 
@@ -36,7 +36,7 @@ Rust's WebSocket span exporter uses `ASH_TRACE_WEBSOCKET_ADDR` and `ASH_TRACE_WE
 The opt-in Playwright test below measures launch request through usable Workbench. It includes window creation, automation, connection, workspace setup, trust interaction on fresh profiles, and rendering. It does **not** identify an App Server connection bottleneck by itself. Use it after the connection trace to check whether a change improves the visible result:
 
 ```sh
-ASH_DESKTOP_STARTUP_TRACE=1 pnpm exec playwright test test/smoke/areas/windows/desktop-startup-trace.spec.ts --project=electron-app-server
+ASH_DESKTOP_STARTUP_TRACE=1 pnpm run smoketest-no-compile test/smoke/areas/windows/desktop-startup-trace.spec.ts
 ```
 
 It records five samples each for fresh, stopped, reused, and UI-only cohorts under `.build/startup-trace/desktop-<run-id>/desktop-startup-trace.json`. Compare two reports with `python3 scripts/desktop_startup_trace.py <baseline-json> <candidate-json>`. The script checks matched conditions and shows samples, medians, observer intervals, and failures. These observer intervals share the Playwright worker clock; `first-window → workbench-ready` contains several stages and is not a backend duration. `test/smoke/areas/windows/home.spec.ts` separately covers reopening an authorized workspace after its backend stops.

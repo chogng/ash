@@ -1,8 +1,9 @@
-import { _electron, expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { strict as assert } from 'node:assert';
 import { dirname, join, resolve } from 'node:path';
+import { launchElectronApplication } from '../../../automation/playwrightElectron.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { exercisePackagedWorkbench } from '../../../automation/packagedWorkbench.js';
 
@@ -47,12 +48,8 @@ test('macOS package launches, opens a window tab, and installs its shell command
 	environment.SHELL = '/bin/sh';
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;
-	const application = await _electron.launch({
-		executablePath: join(bundlePath, 'Contents', 'MacOS', 'Ash'),
-		args: [`--user-data-dir=${userDataDirectory}`],
-		cwd: dirname(bundlePath),
-		env: environment,
-	});
+	const desktop = await launchElectronApplication({ packagedBundle: bundlePath, appServerMode: 'required', userDataDirectory, environment });
+	const { application } = desktop;
 	try {
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
@@ -74,6 +71,6 @@ test('macOS package launches, opens a window tab, and installs its shell command
 		});
 		await expect.poll(() => application.windows().length).toBe(2);
 	} finally {
-		await application.close();
+		await desktop.close();
 	}
 });

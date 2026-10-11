@@ -52,7 +52,7 @@ node test/scenario/out/runScenario.js .build/ash-playwright-mcp/desktop-search.c
 | `--verbose`        | Accepted; do not assume extra diagnostics are implemented.                                                                                                                                 |
 | `--build`          | Unsupported; do not use it. Installed-product selection is not implemented by this runner.                                                                                                 |
 
-Desktop uses a temporary user-data directory, an isolated test home/profile, and a 1440×900 recording canvas. The runner stops its owned application/daemon and removes the temporary profile; retain the separate fixture workspace and evidence for review. It must not stop unrelated processes.
+Desktop uses a temporary user-data directory, an isolated test home/profile, and a 1440×900 recording canvas. The runner stops its owned application/daemon and removes the temporary profile; retain the separate fixture workspace and evidence for review. It must not stop unrelated processes. The CLI supervisor installs cancellation before scenario loading and shares the process/resource registry with its worker. Ctrl-C / SIGINT or SIGTERM cleans that run even if startup or a step never settles; interrupt again to skip the graceful wait. Await command exit before reporting it stopped.
 
 Check caption tooling before running. `renderEvidenceChapters.ts` needs `ffmpeg` with the `drawtext` filter, `ffprobe`, and a supported font. It searches `PATH` and known install locations. Overrides are `FFMPEG_PATH`, `FFPROBE_PATH`, and `CHAPTER_FONT`.
 

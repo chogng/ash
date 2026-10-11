@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { withProcessRun } from '../../../build/processes.ts';
 import type { PlaywrightApplication, PlaywrightDriver } from '../../automation/playwrightDriver.ts';
 import type { Workbench } from '../../automation/workbench.ts';
 import { ApplicationService, type JSONValue } from './application.ts';
@@ -145,11 +146,19 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
 		console.error('Usage: node test/scenario/out/runScenario.js <scenario.cjs> [--dev] [--web] [--headless] [--verbose]');
 		process.exit(2);
 	}
-	void loadScenario(resolve(scenarioArgument)).then(runScenario).then(result => {
-		console.log(`Outcome: ${result.outcome}`);
-		process.exit(result.outcome === 'passed' ? 0 : 1);
-	}, error => {
-		console.error(error instanceof Error ? error.stack ?? error.message : error);
-		process.exit(1);
-	});
+	if (process.env.ASH_SCENARIO_WORKER !== '1') {
+		// A separate worker lets cancellation terminate even a step whose promise
+		// never settles. Its launchers share the supervisor's resource registry.
+		await withProcessRun(resolve(import.meta.dirname, '../../..'), async (run, environment) => {
+			process.exitCode = (await run.command(process.execPath, [process.argv[1], ...commandLine], { ...environment, ASH_SCENARIO_WORKER: '1' })).code;
+		});
+	} else {
+		await loadScenario(resolve(scenarioArgument)).then(runScenario).then(result => {
+			console.log(`Outcome: ${result.outcome}`);
+			process.exit(result.outcome === 'passed' ? 0 : 1);
+		}, error => {
+			console.error(error instanceof Error ? error.stack ?? error.message : error);
+			process.exit(1);
+		});
+	}
 }

@@ -32,7 +32,7 @@ test('Frontend CI retains Academic coverage in the unified Workbench projects', 
 	const workbenchStep = workflow.match(/- name: Test Academic workbench\n([\s\S]*?)(?=\n      -)/)?.[1];
 	assert.ok(workbenchStep, 'Frontend CI must retain the Academic Workbench step');
 	assert.match(workbenchStep, /if: matrix\.surface == 'electron'/);
-	assert.match(workbenchStep, /playwright test test\/smoke\/areas\/academic\/academic-workbench\.spec\.ts --project=electron-ui/);
+	assert.match(workbenchStep, /node test\/smoke\/run\.ts electron-ui test\/smoke\/areas\/academic\/academic-workbench\.spec\.ts/);
 	assert.deepEqual(playwrightTargetForProject('electron-ui'), { kind: 'electron', appServerMode: 'disabled' });
 
 	const connectedStep = workflow.match(/- name: Test connected Academic document editing\n([\s\S]*?)(?=\n      -)/)?.[1];

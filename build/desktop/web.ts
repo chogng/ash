@@ -2,6 +2,7 @@ import { execFile, spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
+import { ProcessRun } from '../processes.ts';
 import { developmentAshPackagePath } from './runtimeStore.ts';
 import { prepareAppServer } from './appServer.ts';
 import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../src/ash/platform/agentHost/common/appServerEnvironment.ts';
@@ -39,7 +40,9 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 	const arguments_ = ['--web', '--port', String(options.port)];
 	if (options.assets) { arguments_.push('--assets', options.assets); }
 	if (options.origin) { arguments_.push('--origin', options.origin); }
-	const child = spawn(executable, arguments_, { cwd: root, env: environment, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+	const child = spawn(executable, arguments_, { cwd: root, env: environment, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
+	const run = new ProcessRun(root, undefined, 5_000);
+	await run.own(child);
 	let diagnostic = '';
 	child.stderr.on('data', chunk => { diagnostic = (diagnostic + String(chunk)).slice(-8192); });
 	const exited = new Promise<number>(resolveExit => {
@@ -51,8 +54,10 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 	let closing: Promise<void> | undefined;
 	const close = (): Promise<void> => closing ??= (async () => {
 		child.stdin.end();
-		const timeout = setTimeout(() => child.kill(), 5_000);
-		try { await exited; } finally { clearTimeout(timeout); }
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		try { await Promise.race([exited, new Promise<void>(resolveWait => { timeout = setTimeout(resolveWait, 5_000); })]); }
+		finally { clearTimeout(timeout); }
+		await run.stop('SIGTERM');
 	})();
 	try {
 		const info = await new Promise<WebListenInfo>((resolveInfo, reject) => {
@@ -65,6 +70,7 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 				if (error) { reject(error); } else { resolveInfo(value!); }
 			};
 			child.once('error', onError); child.once('close', onClose);
+			if (child.exitCode !== null || child.signalCode !== null) { onClose(); return; }
 			lines.once('line', line => {
 				try {
 					if (line.length > 16_384) { throw new Error('Invalid Web launch record'); }

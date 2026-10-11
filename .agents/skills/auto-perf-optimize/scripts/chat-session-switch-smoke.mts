@@ -7,9 +7,9 @@
  *
  * Intended workflow:
  * - Fast health check:
- *   node .github/skills/auto-perf-optimize/scripts/chat-session-switch-smoke.mts --switch-iterations 3 --no-heap-snapshots
+ *   node .agents/skills/auto-perf-optimize/scripts/chat-session-switch-smoke.mts --switch-iterations 3 --no-heap-snapshots
  * - Targeted snapshots:
- *   node .github/skills/auto-perf-optimize/scripts/chat-session-switch-smoke.mts --switch-iterations 8 --heap-snapshot-label 04-switch-01 --heap-snapshot-label 04-switch-08
+ *   node .agents/skills/auto-perf-optimize/scripts/chat-session-switch-smoke.mts --switch-iterations 8 --heap-snapshot-label 04-switch-01 --heap-snapshot-label 04-switch-08
  */
 
 import { chromium, type Browser, type CDPSession, type Page } from 'playwright-core';
@@ -21,7 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
-import { StopWatch } from '../../../../src/vs/base/common/stopwatch.ts';
+import { StopWatch } from '../../../../src/ash/base/common/stopwatch.ts';
 import { prepareUserDataProfile } from './userDataProfile.mts';
 
 const root = path.resolve(import.meta.dirname, '..', '..', '..', '..');
@@ -132,7 +132,7 @@ if (options.help) {
 	process.exit(0);
 }
 
-await main();
+throw new Error('This legacy Chat runner requires VS Code UI and scripts/code.sh. It is not an Ash runner. Use test/scenario/src/runScenario.ts with an Ash scenario; see ../SKILL.md.');
 
 async function main(): Promise<void> {
 	const outputDir = path.resolve(options.outputDir);
@@ -905,27 +905,5 @@ function parseIntegerArg(flag: string, value: string, min: number): number {
 }
 
 function printHelp(): void {
-	console.log([
-		'Usage: node .github/skills/auto-perf-optimize/scripts/chat-session-switch-smoke.mts [options]',
-		'',
-		'Creates multiple Chat sessions with different content types, then repeatedly',
-		'switches between them via the sessions list to verify no memory leaks.',
-		'',
-		'Options:',
-		'  --workspace <path>              Workspace to open. Default: repo root',
-		'  --output <path>                 Output folder. Default: .build/chat-session-switch-smoke/<timestamp>',
-		'  --port <number>                 Remote debugging port. Default: 9224',
-		'  --switch-iterations <number>    Number of full switch cycles. Default: 5',
-		'  --no-heap-snapshots             Only record small heap-size metrics',
-		'  --heap-snapshot-label <label>   Only snapshot matching sample labels. Repeatable or comma-separated',
-		'  --reuse                         Attach to an already-running --enable-smoke-test-driver window',
-		'  --skip-prelaunch                Set VSCODE_SKIP_PRELAUNCH=1',
-		'  --temporary-user-data           Use an output-local clean user-data-dir',
-		'  --seed-user-data-dir <path>     Copy a logged-in profile into a fresh target user-data-dir before launch',
-		'  --keep-open                     Leave launched Code open',
-		'  --verbose                       Show Code stdout/stderr',
-		'',
-		'Example:',
-		'  node .github/skills/auto-perf-optimize/scripts/chat-session-switch-smoke.mts --switch-iterations 3 --no-heap-snapshots',
-	].join('\n'));
+	console.log('Legacy VS Code Chat runner: unavailable for Ash. Use node test/scenario/out/runScenario.js <scenario.cjs>; see .agents/skills/auto-perf-optimize/SKILL.md.');
 }

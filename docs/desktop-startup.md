@@ -8,7 +8,7 @@
 
 ```sh
 ASH_DESKTOP_STARTUP_TRACE=1 pnpm run pretest:smoke:desktop
-ASH_DESKTOP_STARTUP_TRACE=1 pnpm exec playwright test test/smoke/areas/windows/desktop-startup-trace.spec.ts --project=electron-app-server
+ASH_DESKTOP_STARTUP_TRACE=1 pnpm run smoketest-no-compile test/smoke/areas/windows/desktop-startup-trace.spec.ts
 python3 scripts/desktop_startup_trace.py <基线报告.json> <候选报告.json>
 ```
 
