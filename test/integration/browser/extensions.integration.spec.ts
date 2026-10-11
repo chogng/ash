@@ -1,5 +1,113 @@
 import { expect, test } from '@playwright/test';
 
+for (const [locale, detailsLabel, featuresLabel, informationLabel, identifierLabel] of [
+	['en', 'Details', 'Features', 'Additional information', 'Identifier'],
+	['zh-CN', '详情', '功能', '其他信息', '标识符'],
+]) {
+	test(`Registered extension editor renders its README, header, tabs and metadata in ${locale}`, async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto(`/extensions.html?preview&locale=${locale}&theme=light&unsafeReadme`);
+		await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.locator('.extension-detail-header')).toContainText('Fixture publisher');
+		await expect(editor.locator('.extension-detail-icon img')).toBeVisible();
+		await expect.poll(() => editor.locator('.extension-detail-icon img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		await expect(editor.getByRole('tabpanel', { name: detailsLabel, exact: true }).getByRole('heading', { name: 'Getting started', exact: true })).toBeVisible();
+		await expect(editor.getByRole('complementary', { name: informationLabel, exact: true })).toContainText(identifierLabel);
+		await expect(editor.getByRole('complementary')).toContainText('publisher.sample@open-vsx');
+		await expect(editor.locator('.extension-detail-content').getByRole('link', { name: 'Unsafe', exact: true })).toHaveCount(0);
+		expect(await page.evaluate(() => (window as any).fixtureUnsafe)).toBeUndefined();
+		const details = editor.getByRole('tab', { name: detailsLabel, exact: true });
+		await details.focus(); await details.press('ArrowRight');
+		const features = editor.getByRole('tab', { name: featuresLabel, exact: true });
+		await expect(features).toBeFocused(); await expect(details).toHaveAttribute('aria-selected', 'true');
+		await features.press('Enter');
+		await expect(features).toHaveAttribute('aria-selected', 'true');
+		await expect(editor.getByRole('tabpanel', { name: featuresLabel, exact: true })).toContainText('editorExtension');
+		await expect(editor.getByRole('tabpanel', { name: detailsLabel, exact: true })).toBeHidden();
+		await details.click();
+		await editor.locator('.extension-detail-links').getByRole('link', { name: 'README.md', exact: true }).click();
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document').at(-1))).toMatchObject(['document', { readOnly: true, languageId: 'markdown', initialText: expect.stringContaining('# Sample editor extension') }]);
+	});
+}
+
+test('Uninstalled editor extension details read metadata and README through the configured gallery', async ({ page }) => {
+	await page.goto('/extensions.html?gallery&theme=light');
+	await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
+	const editor = page.locator('.ash-extension-editor');
+	await expect(editor.locator('.extension-detail-publisher')).toHaveText('Fixture publisher');
+	await expect(editor.locator('.ash-markdown')).toContainText('Getting started');
+	await expect(editor.locator('.extension-detail-icon img')).toBeVisible();
+	await expect(editor.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
+	const requests = await page.evaluate(() => window.ashExtensionsIntegration.requests);
+	expect(requests.filter((entry: any) => entry[0] === 'galleryResource')).toEqual(expect.arrayContaining([
+		['galleryResource', expect.objectContaining({ publisher: 'publisher', name: 'sample', version: '1.0.0', path: 'package.json' })],
+		['galleryResource', expect.objectContaining({ publisher: 'publisher', name: 'sample', version: '1.0.0', path: 'README.md' })],
+	]));
+	expect(requests.some((entry: any) => entry[0] === 'install')).toBe(false);
+});
+
+test('Plugins, Skills and MCP use the registered editor with their own content tabs', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => window.ashExtensionsIntegration.addSkillOnlyPlugin());
+	const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
+	await plugins.getByRole('button', { name: 'Plugins', exact: true }).click();
+	await plugins.getByRole('option').filter({ hasText: 'Skill-only plugin' }).click();
+	const editor = page.locator('.ash-extension-editor');
+	await editor.getByRole('tab', { name: 'Permissions', exact: true }).click();
+	await expect(editor.getByRole('tabpanel', { name: 'Permissions', exact: true })).toContainText('sha256:');
+	await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
+	await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
+	await editor.getByRole('tab', { name: 'Instructions', exact: true }).click();
+	await expect(editor.getByRole('tabpanel', { name: 'Instructions', exact: true })).toContainText('Review changes carefully.');
+	await editor.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+	await expect(editor.getByRole('tabpanel', { name: 'Diagnostics', exact: true })).toContainText('Invalid metadata');
+	await page.evaluate(() => window.ashExtensionsIntegration.addMcpPackage());
+	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('option').click();
+	await editor.getByRole('tab', { name: 'Tools', exact: true }).click();
+	await expect(editor.getByRole('tabpanel', { name: 'Tools', exact: true })).toContainText('fixture_search');
+	await expect(editor.getByRole('complementary')).toContainText('Contract version');
+	const registrations = await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPane'));
+	expect(registrations).toEqual([['editorPane', 'ash.extensions.editor'], ['editorPane', 'ash.extensions.editor'], ['editorPane', 'ash.extensions.editor']]);
+});
+
+test('A late README cannot replace another capability in the editor', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => { window.ashExtensionsIntegration.holdReadme(); });
+	await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
+	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.readmeStarted())).toBe(true);
+	await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
+	await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
+	await page.evaluate(() => window.ashExtensionsIntegration.completeReadme());
+	await expect(page.locator('.ash-extension-editor .extension-detail-header')).toContainText('review');
+	await expect(page.locator('.ash-extension-editor')).not.toContainText('Retired README');
+	await expect(page.locator('.extension-detail-document .ash-markdown')).toHaveCount(0);
+});
+
+for (const theme of ['light', 'dark', 'hc']) {
+	test(`Extension detail columns, responsive layout and focus remain usable in ${theme}`, async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto(`/extensions.html?preview&theme=${theme}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.locator('.ash-markdown')).toContainText('Getting started');
+		const content = await editor.locator('.extension-detail-content').boundingBox();
+		const info = await editor.locator('.extension-detail-info').boundingBox();
+		expect(info!.x).toBeGreaterThan(content!.x + content!.width);
+		await editor.getByRole('tab', { name: 'Details', exact: true }).focus();
+		await expect.poll(() => editor.getByRole('tab', { name: 'Details', exact: true }).evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(1);
+		await page.screenshot({ path: `.build/desktop/ui-previews/extension-details-${theme}.png` });
+		await page.locator('#details').evaluate(element => { element.style.width = '360px'; });
+		await expect(editor).toHaveClass(/compact/u);
+		await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+		const narrowContent = await editor.locator('.extension-detail-content').boundingBox();
+		const narrowInfo = await editor.locator('.extension-detail-info').boundingBox();
+		expect(narrowInfo!.y).toBeGreaterThanOrEqual(narrowContent!.y + narrowContent!.height);
+	});
+}
+
 for (const [locale, title, reason] of [['en', 'Recommended', 'Recommended by this workspace'], ['zh-CN', '推荐', '此工作区推荐']]) {
 	test(`Workspace recommendations open package details by keyboard in ${locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?locale=${locale}`);

@@ -20,7 +20,8 @@ for (const [name, value] of Object.entries({
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { ChatInputEditor } = await import("../../browser/widget/input/chatInputEditor.js");
 const { ChatInputEditor: CoworkChatInputEditor } = await import('../../../../../sessions/contrib/cowork/browser/widget/input/chatInputEditor.js');
-const { ChatInputConfiguration } = await import('../../browser/chat.shared.contribution.js');
+await import('../../browser/chat.shared.contribution.js');
+const { ChatInputConfiguration } = await import('../../common/constants.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 const { createChatCommandCompletionProvider } = await import("../../browser/widget/input/chatCommandCompletion.js");
 const { createChatSkillCompletionProvider } = await import("../../browser/widget/input/chatSkillCompletion.js");
@@ -315,7 +316,7 @@ test('Chat command completion replaces the whole command and preserves arguments
 	assert.equal(editor.value, '/history argument');
 });
 
-test("Chat input starts at the InputPart default height and still grows with content", async () => {
+test("Chat input starts with two lines and grows and shrinks with content", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
@@ -324,12 +325,17 @@ test("Chat input starts at the InputPart default height and still grows with con
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 
-	// The InputPart supplies the inset; the editor's existing default excludes it.
-	assert.equal(editor.element.style.height, "100px");
+	assert.equal(editor.element.style.height, "40px");
+	editor.value = "First line\nSecond line";
+	await waitFor(() => editor.element.style.height === "40px");
+	editor.value += "\nThird line";
+	await waitFor(() => editor.element.style.height === "60px");
 	editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");
 	await waitFor(() => editor.element.style.height === "240px");
 	editor.value = Array.from({ length: 50 }, (_, index) => `Line ${index + 1}`).join("\n");
 	await waitFor(() => editor.element.style.height === "314px");
+	editor.value = "";
+	await waitFor(() => editor.element.style.height === "40px");
 	dom.window.close();
 });
 

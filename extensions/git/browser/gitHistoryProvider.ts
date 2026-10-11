@@ -257,7 +257,6 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	}
 
 	private handleStatus(status: GitStatus): void {
-		console.debug('GIT REF DIAGNOSTIC status', status.historyRevision, this.historyStatus?.historyRevision, this.graphRevision, this.generation);
 		if (status.repositoryId !== this.repositoryId) return;
 		const previous = this.historyStatus;
 		if (previous?.streamInstanceId === status.streamInstanceId && previous.historyRevision >= status.historyRevision) return;
@@ -293,14 +292,12 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 			this.remotes = snapshot.remotes;
 			this.acceptReferences(snapshot.references);
 			this.setHistoryItemRef(currentRef(snapshot.status.head));
-			console.debug('GIT REF DIAGNOSTIC update', snapshot.references.map(ref => ref.name), this.commits.length, this.generation);
 			this.refsChanged.fire(this.commits.map(commit => this.historyItem(commit)));
 			return;
 		}
 	}
 
 	private reset(notify = true, preserveReferences = false): void {
-		console.debug('GIT REF DIAGNOSTIC reset', notify, preserveReferences, this.generation);
 		this.generation += 1;
 		this.loading = undefined;
 		this.referencesLoading = undefined;

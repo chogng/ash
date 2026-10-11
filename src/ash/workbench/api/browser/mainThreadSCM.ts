@@ -384,7 +384,6 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		}
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
-		console.debug('GIT REF DIAGNOSTIC accept', historyChanged, value.historyRefsRevision, this.snapshot.historyRefsRevision);
 		this.snapshot = value;
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }

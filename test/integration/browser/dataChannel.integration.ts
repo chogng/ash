@@ -1,3 +1,4 @@
+import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';

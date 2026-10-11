@@ -11,7 +11,7 @@ export const dialogClient: DialogClient = { confirm: options => editors.request(
 export const editorClient: EditorClient = { openEditor: (input, options, target) => editors.request({ method: 'open', input: encode(input), options, sideBySide: target === 'sideGroup' }) };
 export const viewsClient: ViewsClient = { focusView: id => editors.request({ method: 'openView', id, focus: true }), openView: (id, focus) => editors.request({ method: 'openView', id, focus }) };
 export const workingCopyClient: WorkingCopyClient = { get: uri => editors.request({ method: 'dirty', uri: uri.toString() }) };
-function encode(value: unknown): unknown { return JSON.parse(JSON.stringify(value, function (key, entry) { const original = this[key]; return original instanceof URI ? original.toString() : entry; })); }
+function encode(value: unknown): unknown { return JSON.parse(JSON.stringify(value, function (key, entry) { const original = this[key]; return original instanceof URI ? original.toString() : original instanceof Uint8Array ? Array.from(original) : entry; })); }
 export async function input(options: { title?: string; placeHolder?: string; value?: string; validateInput?(value: string): Promise<string | undefined>; }): Promise<string | undefined> {
 	let value = options.value;
 	let validationMessage: string | undefined;

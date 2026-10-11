@@ -74,12 +74,15 @@ does not execute extension JavaScript or acquire text models for binary media. W
 Sessions both start this declarative loader.
 
 Workbench and Sessions create `WebWorkerExtensionHost` for packaged `browser` entries. It owns the window's extension Workers alongside the App Server executable-host transport.
-The Worker entry lives in `workbench/services/extensions/browser/webWorkerExtensionHostWorker.ts`; editor callback contracts
+The Worker entry lives in `workbench/api/worker/extensionHostWorker.ts`; editor callback contracts
 live in `workbench/api/common/extHost.protocol.ts`. `platform/agentHost` owns the App Server
 transport, invocation cancellation and wire validation, without importing Workbench contracts.
 `build/builtin/extensions.ts` bundles each browser entry and its dependencies into an immutable ES
 module. Activation receives the window language, registration callbacks, and command execution.
-`MainThreadExtensionApi` installs extension commands and manifest editor menus;
+`MainThreadExtensionApi` installs extension commands and manifest editor menus. Command categories
+prefix palette labels while menus retain short titles, and declared enablement gates menu actions.
+Worker client requests queue at the host's concurrency limit; SCM state publication keeps its
+incarnation lifetime when an unrelated read callback is cancelled.
 `MainThreadCustomEditors` installs text-backed editor providers in the shared pane registry.
 The Markdown package under `extensions/markdown-language-features` owns its preview rendering and
 actions. `WebviewEditor` hosts the content, and `CustomTextEditorModel` holds a reference to the same

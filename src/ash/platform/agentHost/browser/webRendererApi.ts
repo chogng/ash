@@ -1,3 +1,4 @@
+import { AppServerMessageHistoryService } from '../../messageHistory/browser/appServerMessageHistoryService.js';
 import { createExtensionBackendApi } from './extensionBackendApi.js';
 import { createAppServerExecutionSettingsApi } from '../../execution/browser/executionSettingsApi.js';
 import { AppServerSymphonyService } from '../../symphony/browser/appServerSymphonyService.js';
@@ -102,6 +103,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 	return {
 		appServer,
 		hasAppServer: true,
+		messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
 		approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 		accounts: createAppServerAccountApi(connection, connectorHostServices),
 		session: createAppServerSessionApi(connection),

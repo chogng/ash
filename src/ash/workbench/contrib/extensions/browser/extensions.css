@@ -84,37 +84,6 @@
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-body2);
 }
-.ash-extension-editor {
-	box-sizing: border-box;
-	height: 100%;
-	overflow: auto;
-	padding: 24px 32px;
-	font-size: var(--ash-fontSize-body1);
-	overflow-wrap: anywhere;
-}
-.ash-extension-editor h1 {
-	font-size: var(--ash-fontSize-heading1);
-	font-weight: var(--ash-fontWeight-semiBold);
-	margin: 0 0 8px;
-}
-.ash-extension-editor h2 {
-	font-size: var(--ash-fontSize-heading2);
-	font-weight: var(--ash-fontWeight-semiBold);
-	margin: 24px 0 12px;
-}
-.ash-extension-editor .extension-metadata {
-	color: var(--ash-description-foreground);
-}
-.ash-extension-editor .extension-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	margin-top: 16px;
-}
-.ash-extension-editor .extension-capabilities {
-	white-space: pre-wrap;
-	line-height: 1.6;
-}
 
 .extension-capability-pane .extensions-status {
 	overflow: hidden;

@@ -1,3 +1,4 @@
+import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
@@ -538,6 +539,7 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IRendererHostService, api);
+		services.registerInstance(IMessageHistoryService, api.messageHistory);
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
 		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, api.extensionBackend);

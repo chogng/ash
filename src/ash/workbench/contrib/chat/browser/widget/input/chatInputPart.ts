@@ -1,9 +1,14 @@
+import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
+import { ChatHistoryNavigator } from '../../../common/widget/chatWidgetHistoryService.js';
+import type { MessageHistoryEntry } from '../../../../../../platform/messageHistory/common/messageHistory.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
+import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import '../media/chat.css';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
 import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
 import { DictationSession } from '../../speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
-import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
+import { addDisposableListener, h, stopEvent } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
 import { Separator } from "../../../../../../base/common/actions.js";
@@ -86,9 +91,23 @@ export interface IChatInputPart extends IDisposable {
 	render(state: ChatInputState): void;
 }
 
+interface InputHistoryDraft {
+	readonly text: string;
+	readonly selection: ChatInputEditorSelection;
+	readonly attachments: readonly ChatContextAttachment[];
+	readonly skills: readonly SkillReference[];
+}
+
+type HistorySearchItem = IQuickPickItem & ({ readonly kind: 'entry'; readonly entry: MessageHistoryEntry } | { readonly kind: 'more'; readonly before: string });
+
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
 export class ChatInputPart extends Disposable implements IChatInputPart {
 	readonly element: HTMLElement;
+	private readonly history: ChatHistoryNavigator<InputHistoryDraft>;
+	private readonly historySearch = this._register(new MutableDisposable<DisposableStore>());
+	private applyingHistory = false;
+	private historyInputRevision = 0;
+	private draftSkills: { readonly text: string; readonly references: readonly SkillReference[]; } | undefined;
 	private readonly inputChanges = this._register(new Emitter<void>());
 	protected readonly onDidChangeInput = this.inputChanges.event;
 	private readonly delegate: ChatInputDelegate;
@@ -136,10 +155,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
+		this.history = this._register(instantiationService.createInstance(ChatHistoryNavigator<InputHistoryDraft>));
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-chat-input-part";
 		container.append(this.element);
@@ -181,11 +202,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				type, priority: 95, name: `chatAttachments-${type}-${createUuid()}`,
 				getProvider: () => {
 					const focused = this.element.ownerDocument.activeElement as HTMLElement | null;
-					if (!focused || (!this.attachmentList.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
+					if (!focused || (!this.input.element.contains(focused) && !this.attachmentList.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
 					if (type === AccessibleViewType.View && this.attachmentModel.size === 0) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
 						const names = this.attachmentModel.attachments.map(attachment => attachment.name).join('\n');
-						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('hooks.feedbackHelp', 'Hook blocks and failures appear in the conversation. Use Tab to reach a Hook summary and Enter or Space to expand its reason. Execution Trace shows status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + names;
+						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('hooks.feedbackHelp', 'Hook blocks and failures appear in the conversation. Use Tab to reach a Hook summary and Enter or Space to expand its reason. Execution Trace shows status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only.') + '\n' + names;
 					}, () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -198,7 +219,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(onboarding.registerHost({ container: this.element, focusTarget: this.element, isVisible: () => this.visible }));
 		this._register(addDisposableListener(this.inputContainer, "focusin", event => {
 			this.inputContainer.classList.add("focused");
-			if (this.attachmentList.contains(event.target as Node)) {
+			if (this.attachmentList.contains(event.target as Node) || this.input.element.contains(event.target as Node)) {
 				const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
 				if (hint) { announceStatus(hint); }
 			}
@@ -212,14 +233,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			void this.acceptInput().catch(() => undefined);
 		}));
 		this._register(this.input.onDidChange(() => {
+			if (!this.applyingHistory) this.draftSkills = undefined;
 			this.draftRevision++;
+			if (!this.applyingHistory) { this.history.invalidatePending(); this.historyInputRevision++; }
 			this.inputChanges.fire();
 			this.status.textContent = this.statusText(this.state);
 			this.renderToolbar();
 		}));
+		this._register(addDisposableListener(this.input.element, "keydown", event => this.handleHistoryKey(event), true));
 		this._register(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
 		this._register(this.attachmentModel.onDidChange(() => {
 			this.draftRevision++;
+			if (!this.applyingHistory) { this.history.invalidatePending(); this.historyInputRevision++; }
 			this.renderAttachments();
 			this.renderToolbar();
 			this.inputChanges.fire();
@@ -230,7 +255,137 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(toDisposable(() => { void this.stopDictation(); }));
 	}
 
+	private captureHistoryDraft(): InputHistoryDraft {
+		return { text: this.input.value, selection: this.input.getSelection(), attachments: this.attachmentModel.attachments, skills: this.draftSkills?.text === this.input.value ? this.draftSkills.references : this.skills.referencesIn(this.input.value) };
+	}
+
+	private applyHistoryDraft(draft: InputHistoryDraft): void {
+		this.applyingHistory = true;
+		try {
+			this.input.value = draft.text;
+			this.input.setSelection(draft.selection);
+			const attachments = this.attachmentModel.attachments;
+			if (attachments.length !== draft.attachments.length || attachments.some((attachment, index) => attachment !== draft.attachments[index])) {
+				this.attachmentModel.clear();
+				this.attachmentModel.addContext(...draft.attachments);
+			}
+			this.draftSkills = { text: draft.text, references: draft.skills };
+		} finally {
+			this.applyingHistory = false;
+		}
+	}
+
+	private applyHistoryEntry(entry: MessageHistoryEntry): void {
+		this.applyingHistory = true;
+		try {
+			this.input.value = entry.text;
+			this.input.setSelection({ anchor: entry.text.length, active: entry.text.length });
+			this.attachmentModel.clear();
+			this.draftSkills = undefined;
+		} finally {
+			this.applyingHistory = false;
+		}
+		announceStatus(localize('chat.history.recalled', 'Recalled input. Press Escape to restore your draft.'));
+	}
+
+	private handleHistoryKey(event: KeyboardEvent): void {
+		if (event.isComposing) return;
+		if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'r') {
+			stopEvent(event);
+			if (!this.history.available) {
+				this.notifications.info(localize('chat.history.unavailable', 'Input history is unavailable on this connection.'));
+				return;
+			}
+			this.showHistorySearch();
+			return;
+		}
+		if (event.key === 'Escape' && this.input.element.querySelector('.stanza-editor-completion:not([hidden])')) return;
+		if (event.key === 'Escape' && this.history.active) {
+			stopEvent(event);
+			const draft = this.history.restore();
+			if (draft) this.applyHistoryDraft(draft);
+			return;
+		}
+		if (!this.history.available || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+		const direction = event.key === 'ArrowUp' ? 'previous' : event.key === 'ArrowDown' ? 'next' : undefined;
+		if (!direction || this.input.element.querySelector('.stanza-editor-completion:not([hidden])')) return;
+		if (!this.history.active && !this.input.isAtHistoryBoundary(direction)) return;
+		stopEvent(event);
+		const revision = this.historyInputRevision;
+		const operation = direction === 'previous' ? this.history.previous(this.captureHistoryDraft()) : this.history.next();
+		void operation.then(result => {
+			if (!result || this.isDisposed || revision !== this.historyInputRevision) return;
+			if (result.kind === 'history') this.applyHistoryEntry(result.entry);
+			else this.applyHistoryDraft(result.draft);
+		}).catch(error => {
+			if (!this.isDisposed && revision === this.historyInputRevision) this.notifications.error(localize('chat.history.readFailed', 'Could not read input history: {0}', String(error)));
+		});
+	}
+
+	private showHistorySearch(): void {
+		this.historySearch.clear();
+		this.history.invalidatePending();
+		const draft = this.captureHistoryDraft();
+		const revision = this.historyInputRevision;
+		const resources = new DisposableStore();
+		const picker = resources.add(this.quickInput.createQuickPick<HistorySearchItem>());
+		this.historySearch.value = resources;
+		picker.placeholder = localize('chat.history.searchPlaceholder', 'Search input history. Enter restores the selected text; Escape keeps your draft.');
+		picker.ariaLabel = localize('chat.history.searchLabel', 'Search input history');
+		picker.sortByLabel = false;
+		picker.filterValue = () => '';
+		let accepted = false;
+		let closed = false;
+		let generation = 0;
+		let entries: HistorySearchItem[] = [];
+		resources.add(toDisposable(() => { closed = true; generation++; }));
+		const load = async (text: string, before?: string): Promise<void> => {
+			const token = ++generation;
+			picker.busy = true;
+			if (!before) { picker.items = []; entries = []; }
+			try {
+				const page = await this.history.search(text, before);
+				if (closed || this.isDisposed || token !== generation) return;
+				const rows: HistorySearchItem[] = page.entries.map(entry => ({
+					kind: 'entry', entry, label: entry.text.split(/\r?\n/u)[0] || entry.text,
+					detail: entry.text, description: new Date(entry.submittedAtMs).toLocaleString(),
+				}));
+				entries = before ? [...entries, ...rows] : rows;
+				picker.items = page.nextBefore ? [...entries, { kind: 'more', before: page.nextBefore, label: localize('chat.history.loadMore', 'Load more inputs') }] : entries;
+			} catch (error) {
+				if (!closed && !this.isDisposed && token === generation) this.notifications.error(localize('chat.history.readFailed', 'Could not read input history: {0}', String(error)));
+			} finally {
+				if (!closed && token === generation) picker.busy = false;
+			}
+		};
+		resources.add(picker.onDidChangeValue(text => { void load(text); }));
+		resources.add(picker.onDidAccept(item => {
+			if (item.kind === 'more') { void load(picker.value, item.before); return; }
+			if (!this.isDisposed && revision === this.historyInputRevision) {
+				accepted = true;
+				this.history.select(item.entry, draft);
+				this.applyHistoryEntry(item.entry);
+			}
+			picker.hide();
+		}));
+		resources.add(picker.onDidHide(() => {
+			if (closed) return;
+			closed = true;
+			generation++;
+			if (!this.isDisposed) {
+				if (!accepted && revision === this.historyInputRevision) this.applyHistoryDraft(draft);
+				this.focus();
+			}
+			this.historySearch.clear();
+		}));
+		picker.show();
+		void load('');
+	}
+
 	private async submit(value: string, contexts: readonly ChatContextAttachment[], operation: Promise<void>): Promise<void> {
+		void this.history.record(value, parseSlashCommandInput(value, this.slashCommands).kind === 'command' ? 'command' : 'agent').catch(error => {
+			if (!this.isDisposed) this.notifications.error(localize('chat.history.saveFailed', 'Could not save input history: {0}', String(error)));
+		});
 		this.input.value = "";
 		this.renderToolbar();
 		try {
@@ -334,7 +489,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.notifications.error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				return;
 			}
-			const skills = this.skills.referencesIn(inputValue);
+			const skills = this.draftSkills?.text === inputValue ? this.draftSkills.references : this.skills.referencesIn(inputValue);
 			const contexts = this.attachmentModel.attachments;
 			await this.submit(inputValue, contexts, this.delegate.send(inputValue, this.mode, skills.length > 0 ? skills : undefined, contexts));
 		} finally {
@@ -352,6 +507,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.visible = visible;
 		if (visible) this.input.layout();
 		if (!visible) {
+			this.history.invalidatePending();
+			this.historySearch.clear();
 			this.attachContext.clear();
 			this.onboarding.hide(this.element);
 			void this.dictationSession.cancel().catch(error => {

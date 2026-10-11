@@ -13,7 +13,6 @@ import { Button } from '../../../base/browser/ui/button/button.js';
 import type { Event } from '../../../base/common/event.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import { ActivityBarPosition, type SideBarLocation } from '../../common/configuration.js';
-import './media/paneCompositePart.css';
 
 export interface IActivityHoverOptions {
 	readonly position: () => HoverPosition;

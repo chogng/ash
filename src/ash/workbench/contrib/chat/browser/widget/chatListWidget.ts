@@ -10,7 +10,7 @@ import { ChatMarkdownDecorationsRenderer } from './chatContentParts/chatMarkdown
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common/config/fontInfo.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
-import { ChatEditorConfiguration } from '../chat.shared.contribution.js';
+import { ChatEditorConfiguration } from '../../common/constants.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
 

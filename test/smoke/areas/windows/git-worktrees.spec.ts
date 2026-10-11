@@ -34,7 +34,7 @@ test('Changes title worktree menu creates a detached checkout and protects local
 		const picker = page.locator('.ash-quick-pick');
 		await picker.getByRole('combobox').fill(checkout);
 		await workbench.dialogs.confirm(application, 'Git: Delete Worktree', 'Delete Worktree', () => picker.getByRole('combobox').press('Enter'));
-		await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('alert').filter({ hasText: 'Could not delete worktree' })).toContainText('Check local changes, locks and session ownership.');
+		await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('article').filter({ hasText: 'Could not delete worktree' })).toContainText('Check local changes, locks and session ownership.');
 		expect(await readFile(join(checkout, 'main.ts'), 'utf8')).toBe('local edits\n');
 
 		await run('git', ['restore', '--worktree', 'main.ts'], { cwd: checkout });

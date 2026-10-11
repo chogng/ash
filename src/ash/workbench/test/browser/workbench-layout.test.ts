@@ -1167,7 +1167,9 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	activitybar.setLayoutStyle('modern');
 	activitybar.setCompact(true);
 	assert.equal(activitybar.minimumWidth, 36);
+	assert.equal(compositeBar.domNode.classList.contains('compact'), true);
 	activitybar.setCompact(false);
+	assert.equal(compositeBar.domNode.classList.contains('compact'), false);
 	activitybar.setSidebarVisible(true);
 	assert.equal(activitybar.domNode.classList.contains('sidebar-open'), true);
 	activitybar.setSidebarVisible(false);

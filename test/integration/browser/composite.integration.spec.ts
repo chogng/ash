@@ -68,7 +68,7 @@ test('activity badges keep compact icons readable, center label counts and retai
 	await page.evaluate(() => window.ashCompositeIntegration.setBadgeOrientation('vertical'));
 	await expect(badge).toHaveCSS('height', '16px');
 	await expect(badge).toHaveCSS('font-size', '9px');
-	for (const compact of [false, true]) {
+	for (const compact of [false, true, false]) {
 		await page.evaluate(compact => window.ashCompositeIntegration.setBadgeCompact(compact), compact);
 		const geometry = await tab.evaluate(element => {
 			const tab = element.getBoundingClientRect();

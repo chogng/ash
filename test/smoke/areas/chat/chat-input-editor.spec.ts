@@ -1,6 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Empty chat keeps its input near the pane edges', async ({ workbench }) => {
+test('Empty chat anchors its input to the bottom pane edge', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -23,7 +23,7 @@ test('Empty chat keeps its input near the pane edges', async ({ workbench }) => 
 		const toolbarBounds = toolbar.getBoundingClientRect();
 		return {
 			listHeight: list.getBoundingClientRect().height,
-			inputTopInset: inputBounds.top - chatBounds.top,
+			inputBottomInset: chatBounds.bottom - inputBounds.bottom,
 			composerTopInset: composerBounds.top - inputBounds.top,
 			composerBottomInset: inputBounds.bottom - composerBounds.bottom,
 			composerLeftInset: composerBounds.left - inputBounds.left,
@@ -41,12 +41,12 @@ test('Empty chat keeps its input near the pane edges', async ({ workbench }) => 
 	});
 	expect(layout).toEqual({
 		listHeight: 0,
-		inputTopInset: 0,
+		inputBottomInset: 0,
 		composerTopInset: 4,
 		composerBottomInset: 4,
 		composerLeftInset: 12,
 		composerRightInset: 12,
-		composerHeight: 144,
+		composerHeight: 84,
 		editorTopInset: 9,
 		editorLeftInset: 9,
 		editorRightInset: 9,
@@ -355,7 +355,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		const composer = chat.locator('.ash-chat-input-container');
 		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
-		await expect(composer).toHaveCSS('height', '144px');
+		await expect(composer).toHaveCSS('height', '84px');
 		const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.insertText('Keep this draft');
@@ -386,7 +386,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).not.toContainText('Could not read dictation model package');
 		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
-		await expect(composer).toHaveCSS('height', '144px');
+		await expect(composer).toHaveCSS('height', '84px');
 		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this draft');
 		await button.focus();
 		await workbench.quickaccess.runCommand('workbench.action.chat.dictation.showIntroduction');
@@ -404,7 +404,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 	}
 });
 
-test('Chat input resizes with wrapped text and retains keyboard focus', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Chat input grows upward with wrapped text and retains keyboard focus', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -414,22 +414,31 @@ test('Chat input resizes with wrapped text and retains keyboard focus', { tag: [
 	const input = editor.locator('.stanza-editor-input');
 	await expect(editor).toBeVisible();
 	await expect(editor.locator('.stanza-editor-completion')).toHaveCount(1);
+	const composer = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-input-container');
+	const initialBounds = await composer.boundingBox();
+	expect(initialBounds).not.toBeNull();
 	await host.evaluate(element => element.style.width = '180px');
 	await input.focus();
 	await page.keyboard.insertText('word '.repeat(80));
 	await expect(editor).toHaveCSS('height', '314px');
 	await expect(input).toBeFocused();
+	const expandedBounds = await composer.boundingBox();
+	expect(expandedBounds).not.toBeNull();
+	expect(expandedBounds!.y).toBeLessThan(initialBounds!.y);
+	expect(expandedBounds!.y + expandedBounds!.height).toBeCloseTo(initialBounds!.y + initialBounds!.height, 0);
 
 	await host.evaluate(element => element.style.width = '1000px');
-	await expect(editor).toHaveCSS('height', '100px');
+	await expect.poll(() => editor.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(314);
 	await expect(input).toBeFocused();
 
 	await host.evaluate(element => element.style.width = '180px');
 	await expect(editor).toHaveCSS('height', '314px');
 	await page.keyboard.press('ControlOrMeta+A');
 	await page.keyboard.press('Backspace');
-	await expect(editor).toHaveCSS('height', '100px');
+	await expect(editor).toHaveCSS('height', '40px');
 	await expect(input).toBeFocused();
+	const restoredBounds = await composer.boundingBox();
+	expect(restoredBounds).toEqual(initialBounds);
 });
 
 test('Chat input explicitly opens slash suggestions from the keyboard', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {

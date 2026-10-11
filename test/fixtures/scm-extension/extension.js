@@ -8,6 +8,15 @@ export function activate(context) {
 	const changes = new EventEmitter();
 	context.subscriptions.push(changes);
 	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.refresh', () => provider.refresh()));
+	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.openBinaryDiff', () => editors.request({
+		method: 'open', input: {
+			kind: 'multiDiff', resource: 'comparison:/independent/binary', label: 'Independent binary comparison', items: [{
+				label: 'image.bin', binary: true,
+				original: { resource: 'snapshot:/independent/before', contentType: 'application/octet-stream', initialBytes: [0, 255, 1] },
+				modified: { resource: 'snapshot:/independent/after', contentType: 'application/octet-stream', initialBytes: [0, 254, 2] },
+			}],
+		},
+	})));
 	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.activate', () => {
 		if (provider) { scm.selectRepository(provider.id); return; }
 		const root = workspace.workspaceFolders[0].uri;

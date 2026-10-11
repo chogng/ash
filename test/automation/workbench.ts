@@ -31,7 +31,7 @@ export class Workbench {
 		this.dialogs = new Dialogs(page);
 		this.search = new Search(page);
 		this.menus = new Menus(page);
-		this.git = new Git(page, this.menus);
+		this.git = new Git(page, this.menus, this.settingsEditor);
 	}
 
 	async waitForReady(): Promise<void> {

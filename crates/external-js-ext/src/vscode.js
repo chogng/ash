@@ -1205,6 +1205,7 @@ export function createApi(configuration, initialization) {
 	}
 	const scmBridge = createSCMApi(ashRuntime, request, invoke, promise => serviceOwner()?.push(promise), async (operation, resultKind) => {
 		// Provider state belongs to the incarnation, even when a short-lived read callback triggers it.
+		if (typeof globalThis.__ashBackgroundRequest !== 'function') return request(operation, resultKind);
 		const result = JSON.parse(await globalThis.__ashBackgroundRequest(JSON.stringify(operation)));
 		if (result.result !== resultKind) throw new Error(`Invalid result for ${operation.operation}`);
 		return result;

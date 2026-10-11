@@ -3,7 +3,7 @@
 	box-sizing: border-box;
 	width: 100%;
 	min-width: 0;
-	min-height: 100px;
+	min-height: 40px;
 	overflow: visible;
 	--ash-editor-background: var(--ash-input-background);
 }

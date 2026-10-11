@@ -12,7 +12,7 @@ import { IChatEditingService, type IModifiedFileEntry, type IModifiedFileEntryCh
 import { ChatEditingModifiedDocumentEntry } from './chatEditingModifiedDocumentEntry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ChatEditSource, ChatEditOutcome } from '../../../../services/chat/common/chatService.js';
-import { autoAcceptDelaySetting } from '../chat.shared.contribution.js';
+import { autoAcceptDelaySetting } from '../../common/constants.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 interface AutoAcceptReview {

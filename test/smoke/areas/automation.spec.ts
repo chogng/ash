@@ -268,8 +268,8 @@ test('Electron window waits report a locked desktop instead of a focus timeout',
 
 test('a pending Dock request does not block the first desktop window', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ }, testInfo) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-dock-'));
-	const desktopDirectory = resolve(import.meta.dirname, '../../..');
-	// Launch from the repository root so Electron resolves the app resources.
+	const desktopDirectory = process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve(import.meta.dirname, '../../..');
+	// The injected entry uses the prepared application's resources, including artifact snapshots.
 	const entry = join(desktopDirectory, `.ash-test-dock-${randomUUID()}.cjs`);
 	const launch = _electron.launch;
 	try {

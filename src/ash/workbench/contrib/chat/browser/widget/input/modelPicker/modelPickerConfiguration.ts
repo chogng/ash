@@ -14,7 +14,7 @@ import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import { getModelConfigSummary, modelPickerEffortOptions } from './modelPickerModelConfig.js';
-import './modelPicker.css';
+import './media/modelPicker.css';
 
 let nextConfigurationId = 0;
 

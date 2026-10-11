@@ -47,6 +47,8 @@ pub enum AppServerErrorName {
     MemoryDiagnosticsStopped,
     MemoryDiagnosticsStale,
     MemoryUnavailable,
+    MessageHistoryUnavailable,
+    MessageHistoryOperationFailed,
     ApprovalEnvironmentUnavailable,
     ApprovalEnvironmentConflict,
     ApprovalEnvironmentOperationFailed,

@@ -32,6 +32,7 @@ test('External Git init and ref changes update status and history without a manu
 	await expect(branch).toContainText('main');
 	await run('git', ['add', '.'], { cwd });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash@example.invalid', 'commit', '-m', 'External baseline'], { cwd });
+	await new Workbench(page).git.setHistoryBadges('All references');
 	const history = await openHistoryGraph(page);
 	await expect(history.getByRole('treeitem', { name: /External baseline/ }).first()).toBeVisible();
 	await run('git', ['branch', 'external-topic'], { cwd });
@@ -114,6 +115,7 @@ test('External nested repository creation and deletion update Repositories, Chan
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('nested');
 	await expect(list.getByRole('option', { name: /external-nested, nested,/u })).toHaveAttribute('aria-selected', 'true');
 	await expect(page.locator('.ash-scm').getByRole('button', { name: 'Open Changes for nested-change.ts', exact: true })).toBeVisible();
+	await new Workbench(page).git.setHistoryBadges('All references');
 	const history = await openHistoryGraph(page);
 	await expect(history.getByRole('treeitem', { name: /Nested repository baseline/u })).toBeVisible();
 	await expect(history.getByRole('treeitem', { name: /Primary repository baseline/u })).toHaveCount(0);
@@ -153,6 +155,7 @@ test('External Git refs refresh two Workbench windows sharing the backend', { ta
 		await new Workbench(second).waitForReady();
 		const histories: Locator[] = [];
 		for (const page of [workbench.page, second]) {
+			await new Workbench(page).git.setHistoryBadges('All references');
 			const history = await openHistoryGraph(page);
 			histories.push(history);
 			await expect(history.getByRole('treeitem', { name: /Shared baseline/ }).first()).toBeVisible();

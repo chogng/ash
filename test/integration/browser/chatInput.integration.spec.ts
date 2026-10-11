@@ -1,5 +1,27 @@
 import { expect, test } from '@playwright/test';
 
+test('Chat textarea fallback starts compact and resizes with multiline content without losing focus', async ({ page }) => {
+	await page.goto('/chatInput.html');
+	const composer = page.locator('.ash-chat-input-container');
+	const input = composer.locator('.ash-chat-textarea-input');
+	await expect(composer).toHaveCSS('height', '84px');
+	await input.focus();
+	await page.keyboard.insertText('First line\nSecond line');
+	await expect(input).toHaveCSS('height', '40px');
+	await page.keyboard.press('Shift+Enter');
+	await page.keyboard.insertText('Third line');
+	await expect(input).toHaveCSS('height', '60px');
+	await expect(composer).toHaveCSS('height', '104px');
+	await expect(input).toBeFocused();
+	await page.keyboard.insertText('\n' + Array.from({ length: 50 }, (_, index) => `Line ${index}`).join('\n'));
+	await expect(input).toHaveCSS('height', '314px');
+	await expect(input).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.press('Backspace');
+	await expect(composer).toHaveCSS('height', '84px');
+	await expect(input).toBeFocused();
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`model and mode menus share primary option typography in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?locale=${locale}`);

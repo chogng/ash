@@ -39,6 +39,7 @@ pub mod language;
 pub mod mcp;
 pub mod memory;
 pub mod memory_diagnostics;
+pub mod message_history;
 pub mod model;
 pub mod notification;
 pub mod plugins;

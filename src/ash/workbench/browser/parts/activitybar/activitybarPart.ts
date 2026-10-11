@@ -78,6 +78,7 @@ export class ActivitybarPart extends Part {
 		if (this.compact === compact) return;
 		this.compact = compact;
 		this.domNode.classList.toggle('compact', compact);
+		this.compositeBar.setDensity(compact ? 'compact' : 'default');
 		this.notifyConstraintsChanged();
 	}
 
@@ -99,6 +100,7 @@ export class ActivitybarPart extends Part {
 
 	private applyPosition(): void {
 		this.domNode.classList.toggle('compact', this.compact);
+		this.compositeBar.setDensity(this.compact ? 'compact' : 'default');
 		this.domNode.classList.toggle('sidebar-right', this.sideBarLocation === 'right');
 		this.compositeBar.setOrientation('vertical');
 	}

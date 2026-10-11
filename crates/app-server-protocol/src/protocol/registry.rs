@@ -149,6 +149,16 @@ use crate::protocol::extension_packages::ExtensionsSourcesResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::{ExtensionRegistryKindDto, ExtensionsSourceDto};
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::message_history::MessageHistoryAppendParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::message_history::MessageHistoryEntry;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::message_history::MessageHistoryKind;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::message_history::MessageHistoryPage;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::message_history::MessageHistoryReadParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::symphony::SymphonyConfigureParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::symphony::SymphonyControlParams;
@@ -3173,6 +3183,15 @@ client_methods! {
     SymphonyControl => "symphony/control" { params: SymphonyControlParams, response: (), serialization: None, },
     SymphonyEnable => "symphony/enable" { params: SymphonyEnableParams, response: (), serialization: None, },
     SymphonyMessages => "symphony/messages" { params: SymphonyMessagesParams, response: SymphonyMessages, serialization: None, },
+    MessageHistoryAppend => "messageHistory/append" {
+        params: MessageHistoryAppendParams, response: MessageHistoryEntry, serialization: GlobalExclusive,
+    },
+    MessageHistoryRead => "messageHistory/read" {
+        params: MessageHistoryReadParams, response: MessageHistoryPage, serialization: GlobalSharedRead,
+    },
+    MessageHistoryClear => "messageHistory/clear" {
+        params: EmptyParams, response: (), serialization: GlobalExclusive,
+    },
     AutomationList => "automation/list" {
         params: EmptyParams, response: AutomationListResult, serialization: None,
     },
@@ -6261,6 +6280,11 @@ typescript_bindings! {
     MemoryTrend,
     MemoryTargetReport,
     MemoryReport,
+    MessageHistoryKind,
+    MessageHistoryAppendParams,
+    MessageHistoryEntry,
+    MessageHistoryReadParams,
+    MessageHistoryPage,
     AutomationListResult,
     AutomationWriteParams,
     AutomationDeleteParams,

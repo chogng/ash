@@ -1,3 +1,7 @@
+import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { QuickInputController } from '../../../src/ash/platform/quickinput/browser/quickInputController.js';
+import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/dictation/editorDictation.js';
 import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';

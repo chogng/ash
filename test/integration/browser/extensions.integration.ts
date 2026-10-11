@@ -3,7 +3,12 @@ import { IGlobalExtensionEnablementService } from '../../../src/ash/platform/ext
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { ExtensionsEditor } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsEditor.js';
+import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { ExtensionsInput, ExtensionsCapabilityInput } from '../../../src/ash/workbench/contrib/extensions/common/extensionsInput.js';
+import { IExtensionApi, type ExtensionResourceRequest } from '../../../src/ash/platform/extensions/common/extensionApi.js';
+import { createBrowserExtensionApi, withBuiltInExtensions } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -99,6 +104,26 @@ const extensionSummary = { ...summary, id: 'publisher.sample@open-vsx', packageT
 const extensionReference = { ...reference, id: extensionSummary.id };
 const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
 const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
+const galleryOnly = new URLSearchParams(location.search).has('gallery');
+const extensionManifest = { publisher: 'Fixture publisher', name: 'sample', icon: 'icon.svg', categories: ['Programming Languages'], homepage: 'https://example.invalid/tools' };
+let heldReadme: ((text: string) => void) | undefined;
+let holdReadme = false;
+const fixtureReadme = '# Sample editor extension\n\nTools for working with your project.\n\n## Features\n\n- Inspect and review workspace files\n- Keep your tools in the editor\n\n## Getting started\n\nInstall the extension and review its requested permissions.\n\n[Homepage](https://example.invalid/tools)\n' + (new URLSearchParams(location.search).has('unsafeReadme') ? '\n[Unsafe](command:fixture.unsafe)\n\n<script>window.fixtureUnsafe = true</script>\n' : '');
+const readPackageResource = async (request: ExtensionResourceRequest): Promise<Uint8Array> => {
+	requests.push(['extensionResource', request]);
+	if (request.path === 'package.json') { return new TextEncoder().encode(JSON.stringify(extensionManifest)); }
+	if (request.path === 'README.md') { if (holdReadme) { holdReadme = false; return new TextEncoder().encode(await new Promise<string>(resolve => { heldReadme = resolve; })); } return new TextEncoder().encode(fixtureReadme); }
+	if (request.path === 'icon.svg') { return new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="8" fill="#3355aa"/><path d="m32 40 32-16 32 16v48L64 104 32 88Z" fill="none" stroke="white" stroke-width="8"/></svg>'); }
+	throw new Error('Package resource is missing');
+};
+services.registerInstance(IExtensionApi, withBuiltInExtensions({
+	list: async () => ({ generation: 1, diagnostics: [], extensions: galleryOnly ? [] : [{ id: 'publisher.sample', name: 'sample', publisher: 'Fixture publisher', version: '1.0.0', displayName: extensionSummary.displayName, sourceKind: 'registry', manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(extensionManifest) }] }),
+	resources: new ExtensionResourceLoaderService(readPackageResource, galleryOnly ? {
+		template: async () => 'https://registry.invalid/api/{publisher}/{name}/{version}/file/{path}',
+		read: async request => { requests.push(['galleryResource', request]); return readPackageResource({ generation: 1, extensionId: `${request.publisher}.${request.name}`, path: request.path }); },
+	} : undefined),
+}, createBrowserExtensionApi()));
+services.registerInstance(IOpenerService, { open: async (href, options) => { requests.push(['openLink', String(href), options]); return true; } } as IOpenerService);
 let editorPolicyRevision = 1;
 let editorEntrypoint: string | null = 'dist/extension.js';
 const editorPolicies = new Map<string, { enabled: boolean; granted: boolean; }>();
@@ -245,7 +270,7 @@ services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ ge
 const themeName = new URLSearchParams(location.search).get('theme');
 const themeService = disposables.add(new TestThemeService(themeName === 'light' ? lightColorTheme : themeName === 'hc' ? highContrastDarkColorTheme : darkColorTheme));
 services.registerInstance(IThemeService, themeService);
-if (themeName) { disposables.add(bindColorTheme(themeService, document.body)); }
+disposables.add(bindColorTheme(themeService, document.body));
 services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
 services.registerInstance(IGlobalExtensionEnablementService, disposables.add(services.createInstance(GlobalExtensionEnablementService)));
 let pane: ExtensionsEditor | undefined;
@@ -256,7 +281,14 @@ services.registerInstance(IEditorService, {
 	openEditor: async input => {
 		if (!(input instanceof ExtensionsInput) && !(input instanceof ExtensionsCapabilityInput)) { requests.push(['document', input]); return; }
 		disposables.add(input); editorAbort.abort(); editorAbort = new AbortController();
-		if (!pane) { pane = services.createInstance(ExtensionsEditor); pane.create(document.getElementById('details')!); }
+		const descriptor = EditorPanes.getEditorPane(input);
+		if (!descriptor || descriptor.id !== 'ash.extensions.editor') { throw new Error('Details must resolve to the registered Extensions editor'); }
+		requests.push(['editorPane', descriptor.id]);
+		if (!pane) {
+			const editor = await descriptor.create({ input, instantiationService: services });
+			if (!(editor instanceof ExtensionsEditor)) { throw new Error('Incorrect Extensions editor implementation'); }
+			pane = editor; pane.create(document.getElementById('details')!);
+		}
 		await pane.setInput(input, editorAbort.signal);
 	},
 } as IEditorService);
@@ -278,7 +310,7 @@ services.registerInstance(IAgentCapabilitiesService, {
 const host = document.getElementById('extensions')!;
 const paneLayout = new URLSearchParams(location.search).has('paneLayout');
 const previewHeight = new URLSearchParams(location.search).has('preview') ? 780 : 650;
-if (new URLSearchParams(location.search).has('preview')) { document.getElementById('lsp')!.hidden = true; document.getElementById('details')!.style.width = '720px'; }
+if (new URLSearchParams(location.search).has('preview')) { document.getElementById('lsp')!.hidden = true; document.getElementById('details')!.style.width = '850px'; document.getElementById('details')!.style.height = `${previewHeight}px`; }
 host.style.width = paneLayout ? '280px' : '360px'; host.style.height = paneLayout ? '260px' : `${previewHeight}px`;
 const panes = disposables.add(new PaneView(host));
 const extensionManagement = disposables.add(services.createInstance(ExtensionsViewPane, host, { id: 'ash.extensions.view', title: 'Extensions' }));
@@ -313,6 +345,10 @@ window.ashExtensionsIntegration = {
 	removeEditorEntrypoint: () => { editorEntrypoint = null; },
 	localPackages: () => structuredClone(localPackages),
 	open: options => extensionManagement.open(options),
+	openEditorExtension: () => services.get(IEditorService).openEditor(new ExtensionsInput(extensionSummary)),
+	holdReadme: () => { holdReadme = true; },
+	readmeStarted: () => !!heldReadme,
+	completeReadme: () => { heldReadme?.('# Retired README'); },
 	holdInstructions: () => { holdInstructions = true; },
 	instructionsStarted: () => !!instructionSignal,
 	instructionsAborted: () => !!instructionSignal?.aborted,
@@ -332,6 +368,6 @@ window.ashExtensionsIntegration = {
 };
 declare global {
 	interface Window {
-		ashExtensionsIntegration: { setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

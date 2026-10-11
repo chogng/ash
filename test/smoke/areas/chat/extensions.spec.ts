@@ -12,6 +12,23 @@ test.beforeEach(async ({ workbench }) => {
 });
 
 for (const window of ['Code', 'Agents']) {
+	test(`Built-in extension details open in the registered Editor in ${window}`, async ({ target, workbench }) => {
+		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+		await new QuickAccess(page).runCommand(window === 'Code' ? 'ash.extensions.open' : 'workbench.action.chat.configure.skills');
+		const extensions = page.locator('[data-view-id="ash.extensions.view"]');
+		await extensions.getByRole('button', { name: 'Built-in', exact: true }).click();
+		await extensions.getByRole('option').filter({ hasText: 'vscode.markdown-language-features' }).click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.locator('.extension-detail-header h1')).toBeVisible();
+		await expect(editor.getByRole('tab', { name: 'Details', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await expect(editor.getByRole('complementary', { name: 'Additional information', exact: true })).toContainText('vscode.markdown-language-features');
+		await editor.getByRole('tab', { name: 'Features', exact: true }).click();
+		await expect(editor.getByRole('tabpanel', { name: 'Features', exact: true })).toContainText('commands');
+		await expect(page.locator('.ash-settings-editor')).toHaveCount(0);
+	});
+}
+
+for (const window of ['Code', 'Agents']) {
 	test(`Skills command opens a readonly SKILL.md snapshot from the shared backend in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');

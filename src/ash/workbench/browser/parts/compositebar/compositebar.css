@@ -291,3 +291,79 @@
 .ash-composite-bar-item.ash-dnd-drop-after::before {
 	right: -2px;
 }
+
+.ash-composite-bar .ash-composite-bar-badge {
+	display: block;
+	font-variant-numeric: normal;
+	text-align: center;
+}
+
+.ash-composite-bar-label .ash-composite-bar-badge {
+	align-self: center;
+	margin-left: 2px;
+	min-width: 16px;
+	height: 16px;
+	padding: 3px 5px;
+	border-radius: 10px;
+	font-size: 10px;
+	font-weight: 400;
+	line-height: 10px;
+}
+
+/* The badge's 17px top offset is measured from a 35px icon item. */
+.ash-composite-bar-horizontal.ash-composite-bar-icon
+	> .ash-action-bar
+	> .ash-composite-bar-item {
+	height: 35px;
+	min-height: 35px;
+}
+
+.ash-composite-bar-horizontal.ash-composite-bar-icon .ash-composite-bar-badge {
+	top: 17px;
+	right: 0;
+	bottom: auto;
+	min-width: 13px;
+	height: 13px;
+	padding: 0 2px;
+	border-radius: 16px;
+	font-size: 9px;
+	font-weight: 600;
+	line-height: 13px;
+}
+
+.ash-composite-bar-horizontal.ash-composite-bar-icon
+	.ash-composite-bar-badge.long-count {
+	padding: 0 3px;
+	font-size: 8px;
+}
+
+.ash-composite-bar-vertical.ash-composite-bar-icon .ash-composite-bar-badge {
+	top: 24px;
+	right: 8px;
+	bottom: auto;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: 20px;
+	font-size: 9px;
+	font-weight: 600;
+	line-height: 16px;
+}
+
+.ash-composite-bar-vertical.ash-composite-bar-icon.compact
+	> .ash-action-bar
+	> .ash-composite-bar-item {
+	height: 28px;
+	min-height: 28px;
+}
+
+.ash-composite-bar-vertical.ash-composite-bar-icon.compact
+	.ash-composite-bar-badge {
+	top: 13px;
+	right: 6px;
+	min-width: 13px;
+	height: 13px;
+	padding: 0 2px;
+	border-radius: 13px;
+	line-height: 13px;
+}

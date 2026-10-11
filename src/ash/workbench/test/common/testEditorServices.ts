@@ -1,3 +1,7 @@
+import { IMessageHistoryService } from '../../../platform/messageHistory/common/messageHistory.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { WorkbenchQuickInputService } from '../../services/quickinput/browser/quickInputService.js';
+import '../../contrib/chat/browser/chat.shared.contribution.js';
 import { WorkbenchConfigurationService } from '../../services/configuration/browser/configurationService.js';
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
@@ -159,6 +163,8 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	services.registerSingleton(IWorkspaceContextService, () => new WorkspaceContextService({ id: 'test-editor', folders: [] }));
 	if (!services.has(IFilesConfigurationService)) services.registerSingleton(IFilesConfigurationService, () => services.createInstance(FilesConfigurationService));
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
+	if (!services.has(IMessageHistoryService)) services.registerInstance(IMessageHistoryService, undefined);
+	if (!services.has(IQuickInputService)) services.registerSingleton(IQuickInputService, () => new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) }));
 	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));

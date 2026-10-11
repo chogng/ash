@@ -144,6 +144,7 @@ mod memories_context;
 mod memories_operations;
 mod memory_operations;
 mod message_checkpoints;
+mod message_history_operations;
 pub(crate) mod message_queue;
 mod network_operations;
 pub(crate) mod notification_queue;
@@ -322,6 +323,7 @@ pub struct AppServer {
     teams: Option<Arc<ash_teams::TeamCoordinator>>,
     team_memberships: Arc<OnceLock<Arc<ash_teams::TeamCoordinator>>>,
     automation: Option<Arc<ash_automation::AutomationStore>>,
+    message_history: Option<Arc<dyn message_history::MessageHistoryStore>>,
     symphony: Option<Arc<ash_symphony::Store>>,
     symphony_http: Option<Arc<dyn ash_http_client::HttpClient>>,
     pub(crate) updates: Arc<UpdateBroker>,
@@ -730,6 +732,7 @@ impl AppServer {
             teams: None,
             team_memberships: Arc::new(OnceLock::new()),
             automation: None,
+            message_history: None,
             symphony: None,
             symphony_http: None,
             updates,
@@ -2595,6 +2598,13 @@ impl AppServer {
             Some(ClientMethod::SymphonyControl) => self.symphony_control(&request.params),
             Some(ClientMethod::SymphonyEnable) => self.symphony_enable(&request.params),
             Some(ClientMethod::SymphonyMessages) => self.symphony_messages(&request.params),
+            Some(ClientMethod::MessageHistoryAppend) => {
+                self.message_history_append(connection, &request.params)
+            }
+            Some(ClientMethod::MessageHistoryRead) => {
+                self.message_history_read(connection, &request.params)
+            }
+            Some(ClientMethod::MessageHistoryClear) => self.message_history_clear(connection),
             Some(ClientMethod::AutomationList) => self.automation_list(),
             Some(ClientMethod::AutomationWrite) => self.automation_write(&request.params),
             Some(ClientMethod::AutomationDelete) => self.automation_delete(&request.params),

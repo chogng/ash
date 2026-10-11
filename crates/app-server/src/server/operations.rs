@@ -464,6 +464,12 @@ impl AppServer {
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
         }
+        if self.message_history.is_some() {
+            capabilities.contracts.insert(
+                "messageHistory".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         if self.automation.is_some() {
             capabilities.contracts.insert(
                 "automation".into(),

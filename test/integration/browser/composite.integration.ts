@@ -264,8 +264,7 @@ window.ashCompositeIntegration = {
 	},
 	setBadgeCompact: compact => {
 		const host = badgeBars[0]!.domNode.parentElement!;
-		host.classList.add('ash-activity-bar-content');
-		host.classList.toggle('compact', compact);
+		badgeBars[0]!.setDensity(compact ? 'compact' : 'default');
 		host.style.width = compact ? '36px' : '48px';
 	},
 	toggleBadge: () => { badgeBars[0]!.toggleBadgeEnablement('first'); },

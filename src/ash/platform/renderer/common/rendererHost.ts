@@ -1,3 +1,4 @@
+import type { IMessageHistoryService } from '../../messageHistory/common/messageHistory.js';
 import type { IExtensionBackendApi } from '../../agentHost/common/extensionBackendApi.js';
 import type { ISymphonyBackend } from '../../symphony/common/symphonyService.js';
 import type { IInstructionService } from '../../instructions/common/instructionService.js';
@@ -82,6 +83,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly calls?: ICallService;
 	readonly dictation?: IDictationService;
 	readonly automation?: IAutomationService;
+	readonly messageHistory?: IMessageHistoryService;
 	readonly symphony?: ISymphonyBackend;
 	readonly memoryDiagnostics?: IMemoryDiagnosticsService;
 	readonly memories?: IMemoriesService;

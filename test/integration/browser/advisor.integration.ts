@@ -1,3 +1,4 @@
+import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';

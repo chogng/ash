@@ -1,3 +1,5 @@
+import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
+import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IInstructionService } from '../../../src/ash/platform/instructions/common/instructionService.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
@@ -85,6 +87,7 @@ if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	resources.add(addDisposableListener(main, EventType.Tap, event => { stopEvent(event); document.querySelector('output')!.textContent = 'Ancestor tap'; }));
 }
 const services = resources.add(new InstantiationService());
+services.registerInstance(IMessageHistoryService, undefined);
 const destinations = document.createElement('output');
 destinations.setAttribute('aria-label', 'Opened sources');
 destinations.textContent = '[]';

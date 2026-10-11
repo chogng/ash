@@ -1,10 +1,20 @@
 import { expect, type Page } from '@playwright/test';
 import type { PlaywrightApplication } from './playwrightDriver.js';
 import type { Menus } from './menus.js';
+import type { SettingsEditor } from './settings.js';
 
 /** Drives the Changes title through its rendered toolbar and actual menu dispatch. */
 export class Git {
-	constructor(private readonly page: Page, private readonly menus: Menus) { }
+	constructor(private readonly page: Page, private readonly menus: Menus, private readonly settings: SettingsEditor) { }
+
+	async setHistoryBadges(value: 'All references' | 'Filtered references'): Promise<void> {
+		await this.settings.openUserSettingsUI();
+		const settings = this.settings.element;
+		await settings.getByRole('searchbox').fill('scm.graph.badges');
+		await settings.locator('[data-settings-item-id="scm.graph.badges"]').getByRole('combobox').click();
+		await this.page.getByRole('option', { name: value, exact: true }).click();
+		await settings.locator('.ash-modal-editor-close').click();
+	}
 
 	async open(): Promise<void> {
 		const tab = this.page.getByRole('tab', { name: /^Source Control(?:,|$)/u });

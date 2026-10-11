@@ -17,6 +17,9 @@ mod checkpoint_live_tests;
 #[path = "memories_live_tests.rs"]
 mod memories_live_tests;
 
+#[path = "message_history_tests.rs"]
+mod message_history_tests;
+
 #[path = "automation_tests.rs"]
 mod automation_tests;
 #[path = "backup_tests.rs"]

@@ -38,6 +38,7 @@
 	box-sizing: border-box;
 	min-height: 0;
 	flex: 0 0 auto;
+	margin-top: auto;
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
 }
 
@@ -130,7 +131,7 @@
 	container-type: inline-size;
 	flex: 0 0 auto;
 	flex-direction: column;
-	min-height: var(--ash-chat-input-min-height, 140px);
+	min-height: var(--ash-chat-input-min-height, 80px);
 	padding: var(--ash-chat-input-padding, var(--ash-spacing-size80));
 	border: var(--ash-strokeThickness) solid
 		var(--ash-chat-input-border, var(--ash-input-border));
@@ -220,10 +221,11 @@
 }
 
 .ash-chat-textarea-input {
+	display: block;
 	box-sizing: border-box;
 	width: 100%;
-	min-height: 106px;
-	resize: vertical;
+	min-height: 40px;
+	resize: none;
 	padding: 0;
 	border: 0;
 	border-radius: 0;
@@ -231,6 +233,7 @@
 	color: var(--ash-input-foreground);
 	background: transparent;
 	font: inherit;
+	line-height: 20px;
 }
 
 .ash-chat-input-toolbars {

@@ -203,6 +203,14 @@ export class CompositeBar extends Disposable {
 		this.render();
 	}
 
+	public setDensity(density: 'default' | 'compact'): void {
+		this.assertNotDisposed();
+		const compact = density === 'compact';
+		if (this.domNode.classList.contains('compact') === compact) { return; }
+		this.domNode.classList.toggle('compact', compact);
+		this.render();
+	}
+
 	setOrientation(orientation: ActionBarOrientation): void {
 		if (this.orientation === orientation) return;
 		this.orientation = orientation;

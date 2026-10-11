@@ -1,3 +1,4 @@
+import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';

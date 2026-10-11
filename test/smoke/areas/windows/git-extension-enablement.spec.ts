@@ -74,6 +74,13 @@ test.describe('Git extension enablement in the full product', () => {
 			await workbench.page.keyboard.insertText('kept without Git');
 			await changes.getByRole('button', { name: 'Record', exact: true }).click();
 			await expect(changes).toContainText('Recorded: kept without Git');
+			await workbench.quickaccess.runCommand('ash.scm.fixture.openBinaryDiff');
+			const binary = group.content.locator('.ash-binary-editor-content:visible');
+			await expect(binary).toHaveCount(2);
+			await expect(binary.nth(0)).toContainText('00 ff 01');
+			await expect(binary.nth(1)).toContainText('00 fe 02');
+			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 3;\n');
+			await group.tabs.filter({ hasText: 'Independent comparison' }).click();
 			await workbench.page.screenshot({ path: testInfo.outputPath('git-disabled-independent-scm.png') });
 			await reload();
 			await workbench.git.open();

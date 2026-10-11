@@ -1,3 +1,5 @@
+import { registerChatActions } from './actions/chatActions.js';
+import './chat.shared.contribution.js';
 import './aiCustomization/aiCustomizationManagement.contribution.js';
 import { registerHookActions } from './promptSyntax/hookActions.js';
 import './actions/chatSpeechToTextActions.js';
@@ -14,6 +16,7 @@ import { DictationOnboardingService, IDictationOnboardingService } from './speec
 
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
+registerChatActions();
 registerSkillActions();
 registerHookActions();
 

@@ -10,7 +10,8 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
 import type { ChatHookRun, ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
-import { ChatEditorConfiguration, ChatInputConfiguration } from '../../browser/chat.shared.contribution.js';
+import '../../browser/chat.shared.contribution.js';
+import { ChatEditorConfiguration, ChatInputConfiguration } from '../../common/constants.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 
 const document = browserEnvironment.window.document;

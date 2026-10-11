@@ -1,3 +1,6 @@
+import { IMessageHistoryService } from '../../../../../platform/messageHistory/common/messageHistory.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { registerTestDictationOnboarding } from '../../../../test/common/testDictationServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ChatSpeechToTextService, ChatSpeechToTextState, IChatSpeechToTextService } from '../../browser/speechToText/chatSpeechToTextService.js';
@@ -59,6 +62,8 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 		registerTestDictationOnboarding(services);
 	}
 	const partServices = inputResources.add(services.createChild());
+	if (!partServices.has(IMessageHistoryService)) partServices.registerInstance(IMessageHistoryService, undefined);
+	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
 	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	partServices.registerInstance(ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService);
 	partServices.registerInstance(INotificationService, notifications);

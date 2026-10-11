@@ -2,20 +2,10 @@ import type { ElectronApplication } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import type { Workbench } from '../../../automation/workbench.js';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
-
-async function setHistoryBadges(workbench: Workbench, value: 'All references' | 'Filtered references'): Promise<void> {
-	await workbench.settingsEditor.openUserSettingsUI();
-	const settings = workbench.settingsEditor.element;
-	await settings.getByRole('searchbox').fill('scm.graph.badges');
-	await settings.locator('[data-settings-item-id="scm.graph.badges"]').getByRole('combobox').click();
-	await workbench.page.getByRole('option', { name: value, exact: true }).click();
-	await settings.locator('.ash-modal-editor-close').click();
-}
 
 
 test.use({ gitRepository: true });
@@ -332,7 +322,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await settings.locator('.ash-modal-editor-close').click();
 	}
-	await setHistoryBadges(workbench, 'All references');
+	await workbench.git.setHistoryBadges('All references');
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history).toBeVisible();
@@ -458,7 +448,7 @@ test('SCM history opens committed contents, copies host metadata and restores lo
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await settings.locator('.ash-modal-editor-close').click();
 	}
-	await setHistoryBadges(workbench, 'All references');
+	await workbench.git.setHistoryBadges('All references');
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	const header = history.locator('.ash-pane-view-header');
@@ -603,7 +593,7 @@ test('SCM history references and actions overlay long titles without changing ro
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await settings.locator('.ash-modal-editor-close').click();
 	}
-	await setHistoryBadges(workbench, 'All references');
+	await workbench.git.setHistoryBadges('All references');
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	const header = history.locator('.ash-pane-view-header');
@@ -1189,7 +1179,7 @@ test('SCM history reference menus act on their badge and the graph picker follow
 	await root.press('Alt+ArrowDown');
 	await expect(page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') })).toContainText('release-review');
 	await page.keyboard.press('Escape');
-	await setHistoryBadges(workbench, 'All references');
+	await workbench.git.setHistoryBadges('All references');
 	const tag = root.getByRole('button', { name: 'release-review', exact: true });
 	await expect(tag).toBeVisible();
 	await tag.focus();

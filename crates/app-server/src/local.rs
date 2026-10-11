@@ -793,6 +793,7 @@ pub struct LocalProfileRuntime {
     analytics: Arc<analytics::Analytics>,
     queue: Arc<queue::QueueStore>,
     automation: Arc<ash_automation::AutomationStore>,
+    message_history: Arc<ash_state::SqliteMessageHistory>,
     symphony: Arc<ash_symphony::Store>,
     profile_root: PathBuf,
     state: Arc<ash_state::StateRuntime>,
@@ -924,6 +925,13 @@ impl LocalProfileRuntime {
             telemetry,
             analytics: Arc::new(analytics::Analytics::default()),
             profile_root,
+            message_history: Arc::new(
+                ash_state::SqliteMessageHistory::open(
+                    &database_path,
+                    message_history::MessageHistoryRetention::default(),
+                )
+                .map_err(open_error)?,
+            ),
             automation: Arc::new(
                 ash_automation::AutomationStore::open(&database_path).map_err(open_error)?,
             ),
@@ -1889,8 +1897,17 @@ pub fn open_app_server_with_codebase_providers(
         .with_local_memories(&database_path)
         .map_err(OpenAppServerError)?;
     if let Some(profile) = &profile_runtime {
+        server = server.with_message_history_store(profile.message_history.clone());
         server = server.with_automation_store(profile.automation_store());
         server = server.with_symphony_store(profile.symphony_store(), application_http.clone());
+    } else {
+        server = server.with_message_history_store(Arc::new(
+            ash_state::SqliteMessageHistory::open(
+                &database_path,
+                message_history::MessageHistoryRetention::default(),
+            )
+            .map_err(open_error)?,
+        ));
     }
     if let Some(executable) = pty_helper {
         server = server.with_pty_helper(executable);

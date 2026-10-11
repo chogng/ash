@@ -47,7 +47,6 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 		if (!active || disposed || pending) return;
 		pending = Promise.resolve().then(async () => {
 			const current = revision;
-			console.debug('GIT REF DIAGNOSTIC publish', current, [...providers.values()].map(entry => [entry.historyRevision, entry.historyRefsRevision]));
 			await stateRequest({ operation: 'scmUpdate', registrationId, revision: current, providers: snapshot() }, 'done');
 			return current;
 		}).then(current => { pending = undefined; if (current !== revision) publish(); }, error => { pending = undefined; if (!disposed) console.error('SCM update failed', error); });

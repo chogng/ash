@@ -1,3 +1,5 @@
+import { Selection } from '../../../../../../editor/common/core/selection.js';
+import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { DEFAULT_FONT_FAMILY } from '../../../../../../base/browser/fonts.js';
 import "./chatInputEditor.css";
@@ -8,7 +10,7 @@ import { Disposable, toDisposable } from "../../../../../../base/common/lifecycl
 import { EditorLineWrapping } from "../../../../../../editor/common/config/editorOptions.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from "../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import { ChatInputConfiguration } from '../../chat.shared.contribution.js';
+import { ChatInputConfiguration } from '../../../common/constants.js';
 import { EditorExtensionsRegistry, type EditorContributionRegistration } from "../../../../../../editor/browser/editorExtensions.js";
 import { LanguageCompletionService } from '../../../../../../editor/contrib/suggest/browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../../../editor/common/languageFeatureRegistry.js';
@@ -26,7 +28,7 @@ import { createChatSkillCompletionProvider } from "./chatSkillCompletion.js";
 
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 // The input container owns the inset; editor heights exclude it to avoid applying it twice.
-const CHAT_INPUT_MIN_HEIGHT = 100;
+const CHAT_INPUT_MIN_HEIGHT = 40;
 const CHAT_INPUT_MAX_HEIGHT = 314;
 
 /** Stanza-backed embedded editor hosted by the Chat input part. */
@@ -122,6 +124,29 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		const range = Range.fromPositions(new Position((0) + 1, (0) + 1), this.model.positionAt(this.model.length));
 		this.model.applyEdits([{ range, text: value }]);
 		this.editor.setPosition(this.model.positionAt(this.model.length));
+	}
+
+	getSelection(): ChatInputEditorSelection {
+		const selection = this.editor.getSelection()!;
+		return {
+			anchor: this.model.offsetAt(new Position(selection.selectionStartLineNumber, selection.selectionStartColumn)),
+			active: this.model.offsetAt(selection.getPosition()),
+		};
+	}
+
+	setSelection(selection: ChatInputEditorSelection): void {
+		const anchor = this.model.positionAt(selection.anchor);
+		const active = this.model.positionAt(selection.active);
+		this.editor.setSelection(new Selection(anchor.lineNumber, anchor.column, active.lineNumber, active.column));
+	}
+
+	isAtHistoryBoundary(direction: 'previous' | 'next'): boolean {
+		if (!this.editor.getSelection()?.isEmpty()) return false;
+		const position = this.editor.getPosition();
+		if (!position) return false;
+		const top = this.editor.getTopForPosition(position.lineNumber, position.column);
+		return direction === 'previous' ? top === this.editor.getTopForPosition(1, 1)
+			: top === this.editor.getTopForPosition(this.model.lineCount, this.model.getLineLength(this.model.lineCount) + 1);
 	}
 
 	focus(): void {

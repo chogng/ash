@@ -1,4 +1,4 @@
-import './modelPicker.css';
+import './media/modelPicker.css';
 import { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';

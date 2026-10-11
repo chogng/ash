@@ -1,3 +1,4 @@
+import '../../../../contrib/chat/browser/chat.shared.contribution.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
