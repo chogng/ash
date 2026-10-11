@@ -153,6 +153,7 @@ test("SCM diff inputs open live files and keep deleted files on the readable sid
 	const status: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-input-stream",
+		historyRevision: 1,
 		revision: 1,
 		workspacePath: "/workspace",
 		head: { type: "branch", name: "main", objectId: "1234567890", upstream: undefined },
@@ -172,7 +173,7 @@ test("SCM diff inputs open live files and keep deleted files on the readable sid
 
 test('SCM Open File actions open editable working files from each group and skip deleted files', async () => {
 	const status: GitStatus = {
-		repositoryId: 'repo-1', streamInstanceId: 'open-file-stream', revision: 1,
+		repositoryId: 'repo-1', streamInstanceId: 'open-file-stream', historyRevision: 1, revision: 1,
 		workspacePath: '/workspace/nested',
 		head: { type: 'branch', name: 'main', objectId: '1234567890', upstream: undefined },
 		changes: [
@@ -332,6 +333,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	let status: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
+		historyRevision: 1,
 		revision: 1,
 		workspacePath: ".",
 		head: { type: "branch", name: "main", objectId: "1234567890abcdef", upstream: { name: "origin/main", ahead: 0, behind: 0 } },
@@ -690,6 +692,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 	const status: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
+		historyRevision: 1,
 		revision: 1,
 		workspacePath: ".",
 		head: { type: "branch", name: "main", objectId: "commit-1", upstream: undefined },
@@ -783,6 +786,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 	const status: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
+		historyRevision: 1,
 		revision: 1,
 		workspacePath: ".",
 		head: { type: "branch", name: "main", objectId: "commit-0", upstream: undefined },
@@ -911,6 +915,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		status: async (): Promise<GitStatus> => ({
 			repositoryId: "repo-1",
 			streamInstanceId: "git-graph-stream",
+			historyRevision: 1,
 			revision: 1,
 			workspacePath: ".",
 			head: { type: "branch", name: "main", objectId, upstream: undefined },
@@ -1140,7 +1145,7 @@ test('Changes title actions execute on their captured repository and retain view
 		const calls: string[] = [];
 		const repositories = ['first', 'second'].map(id => ({ id, label: id, path: `/${id}`, root: URI.file(`/${id}`) }));
 		const snapshots = new Map(repositories.map(repository => [repository.id, {
-			repositoryId: repository.id, streamInstanceId: 'stream', revision: 1, workspacePath: repository.path,
+			repositoryId: repository.id, streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: repository.path,
 			head: { type: 'branch' as const, name: 'main', objectId: '1234567', upstream: undefined },
 			changes: [change('a/z.ts', 'unmodified', 'modified'), change('b/a.ts', 'unmodified', 'added')],
 		} satisfies GitStatus]));
@@ -1926,6 +1931,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const first: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-1",
+		historyRevision: 1,
 		revision: 1,
 		workspacePath: "/workspace",
 		head: {
@@ -1944,6 +1950,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const committedClean: GitStatus = {
 		repositoryId: first.repositoryId,
 		streamInstanceId: first.streamInstanceId,
+		historyRevision: 1,
 		revision: 2,
 		workspacePath: first.workspacePath,
 		head: first.head,
@@ -1956,6 +1963,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const nestedStatus: GitStatus = {
 		repositoryId: "repo-2",
 		streamInstanceId: "git-stream-2",
+		historyRevision: 1,
 		revision: 1,
 		workspacePath: "/workspace/nested",
 		head: { type: "branch", name: "nested", objectId: "2345678901", upstream: undefined },
@@ -2234,6 +2242,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 	const previous: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-before-restart",
+		historyRevision: 1,
 		revision: 20,
 		workspacePath: "/workspace",
 		head: { type: "branch", name: "before", objectId: "1111111", upstream: undefined },
@@ -2242,6 +2251,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 	const restarted: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-after-restart",
+		historyRevision: 1,
 		revision: 1,
 		workspacePath: "/workspace",
 		head: { type: "branch", name: "after", objectId: "2222222", upstream: undefined },
@@ -2473,7 +2483,7 @@ suite('SCM badge and decorations', () => {
 		using repositoryChanges = new Emitter<readonly GitRepository[]>();
 		const repository: GitRepository = { id: 'repo', label: 'workspace', path: '/workspace', root: URI.file('/workspace') };
 		let repositories = [repository];
-		const status: GitStatus = { repositoryId: 'repo', streamInstanceId: 'stream', revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [change('src/both.ts', 'added', 'modified')] };
+		const status: GitStatus = { repositoryId: 'repo', streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [change('src/both.ts', 'added', 'modified')] };
 		const git = { get repositories() { return repositories; }, activeRepository: repository, onDidChangeRepositories: repositoryChanges.event, onDidChangeActiveRepository: Event.None, onDidBecomeReady: Event.None, onDidChangeRepositoryStatus: changes.event, status: async () => status } as unknown as IGitService;
 		const dom = new JSDOM('<!doctype html><head></head><body></body>');
 		using documentLifetime = toDisposable(() => dom.window.close());

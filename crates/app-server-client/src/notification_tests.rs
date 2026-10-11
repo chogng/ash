@@ -65,6 +65,7 @@ fn decodes_git_status_changed_notification() {
                     "streamInstanceId": "git_stream_1",
                     "workspacePath": "/workspace",
                     "revision": 7,
+                    "historyRevision": 3,
                     "path": ".",
                     "head": {
                         "type": "branch",
@@ -97,6 +98,7 @@ fn decodes_git_status_changed_notification() {
     assert_eq!(changed.status.repository_id, "repository-root");
     assert_eq!(changed.status.stream_instance_id.as_str(), "git_stream_1");
     assert_eq!(changed.status.revision, 7);
+    assert_eq!(changed.status.history_revision, 3);
     assert!(matches!(
         changed.status.head,
         GitHeadDto::Branch { ref name, .. } if name == "main"

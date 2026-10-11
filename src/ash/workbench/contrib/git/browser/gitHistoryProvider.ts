@@ -26,11 +26,15 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	private hasMore = true;
 	private generation = 0;
 	private loading: Promise<void> | undefined;
+	private historyStatus: Pick<GitStatus, 'streamInstanceId' | 'historyRevision'> | undefined;
 
 	constructor(private readonly gitService: IGitService, readonly repositoryId: string) {
 		super();
 		this._register(gitService.onDidChangeRepositoryStatus(status => {
 			if (status.repositoryId !== repositoryId) return;
+			const previous = this.historyStatus;
+			if (previous?.streamInstanceId === status.streamInstanceId && previous.historyRevision >= status.historyRevision) return;
+			this.historyStatus = status;
 			this.reset();
 		}));
 		this._register(gitService.onDidBecomeReady(() => this.reset()));
@@ -41,6 +45,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	}
 
 	public async provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[]> {
+		const generation = this.generation;
 		const skip = options.skip ?? 0;
 		const limit = options.limit ?? PageSize;
 		if (!Number.isSafeInteger(skip) || skip < 0 || !Number.isSafeInteger(limit) || limit < 1) {
@@ -53,6 +58,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		} catch (error) {
 			throw historyError(error);
 		}
+		if (generation === this.generation) this.historyStatus = status;
 		this.setHistoryItemRef(currentRef(status.head));
 		return this.commits.slice(skip, skip + limit).map(commit => ({
 			id: commit.objectId,

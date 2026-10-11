@@ -37,6 +37,8 @@ export interface GitStatus {
 	readonly repositoryId: string;
 	readonly streamInstanceId: string;
 	readonly revision: number;
+	/** Scoped to streamInstanceId; file edits and index changes leave it unchanged. */
+	readonly historyRevision: number;
 	readonly workspacePath: string;
 	readonly head: GitHead;
 	readonly changes: readonly GitRepositoryChange[];

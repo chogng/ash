@@ -139,7 +139,7 @@ let dirty = false;
 services.registerInstance(IGitService, {
 	listRepositories: async () => [localRepository],
 	graph: async () => ({ remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }, { name: 'fork', identity: { provider: 'github', host: 'github.com', owner: 'contributor', repository: 'fork' } }], references: [], commits: [], hasMore: false, nextCursor: undefined }),
-	status: async () => ({ repositoryId: 'local-repo', streamInstanceId: 'test', revision: 1, workspacePath: '/workspace', head: { type: 'branch', name: 'pr/7', objectId: 'd'.repeat(40), upstream: undefined }, changes: [] }),
+	status: async () => ({ repositoryId: 'local-repo', streamInstanceId: 'test', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'branch', name: 'pr/7', objectId: 'd'.repeat(40), upstream: undefined }, changes: [] }),
 	executeCommand: async (command: GitCommand, repositoryId?: string) => { gitRequests.push({ method: 'git/command', params: { command, repositoryId } }); return { outcome: 'completed', operation: undefined, status: await services.get(IGitService).status(repositoryId) }; },
 } as unknown as IGitService);
 services.registerInstance(IWorkingCopyService, { getAll: () => dirty ? [{ resource: URI.file('/workspace/a.rs'), isDirty: true }] : [] } as unknown as IWorkingCopyService);

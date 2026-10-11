@@ -185,6 +185,7 @@ fn configured_app(mode: ScreenMode) -> App {
         ash_app_server_protocol::protocol::git::GitStatusResult {
             repository_id: "repository".into(),
             stream_instance_id: ash_protocol::StreamInstanceId::new("git-stream").unwrap(),
+            history_revision: 1,
             revision: 1,
             path: "/work/ash".into(),
             head: ash_app_server_protocol::protocol::git::GitHeadDto::Unborn {

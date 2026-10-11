@@ -117,6 +117,7 @@ fn git_status_change_updates_tui_owned_status_state() {
         status: GitStatusResult {
             repository_id: "repository-1".into(),
             stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
+            history_revision: 1,
             revision: 1,
             path: String::new(),
             head: GitHeadDto::Unborn {

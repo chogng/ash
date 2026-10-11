@@ -1,5 +1,11 @@
 {
   "ash": {
+    "multiDiff.empty": "此选择中没有更改。",
+    "multiDiff.fileActions": "{0} 操作",
+    "multiDiff.discardChanges": "放弃更改",
+    "multiDiff.discardFileConfirm": "要放弃 {0} 中的更改吗？此操作无法撤销。",
+    "multiDiff.unstageChanges": "取消暂存更改",
+    "multiDiff.stageChanges": "暂存更改",
     "multiDiff.files": "文件",
     "multiDiff.openFiles": "打开文件视图",
     "multiDiff.collapseAll": "全部折叠",

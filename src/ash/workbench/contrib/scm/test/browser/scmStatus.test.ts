@@ -83,14 +83,14 @@ function createFixture(changes: Emitter<GitStatus>, status: () => Promise<GitSta
 
 function branchStatus(ahead: number, behind: number, name = 'main'): GitStatus {
 	return {
-		repositoryId: 'repo-1', streamInstanceId: 'git-stream', revision: 1, workspacePath: '.',
+		repositoryId: 'repo-1', streamInstanceId: 'git-stream', historyRevision: 1, revision: 1, workspacePath: '.',
 		head: { type: 'branch', name, objectId: 'abcdef1234567890', upstream: { name: `origin/${name}`, ahead, behind } }, changes: [],
 	};
 }
 
 function detachedStatus(): GitStatus {
 	return {
-		repositoryId: 'repo-1', streamInstanceId: 'git-stream', revision: 2, workspacePath: '.',
+		repositoryId: 'repo-1', streamInstanceId: 'git-stream', historyRevision: 1, revision: 2, workspacePath: '.',
 		head: { type: 'detached', objectId: '1234567890abcdef' }, changes: [],
 	};
 }

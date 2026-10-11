@@ -99,7 +99,7 @@ test('Git diff title Open File opens the renamed working resource at the current
 	using commands = new CommandService(services);
 	const menus = new MenuService(commands, contexts);
 	const status: GitStatus = {
-		repositoryId: 'nested-repo', streamInstanceId: 'file-title-stream', revision: 4,
+		repositoryId: 'nested-repo', streamInstanceId: 'file-title-stream', historyRevision: 1, revision: 4,
 		workspacePath: '/workspace/nested', head: { type: 'branch', name: 'main', objectId: firstParent, upstream: undefined }, changes: [],
 	};
 	const git = { changeFile: async () => ({ original: { kind: 'text', text: 'before' }, modified: { kind: 'text', text: 'after' } }) } as unknown as IGitService;
@@ -148,7 +148,7 @@ function commitFixture(overrides: Partial<IGitService> = {}, confirm: () => Prom
 	const views = lifetime.add(new SCMViewService(scm));
 	const repository = { id: 'commit-repo', label: 'Commit repository', path: '.', root: URI.file('/workspace') };
 	const status: GitStatus = {
-		repositoryId: repository.id, streamInstanceId: 'commit-stream', revision: 1, workspacePath: '/workspace',
+		repositoryId: repository.id, streamInstanceId: 'commit-stream', historyRevision: 1, revision: 1, workspacePath: '/workspace',
 		head: { type: 'branch', name: 'main', objectId: selectedId, upstream: undefined },
 		changes: [{ path: 'tracked.ts', originalPath: undefined, indexStatus: 'modified', worktreeStatus: 'modified', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }],
 	};
@@ -611,7 +611,7 @@ for (const menuId of [MenuId.SCMTitle, MenuId.for('git.pullpush')]) {
 			const git: Partial<IGitService> = {
 				onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None,
 				getRepository: async repositoryId => { requests.push(['repository', repositoryId]); return repository; },
-				status: async repositoryId => ({ repositoryId: repositoryId!, streamInstanceId: 'stream', revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [] }),
+				status: async repositoryId => ({ repositoryId: repositoryId!, streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [] }),
 				catalog: async repositoryId => { requests.push(['catalog', repositoryId]); await catalogStarted.complete(); return catalog.p; },
 				fetch: async repositoryId => { requests.push(['fetch', repositoryId]); throw new Error('GitOperationFailed'); },
 			};
@@ -815,7 +815,7 @@ for (const cancel of [false, true]) {
 		const git: Partial<IGitService> = {
 			onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None,
 			getRepository: async () => repository,
-			status: async () => ({ repositoryId: repository.id, streamInstanceId: 'stream', revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [] }),
+			status: async () => ({ repositoryId: repository.id, streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [] }),
 			catalog: async () => ({ tags: [], stashes: [], remotes: ['backup', 'origin'], operation: undefined }),
 			fetch: async () => { fetches++; throw new Error('GitOperationFailed'); },
 		};

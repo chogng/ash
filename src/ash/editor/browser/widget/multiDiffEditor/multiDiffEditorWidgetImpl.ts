@@ -56,13 +56,13 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private readonly viewModel: MultiDiffEditorViewModel;
 	private readonly layouts: MultiDiffSectionLayout[] = [];
 	private readonly measuredHeights = new Map<string, number>();
-	private readonly editorOptions: Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges'>;
+	private editorOptions: Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges'>;
 	private rowLayouts = new WeakMap<DiffModel, DiffRowLayout>();
-	private readonly lineHeight: number;
+	private lineHeight: number;
 	private readonly overscanRowCount: number;
-	private readonly loopChanges: boolean;
-	private readonly showLineNumbers: boolean;
-	private readonly fontInfoSettings: ReturnType<typeof createBareFontInfoFromRawSettings>;
+	private loopChanges: boolean;
+	private showLineNumbers: boolean;
+	private fontInfoSettings: ReturnType<typeof createBareFontInfoFromRawSettings>;
 	private fontInfo: FontInfo | undefined;
 	private configuredWordWrap: boolean;
 	private temporaryWordWrap: boolean | undefined;
@@ -103,6 +103,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			fontLigatures: options.fontLigatures,
 			showLineNumbers: options.showLineNumbers,
 			showInlineChanges: options.showInlineChanges,
+			loopChanges: options.loopChanges,
 		};
 		this.fontInfoSettings = createBareFontInfoFromRawSettings({
 			fontFamily: options.fontFamily,
@@ -238,6 +239,25 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	public setConfiguredWordWrap(enabled: boolean): void {
 		this.configuredWordWrap = enabled;
 		this.updateWordWrap();
+	}
+
+	public updateOptions(options: Pick<IMultiDiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges'>): void {
+		this.editorOptions = { ...this.editorOptions, ...options };
+		this.loopChanges = this.editorOptions.loopChanges ?? true;
+		this.showLineNumbers = this.editorOptions.showLineNumbers ?? true;
+		this.fontInfoSettings = createBareFontInfoFromRawSettings(this.editorOptions, getWindow(this.domNode).devicePixelRatio);
+		this.lineHeight = this.fontInfoSettings.lineHeight;
+		this.fontInfo = undefined;
+		this.domNode.classList.toggle('hide-line-numbers', !this.showLineNumbers);
+		for (const section of this.sections.values()) {
+			section.editor?.updateOptions({
+				...this.editorOptions,
+				lineNumbers: this.showLineNumbers ? 'on' : 'off',
+			});
+		}
+		this.rowLayouts = new WeakMap();
+		this.measuredHeights.clear();
+		this.refreshLayout();
 	}
 
 	public toggleWordWrap(): void {

@@ -18,7 +18,7 @@ export class CodeEditorService extends AbstractCodeEditorService {
 				selectionSource: TextEditorSelectionSource.NAVIGATION,
 			}, sideBySide ? 'sideGroup' : 'activeGroup');
 			const control = pane.getControl?.();
-			const editor = this.listCodeEditors().find(editor => editor === control) ?? null;
+			const editor = this.resolveCodeEditor(control);
 			if (editor && !input.options?.preserveFocus) {
 				editor.focus();
 			}
@@ -28,6 +28,12 @@ export class CodeEditorService extends AbstractCodeEditorService {
 
 	public getActiveCodeEditor(): ICodeEditor | null {
 		const control = this.editorParts.activePane?.getControl?.();
-		return this.listCodeEditors().find(editor => editor === control) ?? null;
+		return this.resolveCodeEditor(control);
+	}
+
+	private resolveCodeEditor(control: unknown): ICodeEditor | null {
+		const diff = this.listDiffEditors().find(editor => editor === control);
+		const candidate = diff ? diff.getModifiedEditor() : control;
+		return this.listCodeEditors().find(editor => editor === candidate) ?? null;
 	}
 }

@@ -139,7 +139,7 @@ const accountsChanged = resources.add(new Emitter<AccountState>());
 const session: ISession = { sessionId: 'session', title: 'Implement PR integration', status: 'active', workspace: new URL(location.href).searchParams.has('noWorkspace') ? null : { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 let selection: SessionsViewSelection | undefined = { kind: 'session', active: { session, threadId: 'thread' } };
 let branch = 'feature';
-const gitStatus = (id: string): GitStatus => ({ repositoryId: id, streamInstanceId: 'stream', revision: 1, workspacePath: '/workspace', head: { type: 'branch', name: branch, objectId: 'a'.repeat(40), upstream: undefined }, changes: [] });
+const gitStatus = (id: string): GitStatus => ({ repositoryId: id, streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'branch', name: branch, objectId: 'a'.repeat(40), upstream: undefined }, changes: [] });
 const git = {
 	repositories: ['one', 'two'].map(id => ({ id, label: id, path: id, root: URI.file(`/workspace/${id}`) })),
 	onDidChangeRepositories: Event.None, onDidChangeRepositoryStatus: statusChanged.event,

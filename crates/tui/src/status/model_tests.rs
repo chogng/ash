@@ -399,6 +399,7 @@ fn git_status(change_count: usize) -> GitStatusResult {
     GitStatusResult {
         repository_id: "repository-1".into(),
         stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
+        history_revision: 1,
         revision: 3,
         path: String::new(),
         head: GitHeadDto::Branch {

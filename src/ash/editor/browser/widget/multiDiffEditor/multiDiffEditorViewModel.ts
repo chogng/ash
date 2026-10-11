@@ -9,6 +9,7 @@ export interface MultiDiffEditorLocation {
 
 export interface MultiDiffEditorViewState {
 	readonly scrollTop: number;
+	readonly activeItemId?: string;
 	readonly collapsedItemIds: readonly string[];
 	readonly itemViewStates: readonly {
 		readonly id: string;
@@ -83,6 +84,7 @@ export class MultiDiffEditorViewModel {
 	public saveViewState(scrollTop: number): MultiDiffEditorViewState {
 		return {
 			scrollTop,
+			...(this.activeItemId ? { activeItemId: this.activeItemId } : {}),
 			collapsedItemIds: [...this.collapsedItemIds],
 			itemViewStates: [...this.itemViewStates].flatMap(([id, state]) =>
 				state.original || state.modified ? [{ id, ...state }] : []),
@@ -98,7 +100,7 @@ export class MultiDiffEditorViewModel {
 			if (this.itemIds.has(state.id)) this.itemViewStates.set(state.id, state);
 		}
 		this.selectedChange = undefined;
-		this.activeItemId = undefined;
+		this.activeItemId = value.activeItemId && this.itemIds.has(value.activeItemId) ? value.activeItemId : undefined;
 		return value.scrollTop;
 	}
 }
@@ -107,6 +109,7 @@ function isMultiDiffEditorViewState(value: unknown): value is MultiDiffEditorVie
 	if (!value || typeof value !== 'object') return false;
 	const state = value as Partial<MultiDiffEditorViewState>;
 	return isFiniteNumber(state.scrollTop) && state.scrollTop >= 0
+		&& (state.activeItemId === undefined || typeof state.activeItemId === 'string')
 		&& Array.isArray(state.collapsedItemIds) && state.collapsedItemIds.every((id: unknown) => typeof id === 'string')
 		&& Array.isArray(state.itemViewStates) && state.itemViewStates.every((item: unknown) => {
 			if (!item || typeof item !== 'object') return false;

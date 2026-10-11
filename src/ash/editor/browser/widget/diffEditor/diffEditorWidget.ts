@@ -16,7 +16,7 @@ import { LineRange } from '../../../common/core/ranges/lineRange.js';
 import { EditorOption, type IDiffEditorOptions } from '../../../common/config/editorOptions.js';
 import { ScrollType, type IEditorDecorationsCollection } from '../../../common/editorCommon.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
-import { type IDiffEditor } from '../../editorBrowser.js';
+import { type ICodeEditor, type IDiffEditor } from '../../editorBrowser.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../codeEditor/codeEditorWidget.js';
 import { AccessibleDiffViewer } from './components/accessibleDiffViewer.js';
@@ -58,8 +58,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private readonly originalMoveAnchor: IEditorDecorationsCollection;
 	private readonly modifiedMoveAnchor: IEditorDecorationsCollection;
 	private movedTextToCompare: MovedText | undefined;
-	private readonly showInlineChanges: boolean;
-	private readonly loopChanges: boolean;
+	private showInlineChanges: boolean;
+	private loopChanges: boolean;
 	private readonly originalLabel: string;
 	private readonly modifiedLabel: string;
 	private inlineView = false;
@@ -373,10 +373,18 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}
 
-	public updateOptions(options: IDiffEditorOptions): void {
+	public getModifiedEditor(): ICodeEditor {
+		return this.modifiedEditor;
+	}
+
+	public updateOptions(options: IDiffEditorOptions & Pick<DiffEditorWidgetOptions, 'showInlineChanges' | 'loopChanges'>): void {
 		this.diffOptions.updateOptions(options);
+		this.showInlineChanges = options.showInlineChanges ?? this.showInlineChanges;
+		this.loopChanges = options.loopChanges ?? this.loopChanges;
+		const { readOnly, ...sharedOptions } = options;
+		this.originalEditor.updateOptions(sharedOptions);
+		this.modifiedEditor.updateOptions({ ...sharedOptions, ...(readOnly !== undefined ? { readOnly } : {}) });
 		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
-		if (options.readOnly !== undefined) this.modifiedEditor.updateOptions({ readOnly: options.readOnly });
 		this.updateFeatures();
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}

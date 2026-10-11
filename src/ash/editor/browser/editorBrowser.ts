@@ -280,6 +280,7 @@ export interface PastePayload {
 
 export interface IDiffEditor {
 	getId(): string;
+	getModifiedEditor(): ICodeEditor;
 }
 
 export interface IViewZone {

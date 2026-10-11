@@ -500,6 +500,7 @@ fn runtime_revisions_and_notifies_only_for_changed_repository_state() {
 
     let initial = runtime.status().unwrap();
     assert_eq!(initial.revision, 1);
+    assert_eq!(initial.history_revision, 1);
     assert_eq!(initial.path, "repository");
     assert!(initial.changes.is_empty());
     assert_eq!(queue.drain().len(), 1);
@@ -531,6 +532,7 @@ fn runtime_revisions_and_notifies_only_for_changed_repository_state() {
     let changed = runtime.status().unwrap();
     assert_eq!(changed.stream_instance_id, initial.stream_instance_id);
     assert_eq!(changed.revision, 2);
+    assert_eq!(changed.history_revision, initial.history_revision);
     assert_eq!(changed.changes.len(), 1);
     let notifications = queue.drain();
     assert_eq!(notifications.len(), 1);
@@ -543,6 +545,7 @@ fn runtime_revisions_and_notifies_only_for_changed_repository_state() {
 
     let unchanged = runtime.status().unwrap();
     assert_eq!(unchanged.revision, 2);
+    assert_eq!(unchanged.history_revision, initial.history_revision);
     assert!(queue.drain().is_empty());
 }
 
@@ -624,6 +627,49 @@ fn unchanged_watcher_refresh_keeps_graph_cursor_alive() {
         .unwrap();
     assert_eq!(final_page.commits.len(), 1);
     assert!(!final_page.has_more);
+}
+
+#[test]
+fn worktree_and_index_changes_preserve_history_revision_and_graph_cursor() {
+    let repository = TestRepository::init();
+    for message in ["first", "second", "third", "fourth"] {
+        repository.write("tracked.txt", message);
+        repository.git(&["add", "."]);
+        repository.git(&["commit", "-m", message]);
+    }
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    queue.drain();
+    let limit = std::num::NonZeroUsize::new(1).unwrap();
+    let mut page = runtime.graph(1, limit, None).unwrap();
+    let mut previous = initial.clone();
+    repository.write("tracked.txt", "worktree edit\n");
+    for mutation in 0..3 {
+        let status = match mutation {
+            0 => runtime.status().unwrap(),
+            1 => runtime.stage(vec![PathBuf::from("tracked.txt")]).unwrap(),
+            2 => runtime.unstage(vec![PathBuf::from("tracked.txt")]).unwrap(),
+            _ => unreachable!(),
+        };
+        assert!(status.revision > previous.revision);
+        assert_eq!(status.history_revision, initial.history_revision);
+        assert_eq!(status.head, initial.head);
+        let notifications = queue.drain();
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0]["params"]["status"]["historyRevision"], initial.history_revision);
+        let cursor = page.next_cursor.unwrap();
+        page = runtime.graph(1, limit, Some(&cursor)).unwrap();
+        previous = status;
+    }
+    assert!(!page.has_more);
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    runtime.stage(vec![PathBuf::from("tracked.txt")]).unwrap();
+    let committed = runtime.commit_for(None, GitCommitRequest::new("fifth".into()).unwrap()).unwrap();
+    assert!(committed.status.history_revision > initial.history_revision);
+    assert!(matches!(runtime.graph(1, limit, Some(&cursor)), Err(super::GitRuntimeError::InvalidGraphCursor)));
 }
 
 #[test]
@@ -713,6 +759,7 @@ fn external_ref_and_remote_changes_publish_without_head_or_file_changes() {
         assert_eq!(status.head, initial.head);
         assert_eq!(status.changes, initial.changes);
         assert_eq!(status.revision, initial.revision + index as u64 + 1);
+        assert_eq!(status.history_revision, initial.history_revision + index as u64 + 1);
         let notifications = first.drain();
         assert_eq!(notifications, second.drain());
         assert_eq!(notifications.len(), 1);

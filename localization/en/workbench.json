@@ -1,5 +1,11 @@
 {
   "ash": {
+    "multiDiff.empty": "No changes in this selection.",
+    "multiDiff.fileActions": "{0} actions",
+    "multiDiff.discardChanges": "Discard Changes",
+    "multiDiff.discardFileConfirm": "Discard changes in {0}? This cannot be undone.",
+    "multiDiff.unstageChanges": "Unstage Changes",
+    "multiDiff.stageChanges": "Stage Changes",
     "workbench.editorGroup.lockedLabel": "Editor group, locked",
     "workbench.editorGroup.label": "Editor group",
     "workbench.editorGroup.emptyLabel": "Empty editor group",

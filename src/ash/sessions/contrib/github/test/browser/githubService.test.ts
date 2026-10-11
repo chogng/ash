@@ -25,7 +25,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 	const accountChanged = resources.add(new Emitter<AccountState>());
 	let selection: SessionsViewSelection | undefined = { kind: 'session', active: { session, threadId: 'thread' } };
 	const repository: GitRepository = { id: 'repo', label: 'repo', path: '', root: URI.file('/work') };
-	const status: GitStatus = { repositoryId: 'repo', streamInstanceId: 'stream', revision: 1, workspacePath: '/work', head: { type: 'branch', name: 'feature', objectId: 'a'.repeat(40), upstream: undefined }, changes: [] };
+	const status: GitStatus = { repositoryId: 'repo', streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/work', head: { type: 'branch', name: 'feature', objectId: 'a'.repeat(40), upstream: undefined }, changes: [] };
 	const github = {
 		onDidChangeSessionPullRequests: Event.None, onDidChangeSessionIssues: Event.None, listSessionIssues: async () => [], listSessionPullRequests: async () => [],
 		listAccounts: async () => [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }],

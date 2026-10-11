@@ -188,6 +188,10 @@ pub struct GitStatusResult {
     pub stream_instance_id: StreamInstanceId,
     #[ts(type = "number")]
     pub revision: u64,
+    /// Changes only when repository identity, HEAD, refs or ref metadata changes.
+    /// Scoped to stream_instance_id, independently of worktree/index status revision.
+    #[ts(type = "number")]
+    pub history_revision: u64,
     pub path: String,
     pub head: GitHeadDto,
     pub changes: Vec<GitRepositoryChangeDto>,

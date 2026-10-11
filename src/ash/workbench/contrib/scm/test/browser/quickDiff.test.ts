@@ -226,6 +226,7 @@ function gitFixture(): { readonly gitService: IGitService; readonly requests: Ar
 	const status: GitStatus = {
 		repositoryId: 'repo-1',
 		streamInstanceId: 'git-1',
+		historyRevision: 1,
 		revision: 7,
 		workspacePath: '/workspace',
 		head: { type: 'branch', name: 'main', objectId: 'abc', upstream: undefined },

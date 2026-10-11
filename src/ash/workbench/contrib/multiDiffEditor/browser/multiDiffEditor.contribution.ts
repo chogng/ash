@@ -5,7 +5,6 @@ import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
-import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -41,17 +40,9 @@ registerEditorPane({
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Multi Diff requires the Workbench instantiation service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
-		const configuration = options.configurationService;
 		return instantiationService.createInstance(MultiDiffEditor, {
 			modelService: getBrowserTextModelService(resourceStore, instantiationService),
 			createComputationService: () => diffService.createComputationService(),
-			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
-			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
-			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),
-			fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
-			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
-			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
-			loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),
 			gitService: instantiationService.getOptional(IGitService),
 			editorService: instantiationService.getOptional(IEditorService),
 			viewsService: instantiationService.getOptional(IViewsService),

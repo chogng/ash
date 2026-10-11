@@ -142,6 +142,7 @@ export function matchMultiDiffEditor(input: IResourceEditorInput): EditorPaneMat
 }
 
 export function multiDiffEditorItemKey(item: MultiDiffEditorInputItem): string {
+	if (item.gitChange) return `git\0${item.gitChange.repositoryId}\0${item.gitChange.path}`;
 	return `${item.original.resource.toString()}\0${item.modified.resource.toString()}`;
 }
 

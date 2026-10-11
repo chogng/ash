@@ -112,6 +112,7 @@ pub(super) struct GitWatcher {
 
 struct GitRuntimeState {
     revision: u64,
+    history_revision: u64,
     repository: Option<GitRepository>,
     status: Option<GitStatusResult>,
     references: Option<ash_git::GitReferenceState>,
@@ -839,6 +840,7 @@ impl GitRepositoryRuntime {
             stream_instance_id: new_stream_instance_id()?,
             state: Mutex::new(GitRuntimeState {
                 revision: 0,
+                history_revision: 0,
                 repository: None,
                 status: None,
                 references: None,
@@ -1183,7 +1185,6 @@ impl GitRepositoryRuntime {
                 resolution,
             )
             .map_err(GitRuntimeError::Service)?;
-        self.invalidate_graphs()?;
         self.accept(repository, snapshot)
     }
 
@@ -1328,7 +1329,6 @@ impl GitRepositoryRuntime {
         let _operation = lock_current_operation(&self.operation)
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let (repository, snapshot) = operation(&self.service).map_err(GitRuntimeError::Service)?;
-        self.invalidate_graphs()?;
         self.accept(repository, snapshot)
     }
 
@@ -1344,10 +1344,22 @@ impl GitRepositoryRuntime {
         let _operation = lock_operation_for_request(&self.operation, cancellation)
             .map_err(GitRuntimeError::Service)?;
         let outcome = operation(&self.service, cancellation);
-        // A remote mutation can update refs before cancellation or failure. Future graph reads
-        // must not continue an earlier traversal, even when no success response was delivered.
-        self.invalidate_graphs()?;
-        let (repository, snapshot) = outcome.map_err(GitRuntimeError::Service)?;
+        let (repository, snapshot) = match outcome {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                // A failed fetch may have updated some refs. Publish the observed state,
+                // preserving the original error even if recovery itself fails.
+                match self.service.snapshot() {
+                    Ok((repository, snapshot)) => {
+                        let _ = self.accept_status(repository, snapshot, StatusNotification::Always);
+                    }
+                    Err(_) => {
+                        let _ = self.invalidate_graphs();
+                    }
+                }
+                return Err(GitRuntimeError::Service(error));
+            }
+        };
         self.accept_status(repository, snapshot, StatusNotification::Always)
     }
 
@@ -1381,13 +1393,20 @@ impl GitRepositoryRuntime {
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let had_state = state.repository.is_some();
-        let unchanged = state.repository.as_ref() == Some(&repository)
-            && state.references.as_ref() == Some(&references)
-            && state.status.as_ref().is_some_and(|current| {
-                current.head == projected.head && current.changes == projected.changes
-            });
+        let history_changed = state.repository.as_ref() != Some(&repository)
+            || state.references.as_ref() != Some(&references)
+            || state
+                .status
+                .as_ref()
+                .is_none_or(|current| current.head != projected.head);
+        let unchanged = !history_changed
+            && state
+                .status
+                .as_ref()
+                .is_some_and(|current| current.changes == projected.changes);
         if unchanged && matches!(notification, StatusNotification::OnChange) {
             projected.revision = state.revision;
+            projected.history_revision = state.history_revision;
             return Ok(projected);
         }
         state.revision = state
@@ -1395,11 +1414,18 @@ impl GitRepositoryRuntime {
             .checked_add(1)
             .expect("Git status revision overflowed");
         projected.revision = state.revision;
+        if history_changed {
+            state.history_revision = state
+                .history_revision
+                .checked_add(1)
+                .expect("Git history revision overflowed");
+        }
+        projected.history_revision = state.history_revision;
         state.repository = Some(repository);
         state.references = Some(references);
         state.status = Some(projected.clone());
         drop(state);
-        if had_state {
+        if had_state && history_changed {
             self.invalidate_graphs()?
         }
         self.updates.publish_git_status_changed(projected.clone());
@@ -2008,6 +2034,7 @@ fn project_status(
         repository_id,
         stream_instance_id,
         revision: 0,
+        history_revision: 0,
         path: wire_path(dir_prefix)?,
         head: head(snapshot.head()),
         changes: snapshot

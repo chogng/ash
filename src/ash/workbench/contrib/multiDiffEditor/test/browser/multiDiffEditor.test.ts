@@ -11,12 +11,14 @@ import { JSDOM } from 'jsdom';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../../editor/common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../../../editor/common/model.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { registerAction2, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -29,7 +31,7 @@ import { CommandService } from '../../../../services/commands/common/commandServ
 import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
 import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { VIEW_ID } from '../../../files/common/files.js';
-import type { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { GitStatus, IGitService } from '../../../../contrib/git/common/gitService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService, type IMultiDiffSourceResolver } from '../../browser/multiDiffSourceResolverService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
@@ -66,6 +68,7 @@ const { MultiDiffEditor } = await import('../../browser/multiDiffEditor.js');
 await import('../../../codeEditor/browser/toggleWordWrap.js');
 await import('../../../../../editor/browser/widget/diffEditor/commands.js');
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
+const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorActions.js');
 const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDiffAction.js');
 
 function registerDialogs(services: InstantiationService, sourceResolver?: IMultiDiffSourceResolver): void {
@@ -88,7 +91,7 @@ function registerDialogs(services: InstantiationService, sourceResolver?: IMulti
 
 test('Multi-diff source resolves uncommitted Git contents', async () => {
 	const status: GitStatus = {
-		repositoryId: 'repo', streamInstanceId: 'stream', revision: 3, workspacePath: '/workspace',
+		repositoryId: 'repo', streamInstanceId: 'stream', historyRevision: 1, revision: 3, workspacePath: '/workspace',
 		head: { type: 'branch', name: 'main', objectId: 'abc', upstream: undefined },
 		changes: [{
 			path: 'src/file.ts', originalPath: undefined, indexStatus: 'modified', worktreeStatus: 'modified', conflicted: false,
@@ -122,9 +125,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
-	using commands = new CommandService(new InstantiationService());
 	using contexts = new ContextKeyService();
-	const menus = new MenuService(commands, contexts);
 	const gitActions: string[] = [];
 	const opened: string[] = [];
 	const focusedViews: string[] = [];
@@ -146,6 +147,12 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	using editorServices = new DisposableStore();
 	const services = createCodeEditorServices(editorServices);
 	registerDialogs(services, externalSourceResolver);
+	using commands = new CommandService(services);
+	const menus = new MenuService(commands, contexts);
+	using fileAction = registerAction2(MultiDiffGoToFileAction);
+	services.registerInstance(IEditorService, {
+		openEditor: async (input: IResourceEditorInput) => { opened.push(input.resource.toString()); },
+	} as IEditorService);
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	const seenOptions: boolean[] = [];
@@ -159,6 +166,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		lineHeight: 24,
 		showLineNumbers: false,
 		gitService: {
+			onDidChangeRepositoryStatus: Event.None,
 			stage: async (paths: readonly string[]) => { gitActions.push(`stage:${paths.join(',')}`); return {} as never; },
 			discardWorktree: async (paths: readonly string[]) => { gitActions.push(`discard:${paths.join(',')}`); return {} as never; },
 		} as unknown as IGitService,
@@ -214,6 +222,15 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	parent.focus();
 	assert.equal(pane.getControl(), activeControl);
 	pane.focus();
+	assert.equal(pane.getControl(), activeControl);
+	await configuration.updateValue(CodeEditorConfiguration.fontSize, 19);
+	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'Courier New');
+	await configuration.updateValue(CodeEditorConfiguration.fontLigatures, true);
+	for (const editor of services.get(ICodeEditorService).listCodeEditors()) {
+		assert.equal(editor.getOption(EditorOption.fontInfo).fontSize, 19);
+		assert.equal(editor.getOption(EditorOption.fontInfo).fontFamily, 'Courier New');
+		assert.equal(editor.getOption(EditorOption.lineHeight), 24);
+	}
 	assert.equal(pane.getControl(), activeControl);
 	assert.deepEqual(services.get(ICodeEditorService).listCodeEditors().map(editor => editor.getOption(EditorOption.readOnly)), [true, true, true, false]);
 	assert.deepEqual(services.get(ICodeEditorService).listCodeEditors().map(editor => editor.getOption(EditorOption.scrollBeyondLastLine)), [false, false, false, false]);

@@ -3,15 +3,79 @@ import { test } from "mocha";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import type { GitRepositoriesResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { GitRepositoriesResult, GitStatusResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { IGitApi } from "../../../../../platform/git/common/gitApi.js";
 import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
 import { GitService } from "../../browser/gitService.js";
+import { GitHistoryProvider } from '../../browser/gitHistoryProvider.js';
 import { GitConfiguration } from '../../common/gitConfiguration.js';
 import { GitWorkspaceError } from '../../common/gitService.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
+
+test('Git history retains cached pages for file edits and stage/unstage, and reloads only for history changes', async () => {
+	let notify: (event: ServerNotification) => void = () => { throw new Error('missing subscription'); };
+	let status: GitStatusResult = { repositoryId: 'root', streamInstanceId: 'stream', revision: 1, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'commit-0', upstream: null }, changes: [] };
+	const queries: Array<{ limit: number; cursor?: string; }> = [];
+	let branchQueries = 0;
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }] }),
+		status: async () => status,
+		branches: async () => { branchQueries++; return { branches: [] }; },
+		graph: async (query: { limit: number; cursor?: string; }) => {
+			queries.push(query);
+			const start = Number(query.cursor ?? 0);
+			const end = Math.min(160, start + query.limit);
+			return {
+				commits: Array.from({ length: end - start }, (_, offset) => ({ objectId: `commit-${start + offset}`, parentObjectIds: [`commit-${start + offset + 1}`], timestampSeconds: 1, subject: `Commit ${start + offset}` })),
+				references: [], remotes: [], hasMore: end < 160, nextCursor: end < 160 ? String(end) : null,
+			};
+		},
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi: IServerEventApi = { subscribe: listener => { notify = listener; return toDisposable(() => undefined); } };
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	await service.listRepositories();
+	using history = new GitHistoryProvider(service, 'root');
+	let changes = 0;
+	using listener = history.onDidChange(() => changes++);
+	const loaded = await history.provideHistoryItems({ limit: 101 });
+	assert.equal(queries.length, 3);
+	assert.equal(branchQueries, 1);
+	for (let repetition = 0; repetition < 5; repetition++) {
+		for (const staged of [false, true, false]) {
+			status = { ...status, revision: status.revision + 1, changes: [{ path: 'file.ts', originalPath: null, indexStatus: staged ? 'modified' : 'unmodified', worktreeStatus: staged ? 'unmodified' : 'modified', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }] };
+			notify({ method: 'git/statusChanged', params: { status } });
+			assert.deepEqual(await history.provideHistoryItems({ limit: 101 }), loaded);
+		}
+	}
+	assert.equal(changes, 0);
+	assert.equal(queries.length, 3, 'File/index status does not requery loaded history');
+	assert.equal(branchQueries, 1);
+	assert.equal((await history.provideHistoryItems({ skip: 150, limit: 1 }))[0]?.id, 'commit-150');
+	assert.equal(queries.at(-1)?.cursor, '150', 'Pagination continues from the retained cache');
+	for (let revision = 2; revision <= 4; revision++) {
+		status = { ...status, revision: status.revision + 1, historyRevision: revision };
+		notify({ method: 'git/statusChanged', params: { status } });
+		await history.provideHistoryItems({ limit: 101 });
+		assert.equal(changes, revision - 1, 'Ref changes reload history even with an unchanged HEAD');
+		assert.equal(queries.length, 4 + 3 * (revision - 1));
+	}
+	const beforeRestart = queries.length;
+	status = { ...status, streamInstanceId: 'restarted', revision: 1, historyRevision: 1 };
+	const restart = { method: 'git/statusChanged', params: { status } } as const;
+	notify(restart);
+	await history.provideHistoryItems({ limit: 101 });
+	notify(restart);
+	assert.equal(changes, 4, 'A new stream invalidates once even if its revision restarts at one');
+	assert.equal(queries.length, beforeRestart + 3);
+	history.refresh();
+	await history.provideHistoryItems({ limit: 101 });
+	assert.equal(queries.length, beforeRestart + 6, 'Explicit refresh still rereads history');
+});
 
 test('GitService preserves legacy commit parameters and forwards explicit commit options to the captured repository', async () => {
 	const requests: unknown[] = [];
@@ -19,7 +83,7 @@ test('GitService preserves legacy commit parameters and forwards explicit commit
 		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
 		commit: async (params: unknown) => {
 			requests.push(params);
-			return { objectId: 'committed', status: { repositoryId: 'nested', streamInstanceId: 'commit-stream', revision: 2, path: 'nested', head: { type: 'branch', name: 'main', objectId: 'committed', upstream: null }, changes: [] } };
+			return { objectId: 'committed', status: { repositoryId: 'nested', streamInstanceId: 'commit-stream', historyRevision: 1, revision: 2, path: 'nested', head: { type: 'branch', name: 'main', objectId: 'committed', upstream: null }, changes: [] } };
 		},
 	} as unknown as IGitApi;
 	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
@@ -159,7 +223,7 @@ test('GitService queries ignore rules in the nearest repository and preserves re
 	const requests: unknown[] = [];
 	const api = {
 		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
-		status: async (params: { repositoryId: string; }) => ({ repositoryId: params.repositoryId, streamInstanceId: 'ignore-test', revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] }),
+		status: async (params: { repositoryId: string; }) => ({ repositoryId: params.repositoryId, streamInstanceId: 'ignore-test', historyRevision: 1, revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] }),
 		checkIgnore: async (params: { repositoryId: string; paths: string[]; }) => {
 			requests.push(params);
 			return { ignoredPaths: params.paths };
@@ -210,6 +274,7 @@ test("GitService keeps empty windows off the App Server and becomes ready with a
 			return {
 				repositoryId,
 				streamInstanceId: "stream-1",
+				historyRevision: 1,
 				revision: 1,
 				workspacePath: "/workspace",
 				head: { type: "unborn" as const, name: "main" },
@@ -269,6 +334,7 @@ test("GitService routes resources and requests to an explicitly selected reposit
 			return {
 				repositoryId: repositoryId!,
 				streamInstanceId: `stream-${repositoryId}`,
+				historyRevision: 1,
 				revision: 1,
 				workspacePath: ".",
 				head: { type: "unborn" as const, name: "main" },
@@ -384,7 +450,7 @@ async function waitFor(predicate: () => boolean, timeout = 1000): Promise<void> 
 
 test('GitService maps integration state and binds partial staging to exact reviewed contents', async () => {
 	const calls: unknown[] = [];
-	const status = { repositoryId: 'root', streamInstanceId: 'review', revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] };
+	const status = { repositoryId: 'root', streamInstanceId: 'review', historyRevision: 1, revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] };
 	const api = {
 		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }] }),
 		catalog: async (params: unknown) => { calls.push(params); return { tags: [], stashes: [], remotes: [], operation: 'rebase' }; },
@@ -410,7 +476,7 @@ test('GitService maps integration state and binds partial staging to exact revie
 
 test('GitService forwards every fetch target and maps the authoritative upstream remote', async () => {
 	const requests: unknown[] = [];
-	const status = { repositoryId: 'root', streamInstanceId: 'fetch', revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] };
+	const status = { repositoryId: 'root', streamInstanceId: 'fetch', historyRevision: 1, revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] };
 	const api = {
 		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
 		status: async ({ repositoryId }: { repositoryId: string; }) => ({ ...status, repositoryId }),

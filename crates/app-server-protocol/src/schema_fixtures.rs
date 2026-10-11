@@ -708,6 +708,7 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
         1
     );
     assert!(definitions.contains_key("GitStatusResult"));
+    assert!(definitions["GitStatusResult"]["required"].as_array().unwrap().contains(&serde_json::json!("historyRevision")));
     assert!(definitions.contains_key("GitPathsParams"));
     assert!(definitions.contains_key("GitCommitParams"));
     assert_eq!(

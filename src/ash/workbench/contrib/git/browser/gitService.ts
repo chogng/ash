@@ -546,6 +546,7 @@ function toGitStatus(status: GitStatusResult, repository: GitRepository): GitSta
 		repositoryId: status.repositoryId,
 		streamInstanceId: status.streamInstanceId,
 		revision: status.revision,
+		historyRevision: status.historyRevision,
 		workspacePath: isRemoteResource(repository.root) ? getRemoteWorkspacePath(repository.root) : repository.root.fsPath,
 		head: toGitHead(status.head),
 		changes: status.changes.map(toGitChange),
