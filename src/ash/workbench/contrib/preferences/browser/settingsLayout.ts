@@ -464,14 +464,6 @@ export const SettingsNavigation = [
 				groups: [],
 			},
 			{
-				id: 'skills',
-				label: 'Skills',
-				description: 'Manage reusable skills that agents can activate.',
-				keywords: ['agent skills', 'capabilities'],
-				presentation: 'general',
-				groups: [],
-			},
-			{
 				id: 'tools',
 				label: 'Tools',
 				description: 'Inspect registered tools and the authority each tool may request.',

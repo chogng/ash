@@ -43,6 +43,8 @@ export interface ExtensionHostCommandRegistration extends ExtensionHostRegistrat
 	readonly kind: "command";
 	readonly command: string;
 	readonly title: string;
+	readonly category?: string;
+	readonly enablement?: string;
 	readonly icon?: string;
 	readonly menus?: readonly { readonly menu: string; readonly when?: string; readonly group?: string; readonly alt?: string; }[];
 }

@@ -12,7 +12,7 @@ stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree in
 仓库初始化、分支改名、远端分支删除、merge/rebase/cherry-pick 及继续或中止、stash、tag、remote 管理、amend/undo、部分 index 编辑、
 不可变 tree/blob 操作、任务快照的有界对象包导出/导入和选定 tree delta 的重放。提交事务由 [`ash-git-transaction`](../git-transaction/README.md) 拥有。任务包保留准确的
 HEAD 与工作树对象，导入验证摘要之外的 Git 完整性和对象类型，且不修改接收目录或 index；子模块
-和嵌入仓库不能由单个对象库表示，直接拒绝。持续监听、状态缓存和自动 fetch 由 [`ash.git` Rust 扩展](../../extensions/git/README.md) 拥有。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
+和嵌入仓库不能由单个对象库表示，直接拒绝。持续监听、状态缓存和自动 fetch 由 [App Server GitRuntime](../app-server/src/server/git_runtime.rs) 拥有。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
 
 ## 为什么不是普通 `git utils`

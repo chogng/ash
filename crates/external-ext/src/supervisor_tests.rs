@@ -146,6 +146,8 @@ impl ExtensionHostProcess for TestProcess {
                         kind: RegistrationKind::Command {
                             command: "acme.review".into(),
                             title: "Review".into(),
+                            category: None,
+                            enablement: None,
                             icon: None,
                             menus: Vec::new(),
                         },
@@ -312,6 +314,7 @@ fn snapshot_retains_ordered_process_fenced_output_events() {
                 text: "ready\n".into(),
                 severity: HostOutputSeverity::Information,
                 category: None,
+                enablement: None,
             },
         });
 

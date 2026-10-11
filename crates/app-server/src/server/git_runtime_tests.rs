@@ -1,6 +1,6 @@
 use super::GitRuntime;
-use crate::server::update_broker::UpdateBroker;
 use crate::server::notification_queue::NotificationQueue;
+use crate::server::update_broker::UpdateBroker;
 use ash_config::ConfigCommandRequest;
 use ash_config::ConfigRevision;
 use ash_config::ConfigStore;

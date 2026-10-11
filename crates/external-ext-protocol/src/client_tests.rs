@@ -19,8 +19,18 @@ fn quick_pick_preserves_descriptions_and_rejects_invalid_peer_items() {
     }
     .validate(&ProtocolLimits::default())
     .unwrap();
-    for item in [json!("main"), json!({"label":4}), json!({"label":"main","detail":false}), json!({"label":"main","owner":"forged"})] {
-        assert!(serde_json::from_value::<ExtensionClientOperation>(json!({"operation":"showQuickPick","placeholder":"Choose","items":[item]})).is_err());
+    for item in [
+        json!("main"),
+        json!({"label":4}),
+        json!({"label":"main","detail":false}),
+        json!({"label":"main","owner":"forged"}),
+    ] {
+        assert!(
+            serde_json::from_value::<ExtensionClientOperation>(
+                json!({"operation":"showQuickPick","placeholder":"Choose","items":[item]})
+            )
+            .is_err()
+        );
     }
 }
 

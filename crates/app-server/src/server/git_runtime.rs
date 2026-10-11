@@ -1,10 +1,8 @@
 //! Shared directory Git orchestration; editor extension enablement does not own this runtime.
-use ash_config::ConfigStore;
-use ash_config::GitAutoFetchMode;
+use super::update_broker::UpdateBroker;
 use crate::git_service::GitService;
 use crate::git_service::GitServiceCommit;
 use crate::git_service::GitServiceError;
-use super::update_broker::UpdateBroker;
 use ash_app_server_protocol::protocol::git::GitBranchDto;
 use ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto;
 use ash_app_server_protocol::protocol::git::GitChangeFileResult;
@@ -38,6 +36,8 @@ use ash_app_server_protocol::protocol::git::GitTextDiffResult;
 use ash_app_server_protocol::protocol::git::GitUpstreamDto;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
+use ash_config::ConfigStore;
+use ash_config::GitAutoFetchMode;
 use ash_file_access::Authorization;
 use ash_file_watcher::DebouncedWatchReceiver;
 use ash_file_watcher::FileWatcher;
@@ -718,10 +718,7 @@ impl GitRuntime {
         }
     }
 
-    pub(super) fn start_watching(
-        self: &Arc<Self>,
-        config: Option<Arc<ConfigStore>>,
-    ) -> GitWatcher {
+    pub(super) fn start_watching(self: &Arc<Self>, config: Option<Arc<ConfigStore>>) -> GitWatcher {
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let runtime = Arc::downgrade(self);
         let cancellation = CancellationSource::new();

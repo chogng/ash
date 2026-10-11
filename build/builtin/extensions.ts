@@ -60,9 +60,18 @@ export async function prepareBrowserExtensions(): Promise<void> {
 		if (typeof manifest.browser === 'string') {
 			// Each Worker imports one immutable module. Package dependencies stay inside that module.
 			const entry = manifest.browser.replace(/^\.\//, '');
+			const compiledSources = new Set<string>();
+			const sourcePlugin = {
+				name: 'ash-extension-sources',
+				transform(_code: string, id: string) {
+					const path = id.split('?')[0];
+					const resource = relative(packageRoot, path).replaceAll('\\', '/');
+					if (!resource.startsWith('../') && /\.[cm]?[jt]sx?$/.test(path)) { compiledSources.add(resource); }
+				}
+			};
 			const result = await build({
 				configFile: false, logLevel: 'error',
-				plugins: [{
+				plugins: [sourcePlugin, {
 					name: 'ash-extension-webview',
 					async resolveId(source, importer) {
 						if (source === 'vscode') return '\0ash-vscode';
@@ -90,6 +99,7 @@ export async function prepareBrowserExtensions(): Promise<void> {
 						if (!id.endsWith('?webview')) return;
 						const webview = await build({
 							configFile: false, logLevel: 'error',
+							plugins: [sourcePlugin],
 							build: {
 								write: false, minify: true, assetsInlineLimit: Infinity,
 								lib: { entry: id.slice(0, -8), formats: ['iife'], name: 'AshExtensionWebview' },
@@ -110,6 +120,13 @@ export async function prepareBrowserExtensions(): Promise<void> {
 			const outputs = Array.isArray(result) ? result.flatMap(output => output.output) : 'output' in result ? result.output : [];
 			const chunks = outputs.filter(output => output.type === 'chunk');
 			if (chunks.length !== 1) throw new Error(`Browser extension '${id}' must produce one ES module`);
+			// Keep uncompiled samples and assets; bundled module inputs no longer need separate resources.
+			for (const source of compiledSources) {
+				const size = Buffer.from(packageResources[source] ?? '', 'base64').byteLength;
+				delete packageResources[source];
+				packageBytes -= size;
+				snapshotBytes -= size;
+			}
 			const module = Buffer.from(chunks[0].code);
 			const previousSize = Buffer.from(packageResources[entry] ?? '', 'base64').byteLength;
 			const difference = module.byteLength - previousSize;

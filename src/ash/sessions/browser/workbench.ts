@@ -73,6 +73,7 @@ import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { h, type IDimension } from "../../base/browser/dom.js";
 import type { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
+import { ExtensionsViewPane, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
 import { DesignEditorService, IDesignEditorService } from '../contrib/creator/browser/designEditorService.js';
 import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
@@ -525,10 +526,17 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
 		this._register(registerExtensionManagementActions());
 		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, () => { void commandService.executeCommand('sessions.open.code').catch(error => notificationService.error(String(error))); }));
-		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, () => preferences.open({ section: 'plugins' }, { mode: 'installed' })));
+		this._register(registerExtensionsViewContainer(SessionsViewRegistry, ViewContainerLocation.AuxiliaryBar));
+		const openExtensions = async (options: ExtensionsOpenOptions): Promise<void> => {
+			await commandService.executeCommand('sessions.open.code');
+			const viewId = options.view && options.view !== 'extensions' ? `ash.extensions.${options.view}` : 'ash.extensions.view';
+			const view = await services.get(IViewsService).openView(viewId, true);
+			if (view instanceof ExtensionsViewPane) { void view.open(options); }
+		};
+		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, () => openExtensions({ view: 'plugins', mode: 'installed' })));
 		this._register(CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, value: unknown) => {
 			const options = value as ExtensionsOpenOptions | string | undefined;
-			return preferences.open({ section: 'plugins' }, typeof options === 'string' ? { query: options.trim() } : { mode: 'browse', ...options });
+			return openExtensions(typeof options === 'string' ? { query: options.trim() } : { mode: 'browse', ...options });
 		}));
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 

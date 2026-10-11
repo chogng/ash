@@ -30,24 +30,19 @@ def copy_builtin_extensions(source_root: Path, destination: Path) -> None:
                 f"Built-in extension package.json is not a regular file: {entry.name}"
             )
         # Browser libraries are compiled into renderer assets, not backend package dependencies.
+        metadata = json.loads(manifest.read_text(encoding="utf-8"))
+        excluded_names = ["node_modules"]
+        if metadata.get("ashRuntime", {}).get("kind") == "rust":
+            excluded_names.extend(
+                ["Cargo.toml", "Cargo.lock", "BUILD.bazel", "tests", "src", "browser"]
+            )
+        elif str(metadata.get("browser", "")).removeprefix("./").startswith("browser/"):
+            excluded_names.append("browser")
         copy_regular_tree(
             entry,
             destination / entry.name,
             "extension package",
-            excluded_names=(
-                "node_modules",
-                "Cargo.toml",
-                "Cargo.lock",
-                "BUILD.bazel",
-                "tests",
-                "src",
-                "browser",
-            )
-            if json.loads(manifest.read_text(encoding="utf-8"))
-            .get("ashRuntime", {})
-            .get("kind")
-            == "rust"
-            else ("node_modules",),
+            excluded_names=tuple(excluded_names),
         )
 
 

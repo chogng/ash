@@ -256,7 +256,7 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		return Object.freeze({ kind, registrationId, schemes: Object.freeze(schemes), label: boundedText(input.label, 'Extension Host opener label', 512) });
 	}
 	if (kind === "command") {
-		exactKeys(input, "Extension Host command registration", ["command", "kind", "registrationId", "title"], ['icon', 'menus']);
+		exactKeys(input, "Extension Host command registration", ["command", "kind", "registrationId", "title"], ['category', 'enablement', 'icon', 'menus']);
 		const menus = input.menus === undefined ? undefined : boundedArray(input.menus, 'Extension command menus', 64).map(value => {
 			const menu = exactRecord(value, 'Extension command menu', ['menu'], ['when', 'group', 'alt']);
 			return Object.freeze({
@@ -268,6 +268,8 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		});
 		return Object.freeze({
 			kind, registrationId, command: boundedText(input.command, "Extension Host command", 256), title: boundedText(input.title, "Extension Host command title", 512),
+			...(input.category === undefined ? {} : { category: boundedText(input.category, 'Extension command category', 512) }),
+			...(input.enablement === undefined ? {} : { enablement: boundedText(input.enablement, 'Extension command enablement', 2048) }),
 			...(input.icon === undefined ? {} : { icon: boundedText(input.icon, 'Extension command icon', 128) }), ...(menus === undefined ? {} : { menus: Object.freeze(menus) })
 		});
 	}

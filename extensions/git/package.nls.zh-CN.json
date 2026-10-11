@@ -406,5 +406,16 @@
   "git.status.syncMany": "{0} 个传入和 {1} 个传出的更改",
   "git.changedFile": "{0} 个文件已更改",
   "git.changedFiles": "{0} 个文件已更改",
-  "git.diff.invalidContext": "请打开更改工具栏来执行此 Git 操作。"
+  "git.diff.invalidContext": "请打开更改工具栏来执行此 Git 操作。",
+  "git.commitSignedCommand.label": "提交并添加签署说明",
+  "git.fetchAllTitle.label": "从所有远端获取",
+  "git.initTitle.label": "初始化仓库",
+  "command.git.openChanges.label": "打开更改",
+  "command.git.openStagedChanges.label": "打开已暂存更改",
+  "command.git.openUncommittedChanges.label": "打开未提交更改",
+  "command.git.openUnstagedChanges.label": "打开更改",
+  "git.stageHunkTitle.label": "暂存更改块",
+  "git.stageSelectionTitle.label": "暂存选中行",
+  "git.unstageHunkTitle.label": "取消暂存更改块",
+  "git.unstageSelectionTitle.label": "取消暂存选中行"
 }

@@ -48,3 +48,43 @@ EditorInputSerializers.registerStatic({
 		}, optionalString(record.installationId, 'extension installation ID'), source as ExtensionsInputSource);
 	},
 });
+
+export type ExtensionsCapabilityTarget =
+	| { readonly kind: 'skill'; readonly source: string; readonly name: string; readonly sessionId?: string; }
+	| { readonly kind: 'mcp'; readonly serverId: string; readonly installationId?: string; readonly capabilityId?: string; };
+
+/** Capability tabs retain identity only; their details are re-read from the owning service. */
+export class ExtensionsCapabilityInput extends EditorInput {
+	public readonly typeId = 'ash.extensions.capabilityInput';
+	public override readonly editorId = 'ash.extensions.editor';
+	public readonly onDidChangeLabel = undefined;
+	public readonly readOnly = true;
+	public readonly showBreadcrumbs = false;
+	public readonly resource: URI;
+
+	constructor(public readonly target: ExtensionsCapabilityTarget) {
+		super();
+		this.resource = URI.from({ scheme: Schemas.ashExtension, path: `/${target.kind}/${encodeURIComponent(JSON.stringify(target))}` });
+	}
+
+	public getName(): string { return this.target.kind === 'skill' ? this.target.name : this.target.serverId; }
+}
+
+EditorInputSerializers.registerStatic({
+	typeId: 'ash.extensions.capabilityInput',
+	canSerialize: input => input instanceof ExtensionsCapabilityInput,
+	serialize: input => {
+		if (!(input instanceof ExtensionsCapabilityInput)) { throw new TypeError('Invalid capability input'); }
+		return input.target;
+	},
+	deserialize: value => {
+		const record = requireRecord(value, 'Capability input');
+		if (record.kind === 'skill') {
+			return new ExtensionsCapabilityInput({ kind: 'skill', source: requireString(record.source, 'skill source'), name: requireString(record.name, 'skill name'), sessionId: optionalString(record.sessionId, 'skill session') });
+		}
+		if (record.kind === 'mcp') {
+			return new ExtensionsCapabilityInput({ kind: 'mcp', serverId: requireString(record.serverId, 'MCP server'), installationId: optionalString(record.installationId, 'MCP installation'), capabilityId: optionalString(record.capabilityId, 'MCP capability') });
+		}
+		throw new TypeError('Invalid capability kind');
+	},
+});

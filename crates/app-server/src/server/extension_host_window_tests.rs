@@ -122,7 +122,11 @@ fn install_node_fixture(root: &Path) -> (ProductJavaScriptLauncher, EditorExtens
     assert!(output.status.success());
     let node = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../external-js-ext/src");
-    for (from, to) in [("node.mjs", "node.mjs"), ("vscode.js", "vscode.mjs")] {
+    for (from, to) in [
+        ("node.mjs", "node.mjs"),
+        ("vscode.js", "vscode.mjs"),
+        ("scm.js", "scm.js"),
+    ] {
         std::fs::copy(source.join(from), root.join(to)).unwrap();
     }
     std::fs::copy(source.join("host.mjs"), root.join("host.mjs")).unwrap();

@@ -11,11 +11,20 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { registerEditorPane } from '../../../browser/editor.js';
 import { EditorPane, EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import { ExtensionsInput, ExtensionsInputSource } from '../common/extensionsInput.js';
+import { ExtensionsInput, ExtensionsInputSource, ExtensionsCapabilityInput } from '../common/extensionsInput.js';
 import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IPluginService } from '../../../../platform/plugins/common/pluginService.js';
 import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
 import { changeExtensionEnablement, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
+import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import './extensions.css';
 
 /** Package review and mutations share the same exact-version confirmation in rows and editor. */
@@ -62,7 +71,7 @@ export class ExtensionsEditor extends EditorPane {
 	private readonly actionResources = this._register(new DisposableStore());
 	private loadVersion = 0;
 	private working = false;
-	private currentInput: ExtensionsInput | undefined;
+	private currentInput: ExtensionsInput | ExtensionsCapabilityInput | undefined;
 	private currentSignal: AbortSignal | undefined;
 
 	constructor(@IExtensionManagementService private readonly extensions: IExtensionManagementService,
@@ -70,6 +79,10 @@ export class ExtensionsEditor extends EditorPane {
 		@ICommandService private readonly commands: ICommandService,
 		@IGlobalExtensionEnablementService private readonly enablement: IGlobalExtensionEnablementService,
 		@IPluginService private readonly plugins: IPluginService,
+		@IPromptsService private readonly prompts: IPromptsService,
+		@IAgentCapabilitiesService private readonly agentCapabilities: IAgentCapabilitiesService,
+		@IEditorService private readonly editors: IEditorService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IThemeService theme: IThemeService, @IStorageService storage: IStorageService) {
 		super('ash.extensions.editor', theme, storage);
 		const refresh = () => {
@@ -80,6 +93,7 @@ export class ExtensionsEditor extends EditorPane {
 		this._register(extensions.onDidChangeInstalled(refresh));
 		this._register(enablement.onDidChangeEnablement(refresh));
 		this._register(plugins.onDidChange(refresh));
+		this._register(prompts.onDidChangeSkills(refresh));
 	}
 
 	public override create(container: HTMLElement): void {
@@ -96,16 +110,28 @@ export class ExtensionsEditor extends EditorPane {
 		const heading = h(mainWindow.document, 'h2'); heading.textContent = localize({ bundle: 'ash.extensions', key: 'capabilities' }, 'Capabilities');
 		this.capabilities = h(mainWindow.document, 'div'); this.capabilities.className = 'extension-capabilities';
 		this.domNode.append(this.title, this.metadata, this.description, this.actions, this.status, heading, this.capabilities);
+		this.title.tabIndex = -1;
+		const scope = this._register(this.contextKeys.createScoped(this.domNode)); scope.createKey('extensionsDetailsFocused', true);
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			this._register(AccessibleViewRegistry.register({
+				type, priority: 100, name: `extensions-details-${type}-${generateUuid()}`, when: ContextKeyExpr.has('extensionsDetailsFocused'),
+				getProvider: () => {
+					const focused = mainWindow.document.activeElement;
+					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.textContent ?? '' : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected extension, plugin, skill or MCP server details. Use Tab to reach actions and content. Skills can be enabled or disabled and their instructions opened. MCP details show registered tools and installed package metadata. Open package opens the owning package for installation and permission management.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+				},
+			}));
+		}
 	}
 
 	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
-		if (!(input instanceof ExtensionsInput)) { throw new TypeError('Extensions editor requires an Extensions input'); }
+		if (!(input instanceof ExtensionsInput) && !(input instanceof ExtensionsCapabilityInput)) { throw new TypeError('Extensions editor requires an Extensions input'); }
 		this.currentInput = input; this.currentSignal = signal;
 		const version = ++this.loadVersion;
 		this.actionResources.clear();
-		this.title.textContent = input.summary.displayName;
-		this.metadata.textContent = `${input.summary.id} · ${input.summary.version}`;
-		this.description.textContent = input.summary.description;
+		this.title.textContent = input.getName();
+		this.metadata.textContent = input instanceof ExtensionsInput ? `${input.summary.id} · ${input.summary.version}` : '';
+		this.description.textContent = input instanceof ExtensionsInput ? input.summary.description : '';
 		this.capabilities.textContent = '';
 		this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…');
 		const button = (label: string, action: () => Promise<void>, enabled = true) => {
@@ -117,6 +143,51 @@ export class ExtensionsEditor extends EditorPane {
 				void action().catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = error instanceof Error ? error.message : String(error); } }).finally(() => { this.working = false; if (!this.isDisposed) { this.domNode.setAttribute('aria-busy', 'false'); } });
 			}));
 		};
+		if (input instanceof ExtensionsCapabilityInput) {
+			const target = input.target;
+			if (target.kind === 'skill') {
+				const snapshot = await this.prompts.readSkillManagement(target.sessionId);
+				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+				const skill = snapshot.catalog.skills.find(skill => skill.id.source === target.source && skill.id.name === target.name);
+				if (!skill) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'skillMissing' }, 'This skill is no longer available. Refresh Skills.'); return; }
+				this.metadata.textContent = localize({ bundle: 'ash.extensions', key: 'skillSource' }, 'Source: {0}', skill.id.source);
+				this.description.textContent = skill.description;
+				this.status.textContent = skill.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+				this.capabilities.textContent = [
+					skill.compatible ? localize({ bundle: 'ash.extensions', key: 'skillCompatible' }, 'Compatible') : localize({ bundle: 'ash.extensions', key: 'skillCompatibilityUnknown' }, 'Compatibility unknown'),
+					localize({ bundle: 'ash.extensions', key: 'skillInvoke' }, 'Invoke enabled skills with ${0} in chat.', skill.id.name),
+					...snapshot.diagnostics.map(entry => `${entry.source}${entry.subject ? ` / ${entry.subject}` : ''}: ${entry.message}`),
+				].join('\n\n');
+				button(skill.enabled ? localize({ bundle: 'ash.extensions', key: 'disableSkill' }, 'Disable skill') : localize({ bundle: 'ash.extensions', key: 'enableSkill' }, 'Enable skill'), async () => {
+					await this.prompts.setSkillEnablement(skill.id, !skill.enabled, snapshot.revision, target.sessionId);
+					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
+				});
+				button(localize({ bundle: 'ash.extensions', key: 'openSkillInstructions' }, 'Open instructions'), async () => {
+					const parsed = await this.prompts.parseNew(skill.uri, CancellationToken.None);
+					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.editors.openEditor({ resource: skill.uri, initialText: parsed.content, languageId: 'markdown', label: `${skill.name}/SKILL.md`, readOnly: true, showBreadcrumbs: false }, { pinned: true }); }
+				});
+				return;
+			}
+			const installed = await this.extensions.listInstalled();
+			const installation = installed.find(entry => entry.installationId === target.installationId);
+			const capability = installation?.capabilities.find(entry => entry.kind === 'mcp' && entry.reference.id === target.capabilityId);
+			const catalog = this.agentCapabilities.isAvailable ? await this.agentCapabilities.read() : undefined;
+			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+			const tools = catalog?.tools.filter(tool => tool.source === 'mcp' && tool.sourceDetails.includes(target.serverId)) ?? [];
+			this.metadata.textContent = installation ? `${installation.package.id} · ${installation.package.version}` : target.serverId;
+			this.status.textContent = tools.length ? localize({ bundle: 'ash.extensions', key: 'mcpToolsCount' }, '{0} registered tools', tools.length) : localize({ bundle: 'ash.extensions', key: 'mcpNoTools' }, 'No tools are currently registered for this server.');
+			this.capabilities.textContent = [
+				...(capability ? [localize({ bundle: 'ash.extensions', key: 'mcpContract' }, 'Contract version: {0}', capability.contractVersion), localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', capability.permissions.join(', '))] : []),
+				...tools.map(tool => `${tool.name}\n${tool.description}`),
+			].join('\n\n');
+			if (installation && capability) {
+				button(localize({ bundle: 'ash.extensions', key: 'openPackage' }, 'Open package'), async () => {
+					await this.editors.openEditor(new ExtensionsInput({ id: installation.package.id, version: installation.package.version, displayName: installation.package.id, description: '', packageType: 'plugin' }, installation.installationId));
+				});
+			}
+			return;
+		}
+
 		const toggle = async () => {
 			await changeExtensionEnablement(input, this.enablement, this.extensions, this.plugins);
 			if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
@@ -214,12 +285,12 @@ export class ExtensionsEditor extends EditorPane {
 
 	public clearInput(): void { this.currentInput = undefined; this.currentSignal = undefined; ++this.loadVersion; this.actionResources.clear(); }
 	public layout(_dimension: IDimension): void { }
-	public focus(): void { this.actions.querySelector<HTMLButtonElement>('button')?.focus(); }
+	public focus(): void { (this.actions.querySelector<HTMLButtonElement>('button') ?? this.title).focus(); }
 }
 
 registerEditorPane({
 	id: 'ash.extensions.editor', name: 'Extensions',
-	canOpen: input => input instanceof ExtensionsInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	canOpen: input => (input instanceof ExtensionsInput || input instanceof ExtensionsCapabilityInput) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) { throw new Error('Extensions editor requires the Instantiation Service'); }
 		return options.instantiationService.createInstance(ExtensionsEditor);

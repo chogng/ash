@@ -2,7 +2,7 @@ import { IGlobalExtensionEnablementService } from '../../../src/ash/platform/ext
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { ExtensionsEditor } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsEditor.js';
-import { ExtensionsInput } from '../../../src/ash/workbench/contrib/extensions/common/extensionsInput.js';
+import { ExtensionsInput, ExtensionsCapabilityInput } from '../../../src/ash/workbench/contrib/extensions/common/extensionsInput.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
@@ -51,7 +51,10 @@ import type { PluginPackageDto, PluginPackageCommandParams } from '../../../.bui
 import { AppServerPluginService } from '../../../src/ash/workbench/services/plugins/browser/appServerPluginService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
-import { SkillsSettingsContent } from '../../../src/ash/workbench/contrib/skills/browser/skillsSettingsContent.js';
+import { SkillsViewPane, McpServersViewPane } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViews.js';
+import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
+import { registerSkillActions } from '../../../src/ash/workbench/contrib/chat/browser/promptSyntax/skillActions.js';
 import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import chineseMessages from '../../../extensions/language-pack-zh-cn/translations/extensions.json' with { type: 'json' };
@@ -63,7 +66,8 @@ if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
 const disposables = new DisposableStore();
 const services = disposables.add(new InstantiationService());
 services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);
+let activeSessionId: string | undefined;
+services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => activeSessionId ? { sessionId: activeSessionId, threadId: 'fixture-thread' } : undefined } as IChatSessionNavigationService);
 const changed = disposables.add(new Emitter<void>());
 const requests: unknown[] = [];
 let offline = false;
@@ -169,16 +173,16 @@ const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);
 services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
-services.registerInstance(ICommandService, { executeCommand: async (id: string, options: ExtensionsOpenOptions) => { requests.push(['command', id, options]); if (id === CLOSE_EDITOR_COMMAND_ID) { return; } if (id === 'ash.extensions.installed') { await extensionManagement.open({ ...options, mode: 'installed' }); } else if (id === OPEN_EXTENSIONS_COMMAND_ID) { await extensionManagement.open(options); } else { await commands.executeCommand(id, options); } } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, options: ExtensionsOpenOptions) => { requests.push(['command', id, options]); if (id === CLOSE_EDITOR_COMMAND_ID) { return; } if (id === 'ash.extensions.installed') { await plugins.open({ ...options, mode: 'installed' }); } else if (id === OPEN_EXTENSIONS_COMMAND_ID) { await commands.executeCommand(id, options); } else { await commands.executeCommand(id, options); } } } as unknown as ICommandService);
 let revision = 3;
 let enabled = true;
 const skillId = { source: 'marketplace:example/web', name: 'review' };
 services.registerInstance(IAppServerSkillApi, {
 	onDidChangeSkills: Event.None,
-	readInstructions: async () => { throw new Error('Skill body reading is outside this component fixture'); },
+	readInstructions: async () => '# Review\nReview changes carefully.',
 	list: async () => ({ generation: 1, skills: [] }),
 	read: async () => ({ revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
-	setEnabled: async (id, value, expectedRevision) => { requests.push(['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
+	setEnabled: async (id, value, expectedRevision, sessionId) => { requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
 });
 services.registerInstance(ILanguageServerService, {
 	read: async () => ({ revision, configurations: {}, servers: [{ id: 'typescript-language-server', languageIds: ['typescriptreact'] }] }),
@@ -232,34 +236,41 @@ disposables.add(toDisposable(() => { editorAbort.abort(); pane?.dispose(); }));
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None,
 	openEditor: async input => {
-		if (!(input instanceof ExtensionsInput)) { throw new Error('Unexpected editor input'); }
+		if (!(input instanceof ExtensionsInput) && !(input instanceof ExtensionsCapabilityInput)) { requests.push(['document', input]); return; }
 		disposables.add(input); editorAbort.abort(); editorAbort = new AbortController();
 		if (!pane) { pane = services.createInstance(ExtensionsEditor); pane.create(document.getElementById('details')!); }
 		await pane.setInput(input, editorAbort.signal);
 	},
 } as IEditorService);
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'fixture', folders: [] }) } as unknown as IWorkspaceContextService);
-const extensionManagement = disposables.add(services.createInstance(ExtensionsViewPane, document.getElementById('extensions')!, { id: 'extensions', title: 'Extensions' }));
-if (new URLSearchParams(location.search).has('paneLayout')) {
-	const { PaneView, Pane } = await import('../../../src/ash/base/browser/ui/splitview/paneview.js');
-	const host = document.getElementById('extensions')!;
-	host.style.width = '280px';
-	host.style.height = '180px';
-	const panes = disposables.add(new PaneView(host));
-	panes.addPane(extensionManagement, 120);
-	panes.addPane(disposables.add(new Pane(host, { id: 'extensions.sibling', title: 'Other view', minimumBodySize: 0 })), 60);
-	panes.layout(180, 280);
-}
-services.registerInstance(IViewsService, { openView: () => extensionManagement } as unknown as IViewsService);
+services.registerInstance(IAgentCapabilitiesService, {
+	isAvailable: true,
+	read: async () => ({ tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp', sourceDetails: ['fixture-server'], exposure: 'direct', authority: 'providerDefined' }], toolSets: [{ id: 'fixture-set', source: 'mcp', sourceId: 'fixture-server', tools: ['fixture_search'] }], localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false }),
+});
+const host = document.getElementById('extensions')!;
+const paneLayout = new URLSearchParams(location.search).has('paneLayout');
+host.style.width = paneLayout ? '280px' : '360px'; host.style.height = paneLayout ? '260px' : '650px';
+const panes = disposables.add(new PaneView(host));
+const extensionManagement = disposables.add(services.createInstance(ExtensionsViewPane, host, { id: 'ash.extensions.view', title: 'Extensions' }));
+const plugins = disposables.add(services.createInstance(ExtensionsViewPane, host, { id: 'ash.extensions.plugins', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '插件' : 'Plugins', collapsed: true }));
+const skills = disposables.add(services.createInstance(SkillsViewPane, host, { id: 'ash.extensions.skills', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '技能' : 'Skills', collapsed: true }));
+const mcp = disposables.add(services.createInstance(McpServersViewPane, host, { id: 'ash.extensions.mcp', title: 'MCP Servers', collapsed: true }));
+for (const pane of [extensionManagement, plugins, skills, mcp]) { panes.addPane(pane, 350); pane.setVisible(true); }
+panes.layout(paneLayout ? 260 : 650, paneLayout ? 280 : 360);
+services.registerInstance(IViewsService, {
+	openView: (id: string) => {
+		const pane = [extensionManagement, plugins, skills, mcp].find(pane => pane.id === id)!;
+		pane.setExpanded(true); pane.focus(); return pane;
+	}
+} as unknown as IViewsService);
+registerSkillActions();
 const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }));
 contributions.advance(WorkbenchPhase.BlockStartup);
 const commands = disposables.add(new CommandService(services));
-const skills = disposables.add(services.createInstance(SkillsSettingsContent, document.getElementById('skills')!));
 const lsp = disposables.add(services.createInstance(LanguageServerSettingsContent, document.getElementById('lsp')!));
 document.getElementById('lsp')!.append(lsp.domNode);
 lsp.setInput(createSettingsEditorInput());
-document.getElementById('skills')!.append(skills.domNode);
-extensionManagement.setVisible(true); skills.setVisible(true); lsp.setVisible(true);
+lsp.setVisible(true);
 
 window.ashExtensionsIntegration = {
 	requests,
@@ -269,6 +280,9 @@ window.ashExtensionsIntegration = {
 	removeEditorEntrypoint: () => { editorEntrypoint = null; },
 	localPackages: () => structuredClone(localPackages),
 	open: options => extensionManagement.open(options),
+	setSession: (id: string) => { activeSessionId = id; },
+	addMcpPackage: () => { installed.push({ installationId: 'fixture-mcp-installation', package: reference, state: 'installed', capabilities: [{ kind: 'mcp', id: 'fixture-server', reference: { id: 'fixture-mcp-capability' }, contractVersion: '1', permissions: ['network'], authenticationProvider: null }] }); changed.fire(); },
+	addSkillOnlyPlugin: () => { localPackages.push({ id: 'acme/skills', version: '1.0.0', digest: 'sha256:' + 'c'.repeat(64), displayName: 'Skill-only plugin', permissions: [], hasEditorExtensions: false, enabled: false, granted: false, effective: false, revoked: false }); },
 	setOffline: () => { offline = true; },
 	changeRevision: () => { revision++; },
 	startHeldSearch: () => { holdSearch = true; heldOpen = extensionManagement.open({ query: 'old query' }); },
@@ -281,6 +295,6 @@ window.ashExtensionsIntegration = {
 };
 declare global {
 	interface Window {
-		ashExtensionsIntegration: { requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

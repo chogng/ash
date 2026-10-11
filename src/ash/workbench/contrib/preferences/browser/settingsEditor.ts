@@ -37,7 +37,6 @@ import type { IOpenSettingsOptions, ISelectSetting, ISetting, ISettingsEditorMod
 import { SettingsEditorInput, isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
-import { SkillsSettingsContent } from '../../skills/browser/skillsSettingsContent.js';
 import { Event } from '../../../../base/common/event.js';
 import { AICustomizationManagementEditorInput } from '../../chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -220,7 +219,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this._register(this.instantiationService.createInstance(NetworkSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(SearchSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(AdvisorSettingsContent, settingsContent)),
-			this._register(this.instantiationService.createInstance(SkillsSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(ModelSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(DictationSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, {

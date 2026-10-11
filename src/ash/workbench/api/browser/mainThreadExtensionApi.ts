@@ -465,7 +465,7 @@ export class MainThreadExtensionApi extends Disposable {
 				}
 				if (registration.kind === "command") {
 					commands.push(Object.freeze({
-						id: registration.command, metadata: { description: registration.title }, handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
+						id: registration.command, metadata: { description: registration.category ? `${registration.category}: ${registration.title}` : registration.title }, handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
 							if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
 								return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtimeId, args) }), controller.signal);
 							}
@@ -491,8 +491,8 @@ export class MainThreadExtensionApi extends Disposable {
 						}
 						menus.push({
 							id, item: {
-								command: { id: registration.command, title: registration.title, icon: registration.icon ? Icon.fromId(registration.icon) : undefined },
-								alt: alternate?.kind === 'command' ? { id: alternate.command, title: alternate.title, icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined } : undefined,
+								command: { id: registration.command, title: registration.title, precondition: registration.enablement ? ContextKeyExpr.deserialize(registration.enablement) : undefined, icon: registration.icon ? Icon.fromId(registration.icon) : undefined },
+								alt: alternate?.kind === 'command' ? { id: alternate.command, title: alternate.title, precondition: alternate.enablement ? ContextKeyExpr.deserialize(alternate.enablement) : undefined, icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined } : undefined,
 								when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined,
 								group,
 								order,

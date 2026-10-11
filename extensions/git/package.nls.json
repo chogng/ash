@@ -348,5 +348,16 @@
   "git.autofetch.all": "All remotes",
   "git.autofetchPeriod.title": "Auto Fetch Period",
   "git.autofetchPeriod.description": "Seconds between automatic fetches for each repository.",
-  "git.diff.invalidContext": "Open a change toolbar to run this Git action."
+  "git.diff.invalidContext": "Open a change toolbar to run this Git action.",
+  "git.commitSignedCommand.label": "Commit with Sign-off",
+  "git.fetchAllTitle.label": "Fetch From All Remotes",
+  "git.initTitle.label": "Initialize Repository",
+  "command.git.openChanges.label": "Open Changes",
+  "command.git.openStagedChanges.label": "Open Staged Changes",
+  "command.git.openUncommittedChanges.label": "Open Uncommitted Changes",
+  "command.git.openUnstagedChanges.label": "Open Changes",
+  "git.stageHunkTitle.label": "Stage Change Block",
+  "git.stageSelectionTitle.label": "Stage Selected Lines",
+  "git.unstageHunkTitle.label": "Unstage Change Block",
+  "git.unstageSelectionTitle.label": "Unstage Selected Lines"
 }

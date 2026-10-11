@@ -931,18 +931,19 @@ Shell 输出已通过 `IProcessDataEvent.writePromise` 等待 xterm 的真实解
 Relaunch 使用新管理器，旧回调不影响新进程。OS PTY drainer 与 bounded ring 仍由 Rust 拥有，
 Renderer 的解析确认不等于服务器输出背压。
 
-SCM 同样通过 `IGitService → GitService → IGitApi` 访问仓库，并由 Service 把 status notification
-和 reconnect lifecycle 投影成前端事件；Search 通过
+Git 的 TS 扩展通过 `GitService → IGitApi → backend.request/state` 访问共享 Rust Git，并把
+status notification 和 reconnect lifecycle 转为扩展事件；Search 通过
 `ISearchService.textSearch → IContentSearchService → BrowserContentSearchService → IContentSearchApi`
 消费有界批次。Workbench SearchService 合并当前文件模型与磁盘结果并管理多根总预算，
 platform 的内容搜索服务只执行显式选择的单目录。
-两者的 contrib 都不接触 App Server notification union 或生成 DTO。
+通用 SCM contribution 不持有 Git 状态或调用 Git 协议；Search contribution 不接触 App Server
+notification union 或生成 DTO。
 
 SCM 的打开操作由 `scmViewPane.ts` 解释：预览保留列表焦点，双击固定文件，修饰键点击或 Enter
-请求侧边分组。打开链中的 `gitSCMProvider.ts` 解析 Git 版本并传递打开参数，`IEditorService` 和 Editor Part
-负责目标分组、pane 生命周期与布局。2026-10-02 已确认将该文件保留为 Ash 的 App Server→SCM
-适配器；VS Code 对应的仓库适配职责位于 `extensions/git/src/repository.ts` 和 `model.ts`，
-依赖扩展宿主 SCM API，不能直接承接 Ash 当前的 App Server 调用链。
+请求侧边分组。打开链中的 [`Git SCM provider`](../extensions/git/browser/gitSCMProvider.ts) 属于
+TS 扩展，解析 Git 版本并通过通用编辑器能力传递打开参数；`IEditorService` 和 Editor Part
+负责目标分组、pane 生命周期与布局。禁用 Git 扩展后，其他 SCM provider 和这些编辑器能力
+继续运行；Agent 和 TUI 使用的共享 Rust Git 也保持可用。
 
 Terminal title actions 通过 `MenuId.TerminalTitle`、Context Key 与
 `MenuWorkbenchToolBar` 接入 MenuService；profile selector 仍由 Terminal 自定义 action view

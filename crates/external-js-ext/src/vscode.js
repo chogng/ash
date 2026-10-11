@@ -1470,9 +1470,9 @@ export function createApi(configuration, initialization) {
 			},
 			registerCommand(command, callback, thisArg) {
 				if (typeof callback !== 'function' || !titles.has(command)) throw new TypeError('Command must be declared in package.json');
-				const contribution = configuration.commands.find(entry => entry.command === command);
+				const contribution = configuration.manifest?.contributes?.commands?.find(entry => entry.command === command) ?? configuration.commands.find(entry => entry.command === command);
 				const menus = Object.entries(configuration.manifest?.contributes?.menus ?? {}).flatMap(([menu, entries]) => entries.filter(entry => entry.command === command).map(({ command: _command, ...entry }) => ({ menu, ...entry })));
-				return ashRuntime.registerContribution({ kind: 'command', registrationId: command, command, title: titles.get(command), ...(contribution.icon ? { icon: contribution.icon.slice(2, -1) } : {}), ...(menus.length ? { menus } : {}) }, 'execute', (_call, payload) => invoke(() => {
+				return ashRuntime.registerContribution({ kind: 'command', registrationId: command, command, title: titles.get(command), ...(contribution.category !== undefined ? { category: contribution.category } : {}), ...(contribution.enablement !== undefined ? { enablement: contribution.enablement } : {}), ...(contribution.icon ? { icon: contribution.icon.slice(2, -1) } : {}), ...(menus.length ? { menus } : {}) }, 'execute', (_call, payload) => invoke(() => {
 					const editor = payload.activeEditor;
 					editorContexts.set(globalThis.__ashInvocation(false), editor);
 					activeEditor = editor ? { document: { uri: Uri.from(editor.resource) }, viewColumn: undefined } : undefined;

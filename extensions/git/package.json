@@ -164,102 +164,150 @@
       },
       {
         "command": "git.abort",
-        "title": "%git.abortTitle%"
+        "title": "%git.menu.abort%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.addRemote",
-        "title": "%git.addRemoteTitle%"
+        "title": "%git.menu.addRemote%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.branch",
-        "title": "%git.menu.createBranch%"
+        "title": "%git.menu.createBranch%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.cherryPick",
-        "title": "%git.cherryPickTitle%"
+        "title": "%git.menu.cherryPick%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.cleanAll",
-        "title": "%git.discardAllCommand%"
+        "title": "%git.menu.discardAll%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.clone",
-        "title": "%git.menu.clone%"
+        "title": "%git.menu.clone%",
+        "category": "Git",
+        "enablement": "!isWeb && !scmBusy"
       },
       {
         "command": "git.commit",
-        "title": "%git.commitCommand%",
-        "icon": "$(check)"
+        "title": "%git.menu.commit%",
+        "icon": "$(check)",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitAll",
-        "title": "%git.commitAllCommand%"
+        "title": "%git.menu.commitAll%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitAllAmend",
-        "title": "%git.commitAllAmendCommand%"
+        "title": "%git.menu.commitAllAmend%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitAllSigned",
-        "title": "%git.commitAllSignedCommand%"
+        "title": "%git.menu.commitAllSigned%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitAmend",
-        "title": "%git.amendTitle%"
+        "title": "%git.menu.amend%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitSigned",
-        "title": "%git.commitSignedCommand%"
+        "title": "%git.commitSignedCommand.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitStaged",
-        "title": "%git.commitStagedCommand%"
+        "title": "%git.menu.commitStaged%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitStagedAmend",
-        "title": "%git.commitStagedAmendCommand%"
+        "title": "%git.menu.amend%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitStagedSigned",
-        "title": "%git.commitStagedSignedCommand%"
+        "title": "%git.menu.commitStagedSigned%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.continue",
-        "title": "%git.continueTitle%"
+        "title": "%git.menu.continue%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.createTag",
-        "title": "%git.createTagTitle%"
+        "title": "%git.menu.createTag%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.createWorktree",
-        "title": "%git.createWorktreeCommandTitle%"
+        "title": "%git.menu.createWorktree%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.deleteBranch",
-        "title": "%git.menu.deleteBranch%"
+        "title": "%git.menu.deleteBranch%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.deleteRemoteBranch",
-        "title": "%git.deleteRemoteBranchTitle%"
+        "title": "%git.menu.deleteRemoteBranch%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.deleteTag",
-        "title": "%git.deleteTagTitle%"
+        "title": "%git.menu.deleteTag%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.deleteWorktree",
-        "title": "%git.deleteWorktreeCommandTitle%"
+        "title": "%git.menu.deleteWorktree%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.fetch",
-        "title": "%git.fetchTitle%",
-        "icon": "$(repo-fetch)"
+        "title": "%git.menu.fetch%",
+        "icon": "$(repo-fetch)",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.fetchAll",
-        "title": "%git.fetchAllTitle%",
-        "icon": "$(repo-fetch)"
+        "title": "%git.fetchAllTitle.label%",
+        "icon": "$(repo-fetch)",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.getRepositoryContexts",
@@ -267,93 +315,124 @@
       },
       {
         "command": "git.graph.checkoutBranch",
-        "title": "%command.git.graph.checkoutBranch%"
+        "title": "%command.git.graph.checkoutBranch%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.checkoutDetached",
-        "title": "%command.git.graph.checkoutDetached%"
+        "title": "%command.git.graph.checkoutDetached%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.cherryPick",
-        "title": "%command.git.graph.cherryPick%"
+        "title": "%command.git.graph.cherryPick%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.compare",
-        "title": "%command.git.graph.compare%"
+        "title": "%command.git.graph.compare%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.compareMergeBase",
-        "title": "%command.git.graph.compareMergeBase%"
+        "title": "%command.git.graph.compareMergeBase%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.compareRemote",
-        "title": "%command.git.graph.compareRemote%"
+        "title": "%command.git.graph.compareRemote%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.copyHash",
-        "title": "%command.git.graph.copyHash%"
+        "title": "%command.git.graph.copyHash%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.copyMessage",
-        "title": "%command.git.graph.copyMessage%"
+        "title": "%command.git.graph.copyMessage%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.createBranch",
-        "title": "%command.git.graph.createBranch%"
+        "title": "%command.git.graph.createBranch%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.createTag",
-        "title": "%command.git.graph.createTag%"
+        "title": "%command.git.graph.createTag%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.deleteBranch",
-        "title": "%command.git.graph.deleteBranch%"
+        "title": "%command.git.graph.deleteBranch%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.openRemote",
-        "title": "%command.git.graph.openRemote%"
+        "title": "%command.git.graph.openRemote%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.init",
-        "title": "%git.initTitle%"
+        "title": "%git.initTitle.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.merge",
-        "title": "%git.mergeBranchTitle%"
+        "title": "%git.menu.merge%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.openChanges",
-        "title": "%command.git.openChanges%"
+        "title": "%command.git.openChanges.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.openFile",
-        "title": "%git.openFileCommand%"
+        "title": "%git.openFileCommand%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.openStagedChanges",
-        "title": "%command.git.openStagedChanges%"
+        "title": "%command.git.openStagedChanges.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.openUncommittedChanges",
-        "title": "%command.git.openUncommittedChanges%"
+        "title": "%command.git.openUncommittedChanges.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.openUnstagedChanges",
-        "title": "%command.git.openUnstagedChanges%"
+        "title": "%command.git.openUnstagedChanges.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.openWorktree",
-        "title": "%git.openWorktreeCommandTitle%"
+        "title": "%git.menu.openWorktree%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.pull",
-        "title": "%command.git.pull%",
-        "icon": "$(repo-pull)"
+        "title": "%git.menu.pull%",
+        "icon": "$(repo-pull)",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.push",
-        "title": "%command.git.push%",
-        "icon": "$(repo-push)"
+        "title": "%git.menu.push%",
+        "icon": "$(repo-push)",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.readSettings",
@@ -361,72 +440,106 @@
       },
       {
         "command": "git.rebase",
-        "title": "%git.rebaseTitle%"
+        "title": "%git.menu.rebase%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.refresh",
-        "title": "%git.refreshCommand%",
-        "icon": "$(refresh)"
+        "title": "%git.menu.refresh%",
+        "icon": "$(refresh)",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.removeRemote",
-        "title": "%git.removeRemoteTitle%"
+        "title": "%git.menu.removeRemote%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.renameBranch",
-        "title": "%git.renameBranchTitle%"
+        "title": "%git.menu.renameBranch%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.showOutput",
-        "title": "%git.showOutputCommand%"
+        "title": "%git.menu.showOutput%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.stageAll",
-        "title": "%git.stageAllCommand%"
+        "title": "%git.menu.stageAll%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.stageHunk",
-        "title": "%git.stageHunkTitle%"
+        "title": "%git.stageHunkTitle.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.stageSelectedRanges",
-        "title": "%git.stageSelectionTitle%"
+        "title": "%git.stageSelectionTitle.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.stash",
-        "title": "%git.stashTitle%"
+        "title": "%git.menu.stashChanges%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.stashApply",
-        "title": "%git.stashApplyTitle%"
+        "title": "%git.menu.applyStash%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.stashDrop",
-        "title": "%git.stashDropTitle%"
+        "title": "%git.menu.dropStash%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.stashPop",
-        "title": "%git.stashPopTitle%"
+        "title": "%git.menu.popStash%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.switchBranch",
-        "title": "%git.menu.checkout%"
+        "title": "%git.menu.checkout%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.undoCommit",
-        "title": "%git.undoCommitTitle%"
+        "title": "%git.menu.undoCommit%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.unstageAll",
-        "title": "%git.unstageAllCommand%"
+        "title": "%git.menu.unstageAll%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.unstageHunk",
-        "title": "%git.unstageHunkTitle%"
+        "title": "%git.unstageHunkTitle.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.unstageSelectedRanges",
-        "title": "%git.unstageSelectionTitle%"
+        "title": "%git.unstageSelectionTitle.label%",
+        "category": "Git",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.updateAutoFetch",
@@ -439,44 +552,53 @@
       {
         "command": "git.diff.stageHunk",
         "title": "%git.diff.stageHunk%",
-        "icon": "$(add)"
+        "icon": "$(add)",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.diff.stageSelection",
         "title": "%git.diff.stageSelection%",
-        "icon": "$(add)"
+        "icon": "$(add)",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.diff.unstageHunk",
         "title": "%git.diff.unstageHunk%",
-        "icon": "$(remove)"
+        "icon": "$(remove)",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.diff.unstageSelection",
         "title": "%git.diff.unstageSelection%",
-        "icon": "$(remove)"
+        "icon": "$(remove)",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.diff.revertHunk",
         "title": "%git.diff.revertHunk%",
-        "icon": "$(arrow-right)"
+        "icon": "$(arrow-right)",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.diff.revertSelection",
         "title": "%git.diff.revertSelection%",
-        "icon": "$(arrow-right)"
+        "icon": "$(arrow-right)",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitAndPushFromChanges",
-        "title": "git.commitAndPushFromChanges"
+        "title": "git.commitAndPushFromChanges",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.commitFromChanges",
-        "title": "git.commitFromChanges"
+        "title": "git.commitFromChanges",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.discardFile",
-        "title": "git.discardFile"
+        "title": "git.discardFile",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.executeRepositoryCommand",
@@ -484,15 +606,18 @@
       },
       {
         "command": "git.openChangesSource",
-        "title": "git.openChangesSource"
+        "title": "git.openChangesSource",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.stageFile",
-        "title": "git.stageFile"
+        "title": "git.stageFile",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.unstageFile",
-        "title": "git.unstageFile"
+        "title": "git.unstageFile",
+        "enablement": "!scmBusy"
       }
     ],
     "colors": [
@@ -621,6 +746,36 @@
         },
         {
           "submenu": "git.worktreeMenu",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "command": "git.clone",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "command": "git.switchBranch",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "submenu": "git.pullPushMenu",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "submenu": "git.remoteMenu",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "submenu": "git.stashMenu",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "submenu": "git.tagMenu",
           "when": "scmProvider == git",
           "group": "2_git"
         }
@@ -883,6 +1038,62 @@
           "command": "git.graph.deleteBranch",
           "group": "1"
         }
+      ],
+      "git.pullPushMenu": [
+        {
+          "command": "git.fetch",
+          "group": "1"
+        },
+        {
+          "command": "git.fetchAll",
+          "group": "2"
+        },
+        {
+          "command": "git.pull",
+          "group": "3"
+        },
+        {
+          "command": "git.push",
+          "group": "4"
+        }
+      ],
+      "git.remoteMenu": [
+        {
+          "command": "git.addRemote",
+          "group": "1"
+        },
+        {
+          "command": "git.removeRemote",
+          "group": "2"
+        }
+      ],
+      "git.stashMenu": [
+        {
+          "command": "git.stash",
+          "group": "1"
+        },
+        {
+          "command": "git.stashApply",
+          "group": "2"
+        },
+        {
+          "command": "git.stashPop",
+          "group": "3"
+        },
+        {
+          "command": "git.stashDrop",
+          "group": "4"
+        }
+      ],
+      "git.tagMenu": [
+        {
+          "command": "git.createTag",
+          "group": "1"
+        },
+        {
+          "command": "git.deleteTag",
+          "group": "2"
+        }
       ]
     },
     "viewsWelcome": [
@@ -992,6 +1203,22 @@
       {
         "id": "git.historyMoreMenu",
         "label": "%git.graph.more%"
+      },
+      {
+        "id": "git.pullPushMenu",
+        "label": "%git.menu.pullpush%"
+      },
+      {
+        "id": "git.remoteMenu",
+        "label": "%git.menu.remote%"
+      },
+      {
+        "id": "git.stashMenu",
+        "label": "%git.menu.stash%"
+      },
+      {
+        "id": "git.tagMenu",
+        "label": "%git.menu.tags%"
       }
     ]
   },

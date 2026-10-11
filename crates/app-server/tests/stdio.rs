@@ -6,6 +6,92 @@ use ash_app_server_protocol::protocol::common::ClientInfo;
 use tempfile::tempdir;
 
 #[test]
+fn git_foundation_serves_tui_reads_and_mutations_without_editor_extensions() {
+    use ash_app_server_protocol::protocol::git::GitBranchCreateParams;
+    use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
+    use ash_app_server_protocol::protocol::git::GitHeadDto;
+    use std::process::Command;
+
+    let root = tempdir().unwrap();
+    let directory = root.path().join("repository");
+    std::fs::create_dir(&directory).unwrap();
+    let git = |args: &[&str]| {
+        let output = Command::new("git")
+            .current_dir(&directory)
+            .args([
+                "-c",
+                "user.name=Git foundation test",
+                "-c",
+                "user.email=git@example.test",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "--initial-branch=main"]);
+    std::fs::write(directory.join("note.txt"), "before\n").unwrap();
+    git(&["add", "note.txt"]);
+    git(&["commit", "-m", "Initial"]);
+    std::fs::write(directory.join("note.txt"), "after\n").unwrap();
+
+    // This is the typed client used by TUI, against a real server with no editor host or packages.
+    let session = AppServerSession::start_stdio(
+        StdioAppServerCommand::new(env!("CARGO_BIN_EXE_ash-app-server"))
+            .with_argument("--listen")
+            .with_argument("stdio://")
+            .with_environment_variable("ASH_WORKSPACE_ROOT", directory.clone().into_os_string())
+            .with_environment_variable("ASH_HOME", root.path().join("profile").into_os_string()),
+        ClientInfo {
+            name: "ash-tui-git-foundation-test".into(),
+            version: "1".into(),
+        },
+        ClientCapabilities::default(),
+    )
+    .unwrap();
+    let mut client = session.client();
+    let status = client.git_status().unwrap();
+    assert!(matches!(status.head, GitHeadDto::Branch { ref name, .. } if name == "main"));
+    assert_eq!(status.changes.len(), 1);
+    assert_eq!(status.changes[0].path, "note.txt");
+    let diff = client.git_text_diff().unwrap();
+    assert_eq!(diff.diffs.len(), 1);
+    assert_eq!(diff.diffs[0].original, "before\n");
+    assert_eq!(diff.diffs[0].modified, "after\n");
+    client
+        .create_git_branch(GitBranchCreateParams {
+            repository_id: None,
+            name: "topic".into(),
+        })
+        .unwrap();
+    client
+        .switch_git_branch(GitBranchSwitchParams {
+            repository_id: None,
+            name: "topic".into(),
+        })
+        .unwrap();
+    assert_eq!(git(&["branch", "--show-current"]), "topic");
+    assert!(
+        client
+            .list_git_branches()
+            .unwrap()
+            .branches
+            .iter()
+            .any(|branch| branch.name == "topic" && branch.current)
+    );
+    assert_eq!(
+        std::fs::read_to_string(directory.join("note.txt")).unwrap(),
+        "after\n"
+    );
+    session.shutdown().unwrap();
+}
+
+#[test]
 fn app_server_serves_an_explicit_dir_over_stdio() {
     let root = tempdir().unwrap();
     let dir = root.path().join("dir");

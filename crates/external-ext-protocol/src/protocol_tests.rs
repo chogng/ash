@@ -371,6 +371,8 @@ fn response_must_match_request_incarnation_and_generation() {
                 kind: RegistrationKind::Command {
                     command: "acme.review".into(),
                     title: "Review".into(),
+                    category: None,
+                    enablement: None,
                     icon: None,
                     menus: Vec::new(),
                 },

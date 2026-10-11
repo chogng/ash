@@ -437,7 +437,7 @@ App 可预装并按认证请求激活 GitHub 扩展；TUI 默认不加载、不�
 | 受限 V8 执行与系统隔离                              | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放        |
 | 完整 TS API                                         | 尚未完成；现有可信 Worker 仍接入通用命令，不属于第三方扩展权限边界                                              |
 | Open VSX 搜索、下载、安装、更新和卸载               | 已接入 Rust Manager 与 Extensions 界面；支持 universal 正式版本、已有静态贡献及分别授权的基础 CommonJS API 子集 |
-| Rust 能力扩展与作者接口                             | GitHub 认证与本地 Git 已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成 |
+| Rust 能力扩展与作者接口                             | GitHub 认证已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成 |
 
 后续实现必须通过真实扩展入口验证：正常授权操作成功；伪造扩展身份、越界文件或仓库、未授权命令、
 受限 V8 的直接 Node 访问及所有扩展的产品 IPC/后端越权访问失败；授权 Node 包的真实文件、网络和子进程调用成功；撤销授权后在途和后续调用停止；关闭窗口释放注册与任务；文档编辑
@@ -924,10 +924,10 @@ ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm run test:smoke:desktop test/smoke/areas/chat/exte
 
 ## Git 内置能力与构建
 
-[`extensions/git`](../extensions/git/README.md) 是目录 scope 的 Rust 能力扩展，使用公共 SDK
-DataChannel 提供本地 Git 产品业务。App Server 保留目录授权、监管与现有 `git/*` adapter；
-仓库发现、状态版本、历史游标、监听、忽略规则通知和自动 fetch 只有扩展一份 owner。
-Git 的前端入口也已迁入扩展，在客户端所属的 Worker 中运行。扩展拥有 Git 命令、SCM provider、
+[`extensions/git`](../extensions/git/README.md) 是 TS 浏览器扩展，在客户端所属的 Worker 中运行。
+共享 Rust `ash-git` 保留基础 Git 执行与解析，App Server 的 `GitRuntime` / `GitService` 拥有
+目录授权、仓库发现、状态版本、历史游标、监听、忽略规则通知和自动 fetch，并提供现有 `git/*` 契约。
+Agent 的 worktree / Turn 事务和 TUI 不依赖前端扩展的启用状态。TS 扩展拥有 Git 命令、SCM provider、
 历史、quick diff、忽略规则装饰和多文件差异策略；manifest 拥有菜单、子菜单、颜色、欢迎内容、
 设置元数据与中英文 NLS。核心只提供通用 SCM 展示、编辑器模型、文件持久化和能力桥接。
 
@@ -942,4 +942,6 @@ GitHub 消费端通过可选的 `git.getRepositoryContexts` 与 `git.executeRepo
 
 [`build/builtin`](../build/builtin) 统一拥有内置扩展资源打包与浏览器快照。Rust 扩展的 manifest、
 NLS 和资源随 catalog 发布，Rust 源码及 Cargo 构建输入不进入资源包；可执行文件由共享后端
-构建、签名和包布局装配。Desktop 开发包、Remote 和 Code 发布包使用同一 Git 可执行组件。
+构建、签名和包布局装配。Git manifest 只有浏览器入口；浏览器源码由 renderer 构建打包，
+共享后端包只保留其元数据，不再构建或装配 Git 扩展可执行组件。禁用 Git 扩展后，通用 SCM、
+差异编辑、撤销与保存仍由核心 owner 提供；共享 Rust Git 与 Agent/TUI 继续可用。

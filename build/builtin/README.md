@@ -10,7 +10,12 @@ inputs; the shared backend build separately produces and signs each Rust executa
 owners. Package selection comes from this checkout's `extensions/`; external browser packages
 can be explicitly supplied through `ASH_WEB_EXTENSION_PATHS`.
 
-A package can contain both a Rust capability and a browser frontend. Git's `browser` entry is
-bundled with the public `ash` and supported `vscode` modules into its Worker resource; its manifest
+A package can contain both a Rust capability and a browser frontend. Git is a browser-only
+TypeScript package; its `browser` entry is bundled with the public `ash` and supported `vscode` modules into its Worker resource; its manifest
 and NLS travel with the same browser catalog. Desktop and Sessions load that entry through their
 generic extension hosts rather than linking Git frontend classes into renderer assemblies.
+
+Compiled browser module inputs are omitted from the resource snapshot; uncompiled samples and
+assets remain available. Browser source directories are excluded from backend resource staging.
+Git backend capabilities remain part of the shared Rust runtime rather than a packaged extension
+executable.

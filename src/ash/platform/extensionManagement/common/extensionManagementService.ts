@@ -12,6 +12,7 @@ export interface ExtensionsSearchOptions {
 
 export interface ExtensionsOpenOptions extends Pick<ExtensionsSearchOptions, "capabilityKind" | "languageId"> {
 	readonly mode?: "browse" | "installed" | "builtIn";
+	readonly view?: "extensions" | "plugins" | "skills" | "mcp";
 	readonly query?: string;
 }
 

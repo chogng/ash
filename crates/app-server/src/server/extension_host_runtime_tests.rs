@@ -126,6 +126,8 @@ fn invocation_operations_are_brokered_by_registration_kind() {
     let command = RegistrationKind::Command {
         command: "acme.run".into(),
         title: "Run".into(),
+        category: None,
+        enablement: None,
         icon: None,
         menus: Vec::new(),
     };

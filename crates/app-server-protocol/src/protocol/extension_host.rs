@@ -374,6 +374,12 @@ pub enum ExtensionHostRegistrationKindDto {
         #[schemars(length(min = 1, max = 512))]
         title: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(length(min = 1, max = 512))]
+        category: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(length(min = 1, max = 2048))]
+        enablement: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         #[schemars(length(min = 1, max = 128))]
         icon: Option<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]

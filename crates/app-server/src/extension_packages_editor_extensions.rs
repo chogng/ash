@@ -481,7 +481,17 @@ fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, Strin
                 .filter(|value| !value.is_empty() && value.len() <= 512)
                 .ok_or("invalid command title")?;
             events.insert(format!("onCommand:{command}"));
-            commands.push((command.to_owned(), title.to_owned()));
+            let title = match entry.get("category") {
+                None => title.to_owned(),
+                Some(category) => {
+                    let category = category
+                        .as_str()
+                        .filter(|value| !value.is_empty() && value.len() <= 512)
+                        .ok_or("invalid command category")?;
+                    format!("{category}: {title}")
+                }
+            };
+            commands.push((command.to_owned(), title));
         }
     }
     if let Some(entries) = manifest.pointer("/contributes/languages") {

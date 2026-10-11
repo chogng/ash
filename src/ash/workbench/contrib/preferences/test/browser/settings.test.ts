@@ -683,7 +683,6 @@ test('settingsLayout is the single projection from registered settings to catego
 		'agent-defaults',
 		'models',
 		'rules',
-		'skills',
 		'tools',
 		'sandbox',
 		'execution-trace',
@@ -1487,25 +1486,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
-		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'skills', 'tools', 'sandbox', 'execution-trace', 'hooks']
+		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'tools', 'sandbox', 'execution-trace', 'hooks']
 			.map(categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent),
-		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools', 'Sandbox', 'Execution trace', 'Hooks'],
+		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Tools', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
-	root.querySelector<HTMLElement>('[data-settings-category-id="skills"]')?.click();
-	await nextTurn();
-	assert.deepEqual(skillScopes, ['session-hooks']);
-	const skillToggle = root.querySelector<HTMLButtonElement>('.ash-skills > button');
-	assert.ok(skillToggle);
-	assert.equal(skillToggle.textContent, 'Disable skill');
-	skillToggle.click();
-	await nextTurn();
-	assert.deepEqual(skillMutations, [[skillId, false, 7, 'session-hooks']]);
-	assert.equal(skillToggle.textContent, 'Enable skill');
-	skillEnabled = true;
-	skillsChanged.fire();
-	await nextTurn();
-	assert.equal(skillToggle.textContent, 'Disable skill');
+	assert.equal(root.querySelector('[data-settings-category-id="skills"]'), null);
+	assert.deepEqual(skillScopes, []);
+	assert.deepEqual(skillMutations, []);
 	root.querySelector<HTMLElement>('[data-settings-category-id="agents"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');

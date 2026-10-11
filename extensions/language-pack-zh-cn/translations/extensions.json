@@ -1,6 +1,6 @@
 {
   "ash.extensions": {
-    "accessibilityHelp": "打开 /extensions 浏览和管理扩展。使用“内置”查看随产品提供的扩展，使用“已安装”管理市场和本地扩展，离线时也可操作。按 Tab 在控件间移动，按方向键选择扩展，按 Enter 打开详情。列表或详情中的启用和禁用控制整个编辑器扩展，包括脚本、主题、语法和代码片段。语言包通过显示语言设置管理。执行授权和权限在详情中单独审核。使用“来源”添加或暂停 Ash 开放源。按 Escape 关闭此帮助。",
+    "accessibilityHelp": "扩展、插件、技能和 MCP 服务器是可折叠的窗格。在窗格标题上按左右方向键可折叠或展开。打开 /extensions 浏览和管理扩展。使用“内置”查看随产品提供的扩展，使用“已安装”管理市场和本地扩展，离线时也可操作。按 Tab 在控件间移动，按方向键选择扩展，按 Enter 打开详情。列表或详情中的启用和禁用控制整个编辑器扩展，包括脚本、主题、语法和代码片段。语言包通过显示语言设置管理。执行授权和权限在详情中单独审核。使用“来源”添加或暂停 Ash 开放源。按 Escape 关闭此帮助。",
     "searchExtensions": "搜索扩展",
     "searchLanguageExtensions": "搜索语言扩展",
     "searchPackages": "搜索扩展",
@@ -107,7 +107,28 @@
     "backendUnavailable": "此提供程序在已连接的后端不可用。",
     "providerRunning": "已启用 · 正在运行",
     "providerStopped": "已启用 · 按需启动",
-    "installLocalAction": "安装本地扩展…"
+    "installLocalAction": "安装本地扩展…",
+    "pluginsPane": "插件",
+    "mcpPane": "MCP 服务器",
+    "searchPane": "搜索{0}",
+    "localPlugin": "本地插件",
+    "paneResults": "{0} 项",
+    "mcpToolsCount": "已注册 {0} 个工具",
+    "mcpRegistered": "已注册",
+    "skillMissing": "此技能已不可用。请刷新技能列表。",
+    "skillSource": "来源：{0}",
+    "skillCompatible": "兼容",
+    "skillCompatibilityUnknown": "兼容性未知",
+    "skillInvoke": "在聊天中使用 ${0} 调用已启用的技能。",
+    "disableSkill": "禁用技能",
+    "enableSkill": "启用技能",
+    "openSkillInstructions": "打开说明",
+    "mcpNoTools": "此服务器当前没有已注册的工具。",
+    "mcpContract": "契约版本：{0}",
+    "openPackage": "打开扩展包",
+    "capabilityHelp": "扩展包含可折叠的扩展、插件、技能和 MCP 服务器窗格。在窗格标题上按左右方向键可折叠或展开，按上下方向键可在标题间移动。在窗格内搜索，使用方向键选择项目，按 Enter 在编辑器中打开详情。技能启停和诊断位于详情中。扩展包安装、权限和卸载位于扩展包详情中。刷新会重新加载当前目录。",
+    "detailsHelp": "这里显示选中的扩展、插件、技能或 MCP 服务器详情。按 Tab 访问操作和内容。技能可以启用或禁用，也可以打开其说明。MCP 详情显示已注册的工具和已安装的扩展包信息。“打开扩展包”会打开所属扩展包，以管理安装和权限。",
+    "skillScopeChanged": "当前会话已切换。请刷新技能列表。"
   },
   "ash.workbench": {
     "command.OpenExtensions": "打开扩展",

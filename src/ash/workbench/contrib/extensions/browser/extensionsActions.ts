@@ -87,7 +87,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 	registrations.add(registerAction2(class ManageLocalExtensions extends Action2 {
 		constructor() { super({ id: 'ash.extensions.manageLocal', get title() { return localize2({ bundle: 'ash.extensions', key: 'manageLocalExtensions' }, 'Manage local extensions'); }, f1: true }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> {
-			await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { mode: 'installed' });
+			await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { view: 'plugins', mode: 'installed' });
 		}
 	}));
 	registrations.add(registerAction2(class ManageExtensionExecution extends Action2 {

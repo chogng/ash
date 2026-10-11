@@ -16,7 +16,7 @@ export class Git {
 		await this.open();
 		const toolbar = this.page.getByRole('toolbar', { name: 'Source control actions', exact: true });
 		// Refresh becomes enabled only after the selected provider has finished its operation.
-		await expect(toolbar.getByRole('button', { name: 'Git: Refresh', exact: true })).toBeEnabled();
+		await expect(toolbar.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
 		await this.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), path);
 	}
 }

@@ -130,6 +130,8 @@ impl Commands {
             kind: RegistrationKind::Command {
                 command: command.id,
                 title: command.title,
+                category: None,
+                enablement: None,
                 icon: None,
                 menus: Vec::new(),
             },

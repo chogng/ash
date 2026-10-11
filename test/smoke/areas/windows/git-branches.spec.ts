@@ -21,7 +21,9 @@ test('Git branch picker explains occupancy and switches after the other worktree
 			await picker.getByRole('combobox').fill('occupied');
 			await expect(picker.getByRole('option', { name: 'occupied Checked out in another worktree', exact: true })).toBeVisible();
 			await picker.getByRole('combobox').press('Enter');
-			await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('alert').filter({ hasText: 'Branch occupied is checked out in another worktree.' }).last()).toBeVisible();
+			await page.getByRole('button', { name: 'Show Notification Center', exact: true }).click();
+			await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toContainText('Branch occupied is checked out in another worktree.');
+			await page.keyboard.press('Escape');
 			await expect(picker).toHaveCount(0);
 		}
 		expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
@@ -46,7 +48,7 @@ test('Git branch menu switches branches and the status bar opens the branch pick
 	await run('git', ['branch', 'topic'], { cwd });
 
 	const page = workbench.page;
-	await workbench.git.selectTitleMenu(application, ['Checkout to…']);
+	await workbench.git.selectTitleMenu(application, ['Branch', 'Checkout to…']);
 	const picker = page.locator('.ash-quick-pick');
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ })).toBeVisible();
 	await picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ }).click();
@@ -55,8 +57,6 @@ test('Git branch menu switches branches and the status bar opens the branch pick
 
 	await page.locator('[data-statusbar-item-id="ash.status.git.branch"]').click();
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: /^main$/ })).toBeVisible();
-	await page.keyboard.press('Escape');
-	await workbench.git.selectTitleMenu(application, ['Branch', 'Checkout to…']);
 	await picker.locator('.ash-quick-pick-row-label', { hasText: /^main$/ }).click();
 	await expect.poll(async () => (await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
 });
@@ -75,7 +75,8 @@ test('Git branch menu preserves local edits when Git rejects the switch', { tag:
 	const picker = page.locator('.ash-quick-pick');
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ })).toBeVisible();
 	await picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ }).click();
-	await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('alert')).toContainText('Git rejected the switch. Check local changes and worktrees.');
+	await page.getByRole('button', { name: 'Show Notification Center', exact: true }).click();
+	await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toContainText('Git rejected the switch. Check local changes and worktrees.');
 	expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
 	expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 3;\n');
 });
@@ -122,7 +123,9 @@ test('Git commands report an unavailable repository without opening an input whe
 		['git.deleteWorktree', 'Could not delete worktree:'],
 	]) {
 		await workbench.quickaccess.runCommand(command!);
-		await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('alert').filter({ hasText: message! }).last()).toBeVisible();
+		await page.getByRole('button', { name: 'Show Notification Center', exact: true }).click();
+		await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toContainText(message!);
+		await page.keyboard.press('Escape');
 		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
 		await expect(page.getByRole('dialog', { name: 'Quick Input', exact: true })).toHaveCount(0);
 	}

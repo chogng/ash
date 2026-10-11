@@ -472,6 +472,7 @@ class PackageTests(unittest.TestCase):
             self.assertNotIn("ashRuntime", git_manifest)
             self.assertEqual("./browser/extension.ts", git_manifest["browser"])
             self.assertFalse((git_extension / "src").exists())
+            self.assertFalse((git_extension / "browser").exists())
             self.assertFalse((git_extension / "Cargo.toml").exists())
             self.assertFalse((output / "bin" / "ash-git-extension").exists())
             self.assertIn(

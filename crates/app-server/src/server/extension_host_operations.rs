@@ -502,11 +502,15 @@ fn registration_dto(
             RegistrationKind::Command {
                 command,
                 title,
+                category,
+                enablement,
                 icon,
                 menus,
             } => ExtensionHostRegistrationKindDto::Command {
                 command,
                 title,
+                category,
+                enablement,
                 icon,
                 menus,
             },

@@ -79,10 +79,17 @@ test.describe('Git extension enablement in the full product', () => {
 			await workbench.git.open();
 			await expect(workbench.page.locator('.ash-scm-commit-form')).toBeHidden();
 			await expect(workbench.page.getByRole('button', { name: 'Clone Repository', exact: true })).toHaveCount(0);
-			await expect(workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible .modified .stanza-editor-line-text')).toContainText(['const value = 3;']);
+			if (reloadMode === 'restart') {
+				await expect(workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible .modified .stanza-editor-line-text')).toContainText(['const value = 3;']);
+			}
 			await workbench.quickaccess.runCommand('ash.scm.fixture.activate');
 			await expect(workbench.page.getByRole('button', { name: 'Open Changes for main.ts', exact: true })).toHaveCount(0);
 			await expect(workbench.page.getByRole('button', { name: 'Open independent diff', exact: true })).toBeVisible();
+			if (reloadMode === 'renderer reload') {
+				// CDP reload bypasses the Desktop shutdown handshake; exercise editors again in the new realm.
+				await workbench.page.getByRole('button', { name: 'Open independent diff', exact: true }).click();
+				await expect(workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible .modified .stanza-editor-line-text')).toContainText(['const value = 3;']);
+			}
 			await toggleGit(workbench, 'Disabled');
 			await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2);
 			await reload();

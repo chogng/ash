@@ -1,52 +1,34 @@
-# Git capability extension
+# Git editor extension
 
-`ash.git` is the directory-scoped Rust provider for local Git workflows. It owns repository
-discovery, status revisions, graph cursors, directory authorization checks, file watchers,
-ignore invalidations and automatic fetch. Desktop and TUI consume the existing `git/*` domain
-API through App Server. Its browser entry owns Git commands, repository policy, SCM resources, history, quick diff and ignore decorations. Desktop retains generic SCM views, editor models and file persistence.
+`ash.git` is the TypeScript frontend for local Git workflows. Its browser entry runs in a
+window-owned Worker and owns Git commands, repository selection, SCM resources, history,
+quick diff, ignore decorations and multi-file diff policy. The manifest owns menus, welcome
+content, colors, settings and English/Chinese NLS. Workbench retains generic SCM views,
+editor models, undo, dirty state and file persistence.
 
-The executable `ash-git-extension` uses the public Rust SDK's typed DataChannel
-`git.repository`. App Server admits the exact product executable through its extension
-supervisor, binds canonical directory grants, forwards configuration changes and relays events.
-Revocation and scope shutdown cancel the provider. Recovery binds a new process incarnation;
-failed writes are never replayed, and previous status streams and graph cursors expire.
+The extension uses product-granted `backend.request/state` routes through the public `ash`
+module. App Server owns directory authorization, repository discovery, status revisions,
+graph cursors, watchers and automatic fetch in its shared `GitRuntime` and `GitService`.
+`crates/git` owns Git execution and parsing. Agent worktrees and Turn transactions use these
+shared Rust primitives directly; TUI uses the existing typed `git/*` App Server contract.
+None of these consumers requires the frontend Worker or a separate Git capability process.
+Shared configuration remains the only persistent autofetch owner.
 
-`crates/git` retains shared Git execution and parsing primitives used by worktrees and Turn
-transactions. OS file locks in the user's local data directory coordinate these consumers with
-the provider without creating metadata inside read-only repositories.
+`build/builtin` bundles the browser module and its dependencies into the immutable renderer
+catalog, with the manifest and NLS. Backend resources retain package metadata; no Git Rust
+executable, Cargo inputs or browser sources are installed in the shared runtime package.
 
-The shared package builds and signs the executable into `bin/` and stages the manifest and
-English/Chinese NLS under `ash-resources/extensions/git`. `build/builtin` owns builtin resource
-staging and browser snapshots; Rust sources and Cargo files are excluded from these artifacts.
-Unbundled test and Code development launches use an explicit absolute `ASH_GIT_EXTENSION_BIN`;
-packaged and Desktop development hosts resolve their declared product layout.
-
-The browser entry runs in a window-owned Worker. The public `ash` module provides SCM
-registration, client editor operations and product-granted backend routes. The package manifest
-owns commands, menus, submenus, welcome content, colors, settings and English/Chinese NLS.
-Use **Manage built-in editor extensions** in either window's command palette to disable
-`ash.git` for the current profile. This removes its browser Worker, commands, declarative
-contributions and SCM providers, without restarting other active browser extensions. The choice
-survives window reloads. Core text models, dirty state, undo, saving, diff editors and other SCM
-providers retain their own lifetimes. Re-enabling starts a new Git activation.
-
-This editor enablement does not revoke the directory-scoped Rust capability used by independent
-worktree and Turn consumers; execution authorization remains owned by App Server.
+Use **Manage built-in editor extensions** to disable `ash.git` for the current profile.
+This disposes its Worker, commands, contributions and SCM providers, while other SCM providers,
+text/diff editors, undo and saving keep their own lifetimes. The choice survives window reloads;
+re-enabling creates a new activation. Frontend enablement does not change shared Rust Git
+availability or App Server directory authorization, so Agent and TUI continue to use Git.
 
 `git.getRepositoryContexts` and `git.executeRepositoryCommand` are optional command contracts
-for GitHub consumers; core consumers do not import this extension's implementation.
-
-The client checks package provenance and grants before routing backend calls. Draft revisions,
-activation generations and provider retirement protect edits and cancel stale callbacks. Multi-diff
-sources and file actions use generic resolver and command descriptors; Git scopes, partial staging
-and reviewed-content checks stay in the extension. Shared configuration remains the autofetch owner.
-
-This is a trusted product capability process. Generic installed-extension enablement and
-third-party OS confinement are separate runtime capabilities; the Ash SCM registration contract does not claim complete VS Code `vscode.scm` API compatibility.
-
-Validation: `just test ash-git-extension` runs the migrated domain suite and launches the real
-executable through the product adapter for reads, writes, watcher events, cancellation,
-crash recovery, stale cursors, read-only grants and revocation.
+for GitHub consumers; core consumers do not import this extension's implementation. The client
+checks package provenance and grants before routing backend calls. Draft revisions, activation
+generations and provider retirement protect edits and cancel stale callbacks. The Ash SCM
+registration contract does not claim complete VS Code `vscode.scm` API compatibility.
 
 History graph requests can select an immutable union of commit revisions. The selection is part
 of the connection-owned cursor identity: changing it starts a new traversal, and continuation
@@ -60,3 +42,8 @@ versions independently of the working tree. The bundled provider contract is ver
 window-facing requests without graph revisions and binary markers without data still decode.
 
 The SCM host bridge advertises optional reference-selection and merge-base callbacks, publishes the upstream reference as an observable snapshot, and serializes immutable binary content as bounded byte arrays. Older providers without these capabilities retain the existing history view and binary marker behavior.
+
+Shared Git authorization, cancellation, watcher and history tests live in `ash-app-server`.
+Its stdio integration test exercises actual Git reads and mutations through the TUI client without
+editor extensions. Browser extension packaging and Electron enablement tests cover the frontend
+boundary separately.

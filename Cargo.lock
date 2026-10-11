@@ -620,7 +620,6 @@ dependencies = [
  "ash-features",
  "ash-feedback-contract",
  "ash-file-access",
- "ash-git",
  "ash-guardian-environment",
  "ash-memories",
  "ash-memory-diagnostics",

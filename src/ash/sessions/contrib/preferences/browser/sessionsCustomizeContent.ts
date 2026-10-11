@@ -3,19 +3,16 @@ import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/t
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import type { ExtensionsOpenOptions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AICustomizationManagementEditorInput } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
-import { ExtensionsContent } from '../../../../workbench/contrib/extensions/browser/extensionsViewlet.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
 import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
-import { SkillsSettingsContent } from '../../../../workbench/contrib/skills/browser/skillsSettingsContent.js';
 
-type CustomizeTab = 'settings' | 'plugins' | 'skills' | 'hooks';
+type CustomizeTab = 'settings' | 'hooks';
 
 /** Owns Customize navigation; each domain retains its content and operation state across tabs. */
 export class SessionsCustomizeContent extends Disposable implements SettingsContent {
@@ -31,8 +28,6 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 	private visible = false;
 	private activeTab: CustomizeTab = 'settings';
 	private query = new SettingsSearchQuery('');
-	private skills: SkillsSettingsContent | undefined;
-	private plugins: ExtensionsContent | undefined;
 	private hooks: SettingsSectionRenderer | undefined;
 
 	constructor(container: HTMLElement, private readonly closeSettings: () => Promise<void>, private readonly showEditor: () => void,
@@ -52,8 +47,6 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 		this.panel.setAttribute('role', 'tabpanel');
 		this.tabItems = [
 			{ id: 'settings', value: 'settings', label: localize('sessions.customize.settings', 'Settings'), tabId: 'ash-sessions-customize-settings', panelId: this.panel.id },
-			{ id: 'plugins', value: 'plugins', label: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), tabId: 'ash-sessions-customize-plugins', panelId: this.panel.id },
-			{ id: 'skills', value: 'skills', label: localize('skills.title', 'Skills'), tabId: 'ash-sessions-customize-skills', panelId: this.panel.id },
 			{ id: 'hooks', value: 'hooks', label: localize('sessions.customize.hooks', 'Hooks'), tabId: 'ash-sessions-customize-hooks', panelId: this.panel.id },
 		];
 		this.domNode.append(this.panel);
@@ -74,11 +67,6 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 		this.render();
 	}
 
-	public async openExtensions(options: ExtensionsOpenOptions): Promise<void> {
-		this.selectTab('plugins');
-		await this.plugins!.open(options);
-	}
-
 	public setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
@@ -95,14 +83,6 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 	private render(): void {
 		const searching = !this.query.isEmpty;
 		const isActive = (tab: CustomizeTab): boolean => this.visible && (searching || this.activeTab === tab);
-		if (isActive('skills') && !this.skills) {
-			this.skills = this._register(this.instantiation.createInstance(SkillsSettingsContent, this.panel));
-			this._register(this.skills.onDidChange(() => this.changed.fire()));
-		}
-		if (isActive('plugins') && !this.plugins) {
-			this.plugins = this._register(this.instantiation.createInstance(ExtensionsContent, this.panel, { mode: 'installed', beforeOpenEditor: async () => { await this.closeSettings(); this.showEditor(); } }));
-			this._register(this.plugins.onDidChange(() => this.changed.fire()));
-		}
 		if (isActive('hooks') && !this.hooks) {
 			this.hooks = this._register(this.instantiation.createInstance(SettingsSectionRenderer, this.panel, {
 				categoryId: 'hooks',
@@ -123,12 +103,9 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 			}, AccessibleViewProviderId.HooksSettings, AccessibilityVerbositySettingId.HooksSettings));
 
 		}
-		const item = (id: string, title: string, domNode: HTMLElement): SettingsTreeNode<SettingsContentItem> => ({ element: { kind: 'item', id, title, description: domNode.textContent ?? '', value: { domNode } } });
 		const nodes: SettingsTreeNode<SettingsContentItem>[] = [
 			{ element: { kind: 'group', id: 'settings', title: this.tabItems[0].label, description: '' }, children: [] },
-			{ element: { kind: 'group', id: 'plugins', title: this.tabItems[1].label, description: '' }, children: this.plugins ? [item('customize.plugins', this.tabItems[1].label, this.plugins.domNode)] : [] },
-			{ element: { kind: 'group', id: 'skills', title: this.tabItems[2].label, description: '' }, children: this.skills?.getNodes() ?? [] },
-			{ element: { kind: 'group', id: 'hooks', title: this.tabItems[3].label, description: '' }, children: this.hooks?.getNodes() as readonly SettingsTreeNode<SettingsContentItem>[] ?? [] },
+			{ element: { kind: 'group', id: 'hooks', title: this.tabItems[1].label, description: '' }, children: this.hooks?.getNodes() as readonly SettingsTreeNode<SettingsContentItem>[] ?? [] },
 		];
 		this.treeModel.setChildren(nodes);
 		this.tree.setNavigationTarget(searching ? undefined : this.activeTab);
@@ -136,8 +113,6 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 		this.tabs.element.hidden = searching;
 		this.tabs.setTabs(this.tabItems, this.activeTab);
 		this.panel.setAttribute('aria-labelledby', `ash-sessions-customize-${this.activeTab}`);
-		this.skills?.setVisible(isActive('skills'));
-		this.plugins?.setVisible(isActive('plugins'));
 		this.hooks?.setVisible(isActive('hooks'));
 	}
 

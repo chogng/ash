@@ -32,6 +32,9 @@ import { IGlobalExtensionEnablementService } from '../../../../platform/extensio
 import { IPluginService } from '../../../../platform/plugins/common/pluginService.js';
 import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
 import { changeExtensionEnablement, extensionEnablementLabel } from './extensionsActions.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry } from '../../../common/views.js';
+import { SkillsViewPane, McpServersViewPane } from './extensionsViews.js';
 import './extensions.css';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -126,7 +129,7 @@ export class ExtensionsContent extends Disposable {
 			type: AccessibleViewType.Help, priority: 100, name: `extensions-help-${generateUuid()}`, when: ContextKeyExpr.has('extensionsFocused'), getProvider: () => {
 				const focused = mainWindow.document.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Open /extensions to browse and manage extensions. Use Built-in for bundled extensions and Installed for market and local extensions, even offline. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Use Sources to add or pause an Ash open source. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions, Plugins, Skills and MCP Servers are collapsible panes. Use Left and Right on headers to collapse or expand them. Open /extensions to browse and manage extensions. Use Built-in for bundled extensions and Installed for market and local extensions, even offline. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Use Sources to add or pause an Ash open source. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 			}
 		}));
 	}
@@ -211,16 +214,16 @@ export class ExtensionsContent extends Disposable {
 					};
 				});
 			} else if (isInstalled) {
-				items = installed.filter(entry => !this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind)).map(installation => {
+				items = installed.filter(entry => (this.options.view !== 'plugins' || !entry.capabilities.some(capability => capability.kind === 'editorExtension')) && (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
 					const policy = policies.extensions.find(value => value.installationId === installation.installationId);
 					return { installation, enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: installation.package.id.split('@')[0], packageType: 'installed', description: installation.capabilities.map(capability => capability.kind).join(' · ') } };
 				});
-				if (!this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
+				if (this.options.view === 'plugins' || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
 					const catalog = await this.plugins.list();
-					items.push(...catalog.packages.filter(plugin => plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, description: localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
+					items.push(...catalog.packages.filter(plugin => this.options.view === 'plugins' || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, description: this.options.view === 'plugins' ? localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') : localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
 				}
 			} else {
-				const options = { limit: 200, capabilityKind: this.options.capabilityKind, languageId: this.options.languageId };
+				const options = { limit: 200, packageType: this.options.view === 'plugins' ? 'plugin' : undefined, capabilityKind: this.options.capabilityKind, languageId: this.options.languageId };
 				const snapshot = await (refresh ? this.extensionManagement.refreshBrowse(query, options) : this.extensionManagement.browse(query, options));
 				unavailableSources = snapshot.unavailableSources;
 				items = snapshot.packages.map(entry => {
@@ -259,10 +262,22 @@ export class ExtensionsContent extends Disposable {
 
 export class ExtensionsViewPane extends ViewPane {
 	private readonly content: ExtensionsContent;
-	constructor(container: HTMLElement, options: IViewPaneOptions, @IInstantiationService instantiation: IInstantiationService) { super(container, options); this.setHeaderVisible(false); this.content = this._register(instantiation.createInstance(ExtensionsContent, this.contentElement, {})); }
-	public async open(options?: ExtensionsOpenOptions): Promise<void> { await this.content.open(options); }
-	public override setVisible(visible: boolean): void { super.setVisible(visible); this.content.setVisible(visible); }
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IInstantiationService instantiation: IInstantiationService) { super(container, options); this.content = this._register(instantiation.createInstance(ExtensionsContent, this.contentElement, options.id === 'ash.extensions.plugins' ? { view: 'plugins', mode: 'installed' } : {})); this._register(this.onDidChangeBodyVisibility(visible => this.content.setVisible(visible))); }
+	public async open(options?: ExtensionsOpenOptions): Promise<void> { this.setExpanded(true); await this.content.open(this.id === 'ash.extensions.plugins' ? { ...options, view: 'plugins' } : options); }
 	public override focus(): void { this.content.focus(); }
+}
+
+/** Both product hosts use the same capability panes with their own view registry and location. */
+export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry, location = ViewContainerLocation.Sidebar): DisposableStore {
+	const registrations = new DisposableStore();
+	registrations.add(registry.registerViewContainer({ id: 'ash.extensions', title: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), location, icon: Lxicon.extensions, order: 8 }));
+	registrations.add(registry.registerViews('ash.extensions', [
+		{ id: 'ash.extensions.view', title: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), canToggleVisibility: false, order: 0, ctorDescriptor: new SyncDescriptor(ExtensionsViewPane) },
+		{ id: 'ash.extensions.plugins', title: localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Plugins'), canToggleVisibility: false, order: 1, collapsed: true, ctorDescriptor: new SyncDescriptor(ExtensionsViewPane) },
+		{ id: 'ash.extensions.skills', title: localize({ bundle: 'ash.extensions', key: 'filterSkills' }, 'Skills'), canToggleVisibility: false, order: 2, collapsed: true, ctorDescriptor: new SyncDescriptor(SkillsViewPane) },
+		{ id: 'ash.extensions.mcp', title: localize({ bundle: 'ash.extensions', key: 'mcpPane' }, 'MCP Servers'), canToggleVisibility: false, order: 3, collapsed: true, ctorDescriptor: new SyncDescriptor(McpServersViewPane) },
+	]));
+	return registrations;
 }
 
 function extensionCapabilityFilters(): readonly (IQuickPickItem & { readonly kind?: ExtensionsCapabilityKind; })[] {

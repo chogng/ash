@@ -168,11 +168,19 @@ pub(super) fn validate_registrations(
             RegistrationKind::Command {
                 command,
                 title,
+                category,
+                enablement,
                 icon,
                 menus,
             } => {
                 validate_selector(command, "command")?;
                 validate_display_text(title, "command title")?;
+                if let Some(category) = category {
+                    validate_display_text(category, "command category")?;
+                }
+                if let Some(enablement) = enablement {
+                    validate_short_text(enablement, 2048, "command enablement")?;
+                }
                 if let Some(icon) = icon {
                     validate_short_text(icon, 128, "command icon")?;
                 }

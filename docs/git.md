@@ -9,17 +9,15 @@
 ## 快速理解
 
 Desktop Renderer 和 TUI 不启动 Git 进程，也不解析 Git 输出。App Server 在明确的 `Dir` 内
-接收 typed Git intent，经公共 SDK 的 typed DataChannel 调用 `ash.git` Rust 扩展，再把 client-safe DTO 返回产品入口。SCM 是
+接收 typed Git intent，由共享 Rust `GitRuntime` / `GitService` 调用 `ash-git`，再把 client-safe DTO 返回产品入口。SCM 是
 Workbench 的通用展示与 provider 编排层；Git 是当前注册到 SCM 的版本控制 provider 和后端领域。
 
 ```text
-Desktop SCM History View → Git history provider → Desktop Git domain service
-Desktop SCM Changes View → SCM repository/provider → Desktop Git domain service
+Desktop SCM History View → Git history provider → TS Git extension service
+Desktop SCM Changes View → SCM repository/provider → TS Git extension service
   → TS Git API adapter → renderer protocol client
   ↔ MessagePort relay（Electron）或 Web transport + Git notification
-  ↔ App Server GitRuntime / GitProviderClient
-  ↔ ash.git（受监管的目录 scope 进程）
-  → 扩展 GitRuntime / GitService
+  ↔ App Server GitRuntime / GitService
   → ash-git
   → system Git
 ```
@@ -179,7 +177,7 @@ VS Code 的 extension-host 进程布局。
 | Workbench SCM                            | repository registry、通用 history contract、Changes、历史图展示和 Editor 打开语义                                                 | Changes、状态栏和历史图均通过 SCM contract 消费 provider                     | 不直接消费 `IGitService` 或 Git 状态                        |
 | Desktop Git provider                     | 把 `IGitService` 的仓库、资源组、提交输入、状态栏命令、refs、history 和历史 Chat 上下文映射为 SCM contract                        | `GitSCMContribution` 注册每个仓库的 `GitSCMProvider` 和 `GitHistoryProvider` | 只拥有前端映射，不拥有 Git RPC 或 Git output parsing        |
 | Desktop `IGitService` 与 Git API adapter | 前端 Git 契约、固定操作目标仓库、连接事件和 typed `git/*` transport                                                               | 已接入分支、独立 worktree、整合流程、stash、tag、remote、提交修改和部分暂存  | 保持 Git 专属；普通 UI 不消费生成 DTO；不改名为 SCM service |
-| `ash.git` 扩展 `GitRuntime` / `GitService` | Git operation serialization、`Authorization<InspectRepository>` / `Authorization<MutateRepository>`、repository projection 与通知 | 已实现                                                                       | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade       |
+| App Server `GitRuntime` / `GitService` | Git operation serialization、`Authorization<InspectRepository>` / `Authorization<MutateRepository>`、repository projection 与通知 | 已实现                                                                       | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade       |
 | `ash-git`                                | Git executable、命令、解析和 failure semantics                                                                                    | 已实现                                                                       | 与 SCM UI 无依赖                                            |
 | `git-turn-changes`                       | 按 Session/Thread/Turn 捕获 Git tree、归属 Tool 写入、维护 ChangeSet 与提交状态                                                   | 已实现                                                                       | 只接受 Git repository，不拥有 Thread 目录或 GitHub Issue    |
 | `worktree`                               | 组合 `ash-git` inventory、维护 Thread 独占 checkout/目录和持久化绑定                                                              | 已接入 App Server 的 Thread 创建与恢复                                       | 不拥有 Turn 归属、摘要或提交状态机                          |
@@ -234,18 +232,18 @@ Peek 使用共享 `ZoneWidget`，宽度与锚点按正文区域计算，避免�
 
 ## 所有权
 
-Git 产品业务由 [`extensions/git`](../extensions/git/README.md) 独立拥有。扩展缺失时 Git API
-返回不可用，基础目录服务继续运行。恢复创建新的状态流和历史游标身份；不重放失败写入。
-共享 Git 原语、Turn 文件事务和 worktree 管理仍属于各自核心领域。
+[`extensions/git`](../extensions/git/README.md) 拥有 TS Git 命令和 SCM 界面；共享 Rust 的
+`ash-git`、App Server Git 服务、Turn 文件事务和 worktree 管理各由已有领域 owner 承担。
+禁用前端 Git 扩展只撤销该窗口的命令与 provider，Agent 和 TUI 的基础 Git 能力继续可用。
+目录授权、取消和连接所属的历史游标仍由 App Server 管理；不重放失败写入。
 
 
 | 层级                                       | 当前职责                                                                                                                                                                                    | 不拥有                                                  |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | Desktop SCM（当前实现）                    | 从 provider 显示资源组、提交输入、状态栏命令和历史图；打开操作交给共享 Editor 服务                                                                                                          | Git process、porcelain parser、任意 host path authority |
 | Git API adapter / renderer protocol client | 领域 service 组织输入并转换结果；API adapter 调用协议；protocol client 校验生成协议、配对请求并分发通知；Electron relay 只转发消息                                                          | Git domain semantics、最终路径授权、另一份仓库状态      |
-| `ash.git` 扩展 `GitRuntime`                 | 发现目录集合中的仓库，按 repository 串行化 operation、维护 projection/revision、消费 watcher hint、去重并发布状态                                                                           | Git command/parsing、Renderer state                     |
-| `ash.git` 扩展 `GitService`                 | 冻结 canonical `Dir` 与 repository projection root、映射目录/仓库路径、持有 Tokio runtime并调用 `ash-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界                         | live projection、notification                           |
-| App Server `GitRuntime` / `GitProviderClient` | 产品最终授权、扩展激活／scope 生命周期、typed 调用与通知转发 | 仓库状态、监听、自动 fetch、历史游标 |
+| App Server `GitRuntime`                 | 发现目录集合中的仓库，按 repository 串行化 operation、维护 projection/revision、消费 watcher hint、去重并发布状态                                                                           | Git command/parsing、Renderer state                     |
+| App Server `GitService`                 | 冻结 canonical `Dir` 与 repository projection root、映射目录/仓库路径、持有 Tokio runtime并调用 `ash-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界                         | live projection、notification                           |
 | `ash-app-server-protocol`                  | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name                                                                                                               | process/runtime state                                   |
 | `ash-git`                                  | system Git identity、仓库发现、porcelain-v2 snapshot、分页 graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、目录产品边界、Renderer state      |
 | `worktree`                                 | 同仓库 worktree 清单、按 branch/path 解析可用 target、来源目录 nested cwd 映射、Codex Desktop settings 与 `codex-thread.json` 归属                                                          | Git process、Session lifecycle、产品目录切换、选择器 UI |
@@ -254,15 +252,15 @@ Git 操作的接入位置：
 
 | 职责                         | 源码                                                                                                                                                                                                                                                                                                |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 前端契约、仓库选择与结果转换 | [`IGitService`](../src/ash/workbench/contrib/git/common/gitService.ts)、[`GitService`](../src/ash/workbench/contrib/git/browser/gitService.ts)                                                                                                                                                      |
-| 命令、输入和确认框           | [`gitBranches.ts`](../src/ash/workbench/contrib/git/browser/gitBranches.ts)、[`gitWorktrees.ts`](../src/ash/workbench/contrib/git/browser/gitWorktrees.ts)、[`git.contribution.ts`](../src/ash/workbench/contrib/git/browser/git.contribution.ts)                                                   |
-| 协议调用与连接               | [`Git API adapter`](../src/ash/platform/git/browser/gitApi.ts)、[`protocol client`](../src/ash/platform/agentHost/browser/appServerProtocolClient.ts)                                                                                                                                               |
+| 前端契约、仓库选择与结果转换 | [`GitService`](../extensions/git/browser/gitService.ts)、[`extension.ts`](../extensions/git/browser/extension.ts)                                                                                                                                                      |
+| 命令、输入和确认框           | [`commands.ts`](../extensions/git/browser/commands.ts)、[`package.json`](../extensions/git/package.json)                                                   |
+| 协议调用与连接               | [`Git API adapter`](../extensions/git/browser/backend.ts)、[`protocol client`](../src/ash/platform/agentHost/browser/appServerProtocolClient.ts)                                                                                                                                               |
 | Electron 连接启动和透明转发  | [`daemon launcher`](../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)、[`relay`](../src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts)、[`MessagePort transport`](../src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts) |
 | 协议定义和生成边界           | [`Git protocol`](../crates/app-server-protocol/src/protocol/git.rs)、[`exporter`](../crates/app-server-protocol/src/export.rs)，生成的 request map 与 decoder 位于 `.build/protocol/typescript/`                                                                                                    |
 | Git 执行与部分 index 编辑    | [`references.rs`](../crates/git/src/references.rs)、[`index_edit.rs`](../crates/git/src/working_copy/index_edit.rs)                                                                                                                                                                                 |
-| Rust 调度与通知              | [`git_operations.rs`](../crates/app-server/src/server/git_operations.rs)、[`provider adapter`](../crates/app-server/src/git_provider.rs)、[`扩展 runtime`](../extensions/git/src/git_runtime.rs)                                                                                                                                                        |
+| Rust 调度与通知              | [`git_operations.rs`](../crates/app-server/src/server/git_operations.rs)、[`GitService`](../crates/app-server/src/git_service.rs)、[`GitRuntime`](../crates/app-server/src/server/git_runtime.rs)                                                                                                                                                        |
 
-这些入口复用已有协议与连接：每个 renderer 一条独立连接，共享 profile 的 app-server daemon；没有新增 Host 或需要退出的旧 Host 注册。生成协议与 decoder 已覆盖这些方法，前端命令只依赖 `IGitService`。命令通过 `getRepository` 先取得目标 ID，后续查询、输入、确认和执行始终使用该 ID。
+这些入口复用已有协议与连接：每个 renderer 一条独立连接，共享 profile 的 app-server daemon；没有新增 Host 或需要退出的旧 Host 注册。生成协议与 decoder 已覆盖这些方法，前端命令只依赖扩展的 `GitService`。命令通过 `getRepository` 先取得目标 ID，后续查询、输入、确认和执行始终使用该 ID。
 
 取消选择器或确认框会释放 UI 资源且不发送修改请求；修改请求发出后沿用后端的有限 Git 操作，不把关闭输入框当作取消执行。连接关闭仍由 protocol client 拒绝该连接的未完成请求，并取消正在处理的服务端请求；监听订阅由前端 service 释放，重新连接时重新发现仓库。脏 worktree 的删除由 Rust 拒绝；打开目录继续走工作区切换服务，编辑器未保存内容继续由 working copy 处理。会话持有的 worktree 仍由会话生命周期管理。
 
@@ -315,7 +313,7 @@ Thread 提交不走普通 `git/commit`。`git-turn-changes` 保存每轮不可�
   `git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 文件、提交和切分支操作返回新的 `GitStatusResult`；创建/删除分支返回分支列表，后端同时推进状态 revision、清理旧 graph cursor 并通知所有连接。worktree 操作返回路径或清单，不改变当前检出的分支；首次打开 View 也会自动刷新；
-- `ash.git` 扩展监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms
+- App Server Git runtime 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms
   debounce 合并 burst；事件只触发重新查询，不直接成为 Git 状态；
 - 忽略装饰使用独立的 `git/ignoreChanged` 通知：普通文件变化只查询相关路径，嵌套 `.gitignore`
   变化只查询所在目录。index、`info/exclude`、Git 配置（包括 include）和 Git 解析出的全局排除

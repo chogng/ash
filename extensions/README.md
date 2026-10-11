@@ -48,10 +48,10 @@ User-installed extensions are a separate profile-level root. Extensions packages
 
 ## Bundled packages
 
-[`git`](git/README.md) owns local Git repository state, history, file watchers and automatic fetch
-in a directory-scoped Rust SDK process. App Server keeps authorization and transport adapters;
-Desktop and TUI use the existing Git domain contracts. `build/builtin` stages builtin resources,
-while the shared runtime package ships `ash-git-extension` separately in `bin/`.
+[`git`](git/README.md) is a browser TypeScript extension owning Git commands and SCM presentation.
+App Server and `ash-git` retain the shared repository, history, watcher and execution capabilities
+used independently by Desktop, Agent and TUI. `build/builtin` bundles the frontend and stages its
+metadata; the shared runtime package needs no separate Git extension executable.
 
 
 `remote-ssh` registers the product's `ssh` authority resolver through the TS SDK in the Rust V8

@@ -209,12 +209,19 @@ pub struct ExtensionWorkspaceFolder {
 impl ExtensionHostInitialization {
     pub fn validate(&self) -> Result<(), ProtocolError> {
         if let Some(localization) = &self.localization {
-            if localization.uri.is_empty() || localization.uri.len() > 32768
+            if localization.uri.is_empty()
+                || localization.uri.len() > 32768
                 || localization.uri.chars().any(char::is_control)
-                || localization.bundle.len() > 10000 || localization.package.len() > 10000
-                || localization.bundle.iter().chain(localization.package.iter()).any(|(key, value)| {
-                    key.is_empty() || key.len() > 1024 || value.len() > 64 * 1024
-                }) {
+                || localization.bundle.len() > 10000
+                || localization.package.len() > 10000
+                || localization
+                    .bundle
+                    .iter()
+                    .chain(localization.package.iter())
+                    .any(|(key, value)| {
+                        key.is_empty() || key.len() > 1024 || value.len() > 64 * 1024
+                    })
+            {
                 return Err(protocol_error("invalid extension localization snapshot"));
             }
         }
@@ -393,6 +400,10 @@ pub enum RegistrationKind {
     Command {
         command: String,
         title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        category: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        enablement: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         icon: Option<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]

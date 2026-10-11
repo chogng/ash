@@ -16,7 +16,7 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 		await mkdir(join(directory, 'extensions/capability'));
 		await writeFile(join(directory, 'extensions/capability/Cargo.toml'), '[package]\nname = "capability"\nversion = "1.0.0"\n');
 		await mkdir(join(directory, 'extensions/git/src'), { recursive: true });
-		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', ashRuntime: { kind: 'rust', entrypoint: 'ash-git-extension' } }));
+		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', ashRuntime: { kind: 'rust', entrypoint: 'test-capability' } }));
 		await writeFile(join(directory, 'extensions/git/src/main.rs'), 'fn main() {}');
 		await writeFile(join(directory, 'extensions/git/Cargo.toml'), '[package]');
 		await writeFile(join(directory, 'extensions/git/package.nls.zh-CN.json'), JSON.stringify({ displayName: 'Git 支持' }));
@@ -49,7 +49,7 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 	}
 });
 
-test('combined Rust and browser packages publish the bundled frontend without its TypeScript sources', async () => {
+test('browser Git packages publish their bundled frontend without a Rust runtime', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-combined-extension-'));
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
@@ -61,17 +61,15 @@ test('combined Rust and browser packages publish the bundled frontend without it
 		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/git/browser'), { recursive: true });
-		await mkdir(join(directory, 'extensions/git/src'));
-		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', ashRuntime: { kind: 'rust', entrypoint: 'ash-git-extension' } }));
+		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts' }));
 		await writeFile(join(directory, 'extensions/git/browser/main.ts'), "import { marker } from './helper.js'; export async function activate(): Promise<string> { return marker; }");
 		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export const marker: string = 'combined-entry-marker';");
-		await writeFile(join(directory, 'extensions/git/src/main.rs'), 'fn main() {}');
-		await writeFile(join(directory, 'extensions/git/Cargo.toml'), '[package]');
+		await writeFile(join(directory, 'extensions/git/browser/sample.ts'), 'export const sample = 1;');
 		const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], { cwd: directory, encoding: 'utf8', timeout: 30_000, env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' } });
 		assert.ifError(result.error);
 		assert.equal(result.status, 0, result.stderr);
 		const bundle = JSON.parse(await readFile(join(directory, 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
-		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['browser/main.ts', 'package.json']);
+		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['browser/main.ts', 'browser/sample.ts', 'package.json']);
 		const module = Buffer.from(bundle.resources['test.git']['browser/main.ts'], 'base64').toString('utf8');
 		assert.match(module, /combined-entry-marker/);
 		assert.doesNotMatch(module, /from ['"]\.\/helper\.js['"]|Promise<string>/);
