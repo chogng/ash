@@ -1,4 +1,9 @@
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
+import '../../../src/ash/base/browser/ui/button/button.css';
+import '../../../src/ash/base/browser/ui/actionbar/actionbar.css';
+import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
+import '../../../src/ash/base/browser/ui/menu/menu.css';
+import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import '../../../src/ash/workbench/contrib/scm/browser/quickDiff.contribution.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
@@ -11,6 +16,7 @@ import { InMemoryConfigurationService } from '../../../src/ash/platform/configur
 import { DiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/diffEditorWidget.js';
 import '../../../src/ash/editor/contrib/diffEditorBreadcrumbs/browser/contribution.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
+import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { MultiDiffEditorWidget } from '../../../src/ash/editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 import { DocumentDiffItem, MultiDiffEditorModel } from '../../../src/ash/editor/browser/widget/multiDiffEditor/model.js';
 import { DiffModel } from '../../../src/ash/editor/common/diff/diffModel.js';
@@ -26,8 +32,22 @@ import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
-import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
-import { MenusRegistry, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
+import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { MenusRegistry, MenuId, IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { EditorPart, IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
+import { EditorPaneMatch } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
+import { TextDiffEditor } from '../../../src/ash/workbench/browser/parts/editor/textDiffEditor.js';
+import { createDiffEditorInput, DIFF_EDITOR_ID, isDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
+import { registerDiffEditorCommands } from '../../../src/ash/workbench/browser/parts/editor/diffEditorCommands.js';
+import { DiffEditorCommandsService, IDiffEditorCommandsService } from '../../../src/ash/workbench/browser/parts/editor/diffEditorCommandsService.js';
+import { BrowserEditorService } from '../../../src/ash/workbench/services/editor/browser/browserEditorService.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import type { DiffEditorSelectionHunkToolbarContext } from '../../../src/ash/editor/browser/widget/diffEditor/features/gutterFeature.js';
 import type { IDiffEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
@@ -108,6 +128,8 @@ let themeBinding: IDisposable | undefined;
 const sessionPane = resources.add(new MutableDisposable<SessionChangesEditor>());
 const sessionChanges = resources.add(new Emitter<{ sessionId: string; threadId: string; }>());
 let sessionServices: ReturnType<typeof editorServices.createChild> | undefined;
+let titleEditor: EditorPart | undefined;
+let titleConfiguration: InMemoryConfigurationService | undefined;
 
 function createSessionChangesPane(): SessionChangesEditor {
 	if (!sessionServices) {
@@ -147,6 +169,57 @@ function createSessionChangesPane(): SessionChangesEditor {
 }
 
 const harness = {
+	async openTitleComparison(): Promise<void> {
+		registerDiffEditorCommands();
+		const host = document.createElement('div');
+		host.id = 'title-comparison';
+		document.body.prepend(host);
+		resources.add(toDisposable(() => host.remove()));
+		titleConfiguration = resources.add(new InMemoryConfigurationService());
+		const services = resources.add(createTestEditorServices(titleConfiguration));
+		services.registerSingleton(ICommandService, () => resources.add(new CommandService(services)));
+		services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
+		services.registerSingleton(IEditorPart, () => titleEditor!);
+		services.registerSingleton(IEditorService, () => resources.add(new BrowserEditorService(titleEditor!)));
+		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(DiffEditorCommandsService));
+		registerCodeEditorServices(services);
+		const contexts = services.get(IContextKeyService);
+		resources.add(bindColorTheme(services.get(IThemeService), document.documentElement));
+		const store: ITextResourceStore = {
+			onDidChange: Event.None,
+			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
+			save: async () => ({ revision: undefined }),
+		};
+		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, store, {}));
+		const registry = new EditorPaneRegistry();
+		resources.add(registry.registerEditorPane({
+			id: DIFF_EDITOR_ID,
+			name: 'Diff editor',
+			canOpen: input => isDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+			create: () => services.createInstance(TextDiffEditor, store, { modelService: models, createComputationService: () => service.createComputationService() }),
+		}));
+		titleEditor = resources.add(services.createInstance(EditorPart, host, {
+			registry,
+			configurationService: titleConfiguration,
+			contextKeyService: contexts,
+			titleActions: { menuService: services.get(IMenuService), contextMenuProvider: services.get(IContextMenuService) },
+		}));
+		titleEditor.layout({ width: 1000, height: 300 });
+		await titleEditor.openEditor(createDiffEditorInput(
+			{ resource: URI.file('/title/before.ts'), label: 'before.ts', initialText: 'before\nshared ' },
+			{ resource: URI.file('/title/after.ts'), label: 'after.ts', initialText: 'after\nshared' },
+		), { pinned: true });
+	},
+	readTitleComparison(): { mode: string | undefined; original: string | undefined; ignoreWhitespace: boolean | undefined; changes: number | undefined; } {
+		const pane = titleEditor?.activePane;
+		const control = pane instanceof TextDiffEditor ? pane.getControl() : undefined;
+		return {
+			mode: control?.viewMode,
+			original: control?.originalEditor.getModel()?.getText(),
+			ignoreWhitespace: titleConfiguration?.getValue<boolean>('diffEditor.ignoreTrimWhitespace'),
+			changes: control?.diff?.hunks.length,
+		};
+	},
 	async openSessionChanges(): Promise<void> {
 		const pane = createSessionChangesPane();
 		pane.setVisible(true);

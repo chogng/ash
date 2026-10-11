@@ -2368,6 +2368,64 @@ test("EditorPart validates Grid layouts before closing current editors", async (
 	dom.window.close();
 });
 
+test('Diff title menu follows each group and updates layout and whitespace checks from settings', async () => {
+	const { SET_DIFF_VIEW_MODE_INLINE, SET_DIFF_VIEW_MODE_SIDE_BY_SIDE, SET_DIFF_VIEW_MODE_AUTOMATIC, TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, DIFF_SWAP_SIDES } = await import('../../diffEditorCommands.js');
+	const { DIFF_EDITOR_ID } = await import('../../../../../common/editor/diffEditorInput.js');
+	const { IDiffEditorCommandsService } = await import('../../diffEditorCommandsService.js');
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using contexts = new ContextKeyService();
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	const configuration = new InMemoryConfigurationService();
+	const registry = new EditorPaneRegistry();
+	registry.registerEditorPane(descriptor(DIFF_EDITOR_ID, '.diff', () => new TestEditorPane(DIFF_EDITOR_ID)));
+	registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
+	const menus = new MenuService(commands, contexts);
+	let overflow: readonly import('../../../../../../base/common/actions.js').IAction[] = [];
+	using editor = createEditorPart(dom.window.document.body, {
+		registry,
+		configurationService: configuration,
+		contextKeyService: contexts,
+		titleActions: { menuService: menus, contextMenuProvider: { showContextMenu: delegate => { overflow = delegate.getActions(); } } },
+	});
+	await editor.openEditor(input('/review.diff'));
+	const review = editor.activeGroup;
+	using reviewContext = contexts.createScoped(review.domNode.querySelector<HTMLElement>('.ash-editor-title-actions')!);
+	const diffActions = () => menus.getMenuActions(MenuId.EditorTitle, { arg: { groupId: review.id } }, reviewContext).find(([group]) => group === '1_diff')![1];
+	const layoutActions = () => menus.getMenuActions(MenuId.DiffEditorViewSubmenu, undefined, reviewContext).flatMap(([, actions]) => actions);
+	const checkedLayout = () => layoutActions().filter(action => action.checked).map(action => action.id);
+	const expectedIds = [SET_DIFF_VIEW_MODE_INLINE, SET_DIFF_VIEW_MODE_SIDE_BY_SIDE, SET_DIFF_VIEW_MODE_AUTOMATIC];
+	assert.deepEqual(layoutActions().map(action => action.id), expectedIds);
+	assert.deepEqual(diffActions().map(action => action.id), [`submenu.${MenuId.DiffEditorViewSubmenu.id}`, TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, DIFF_SWAP_SIDES]);
+	assert.deepEqual(checkedLayout(), [SET_DIFF_VIEW_MODE_AUTOMATIC]);
+	assert.equal(diffActions()[1]!.checked, false);
+	review.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.toolbar.moreActions"] button')!.click();
+	assert.deepEqual(overflow.filter(action => action.id !== 'separator').slice(0, 3).map(action => action.id), diffActions().map(action => action.id));
+	await configuration.updateValue('diffEditor.renderSideBySide', false);
+	assert.deepEqual(checkedLayout(), [SET_DIFF_VIEW_MODE_INLINE]);
+	await configuration.updateValue('diffEditor.renderSideBySide', true);
+	await configuration.updateValue('diffEditor.useInlineViewWhenSpaceIsLimited', false);
+	assert.deepEqual(checkedLayout(), [SET_DIFF_VIEW_MODE_SIDE_BY_SIDE]);
+	await configuration.updateValue('diffEditor.ignoreTrimWhitespace', false);
+	assert.equal(diffActions()[1]!.checked, true);
+	await configuration.updateValue('diffEditor.useInlineViewWhenSpaceIsLimited', true);
+	assert.deepEqual(checkedLayout(), [SET_DIFF_VIEW_MODE_AUTOMATIC]);
+	await editor.splitActiveGroupHorizontal();
+	await editor.openEditor(input('/code.ts'), { pinned: true });
+	using codeContext = contexts.createScoped(editor.activeGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-actions')!);
+	assert.equal(menus.getMenuActions(MenuId.EditorTitle, undefined, codeContext).some(([group]) => group === '1_diff'), false);
+	assert.equal(diffActions().length, 3);
+	const invoked: unknown[] = [];
+	services.registerInstance(IEditorPart, editor);
+	services.registerInstance(IDiffEditorCommandsService, {
+		setViewMode: async (mode: string) => { invoked.push({ group: editor.activeGroup.id, mode }); },
+	} as never);
+	const submenu = diffActions()[0] as import('../../../../../../base/common/actions.js').SubmenuAction;
+	await submenu.actions.find(action => action.id === SET_DIFF_VIEW_MODE_INLINE)!.run();
+	assert.deepEqual(invoked, [{ group: review.id, mode: 'inline' }]);
+	dom.window.close();
+});
+
 test("Editor title toolbar splits the active group and owns More Actions", async () => {
 	const [
 		{ MenuService },

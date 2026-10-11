@@ -16,6 +16,45 @@ test.afterEach(async ({ page }) => {
 });
 
 for (const locale of ['en', 'zh-CN'] as const) {
+	test(`diff title More Actions runs layout, whitespace and swap commands by keyboard (${locale})`, async ({ page }, testInfo) => {
+		await page.setViewportSize({ width: 1400, height: 700 });
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison());
+		const more = page.locator('#title-comparison [data-action-id="ash.toolbar.moreActions"] button');
+		await more.focus();
+		await more.press('Enter');
+		const view = page.getByRole('menuitem', { name: localized(locale, 'Diff View', '差异视图'), exact: true });
+		await page.keyboard.press('ArrowDown');
+		await expect(view).toBeFocused();
+		await view.press('ArrowRight');
+		const inline = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Inline Diff', '显示行内差异'), exact: true });
+		const sideBySide = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Side by Side Diff', '显示并排差异'), exact: true });
+		const automatic = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Use Automatic Diff Layout', '使用自动差异布局'), exact: true });
+		await expect(inline).toHaveAttribute('aria-checked', 'false');
+		await expect(sideBySide).toHaveAttribute('aria-checked', 'false');
+		await expect(automatic).toHaveAttribute('aria-checked', 'true');
+		await testInfo.attach(`diff-title-menu-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+		await inline.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().mode)).toBe('inline');
+		await more.press('Enter');
+		await view.press('ArrowRight');
+		await expect(inline).toHaveAttribute('aria-checked', 'true');
+		await sideBySide.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().mode)).toBe('sideBySide');
+		await more.press('Enter');
+		const whitespace = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Leading/Trailing Whitespace Differences', '显示首尾空白差异'), exact: true });
+		await expect(whitespace).toHaveAttribute('aria-checked', 'false');
+		await whitespace.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().ignoreWhitespace)).toBe(false);
+		await more.press('Enter');
+		await expect(whitespace).toHaveAttribute('aria-checked', 'true');
+		await page.getByRole('menuitem', { name: localized(locale, 'Swap Left and Right Editor Side', '交换左右编辑器侧'), exact: true }).press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().original)).toBe('after\nshared');
+		await more.press('Enter');
+		await page.keyboard.press('Escape');
+		await expect(more).toBeFocused();
+	});
+
 	test(`diff pairs edited code after inserted setup and highlights whole identifiers (${locale})`, async ({ page }, testInfo) => {
 		await page.setViewportSize({ width: 1500, height: 600 });
 		await openDiffPage(page, locale);

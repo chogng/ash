@@ -248,11 +248,21 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (this.scopedContextKeyService && this.configurationService) {
 			const context = this.scopedContextKeyService;
 			const configuration = this.configurationService;
+			const settings = [
+				'diffEditor.hideUnchangedRegions.enabled',
+				'diffEditor.renderSideBySide',
+				'diffEditor.useInlineViewWhenSpaceIsLimited',
+				'diffEditor.ignoreTrimWhitespace',
+			];
 			// The menu state follows configuration, including Settings and restored values.
-			const update = () => context.setContext('config.diffEditor.hideUnchangedRegions.enabled', configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'));
+			const update = (): void => context.bufferChangeEvents(() => {
+				for (const setting of settings) {
+					context.setContext(`config.${setting}`, configuration.getValue<boolean>(setting));
+				}
+			});
 			update();
 			this._register(configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')) {
+				if (settings.some(setting => event.affectsConfiguration(setting))) {
 					update();
 				}
 			}));

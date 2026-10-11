@@ -1,5 +1,6 @@
 {
   "ash": {
+    "diffEditor.toolbar.help": "使用编辑器工具栏的“更多操作”菜单可选择行内、并排或自动差异布局，显示首尾空白差异，或交换原始侧与修改侧。使用方向键浏览菜单，按 Enter 执行操作，按 Escape 关闭菜单。",
     "accessibility.editorSaveRecovery": "保存失败时，对话框提供恢复操作。用 Tab 选择可用的覆盖、使用管理员权限重试、另存为或还原，按 Enter 执行。Escape 取消并保留未保存的修改。覆盖使只读文件可写；还原放弃未保存的修改。",
     "actions.pasteSelectionClipboard": "粘贴选区剪贴板",
     "diffEditor.lineHeight.invalid": "差异编辑器行高必须是非负有限数值。",
