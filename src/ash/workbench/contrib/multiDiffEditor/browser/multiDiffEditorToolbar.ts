@@ -12,6 +12,8 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { localize } from '../../../../nls.js';
 import { VIEW_ID } from '../../files/common/files.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../contrib/git/common/gitService.js';
@@ -38,7 +40,13 @@ export class MultiDiffEditorToolbar extends Disposable {
 	private readonly overlay = this._register(new MutableDisposable<DisposableStore>());
 	private busy = false;
 
-	constructor(private readonly options: MultiDiffEditorToolbarOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IDialogService private readonly dialogs: IDialogService, @IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService) {
+	constructor(
+		private readonly options: MultiDiffEditorToolbarOptions,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService,
+		@IHoverService private readonly hoverService: IHoverService,
+	) {
 		super();
 		const ownerDocument = options.container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
@@ -59,6 +67,14 @@ export class MultiDiffEditorToolbar extends Disposable {
 	}
 
 	private createSourceToolbar(container: HTMLElement): void {
+		if (this.options.input.source?.kind === 'snapshot') {
+			const labelDomNode = h(container.ownerDocument, 'span');
+			labelDomNode.className = 'ash-multi-diff-editor-source-label';
+			labelDomNode.textContent = this.options.input.label;
+			container.append(labelDomNode);
+			this._register(this.hoverService.setupDelayedHover(labelDomNode, { content: this.options.input.label }));
+			return;
+		}
 		const primary = new ToolbarAction('multiDiff.source', sourceLabel(this.options.input.source), 'Select change source', undefined, this.options.editorService !== undefined, () => this.selectCurrentSource());
 		const dropdown = new ToolbarAction('multiDiff.source.menu', 'Select Changes', 'Select Changes', Lxicon.chevronDown, true, () => { });
 		const actions: readonly IAction[] = [
@@ -87,17 +103,17 @@ export class MultiDiffEditorToolbar extends Disposable {
 				: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', Lxicon.git, false, () => { });
 		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', Lxicon.chevronDown, true, () => { });
 		const actions = isMain ? this.commitActions() : this.pullRequestActions();
-		const files = new ToolbarAction('multiDiff.files', 'Files', 'Open Files', Lxicon.files, this.options.viewsService !== undefined, () => this.options.viewsService?.focusView(VIEW_ID));
+		const files = new ToolbarAction('multiDiff.files', localize('multiDiff.files', 'Files'), localize('multiDiff.openFiles', 'Open Files'), Lxicon.files, this.options.viewsService !== undefined, () => this.options.viewsService?.focusView(VIEW_ID));
 		const secondary = [
-			new ToolbarAction('multiDiff.collapseAll', 'Collapse All', 'Collapse all diffs', Lxicon.fold, true, this.options.collapseAll),
-			new ToolbarAction('multiDiff.expandAll', 'Expand All', 'Expand all diffs', Lxicon.unfold, true, this.options.expandAll),
+			new ToolbarAction('multiDiff.collapseAll', localize('multiDiff.collapseAll', 'Collapse All'), localize('multiDiff.collapseAllTooltip', 'Collapse all diffs'), Lxicon.fold, true, this.options.collapseAll),
+			new ToolbarAction('multiDiff.expandAll', localize('multiDiff.expandAll', 'Expand All'), localize('multiDiff.expandAllTooltip', 'Expand all diffs'), Lxicon.unfold, true, this.options.expandAll),
 			...(this.options.input.source?.kind === 'git' ? [
 				new ToolbarAction('multiDiff.stageAll', 'Stage All', 'Stage all changes in this source', Lxicon.check, this.canOpenGit(), () => this.stageAll()),
 				new ToolbarAction('multiDiff.discardAll', 'Discard All', 'Discard all working-tree changes in this source', Lxicon.discard, this.canOpenGit(), () => this.discardAll()),
 			] : []),
 		];
 		const toolbar = this._register(new WorkbenchToolBar(container, this.options.contextMenuProvider, {
-			ariaLabel: 'Multi-diff repository actions',
+			ariaLabel: localize('multiDiff.repositoryActions', 'Multi-diff repository actions'),
 			actionViewItemProvider: action => action.id === primary.id && !contributedPrimary
 				? new DropdownWithPrimaryActionViewItem(primary, dropdown, actions, this.options.contextMenuProvider)
 				: undefined,
@@ -129,10 +145,6 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 	private async selectCurrentSource(): Promise<void> {
 		const source = this.options.input.source;
-		if (source?.kind === 'snapshot') {
-			await this.options.editorService!.openEditor(this.options.input, { pinned: true });
-			return;
-		}
 		if (source?.kind === 'external') {
 			const resolved = await this.sourceResolvers.resolve(this.options.input.resource);
 			if (!resolved) throw new Error('No resolver is registered for this multi-diff source.');
@@ -140,7 +152,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 			await this.options.editorService.openEditor(createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source), { pinned: true });
 			return;
 		}
-		return this.openGitSource(source?.scope ?? 'uncommitted');
+		return this.openGitSource(source?.kind === 'git' ? source.scope : 'uncommitted');
 	}
 
 	private async openGitSource(scope: GitMultiDiffScope): Promise<void> {

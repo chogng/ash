@@ -15,7 +15,109 @@ test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.ashDiffIntegration?.dispose());
 });
 
+for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light'] as const) {
+	test(`multi diff aligns header corners and borders without hover elevation (${theme})`, async ({ page }, testInfo) => {
+		await openDiffPage(page);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('history'));
+		await page.evaluate(themeId => window.ashDiffIntegration.setTitleTheme(themeId), theme);
+		const section = page.locator('#title-comparison .stanza-multi-diff-editor-section').first();
+		const header = section.locator('.stanza-multi-diff-editor-header');
+		const toggle = header.locator('.stanza-multi-diff-editor-header-toggle');
+		await toggle.click();
+		await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+		await page.mouse.move(0, 0);
+		const readHeader = async () => section.evaluate(node => {
+			const headerNode = node.querySelector<HTMLElement>('.stanza-multi-diff-editor-header')!;
+			const toggleNode = node.querySelector<HTMLElement>('.stanza-multi-diff-editor-header-toggle')!;
+			const outer = node.getBoundingClientRect();
+			const inner = headerNode.getBoundingClientRect();
+			const outerStyle = getComputedStyle(node);
+			const innerStyle = getComputedStyle(headerNode);
+			return {
+				background: innerStyle.backgroundColor,
+				bounds: [outer.x, outer.y, outer.width, outer.height, inner.x, inner.y, inner.width, inner.height],
+				insets: [inner.top - outer.top, outer.bottom - inner.bottom, inner.left - outer.left, outer.right - inner.right],
+				borders: [outerStyle.borderTopWidth, outerStyle.borderBottomWidth, outerStyle.borderLeftWidth, outerStyle.borderRightWidth].map(Number.parseFloat),
+				radii: [outerStyle.borderTopLeftRadius, innerStyle.borderTopLeftRadius, innerStyle.borderBottomLeftRadius].map(Number.parseFloat),
+				edges: [outerStyle.borderColor, innerStyle.borderColor, innerStyle.borderRadius],
+				shadows: [outerStyle.boxShadow, innerStyle.boxShadow, getComputedStyle(toggleNode).boxShadow],
+				appearance: getComputedStyle(toggleNode).appearance,
+			};
+		});
+		const resting = await readHeader();
+		for (let index = 0; index < resting.insets.length; index++) {
+			expect(resting.insets[index]).toBeCloseTo(resting.borders[index]!, 4);
+		}
+		expect(resting.radii[1]! + resting.borders[2]!).toBe(resting.radii[0]);
+		expect(resting.radii[2]).toBe(resting.radii[1]);
+		expect(resting.appearance).toBe('none');
+		await toggle.hover();
+		const hovered = await readHeader();
+		expect(hovered.background).not.toBe(resting.background);
+		expect(hovered.bounds).toEqual(resting.bounds);
+		expect(hovered.edges).toEqual(resting.edges);
+		expect(hovered.shadows).toEqual(['none', 'none', 'none']);
+		await testInfo.attach(`multi-diff-hover-${theme}`, { body: await section.screenshot(), contentType: 'image/png' });
+		await page.mouse.move(0, 0);
+		await toggle.press('Tab');
+		await page.keyboard.press('Shift+Tab');
+		await expect(toggle).toBeFocused();
+		await expect(toggle).toHaveCSS('outline-style', 'solid');
+		await toggle.press('Enter');
+		await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+		await expect(header).toHaveCSS('border-bottom-left-radius', '0px');
+		const expanded = await section.evaluate(node => {
+			const body = node.querySelector('.stanza-multi-diff-editor-body')!.getBoundingClientRect();
+			return node.getBoundingClientRect().bottom - body.bottom;
+		});
+		expect(expanded).toBeCloseTo(resting.borders[1]!, 4);
+	});
+}
+
 for (const locale of ['en', 'zh-CN'] as const) {
+	test(`history multi-diff shows static commit information and preserves keyboard actions (${locale})`, async ({ page }, testInfo) => {
+		await page.setViewportSize({ width: 1200, height: 700 });
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('history'));
+		const host = page.locator('#title-comparison');
+		const label = host.locator('.ash-multi-diff-editor-source-label');
+		const toolbar = host.locator('.stanza-multi-diff-editor-toolbar');
+		await expect(host.locator('.ash-editor-breadcrumbs')).toBeHidden();
+		await expect(label).toHaveText('98246c6 · Simplify diff editor update method and improve accessibility');
+		await expect(toolbar.locator('.stanza-multi-diff-editor-source-toolbar')).toHaveCount(0);
+		await expect(toolbar.getByRole('button', { name: /98246c6/ })).toHaveCount(0);
+		const files = toolbar.getByRole('button', { name: localized(locale, 'Files', '文件'), exact: true });
+		await files.focus();
+		await files.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.focusedHistoryView())).toBe('ash.explorer');
+		const more = toolbar.locator('.ash-toolbar-more-actions button');
+		await more.focus();
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: localized(locale, 'Collapse All', '全部折叠'), exact: true }).press('Enter');
+		const section = host.locator('.stanza-multi-diff-editor-header-toggle');
+		await expect(section).toHaveAttribute('aria-expanded', 'false');
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: localized(locale, 'Expand All', '全部展开'), exact: true }).press('Enter');
+		await expect(section).toHaveAttribute('aria-expanded', 'true');
+		await more.press('Enter');
+		await page.keyboard.press('Escape');
+		await expect(more).toBeFocused();
+		for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light'] as const) {
+			await page.evaluate(themeId => window.ashDiffIntegration.setTitleTheme(themeId), theme);
+			await expect(label).toBeVisible();
+			await expect(label).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+			await testInfo.attach(`history-toolbar-${locale}-${theme}`, { body: await host.screenshot(), contentType: 'image/png' });
+		}
+		await page.evaluate(() => window.ashDiffIntegration.resizeTitleComparison(320));
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+		await expect(files).toBeVisible();
+		await expect(more).toBeVisible();
+		await label.hover();
+		await expect(page.locator('.ash-hover').filter({ hasText: '98246c6 · Simplify diff editor' })).toBeVisible();
+		await testInfo.attach(`history-toolbar-${locale}-narrow`, { body: await host.screenshot(), contentType: 'image/png' });
+	});
+
 	test(`diff title More Actions runs layout, whitespace and swap commands by keyboard (${locale})`, async ({ page }, testInfo) => {
 		await page.setViewportSize({ width: 1400, height: 700 });
 		await openDiffPage(page, locale);

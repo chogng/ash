@@ -6,6 +6,29 @@ test.beforeEach(async ({ page }) => {
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);
 });
 
+test('Panel lays out active and retained panes before resize or activation returns', async ({ page }) => {
+	const samples = await page.evaluate(async () => {
+		const fixture = window.ashCompositeIntegration;
+		await fixture.open('first', true);
+		fixture.resize(400, 300);
+		const resized = fixture.geometry();
+		await fixture.open('second', true);
+		const activated = fixture.geometry();
+		fixture.resize(600, 240);
+		await fixture.open('first', true);
+		const retained = fixture.geometry();
+		fixture.hide();
+		fixture.resize(300, 320);
+		await fixture.open('first', true);
+		return [resized, activated, retained, fixture.geometry()];
+	});
+	for (const sample of samples) {
+		expect(sample.paneWidth, JSON.stringify(sample)).toBe(sample.hostWidth);
+		expect(sample.paneHeight, JSON.stringify(sample)).toBe(sample.hostHeight);
+	}
+	await expect(page.getByRole('textbox', { name: 'First input' })).toBeFocused();
+});
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 	test(`pane headers and resize handles reach their click targets immediately with ${reducedMotion} motion`, async ({ page }) => {
 		await page.emulateMedia({ reducedMotion });

@@ -203,8 +203,9 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		this.updateTitleVisibility();
 	}
 
-	override layout(_dimension: IDimension): void {
+	override layout(dimension: IDimension): void {
 		this.compositeBar.layout();
+		super.layout(dimension);
 	}
 
 	private updateTitleVisibility(): void {

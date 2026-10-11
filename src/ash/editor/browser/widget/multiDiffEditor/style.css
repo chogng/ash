@@ -43,12 +43,17 @@
 	align-items: center;
 	box-sizing: border-box;
 	width: 100%;
-	height: 34px;
+	/* The virtual section height already includes both outer border strokes. */
+	height: calc(34px - 2 * var(--ash-strokeThickness, 0px));
 	min-width: 0;
 	color: inherit;
 	background: var(--ash-multiDiffEditor-headerBackground);
 	border-bottom: var(--ash-strokeThickness) solid
 		var(--ash-multiDiffEditor-border);
+	border-radius: calc(
+			var(--ash-cornerRadius-medium) - var(--ash-strokeThickness)
+		)
+		calc(var(--ash-cornerRadius-medium) - var(--ash-strokeThickness)) 0 0;
 	cursor: pointer;
 }
 
@@ -70,6 +75,7 @@
 	text-align: left;
 	background: transparent;
 	border: 0;
+	appearance: none;
 	cursor: pointer;
 }
 
@@ -98,6 +104,9 @@
 
 .stanza-multi-diff-editor-section.collapsed .stanza-multi-diff-editor-header {
 	border-bottom-color: transparent;
+	border-radius: calc(
+		var(--ash-cornerRadius-medium) - var(--ash-strokeThickness)
+	);
 }
 
 .stanza-multi-diff-editor-title {
@@ -143,7 +152,7 @@
 
 .stanza-multi-diff-editor-item-editor {
 	position: sticky;
-	top: 34px;
+	top: calc(34px - 2 * var(--ash-strokeThickness, 0px));
 	min-width: 0;
 	width: 100%;
 	overflow: hidden;

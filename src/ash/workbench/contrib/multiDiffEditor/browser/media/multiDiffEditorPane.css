@@ -50,6 +50,21 @@
 
 .stanza-multi-diff-editor-toolbar-right {
 	margin-left: auto;
+	flex-shrink: 0;
+}
+
+.stanza-multi-diff-editor-toolbar-left {
+	min-width: 0;
+}
+
+.ash-multi-diff-editor-source-label {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .stanza-multi-diff-editor-toolbar-status {

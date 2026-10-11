@@ -190,8 +190,10 @@ export class ScmViewPane extends ViewPane {
 	public override focus(): void {
 		if (this.welcomeController.enabled) {
 			this.welcomeController.focus();
+		} else if (this.tree.selection.length === 0 && this.commitInput.input) {
+			this.commitInput.focus();
 		} else {
-			super.focus();
+			this.tree.domFocus();
 		}
 	}
 

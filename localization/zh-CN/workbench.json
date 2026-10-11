@@ -1,5 +1,12 @@
 {
   "ash": {
+    "multiDiff.files": "文件",
+    "multiDiff.openFiles": "打开文件视图",
+    "multiDiff.collapseAll": "全部折叠",
+    "multiDiff.collapseAllTooltip": "折叠所有差异",
+    "multiDiff.expandAll": "全部展开",
+    "multiDiff.expandAllTooltip": "展开所有差异",
+    "multiDiff.repositoryActions": "多文件差异仓库操作",
     "workbench.editorGroup.lockedLabel": "编辑器组，已锁定",
     "workbench.editorGroup.label": "编辑器组",
     "workbench.editorGroup.emptyLabel": "空编辑器组",

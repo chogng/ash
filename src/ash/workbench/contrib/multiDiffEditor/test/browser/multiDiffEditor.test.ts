@@ -252,9 +252,9 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		original: { resource: URI.parse('git-commit:/parent/committed.ts'), initialText: 'before', readOnly: true },
 		modified: { resource: URI.parse('git-commit:/commit/committed.ts'), initialText: 'after', readOnly: true },
 	}], 'Committed changes', { kind: 'snapshot', repositoryId: 'repo', label: 'Committed changes' }), new AbortController().signal);
-	requiredElement<HTMLButtonElement>(parent, 'button[aria-label="Committed changes"]').click();
-	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(opened.at(-1), 'ash-multi-diff:/history');
+	assert.equal(parent.querySelector('.ash-multi-diff-editor-source-label')?.textContent, 'Committed changes');
+	assert.equal(parent.querySelector('.stanza-multi-diff-editor-source-toolbar'), null);
+	assert.deepEqual(opened, ['file:///workspace/src/first.ts']);
 	assert.equal(parent.querySelector('button[aria-label="Commit"]'), null);
 	assert.equal(parent.querySelector('button[aria-label="Stage Changes"]'), null);
 	assert.equal(parent.querySelector('button[aria-label="Discard Changes"]'), null);

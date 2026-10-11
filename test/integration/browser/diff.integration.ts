@@ -52,14 +52,19 @@ import type { DiffEditorSelectionHunkToolbarContext } from '../../../src/ash/edi
 import type { IDiffEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { isEditorPaneWithViewState } from '../../../src/ash/workbench/browser/parts/editor/editorWithViewState.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
-import { matchMultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { createMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
+import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditor.js';
@@ -130,6 +135,8 @@ const sessionChanges = resources.add(new Emitter<{ sessionId: string; threadId: 
 let sessionServices: ReturnType<typeof editorServices.createChild> | undefined;
 let titleEditor: EditorPart | undefined;
 let titleConfiguration: InMemoryConfigurationService | undefined;
+let titleTheme: TestThemeService | undefined;
+let focusedHistoryView: string | undefined;
 
 function createSessionChangesPane(): SessionChangesEditor {
 	if (!sessionServices) {
@@ -169,7 +176,7 @@ function createSessionChangesPane(): SessionChangesEditor {
 }
 
 const harness = {
-	async openTitleComparison(): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' = 'diff'): Promise<void> {
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
 		host.id = 'title-comparison';
@@ -182,8 +189,11 @@ const harness = {
 		services.registerSingleton(IEditorPart, () => titleEditor!);
 		services.registerSingleton(IEditorService, () => resources.add(new BrowserEditorService(titleEditor!)));
 		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(DiffEditorCommandsService));
+		services.registerInstance(IDialogService, resources.add(new DialogService()));
 		registerCodeEditorServices(services);
+		services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 		const contexts = services.get(IContextKeyService);
+		titleTheme = services.get(IThemeService) as TestThemeService;
 		resources.add(bindColorTheme(services.get(IThemeService), document.documentElement));
 		const store: ITextResourceStore = {
 			onDidChange: Event.None,
@@ -198,6 +208,20 @@ const harness = {
 			canOpen: input => isDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 			create: () => services.createInstance(TextDiffEditor, store, { modelService: models, createComputationService: () => service.createComputationService() }),
 		}));
+		resources.add(registry.registerEditorPane({
+			id: MULTI_DIFF_EDITOR_ID,
+			name: 'Multi-diff editor',
+			canOpen: matchMultiDiffEditor,
+			create: () => services.createInstance(MultiDiffEditor, {
+				modelService: models,
+				createComputationService: () => service.createComputationService(),
+				editorService: services.get(IEditorService),
+				viewsService: {
+					focusView: async (viewId: string) => { focusedHistoryView = viewId; return true; },
+				} as IViewsService,
+				fileActions: { menuService: services.get(IMenuService), contextMenuProvider: services.get(IContextMenuService), contextKeyService: contexts },
+			}),
+		}));
 		titleEditor = resources.add(services.createInstance(EditorPart, host, {
 			registry,
 			configurationService: titleConfiguration,
@@ -205,11 +229,30 @@ const harness = {
 			titleActions: { menuService: services.get(IMenuService), contextMenuProvider: services.get(IContextMenuService) },
 		}));
 		titleEditor.layout({ width: 1000, height: 300 });
+		if (kind === 'history') {
+			await titleEditor.openEditor(createMultiDiffEditorInput(
+				URI.parse('ash-multi-diff:/scm-history/repo_internal/parent/98246c6'),
+				[{
+					label: 'src/example.ts',
+					original: { resource: URI.parse('git-commit:/parent/example.ts'), initialText: 'before\nshared', readOnly: true },
+					modified: { resource: URI.parse('git-commit:/98246c6/example.ts'), initialText: 'after\nshared', readOnly: true },
+				}],
+				'98246c6 · Simplify diff editor update method and improve accessibility',
+				{ kind: 'snapshot', repositoryId: 'repo_internal', label: '98246c6' },
+			), { pinned: true });
+			return;
+		}
 		await titleEditor.openEditor(createDiffEditorInput(
 			{ resource: URI.file('/title/before.ts'), label: 'before.ts', initialText: 'before\nshared ' },
 			{ resource: URI.file('/title/after.ts'), label: 'after.ts', initialText: 'after\nshared' },
 		), { pinned: true });
 	},
+	setTitleTheme(themeId: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light'): void {
+		const themes = { vs: lightColorTheme, 'vs-dark': darkColorTheme, 'hc-black': highContrastDarkColorTheme, 'hc-light': highContrastLightColorTheme };
+		titleTheme!.setColorTheme(themes[themeId]);
+	},
+	resizeTitleComparison(width: number): void { titleEditor!.layout({ width, height: 300 }); },
+	focusedHistoryView(): string | undefined { return focusedHistoryView; },
 	readTitleComparison(): { mode: string | undefined; original: string | undefined; ignoreWhitespace: boolean | undefined; changes: number | undefined; } {
 		const pane = titleEditor?.activePane;
 		const control = pane instanceof TextDiffEditor ? pane.getControl() : undefined;

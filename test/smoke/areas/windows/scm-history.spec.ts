@@ -9,6 +9,81 @@ const run = promisify(execFile);
 
 test.use({ gitRepository: true });
 
+test('SCM activation focuses its input or selected resource without outlining the whole pane', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	await writeFile(testWorkspace.file, 'const changed = true;\n');
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const pane = page.locator('[data-view-id="ash.gitView"]');
+	const input = pane.locator('.ash-scm-input .stanza-editor-input');
+	await expect(input).toBeFocused();
+	await expect(pane).toHaveCSS('outline-style', 'none');
+	await expect(pane.locator('.ash-scm-input')).toHaveCSS('outline-style', 'solid');
+	const tree = pane.getByRole('tree', { name: 'Source control changes' });
+	await expect(tree.getByRole('treeitem').filter({ hasText: 'main.ts' })).toBeVisible();
+	await tree.focus();
+	await tree.press('Home');
+	const resource = await tree.getAttribute('aria-activedescendant');
+	expect(resource).toBeTruthy();
+	await page.getByRole('tab', { name: /^Explorer(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await expect(tree).toBeFocused();
+	await expect(tree).toHaveAttribute('aria-activedescendant', resource!);
+	await expect(pane).toHaveCSS('outline-style', 'none');
+	await expect(tree.locator('.ash-tree-row.focused')).toHaveCSS('outline-style', 'solid');
+});
+
+test('SCM history retains the reading position, expanded files and row actions after a commit', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	const { stdout } = await run('git', ['rev-parse', 'HEAD'], { cwd });
+	const commits = Array.from({ length: 80 }, (_, index) => {
+		const message = `Retained history ${index}`;
+		return `commit refs/heads/main\nmark :${index + 1}\ncommitter History Author <history@example.invalid> ${1_700_000_000 + index} +0000\ndata ${message.length}\n${message}\nfrom ${index === 0 ? stdout.trim() : `:${index}`}\n\n`;
+	}).join('');
+	await new Promise<void>((resolve, reject) => {
+		const importer = execFile('git', ['fast-import', '--quiet'], { cwd }, error => error ? reject(error) : resolve());
+		importer.stdin!.end(commits);
+	});
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
+	const graph = history.locator('.ash-scm-graph');
+	const viewport = graph.locator('.ash-scrollbar-viewport');
+	await expect(graph.getByRole('treeitem').first()).toContainText('Retained history 79');
+	await viewport.evaluate(element => { element.scrollTop = 35 * 22; });
+	const row = graph.getByRole('treeitem').filter({ hasText: 'Retained history 44' });
+	await expect(row).toHaveAttribute('aria-setsize', '81');
+	await page.mouse.move(900, 100);
+	await row.focus();
+	await row.press('Enter');
+	await expect(row.locator('.ash-scm-graph-change-state')).toHaveText('No changed files.');
+	const retained = await row.elementHandle();
+	const actions = await row.locator('.ash-scm-graph-actions').elementHandle();
+	const originalViewport = await viewport.elementHandle();
+	const position = (await row.boundingBox())!.y;
+	try {
+		await run('git', ['commit', '--allow-empty', '-m', 'Commit without resetting history'], { cwd });
+		await expect(row).toHaveAttribute('aria-setsize', '82');
+		expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
+		expect(await actions!.evaluate(element => element.isConnected)).toBe(true);
+		expect(await originalViewport!.evaluate(element => element.isConnected)).toBe(true);
+		await expect(row).toHaveAttribute('aria-expanded', 'true');
+		await expect(row).toBeFocused();
+		expect((await row.boundingBox())!.y).toBeCloseTo(position, 0);
+		await viewport.evaluate(element => { element.scrollTop = 0; });
+		await expect(graph.getByRole('treeitem').first()).toContainText('Commit without resetting history');
+		await expect(graph.locator('.ash-scm-graph-commit.current .ash-scm-graph-label.head')).toHaveText('main');
+		await expect(graph.locator('.ash-scm-graph-label.head')).toHaveCount(1);
+	} finally {
+		await retained?.dispose();
+		await actions?.dispose();
+		await originalViewport?.dispose();
+	}
+});
+
 test('SCM startup keeps commit hover targets stable in a large history', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	const cwd = testWorkspace.directory;

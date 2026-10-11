@@ -70,6 +70,8 @@ declare global {
 			readonly events: readonly string[];
 			state(): readonly CompositeState[];
 			open(id: string, focus?: boolean): Promise<void>;
+			resize(width: number, height: number): void;
+			geometry(): { hostWidth: number; hostHeight: number; paneWidth: number; paneHeight: number; };
 			hide(): void;
 			openView(id: string): Promise<void>;
 			dispose(): void;
@@ -207,6 +209,17 @@ window.ashCompositeIntegration = {
 	events,
 	editorEvents,
 	partEvents,
+	resize: (width, height) => {
+		panel.domNode.style.width = `${width}px`;
+		panel.domNode.style.height = `${height}px`;
+		panel.layout({ width, height });
+	},
+	geometry: () => {
+		const host = panel.domNode.querySelector<HTMLElement>('.ash-view-pane-container')!;
+		const pane = host.querySelector<HTMLElement>('.ash-split-view-pane')!;
+		const bounds = pane.getBoundingClientRect();
+		return { hostWidth: host.clientWidth, hostHeight: host.clientHeight, paneWidth: bounds.width, paneHeight: bounds.height };
+	},
 	openEditor,
 	openFileAliases: async target => {
 		const workspace = resources.add(new WorkspaceContextService({ id: 'composite', uri: URI.file('/composite') }));

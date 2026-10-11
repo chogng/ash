@@ -1,9 +1,6 @@
 import { localize2, localize, getNLSLanguage } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { PagedList, type IPagedRenderer } from '../../../../base/browser/ui/list/listPaging.js';
-import type { IPagedModel } from '../../../../base/common/paging.js';
-import { Emitter } from '../../../../base/common/event.js';
-import { CancellationError } from '../../../../base/common/errors.js';
+import { List } from '../../../../base/browser/ui/list/listWidget.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -92,9 +89,9 @@ interface HistoryPage {
 	readonly hasMore: boolean;
 }
 
-interface HistoryRowTemplate {
-	readonly container: HTMLElement;
-	row?: HistoryItemRow;
+interface HistoryListItem {
+	readonly id: string;
+	model: ISCMHistoryItemViewModel | undefined;
 }
 
 // Each rendered commit owns its actions and hover independently of viewport updates.
@@ -102,6 +99,12 @@ class HistoryItemRow extends Disposable {
 	public readonly element: HTMLDivElement;
 	public readonly resources = this._register(new DisposableStore());
 	public readonly changes = this._register(new DisposableStore());
+	public readonly references = this._register(new DisposableStore());
+	public referenceLabels: HTMLSpanElement | undefined;
+	public visibleReferences: readonly ISCMHistoryItemRef[] = [];
+	public headReferenceId: string | undefined;
+	public scope: IScopedContextKeyService | undefined;
+	public target: SCMHistoryItemViewModelTreeElement | undefined;
 	public expanded: ExpandedCommit | undefined;
 	public changesElement: HTMLUListElement | undefined;
 	public hover: IManagedHover | undefined;
@@ -120,6 +123,8 @@ export class SCMHistoryViewPane extends ViewPane {
 	private readonly busyContext: IContextKey<boolean>;
 	private readonly providerIdContext: IContextKey<string>;
 	private readonly graphElement: HTMLDivElement;
+	private readonly statusElement: HTMLDivElement;
+	private readonly statusResources = this._register(new DisposableStore());
 	private readonly rowResources = this._register(new DisposableMap<string, HistoryItemRow>());
 	private readonly resourceLabels: ResourceLabels;
 	private readonly more = this._register(new DisposableStore());
@@ -129,11 +134,13 @@ export class SCMHistoryViewPane extends ViewPane {
 	private head: ISCMHistoryItemRef | undefined;
 	private generation = 0;
 	private loading = false;
+	private refreshing = false;
+	private refreshFailed = false;
 	private titleOperation: object | undefined;
 	private moreError: string | undefined;
 	private rows: readonly ISCMHistoryItemViewModel[] = [];
-	private list: PagedList<ISCMHistoryItemViewModel> | undefined;
-	private historyLengthChanged: Emitter<number> | undefined;
+	private list: List<HistoryListItem> | undefined;
+	private readonly moreItem: HistoryListItem = { id: 'more', model: undefined };
 	private readonly listResources = this._register(new MutableDisposable<DisposableStore>());
 
 	private readonly expanded = new Map<string, ExpandedCommit>();
@@ -148,6 +155,11 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.contentElement.classList.add("ash-scm-secondary-pane");
 		this.graphElement = h(container.ownerDocument, "div");
 		this.graphElement.className = "ash-scm-graph";
+		this.statusElement = h(container.ownerDocument, 'div');
+		this.statusElement.className = 'ash-scm-empty';
+		this.statusElement.setAttribute('role', 'status');
+		this.statusElement.setAttribute('aria-live', 'polite');
+		this.graphElement.append(this.statusElement);
 		this.contentElement.append(this.graphElement);
 		this.busyContext = SCMHistoryBusyContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.busyContext.reset()));
@@ -182,155 +194,172 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 	}
 
-	private async refresh(): Promise<void> {
-		const generation = ++this.generation;
-		const repository = this.scmViewService.activeRepository;
-		this.providerIdContext.set(repository?.provider.providerId ?? '');
-		const provider = repository?.provider.historyProvider;
-		if (repository?.id !== this.graphRepositoryId || provider !== this.provider) {
-			// A completed operation belongs to the repository where it started, even after switching back.
-			this.titleOperation = undefined;
-			this.busyContext.set(false);
-		}
-		this.provider = provider;
-		this.providerListener.value = provider?.onDidChange(() => void this.refresh());
-		this.graphRepositoryId = repository?.id;
+	private clearGraph(): void {
 		this.page = undefined;
 		this.head = undefined;
 		this.loading = false;
 		this.moreError = undefined;
 		this.rows = [];
 		this.listResources.clear();
-		this.historyLengthChanged = undefined;
 		this.list = undefined;
 		this.expanded.clear();
 		this.rowResources.clearAndDisposeAll();
 		this.more.clear();
-		this.graphElement.textContent = "Loading commit graph…";
-		this.graphElement.setAttribute('role', 'status');
-		this.graphElement.setAttribute('aria-live', 'polite');
-		this.graphElement.setAttribute("aria-busy", "true");
+		this.statusResources.clear();
+		this.graphElement.replaceChildren(this.statusElement);
+	}
+
+	private async refresh(): Promise<void> {
+		const generation = ++this.generation;
+		const repository = this.scmViewService.activeRepository;
+		this.providerIdContext.set(repository?.provider.providerId ?? '');
+		const provider = repository?.provider.historyProvider;
+		if (repository?.id !== this.graphRepositoryId || provider !== this.provider) {
+			this.titleOperation = undefined;
+			this.busyContext.set(false);
+			this.clearGraph();
+			this.provider = provider;
+			this.providerListener.value = provider?.onDidChange(() => void this.refresh());
+			this.graphRepositoryId = repository?.id;
+		}
+		const previousPage = this.page;
+		this.loading = false;
+		this.moreError = undefined;
+		this.refreshing = true;
+		this.refreshFailed = false;
+		this.statusResources.clear();
+		this.statusElement.textContent = localize('scm.history.loadingGraph', 'Loading commit graph…');
+		this.statusElement.hidden = this.rows.length > 0;
+		this.graphElement.setAttribute('aria-busy', 'true');
 		if (!provider) {
+			this.refreshing = false;
 			this.renderGraph({ items: [], hasMore: false });
 			return;
 		}
 		try {
-			const loaded = await provider.provideHistoryItems({ skip: 0, limit: PageSize + 1 });
+			// One bounded look-ahead page retains the loaded tail when new commits arrive.
+			const limit = previousPage ? Math.max(PageSize, previousPage.items.length) + PageSize : PageSize;
+			const loaded = await provider.provideHistoryItems({ skip: 0, limit: limit + 1 });
 			if (this.isDisposed || generation !== this.generation) return;
 			const items = loaded ?? [];
-			const page = { items: items.slice(0, PageSize), hasMore: items.length > PageSize };
+			const previousTail = previousPage?.items.at(-1)?.id;
+			const tailIndex = previousTail === undefined ? -1 : items.findIndex(item => item.id === previousTail);
+			const retainedCount = Math.max(PageSize, tailIndex + 1);
+			const page = { items: items.slice(0, retainedCount), hasMore: items.length > retainedCount };
 			this.page = page;
 			this.head = provider.historyItemRef.get();
 			this.renderGraph(page);
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
-			const document = this.graphElement.ownerDocument;
-			const message = h(document, "p");
-			message.className = "ash-scm-empty";
-			message.textContent = error instanceof Error ? error.message : String(error);
-			this.graphElement.replaceChildren(message);
+			this.refreshFailed = true;
+			if (error instanceof SCMHistoryUnavailableError) this.clearGraph();
+			this.statusElement.hidden = false;
+			this.statusElement.textContent = error instanceof Error ? error.message : String(error);
 			if (!(error instanceof SCMHistoryUnavailableError)) {
-				const retry = h(document, "button");
-				retry.className = "ash-scm-command";
-				retry.type = "button";
-				retry.textContent = "Retry";
-				retry.setAttribute("aria-label", "Retry loading commit graph");
-				this.more.add(addDisposableListener(retry, "click", () => void this.refresh()));
-				this.graphElement.append(retry);
+				const retry = h(this.graphElement.ownerDocument, 'button');
+				retry.className = 'ash-scm-command';
+				retry.type = 'button';
+				retry.textContent = localize('scm.history.retry', 'Retry');
+				retry.setAttribute('aria-label', localize('scm.history.retryGraph', 'Retry loading commit graph'));
+				this.statusResources.add(addDisposableListener(retry, 'click', () => void this.refresh()));
+				this.statusElement.append(retry);
 			}
-			this.graphElement.setAttribute("aria-busy", "false");
+		} finally {
+			if (!this.isDisposed && generation === this.generation) {
+				this.refreshing = false;
+				this.graphElement.setAttribute('aria-busy', this.loading || this.refreshing ? 'true' : 'false');
+				this.loadMoreIfVisible();
+			}
 		}
 	}
 
 	private renderGraph(page: HistoryPage): void {
-		this.graphElement.removeAttribute('role');
-		this.graphElement.removeAttribute('aria-live');
-		this.listResources.clear();
-		this.historyLengthChanged = undefined;
-		this.list = undefined;
-		this.more.clear();
-		this.graphElement.replaceChildren();
+		const previousRows = this.rows;
+		const scrollTop = this.list?.scrollTop ?? 0;
+		let anchor: { id: string; offset: number; } | undefined;
+		let position = 0;
+		if (scrollTop > 0) {
+			for (const model of previousRows) {
+				const height = this.rowHeight(model.historyItem);
+				if (position + height > scrollTop) { anchor = { id: model.historyItem.id, offset: scrollTop - position }; break; }
+				position += height;
+			}
+		}
+		const focused = this.graphElement.ownerDocument.activeElement as HTMLElement | null;
+		const restoreFocus = focused && this.graphElement.contains(focused) ? focused : undefined;
+		const retained = new Set(page.items.map(item => item.id));
+		for (const id of this.expanded.keys()) {
+			if (!retained.has(id)) this.expanded.delete(id);
+		}
 		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head);
-		if (page.items.length === 0) {
-			const empty = h(this.graphElement.ownerDocument, 'p');
-			empty.className = 'ash-scm-empty';
-			empty.textContent = 'No commits yet.';
-			this.graphElement.append(empty);
-		} else {
+		this.statusElement.hidden = page.items.length > 0;
+		this.statusElement.textContent = localize('scm.history.empty', 'No commits yet.');
+		if (!this.list && page.items.length > 0) {
 			const resources = new DisposableStore();
 			this.listResources.value = resources;
-			const lengthChanged = resources.add(new Emitter<number>());
-			const pane = this;
-			const model: IPagedModel<ISCMHistoryItemViewModel> = {
-				get length() { return pane.rows.length + (pane.page?.hasMore ? 1 : 0); },
-				onDidIncrementLength: lengthChanged.event,
-				isResolved: index => index >= 0 && index < this.rows.length,
-				get: index => this.rows[index]!,
-				resolve: async (index, token) => {
-					if (!this.isBodyVisible() || this.moreError || token.isCancellationRequested) {
-						throw new CancellationError();
-					}
-					await this.loadMore();
-					if (token.isCancellationRequested || index >= this.rows.length) {
-						throw new CancellationError();
-					}
-					return this.rows[index]!;
-				},
-			};
-			const renderer: IPagedRenderer<ISCMHistoryItemViewModel, HistoryRowTemplate> = {
-				templateId: 'history',
-				renderTemplate: container => ({ container }),
-				renderElement: (model, index, data) => {
-					if (data.row) {
-						this.updateCommitRow(data.row, model);
-					} else {
-						this.more.clear();
-						data.row = this.renderCommit(model, renderSCMHistoryItemGraph(model, this.rowHeight(model.historyItem), this.graphElement.ownerDocument));
-						data.container.replaceChildren(data.row.element);
-					}
-					this.updateCommitAccessibility(data.row, index);
-				},
-				renderPlaceholder: (_index, data) => {
-					this.more.clear();
-					data.container.replaceChildren(this.renderMore());
-				},
-				disposeTemplate: data => {
-					if (data.row) {
-						this.rowResources.deleteAndDispose(data.row.historyItemViewModel.historyItem.id);
-					} else {
-						this.more.clear();
-					}
-					data.container.replaceChildren();
-				},
-			};
-			const list = resources.add(new PagedList(this.graphLabel, this.graphElement, {
-				getHeight: index => index < this.rows.length ? this.rowHeight(this.rows[index]!.historyItem) : SWIMLANE_HEIGHT * 2,
-				getTemplateId: () => renderer.templateId,
-			}, [renderer], {
-				role: 'tree',
-				ariaLabel: this.graphLabel,
-				mouseSupport: false,
-				keyboardSupport: false,
-				// The commit contains its own focusable actions and expanded file list.
+			const list = resources.add(new List<HistoryListItem>(this.graphElement, {
+				role: 'tree', ariaLabel: this.graphLabel, scrolling: 'managed',
+				mouseSupport: false, keyboardNavigation: false,
+				getId: item => item.id,
+				getHeight: item => item.model ? this.rowHeight(item.model.historyItem) : SWIMLANE_HEIGHT * 2,
+				reuseRows: true,
 				accessibilityProvider: { getRole: () => 'presentation' },
-			}));
-			this.historyLengthChanged = lengthChanged;
-			resources.add(this.onDidChangeBodyVisibility(visible => {
-				if (visible && !this.moreError) list.widget.rerender(this.rows.length);
+				renderItem: (item, index) => {
+					if (!item.model) { this.more.clear(); return this.renderMore(); }
+					const row = this.renderCommit(item.model, renderSCMHistoryItemGraph(item.model, this.rowHeight(item.model.historyItem), this.graphElement.ownerDocument));
+					this.updateCommitAccessibility(row, index);
+					return row.element;
+				},
+				updateItem: (item, index) => {
+					if (!item.model) return;
+					const row = this.rowResources.get(item.model.historyItem.id)!;
+					this.updateCommitRow(row, item.model);
+					this.updateCommitAccessibility(row, index);
+				},
+				onDidRemoveRow: row => {
+					const id = row.dataset.listId;
+					if (id?.startsWith('commit:')) this.rowResources.deleteAndDispose(id.slice(7));
+					else this.more.clear();
+				},
 			}));
 			this.list = list;
-			list.widget.domNode.classList.add('ash-scm-graph-viewport');
-			list.widget.element.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that commit. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag. Press Alt+Down Arrow to focus commit details and use its actions; Escape returns to the commit.'));
-			resources.add(list.widget.onDidRenderRows(() => {
+			resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
+			list.domNode.classList.add('ash-scm-graph-viewport');
+			list.element.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that commit. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag. Press Alt+Down Arrow to focus commit details and use its actions; Escape returns to the commit.'));
+			resources.add(list.onDidRenderRows(() => {
 				for (const [, row] of this.rowResources) {
 					if (!row.hover?.visible) continue;
 					if (!row.element.isConnected) row.hover.hide();
 					else this.contextViewService.layout();
 				}
+				this.loadMoreIfVisible();
 			}));
-			list.model = model;
 		}
-		this.graphElement.setAttribute('aria-busy', this.loading ? 'true' : 'false');
+		if (this.list) {
+			// Stable wrappers let List retain a commit's DOM while its graph and refs change.
+			const previous = new Map(this.list.items.map(item => [item.id, item]));
+			const items = this.rows.map(model => {
+				const id = `commit:${model.historyItem.id}`;
+				const item = previous.get(id) ?? { id, model };
+				item.model = model;
+				return item;
+			});
+			if (page.hasMore) items.push(this.moreItem);
+			this.list.items = items;
+			if (anchor) {
+				let top = 0;
+				for (const model of this.rows) {
+					if (model.historyItem.id === anchor.id) { this.list.scrollTop = top + anchor.offset; break; }
+					top += this.rowHeight(model.historyItem);
+				}
+			} else if (scrollTop === 0) { this.list.scrollTop = 0; }
+			if (restoreFocus?.isConnected && restoreFocus !== this.graphElement.ownerDocument.activeElement) restoreFocus.focus({ preventScroll: true });
+		}
+		this.graphElement.setAttribute('aria-busy', this.loading || this.refreshing ? 'true' : 'false');
+	}
+
+	private loadMoreIfVisible(): void {
+		if (this.isBodyVisible() && this.graphElement.querySelector('.ash-scm-graph-load-more')) void this.loadMore();
 	}
 
 	private updateCommitAccessibility(row: HistoryItemRow, index: number): void {
@@ -341,8 +370,8 @@ export class SCMHistoryViewPane extends ViewPane {
 
 	private updateCommitHeight(historyItem: ISCMHistoryItem): void {
 		const index = this.rows.findIndex(model => model.historyItem.id === historyItem.id);
-		this.list?.widget.updateElementHeight(index, this.rowHeight(historyItem));
-		this.list?.widget.rerender(index);
+		this.list?.updateElementHeight(index, this.rowHeight(historyItem));
+		this.list?.rerender(index);
 	}
 
 	private rowHeight(historyItem: ISCMHistoryItem): number {
@@ -378,13 +407,13 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.more.clear();
 			current.replaceWith(this.renderMore());
 		}
-		this.graphElement.setAttribute('aria-busy', this.loading ? 'true' : 'false');
+		this.graphElement.setAttribute('aria-busy', this.loading || this.refreshing ? 'true' : 'false');
 	}
 
 	private async loadMore(): Promise<void> {
 		const page = this.page;
 		const provider = this.provider;
-		if (!page || !provider || !page.hasMore || this.loading) return;
+		if (!page || !provider || !page.hasMore || this.loading || this.refreshing || this.refreshFailed) return;
 
 		const generation = this.generation;
 		this.loading = true;
@@ -396,10 +425,9 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (this.isDisposed || generation !== this.generation) return;
 			const items = next ?? [];
 			this.page = { items: [...page.items, ...items.slice(0, PageSize)], hasMore: items.length > PageSize };
-			this.rows = toISCMHistoryItemViewModelArray(this.page.items, new Map(), this.head);
 			this.loading = false;
+			this.renderGraph(this.page);
 			this.updateMore();
-			this.historyLengthChanged?.fire(this.list!.model.length);
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			this.loading = false;
@@ -436,6 +464,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		const repository = this.scmViewService.activeRepository;
 		const menuTarget: SCMHistoryItemViewModelTreeElement | undefined = repository ? { repository, get historyItemViewModel() { return rendered.historyItemViewModel; }, type: 'historyItemViewModel' } : undefined;
 		const scope = resources.add(this.contextKeyService.createScoped(item));
+		rendered.scope = scope;
+		rendered.target = menuTarget;
 		scope.setContext('scmHistoryProviderId', repository?.provider.providerId ?? '');
 		scope.setContext('scmHistoryItemHasRemote', (historyItem.remoteLinks?.length ?? 0) > 0);
 		scope.setContext('scmHistoryItemRemoteAuthority', historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '');
@@ -471,9 +501,14 @@ export class SCMHistoryViewPane extends ViewPane {
 			}));
 		}
 		const visibleReferences = historyItemReferences(historyItem, this.head);
+		rendered.visibleReferences = visibleReferences;
+		rendered.headReferenceId = visibleReferences.find(reference => reference.id === this.head?.id)?.id;
 		const overlay = h(document, 'div');
 		overlay.className = 'ash-scm-graph-overlay';
-		if (visibleReferences.length > 0) { overlay.append(this.renderReferenceLabels(visibleReferences, menuTarget, scope, resources)); }
+		if (visibleReferences.length > 0) {
+			rendered.referenceLabels = this.renderReferenceLabels(visibleReferences, menuTarget, scope, rendered.references);
+			overlay.append(rendered.referenceLabels);
+		}
 		const row = h(document, "div");
 		row.className = "ash-scm-graph-row";
 		row.append(graph, details);
@@ -535,6 +570,33 @@ export class SCMHistoryViewPane extends ViewPane {
 			row.element.style.setProperty('--scm-graph-content-x', graph.style.width);
 		}
 		row.historyItemViewModel = model;
+		const historyItem = model.historyItem;
+		const current = this.head?.revision === historyItem.id;
+		const merge = historyItem.parentIds.length > 1;
+		row.element.classList.toggle('current', current);
+		row.element.classList.toggle('head', current);
+		row.element.classList.toggle('merge', merge);
+		row.element.classList.toggle('commit', !current && !merge);
+		if (current) row.element.setAttribute('aria-current', 'true');
+		else row.element.removeAttribute('aria-current');
+		row.scope?.setContext('scmHistoryItemHasRemote', (historyItem.remoteLinks?.length ?? 0) > 0);
+		row.scope?.setContext('scmHistoryItemRemoteAuthority', historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '');
+		row.scope?.setContext('scmHistoryItemHasBranch', historyItem.references?.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch') ?? false);
+		row.scope?.setContext('scmHistoryItemHasUpstream', historyItem.references?.some(reference => reference.upstream !== undefined) ?? false);
+		const references = historyItemReferences(historyItem, this.head);
+		const headReferenceId = references.find(reference => reference.id === this.head?.id)?.id;
+		if (row.headReferenceId !== headReferenceId || !equals(row.visibleReferences, references, (left, right) => left.id === right.id && left.name === right.name && left.revision === right.revision && left.category === right.category && left.description === right.description && left.color === right.color && left.upstream === right.upstream && left.canDelete === right.canDelete)) {
+			if (row.referenceLabels?.contains(row.element.ownerDocument.activeElement)) row.element.focus({ preventScroll: true });
+			row.references.clear();
+			row.referenceLabels?.remove();
+			row.referenceLabels = undefined;
+			row.visibleReferences = references;
+			row.headReferenceId = headReferenceId;
+			if (references.length > 0) {
+				row.referenceLabels = this.renderReferenceLabels(references, row.target, row.scope!, row.references);
+				row.element.querySelector('.ash-scm-graph-overlay')!.prepend(row.referenceLabels);
+			}
+		}
 		if (!expansionChanged) return;
 		if (row.changesElement?.contains(row.element.ownerDocument.activeElement)) row.element.focus();
 		row.changes.clear();
@@ -709,15 +771,15 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 		const provider = this.provider;
 		if (!provider) return;
-		const generation = this.generation;
-		this.expanded.set(historyItem.id, { state: "loading" });
+		const pending = { state: 'loading' } as const;
+		this.expanded.set(historyItem.id, pending);
 		this.updateCommitHeight(historyItem);
 		try {
 			const result = await provider.provideHistoryItemChanges(historyItem.id, historyItem.parentIds[0]);
-			if (this.isDisposed || generation !== this.generation || !this.expanded.has(historyItem.id)) return;
+			if (this.isDisposed || provider !== this.provider || this.expanded.get(historyItem.id) !== pending) return;
 			this.expanded.set(historyItem.id, { state: "ready", result: result ?? [] });
 		} catch (error) {
-			if (this.isDisposed || generation !== this.generation || !this.expanded.has(historyItem.id)) return;
+			if (this.isDisposed || provider !== this.provider || this.expanded.get(historyItem.id) !== pending) return;
 			this.expanded.set(historyItem.id, { state: "error", message: error instanceof Error ? error.message : String(error) });
 		}
 		this.updateCommitHeight(historyItem);

@@ -680,6 +680,44 @@ test('registered Search exposes Chinese labels and localized result counts', asy
 });
 
 for (const mode of ['flat', 'tree'] as const) {
+	test(`Search ${mode} pane receives Sidebar widths synchronously`, async ({ page }) => {
+		await page.goto('/search.html');
+		await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(true));
+		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+		await query.fill('layout');
+		await query.press('Enter');
+		await expect(page.getByRole('status')).toHaveText('3 results');
+		if (mode === 'tree') {
+			await page.getByRole('button', { name: 'More Actions', exact: true }).click();
+			await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
+		}
+		// Resize and measure in the same browser task: a ResizeObserver cannot repair stale geometry.
+		const samples = await page.evaluate(() => [600, 180, 400, 220, 280, 180, 600].map(width => {
+			window.ashSearchIntegration.setWidth(width);
+			const sidebar = document.querySelector<HTMLElement>('[data-part="sidebar"]')!;
+			const host = sidebar.querySelector<HTMLElement>('.ash-view-pane-container')!;
+			const pane = host.querySelector<HTMLElement>('.ash-split-view-pane')!;
+			return {
+				width,
+				hostWidth: host.clientWidth,
+				paneWidth: pane.getBoundingClientRect().width,
+				previews: Array.from(pane.querySelectorAll('.ash-search-preview')).map(preview => ({
+					width: preview.getBoundingClientRect().width,
+					right: preview.getBoundingClientRect().right,
+				})),
+				right: sidebar.getBoundingClientRect().right,
+			};
+		}));
+		for (const sample of samples) {
+			expect(sample.paneWidth, JSON.stringify(sample)).toBe(sample.hostWidth);
+			expect(sample.previews).toHaveLength(3);
+			for (const preview of sample.previews) {
+				expect(preview.width).toBeGreaterThan(0);
+				expect(preview.right, JSON.stringify(sample)).toBeLessThanOrEqual(sample.right);
+			}
+		}
+	});
+
 	test(`Search ${mode} results preserve source paths, preview coordinates and geometry across Sidebar widths`, async ({ page }) => {
 		await page.goto('/search.html');
 		await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(true));
@@ -743,6 +781,7 @@ for (const mode of ['flat', 'tree'] as const) {
 					});
 					return { width: bounds.width, titleFits: title.right <= toolbar.left, toolbarAtTop: toolbar.bottom <= input.top, alignedInputs: input.left === replacement.left && input.right === replacement.right, previews, files };
 				});
+				await test.info().attach(`search-${mode}-${theme}-${width}px-geometry`, { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
 				expect(geometry.titleFits).toBe(true);
 				expect(geometry.toolbarAtTop).toBe(true);
 				expect(geometry.alignedInputs).toBe(true);
@@ -757,7 +796,6 @@ for (const mode of ['flat', 'tree'] as const) {
 				}
 				for (const file of geometry.files) { expect(file.width).toBeGreaterThan(0); expect(file.separated).toBe(true); expect(file.fits).toBe(true); }
 				await expect(page.locator('.ash-pane-composite-title-view-actions').getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
-				await test.info().attach(`search-${mode}-${theme}-${width}px-geometry`, { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
 				await test.info().attach(`search-${mode}-${theme}-${width}px`, { body: await sidebar.screenshot(), contentType: 'image/png' });
 			}
 		}

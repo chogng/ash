@@ -6,7 +6,7 @@ import { Part } from "../part.js";
 import type { IComposite } from '../../common/composite.js';
 import type { Composite } from '../composite.js';
 import { WorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
-import { addDisposableListener } from '../../../base/browser/dom.js';
+import { addDisposableListener, Dimension, type IDimension } from '../../../base/browser/dom.js';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
 
 /**
@@ -117,6 +117,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 			}
 			// Reopening the retained Composite must reattach its title renderer after the old host was restored.
 			this.updateTitleArea();
+			this.layoutActiveComposite();
 			if (focus && composite.isVisible()) {
 				this.pendingFocus = false;
 				composite.focus();
@@ -136,6 +137,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		this.contentDomNode.append(composite.getContainer()!);
 		composite.setVisible(!this.domNode.hidden);
 		this.updateTitleArea();
+		this.layoutActiveComposite();
 		if (!this.domNode.hidden) {
 			this.compositeOpened.fire({ composite, focus });
 			this.pendingFocus = false;
@@ -147,12 +149,27 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		const changed = this.domNode.hidden === visible;
 		super.setVisible(visible);
 		this.activeComposite?.setVisible(visible);
+		if (visible) { this.layoutActiveComposite(); }
 		if (changed && this.activeComposite) {
 			if (visible) { this.compositeOpened.fire({ composite: this.activeComposite, focus: this.pendingFocus }); }
 			else { this.compositeClosed.fire(this.activeComposite); }
 		}
 		if (visible && this.pendingFocus) { this.activeComposite?.focus(); }
 		this.pendingFocus = false;
+	}
+
+	public override layout(_dimension: IDimension): void {
+		this.layoutActiveComposite();
+	}
+
+	private layoutActiveComposite(): void {
+		if (!this.activeComposite?.isVisible() || this.domNode.hidden) { return; }
+		// Flex owns the space left by borders, title slots and activity bars. Publish it
+		// during the host layout, before focus or paint can use the previous pane size.
+		const { clientWidth, clientHeight } = this.contentDomNode;
+		if (clientWidth > 0 && clientHeight > 0) {
+			this.activeComposite.layout(new Dimension(clientWidth, clientHeight));
+		}
 	}
 
 	public getActiveComposite(): IComposite | undefined { return this.activeComposite; }

@@ -125,6 +125,7 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 		items: Object.freeze(normalizedItems),
 		label: label.trim(),
 		readOnly: true,
+		showBreadcrumbs: false,
 		...(source ? { source: freezeMultiDiffSource(source) } : {}),
 	});
 }

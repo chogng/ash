@@ -44,7 +44,7 @@ import { BrowserContextMenuService, transformContextMenuDelegate } from '../../.
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
-import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
+import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitCommitChanges, type GitRepository, type GraphQuery, type GraphPage, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { WorkbenchState, IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -314,6 +314,11 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	const remoteRepositoryIds: Array<string | undefined> = [];
 	const readyChanges = new Emitter<void>();
 	let workspaceError: GitWorkspaceError | undefined;
+	let graphFailure: Error | undefined;
+	let pendingGraph: Promise<GraphPage> | undefined;
+	let lastGraph: GraphPage | undefined;
+	let addedCommit = false;
+	let pendingChanges: Promise<GitCommitChanges> | undefined;
 	let readySubscriptions = 0;
 	const hoverService: IHoverService = {
 		setupDelayedHover: () => testManagedHover(),
@@ -324,7 +329,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		showHover: () => testManagedHover(),
 		hideHover() { },
 	};
-	const status: GitStatus = {
+	let status: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
 		revision: 1,
@@ -354,15 +359,17 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		branches: async () => [],
 		graph: async (query: GraphQuery, repositoryId?: string) => {
 			if (workspaceError) throw workspaceError;
+			if (graphFailure) throw graphFailure;
 			graphRequests.push(query);
 			graphRepositoryIds.push(repositoryId);
-			return {
+			const result: GraphPage = {
 				commits: [
-					{ objectId: "1234567890abcdef", parentObjectIds: ["abcdef1234567890", "side-parent"], timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
-					{ objectId: "abcdef1234567890", parentObjectIds: ["parent-one", "parent-two"], timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
+					...(addedCommit ? [{ repositoryId: 'repo-1', objectId: 'new-commit', parentObjectIds: ['1234567890abcdef'], timestampSeconds: 1_754_000_000, subject: 'New commit' }] : []),
+					{ repositoryId: 'repo-1', objectId: "1234567890abcdef", parentObjectIds: ["abcdef1234567890", "side-parent"], timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
+					{ repositoryId: 'repo-1', objectId: "abcdef1234567890", parentObjectIds: ["parent-one", "parent-two"], timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
 				],
 				references: [
-					{ name: "main", objectId: "1234567890abcdef", kind: "localBranch", remoteName: undefined, current: true },
+					{ name: "main", objectId: addedCommit ? 'new-commit' : "1234567890abcdef", kind: "localBranch", remoteName: undefined, current: true },
 					{ name: "origin/main", objectId: "abcdef1234567890", kind: "remoteBranch", remoteName: "origin", current: false },
 					{ name: "origin/release", objectId: "abcdef1234567890", kind: "remoteBranch", remoteName: "origin", current: false },
 					{ name: "topic", objectId: "abcdef1234567890", kind: "localBranch", remoteName: undefined, current: false },
@@ -373,7 +380,10 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 				hasMore: false,
 				nextCursor: undefined,
 			};
+			lastGraph = result;
+			return pendingGraph ?? result;
 		},
+		commitChanges: async () => pendingChanges ?? { parentObjectId: 'parent-one', changes: [] },
 		fetch: async (repositoryId?: string) => {
 			remoteRepositoryIds.push(repositoryId);
 			return status;
@@ -423,7 +433,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(pane.element.querySelector<HTMLElement>('.ash-scm-graph-label[aria-label="reviewed"]')?.dataset.icon, 'tag');
 		assert.equal(pane.element.querySelector('.ash-scm-graph-remotes'), null);
 		assert.ok(pane.element.querySelector('.ash-scm-graph > .ash-scm-graph-viewport .ash-list'));
-		assert.equal(hoverOptions.length, 4);
+		assert.equal(hoverOptions.length, 2, 'Refreshing unchanged history retains its row hovers');
 		assert.ok(hoverOptions.every((options) => options.target.classList.contains("ash-scm-graph-commit")));
 		assert.ok(hoverOptions.every((options) => options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal));
 		assert.ok(hoverOptions.every((options) => options.anchorPosition === AnchorPosition.Below));
@@ -514,6 +524,61 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		workspaceError = undefined;
 		readyChanges.fire();
 		await waitFor(() => pane.element.querySelectorAll('.ash-scm-graph-commit').length === 2);
+		await waitFor(() => pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false');
+		const oldRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')].find(row => row.textContent?.includes('Prepare graph data'))!;
+		const oldActions = oldRow.querySelector('.ash-scm-graph-actions');
+		const oldList = pane.element.querySelector('.ash-scm-graph-viewport');
+		const changes = new DeferredPromise<GitCommitChanges>();
+		pendingChanges = changes.p;
+		oldRow.click();
+		oldRow.focus();
+		assert.equal(oldRow.getAttribute('aria-expanded'), 'true');
+		const delayedGraph = new DeferredPromise<GraphPage>();
+		pendingGraph = delayedGraph.p;
+		addedCommit = true;
+		status = { ...status, head: { type: 'branch', name: 'main', objectId: 'new-commit', upstream: undefined } };
+		const previousRequests = graphRequests.length;
+		readyChanges.fire();
+		await waitFor(() => graphRequests.length === previousRequests + 1);
+		assert.equal(oldRow.isConnected, true, 'History remains visible during an outstanding refresh');
+		assert.equal(browser.window.document.activeElement, oldRow);
+		await changes.complete({ parentObjectId: 'parent-one', changes: [] });
+		await waitFor(() => oldRow.querySelector('.ash-scm-graph-change-state')?.textContent === 'No changed files.');
+		await delayedGraph.complete(lastGraph!);
+		await waitFor(() => pane.element.querySelectorAll('.ash-scm-graph-commit').length === 3 && pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false');
+		assert.equal(pane.element.querySelector('.ash-scm-graph-viewport'), oldList);
+		assert.equal(oldRow.isConnected, true);
+		assert.equal(oldRow.querySelector('.ash-scm-graph-actions'), oldActions);
+		assert.equal(oldRow.getAttribute('aria-expanded'), 'true');
+		assert.equal(browser.window.document.activeElement, oldRow);
+		assert.equal(pane.element.querySelector('.ash-scm-graph-commit.current .ash-scm-graph-subject')?.textContent, 'New commit');
+		assert.equal(pane.element.querySelector('.ash-scm-graph-commit.current .ash-scm-graph-label.head')?.textContent, 'main');
+		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-label.head').length, 1);
+		pendingGraph = undefined;
+		status = { ...status, head: { type: 'branch', name: 'topic', objectId: 'abcdef1234567890', upstream: undefined } };
+		readyChanges.fire();
+		await waitFor(() => oldRow.querySelector('.ash-scm-graph-label.head')?.textContent === 'topic' && pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false');
+		assert.equal(pane.element.querySelector('.ash-scm-graph-commit.current'), oldRow);
+		status = { ...status, head: { type: 'branch', name: 'main', objectId: 'new-commit', upstream: undefined } };
+		readyChanges.fire();
+		await waitFor(() => pane.element.querySelector('.ash-scm-graph-commit.current .ash-scm-graph-label.head')?.textContent === 'main' && pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false');
+		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-label.head').length, 1, 'Checkout updates HEAD badges even when the branch references are unchanged');
+		graphFailure = new Error('Temporary history read failure');
+		readyChanges.fire();
+		await waitFor(() => pane.element.querySelector('[aria-label="Retry loading commit graph"]') !== null);
+		assert.equal(oldRow.isConnected, true, 'A failed refresh retains the last successful graph');
+		assert.equal(oldRow.getAttribute('aria-expanded'), 'true');
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		try {
+			readyChanges.fire();
+			await waitFor(() => pane.element.querySelector('[aria-label="重试读取提交图"]') !== null);
+			const retry = pane.element.querySelector<HTMLButtonElement>('[aria-label="重试读取提交图"]')!;
+			assert.equal(retry.textContent, '重试');
+			graphFailure = undefined;
+			retry.click();
+			await waitFor(() => pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false' && pane.element.querySelector('[aria-label="重试读取提交图"]') === null);
+			assert.equal(oldRow.isConnected, true);
+		} finally { resetNlsResolver(); }
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -1258,6 +1323,23 @@ async function createResourceGroupMenuFixture(renderContextMenu = false, groupLa
 		throw error;
 	}
 }
+
+test('SCM pane focus enters the commit input and restores the focused resource instead of the pane root', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const { pane, tree, browser, key } = fixture;
+	pane.focus();
+	assert.equal(browser.window.document.activeElement, pane.element.querySelector('.ash-scm-input .stanza-editor-input'));
+	tree.focus();
+	key('Home');
+	const focusedResource = tree.getAttribute('aria-activedescendant');
+	assert.ok(focusedResource);
+	const outside = browser.window.document.createElement('button');
+	browser.window.document.body.append(outside);
+	outside.focus();
+	pane.focus();
+	assert.equal(browser.window.document.activeElement, tree);
+	assert.equal(tree.getAttribute('aria-activedescendant'), focusedResource);
+});
 
 for (const mode of ['tree', 'list'] as const) {
 	test(`SCM resource group navigation cycles through rendered groups in ${mode} mode without expanding them`, async () => {
