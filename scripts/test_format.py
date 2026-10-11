@@ -22,7 +22,7 @@ class FormatterTests(unittest.TestCase):
                 "id": "vendored",
                 "name": "vendored",
                 "manifest_path": str(
-                    formatting.REPOSITORY_ROOT / "crates/vendor/mxc/Cargo.toml"
+                    formatting.REPOSITORY_ROOT / "crates/vendor/example/Cargo.toml"
                 ),
             },
             {

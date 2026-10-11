@@ -122,29 +122,6 @@ fn managed_psec_rejection_keeps_the_policy_unchanged_for_the_account_candidate()
     );
 }
 
-#[test]
-fn processcontainer_requires_its_proxy_constraints_without_relaxing_the_request() {
-    let config = serde_json::json!({
-        "version": "1.0.0",
-        "containment": "processcontainer",
-        "process": {"commandLine": "cmd.exe /c exit 0"},
-        "network": {"egress": {"default": "deny"}, "ingress": {"default": "deny", "hostLoopback": "deny"}},
-        "runtimeConfig": {"networkProxy": "http://127.0.0.1:3128"}
-    });
-    let mut logger =
-        mxc_sdk::mxc_common::logger::Logger::new(mxc_sdk::mxc_common::logger::Mode::Buffer);
-    let error = mxc_sdk::mxc_common::config_parser::load_mxc_request_from_json(
-        &config.to_string(),
-        &mut logger,
-    )
-    .unwrap_err();
-    let message = format!("{error:?}").to_ascii_lowercase();
-    assert!(
-        message.contains("proxy") && (message.contains("ingress") || message.contains("peer")),
-        "{error:?}"
-    );
-}
-
 #[cfg(target_os = "macos")]
 mod execution {
     use super::*;

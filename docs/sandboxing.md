@@ -117,7 +117,7 @@ macOS 策略固定可写根和受保护路径的祖先目录，防止移动目�
 - Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。Bubblewrap 在启动时安装禁止 `AF_VSOCK` 的 seccomp 过滤器，阻止 WSL 互操作创建不受 Linux 命名空间约束的 Windows 进程；过滤器由后代继承。
 - 本轮自写 `mxc-user` 账户运行器已退出源码、编译、打包、签名和 CI 配置；不再安装它。
 
-补丁来源与校验见 [MXC 依赖](../crates/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
+补丁来源与校验见 [MXC 依赖](../third_party/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
 
 固定版本的 [上游说明](https://github.com/microsoft/mxc/blob/c6f301d53a1430c4c921a05c57af838f7392348f/README.md) 已移除早期预览声明。Ash 的隔离保证仍以所用策略、受审查补丁和对应平台实机证据为依据；不能仅凭 SDK 版本或后端名称宣布完成产品验收。
 

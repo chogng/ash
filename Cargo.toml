@@ -1,6 +1,5 @@
 [workspace]
 exclude = [
-    "crates/vendor/mxc",
     "third_party/wezterm/portable-pty",
 ]
 members = [
@@ -223,7 +222,7 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
-mxc-sdk = { path = "crates/vendor/mxc/mxc-sdk" }
+mxc-sdk = "=1.0.0"
 testing = { package = "ash-testing", path = "crates/testing" }
 cli = { package = "ash-utils-cli", path = "crates/utils/cli" }
 cargo-bin = { package = "ash-utils-cargo-bin", path = "crates/utils/cargo-bin" }
@@ -649,6 +648,9 @@ inherits = "test"
 debug = "limited"
 
 [patch.crates-io]
+# Preserve the sandbox boundaries absent from the published SDK. The compatibility
+# fork keeps upstream layout; remove this override after equivalent upstream support.
+mxc-sdk = { git = "https://github.com/chogng/mxc", rev = "d4bc220668130f941d117aab4326edb4c1812e78" }
 # citationberg 0.7.0 still resolves vulnerable quick-xml 0.38. This upstream fix
 # switches to 0.41 without changing citationberg's API; remove after a fixed release.
 citationberg = { git = "https://github.com/typst/citationberg", rev = "06a591e2f237d25e1dfdedac3f3d1494c496c52d" }

@@ -32,7 +32,7 @@
       "destination": "ash-resources/licenses/vscode/LICENSE.txt"
     },
     {
-      "source": "crates/vendor/mxc/LICENSE.md",
+      "source": "third_party/mxc/LICENSE.md",
       "destination": "ash-resources/licenses/mxc/LICENSE.md"
     },
     {

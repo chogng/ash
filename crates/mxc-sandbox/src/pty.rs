@@ -52,10 +52,21 @@ pub fn run_pty_helper() -> Result<i32, String> {
     let request: crate::request::Request =
         serde_json::from_str(&encoded).map_err(|_| "invalid PTY launch request")?;
     let mut child = request
-        .spawn(mxc_sdk::mxc_common::sandbox_process::StdioMode::Inherit)
+        .prepare()
+        .map_err(|error| error.to_string())?
+        .spawn_inherited()
         .map_err(|error| error.to_string())?;
     let status = child.wait().map_err(|error| error.to_string())?;
-    Ok(if status < 0 { 1 } else { status })
+    Ok(match status {
+        mxc_sdk::v1::WaitResult::Exited(code) => {
+            if code >= 0 {
+                code
+            } else {
+                1
+            }
+        }
+        mxc_sdk::v1::WaitResult::TimedOut => 1,
+    })
 }
 
 struct Launch {

@@ -1,7 +1,7 @@
 # ash-mxc-sandbox
 
 - 将 Ash 已批准的文件、网络和宿主 ACL 要求转换为 Microsoft MXC 请求。
-- 管道与 PTY 均通过 MXC 的 `SandboxBackend::spawn` 调用选定的平台运行器；Ash 拥有请求准备和终端交接。
+- 将 Ash 执行规格转换为 typed `v1::ContainerRequest`，通过 SDK 的 `prepare_restricted` 及标准句柄启动；Ash 拥有授权、文件身份和终端交接。
 - 将 SDK 进程句柄接入 Ash 的输入输出、取消与关闭接口。
 - 隔离 SDK 类型和错误；平台运行器及基础策略由 SDK 实施，Ash 将自己的持续路径规则编译为追加的 Seatbelt 限制。
 
@@ -68,25 +68,25 @@ just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
 
 ## PTY 启动
 
-- Unix 直接使用 SDK 的 `StdioMode::Pty`，由 SDK 分配终端并启动 Bubblewrap 或 Seatbelt。Ash 接入终端输入、合并输出、resize、前台作业中断及进程树关闭。
+- Unix 使用 SDK 的 `RestrictedLaunch::spawn_with_pty`，由 SDK 分配终端并启动 Bubblewrap 或 Seatbelt。Ash 接入终端输入、合并输出、resize、前台作业中断及进程树关闭。
 - Windows 的 Rust SDK 仍不支持 ProcessContainer 分配 PTY，因此宿主通过 `with_pty_helper` 提供启动器。`utils-pty` 启动该程序的 `--ash-mxc-pty` 角色，产品入口先调用 `arg0::dispatch`。
-- Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。内部角色通过官方发布的 1.0 契约重建 SDK 请求，不反序列化 SDK 内部执行模型。新增宿主 ACL 授权字段会被拒绝。
+- Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。内部角色从同一份 Ash 执行规格生成 typed SDK 请求，不反序列化 SDK 内部执行模型。新增宿主 ACL 授权字段会被拒绝。
 - Windows 交接请求最多 1 MiB UTF-8，按字符边界拆成不超过 8 KiB 的环境项；帮助进程检查块数、总字节数、缺块、重复键及多余字段。工作负载环境与启动器环境分开，传输变量不注入工作负载，显式空环境保持为空。PSEC 所需的 `SYSTEMROOT` 和 `LOCALAPPDATA` 由执行器提供。
 - `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 普通回归验证帮助进程入口，[PSEC 终端用例](tests/pty/windows.rs) 另检查真实终端输入、尺寸、大环境、传输变量隔离、只读拒写、退出码及后代回收。[执行服务验收](../exec-server/README.md#pty-边界) 通过产品可执行文件和 RPC 检查帮助进程装配、重连与退出输出。这些用例须在支持 PSEC 的系统显式执行，已接入 `scripts/test-psec.ps1`；交叉编译不代表对应系统已通过运行验收。
 
 ## SDK 依赖
 
-固定 Microsoft MXC `c6f301d53a1430c4c921a05c57af838f7392348f`，使用官方合并后的 `mxc-sdk 1.0.0` 单包。源码及可复核补丁保存在 [vendor/mxc](../vendor/mxc/README.md)，Cargo 与 Bazel 消费同一份源码。
+使用官方 `mxc-sdk = "=1.0.0"` 声明；当前发布包尚不能保持全部已验证的沙箱行为，根清单通过 `[patch.crates-io]` 固定兼容 fork。它基于 Microsoft `c6f301d53a1430c4c921a05c57af838f7392348f`，保留上游结构。实际来源由 Cargo.lock 记录，Cargo 与 Bazel 使用同一外部源码。必要补丁、已移除的维护差异及退出条件见 [SDK 依赖说明](../../third_party/mxc/README.md)。
 
-适配器使用 SDK 已提供的契约和平台运行器导出。公开的 `v1::spawn` 尚不能明确禁止 ACL 改动、锁定 PSEC 运行器或指定受信 Bubblewrap 路径，因此当前保留直接选择运行器的接入；不让 SDK 的实现选择改变 Ash 已确定的隔离要求。
+适配器通过 SDK `v1::prepare_restricted` 固定 PSEC、禁止宿主 ACL 改动并传入受信 Bubblewrap 路径及 Seatbelt 追加拒绝规则。SDK 拥有运行器选择、基础 profile 和资源清理；Ash 保存唯一的执行规格，准备和启动时临时生成 SDK 请求。管道、PTY 和 Windows helper 分别取得标准 SDK 句柄。
 
-文件身份快照由 `sandboxing` 持有，使用 `file-identity` 的句柄检查；Windows ACL 授权范围由 `windows-sandbox` 持有。SDK 补丁只处理隔离边界、平台能力诊断和资源生命周期。Unix PTY 复用官方实现，补充前台作业中断接口。
+文件身份快照由 `sandboxing` 持有，使用 `file-identity` 的句柄检查；Windows ACL 授权范围仍由 `windows-sandbox` 持有。终端交接直接保存 Ash 的 Allowed、Denied 或 Managed 模式，以及显式环境和文件身份；SDK 的方向网络策略在接入边界生成，无需反向恢复权限或修补内部运行时标记。
 
-终端交接从 SDK 的方向网络策略恢复 Ash 的 Allowed、Denied 或 Managed 模式，同时检查入站、宿主回环和出站例外。无法保留的组合拒绝序列化，不依据已删除的旧网络字段重建权限。
-
-升级时固定 commit、对照上游复核补丁，再验证消费者及平台行为。该 pin 是源码快照，上游已移除早期预览说明；这不替代产品自己的隔离验收。[上游源码](https://github.com/microsoft/mxc/tree/c6f301d53a1430c4c921a05c57af838f7392348f)
+升级时固定 commit 并复核兼容 fork 相对官方基线的差异，再验证两个沙箱消费者及平台行为。源码版本和官方支持说明不能替代产品隔离验收。
 
 ## 验证
+
+2026-10-11 退出 vendor 后，macOS ARM64 的 `just verify ash-mxc-sandbox` 通过：36 项库测试、2 项 macOS 集成测试和 7 项真实 PTY 场景通过，局域网用例与 `fcntl` 子进程入口按原条件忽略。远程固定 SDK 的 Cargo 正常编译、warning 门禁及 Bazel 适配器库构建通过；SDK 严格准备、Seatbelt profile 与退出观察的筛选组分别通过 8、89、2 项。Linux ARM64 与 Windows x64 MSVC 的适配器测试目标交叉编译通过。执行服务的 54 项库测试和 16 项真实 RPC 集成测试通过，覆盖重连、受限终端、取消、退出输出和回收。依赖结构、安全来源/许可证/漏洞检查通过，Python 工具回归 167 项（1 项按平台条件跳过）通过。以下较早的 Windows/WSL 运行结果属于原 pin，当前兼容 fork 尚未在这些平台重新运行验收。
 
 2026-10-10 升级至 `c6f301d5` 后，在 Windows 11 23H2 x64（build `22631.6199`）及 WSL2 `AshAcceptance` x64（kernel `6.18.40.1-microsoft-standard-WSL2`）执行以下验证：
 

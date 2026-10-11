@@ -52,6 +52,8 @@ unknown-git = "deny"
 required-git-spec = "rev"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
+    # SDK compatibility fixes required by the sandbox; see third_party/mxc/README.md.
+    "https://github.com/chogng/mxc",
     "https://github.com/cobalt-org/liquid-rust",
     "https://github.com/dzbarsky/rules_rust",
     "https://github.com/helix-editor/nucleo.git",

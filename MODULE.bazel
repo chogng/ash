@@ -212,6 +212,7 @@ crate.annotation(
 # Use the existing LLVM toolchain for resources rather than a host Windows SDK.
 crate.annotation(
     crate = "mxc-sdk",
+    workspace_cargo_toml = "src/Cargo.toml",
     build_script_tools = ["@llvm//tools:llvm-rc"],
     build_script_env = {
         "RC_PATH": "$(execpath @llvm//tools:llvm-rc)",

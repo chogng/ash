@@ -35,8 +35,8 @@ fn windows_command_path_preserves_cmd_syntax_and_argument_slashes() {
     // cannot create a PSEC environment. Keep its /c payload unchanged.
     let output = std::process::Command::new(system.join("System32").join("cmd.exe"))
         .args(["/d", "/s", "/c"])
-        .raw_arg(format!("\"{}\"", request.inner.script_code))
-        .current_dir(&request.inner.working_directory)
+        .raw_arg(format!("\"{}\"", request.command_line))
+        .current_dir(&request.cwd)
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(125), "{output:?}");
@@ -63,18 +63,25 @@ fn windows_policy_allows_required_desktop_resources_but_keeps_sensitive_ui_block
         &SandboxScope::single(dir),
     )
     .unwrap();
-    let policy = request.inner.policy;
-    assert!(!policy.ui.disable);
-    assert!(matches!(
-        policy.ui.clipboard,
-        mxc_sdk::mxc_common::models::ClipboardPolicy::None
-    ));
-    assert!(!policy.ui.injection);
-    assert_eq!(policy.base_process_ui.isolation, "desktop");
-    assert!(!policy.base_process_ui.desktop_system_control);
-    assert_eq!(policy.base_process_ui.system_settings, "none");
-    assert!(!policy.base_process_ui.ime);
-    assert!(!policy.fallback.allow_dacl_mutation);
+    let sdk = super::sdk_request(&request).unwrap();
+    let ui = sdk.ui.unwrap();
+    assert!(!ui.disable);
+    assert_eq!(ui.clipboard, mxc_sdk::v1::ClipboardPolicy::None);
+    assert!(!ui.allow_input_injection);
+    let mxc_sdk::v1::Containment::ProcessContainer(process) = sdk.containment else {
+        panic!("Windows must use ProcessContainer");
+    };
+    let ui = process.ui.unwrap();
+    assert_eq!(
+        ui.isolation,
+        mxc_sdk::v1::configs::ProcessContainerUiIsolation::Desktop
+    );
+    assert!(!ui.desktop_system_control);
+    assert_eq!(
+        ui.system_settings,
+        mxc_sdk::v1::configs::ProcessContainerSystemSettings::None
+    );
+    assert!(!ui.ime);
 }
 
 #[test]

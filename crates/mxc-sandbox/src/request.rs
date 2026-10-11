@@ -1,44 +1,26 @@
-//! Prepared MXC requests owned by the Ash adapter, independent of SDK dispatch.
+//! Ash's approved launch specification; SDK requests exist only at the launch boundary.
 use crate::unavailable;
 use ash_sandboxing::FilesystemSnapshot;
+use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxError;
-use mxc_sdk::mxc_common::logger::Logger;
-use mxc_sdk::mxc_common::logger::Mode;
-use mxc_sdk::mxc_common::models::ExecutionRequest;
-use mxc_sdk::mxc_common::models::NetworkAction;
-use mxc_sdk::mxc_common::sandbox_process::SandboxBackend;
-use mxc_sdk::mxc_common::sandbox_process::SandboxProcess;
-use mxc_sdk::mxc_common::sandbox_process::StdioMode;
+use mxc_sdk::v1::FilesystemPolicy;
 use serde::Deserialize;
 use serde::Serialize;
-use serde::ser::Error as _;
 use std::path::Path;
 use std::path::PathBuf;
 
-#[derive(Debug)]
-pub(super) struct Request {
-    pub inner: ExecutionRequest,
-    snapshot: FilesystemSnapshot,
-    // These controls deliberately do not deserialize through MXC's public config.
-    bubblewrap: Option<PathBuf>,
-    private_ipc: Vec<String>,
-    proxy_port: Option<u16>,
-    #[cfg(target_os = "macos")]
-    seatbelt_rules: String,
-}
-
-// The handoff carries Ash's concrete execution controls, never a serialized SDK
-// implementation model. Rebuilding through the published contract retains its validation.
-#[derive(Serialize, Deserialize)]
+// The same concrete specification crosses the Windows helper boundary. SDK implementation
+// state is never persisted or reconstructed from a second representation of the policy.
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Handoff {
-    command_line: String,
-    cwd: String,
-    environment: Option<Vec<String>>,
-    readwrite_paths: Vec<String>,
-    readonly_paths: Vec<String>,
-    denied_paths: Vec<String>,
-    network: HandoffNetwork,
+pub(super) struct Request {
+    pub command_line: String,
+    pub cwd: String,
+    pub environment: Option<Vec<String>>,
+    pub readwrite_paths: Vec<String>,
+    pub readonly_paths: Vec<String>,
+    pub denied_paths: Vec<String>,
+    pub network: Network,
     snapshot: FilesystemSnapshot,
     bubblewrap: Option<PathBuf>,
     private_ipc: Vec<String>,
@@ -46,136 +28,72 @@ struct Handoff {
     seatbelt_rules: String,
 }
 
-#[derive(Serialize, Deserialize)]
-enum HandoffNetwork {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) enum Network {
     Allowed,
     Denied,
-    Managed(u16),
-}
-
-impl Serialize for Request {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let policy = &self.inner.policy;
-        let egress = policy.network_egress.as_ref().ok_or_else(|| {
-            S::Error::custom("terminal handoff requires an explicit egress policy")
-        })?;
-        let ingress = policy.network_ingress.as_ref().ok_or_else(|| {
-            S::Error::custom("terminal handoff requires an explicit ingress policy")
-        })?;
-        // The handoff represents Ash's three network modes. Refuse any SDK
-        // refinement it cannot retain rather than broadening it in the helper.
-        if !egress.allow.is_empty()
-            || !egress.deny.is_empty()
-            || ingress.default != egress.default
-            || ingress.host_loopback != egress.default
-        {
-            return Err(S::Error::custom(
-                "terminal handoff cannot preserve the directional network policy",
-            ));
-        }
-        let network = match (self.proxy_port, egress.default) {
-            (Some(port), NetworkAction::Deny) => HandoffNetwork::Managed(port),
-            (None, NetworkAction::Allow) => HandoffNetwork::Allowed,
-            (None, NetworkAction::Deny) => HandoffNetwork::Denied,
-            (Some(_), NetworkAction::Allow) => {
-                return Err(S::Error::custom(
-                    "managed networking must deny direct egress",
-                ));
-            }
-        };
-        Handoff {
-            command_line: self.inner.script_code.clone(),
-            cwd: self.inner.working_directory.clone(),
-            environment: self.inner.env.clone(),
-            readwrite_paths: self.inner.policy.readwrite_paths.clone(),
-            readonly_paths: self.inner.policy.readonly_paths.clone(),
-            denied_paths: self.inner.policy.denied_paths.clone(),
-            network,
-            snapshot: self.snapshot.clone(),
-            bubblewrap: self.bubblewrap.clone(),
-            private_ipc: self.private_ipc.clone(),
-            #[cfg(target_os = "macos")]
-            seatbelt_rules: self.seatbelt_rules.clone(),
-        }
-        .serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Request {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let handoff = Handoff::deserialize(deserializer)?;
-        let (network, proxy_port) = match handoff.network {
-            HandoffNetwork::Allowed => (ash_sandboxing::NetworkAccess::Allowed, None),
-            HandoffNetwork::Denied => (ash_sandboxing::NetworkAccess::Denied, None),
-            HandoffNetwork::Managed(port) => (ash_sandboxing::NetworkAccess::Managed, Some(port)),
-        };
-        let files = mxc_sdk::mxc_common::models::ContainerPolicy {
-            readwrite_paths: handoff.readwrite_paths,
-            readonly_paths: handoff.readonly_paths,
-            denied_paths: handoff.denied_paths,
-            ..Default::default()
-        };
-        let mut inner = crate::policy::sdk_request(
-            handoff.command_line,
-            handoff.cwd,
-            files,
-            network,
-            proxy_port,
-        )
-        .map_err(serde::de::Error::custom)?;
-        inner.env = handoff.environment;
-        Ok(Self {
-            inner,
-            snapshot: handoff.snapshot,
-            bubblewrap: handoff.bubblewrap,
-            private_ipc: handoff.private_ipc,
-            proxy_port,
-            #[cfg(target_os = "macos")]
-            seatbelt_rules: handoff.seatbelt_rules,
-        })
-    }
+    #[cfg(not(windows))]
+    Managed(std::num::NonZeroU16),
 }
 
 impl Request {
-    pub fn new(inner: ExecutionRequest) -> Result<Self, SandboxError> {
-        let proxy_port = inner
-            .policy
-            .network_proxy
-            .address
-            .as_ref()
-            .map(|address| address.port());
-        let snapshot_paths = inner
-            .policy
+    pub fn new(
+        command_line: String,
+        cwd: String,
+        files: FilesystemPolicy,
+        network: NetworkAccess,
+        proxy_port: Option<u16>,
+    ) -> Result<Self, SandboxError> {
+        let network = match (network, proxy_port) {
+            (NetworkAccess::Allowed, None) => Network::Allowed,
+            (NetworkAccess::Denied, None) => Network::Denied,
+            #[cfg(windows)]
+            (NetworkAccess::Managed, _) => return Err(crate::policy::unsupported_managed_network()),
+            #[cfg(not(windows))]
+            (NetworkAccess::Managed, Some(port)) if port != 0 => {
+                Network::Managed(std::num::NonZeroU16::new(port).expect("port was checked"))
+            }
+            _ => {
+                return Err(unavailable(
+                    "managed networking requires one execution-owned HTTP/SOCKS endpoint",
+                ));
+            }
+        };
+        let paths = files
             .readwrite_paths
             .iter()
-            .chain(&inner.policy.readonly_paths)
-            .chain(&inner.policy.denied_paths)
+            .chain(&files.readonly_paths)
+            .chain(&files.denied_paths)
             .map(PathBuf::from)
-            .chain(std::iter::once(PathBuf::from(&inner.working_directory)))
+            .chain(std::iter::once(PathBuf::from(&cwd)))
             .map(snapshot_path)
             .collect::<std::io::Result<Vec<_>>>()
             .map_err(|error| unavailable(error.to_string()))?;
-        let snapshot = FilesystemSnapshot::capture(snapshot_paths)
-            .map_err(|error| unavailable(error.to_string()))?;
+        let snapshot =
+            FilesystemSnapshot::capture(paths).map_err(|error| unavailable(error.to_string()))?;
         Ok(Self {
-            inner,
+            command_line,
+            cwd,
+            environment: None,
+            readwrite_paths: files.readwrite_paths,
+            readonly_paths: files.readonly_paths,
+            denied_paths: files.denied_paths,
+            network,
             snapshot,
             bubblewrap: None,
             private_ipc: Vec::new(),
-            proxy_port,
             #[cfg(target_os = "macos")]
             seatbelt_rules: String::new(),
         })
     }
 
     pub fn set_env(&mut self, environment: &[(String, String)]) {
-        self.inner.env = Some(
+        self.environment = Some(
             environment
                 .iter()
                 .map(|(key, value)| format!("{key}={value}"))
                 .collect(),
         );
-        self.inner.inherit_default_env = false;
     }
 
     pub fn set_bubblewrap_executable(&mut self, path: &Path) {
@@ -192,81 +110,34 @@ impl Request {
         self.seatbelt_rules = rules;
     }
 
-    pub fn prepare(&self) -> Result<(), SandboxError> {
+    pub fn prepare(&self) -> Result<mxc_sdk::v1::RestrictedLaunch, SandboxError> {
         self.snapshot
             .validate()
             .map_err(|error| unavailable(error.to_string()))?;
-        #[cfg(windows)]
-        mxc_sdk::process_container_common::base_container_runner::BaseContainerRunner::require_psec(
-            &self.inner,
-        )
-        .map_err(|error| {
-            if error.code == mxc_sdk::mxc_common::mxc_error::MxcErrorCode::UnsupportedContainment {
-                SandboxError::UnsupportedPolicy(error.to_string())
-            } else {
-                unavailable(error.to_string())
-            }
-        })?;
-        Ok(())
-    }
-
-    pub fn spawn(mut self, stdio: StdioMode) -> Result<Box<dyn SandboxProcess>, SandboxError> {
-        self.restore_runtime_policy();
-        self.prepare()?;
-        self.inner.bubblewrap_executable = self.bubblewrap;
+        let mut options = mxc_sdk::v1::RestrictedLaunchOptions::default();
+        options.bubblewrap_executable = self.bubblewrap.clone();
+        options.unix_socket_paths = self.private_ipc.clone();
         #[cfg(target_os = "macos")]
         {
-            let seatbelt = self.inner.seatbelt.get_or_insert_with(Default::default);
-            seatbelt.allow_unix_sockets = false;
-            seatbelt.allowed_unix_socket_paths = self.private_ipc;
-            if !self.seatbelt_rules.is_empty() {
-                if seatbelt.profile_override.is_some() {
-                    return Err(SandboxError::UnsupportedPolicy(
-                        "continuous path rules cannot extend a Seatbelt profile override".into(),
-                    ));
+            options.seatbelt_denials = self.seatbelt_rules.clone();
+        }
+        mxc_sdk::v1::prepare_restricted(crate::policy::sdk_request(self)?, options).map_err(
+            |error| {
+                if error.code == mxc_sdk::v1::ErrorCode::UnsupportedContainment {
+                    SandboxError::UnsupportedPolicy(error.to_string())
+                } else {
+                    unavailable(error.to_string())
                 }
-                let mut profile =
-                    mxc_sdk::seatbelt_common::profile_builder::build_profile_with_proxy(
-                        &self.inner,
-                        self.inner.policy.network_proxy.address.as_ref(),
-                    )
-                    .map_err(SandboxError::UnsupportedPolicy)?;
-                profile.push_str(&self.seatbelt_rules);
-                self.inner
-                    .seatbelt
-                    .as_mut()
-                    .expect("Seatbelt configuration was created above")
-                    .profile_override = Some(profile);
-            }
-        }
-        let mut logger = Logger::new(Mode::Buffer);
-        #[cfg(windows)]
-        let mut backend =
-            mxc_sdk::process_container_common::base_container_runner::BaseContainerRunner::new();
-        #[cfg(target_os = "linux")]
-        let mut backend = mxc_sdk::bwrap_common::bwrap_runner::BubblewrapScriptRunner::new();
-        #[cfg(target_os = "macos")]
-        let mut backend = mxc_sdk::seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new();
-        let result = backend
-            .spawn(&self.inner, &mut logger, stdio)
-            .map_err(spawn_error);
-        for warning in logger.take_warnings() {
-            log::warn!(target: "sandbox", "MXC execution diagnostic: {warning}");
-        }
-        result
+            },
+        )
     }
+}
 
-    fn restore_runtime_policy(&mut self) {
-        // Ash always supplies an explicit network policy and uses one owned
-        // loopback endpoint. MXC deliberately omits these fields from its config serialization.
-        let policy = &mut self.inner.policy;
-        policy.network_specified = true;
-        policy.network_mode_specified = true;
-        policy.ui_specified = cfg!(windows);
-        policy.runtime_network_proxy_specified = self.proxy_port.is_some();
-        policy.network_proxy.address = self
-            .proxy_port
-            .map(|port| mxc_sdk::mxc_common::models::ProxyAddress::new("127.0.0.1".into(), port));
+pub(super) fn spawn_error(error: mxc_sdk::v1::Error) -> SandboxError {
+    // SDK diagnoses a launch failure; it does not attest that user code never started.
+    SandboxError::StartFailed {
+        timing: ash_sandboxing::SandboxDenialTiming::ProcessMayHaveStarted,
+        message: error.to_string(),
     }
 }
 
@@ -284,29 +155,6 @@ fn snapshot_path(path: PathBuf) -> std::io::Result<PathBuf> {
         }
     }
     Ok(path)
-}
-
-fn spawn_error(error: mxc_sdk::mxc_common::models::ScriptResponse) -> SandboxError {
-    use mxc_sdk::mxc_common::models::FailurePhase;
-    let code = match error.failure_phase {
-        FailurePhase::BackendUnavailable => "backend_unavailable",
-        FailurePhase::Rejected => "policy_validation",
-        FailurePhase::None
-        | FailurePhase::LaunchFailed
-        | FailurePhase::PostLaunchFailed
-        | FailurePhase::ProcessExited
-        | FailurePhase::Timeout => "backend_error",
-    };
-    let mut message = format!("{code}: {}", error.error_message);
-    if !error.extended_error.is_empty() {
-        message.push_str(&format!(" ({})", error.extended_error));
-    }
-    // A launch error never reopens backend selection. SDK failure categories
-    // describe the diagnosis, but do not attest that user code never started.
-    SandboxError::StartFailed {
-        timing: ash_sandboxing::SandboxDenialTiming::ProcessMayHaveStarted,
-        message,
-    }
 }
 
 #[cfg(test)]
@@ -335,7 +183,7 @@ pub(super) fn host_paths(cwd: &Path) -> Result<Vec<String>, SandboxError> {
                         .path();
                     // Generated visibility does not authorize inaccessible objects.
                     // Explicit grants were captured separately and always fail closed.
-                    use mxc_sdk::mxc_common::filesystem_object::{
+                    use mxc_sdk::v1::{
                         ExistingObjectComparison, compare_existing_filesystem_objects,
                     };
                     if compare_existing_filesystem_objects(&path, &path)

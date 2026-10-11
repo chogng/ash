@@ -177,7 +177,7 @@ Ash 当前 [MXC 请求](../mxc-sandbox/src/policy.rs) 明确允许窗口与桌�
 
 ### 管道与会话管理
 
-Ash 直接通过 MXC 平台运行器的 `SandboxBackend::spawn` 获取持续双向标准流和终止句柄。执行会话由 Ash 执行器负责：
+Ash 通过 MXC SDK 的严格准备接口和标准进程句柄获取持续双向标准流与终止能力。执行会话由 Ash 执行器负责：
 
 - 开始执行只创建一次进程；短等待后返回已完成结果或稳定、不透明的进程会话标识及输出游标。
 - 后续读输出、写输入、关闭输入、中断和终止都操作同一执行记录，校验调用方/Thread/Environment 归属及授权快照。对交互 shell 的授权覆盖会话内输入；不能只批准初始 shell 路径而忽略其后续任意执行能力。
@@ -190,7 +190,7 @@ Ash 直接通过 MXC 平台运行器的 `SandboxBackend::spawn` 获取持续双�
 
 固定 SDK 的 `v1::spawn_with_pty` 已提供调用方持有的 Unix 终端，Bubblewrap 与 Seatbelt 的平台运行器支持 `StdioMode::Pty`。Windows Rust ProcessContainer 仍不分配 PTY；Node 包的终端支持不能直接用于 Ash 的 Rust 进程接口。IsolationSession 的终端接入不能满足本方案要求的受限文件和网络策略。
 
-- Unix 直接使用 SDK 的 `StdioMode::Pty`，由 SDK 分配终端、维护尺寸和进程生命周期，Ash 适配输入输出与前台作业中断。Windows 通过内部 helper 交接 Ash 请求，以 `StdioMode::Inherit` 继承终端。管道使用同一平台运行器的 `StdioMode::Pipes`。
+- Unix 使用 SDK 严格准备后的 `spawn_with_pty`，由 SDK 分配终端、维护尺寸和进程生命周期，Ash 适配输入输出与前台作业中断。Windows 内部 helper 交接同一 Ash 请求，通过 `spawn_inherited` 继承终端；管道通过 `spawn` 取得标准 SDK 句柄。
 - MXC 内部复用自己的平台终端能力，不能依赖 `ash-*`。Ash 侧由 `utils/pty::ProcessDriver` 适配已经受限的进程和终端；`mxc-sandbox` 保持机械转换，不另起未受限命令。
 - Windows 账户后端在同一受限令牌、Job 和桌面创建流程接入 ConPTY；Linux/macOS 校验 controlling terminal、前台进程组、信号以及后代仍在隔离范围内。
 - 用户请求 PTY 时，后端准备必须检查该能力；没有 PTY 不能静默改为管道。PTY 合并 stdout/stderr，管道仍分离；resize 只用于终端，中断与强制终止分别实施并验证。
@@ -224,7 +224,7 @@ PSEC 检查分为宿主能力和本次请求两部分，由现有 MXC 平台实�
 
 ### 当前实现与边界
 
-[当前 PSEC 准备](../vendor/mxc/mxc-sdk/src/backends/process_container/common/base_container_runner.rs) 使用本次请求的有效策略创建并关闭临时 PSEC 环境，同时构造启动属性并查询请求实际使用的拒绝路径能力；需要拒绝捕获时才检查 Learning Mode。API set 或导出明确缺失、已识别的 `E_NOTIMPL`/`ERROR_CALL_NOT_IMPLEMENTED`/`ERROR_NOT_SUPPORTED` 返回 `UnsupportedContainment`，DLL 加载、访问拒绝、资源及未知查询错误返回 `BackendUnavailable`，并保留失败操作和系统错误码。
+[当前 PSEC 准备](https://github.com/chogng/mxc/blob/d4bc220668130f941d117aab4326edb4c1812e78/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs) 使用本次请求的有效策略创建并关闭临时 PSEC 环境，同时构造启动属性并查询请求实际使用的拒绝路径能力；需要拒绝捕获时才检查 Learning Mode。API set 或导出明确缺失、已识别的 `E_NOTIMPL`/`ERROR_CALL_NOT_IMPLEMENTED`/`ERROR_NOT_SUPPORTED` 返回 `UnsupportedContainment`，DLL 加载、访问拒绝、资源及未知查询错误返回 `BackendUnavailable`，并保留失败操作和系统错误码。
 
 [准备门禁](../mxc-sandbox/src/request.rs) 直接传递该结构化结果；`mxc-sandbox` 只按 SDK 错误码决定是否返回 `UnsupportedPolicy`，不从错误文本推断。启动前再次执行同一门禁，变化或故障直接终止，不重新选择后端。公开布尔探测仍供诊断和旧入口使用，但不再是 Ash 安全选择的输入。
 
@@ -259,7 +259,7 @@ Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适�
 - `file-access` 保留文件对象与授权校验，`terminal` 保留终端语义；命令会话不放进终端绘制或无界面 Agent runner。前端通过 App Server 访问执行记录，不持有后端系统句柄。
 - crate 主要用于能力和依赖隔离。现有边界承载策略、会话、PTY 和平台修复，不另拆“能力探测”或“选择协调”crate。
 
-补丁范围与校验入口由 [MXC 依赖说明](../vendor/mxc/README.md) 维护。
+补丁范围与校验入口由 [MXC 依赖说明](../../third_party/mxc/README.md) 维护。
 
 ## 安装与单次执行
 
@@ -278,23 +278,23 @@ Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适�
 
 以下状态来自源码核对及仓库已有记录，本次文档修订没有重新运行产品测试。
 
-| 能力                           | 状态                                                                                                      | 定位                                                                                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 候选顺序与统一选择器           | 已接线；选择器只接受 `UnsupportedPolicy` 继续                                                             | [选择器](../sandboxing/src/backends.rs)、[App Server](../app-server/src/local_tools.rs)                                                     |
-| 正式版本候选与支持清单一致     | 待发布验收后核定，当前固定注册不代表取得资格                                                              | App Server 装配与发行验证                                                                                                                   |
-| Windows 最低模型与 Strict 拒绝 | 已实现，账户后端不改写请求                                                                                | [策略类型](../sandboxing/src/model.rs)、[账户准备](../windows-sandbox/src/windows.rs)                                                       |
-| PSEC 准备门禁                  | 已区分明确不支持与运行故障；按本次请求创建临时环境并检查启动属性，启动前复核                              | [MXC 请求](../mxc-sandbox/src/request.rs)、[平台探测](../vendor/mxc/mxc-sdk/src/backends/process_container/common/base_container_runner.rs) |
-| PSEC Managed 接入              | 当前明确拒绝不能保持默认禁止入站的组合；正式代理身份及成功路径未完成                                      | [适配器门禁](../mxc-sandbox/src/lib.rs)、[拒绝组合测试](../mxc-sandbox/src/sandbox_tests.rs)                                                |
-| Windows 工具 UI 兼容           | 已显式允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置；需按 PSEC 路径实机验证            | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 转换](../mxc-sandbox/src/policy.rs)                                                           |
-| 路径级规则与最小读取基线       | 精确路径、执行前模式快照和宿主读取已接入；macOS 持续拒绝/只读 glob 实测通过；可配置授权与跨平台验收未完成 | [目录范围](../sandboxing/src/scope.rs)、[规则解析](../sandboxing/src/filesystem.rs)、[Seatbelt 规则](../mxc-sandbox/src/seatbelt.rs)        |
-| 受控 Unix socket               | 已有执行私有 IPC 例外与敏感路径拒绝；需实机验证                                                           | [请求转换](../mxc-sandbox/src/policy.rs)                                                                                                    |
-| PTY 与命令会话                 | MXC 管道与 PTY 已使用同一平台运行器；会话及各平台验收单独推进                                             | [终端交接](../mxc-sandbox/src/pty.rs)、[执行器](../tool-executor/src/lib.rs)、[PTY](../utils/pty/README.md)                                 |
-| 选择器故障停止、启动不重跑     | 已有替身测试；不证明 SDK 错误转换正确                                                                     | [选择器测试](../sandboxing/src/backends_tests.rs)                                                                                           |
-| 账户模型实机执行               | 23H2 本机记录 21 项单测、9 项完整执行用例通过                                                             | [验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-09-11-windowsaccount-模型验收)                                             |
-| PSEC 完整成功路径              | 未取得实机通过证据；对应测试标为忽略                                                                      | [Windows PSEC 测试](../mxc-sandbox/tests/windows.rs)                                                                                        |
-| MXC 与账户后端组合             | 真实组合及故障注入验证待补                                                                                | 复用 `sandboxing`、`mxc-sandbox` 和 App Server 测试入口                                                                                     |
-| Linux/macOS 隔离               | macOS 27.0.1 ARM64 的文件边界与终端已有实测；网络/私有 IPC 完整矩阵及 Intel Mac 未验收                    | [Linux 测试](../mxc-sandbox/tests/linux.rs)、[macOS 测试](../mxc-sandbox/src/sandbox_tests.rs)、[验收范围](../../MXC-TODO.md)               |
-| 异常恢复                       | 已有部分账户日志恢复证据，完整崩溃组合未覆盖                                                              | [验收手册](../../docs/windows-sandbox-acceptance-runbook.md)                                                                                |
+| 能力                           | 状态                                                                                                      | 定位                                                                                                                                                                                                          |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 候选顺序与统一选择器           | 已接线；选择器只接受 `UnsupportedPolicy` 继续                                                             | [选择器](../sandboxing/src/backends.rs)、[App Server](../app-server/src/local_tools.rs)                                                                                                                       |
+| 正式版本候选与支持清单一致     | 待发布验收后核定，当前固定注册不代表取得资格                                                              | App Server 装配与发行验证                                                                                                                                                                                     |
+| Windows 最低模型与 Strict 拒绝 | 已实现，账户后端不改写请求                                                                                | [策略类型](../sandboxing/src/model.rs)、[账户准备](../windows-sandbox/src/windows.rs)                                                                                                                         |
+| PSEC 准备门禁                  | 已区分明确不支持与运行故障；按本次请求创建临时环境并检查启动属性，启动前复核                              | [MXC 请求](../mxc-sandbox/src/request.rs)、[平台探测](https://github.com/chogng/mxc/blob/d4bc220668130f941d117aab4326edb4c1812e78/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs) |
+| PSEC Managed 接入              | 当前明确拒绝不能保持默认禁止入站的组合；正式代理身份及成功路径未完成                                      | [适配器门禁](../mxc-sandbox/src/lib.rs)、[拒绝组合测试](../mxc-sandbox/src/sandbox_tests.rs)                                                                                                                  |
+| Windows 工具 UI 兼容           | 已显式允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置；需按 PSEC 路径实机验证            | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 转换](../mxc-sandbox/src/policy.rs)                                                                                                                             |
+| 路径级规则与最小读取基线       | 精确路径、执行前模式快照和宿主读取已接入；macOS 持续拒绝/只读 glob 实测通过；可配置授权与跨平台验收未完成 | [目录范围](../sandboxing/src/scope.rs)、[规则解析](../sandboxing/src/filesystem.rs)、[Seatbelt 规则](../mxc-sandbox/src/seatbelt.rs)                                                                          |
+| 受控 Unix socket               | 已有执行私有 IPC 例外与敏感路径拒绝；需实机验证                                                           | [请求转换](../mxc-sandbox/src/policy.rs)                                                                                                                                                                      |
+| PTY 与命令会话                 | MXC 管道与 PTY 已使用同一平台运行器；会话及各平台验收单独推进                                             | [终端交接](../mxc-sandbox/src/pty.rs)、[执行器](../tool-executor/src/lib.rs)、[PTY](../utils/pty/README.md)                                                                                                   |
+| 选择器故障停止、启动不重跑     | 已有替身测试；不证明 SDK 错误转换正确                                                                     | [选择器测试](../sandboxing/src/backends_tests.rs)                                                                                                                                                             |
+| 账户模型实机执行               | 23H2 本机记录 21 项单测、9 项完整执行用例通过                                                             | [验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-09-11-windowsaccount-模型验收)                                                                                                               |
+| PSEC 完整成功路径              | 未取得实机通过证据；对应测试标为忽略                                                                      | [Windows PSEC 测试](../mxc-sandbox/tests/windows.rs)                                                                                                                                                          |
+| MXC 与账户后端组合             | 真实组合及故障注入验证待补                                                                                | 复用 `sandboxing`、`mxc-sandbox` 和 App Server 测试入口                                                                                                                                                       |
+| Linux/macOS 隔离               | macOS 27.0.1 ARM64 的文件边界与终端已有实测；网络/私有 IPC 完整矩阵及 Intel Mac 未验收                    | [Linux 测试](../mxc-sandbox/tests/linux.rs)、[macOS 测试](../mxc-sandbox/src/sandbox_tests.rs)、[验收范围](../../MXC-TODO.md)                                                                                 |
+| 异常恢复                       | 已有部分账户日志恢复证据，完整崩溃组合未覆盖                                                              | [验收手册](../../docs/windows-sandbox-acceptance-runbook.md)                                                                                                                                                  |
 
 Codex 核对基线已更新为 `95ec468619386ebb93506ac2091a48e5a558d25c`。当前代码支持显式 MXC 和默认关闭的本地优先选项，已接入实际执行链、RPC 与 ConPTY；测试用例存在不能替代对应系统的通过证据。Ash 已增加 PowerShell 自动发现过滤、分块 PTY 交接和 PSEC 终端/文件别名验收用例，Windows 成功执行仍以实际验收为准。具体源码、网络差异及采用边界见 [Windows 候选评估](../../docs/sandboxing.md#windows-候选评估)。
 

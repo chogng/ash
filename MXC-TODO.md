@@ -1,14 +1,19 @@
 # MXC 升级验收与去除 vendor
 
-本轮固定官方提交 `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用 `mxc-sdk 1.0.0`。Windows 和 macOS ARM64 已有下述实机结果；Linux 发行版及各平台未覆盖的组合继续单独验收。每个平台记录实际源码、系统版本、架构、命令、通过数和清理结果，旧 pin 的结果不算新版通过证据。
+下述记录属于 2026-10-07 的官方提交 `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用当时的 `mxc-sdk 1.0.0`。Windows 和 macOS ARM64 已有这些实机结果；Linux 发行版及各平台未覆盖的组合继续单独验收。每个平台记录实际源码、系统版本、架构、命令、通过数和清理结果，旧 pin 的结果不算新版通过证据。
 
-## 为什么目前保留 vendor
+## 当前依赖方式
 
-官方单包 SDK 已直接提供 Unix PTY、请求契约和平台运行器。文件身份快照、宿主 ACL 授权范围和 Windows 终端交接格式已移回 Ash。
+2026-10-11 已删除 Ash 中的 SDK vendor，改为官方版本声明加固定兼容 fork。上游模块布局、workspace 清单和 fixture 来源均保留，必要的隔离修正通过 Git 提交复核；具体保留原因和退出条件见 [SDK 依赖说明](third_party/mxc/README.md)。适配器只保存 Ash 执行规格，通过 typed 严格准备接口和 SDK 句柄接入。
 
-当前仍有官方未合入的隔离和生命周期修正：隐藏父目录内的授权例外、Windows ACL 日志与继承恢复、精确 PSEC 能力准备、WSL `AF_VSOCK` 禁止、进程树清理前保留 PID、Seatbelt 祖先目录固定与 `fcntl` 防护，以及 Unix 终端前台中断和 Bubblewrap 作业控制。直接改成官方 Git 依赖会失去这些修正；改用 fork 仍需维护同样的补丁。
+下述 2026-10-07 验收属于原 pin 的历史证据；它不证明当前 fork 已在 Windows/WSL 重新运行。当前 macOS 行为回归和跨平台编译结果由 [适配器验证](crates/mxc-sandbox/README.md#验证) 记录。
 
-完整差异和来源校验见 [vendor 说明](crates/vendor/mxc/README.md)；已运行项目见 [适配器验证](crates/mxc-sandbox/README.md#验证)。本轮补丁包含 51 个 `mod.rs` 文件模块改名，不能把补丁文件数量全部当作功能修改数量。
+### 当前 SDK 的 Windows／WSL 实机复测
+
+- [ ] 在支持 PSEC 的 Windows 宿主重跑当前固定 fork 的文件、网络、ConPTY、执行服务 RPC、后代回收和清理验收，记录系统版本、架构、SDK 提交及原始结果；入口见 [Windows 验收手册](docs/windows-sandbox-acceptance-runbook.md) 和 `scripts/test-psec.ps1`。
+- [ ] 在该宿主的 WSL2 中重跑 Linux 适配器、PTY、执行服务及网络矩阵，补 Windows 挂载目录边界，记录发行版、内核和 Bubblewrap 版本；使用下文 Linux 命令及 [WSL 验证入口](crates/mxc-sandbox/README.md#验证)。
+
+2026-10-11 当前工作环境只有 macOS，无法直接运行 Windows／WSL2；本轮未接入可用的 Windows 宿主，因此以上两项保持待办。可以使用具备 PSEC 与 WSL2 的同一台 Windows 机器，通过 SSH 控制或相应 Windows CI 运行；交叉编译和历史 pin 的结果均不能替代当前 SDK 的实机证据。本轮 macOS 沙箱 45 项及执行服务 70 项测试通过，Linux ARM64、Windows x64 测试目标编译通过，Bazel 构建及依赖安全检查通过。
 
 ## Windows：本任务负责
 
@@ -76,7 +81,7 @@ just test ash-mxc-sandbox --test pty --locked
 just test ash-tool-executor --lib --locked
 just test ash-exec-server --test execution --locked
 just test ash-sandboxing --lib --locked
-just test mxc-sdk --manifest-path crates/vendor/mxc/Cargo.toml --lib profile_builder --locked
+just test mxc-sdk --manifest-path /path/to/mxc/src/Cargo.toml --lib profile_builder --profile test --locked
 just rust-warnings ash-mxc-sandbox
 ```
 
@@ -94,9 +99,9 @@ TS 聊天工作区文件选择器已通过 `file/search/glob` 复用 Agent 的�
 
 Seatbelt 策略生成单测不证明实际访问受到限制；尚未完成网络实际流量矩阵、私有 IPC 完整矩阵和 Intel Mac 验收，不能据此宣称完成所有 Codex 能力对齐。
 
-## 去除 vendor 的条件
+## 退出兼容 fork 的条件
 
-- [ ] 逐项对照 `changes.patch`，把仍需要的通用修正提交官方或确认官方已有等价实现；Unix PTY 作业控制与 UTF-8 资源构建可单独提交。
+- [ ] 逐项对照固定 fork 与官方基线的差异，把仍需要的通用修正提交官方或确认官方已有等价实现；Unix PTY 作业控制与 UTF-8 资源构建可单独提交。
 - [ ] 确认官方代码完整实施 Ash 已批准的文件、网络、ACL 和进程生命周期要求。
 - [ ] 固定新的官方 commit，用未经修改的 SDK 重新完成三个平台的受影响验收。
-- [ ] 将 `mxc-sdk` 改为官方 Git `rev` 依赖，更新 Cargo/Bazel/依赖审查记录，再删除 vendor 源码、补丁校验与过时链接；保留许可证归属。
+- [ ] 移除根清单的兼容 patch，保留官方 SDK 版本声明，更新 Cargo/Bazel lockfile、来源审查与链接；保留许可证归属。
