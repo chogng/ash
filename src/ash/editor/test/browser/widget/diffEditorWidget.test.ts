@@ -90,6 +90,10 @@ test('DiffEditorWidget colors inline removed lines and refreshes their tokens wi
 	assert.equal([...removedLine.querySelectorAll('.token-keyword')].map(token => token.textContent).join(''), 'before');
 	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'before');
 
+	const unchangedToken = removedLine.firstElementChild;
+	original.deltaDecorations([], [{ range: new Range(1, 1, 1, 7), options: { description: 'unrelated margin', linesDecorationsClassName: 'unrelated-margin' } }]);
+	assert.strictEqual(removedLine.firstElementChild, unchangedToken);
+
 	tokenType = 'string';
 	original.tokenization.resetTokenization();
 	await original.tokenization.whenReady(new AbortController().signal);

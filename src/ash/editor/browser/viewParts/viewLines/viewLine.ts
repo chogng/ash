@@ -45,6 +45,7 @@ export class ViewLine {
 	public onOptionsChanged(options: ViewLineOptions): void {
 		this._options = options;
 		this._isMaybeInvalid = true;
+		this.resetCachedWidth();
 	}
 
 	public onContentChanged(): void {
@@ -54,12 +55,10 @@ export class ViewLine {
 
 	public onTokensChanged(): void {
 		this._isMaybeInvalid = true;
-		this.resetCachedWidth();
 	}
 
 	public onDecorationsChanged(): void {
 		this._isMaybeInvalid = true;
-		this.resetCachedWidth();
 	}
 
 	public onSelectionChanged(): boolean {
@@ -72,9 +71,9 @@ export class ViewLine {
 
 	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth = 0, inlineDecorations: readonly InlineDecoration[] = [], lineNumber = 1): boolean {
 		if (!Number.isFinite(wrappedTextIndentWidth) || wrappedTextIndentWidth < 0) throw new RangeError('View line indent must be finite and non-negative');
-		this._renderedViewLine.render(text, tokens, wrappedTextIndentWidth, inlineDecorations, lineNumber, this._options.stopRenderingLineAfter);
+		const changed = this._renderedViewLine.render(text, tokens, wrappedTextIndentWidth, inlineDecorations, lineNumber, this._options.stopRenderingLineAfter);
 		this._isMaybeInvalid = false;
-		return true;
+		return changed;
 	}
 
 	public layoutLine(lineHeight: number): void {
@@ -146,12 +145,17 @@ class RenderedViewLine {
 		return this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
 	}
 
-	render(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number, stopRenderingLineAfter: number): void {
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, this.tabSize, inlineDecorations, lineNumber, stopRenderingLineAfter);
+	render(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number, stopRenderingLineAfter: number): boolean {
+		const characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, this.tabSize, inlineDecorations, lineNumber, stopRenderingLineAfter);
+		if (characterMapping === this.characterMapping && wrappedTextIndentWidth === this.wrappedTextIndentWidth) {
+			return false;
+		}
+		this.characterMapping = characterMapping;
 		this.textElement.style.marginInlineStart = `${wrappedTextIndentWidth}px`;
 		this.renderedText = stopRenderingLineAfter < 0 ? text : text.slice(0, stopRenderingLineAfter);
 		this.wrappedTextIndentWidth = wrappedTextIndentWidth;
 		this.resetCachedWidth();
+		return true;
 	}
 
 	layout(lineHeight: number): void {
@@ -219,6 +223,11 @@ class RenderedViewLine {
 export { SemanticTokenModifier, SemanticTokenPresentation } from '../../../common/tokens/languageTokens.js';
 export type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 
+// Token batches can change other lines. Keep the successful DOM input here so
+// both visible rows and inline deleted zones retain unchanged spans and mapping.
+// Weak keys let the row/zone owner release this render cache with its DOM.
+const renderedLineInputs = new WeakMap<HTMLElement, { readonly key: string; readonly mapping: CharacterMapping; }>();
+
 /** Projects one line transactionally while preserving its exact source text. */
 export function projectStanzaSemanticTokenLine(
 	element: HTMLElement,
@@ -232,6 +241,11 @@ export function projectStanzaSemanticTokenLine(
 	validateLineTokens(lineText, tokens);
 	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
 	const visibleText = stopRenderingLineAfter < 0 ? lineText : lineText.slice(0, stopRenderingLineAfter);
+	const key = JSON.stringify([visibleText, visibleText.length < lineText.length, tokens, tabSize, inlineDecorations, lineNumber]);
+	const previous = renderedLineInputs.get(element);
+	if (previous?.key === key) {
+		return previous.mapping;
+	}
 	const ownerDocument = element.ownerDocument;
 	const fragment = createFragment(ownerDocument);
 	const lineDecorations = inlineDecorations.filter(decoration => decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber && decoration.range.startColumn - 1 <= visibleText.length);
@@ -283,6 +297,7 @@ export function projectStanzaSemanticTokenLine(
 		fragment.append(marker);
 	}
 	reset(element, fragment);
+	renderedLineInputs.set(element, { key, mapping: characterMapping });
 	return characterMapping;
 }
 

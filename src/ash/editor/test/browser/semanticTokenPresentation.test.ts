@@ -11,6 +11,31 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
+test('Equal rendering inputs retain spans while changed styling and geometry refresh them', () => {
+	const dom = new JSDOM('<!doctype html><body><code></code></body>');
+	try {
+		const element = requiredElement<HTMLElement>(dom.window.document, 'code');
+		const tokens = [{ startColumn: 0, endColumn: 4, syntaxPresentation: { foreground: '#0000ff' } }];
+		const mapping = projectStanzaSemanticTokenLine(element, 'a\tbc', tokens);
+		const span = element.firstElementChild;
+		assert.strictEqual(projectStanzaSemanticTokenLine(element, 'a\tbc', structuredClone(tokens)), mapping);
+		assert.strictEqual(element.firstElementChild, span);
+		tokens[0]!.syntaxPresentation.foreground = '#ff0000';
+		assert.notStrictEqual(projectStanzaSemanticTokenLine(element, 'a\tbc', tokens), mapping);
+		assert.equal((element.firstElementChild as HTMLElement).style.getPropertyValue('--ash-editor-token-foreground'), '#ff0000');
+		const tabMapping = projectStanzaSemanticTokenLine(element, 'a\tbc', tokens, 8);
+		assert.equal(tabMapping.getHorizontalOffset(5), 10);
+		projectStanzaSemanticTokenLine(element, 'a\tbc', tokens, 8, [new InlineDecoration(new Range(1, 1, 1, 2), 'changed-decoration', InlineDecorationType.Regular)]);
+		assert.equal(element.querySelector('.changed-decoration')?.textContent, 'a');
+		projectStanzaSemanticTokenLine(element, 'a\tbc', tokens, 8, [], 1, 2);
+		assert.equal(element.textContent, 'a\t…');
+		projectStanzaSemanticTokenLine(element, 'a\tbc', tokens, 8);
+		assert.equal(element.textContent, 'a\tbc');
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("Default resolver maps only Stanza's explicit semantic vocabulary", () => {
 	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, "keyword")).presentation, SemanticTokenPresentation.Keyword);
 	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, "method")).presentation, SemanticTokenPresentation.Function);
