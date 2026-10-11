@@ -15,6 +15,30 @@ import { productLanguagePackCatalogs } from '../../../localization/common/locali
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
+test('activity counts abbreviate visually while retaining complete descriptions', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using container = ViewsRegistry.registerViewContainer({ id: 'large-count', title: 'Changes', location: ViewContainerLocation.Sidebar });
+		using contexts = new ContextKeyService();
+		using views = new ViewDescriptorService({}, contexts);
+		using bar = new CompositeBar(dom.window.document.body, {
+			openComposite: async () => null, activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views',
+		});
+		using activity = new ActivityService(bar);
+		for (const [count, text] of [[13, '13'], [999, '999'], [1000, '1K'], [1234, '1K+'], [2000, '2K']] as const) {
+			using handle = activity.showViewContainerActivity('large-count', new NumberBadge(count, `${count} changes`));
+			const tab = bar.domNode.querySelector('[role="tab"]')!;
+			assert.equal(tab.querySelector('.ash-count-badge')?.textContent, text);
+			assert.equal(tab.getAttribute('aria-label'), `Changes, ${count} changes`);
+			assert.equal(tab.querySelector('.ash-count-badge')?.getAttribute('aria-hidden'), 'true');
+		}
+		bar.setBadge('large-count', 0);
+		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('ActivityService combines concurrent counts and descriptions and releases only their own activities', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = ViewsRegistry;

@@ -13,6 +13,7 @@ import { Button } from '../../../base/browser/ui/button/button.js';
 import type { Event } from '../../../base/common/event.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import { ActivityBarPosition, type SideBarLocation } from '../../common/configuration.js';
+import './media/paneCompositePart.css';
 
 export interface IActivityHoverOptions {
 	readonly position: () => HoverPosition;
@@ -140,9 +141,12 @@ export class CompositeActionViewItem extends ActionViewItem {
 			icon: options.icon,
 		}));
 		container.append(action);
-		if (options.badge && options.badgeEnabled) {
-			const badge = this._register(new CountBadge(container, { count: options.badge.count, size: 'small' }));
+		if (options.badge && options.badgeEnabled && options.badge.count > 0) {
+			const count = options.badge.count;
+			const countFormat = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
+			const badge = this._register(new CountBadge(container, { count, countFormat, size: 'small' }));
 			badge.domNode.classList.add('ash-composite-bar-badge');
+			badge.domNode.classList.toggle('long-count', (countFormat ?? String(count)).length >= 3);
 			badge.domNode.setAttribute('aria-hidden', 'true');
 		}
 		this._register(addDisposableListener(container, "click", (event) => {

@@ -1,11 +1,22 @@
 import type { ElectronApplication } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
+import type { Workbench } from '../../../automation/workbench.js';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
+
+async function setHistoryBadges(workbench: Workbench, value: 'All references' | 'Filtered references'): Promise<void> {
+	await workbench.settingsEditor.openUserSettingsUI();
+	const settings = workbench.settingsEditor.element;
+	await settings.getByRole('searchbox').fill('scm.graph.badges');
+	await settings.locator('[data-settings-item-id="scm.graph.badges"]').getByRole('combobox').click();
+	await workbench.page.getByRole('option', { name: value, exact: true }).click();
+	await settings.locator('.ash-modal-editor-close').click();
+}
+
 
 test.use({ gitRepository: true });
 
@@ -321,6 +332,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await settings.locator('.ash-modal-editor-close').click();
 	}
+	await setHistoryBadges(workbench, 'All references');
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history).toBeVisible();
@@ -446,6 +458,7 @@ test('SCM history opens committed contents, copies host metadata and restores lo
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await settings.locator('.ash-modal-editor-close').click();
 	}
+	await setHistoryBadges(workbench, 'All references');
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	const header = history.locator('.ash-pane-view-header');
@@ -590,6 +603,7 @@ test('SCM history references and actions overlay long titles without changing ro
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await settings.locator('.ash-modal-editor-close').click();
 	}
+	await setHistoryBadges(workbench, 'All references');
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	const header = history.locator('.ash-pane-view-header');
@@ -1066,7 +1080,7 @@ test('SCM history filters references, compares branch ranges, switches file tree
 	await page.screenshot({ path: test.info().outputPath('scm-history-binary-file.png') });
 	await test.info().attach('scm-history-binary-file', { path: test.info().outputPath('scm-history-binary-file.png'), contentType: 'image/png' });
 	const selectReferences = async (names: readonly string[]) => {
-		await history.locator('[data-action-id="workbench.scm.action.graph.selectHistoryItemRefs"] > button').click();
+		await history.locator('[data-action-id="workbench.scm.action.graph.pickHistoryItemRefs"] > button').click();
 		for (const name of names) {
 			await page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText(name, { exact: true }) }).click();
 		}
@@ -1081,7 +1095,7 @@ test('SCM history filters references, compares branch ranges, switches file tree
 	history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history.getByRole('treeitem', { name: /Topic only/u })).toBeVisible();
 	await expect(page.locator('.ash-binary-editor-content:visible')).toContainText('00 02 fe');
-	await history.locator('[data-action-id="workbench.scm.action.graph.selectHistoryItemRefs"] > button').click();
+	await history.locator('[data-action-id="workbench.scm.action.graph.pickHistoryItemRefs"] > button').click();
 	for (const name of ['topic', 'topic-tag']) {
 		await expect(page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText(name, { exact: true }) })).toHaveAttribute('aria-selected', 'true');
 	}
@@ -1127,10 +1141,109 @@ test('SCM history filters references, compares branch ranges, switches file tree
 	history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history.getByRole('treeitem', { name: /^传出更改/u })).toBeVisible();
 	await expect(history.getByRole('treeitem', { name: /^传入更改/u })).toBeVisible();
-	await expect(history.locator('[data-action-id="workbench.scm.action.graph.selectHistoryItemRefs"] > button')).toHaveAttribute('aria-label', '筛选历史记录引用');
-	await history.locator('[data-action-id="workbench.scm.action.graph.selectHistoryItemRefs"] > button').click();
+	await expect(history.locator('[data-action-id="workbench.scm.action.graph.pickHistoryItemRefs"] > button')).toHaveAttribute('aria-label', '筛选历史记录引用');
+	await history.locator('[data-action-id="workbench.scm.action.graph.pickHistoryItemRefs"] > button').click();
 	await expect(page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText('origin/main', { exact: true }) }).locator('.ash-quick-pick-row-description')).toHaveText('远程分支');
 	await page.keyboard.press('Escape');
 	await history.screenshot({ path: test.info().outputPath('scm-history-localized-ranges.png') });
 	await test.info().attach('scm-history-localized-ranges', { path: test.info().outputPath('scm-history-localized-ranges.png'), contentType: 'image/png' });
+});
+
+test('SCM history reference menus act on their badge and the graph picker follows repository ownership', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	test.setTimeout(120_000);
+	const cwd = testWorkspace.directory;
+	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+	await mkdir(join(cwd, 'src', 'nested'), { recursive: true });
+	await writeFile(join(cwd, 'src', 'nested', 'history.txt'), 'history\n');
+	await git('add', '.');
+	await git('commit', '-m', 'Root reference actions');
+	await git('branch', 'local-review');
+	await git('tag', 'release-review');
+	const remote = join(cwd, '.git', 'history-test-remote.git');
+	await run('git', ['init', '--bare', remote]);
+	await git('remote', 'add', 'origin', remote);
+	await git('push', 'origin', 'HEAD:refs/heads/remote-review');
+	await git('update-ref', 'refs/remotes/origin/remote-review', 'HEAD');
+	const other = join(cwd, 'other-repo');
+	await mkdir(other);
+	await run('git', ['init', '-b', 'other-main'], { cwd: other });
+	await writeFile(join(other, 'other.txt'), 'other repository\n');
+	await run('git', ['add', '.'], { cwd: other });
+	await run('git', ['-c', 'user.name=History Test', '-c', 'user.email=history@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'Other repository history'], { cwd: other });
+	const page = workbench.page;
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('layout');
+		await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Custom', exact: true }).click();
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+	}
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	const root = history.getByRole('treeitem', { name: /Root reference actions/u });
+	await expect(root).toBeVisible();
+	await expect(root.getByRole('button', { name: 'release-review', exact: true })).toHaveCount(0);
+	await root.focus();
+	await root.press('Alt+ArrowDown');
+	await expect(page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') })).toContainText('release-review');
+	await page.keyboard.press('Escape');
+	await setHistoryBadges(workbench, 'All references');
+	const tag = root.getByRole('button', { name: 'release-review', exact: true });
+	await expect(tag).toBeVisible();
+	await tag.focus();
+	await tag.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Checkout…', exact: true })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Copy Commit Hash', exact: true })).toHaveCount(0);
+	await workbench.dialogs.confirm(application, 'Delete Tag…', 'Cancel', () => page.getByRole('menuitem', { name: 'Delete Tag…', exact: true }).click());
+	expect(await git('tag', '--list', 'release-review')).toBe('release-review');
+	await tag.focus();
+	await tag.press('Shift+F10');
+	await workbench.dialogs.confirm(application, 'Delete Tag…', 'Delete', () => page.getByRole('menuitem', { name: 'Delete Tag…', exact: true }).click());
+	await expect.poll(() => git('tag', '--list', 'release-review')).toBe('');
+	await expect(tag).toHaveCount(0);
+	const local = root.getByRole('button', { name: 'local-review', exact: true });
+	await local.focus();
+	await local.press('Shift+F10');
+	await workbench.dialogs.confirm(application, 'Delete Branch…', 'Delete', () => page.getByRole('menuitem', { name: 'Delete Branch…', exact: true }).click());
+	await expect.poll(() => git('branch', '--list', 'local-review')).toBe('');
+	const remoteBadge = root.getByRole('button', { name: 'origin/remote-review', exact: true });
+	await remoteBadge.focus();
+	await remoteBadge.press('Shift+F10');
+	const remoteConfirmation = await workbench.dialogs.confirm(application, 'Git: Delete Remote Branch', 'Delete', () => page.getByRole('menuitem', { name: 'Delete Branch…', exact: true }).click());
+	expect(remoteConfirmation.message).toBe('Delete branch remote-review from remote origin?');
+	await expect.poll(async () => (await run('git', ['--git-dir', remote, 'branch', '--list', 'remote-review'])).stdout.trim()).toBe('');
+	await root.focus();
+	await root.press('ArrowRight');
+	await expect(root.locator('.ash-scm-graph-change')).toHaveCount(1);
+	await history.locator('.ash-pane-view-header').getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'View as Tree', exact: true }).click();
+	await root.focus();
+	await root.press('ArrowDown');
+	const src = root.getByRole('button', { name: 'Folder src', exact: true });
+	await expect(src).toBeFocused();
+	await src.press('ArrowRight');
+	const nested = root.getByRole('button', { name: 'Folder src/nested', exact: true });
+	await expect(nested).toBeFocused();
+	await nested.press('ArrowRight');
+	const file = root.locator('.ash-scm-graph-change');
+	await expect(file).toBeFocused();
+	await file.press('ArrowLeft');
+	await expect(nested).toBeFocused();
+	await nested.press('ArrowUp');
+	await expect(src).toBeFocused();
+	const picker = history.locator('[data-action-id="workbench.scm.action.graph.pickRepository"] > button');
+	await expect(picker).toBeVisible();
+	await picker.click();
+	await page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText('other-repo', { exact: true }) }).click();
+	await expect(history.getByRole('treeitem', { name: /Other repository history/u })).toBeVisible();
+	await expect(root).toHaveCount(0);
+	await expect(history.locator('.ash-scm-graph-label.head')).toHaveText('other-main');
+	await picker.click();
+	await page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText(basename(cwd), { exact: true }) }).click();
+	await expect(root).toBeVisible();
+	await expect(history.locator('.ash-scm-graph-label.head')).toHaveText('main');
+	await history.screenshot({ path: test.info().outputPath('scm-history-reference-repository.png') });
+	await test.info().attach('scm-history-reference-repository', { path: test.info().outputPath('scm-history-reference-repository.png'), contentType: 'image/png' });
 });

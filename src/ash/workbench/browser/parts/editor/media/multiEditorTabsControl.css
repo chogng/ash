@@ -56,6 +56,8 @@
 }
 
 .ash-standard-editor-tabs .ash-tab.checked {
+	/* Cover the title separator where the active tab meets the editor surface. */
+	z-index: 1;
 	/* Selection remains explicit when high-contrast tab backgrounds coincide. */
 	border-top-color: var(--ash-contrastBorder, transparent);
 }

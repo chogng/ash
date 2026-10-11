@@ -1,5 +1,10 @@
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
+import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
+import { CompositeBar } from '../../../src/ash/workbench/browser/parts/compositeBar.js';
+import { HoverPosition } from '../../../src/ash/base/browser/ui/hover/hoverWidget.js';
+import { ActivityService } from '../../../src/ash/workbench/services/activity/browser/activityService.js';
+import { NumberBadge } from '../../../src/ash/workbench/services/activity/common/activity.js';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import '../../../src/ash/base/browser/ui/actionbar/actionbar.css';
 import '../../../src/ash/base/browser/ui/grid/grid.css';
@@ -10,7 +15,7 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { Event } from '../../../src/ash/base/common/event.js';
-import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextKeyService, ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
@@ -72,6 +77,10 @@ declare global {
 			active(): string;
 		};
 		ashCompositeIntegration: {
+			setBadge(count: number): void;
+			setBadgeOrientation(orientation: 'horizontal' | 'vertical'): void;
+			setBadgeCompact(compact: boolean): void;
+			toggleBadge(): void;
 			readonly events: readonly string[];
 			state(): readonly CompositeState[];
 			open(id: string, focus?: boolean): Promise<void>;
@@ -110,8 +119,12 @@ class FocusView extends ViewPane {
 }
 
 const resources = new DisposableStore();
-if (new URLSearchParams(location.search).has('editorTabs')) {
+if (new URLSearchParams(location.search).has('editorTabs') || new URLSearchParams(location.search).has('badges')) {
 	await import('../../../src/ash/base/browser/ui/iconlabel/iconlabel.css');
+}
+if (new URLSearchParams(location.search).has('badges')) {
+	await import('../../../src/ash/workbench/browser/media/style.css');
+	await import('../../../src/ash/workbench/browser/parts/activitybar/media/activitybarpart.css');
 }
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const locale = new URLSearchParams(location.search).get('locale');
@@ -122,7 +135,7 @@ if (locale) {
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const registry = new WorkbenchViewRegistry();
 for (const id of ['first', 'second']) {
-	resources.add(registry.registerViewContainer({ id, title: `${id} container`, location: ViewContainerLocation.Panel }));
+	resources.add(registry.registerViewContainer({ id, title: `${id} container`, icon: new URLSearchParams(location.search).has('badges') ? Lxicon.gitBranch : undefined, location: ViewContainerLocation.Panel }));
 	resources.add(registry.registerViews(id, [{ id: `${id}.view`, title: `${id} view`, ctorDescriptor: new SyncDescriptor(FocusView) }]));
 }
 const services = resources.add(new InstantiationService());
@@ -196,6 +209,28 @@ modelServices.registerInstance(IFileTextModelService, models);
 modelServices.registerInstance(ITextModelResourceService, models);
 const editorServices = resources.add(createTestEditorServices(undefined, modelServices));
 resources.add(bindColorTheme(editorServices.get(IThemeService), document.documentElement));
+const badgeBars: CompositeBar[] = [];
+const badgeActivities: ActivityService[] = [];
+const badgeHandles = resources.add(new MutableDisposable<DisposableStore>());
+if (new URLSearchParams(location.search).has('badges')) {
+	for (const presentation of ['icon', 'label'] as const) {
+		const host = h(document, 'div');
+		host.id = `badge-${presentation}`;
+		host.style.cssText = 'width:240px;height:100px';
+		document.body.append(host);
+		resources.add(toDisposable(() => host.remove()));
+		const bar = resources.add(new CompositeBar(host, {
+			presentation,
+			location: ViewContainerLocation.Panel,
+			viewDescriptorService: services.get(IViewDescriptorService),
+			ariaLabel: 'Badge views',
+			activityHoverOptions: { position: () => HoverPosition.BELOW },
+			openComposite: id => views.openViewContainer(id),
+		}));
+		badgeBars.push(bar);
+		badgeActivities.push(resources.add(new ActivityService(bar)));
+	}
+}
 const editorRegistry = new EditorPaneRegistry();
 resources.add(editorRegistry.registerEditorPane({
 	id: CODE_EDITOR_ID, name: 'Text editor', canOpen: () => EditorPaneMatch.Default,
@@ -217,6 +252,23 @@ async function openEditor(name: string): Promise<void> {
 }
 
 window.ashCompositeIntegration = {
+	setBadge: count => {
+		badgeHandles.value = new DisposableStore();
+		for (const activity of badgeActivities) {
+			badgeHandles.value.add(activity.showViewContainerActivity('first', new NumberBadge(count, `${count} changes`)));
+		}
+	},
+	setBadgeOrientation: orientation => {
+		badgeBars[0]!.domNode.parentElement!.style.width = orientation === 'vertical' ? '48px' : '240px';
+		badgeBars[0]!.setOrientation(orientation);
+	},
+	setBadgeCompact: compact => {
+		const host = badgeBars[0]!.domNode.parentElement!;
+		host.classList.add('ash-activity-bar-content');
+		host.classList.toggle('compact', compact);
+		host.style.width = compact ? '36px' : '48px';
+	},
+	toggleBadge: () => { badgeBars[0]!.toggleBadgeEnablement('first'); },
 	events,
 	editorEvents,
 	partEvents,

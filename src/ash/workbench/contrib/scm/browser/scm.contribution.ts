@@ -98,6 +98,27 @@ for (const [order, action] of sortActions.entries()) {
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+configurationRegistry.registerConfiguration<'all' | 'filter'>({
+	key: 'scm.graph.badges',
+	defaultValue: 'filter',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['all', 'filter'] },
+	parse: value => {
+		if (value !== 'all' && value !== 'filter') { throw new TypeError(localize('scm.history.badgesInvalid', 'History badges must be all or filter.')); }
+		return value;
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize('scm.history.badgesTitle', 'Source Control › Graph: Badges'); },
+		get description() { return localize('scm.history.badgesDescription', 'Choose whether the graph shows all reference badges or only the references selected by the filter.'); },
+		get options() {
+			return [
+				{ value: 'all' as const, label: localize('scm.history.badgesAll', 'All references') },
+				{ value: 'filter' as const, label: localize('scm.history.badgesFilter', 'Filtered references') },
+			];
+		},
+	},
+});
 configurationRegistry.registerConfiguration<number>({
 	key: 'scm.graph.pageSize',
 	defaultValue: 50,

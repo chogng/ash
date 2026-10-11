@@ -6,6 +6,93 @@ test.beforeEach(async ({ page }) => {
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);
 });
 
+test('activity badges keep compact icons readable, center label counts and retain full accessible descriptions', async ({ page }, testInfo) => {
+	await page.goto('/composite.html?badges');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const tab = page.locator('#badge-icon [data-action-id="first"]');
+	const badge = tab.locator('.ash-composite-bar-badge');
+	const labelTab = page.locator('#badge-label [data-action-id="first"]');
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await page.evaluate(() => window.ashCompositeIntegration.setBadge(13));
+		await expect(badge).toHaveText('13');
+		await expect(tab).toHaveAttribute('aria-label', 'first container, 13 changes');
+		await expect(badge).toHaveAttribute('aria-hidden', 'true');
+		const geometry = await tab.evaluate(element => {
+			const tab = element.getBoundingClientRect();
+			const badge = element.querySelector('.ash-composite-bar-badge')!.getBoundingClientRect();
+			const icon = element.querySelector('.ash-icon')!.getBoundingClientRect();
+			const style = getComputedStyle(element.querySelector('.ash-composite-bar-badge')!);
+			return {
+				height: badge.height,
+				itemHeight: tab.height,
+				top: badge.top - tab.top,
+				right: tab.right - badge.right,
+				font: style.fontSize,
+				weight: style.fontWeight,
+				lineHeight: style.lineHeight,
+				padding: style.padding,
+				radius: style.borderRadius,
+				inside: badge.left >= tab.left && badge.right <= tab.right && badge.top >= tab.top && badge.bottom <= tab.bottom,
+				overlap: Math.max(0, Math.min(badge.right, icon.right) - Math.max(badge.left, icon.left)) * Math.max(0, Math.min(badge.bottom, icon.bottom) - Math.max(badge.top, icon.top)) / (icon.width * icon.height),
+				foreground: style.color, background: style.backgroundColor, outline: style.outlineColor,
+			};
+		});
+		expect(geometry).toMatchObject({ height: 13, itemHeight: 35, top: 17, right: 0, font: '9px', weight: '600', lineHeight: '13px', padding: '0px 2px', radius: '16px' });
+		expect(geometry.inside).toBe(true);
+		expect(geometry.overlap).toBeLessThan(0.5);
+		expect(geometry.foreground).not.toBe(geometry.background);
+		if (theme.includes('high-contrast')) {
+			expect(geometry.outline).not.toBe('rgba(0, 0, 0, 0)');
+		}
+		const labelGeometry = await labelTab.evaluate(element => {
+			const label = element.querySelector('.ash-composite-bar-action')!.getBoundingClientRect();
+			const badgeElement = element.querySelector('.ash-composite-bar-badge')!;
+			const badge = badgeElement.getBoundingClientRect();
+			const style = getComputedStyle(badgeElement);
+			return { height: badge.height, gap: badge.left - label.right, center: (badge.top + badge.bottom - label.top - label.bottom) / 2, font: style.fontSize, padding: style.padding, radius: style.borderRadius, weight: style.fontWeight, lineHeight: style.lineHeight };
+		});
+		expect(labelGeometry).toEqual({ height: 16, gap: 2, center: 0, font: '10px', padding: '3px 5px', radius: '10px', weight: '400', lineHeight: '10px' });
+		await tab.focus();
+		await expect(tab).toHaveCSS('outline-style', 'solid');
+		await page.screenshot({ path: testInfo.outputPath(`${theme}-badges.png`) });
+	}
+	for (const [count, text] of [[999, '999'], [1000, '1K'], [1234, '1K+']] as const) {
+		await page.evaluate(count => window.ashCompositeIntegration.setBadge(count), count);
+		await expect(badge).toHaveText(text);
+		await expect(tab).toHaveAttribute('aria-label', `first container, ${count} changes`);
+		await expect(tab).toBeFocused();
+		await expect(badge).toHaveCSS('font-size', count === 1000 ? '9px' : '8px');
+		await expect(badge).toHaveCSS('padding', count === 1000 ? '0px 2px' : '0px 3px');
+	}
+	await page.evaluate(() => window.ashCompositeIntegration.setBadgeOrientation('vertical'));
+	await expect(badge).toHaveCSS('height', '16px');
+	await expect(badge).toHaveCSS('font-size', '9px');
+	for (const compact of [false, true]) {
+		await page.evaluate(compact => window.ashCompositeIntegration.setBadgeCompact(compact), compact);
+		const geometry = await tab.evaluate(element => {
+			const tab = element.getBoundingClientRect();
+			const badgeElement = element.querySelector('.ash-composite-bar-badge')!;
+			const badge = badgeElement.getBoundingClientRect();
+			const style = getComputedStyle(badgeElement);
+			return { itemHeight: tab.height, height: badge.height, top: badge.top - tab.top, right: tab.right - badge.right, padding: style.padding, radius: style.borderRadius, lineHeight: style.lineHeight };
+		});
+		expect(geometry).toEqual(compact
+			? { itemHeight: 28, height: 13, top: 13, right: 6, padding: '0px 2px', radius: '13px', lineHeight: '13px' }
+			: { itemHeight: 48, height: 16, top: 24, right: 8, padding: '0px 4px', radius: '20px', lineHeight: '16px' });
+		await page.screenshot({ path: testInfo.outputPath(`vertical-${compact ? 'compact' : 'default'}-badges.png`) });
+	}
+	await page.evaluate(() => window.ashCompositeIntegration.toggleBadge());
+	await expect(badge).toHaveCount(0);
+	await expect(tab).toBeFocused();
+	await page.evaluate(() => window.ashCompositeIntegration.toggleBadge());
+	await expect(badge).toHaveText('1K+');
+	await tab.press('ArrowDown');
+	await expect(page.locator('#badge-icon [data-action-id="second"]')).toBeFocused();
+	await page.evaluate(() => window.ashCompositeIntegration.setBadge(0));
+	await expect(badge).toHaveCount(0);
+});
+
 test('standard editor tabs fill the title row and switch styles without losing keyboard focus', async ({ page }) => {
 	await page.goto('/composite.html?editorTabs');
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);

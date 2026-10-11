@@ -319,6 +319,10 @@
         "enablement": "!scmBusy"
       },
       {
+        "command": "git.graph.checkout",
+        "title": "%command.git.graph.checkout%"
+      },
+      {
         "command": "git.graph.checkoutDetached",
         "title": "%command.git.graph.checkoutDetached%",
         "enablement": "!scmBusy"
@@ -618,6 +622,10 @@
         "command": "git.unstageFile",
         "title": "git.unstageFile",
         "enablement": "!scmBusy"
+      },
+      {
+        "command": "git.graph.deleteTag",
+        "title": "%command.git.graph.deleteTag%"
       }
     ],
     "colors": [
@@ -1021,7 +1029,7 @@
       ],
       "git.historyCheckoutMenu": [
         {
-          "command": "git.graph.checkoutBranch",
+          "command": "git.graph.checkout",
           "group": "1"
         },
         {
@@ -1093,6 +1101,24 @@
         {
           "command": "git.deleteTag",
           "group": "2"
+        }
+      ],
+      "scm/historyItemRef/context": [
+        {
+          "command": "git.graph.checkout",
+          "when": "scmHistoryProviderId == git",
+          "group": "1_checkout@1"
+        },
+        {
+          "command": "git.graph.deleteBranch",
+          "when": "scmHistoryProviderId == git && scmHistoryItemHasBranch && scmHistoryRefCanDelete",
+          "group": "2_branch@1"
+        },
+        {
+          "command": "git.graph.deleteTag",
+          "when": "scmHistoryProviderId == git && scmHistoryRefHasTag",
+          "group": "3_tag@1"
+
         }
       ]
     },

@@ -32,7 +32,7 @@ import { IHoverService, type IManagedHover } from "../../../../platform/hover/br
 import { IResourceLabelService, type ResourceLabels } from "../../../browser/labels.js";
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, SCMHistoryUnavailableError, type ISCMHistoryItemDetails, type ISCMHistoryItemComparison, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
-import { ISCMViewService } from '../common/scm.js';
+import { ISCMService, ISCMViewService } from '../common/scm.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
@@ -123,7 +123,7 @@ const HistoryRefsAvailable = new RawContextKey<boolean>('scmHistoryRefsAvailable
 registerAction2(class extends Action2 {
 	constructor() {
 		super({
-			id: 'workbench.scm.action.graph.selectHistoryItemRefs',
+			id: 'workbench.scm.action.graph.pickHistoryItemRefs',
 			title: localize2('scm.history.filter', 'Filter History References'),
 			icon: Lxicon.filter,
 			precondition: HistoryRefsAvailable.isEqualTo(true),
@@ -131,14 +131,14 @@ registerAction2(class extends Action2 {
 		});
 	}
 	public override async run(_accessor: ServicesAccessor, target: unknown): Promise<void> {
-		if (target instanceof SCMHistoryViewPane) { await target.selectHistoryItemRefs(); }
+		if (target instanceof SCMHistoryViewPane) { await target.pickHistoryItemRef(); }
 	}
 });
 for (const mode of ['list', 'tree'] as const) {
 	registerAction2(class extends Action2 {
 		constructor() {
 			super({
-				id: `workbench.scm.action.graph.viewAs${mode === 'list' ? 'List' : 'Tree'}`,
+				id: `workbench.scm.action.graph.set${mode === 'list' ? 'List' : 'Tree'}ViewMode`,
 				title: mode === 'list' ? localize2('scm.history.viewAsList', 'View as List') : localize2('scm.history.viewAsTree', 'View as Tree'),
 				icon: mode === 'list' ? Lxicon.listUnordered : Lxicon.folders,
 				menu: { id: MenuId.SCMHistoryTitle, group: 'view', order: mode === 'list' ? 1 : 2 },
@@ -150,6 +150,20 @@ for (const mode of ['list', 'tree'] as const) {
 		}
 	});
 }
+
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.graph.pickRepository',
+			title: localize2('scm.history.repositoryPicker', 'Repository Picker'),
+			icon: Lxicon.gitBranch,
+			menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 0, when: ContextKeyExpr.greater('scm.historyProviderCount', 1) },
+		});
+	}
+	public override async run(_accessor: ServicesAccessor, target: unknown): Promise<void> {
+		if (target instanceof SCMHistoryViewPane) { await target.pickRepository(); }
+	}
+});
 
 const CurrentHistoryItemAvailable = new RawContextKey<boolean>('scmHistoryCurrentItemAvailable', false);
 
@@ -249,7 +263,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickInputService private readonly quickInputService: IQuickInputService, @IStorageService private readonly storageService: IStorageService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickInputService private readonly quickInputService: IQuickInputService, @IStorageService private readonly storageService: IStorageService, @ISCMService private readonly scmService: ISCMService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
@@ -296,6 +310,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('scm.graph.pageSize') || event.affectsConfiguration('scm.graph.showIncomingChanges') || event.affectsConfiguration('scm.graph.showOutgoingChanges')) { void this.refresh(); }
 			else if (event.affectsConfiguration('scm.graph.pageOnScroll')) { this.loadMoreIfVisible(); }
+			else if (event.affectsConfiguration('scm.graph.badges') && this.page) { this.renderGraph(this.page); }
 		}));
 		void this.refresh();
 	}
@@ -314,7 +329,49 @@ export class SCMHistoryViewPane extends ViewPane {
 		return repository?.provider.rootUri?.toString() ?? repository?.id ?? '';
 	}
 
-	public async selectHistoryItemRefs(): Promise<void> {
+	public async pickRepository(): Promise<void> {
+		const resources = new DisposableStore();
+		this.filterPicker.value = resources;
+		const repositories = [...this.scmService.repositories].filter(repository => repository.provider.historyProvider);
+		const picker = resources.add(this.quickInputService.createQuickPick<IQuickPickItem & { repository: typeof repositories[number]; }>());
+		picker.placeholder = picker.ariaLabel = localize('scm.history.pickRepository', 'Choose a repository for the Source Control Graph');
+		picker.items = repositories.map(repository => ({
+			label: repository.provider.label,
+			description: repository.provider.activeRepositoryName,
+			detail: repository.provider.rootUri?.fsPath,
+			picked: repository === this.scmViewService.activeRepository,
+			repository,
+		}));
+		const selected = await new Promise<typeof repositories[number] | undefined>(resolve => {
+			resources.add(toDisposable(() => resolve(undefined)));
+			resources.add(picker.onDidHide(() => { if (this.filterPicker.value === resources) { this.filterPicker.clear(); } }));
+			resources.add(picker.onDidAccept(item => {
+				resolve(item.repository);
+				picker.hide();
+			}));
+			picker.show();
+		});
+		if (this.isDisposed || !selected || this.scmService.getRepository(selected.id) !== selected) { return; }
+		try {
+			await selected.provider.activate();
+			if (!this.isDisposed && this.scmService.getRepository(selected.id) === selected) { this.scmViewService.selectRepository(selected.id); }
+		} catch {
+			if (!this.isDisposed) {
+				this.statusElement.hidden = false;
+				this.statusElement.textContent = localize('scm.history.repositoryFailed', 'Unable to select the history repository.');
+			}
+		}
+	}
+
+	private getHistoryItemReferences(item: ISCMHistoryItem): readonly ISCMHistoryItemRef[] {
+		const references = historyItemReferences(item, this.head);
+		const filter = this.filters.get(this.filterKey) ?? 'auto';
+		if (this.configurationService.getValue<string>('scm.graph.badges') !== 'filter' || filter === 'all' || !this.provider?.provideHistoryItemRefs) { return references; }
+		const ids = Array.isArray(filter) ? filter : [this.head?.id, this.provider.historyItemRemoteRef?.get()?.id];
+		return references.filter(reference => ids.includes(reference.id));
+	}
+
+	public async pickHistoryItemRef(): Promise<void> {
 		const provider = this.provider;
 		const key = this.filterKey;
 		if (!provider?.provideHistoryItemRefs) { return; }
@@ -361,6 +418,11 @@ export class SCMHistoryViewPane extends ViewPane {
 					void this.refresh();
 				}));
 			});
+		} catch {
+			if (!this.isDisposed && this.filterPicker.value === resources) {
+				this.statusElement.hidden = false;
+				this.statusElement.textContent = localize('scm.history.refsFailed', 'Unable to load history references. Try opening the picker again.');
+			}
 		} finally {
 			if (this.filterPicker.value === resources) { this.filterPicker.clear(); }
 		}
@@ -605,7 +667,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.list = list;
 			resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
 			list.domNode.classList.add('ash-scm-graph-viewport');
-			list.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to move between commits, Home and End to move to the first and last loaded commits, and Page Up and Page Down to move by a page. Use Right Arrow to expand files and Left Arrow to collapse them. Press Enter or Space on a history item to toggle its files. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that item. Press Enter on a reference badge for provider actions. Press Alt+Down Arrow to focus history details and use its actions; Escape returns to the history item. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. In tree mode, use Enter or the Left and Right Arrow keys on a folder to collapse or expand it. Incoming and Outgoing Changes compare the corresponding branch with its merge base. Binary changes open a read-only hexadecimal comparison.'));
+			list.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to move between commits, Home and End to move to the first and last loaded commits, and Page Up and Page Down to move by a page. Use Right Arrow to expand files and Left Arrow to collapse them. Press Enter or Space on a history item to toggle its files. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that item. Press Enter on a reference badge for provider actions. Press Alt+Down Arrow to focus history details and use its actions; Escape returns to the history item. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. In tree mode, use Enter or the Left and Right Arrow keys on a folder to collapse or expand it. Incoming and Outgoing Changes compare the corresponding branch with its merge base. Binary changes open a read-only hexadecimal comparison. Use Up and Down Arrow to navigate expanded folders and files. Use Left Arrow to return to their parent, and Right Arrow on an expanded folder to enter it.'));
 			resources.add(list.onDidRenderRows(() => {
 				for (const [, row] of this.rowResources) {
 					if (!row.hover?.visible) continue;
@@ -800,7 +862,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				gap: 8,
 			}));
 		}
-		const visibleReferences = historyItemReferences(historyItem, this.head);
+		const visibleReferences = this.getHistoryItemReferences(historyItem);
 		rendered.visibleReferences = visibleReferences;
 		rendered.headReferenceId = visibleReferences.find(reference => reference.id === this.head?.id)?.id;
 		const overlay = h(document, 'div');
@@ -841,6 +903,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		}));
 		resources.add(addDisposableListener(item, "keydown", event => {
 			if (event.target !== item) { return; }
+			if (this.navigateHistoryChildren(event, historyItem.id)) { return; }
 			if (event.altKey && event.key === 'ArrowDown') {
 				event.preventDefault();
 				commitHover?.show();
@@ -866,6 +929,38 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (menuTarget) { this.showHistoryMenu(menuTarget, scope, item, event); }
 		}));
 		return rendered;
+	}
+
+	private navigateHistoryChildren(event: KeyboardEvent, historyItemId: string): boolean {
+		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) { return false; }
+		const row = this.rowResources.get(historyItemId)?.element;
+		const target = event.target as HTMLElement;
+		if (!row || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { return false; }
+		const children = [...row.querySelectorAll<HTMLElement>('.ash-scm-graph-folder, .ash-scm-graph-change')]
+			.filter(element => !element.closest('[hidden]'));
+		const childIndex = children.indexOf(target);
+		if (target !== row && childIndex < 0) { return false; }
+		const parent = (): HTMLElement => target.closest('.ash-scm-graph-folder-children')?.parentElement?.querySelector<HTMLElement>('.ash-scm-graph-folder') ?? row;
+		let next: HTMLElement | undefined;
+		if (event.key === 'ArrowLeft' && target !== row) {
+			if (target.classList.contains('ash-scm-graph-folder') && target.getAttribute('aria-expanded') === 'true') { target.click(); }
+			else { next = parent(); }
+		} else if (event.key === 'ArrowRight' && target.classList.contains('ash-scm-graph-folder')) {
+			if (target.getAttribute('aria-expanded') === 'false') { target.click(); }
+			else { next = children[childIndex + 1]; }
+		} else if (event.key === 'ArrowDown' && children[childIndex + 1]) {
+			next = children[childIndex + 1];
+		} else if (event.key === 'ArrowUp' && target !== row) {
+			next = childIndex === 0 ? row : children[childIndex - 1];
+		} else if (target !== row && ['ArrowDown', 'Home', 'End'].includes(event.key)) {
+			const index = this.rows.findIndex(model => model.historyItem.id === historyItemId);
+			this.list?.setActiveIndex(index, undefined, { reveal: false });
+			void this.navigateCommits(event);
+		} else { return false; }
+		event.preventDefault();
+		event.stopPropagation();
+		next?.focus();
+		return true;
 	}
 
 	private async navigateCommits(event: KeyboardEvent): Promise<void> {
@@ -894,7 +989,12 @@ export class SCMHistoryViewPane extends ViewPane {
 		index = Math.max(0, Math.min(index, this.rows.length - 1));
 		list.reveal(index);
 		list.setActiveIndex(index, event, { reveal: false });
-		list.row(index)?.querySelector<HTMLElement>('.ash-scm-graph-commit')?.focus({ preventScroll: true });
+		const row = list.row(index)?.querySelector<HTMLElement>('.ash-scm-graph-commit');
+		row?.focus({ preventScroll: true });
+		if (event.key === 'ArrowUp' || event.key === 'End') {
+			const children = [...row?.querySelectorAll<HTMLElement>('.ash-scm-graph-folder, .ash-scm-graph-change') ?? []].filter(element => !element.closest('[hidden]'));
+			children.at(-1)?.focus({ preventScroll: true });
+		}
 	}
 
 	private updateCommitRow(row: HistoryItemRow, model: ISCMHistoryItemViewModel): void {
@@ -923,7 +1023,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		row.scope?.setContext('scmHistoryItemRemoteAuthority', historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '');
 		row.scope?.setContext('scmHistoryItemHasBranch', historyItem.references?.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch') ?? false);
 		row.scope?.setContext('scmHistoryItemHasUpstream', historyItem.references?.some(reference => reference.upstream !== undefined) ?? false);
-		const references = historyItemReferences(historyItem, this.head);
+		const references = this.getHistoryItemReferences(historyItem);
 		const headReferenceId = references.find(reference => reference.id === this.head?.id)?.id;
 		if (row.headReferenceId !== headReferenceId || !equals(row.visibleReferences, references, (left, right) => left.id === right.id && left.name === right.name && left.revision === right.revision && left.category === right.category && left.description === right.description && left.color === right.color && left.upstream === right.upstream && left.canDelete === right.canDelete)) {
 			if (row.referenceLabels?.contains(row.element.ownerDocument.activeElement)) row.element.focus({ preventScroll: true });
@@ -955,7 +1055,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		focus.focus();
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined } : focus,
-			menuId: target.references ? MenuId.for('SCMHistoryItemRefContext') : MenuId.SCMHistoryItemContext,
+			menuId: target.references ? MenuId.SCMHistoryItemRefContext : MenuId.SCMHistoryItemContext,
 			contextKeyService: scope,
 			menuActionOptions: { arg: target },
 			onHide: cancelled => { if (cancelled) { focus.focus(); } },
@@ -1002,7 +1102,8 @@ export class SCMHistoryViewPane extends ViewPane {
 			const scope = resources.add(rowScope.createScoped(label));
 			scope.setContext('scmHistoryItemHasBranch', group.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch'));
 			scope.setContext('scmHistoryItemHasUpstream', group.some(reference => reference.upstream !== undefined));
-			scope.setContext('scmHistoryRefCanDelete', group.some(reference => reference.canDelete === true));
+			scope.setContext('scmHistoryRefCanDelete', group.some(reference => reference.canDelete === true || reference.category === 'remoteBranch'));
+			scope.setContext('scmHistoryRefHasTag', group.some(reference => reference.category === 'tag'));
 			if (target) {
 				const menuTarget = { ...target, references: group };
 				resources.add(addDisposableListener(label, 'click', event => {
@@ -1056,6 +1157,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			return list;
 		}
 		list.setAttribute('role', 'group');
+		resources.add(addDisposableListener(list, 'keydown', event => { this.navigateHistoryChildren(event, historyItem.id); }));
 		const directories = new Map<string, HTMLUListElement>();
 		for (const change of expanded.result) {
 			let parent = list;
@@ -1085,12 +1187,6 @@ export class SCMHistoryViewPane extends ViewPane {
 							Array.from(this.rowResources.get(historyItem.id)?.element.querySelectorAll<HTMLButtonElement>('.ash-scm-graph-folder') ?? []).find(button => button.dataset.historyFolder === path)?.focus();
 						};
 						resources.add(folder.onDidClick(event => { event.stopPropagation(); toggle(); }));
-						resources.add(addDisposableListener(folder.domNode, 'keydown', event => {
-							if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-								event.preventDefault(); event.stopPropagation();
-								if (folders.has(path) === (event.key === 'ArrowRight')) { toggle(); }
-							}
-						}));
 						directory.append(children);
 						parent.append(directory);
 						directories.set(path, children);

@@ -1,6 +1,6 @@
 # Ash Agent Instructions
 
-Read [`.github/instructions`](.github/instructions) files whose `applyTo` matches the edited path.
+Local Refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `../zed`, `../warp`, `../livekit`
 
 ## Repository ownership
 

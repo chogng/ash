@@ -74,7 +74,7 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 		['git.diff.unstageHunk', 'staged', 'index'], ['git.diff.unstageSelection', 'staged', 'index'],
 		['git.diff.revertHunk', 'unstaged', 'revert'], ['git.diff.revertSelection', 'unstaged', 'revert'],
 	] as const) { register(id, value => runDiffChange({ git, editors, dialogs: dialogClient }, value, comparison, operation)); }
-	for (const kind of ['openRemote', 'checkoutBranch', 'checkoutDetached', 'createBranch', 'deleteBranch', 'createTag', 'cherryPick', 'compareRemote', 'compareMergeBase', 'compare', 'copyHash', 'copyMessage'] as const) { register(`git.graph.${kind}`, value => runGraphAction(ctx, kind, reviveHistoryTarget(value))); }
+	for (const kind of ['openRemote', 'checkout', 'checkoutDetached', 'createBranch', 'deleteBranch', 'createTag', 'deleteTag', 'cherryPick', 'compareRemote', 'compareMergeBase', 'compare', 'copyHash', 'copyMessage'] as const) { register(`git.graph.${kind}`, value => runGraphAction(ctx, kind, reviveHistoryTarget(value))); }
 	for (const scope of ['staged', 'unstaged', 'uncommitted'] as const) { register(`git.open${scope[0].toUpperCase()}${scope.slice(1)}Changes`, async () => editorClient.openEditor(await createGitMultiDiffEditorInput(git, scope), { pinned: true })); }
 	register('git.openChanges', async value => { const options = value as { status: Parameters<typeof createGitMultiDiffEditorInput>[2]; comparison: 'staged' | 'unstaged'; title: string; changes: Parameters<typeof createGitMultiDiffEditorInput>[4]; }; const current = await git.status(options.status!.repositoryId); if (current.streamInstanceId !== options.status!.streamInstanceId || current.revision !== options.status!.revision) { return 'stale'; } const input = await createGitMultiDiffEditorInput(git, options.comparison, options.status, options.title, options.changes); if (!input.items.length) { return 'empty'; } await editorClient.openEditor(input, { pinned: true }); return 'opened'; });
 	register('git.getRepositoryContexts', async () => Promise.all((await git.listRepositories()).map(async repository => ({ id: repository.id, label: repository.label, path: repository.path, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))));
@@ -290,7 +290,7 @@ async function prepareGitCommand(accessor: GitCommandContext, kind: RepositoryCo
 }
 
 
-type GraphActionKind = 'openRemote' | 'checkoutBranch' | 'checkoutDetached' | 'createBranch' | 'deleteBranch' | 'createTag' | 'cherryPick' | 'compareRemote' | 'compareMergeBase' | 'compare' | 'copyHash' | 'copyMessage';
+type GraphActionKind = 'openRemote' | 'checkout' | 'checkoutDetached' | 'createBranch' | 'deleteBranch' | 'createTag' | 'deleteTag' | 'cherryPick' | 'compareRemote' | 'compareMergeBase' | 'compare' | 'copyHash' | 'copyMessage';
 async function runGraphAction(accessor: GitCommandContext, kind: GraphActionKind, element: HistoryTarget): Promise<void> {
 	const git = accessor.git;
 	const repositoryId = element.repository.provider.id;
@@ -317,12 +317,16 @@ async function runGraphAction(accessor: GitCommandContext, kind: GraphActionKind
 			if (selected) { await accessor.opener.open(selected.uri, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }); }
 			return;
 		}
-		case 'checkoutBranch': {
-			const reference = await chooseReference(references.filter(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch'), localize('git.graph.chooseBranch', 'Choose a branch at this commit'));
+		case 'checkout': {
+			const reference = await chooseReference(references, localize('git.graph.chooseReference', 'Choose a reference at this commit'));
 			if (!reference) { return; }
 			if (reference.category === 'localBranch') {
 				await git.switchBranch(reference.name, repositoryId);
 				return;
+			}
+			if (reference.category === 'tag') {
+				command = { kind: 'checkoutDetached', objectId: commit.id };
+				break;
 			}
 			const defaultName = reference.description ? reference.name.slice(reference.description.length + 1) : reference.name;
 			const name = await promptName(localize('git.graph.trackingBranchName', 'Name for the new local tracking branch'), defaultName);
@@ -345,12 +349,37 @@ async function runGraphAction(accessor: GitCommandContext, kind: GraphActionKind
 		}
 		case 'deleteBranch': {
 			const branches = await git.branches(repositoryId);
-			const deletable = references.filter(reference => reference.category === 'localBranch' && branches.some(branch => branch.name === reference.name && !branch.current && !branch.checkedOutElsewhere));
+			const deletable = references.filter(reference => reference.category === 'remoteBranch' || reference.category === 'localBranch' && branches.some(branch => branch.name === reference.name && !branch.current && !branch.checkedOutElsewhere));
 			const reference = await chooseReference(deletable, localize('git.graph.chooseBranchToDelete', 'Choose a local branch to delete'));
 			if (!reference) { return; }
+			if (reference.category === 'remoteBranch') {
+				const { remotes } = await git.catalog(repositoryId);
+				const remote = [...remotes].sort((left, right) => right.length - left.length).find(name => reference.name.startsWith(`${name}/`));
+				if (!remote) { return; }
+				const name = reference.name.slice(remote.length + 1);
+				const confirmation = await accessor.dialogs.confirm({
+					title: localize('git.deleteRemoteBranchTitle', 'Git: Delete Remote Branch'),
+					message: localize('git.deleteRemoteBranchConfirm', 'Delete branch {0} from remote {1}?', name, remote),
+					primaryButton: localize('git.graph.delete', 'Delete'),
+				});
+				if (confirmation.confirmed) { await git.executeCommand({ kind: 'deleteRemoteBranch', remote, name }, repositoryId); }
+				return;
+			}
 			if (!(await accessor.dialogs.confirm({ title: localize('git.graph.deleteBranch', 'Delete Branch…'), message: localize('git.graph.deleteBranchConfirm', 'Delete local branch {0}? Git will reject branches with unmerged commits or a worktree using them.', reference.name), primaryButton: localize('git.graph.delete', 'Delete') })).confirmed) { return; }
 			await git.deleteBranch(reference.name, repositoryId);
 			return;
+		}
+		case 'deleteTag': {
+			const reference = await chooseReference(references.filter(reference => reference.category === 'tag'), localize('git.graph.chooseTagToDelete', 'Choose a tag to delete'));
+			if (!reference) { return; }
+			const confirmation = await accessor.dialogs.confirm({
+				title: localize('git.graph.deleteTag', 'Delete Tag…'),
+				message: localize('git.deleteTagConfirm', 'Delete tag {0}?', reference.name),
+				primaryButton: localize('git.graph.delete', 'Delete'),
+			});
+			if (!confirmation.confirmed) { return; }
+			command = { kind: 'deleteTag', name: reference.name };
+			break;
 		}
 		case 'cherryPick': {
 			if (commit.parentIds.length > 1) {
