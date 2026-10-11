@@ -4,6 +4,35 @@ import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorC
 
 const pageErrors = new WeakMap<object, string[]>();
 
+test('plain ASCII widths agree with DOM measurement across fonts, weights and host scales', async ({ page }) => {
+	await openEditor(page);
+	const text = 'iiii WWWW <> 0123456789 '.repeat(80);
+	for (const [fontFamily, fontWeight, scale] of [
+		['monospace', 'normal', 1],
+		['monospace', '700', 0.75],
+		['monospace', 'normal', 1.25],
+		['Arial', 'normal', 1.25],
+	] as const) {
+		await page.evaluate(({ text, fontFamily, fontWeight, scale }) => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({ fontFamily, fontWeight, fontSize: 16, fontLigatures: false, wordWrap: 'off', disableMonospaceOptimizations: true });
+			editor.getDomNode().style.transform = `scale(${scale})`;
+			editor.getDomNode().style.transformOrigin = 'top left';
+			editor.setValue(text);
+			editor.getModel()!.setLanguage('plaintext');
+		}, { text, fontFamily, fontWeight, scale });
+		const read = async () => page.evaluate(async () => {
+			await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			return window.ashTextModelIntegration.getControl().getContentWidth();
+		});
+		const measured = await read();
+		expect(measured).toBeGreaterThan(5000);
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ disableMonospaceOptimizations: false }));
+		const optimized = await read();
+		expect(Math.abs(optimized - measured)).toBeLessThanOrEqual(1);
+	}
+});
+
 test('symbol highlights stay on the symbol when the gutter, minimap and horizontal scroll change', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {

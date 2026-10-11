@@ -58,8 +58,8 @@ test('editors finish text rendering before measuring widgets and writing widget 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using firstModel = new TextModel('first');
 	using secondModel = new TextModel('second');
-	using first = new View({ container: requiredElement(dom.window.document, '#first'), model: firstModel, minimap: { enabled: false } });
-	using second = new View({ container: requiredElement(dom.window.document, '#second'), model: secondModel, minimap: { enabled: false } });
+	using first = new View({ container: requiredElement(dom.window.document, '#first'), model: firstModel, minimap: { enabled: false }, fontLigatures: true });
+	using second = new View({ container: requiredElement(dom.window.document, '#second'), model: secondModel, minimap: { enabled: false }, fontLigatures: true });
 	const phases: string[] = [];
 	const measuredText: string[][] = [];
 	const lineWidthSnapshots: string[][] = [];

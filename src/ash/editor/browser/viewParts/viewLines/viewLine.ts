@@ -3,12 +3,18 @@ import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
 import { type ViewLineOptions } from './viewLineOptions.js';
+import { EditorFontLigatures } from '../../../common/config/editorOptions.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
 import { InlineDecorationType, type InlineDecoration } from '../../../common/viewModel/inlineDecorations.js';
 import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { FloatHorizontalRange, VisibleRanges } from '../../view/renderingContext.js';
+
+interface MonospaceMetrics {
+	readonly spaceWidth: number;
+	readonly requiresNormalWeight: boolean;
+}
 
 /** Owns one reusable virtual-line DOM subtree rendered by ViewLines. */
 export class ViewLine {
@@ -71,7 +77,7 @@ export class ViewLine {
 
 	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth = 0, inlineDecorations: readonly InlineDecoration[] = [], lineNumber = 1): boolean {
 		if (!Number.isFinite(wrappedTextIndentWidth) || wrappedTextIndentWidth < 0) throw new RangeError('View line indent must be finite and non-negative');
-		const changed = this._renderedViewLine.render(text, tokens, wrappedTextIndentWidth, inlineDecorations, lineNumber, this._options.stopRenderingLineAfter);
+		const changed = this._renderedViewLine.render(text, tokens, wrappedTextIndentWidth, inlineDecorations, lineNumber, this._options);
 		this._isMaybeInvalid = false;
 		return changed;
 	}
@@ -89,7 +95,7 @@ export class ViewLine {
 	}
 
 	public getWidthIsFast(): boolean {
-		return this._renderedViewLine.hasCachedWidth;
+		return this._renderedViewLine.canReadWidthWithoutLayout;
 	}
 
 	public needsMonospaceFontCheck(): boolean {
@@ -127,6 +133,8 @@ class RenderedViewLine {
 	private renderedText = '';
 	private wrappedTextIndentWidth = 0;
 	private cachedWidth: number | undefined;
+	private monospaceMetrics: MonospaceMetrics | undefined;
+	private shouldUpdateWidth = true;
 	private useMonospaceMeasurement = true;
 
 	constructor(
@@ -137,25 +145,50 @@ class RenderedViewLine {
 		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, '', [], this.tabSize);
 	}
 
-	get hasCachedWidth(): boolean {
-		return this.cachedWidth !== undefined;
+	get canReadWidthWithoutLayout(): boolean {
+		return this.cachedWidth !== undefined || this.canUseMonospaceMetrics;
+	}
+
+	private get canUseMonospaceMetrics(): boolean {
+		if (!this.monospaceMetrics) {
+			return false;
+		}
+		if (!this.monospaceMetrics.requiresNormalWeight) {
+			return true;
+		}
+		// Neutral token styles reset weight to normal. The editor stamps its
+		// normalized font declaration, so no computed-style/layout read is needed.
+		const weight = (this.domNode.domNode.closest('.stanza-editor') as HTMLElement | null)?.style.fontWeight;
+		return weight === 'normal' || weight === '400';
 	}
 
 	get canCheckMonospaceAssumptions(): boolean {
-		return this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
+		return !this.canUseMonospaceMetrics && this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
 	}
 
-	render(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number, stopRenderingLineAfter: number): boolean {
+	render(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number, options: ViewLineOptions): boolean {
+		const stopRenderingLineAfter = options.stopRenderingLineAfter;
 		const characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, this.tabSize, inlineDecorations, lineNumber, stopRenderingLineAfter);
-		if (characterMapping === this.characterMapping && wrappedTextIndentWidth === this.wrappedTextIndentWidth) {
+		const changed = characterMapping !== this.characterMapping || wrappedTextIndentWidth !== this.wrappedTextIndentWidth;
+		if (!changed && !this.shouldUpdateWidth) {
 			return false;
 		}
-		this.characterMapping = characterMapping;
-		this.textElement.style.marginInlineStart = `${wrappedTextIndentWidth}px`;
-		this.renderedText = stopRenderingLineAfter < 0 ? text : text.slice(0, stopRenderingLineAfter);
-		this.wrappedTextIndentWidth = wrappedTextIndentWidth;
+		if (changed) {
+			this.characterMapping = characterMapping;
+			this.textElement.style.marginInlineStart = `${wrappedTextIndentWidth}px`;
+			this.renderedText = stopRenderingLineAfter < 0 ? text : text.slice(0, stopRenderingLineAfter);
+			this.wrappedTextIndentWidth = wrappedTextIndentWidth;
+		}
 		this.resetCachedWidth();
-		return true;
+		// Retained inputs keep their eligibility with the width cache. Arbitrary
+		// decorations, font styles and non-basic text still require DOM advances.
+		this.monospaceMetrics = this.useMonospaceMeasurement && options.useMonospaceOptimizations && options.fontLigatures === EditorFontLigatures.OFF
+			&& /^[\x20-\x7e]*$/u.test(text) && inlineDecorations.length === 0
+			&& tokens.every(token => !token.modifiers?.length && !token.syntaxPresentation?.fontStyle?.length)
+			&& (stopRenderingLineAfter < 0 || text.length <= stopRenderingLineAfter)
+			? { spaceWidth: options.spaceWidth, requiresNormalWeight: tokens.some(token => token.syntaxPresentation?.fontStyle !== undefined) } : undefined;
+		this.shouldUpdateWidth = false;
+		return changed;
 	}
 
 	layout(lineHeight: number): void {
@@ -191,6 +224,10 @@ class RenderedViewLine {
 
 	getWidth(context: DomReadingContext | null): number {
 		if (this.cachedWidth !== undefined) return this.cachedWidth;
+		if (this.canUseMonospaceMetrics) {
+			this.cachedWidth = this.wrappedTextIndentWidth + this.renderedText.length * this.monospaceMetrics!.spaceWidth;
+			return this.cachedWidth;
+		}
 		const width = context
 			? this.textElement.getBoundingClientRect().width / context.clientRectScale
 			: this.textElement.offsetWidth;
@@ -213,6 +250,8 @@ class RenderedViewLine {
 
 	resetCachedWidth(): void {
 		this.cachedWidth = undefined;
+		this.monospaceMetrics = undefined;
+		this.shouldUpdateWidth = true;
 	}
 
 	private hasColumn(column: number): boolean {

@@ -4,6 +4,8 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ViewLineOptions } from '../../browser/viewParts/viewLines/viewLineOptions.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
+import { Range } from '../../common/core/range.js';
+import { InlineDecoration, InlineDecorationType } from '../../common/viewModel/inlineDecorations.js';
 import { createTestConfiguration } from './config/testConfiguration.js';
 
 const { SemanticTokenPresentation } = await import('../../browser/viewParts/viewLines/viewLine.js');
@@ -55,7 +57,7 @@ test('ViewLine owns rendering, character mapping, geometry, and width state', ()
 test('Unchanged token and decoration notifications retain spans and measured widths', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none' });
+		using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none', disableMonospaceOptimizations: true });
 		const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
 		line.renderLine('sample', [{ startColumn: 0, endColumn: 6, presentation: SemanticTokenPresentation.Keyword }]);
 		const textElement = line.getDomNode().firstElementChild as HTMLElement;
@@ -84,7 +86,7 @@ test('Unchanged token and decoration notifications retain spans and measured wid
 test('Indent and font options invalidate geometry even when text spans are unchanged', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none' });
+		using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none', disableMonospaceOptimizations: true });
 		const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
 		line.renderLine('sample', []);
 		const textElement = line.getDomNode().firstElementChild as HTMLElement;
@@ -96,6 +98,101 @@ test('Indent and font options invalidate geometry even when text spans are uncha
 		assert.equal(line.getWidth(null), 70);
 		line.onOptionsChanged(new ViewLineOptions(configuration, ColorScheme.HighContrastDark));
 		assert.equal(line.getWidthIsFast(), false);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Plain ASCII widths reuse measured font advances and reset eligibility with geometry', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using configuration = createTestConfiguration(dom.window.document.body);
+		const options = new ViewLineOptions(configuration, ColorScheme.Dark);
+		const line = new ViewLine(dom.window.document.body, 0, options, 4);
+		const text = line.getDomNode().firstElementChild as HTMLElement;
+		let reads = 0;
+		Object.defineProperty(text, 'offsetWidth', { get: () => { reads++; return 91; } });
+		line.renderLine('abc', [{ startColumn: 0, endColumn: 3, presentation: SemanticTokenPresentation.Keyword }], 10);
+		assert.equal(line.getWidthIsFast(), true);
+		assert.equal(line.getWidth(null), 10 + 3 * options.spaceWidth);
+		assert.equal(reads, 0);
+		assert.equal(line.needsMonospaceFontCheck(), false, 'Trusted font measurements do not need a check against the derived width');
+		line.onTokensChanged();
+		line.renderLine('longer', []);
+		assert.equal(line.getWidth(null), 6 * options.spaceWidth);
+		assert.equal(reads, 0);
+		line.onOptionsChanged(options);
+		assert.equal(line.getWidthIsFast(), false);
+		line.renderLine('longer', []);
+		assert.equal(line.getWidth(null), 6 * options.spaceWidth);
+		line.resetCachedWidth();
+		assert.equal(line.getWidthIsFast(), false);
+		assert.equal(line.getWidth(null), 91, 'An explicit geometry reset must allow fresh DOM measurement');
+		assert.equal(reads, 1);
+		line.onMonospaceAssumptionsInvalidated();
+		line.renderLine('plain', []);
+		assert.equal(line.getWidth(null), 91);
+		assert.equal(reads, 2);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Complex text, decorations, font styles, ligatures and clipped markers retain DOM widths', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using configuration = createTestConfiguration(dom.window.document.body);
+		const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
+		const text = line.getDomNode().firstElementChild as HTMLElement;
+		let reads = 0;
+		Object.defineProperty(text, 'offsetWidth', { get: () => { reads++; return 91; } });
+		for (const value of ['\ttext', '中文', 'ab🙂', 'a\u0000b']) {
+			line.renderLine(value, []);
+			assert.equal(line.getWidthIsFast(), false);
+			assert.equal(line.getWidth(null), 91);
+		}
+		line.renderLine('abc', [], 0, [new InlineDecoration(new Range(1, 1, 1, 2), 'custom-width', InlineDecorationType.Regular)]);
+		assert.equal(line.getWidth(null), 91);
+		line.renderLine('abc', [{ startColumn: 0, endColumn: 3, syntaxPresentation: { fontStyle: ['bold'] } }]);
+		assert.equal(line.getWidth(null), 91);
+		using ligatures = createTestConfiguration(dom.window.document.body, { fontLigatures: true });
+		line.onOptionsChanged(new ViewLineOptions(ligatures, ColorScheme.Dark));
+		line.renderLine('abc', []);
+		assert.equal(line.getWidthIsFast(), false);
+		assert.equal(line.getWidth(null), 91);
+		using clipped = createTestConfiguration(dom.window.document.body, { stopRenderingLineAfter: 2 });
+		line.onOptionsChanged(new ViewLineOptions(clipped, ColorScheme.Dark));
+		line.renderLine('abc', []);
+		assert.equal(text.textContent, 'ab…');
+		assert.equal(line.getWidth(null), 91);
+		assert.equal(reads, 8);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Neutral token styles reuse only a declared normal editor font weight', () => {
+	const dom = new JSDOM('<main class="stanza-editor" style="font-weight: normal"></main>');
+	try {
+		const host = dom.window.document.querySelector<HTMLElement>('main')!;
+		using configuration = createTestConfiguration(host);
+		const options = new ViewLineOptions(configuration, ColorScheme.Dark);
+		const line = new ViewLine(host, 0, options, 4);
+		host.append(line.getDomNode());
+		const text = line.getDomNode().firstElementChild as HTMLElement;
+		let reads = 0;
+		Object.defineProperty(text, 'offsetWidth', { get: () => { reads++; return 91; } });
+		const tokens = [{ startColumn: 0, endColumn: 3, syntaxPresentation: { fontStyle: [] } }];
+		line.renderLine('abc', tokens);
+		assert.equal(line.getWidthIsFast(), true);
+		assert.equal(line.getWidth(null), 3 * options.spaceWidth);
+		assert.equal(reads, 0);
+		host.style.fontWeight = '700';
+		line.onOptionsChanged(options);
+		line.renderLine('abc', tokens);
+		assert.equal(line.getWidthIsFast(), false);
+		assert.equal(line.getWidth(null), 91);
+		assert.equal(reads, 1);
 	} finally {
 		dom.window.close();
 	}
