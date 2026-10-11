@@ -186,6 +186,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 
 		const content = await this.resourceStore.resolve({
 			resource: input.resource,
+			languageId: input.languageId ?? this.options.languageService?.guessLanguageIdByFilepathOrFirstLine(input.resource) ?? undefined,
 			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
 			...(input.encoding === undefined ? {} : { encoding: input.encoding }),
 		}, signal);

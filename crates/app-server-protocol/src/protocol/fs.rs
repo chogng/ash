@@ -117,10 +117,18 @@ pub struct FsReadFileParams {
     #[ts(optional)]
     pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
-    /// When present, decode/encode editor text using this codec. Reads also accept "auto" for BOM detection.
+    /// Decode using this codec ("auto" detects Unicode); automatic policy fields use it as the configured fallback.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub encoding: Option<String>,
+    /// When present, apply automatic BOM/UTF-16 detection and optionally guess legacy text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub auto_guess_encoding: Option<bool>,
+    /// Restrict legacy guesses; an empty list lets the detector use its supported codecs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub candidate_guess_encodings: Option<Vec<String>>,
 }
 
 /// UTF-8 text returned by `fs/readFile`.
@@ -174,7 +182,7 @@ pub struct FsWriteFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub expected_revision: Option<String>,
-    /// When present, decode/encode editor text using this codec. Reads also accept "auto" for BOM detection.
+    /// Decode using this codec ("auto" detects Unicode); automatic policy fields use it as the configured fallback.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub encoding: Option<String>,
@@ -219,7 +227,7 @@ pub struct FsWriteFileElevatedParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub expected_revision: Option<String>,
-    /// When present, decode/encode editor text using this codec. Reads also accept "auto" for BOM detection.
+    /// Decode using this codec ("auto" detects Unicode); automatic policy fields use it as the configured fallback.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub encoding: Option<String>,

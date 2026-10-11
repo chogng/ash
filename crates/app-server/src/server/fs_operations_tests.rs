@@ -98,3 +98,39 @@ fn encoded_write_options_keep_unlock_authorization_and_creation_policy() {
     assert_eq!(error.message, AppServerErrorName::PermissionRequired);
     assert_eq!(fs::read(dir.path().join("text")).unwrap(), b"original");
 }
+
+#[test]
+fn automatic_encoding_read_uses_backend_bytes_and_validates_options() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = server(directory.path());
+    let text = "一般中文\n";
+    std::fs::write(
+        directory.path().join("text"),
+        encode_text(text, "cp950").unwrap(),
+    )
+    .unwrap();
+    let read = server.fs_read_file(&json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":true, "candidateGuessEncodings":["utf8","cp950"]})).unwrap();
+    assert_eq!(read["content"], text);
+    assert_eq!(read["encoding"], "cp950");
+    assert!(
+        server
+            .fs_read_file(&json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":false}))
+            .is_err()
+    );
+    assert!(
+        server
+            .fs_read_file(&json!({"path":"text", "autoGuessEncoding":true}))
+            .is_err()
+    );
+    assert!(server.fs_read_file(&json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":true,"candidateGuessEncodings":["unknown"]})).is_err());
+    std::fs::write(
+        directory.path().join("text"),
+        encode_text("hello", "utf16be").unwrap(),
+    )
+    .unwrap();
+    let read = server
+        .fs_read_file(&json!({"path":"text", "encoding":"windows1252", "autoGuessEncoding":false}))
+        .unwrap();
+    assert_eq!(read["encoding"], "utf16be");
+    assert_eq!(read["content"], "hello");
+}

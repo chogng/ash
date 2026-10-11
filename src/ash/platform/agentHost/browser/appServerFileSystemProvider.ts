@@ -1,3 +1,4 @@
+import type { IFileReadOptions } from '../../files/common/files.js';
 import { localize } from '../../../nls.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { posix } from '../../../base/common/path.js';
@@ -332,9 +333,10 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 		}
 	}
 
-	async readTextFile(resource: URI, encoding: string): Promise<IFileContent> {
+	async readTextFile(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent> {
 		try {
-			const result = await this.api.readFile({ ...this.fileTarget(resource), encoding });
+			const { candidateGuessEncodings, ...decoding } = options ?? {};
+			const result = await this.api.readFile({ ...this.fileTarget(resource), encoding, ...decoding, ...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: candidateGuessEncodings.slice() }) });
 			return { resource, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
 		} catch (error) {
 			if (isFileNotFound(error)) throw new FileNotFoundError(resource);

@@ -1374,7 +1374,15 @@
     "status.editor.reopenDirtyDetail": "未保存的更改将被丢弃。",
     "status.editor.reopenConfirm": "重新打开",
     "files.openWithEncoding": "通过编码打开",
-    "files.openWithEncodingFailed": "无法以所选编码打开此文件：{0}"
+    "files.openWithEncodingFailed": "无法以所选编码打开此文件：{0}",
+    "files.encodingTitle": "默认文件编码",
+    "files.encodingDescription": "选择读写文本文件时使用的默认编码。可按语言覆盖。",
+    "files.invalidAutoGuessEncoding": "自动编码检测必须为 true 或 false。",
+    "files.autoGuessEncodingTitle": "自动猜测文件编码",
+    "files.autoGuessEncodingDescription": "打开文本文件时尝试检测字符编码。BOM 和 UTF-16 检测始终优先。可按语言覆盖。",
+    "files.candidateGuessEncodingsDescription": "将自动猜测限制为这些编码。空列表使用全部可检测编码。检测无法确定时，仅在候选旧编码是唯一无损匹配时使用它，否则使用默认文件编码。",
+    "files.invalidCandidateGuessEncodings": "请输入不重复的可检测编码标识符列表。",
+    "status.editor.guessedEncoding": "根据内容猜测"
   },
   "ash.menu": {
     "file": "文件",

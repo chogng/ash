@@ -37,6 +37,8 @@ pub use types::{
 };
 
 pub use text_encoding::DecodedText;
+pub use text_encoding::TextDecodingOptions;
 pub use text_encoding::TextEncodingError;
 pub use text_encoding::decode_text;
+pub use text_encoding::decode_text_with_options;
 pub use text_encoding::encode_text;

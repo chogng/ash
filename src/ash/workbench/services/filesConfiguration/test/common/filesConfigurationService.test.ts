@@ -58,6 +58,8 @@ suite('Configured file policies', () => {
 		services.registerInstance(IFilesConfigurationService, policy);
 		assert.throws(() => services.createInstance(TextFileService), /Unknown service: elevatedFileService/);
 		services.registerInstance(IElevatedFileService, new BrowserElevatedFileService());
+		assert.throws(() => services.createInstance(TextFileService), /Unknown service: configurationService/);
+		services.registerInstance(IConfigurationService, configuration);
 		using textFiles = services.createInstance(TextFileService);
 		const saved: string[] = [];
 		using listener = textFiles.onDidSave(event => saved.push(event.content));

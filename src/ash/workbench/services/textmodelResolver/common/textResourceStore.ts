@@ -6,6 +6,9 @@ export interface TextResourceResolveRequest {
 	readonly resource: URI;
 	readonly bootstrapText?: string;
 	readonly encoding?: string;
+	readonly languageId?: string;
+	readonly autoGuessEncoding?: boolean;
+	readonly candidateGuessEncodings?: readonly string[];
 }
 
 /** Text returned by a resource adapter. */

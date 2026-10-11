@@ -1,3 +1,4 @@
+import type { IFileReadOptions } from './files.js';
 import { Emitter } from '../../../base/common/event.js';
 import { bufferToStream, VSBuffer, type VSBufferReadableStream } from '../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../base/common/async.js';
@@ -182,10 +183,10 @@ export class FileService extends Disposable implements IFileService {
 		return this.provider(resource).readDirectory(resource);
 	}
 
-	public readFile(resource: URI, encoding?: string): Promise<IFileContent> {
+	public readFile(resource: URI, encoding?: string, options?: IFileReadOptions): Promise<IFileContent> {
 		const provider = this.provider(resource);
 		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite)) throw new FileOperationNotSupportedError(resource, 'readFile');
-		if (encoding !== undefined && provider.readTextFile) return provider.readTextFile(resource, encoding);
+		if (encoding !== undefined && provider.readTextFile) return provider.readTextFile(resource, encoding, options);
 		if (encoding !== undefined && !['auto', 'utf8', 'utf8bom'].includes(encoding)) throw new FileOperationNotSupportedError(resource, 'readTextFile');
 		return this.readFileBytes(resource).then(content => {
 			const bom = content.bytes[0] === 0xef && content.bytes[1] === 0xbb && content.bytes[2] === 0xbf;

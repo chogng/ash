@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 ash-async-utils = { workspace = true }
 ec4rs = { workspace = true }
+chardetng = { workspace = true }
 encoding_rs = { workspace = true, features = ["fast-legacy-encode"] }
 cap-std = { workspace = true }
 sha2 = { workspace = true }

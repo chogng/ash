@@ -9,6 +9,9 @@ export interface TextFileResolveRequest {
 	readonly resource: URI;
 	readonly bootstrapText?: string;
 	readonly encoding?: string;
+	readonly languageId?: string;
+	readonly autoGuessEncoding?: boolean;
+	readonly candidateGuessEncodings?: readonly string[];
 }
 
 export interface ResolvedTextFileContent {

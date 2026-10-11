@@ -1,3 +1,4 @@
+import { WorkbenchConfigurationService } from '../../services/configuration/browser/configurationService.js';
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
@@ -63,22 +64,22 @@ class TestFileService extends FileService {
 }
 
 /** Owns the real file-policy dependencies for file-service tests outside a Workbench. */
-export function createTestTextFileService(files: IFileSystemProvider | IFileService): TextFileService {
-	return new TestTextFileService(files);
+export function createTestTextFileService(files: IFileSystemProvider | IFileService, configuration?: IConfigurationService): TextFileService {
+	return new TestTextFileService(files, configuration);
 }
 
 class TestTextFileService extends TextFileService {
-	constructor(provider: IFileSystemProvider | IFileService) {
-		const configuration = new InMemoryConfigurationService();
+	constructor(provider: IFileSystemProvider | IFileService, suppliedConfiguration?: IConfigurationService) {
+		const configuration = suppliedConfiguration ?? new WorkbenchConfigurationService();
 		const workspace = new WorkspaceContextService({ id: 'test-text-files', folders: [] });
 		const policy = new FilesConfigurationService(configuration, workspace);
 		let ownedFiles: FileService | undefined;
 		let files: IFileService;
 		if ('registerProvider' in provider) files = provider;
 		else files = ownedFiles = createTestFileService(provider);
-		super(files, policy, new BrowserElevatedFileService());
+		super(files, policy, new BrowserElevatedFileService(), configuration);
 		if (ownedFiles) this._register(ownedFiles);
-		this._register(configuration);
+		if (!suppliedConfiguration) this._register(configuration as WorkbenchConfigurationService);
 		this._register(workspace);
 		this._register(policy);
 	}

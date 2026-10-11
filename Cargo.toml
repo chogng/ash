@@ -337,6 +337,7 @@ deno_core_icudata = "0.78.0"
 dunce = "1"
 ed25519-dalek = "3.0.0"
 encoding_rs = "0.8.42"
+chardetng = "1.0.0"
 ec4rs = "1.2.0"
 getrandom = "0.2"
 jsonwebtoken = { version = "10.4.0", default-features = false, features = ["aws_lc_rs"] }

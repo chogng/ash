@@ -1,6 +1,38 @@
 import { expect, test } from '../../../automation/test.js';
+import { StorageScope } from '../../../../src/ash/platform/storage/common/storage.js';
+import { readStorageEntries } from '../../../automation/storage.js';
 
 test.use({ openWorkspace: false });
+
+test('Activity Bar unpins the active view, switches to another view and retains checkmarks after restart', async ({ workbench, application, reloadWorkbench }) => {
+	let page = workbench.page;
+	const rail = () => page.locator('[data-part="activitybar"]');
+	const openMenu = () => rail().getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
+	await rail().getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	await expect(rail().getByRole('tab', { name: /^Source Control(?:,|$)/u })).toHaveAttribute('aria-selected', 'true');
+	await workbench.menus.select(application, openMenu, ['Source Control']);
+	await expect(rail().getByRole('tab', { name: /^Source Control(?:,|$)/u })).toHaveCount(0);
+	await expect(rail().getByRole('tab', { name: 'Explorer', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await workbench.menus.select(application, openMenu, ['Explorer']);
+	await expect(rail().getByRole('tab', { name: 'Explorer', exact: true })).toHaveCount(0);
+	await expect(rail().getByRole('tab', { name: 'Search', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect.poll(() => page.locator('[data-part="sidebar"]').evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	const expected = ['Explorer', 'Search', 'Source Control'].map(label => expect.objectContaining({ label, checked: label === 'Search' }));
+	expect(await workbench.menus.inspect(application, openMenu)).toEqual(expect.arrayContaining(expected));
+	await expect.poll(async () => {
+		const entries = await readStorageEntries(application, page, { scope: StorageScope.PROFILE, id: 'default' });
+		return JSON.parse(entries['workbench.activityBar.hiddenViewContainers']?.value ?? '[]').sort();
+	}).toEqual(['ash.git', 'ash.sidebar']);
+	({ application, workbench } = await reloadWorkbench());
+	page = workbench.page;
+	await expect(rail().getByRole('tab', { name: 'Explorer', exact: true })).toHaveCount(0);
+	await expect(rail().getByRole('tab', { name: /^Source Control(?:,|$)/u })).toHaveCount(0);
+	await expect(rail().getByRole('tab', { name: 'Search', exact: true })).toHaveAttribute('aria-selected', 'true');
+	expect(await workbench.menus.inspect(application, openMenu)).toEqual(expect.arrayContaining(expected));
+	await workbench.menus.select(application, openMenu, ['Explorer']);
+	await expect(rail().getByRole('tab', { name: 'Explorer', exact: true })).toBeVisible();
+	await expect(rail().getByRole('tab', { name: 'Search', exact: true })).toHaveAttribute('aria-selected', 'true');
+});
 
 test('region navigation visits editor splits, skips hidden parts and follows sidebar placement', async ({ workbench, application }) => {
 	const page = workbench.page;

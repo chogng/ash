@@ -1,3 +1,4 @@
+import { ITextFileService } from '../../../services/textfile/common/textfiles.js';
 import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { EncodingMode } from '../../../services/textfile/common/textfiles.js';
 import { getEncodingLabel, SUPPORTED_ENCODINGS } from '../../../services/textfile/common/encoding.js';
@@ -345,7 +346,23 @@ export class ChangeEncodingAction extends Action2 {
 		if (modes.length === 0) return;
 		const choice = await pickStatusItem(quickInput, modes, localize('status.editor.selectEncodingAction', 'Select an Encoding Action'), pickerLifetime);
 		if (!choice || !isCurrent()) return;
-		const encoding = await pickStatusItem(quickInput, Object.keys(SUPPORTED_ENCODINGS).filter(id => choice.mode === EncodingMode.Encode || id !== 'utf8bom').map(id => ({ label: getEncodingLabel(id), id, description: id === support.getEncoding() ? localize('status.editor.currentEncoding', 'Current Encoding') : undefined })), localize('status.editor.selectEncoding', 'Select File Encoding'), pickerLifetime);
+		const picks: (IQuickPickItem & { id: string })[] = [];
+		if (choice.mode === EncodingMode.Decode) {
+			const controller = new AbortController();
+			pickerLifetime.add(toDisposable(() => controller.abort()));
+			try {
+				const content = await accessor.get(ITextFileService).resolve({ resource: model.uri, languageId: model.getLanguageId(), autoGuessEncoding: true }, controller.signal);
+				if (!isCurrent()) return;
+				picks.push({ id: content.encoding, label: getEncodingLabel(content.encoding), description: localize('status.editor.guessedEncoding', 'Guessed from Content') });
+			} catch {
+				if (!isCurrent()) return;
+			}
+		}
+		for (const [id, info] of Object.entries(SUPPORTED_ENCODINGS)) {
+			if (info.hidden || choice.mode === EncodingMode.Decode && info.encodeOnly || picks.some(pick => pick.id === id)) continue;
+			picks.push({ label: getEncodingLabel(id), id, description: id, detail: id === support.getEncoding() ? localize('status.editor.currentEncoding', 'Current Encoding') : undefined });
+		}
+		const encoding = await pickStatusItem(quickInput, picks, localize('status.editor.selectEncoding', 'Select File Encoding'), pickerLifetime);
 		if (!encoding || !isCurrent() || choice.mode === EncodingMode.Encode && editor.getOption(EditorOption.readOnly)) return;
 		try {
 			if (choice.mode === EncodingMode.Decode) {

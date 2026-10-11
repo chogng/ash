@@ -14,7 +14,8 @@ import { AppServerRemoteError } from '../../../../../platform/agentHost/common/a
 import type { FsWriteFileParams, FsWriteFileElevatedParams, FsWriteFileResult } from '../../../../../../../.build/protocol/typescript/index.js';
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../../filesConfiguration/common/filesConfigurationService.js';
-import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IElevatedFileService } from '../../common/elevatedFileService.js';
 import { ElectronElevatedFileService } from '../../electron-browser/elevatedFileService.js';
 import { BrowserElevatedFileService } from '../../browser/elevatedFileService.js';
@@ -32,7 +33,7 @@ const saved: FsWriteFileResult = { revision: 'saved-revision', metadata: { fileT
 function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSignal) => Promise<FsWriteFileResult>, ordinary?: (request: FsWriteFileParams) => Promise<FsWriteFileResult>) {
 	const services = new InstantiationService();
 	const workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
-	const configuration = new InMemoryConfigurationService();
+	const configuration = new WorkbenchConfigurationService();
 	const policy = new FilesConfigurationService(configuration, workspace);
 	const provider = new AppServerFileSystemProvider({
 		workspaceContextService: workspace,
@@ -44,6 +45,7 @@ function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSigna
 	const files = new FileService();
 	const registration = files.registerProvider('file', provider);
 	services.registerInstance(IFileService, files);
+	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IFilesConfigurationService, policy);
 	services.registerSingleton(IElevatedFileService, () => services.createInstance(ElectronElevatedFileService));
 	const textFiles = services.createInstance(TextFileService);

@@ -81,6 +81,8 @@ fn remote_directories_share_a_backend_with_separate_authorities() {
         session_directory: None,
         path,
         encoding: None,
+        auto_guess_encoding: None,
+        candidate_guess_encodings: None,
     };
     let mut first_client = first.client();
     let mut second_client = second.client();
@@ -211,6 +213,8 @@ fn empty_remote_connection_has_no_directory_authority() {
                     session_directory: None,
                     path: outside,
                     encoding: None,
+                    auto_guess_encoding: None,
+                    candidate_guess_encodings: None,
                 })
                 .is_err()
         );

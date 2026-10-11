@@ -453,11 +453,21 @@ export class CompositeBar extends Disposable {
 		return new Set(ids);
 	}
 
-	private setPinned(containerId: string, pinned: boolean): void {
+	private async setPinned(containerId: string, pinned: boolean): Promise<void> {
 		if (pinned) this.hiddenContainerIds.delete(containerId);
 		else this.hiddenContainerIds.add(containerId);
 		this.storageService?.store(HIDDEN_VIEW_CONTAINERS_KEY, JSON.stringify([...this.hiddenContainerIds]), StorageScope.PROFILE, StorageTarget.USER);
 		this.render();
+		if (pinned || containerId !== this._activeCompositeId) {
+			return;
+		}
+		const defaultId = this.viewDescriptorService.getDefaultViewContainer(this.location)?.id;
+		const pinnedContainers = this.containers.filter(container => !this.hiddenContainerIds.has(container.id));
+		const next = pinnedContainers.find(container => container.id === defaultId) ?? pinnedContainers[0];
+		if (next) {
+			// The host updates activation and its saved selection when opening succeeds.
+			await this.openComposite(next.id, next.id === defaultId);
+		}
 	}
 
 	private readHiddenContainerIds(): Set<string> {

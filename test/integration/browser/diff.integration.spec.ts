@@ -2251,6 +2251,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(picker).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select File Encoding', '选择文件编码'));
+		await expect(page.getByText(localized(locale, 'Guessed from Content', '根据内容猜测'), { exact: true })).toBeVisible();
+		await expect(page.locator('.ash-quick-pick-list').getByRole('option')).toHaveCount(48);
+		await picker.fill('cp1125');
+		await expect(page.locator('.ash-quick-pick-list').getByRole('option')).toHaveText(/CP 1125/);
 		await picker.fill('UTF-16 LE');
 		await page.keyboard.press('Enter');
 		await expect(encoding).toHaveText('UTF-16 LE');

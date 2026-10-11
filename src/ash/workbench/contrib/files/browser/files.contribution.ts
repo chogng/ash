@@ -1,3 +1,4 @@
+import { assertEncoding, GUESSABLE_ENCODINGS, getEncodingLabel, SUPPORTED_ENCODINGS } from '../../../services/textfile/common/encoding.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -26,6 +27,32 @@ import "./fileActions.contribution.js";
 EditorPanes.registerEditorPane(binaryFileEditorDescriptor());
 
 const configuration = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+configuration.registerConfiguration<string>({
+	key: 'files.encoding', defaultValue: 'utf8', scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+	schema: { type: 'string', enum: Object.keys(SUPPORTED_ENCODINGS).filter(id => !SUPPORTED_ENCODINGS[id].hidden) },
+	parse(value: unknown): string {
+		assertEncoding(value);
+		return value;
+	},
+	setting: { valueType: 'select', title: localize('files.encodingTitle', 'Default File Encoding'), description: localize('files.encodingDescription', 'Choose the default encoding for reading and writing text files. Can be overridden per language.'), options: Object.keys(SUPPORTED_ENCODINGS).filter(id => !SUPPORTED_ENCODINGS[id].hidden).map(value => ({ value, label: getEncodingLabel(value) })) },
+});
+configuration.registerConfiguration<boolean>({
+	key: 'files.autoGuessEncoding', defaultValue: false, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('files.invalidAutoGuessEncoding', 'Automatic encoding detection must be true or false.'));
+		return value;
+	},
+	setting: { valueType: 'boolean', title: localize('files.autoGuessEncodingTitle', 'Auto Guess File Encoding'), description: localize('files.autoGuessEncodingDescription', 'Attempt to detect the character encoding when opening text files. BOM and UTF-16 detection always take precedence. Can be overridden per language.') },
+});
+configuration.registerConfiguration<readonly string[]>({
+	key: 'files.candidateGuessEncodings', defaultValue: [], scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+	schema: { type: 'array', items: { type: 'string', enum: Object.keys(GUESSABLE_ENCODINGS) }, uniqueItems: true, description: localize('files.candidateGuessEncodingsDescription', 'Limit automatic guesses to these encodings. An empty list uses all detectable encodings. If detection is inconclusive, use a legacy candidate only when it is the sole lossless match; otherwise use the default file encoding.') },
+	parse(value: unknown): readonly string[] {
+		if (!Array.isArray(value) || value.length > Object.keys(GUESSABLE_ENCODINGS).length || value.some(id => !Object.hasOwn(GUESSABLE_ENCODINGS, id)) || new Set(value).size !== value.length) throw new TypeError(localize('files.invalidCandidateGuessEncodings', 'Enter a list of unique detectable encoding identifiers.'));
+		return Object.freeze(value.slice());
+	},
+});
 configuration.registerConfiguration({
 	key: 'explorer.sortOrder',
 	defaultValue: SortOrder.Default,

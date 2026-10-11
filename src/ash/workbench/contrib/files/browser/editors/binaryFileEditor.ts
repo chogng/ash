@@ -69,7 +69,7 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		this.encodingPicker.value = resources;
 		try {
 			const picker = resources.add(this.quickInput.createQuickPick<{ label: string; id: string }>());
-			picker.items = Object.keys(SUPPORTED_ENCODINGS).filter(id => id !== 'utf8bom').map(id => ({ label: getEncodingLabel(id), id }));
+			picker.items = Object.keys(SUPPORTED_ENCODINGS).filter(id => !SUPPORTED_ENCODINGS[id].hidden && !SUPPORTED_ENCODINGS[id].encodeOnly).map(id => ({ label: getEncodingLabel(id), id, description: id }));
 			picker.sortByLabel = false;
 			picker.placeholder = picker.ariaLabel = localize('status.editor.selectEncoding', 'Select File Encoding');
 			const selected = await new Promise<{ id: string } | undefined>(resolve => {

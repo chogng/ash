@@ -463,7 +463,15 @@
     "status.editor.reopenDirtyDetail": "Your unsaved changes will be discarded.",
     "status.editor.reopenConfirm": "Reopen",
     "files.openWithEncoding": "Open with Encoding",
-    "files.openWithEncodingFailed": "Could not open this file with the selected encoding: {0}"
+    "files.openWithEncodingFailed": "Could not open this file with the selected encoding: {0}",
+    "files.encodingTitle": "Default File Encoding",
+    "files.encodingDescription": "Choose the default encoding for reading and writing text files. Can be overridden per language.",
+    "files.invalidAutoGuessEncoding": "Automatic encoding detection must be true or false.",
+    "files.autoGuessEncodingTitle": "Auto Guess File Encoding",
+    "files.autoGuessEncodingDescription": "Attempt to detect the character encoding when opening text files. BOM and UTF-16 detection always take precedence. Can be overridden per language.",
+    "files.candidateGuessEncodingsDescription": "Limit automatic guesses to these encodings. An empty list uses all detectable encodings. If detection is inconclusive, use a legacy candidate only when it is the sole lossless match; otherwise use the default file encoding.",
+    "files.invalidCandidateGuessEncodings": "Enter a list of unique detectable encoding identifiers.",
+    "status.editor.guessedEncoding": "Guessed from Content"
   },
   "ash.views": {
     "explorer": "Explorer",

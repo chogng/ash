@@ -190,6 +190,8 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	layout(size: number, _offset: number, orthogonalSize: number): void {
 		this.didLayout = true;
+		// Neighbouring headers already use the new allocation while the wrapper height is still animating.
+		this.element.style.maxHeight = `${size}px`;
 		if (!this.collapsed) {
 			const bodyHeight = Math.max(0, size - this.headerSize);
 			// Keep the body at its allocated size while the outer pane clips the transition.

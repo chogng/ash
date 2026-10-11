@@ -38,7 +38,7 @@ test('local history captures successful saves, honors exclusion and retention, a
 		using configuration = new InMemoryConfigurationService();
 		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file(directory) });
 		using policy = new FilesConfigurationService(configuration, workspace);
-		using textFiles = new TextFileService(files, policy, new BrowserElevatedFileService());
+		using textFiles = new TextFileService(files, policy, new BrowserElevatedFileService(), configuration);
 		using shutdown = new Emitter<IWillShutdownEvent>();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);

@@ -270,6 +270,13 @@ const harness = {
 		const parentServices = resources.add(createTestEditorServices(titleConfiguration));
 		const services = resources.add(parentServices.createChild());
 		titleServices = services;
+		if (kind === 'encoding') {
+			services.registerInstance(ITextFileService, {
+				onDidChangeFiles: Event.None, onDidSave: Event.None,
+				resolve: async request => ({ resource: request.resource, text: 'after\nshared', revision: 'encoding-revision', encoding: 'cp950', source: TextFileContentSource.FileSystem }),
+				save: async () => ({ revision: 'encoding-revision' }),
+			});
+		}
 		if (kind === 'git') {
 			services.registerInstance(INotificationService, { error: (message: string) => gitGutterCalls.push({ error: message }), info: () => { } } as unknown as INotificationService);
 			services.registerInstance(ITextFileService, {

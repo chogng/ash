@@ -257,3 +257,33 @@ test("text-file decoding retains a leading content character after the UTF-8 BOM
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	assert.equal(reference.model.getText(), "\uFEFFcontent");
 });
+
+test('TextFileService forwards configured detection and language overrides, with explicit reopen precedence', async () => {
+	const { WorkbenchConfigurationService } = await import('../../../configuration/browser/configurationService.js');
+	await import('../../../../contrib/files/browser/files.contribution.js');
+	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue('files.encoding', 'windows1252');
+	await configuration.updateValue('files.autoGuessEncoding', true);
+	await configuration.updateValue('files.candidateGuessEncodings', ['utf8', 'cp950']);
+	await configuration.updateValue('files.encoding', 'cp1125', { overrideIdentifiers: ['typescript'] });
+	const requests: unknown[] = [];
+	const files = Object.assign(new TestFileService('unused'), {
+		readTextFile: async (resource: URI, encoding: string, options: unknown) => {
+			requests.push({ encoding, options });
+			return { resource, content: 'decoded', encoding: 'cp950', revision: 'bytes-revision' };
+		},
+	});
+	using service = createTestTextFileService(files, configuration);
+	const resource = URI.file('/project/file.ts');
+	assert.equal((await service.resolve({ resource, languageId: 'typescript' }, new AbortController().signal)).encoding, 'cp950');
+	await service.resolve({ resource, encoding: 'cp850', autoGuessEncoding: true }, new AbortController().signal);
+	assert.deepEqual(requests, [
+		{ encoding: 'cp1125', options: { autoGuessEncoding: true, candidateGuessEncodings: ['utf8', 'cp950'] } },
+		{ encoding: 'cp850', options: undefined },
+	]);
+	assert.equal((await service.resolve({ resource, languageId: 'typescript', bootstrapText: 'untitled' }, new AbortController().signal)).encoding, 'cp1125');
+	await assert.rejects(configuration.updateValue('files.candidateGuessEncodings', ['unsupported']), /unique detectable/);
+	await assert.rejects(configuration.updateValue('files.autoGuessEncoding', 'yes'), /true or false/);
+	await assert.rejects(configuration.updateValue('files.encoding', 'unsupported'), /Unsupported/);
+	assert.deepEqual(configuration.getValue('files.candidateGuessEncodings'), ['utf8', 'cp950']);
+});

@@ -434,6 +434,8 @@ fn client_reads_writes_and_versions_files_through_typed_contracts() {
             session_directory: None,
             path: "src/main.rs".into(),
             encoding: None,
+            auto_guess_encoding: None,
+            candidate_guess_encodings: None,
         })
         .unwrap();
     let binary = client

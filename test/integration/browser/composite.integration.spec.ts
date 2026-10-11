@@ -239,3 +239,33 @@ test('Sessions preserve Chinese titles when replacing the active group under the
 	await expect(host.getByRole('tab', { name: '乙', exact: true })).toHaveCount(0);
 	await expect(host.locator('.ash-editor-group')).toHaveCount(2);
 });
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+	test(`rapidly reversed pane transitions never paint content across the next header (${reducedMotion})`, async ({ page }) => {
+		await page.emulateMedia({ reducedMotion });
+		await page.goto('/composite.html?paneTransitions&locale=zh-CN');
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		const samples = await page.locator('#pane-transitions').evaluate(async host => {
+			const panes = [...host.querySelectorAll<HTMLElement>('.ash-pane-view')];
+			const buttons = panes.map(pane => pane.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!);
+			const samples: { title: string; paintedBottom: number; nextHeaderTop: number; }[] = [];
+			for (let index = 0; index < 12; index++) {
+				buttons[index % buttons.length]!.click();
+				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+				for (let paneIndex = 0; paneIndex < panes.length - 1; paneIndex++) {
+					const pane = panes[paneIndex]!;
+					const body = pane.querySelector<HTMLElement>('.ash-pane-view-content')!;
+					if (body.hidden) { continue; }
+					const paintedBottom = Math.min(body.getBoundingClientRect().bottom, pane.getBoundingClientRect().bottom, pane.parentElement!.getBoundingClientRect().bottom);
+					const nextHeaderTop = panes[paneIndex + 1]!.querySelector('.ash-pane-view-header')!.getBoundingClientRect().top;
+					samples.push({ title: buttons[paneIndex]!.textContent!, paintedBottom, nextHeaderTop });
+				}
+			}
+			return samples;
+		});
+		expect(samples.length).toBeGreaterThan(0);
+		for (const sample of samples) {
+			expect(sample.paintedBottom, JSON.stringify(sample)).toBeLessThanOrEqual(sample.nextHeaderTop + 1);
+		}
+	});
+}

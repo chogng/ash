@@ -1652,6 +1652,58 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 	dom.window.close();
 });
 
+for (const activeId of ['search', 'explorer']) {
+	test(`Activity Bar unpinning active ${activeId} opens the default or first pinned view`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using disposables = new DisposableStore();
+			const registry = new WorkbenchViewRegistry();
+			for (const id of ['search', 'explorer', 'git']) {
+				disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar, isDefault: id === 'explorer' }));
+			}
+			const contextKeys = disposables.add(new ContextKeyService());
+			const views = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+			const opened: { id: string; preserveFocus: boolean | undefined; }[] = [];
+			let actions: readonly IAction[] = [];
+			const bar = disposables.add(new CompositeBar(dom.window.document.body, {
+				openComposite: async (id, preserveFocus) => {
+					opened.push({ id, preserveFocus });
+					bar.setActiveComposite(id);
+					return null;
+				},
+				activityHoverOptions: { position: () => HoverPosition.RIGHT },
+				viewDescriptorService: views,
+				location: ViewContainerLocation.Sidebar,
+				ariaLabel: 'Views',
+				orientation: 'vertical',
+				contextMenuProvider: { showContextMenu(options) { actions = options.getActions(); } },
+			}));
+			bar.setActiveComposite(activeId);
+			bar.showContextMenu(new dom.window.MouseEvent('contextmenu'));
+			await actions.find(action => action.label === 'git')!.run();
+			assert.deepEqual(opened, []);
+			bar.showContextMenu(new dom.window.MouseEvent('contextmenu'));
+			await actions.find(action => action.label === activeId)!.run();
+			const nextId = activeId === 'search' ? 'explorer' : 'search';
+			assert.deepEqual(opened, [{ id: nextId, preserveFocus: nextId === 'explorer' }]);
+			assert.equal(bar.activeCompositeId, nextId);
+			assert.equal(bar.domNode.querySelector(`[data-action-id="${activeId}"]`), null);
+			assert.equal(bar.domNode.querySelector(`[data-action-id="${nextId}"]`)?.getAttribute('aria-selected'), 'true');
+			bar.showContextMenu(new dom.window.MouseEvent('contextmenu'));
+			assert.deepEqual(actions.map(action => [action.label, action.checked, action.enabled]), [
+				['search', nextId === 'search', nextId !== 'search'],
+				['explorer', nextId === 'explorer', nextId !== 'explorer'],
+				['git', false, true],
+			]);
+			await actions.find(action => action.label === activeId)!.run();
+			assert.equal(opened.length, 1);
+			assert.equal(bar.activeCompositeId, nextId);
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
 test('Activity Bar context menu persists hidden views and keeps one pinned view', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using disposables = new DisposableStore();

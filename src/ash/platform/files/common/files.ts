@@ -192,6 +192,12 @@ export function hasPathIdentityCapability(provider: IFileSystemProvider): provid
 	return 'resolvePathIdentity' in provider && 'getPathIdentity' in provider && 'retainPathIdentity' in provider && 'onDidChangePathIdentity' in provider;
 }
 
+/** Codec policy for provider-owned text decoding. Explicit encoding requests omit this policy. */
+export interface IFileReadOptions {
+	readonly autoGuessEncoding?: boolean;
+	readonly candidateGuessEncodings?: readonly string[];
+}
+
 /** Storage operations implemented by a runtime or virtual resource provider. */
 export interface IFileSystemProvider {
 	readonly capabilities: FileSystemProviderCapabilities;
@@ -203,7 +209,7 @@ export interface IFileSystemProvider {
 	/** Reads exact stored bytes; the revision continues to identify those bytes across text decoding. */
 	readFile(resource: URI): Promise<IFileBytes>;
 	/** Text codecs are provider-owned; absence limits this provider to UTF-8. */
-	readTextFile?(resource: URI, encoding: string): Promise<IFileContent>;
+	readTextFile?(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent>;
 	writeTextFile?(resource: URI, content: string, encoding: string, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
@@ -229,7 +235,7 @@ export interface IFileService {
 	watch(resource: URI, options?: IWatchOptions): IDisposable;
 	stat(resource: URI): Promise<IFileStat>;
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
-	readFile(resource: URI, encoding?: string): Promise<IFileContent>;
+	readFile(resource: URI, encoding?: string, options?: IFileReadOptions): Promise<IFileContent>;
 	readFileBytes(resource: URI): Promise<IFileBytes>;
 	readFileStream(resource: URI, options?: IReadFileStreamOptions, token?: CancellationToken): Promise<IFileStreamContent>;
 	writeFile(request: IFileWriteRequest, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;

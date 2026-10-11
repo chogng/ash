@@ -48,8 +48,10 @@ use ash_file_system::FileWriteMode;
 use ash_file_system::LocalFileSystem;
 use ash_file_system::MissingTargetBehavior;
 use ash_file_system::SystemFileTransferOperation;
+use ash_file_system::TextDecodingOptions;
 use ash_file_system::TextEncodingError;
 use ash_file_system::decode_text;
+use ash_file_system::decode_text_with_options;
 use ash_file_system::encode_text;
 use ash_file_system::file_revision;
 use base64::Engine;
@@ -125,6 +127,12 @@ impl AppServer {
 
     pub(super) fn fs_read_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadFileParams = decode(params)?;
+        if (params.encoding.is_none()
+            && (params.auto_guess_encoding.is_some() || params.candidate_guess_encodings.is_some()))
+            || (params.candidate_guess_encodings.is_some() && params.auto_guess_encoding.is_none())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let content = self
             .file_system_for_request(
                 params.dir_id.as_deref(),
@@ -134,7 +142,26 @@ impl AppServer {
             .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
         let (text, encoding) = if let Some(encoding) = params.encoding {
-            let decoded = decode_text(&content.bytes, &encoding).map_err(text_encoding_error)?;
+            let decoded = if let Some(auto_guess_encoding) = params.auto_guess_encoding {
+                decode_text_with_options(
+                    &content.bytes,
+                    &TextDecodingOptions {
+                        encoding: Some(if encoding == "auto" {
+                            "utf8"
+                        } else {
+                            &encoding
+                        }),
+                        auto_guess_encoding,
+                        candidate_guess_encodings: params
+                            .candidate_guess_encodings
+                            .as_deref()
+                            .unwrap_or_default(),
+                    },
+                )
+            } else {
+                decode_text(&content.bytes, &encoding)
+            }
+            .map_err(text_encoding_error)?;
             (decoded.text, Some(decoded.encoding))
         } else {
             (

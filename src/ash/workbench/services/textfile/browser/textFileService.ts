@@ -1,3 +1,4 @@
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IElevatedFileService } from '../../files/common/elevatedFileService.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
@@ -17,7 +18,7 @@ export class TextFileService extends Disposable implements ITextFileService {
 	private readonly saved = this._register(new Emitter<ITextFileSaveEvent>());
 	public readonly onDidSave = this.saved.event;
 
-	constructor(@IFileService private readonly files: IFileService, @IFilesConfigurationService private readonly filesConfiguration: IFilesConfigurationService, @IElevatedFileService private readonly elevatedFiles: IElevatedFileService) {
+	constructor(@IFileService private readonly files: IFileService, @IFilesConfigurationService private readonly filesConfiguration: IFilesConfigurationService, @IElevatedFileService private readonly elevatedFiles: IElevatedFileService, @IConfigurationService private readonly configuration: IConfigurationService) {
 		super();
 		if (!files || typeof files.readFile !== 'function' || typeof files.writeFile !== 'function') {
 			throw new TypeError('Text file service requires a file service');
@@ -28,13 +29,16 @@ export class TextFileService extends Disposable implements ITextFileService {
 	public async resolve(request: TextFileResolveRequest, signal: AbortSignal): Promise<ResolvedTextFileContent> {
 		validateRequest(request);
 		throwIfCancelled(signal, 'Text file resolution was cancelled');
+		const overrides = { resource: request.resource, overrideIdentifier: request.languageId };
+		const preferredEncoding = request.encoding ?? this.configuration.getValue<string>('files.encoding', overrides) ?? 'utf8';
+		const decoding = request.encoding !== undefined ? undefined : { autoGuessEncoding: request.autoGuessEncoding ?? this.configuration.getValue<boolean>('files.autoGuessEncoding', overrides) ?? false, candidateGuessEncodings: request.candidateGuessEncodings ?? this.configuration.getValue<string[]>('files.candidateGuessEncodings', overrides) ?? [] };
 		if (request.bootstrapText !== undefined) {
 			return Object.freeze({
 				resource: request.resource,
 				text: request.bootstrapText,
 				source: TextFileContentSource.Bootstrap,
 				revision: undefined,
-				encoding: request.encoding ?? 'utf8',
+				encoding: preferredEncoding,
 			});
 		}
 		const stat = await raceCancellationError(this.files.stat(request.resource), signal, 'Text file resolution was cancelled');
@@ -43,13 +47,13 @@ export class TextFileService extends Disposable implements ITextFileService {
 		}
 		let content;
 		try {
-			content = await raceCancellationError(this.files.readFile(request.resource, request.encoding ?? 'auto'), signal, 'Text file resolution was cancelled');
+			content = await raceCancellationError(this.files.readFile(request.resource, preferredEncoding, decoding), signal, 'Text file resolution was cancelled');
 		} catch (error) {
 			if (toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotText || error instanceof TypeError) throw new TextFileBinaryError(request.resource, undefined, { cause: error });
 			throw error;
 		}
 		const text = content.content;
-		const encoding = content.encoding ?? request.encoding ?? 'utf8';
+		const encoding = content.encoding ?? preferredEncoding;
 		throwIfCancelled(signal, 'Text file resolution was cancelled');
 		if (looksBinary(text)) throw new TextFileBinaryError(request.resource);
 		return Object.freeze({
@@ -114,6 +118,11 @@ function validateRequest(request: TextFileResolveRequest): void {
 		throw new TypeError('Text file bootstrap content must be text');
 	}
 	if (request.encoding !== undefined) assertEncoding(request.encoding);
+	if ('autoGuessEncoding' in request && request.autoGuessEncoding !== undefined && typeof request.autoGuessEncoding !== 'boolean') throw new TypeError(localize('files.invalidAutoGuessEncoding', 'Automatic encoding detection must be true or false.'));
+	if ('candidateGuessEncodings' in request && request.candidateGuessEncodings !== undefined) {
+		if (!Array.isArray(request.candidateGuessEncodings) || request.candidateGuessEncodings.length > 50) throw new TypeError(localize('files.invalidCandidateGuessEncodings', 'Enter a list of unique detectable encoding identifiers.'));
+		for (const encoding of request.candidateGuessEncodings) assertEncoding(encoding);
+	}
 }
 
 function validateSaveRequest(request: TextFileSaveRequest): void {
