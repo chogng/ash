@@ -8,8 +8,8 @@ test('detached editor window inherits workbench theme and accessibility state', 
 
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('Move Editor into New Window');
-	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Move Editor into New Window' })).toBeVisible();
+	await command.fill('Move to New Window');
+	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Move to New Window' })).toBeVisible();
 	const popupPromise = page.context().waitForEvent('page');
 	await command.press('Enter');
 	const popup = await popupPromise;
@@ -45,7 +45,7 @@ test('detached editor window inherits workbench theme and accessibility state', 
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(1);
 		await page.keyboard.press('F1');
 		const reopenCommand = page.locator('.ash-quick-pick').getByRole('combobox');
-		await reopenCommand.fill('Move Editor into New Window');
+		await reopenCommand.fill('Move to New Window');
 		const reopenedPromise = page.context().waitForEvent('page');
 		await reopenCommand.press('Enter');
 		const reopened = await reopenedPromise;
@@ -70,7 +70,7 @@ test('detached editor windows participate in desktop window switching and close-
 	await expect(workbench.editors.groupAt(0).tabs.last()).toContainText('Untitled');
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('Move Editor into New Window');
+	await command.fill('Move to New Window');
 	const opened = page.context().waitForEvent('page');
 	await command.press('Enter');
 	const popup = await opened;
@@ -110,8 +110,8 @@ test('detached window titlebar follows its own editor and reserves layout space'
 	await page.keyboard.press('ControlOrMeta+N');
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('Move Editor into New Window');
-	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Move Editor into New Window' })).toBeVisible();
+	await command.fill('Move to New Window');
+	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Move to New Window' })).toBeVisible();
 	const popupPromise = page.context().waitForEvent('page');
 	await command.press('Enter');
 	const popup = await popupPromise;

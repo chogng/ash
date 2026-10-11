@@ -58,6 +58,47 @@ test.describe('SCM editor groups', () => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 	});
 
+	test('SCM Changes reserves a file viewport when Graph expands and the commit draft grows', async ({ workbench }) => {
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const changes = page.locator('[data-view-id="ash.gitView"]');
+		const graph = page.locator('[data-view-id="ash.gitGraph"]');
+		const changesHeader = changes.locator('.ash-pane-view-header-button');
+		const graphHeader = graph.locator('.ash-pane-view-header-button');
+		await expect(changes.locator('.ash-scm-change')).toHaveCount(1);
+		await graphHeader.click();
+		await expect(graphHeader).toHaveAttribute('aria-expanded', 'true');
+		const split = changes.locator('xpath=../..');
+		const sash = split.locator(':scope > .ash-sash').first();
+		const compressChanges = async (): Promise<void> => {
+			const bounds = (await sash.boundingBox())!;
+			const container = (await split.boundingBox())!;
+			const x = bounds.x + bounds.width / 2;
+			const y = bounds.y + bounds.height / 2;
+			await page.mouse.move(x, y);
+			await page.mouse.down();
+			await page.mouse.move(x, container.y + 1);
+			await page.mouse.up();
+		};
+		const viewport = changes.locator('.ash-scm-changes .ash-scrollbar-viewport');
+		await compressChanges();
+		await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
+		await expect(changes.locator('.ash-scm-change')).toBeInViewport();
+		const input = changes.getByRole('textbox', { name: /^Commit message/u });
+		await input.focus();
+		await page.keyboard.insertText(Array.from({ length: 8 }, (_, index) => `Draft line ${index}`).join('\n'));
+		await expect.poll(() => changes.locator('.ash-scm-input-editor').evaluate(element => element.clientHeight)).toBeGreaterThan(120);
+		await compressChanges();
+		await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
+		await changesHeader.press('ArrowLeft');
+		await expect(changesHeader).toHaveAttribute('aria-expanded', 'false');
+		await changesHeader.press('ArrowRight');
+		await expect(changesHeader).toHaveAttribute('aria-expanded', 'true');
+		await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
+		await expect(changes.locator('.ash-scm-change')).toBeInViewport();
+		await expect(changes.locator('.view-lines')).toContainText('Draft line 7');
+	});
+
 	test('SCM resource group navigation uses saved bindings, reveals groups and preserves collapse in tree and list views', async ({ application, testWorkspace, workbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		await mkdir(join(testWorkspace.directory, 'bulk'));

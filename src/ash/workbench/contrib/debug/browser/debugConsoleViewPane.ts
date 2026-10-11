@@ -39,6 +39,7 @@ export class DebugConsoleViewPane extends ViewPane {
 		this.status.className = "ash-debug-console-status";
 		this.status.setAttribute("role", "status");
 		this.contentElement.append(this.sessionSelect, this.output, this.form, this.status);
+		this.trackBodyMinimum(this.output, 60);
 		this._register(addDisposableListener(this.sessionSelect, "change", () => this.selectSession()));
 		this._register(addDisposableListener(this.form, "submit", event => { void this.evaluate(event); }));
 		this._register(consoleService.onDidChange(() => this.render()));

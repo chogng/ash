@@ -25,6 +25,7 @@ import { type IEditorService, type EditorOpenOptions } from '../../../src/ash/wo
 import { TestingViewPane } from '../../../src/ash/workbench/contrib/testing/browser/testingViewPane.js';
 import { TestingEditorContribution } from '../../../src/ash/workbench/contrib/testing/browser/testingEditorContribution.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
 	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -65,6 +66,18 @@ const pane = store.add(new TestingViewPane(document.querySelector<HTMLElement>('
 	{ getOpenAriaHint: () => 'Press Alt+F1 for help.' } as unknown as IAccessibleViewService,
 	workspace));
 pane.setVisible(true);
+if (new URLSearchParams(location.search).has('paneLayout')) {
+	await import('../../../src/ash/base/browser/ui/styles.css');
+	await import('../../../src/ash/workbench/browser/media/style.css');
+	const host = document.querySelector<HTMLElement>('#testing')!;
+	host.style.height = '300px';
+	host.style.width = '320px';
+	const panes = store.add(new PaneView(host));
+	panes.addPane(pane, 180);
+	const sibling = store.add(new Pane(host, { id: 'testing.sibling', title: 'Other view', minimumBodySize: 0 }));
+	panes.addPane(sibling, 120);
+	panes.layout(300, 320);
+}
 const model = store.add(createModel('mod checks {\n #[test]\n fn passes() {}\n fn fails() {}\n}', 'rust', URI.file('/workspace/src/lib.rs')) as TextModel);
 const editor = store.add(create(document.querySelector<HTMLElement>('#editor')!, { model, glyphMargin: true, automaticLayout: true }));
 store.add(new TestingEditorContribution(editor, model, service, copies, store.add(new NotificationService())));

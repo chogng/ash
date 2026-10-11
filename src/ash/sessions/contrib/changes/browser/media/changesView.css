@@ -13,6 +13,13 @@
 }
 
 .ash-sessions-changes-tree {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
+.ash-sessions-changes-tree > .ash-tree {
 	flex: 1;
 	min-height: 0;
 }

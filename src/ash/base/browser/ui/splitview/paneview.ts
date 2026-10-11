@@ -51,7 +51,7 @@ export class Pane extends Disposable implements ISplitViewView {
 		this.isClosing = false;
 		this.renderCollapsedState();
 	}, UI_ANIMATION_DURATION.normal));
-	private readonly minimumBodySize: number;
+	private _minimumBodySize: number;
 	private readonly maximumBodySize: number;
 	private readonly change = this._register(new Emitter<number | undefined>());
 	readonly onDidChange = this.change.event;
@@ -63,7 +63,7 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	constructor(container: HTMLElement, options: IPaneOptions) {
 		super();
-		this.minimumBodySize = options.minimumBodySize ?? 120;
+		this._minimumBodySize = options.minimumBodySize ?? 120;
 		this.maximumBodySize = options.maximumBodySize ?? Number.POSITIVE_INFINITY;
 		if (!Number.isFinite(this.minimumBodySize) || this.minimumBodySize < 0 || this.maximumBodySize < this.minimumBodySize || Number.isNaN(this.maximumBodySize)) {
 			throw new RangeError("Invalid pane body size constraints");
@@ -164,6 +164,20 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	get minimumSize(): number {
 		return this.headerSize + (this.collapsed ? 0 : this.minimumBodySize);
+	}
+
+	/** Whole-body constraint; consumers include fixed controls alongside their scrollable content. */
+	public get minimumBodySize(): number {
+		return this._minimumBodySize;
+	}
+
+	public set minimumBodySize(size: number) {
+		if (!Number.isFinite(size) || size < 0 || size > this.maximumBodySize) {
+			throw new RangeError("Invalid pane body size constraints");
+		}
+		if (size === this._minimumBodySize) { return; }
+		this._minimumBodySize = size;
+		this.change.fire(undefined);
 	}
 
 	get maximumSize(): number {

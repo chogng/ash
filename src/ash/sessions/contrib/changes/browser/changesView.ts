@@ -63,6 +63,7 @@ export class ChangesViewPane extends ViewPane {
 		const treeContainer = h(container.ownerDocument, 'div');
 		treeContainer.className = 'ash-sessions-changes-tree';
 		this.contentElement.append(treeContainer);
+		this.trackBodyMinimum(treeContainer, this.minimumBodySize);
 		this.tree = this._register(new WorkbenchObjectTree(treeContainer, {
 			configurationService: configuration,
 			multipleSelectionSupport: true,

@@ -84,6 +84,34 @@ function installDomGlobals(dom: JSDOM): readonly string[] {
 	return Object.keys(globals);
 }
 
+test('PaneView reallocates sibling space when a pane content minimum changes', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(dom);
+	try {
+		const { Pane, PaneView } = await import('../../../../../../base/browser/ui/splitview/paneview.js');
+		using view = new PaneView(dom.window.document.body);
+		using changes = new Pane(dom.window.document.body, { id: 'changes', title: 'Changes', maximumBodySize: 500 });
+		using graph = new Pane(dom.window.document.body, { id: 'graph', title: 'Graph', minimumBodySize: 0 });
+		view.addPane(changes, 200);
+		view.addPane(graph, 200);
+		view.layout(400, 300);
+		changes.minimumBodySize = 300;
+		assert.equal(view.getPaneSize(changes), 328);
+		assert.equal(view.getPaneSize(graph), 72);
+		changes.setCollapsed(true);
+		changes.minimumBodySize = 200;
+		assert.equal(view.getPaneSize(changes), 28);
+		changes.setCollapsed(false);
+		assert.ok(view.getPaneSize(changes) >= 228);
+		assert.throws(() => changes.minimumBodySize = Number.NaN, RangeError);
+		assert.throws(() => changes.minimumBodySize = 501, RangeError);
+		assert.equal(changes.minimumBodySize, 200);
+	} finally {
+		for (const name of installedGlobals) { Reflect.deleteProperty(globalThis, name); }
+		dom.window.close();
+	}
+});
+
 test('View welcome content follows context, preserves focus, runs commands and releases its DOM', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(dom);

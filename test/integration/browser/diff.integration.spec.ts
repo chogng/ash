@@ -27,9 +27,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.keyboard.press('ArrowDown');
 		await expect(view).toBeFocused();
 		await view.press('ArrowRight');
-		const inline = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Inline Diff', '显示行内差异'), exact: true });
-		const sideBySide = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Side by Side Diff', '显示并排差异'), exact: true });
-		const automatic = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Use Automatic Diff Layout', '使用自动差异布局'), exact: true });
+		const inline = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Inline', '行内'), exact: true });
+		const sideBySide = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Side by Side', '并排'), exact: true });
+		const automatic = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Automatic', '自动'), exact: true });
 		await expect(inline).toHaveAttribute('aria-checked', 'false');
 		await expect(sideBySide).toHaveAttribute('aria-checked', 'false');
 		await expect(automatic).toHaveAttribute('aria-checked', 'true');
@@ -42,13 +42,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await sideBySide.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().mode)).toBe('sideBySide');
 		await more.press('Enter');
-		const whitespace = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Leading/Trailing Whitespace Differences', '显示首尾空白差异'), exact: true });
+		const whitespace = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Whitespace Differences', '显示空白差异'), exact: true });
 		await expect(whitespace).toHaveAttribute('aria-checked', 'false');
 		await whitespace.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().ignoreWhitespace)).toBe(false);
 		await more.press('Enter');
 		await expect(whitespace).toHaveAttribute('aria-checked', 'true');
-		await page.getByRole('menuitem', { name: localized(locale, 'Swap Left and Right Editor Side', '交换左右编辑器侧'), exact: true }).press('Enter');
+		await page.getByRole('menuitem', { name: localized(locale, 'Swap Sides', '交换两侧'), exact: true }).press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().original)).toBe('after\nshared');
 		await more.press('Enter');
 		await page.keyboard.press('Escape');

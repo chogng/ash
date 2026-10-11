@@ -41,21 +41,21 @@ export function registerDiffEditorCommands(): void {
 	for (const [id, title, mode, toggled, order] of [
 		[
 			SET_DIFF_VIEW_MODE_INLINE,
-			localize2({ bundle: 'ash.workbench', key: 'diffView.inline' }, 'Show Inline Diff'),
+			localize2({ bundle: 'ash.workbench', key: 'diffView.inline' }, 'Inline'),
 			'inline',
 			ContextKeyExpr.equals('config.diffEditor.renderSideBySide', false),
 			1,
 		],
 		[
 			SET_DIFF_VIEW_MODE_SIDE_BY_SIDE,
-			localize2({ bundle: 'ash.workbench', key: 'diffView.sideBySide' }, 'Show Side by Side Diff'),
+			localize2({ bundle: 'ash.workbench', key: 'diffView.sideBySide' }, 'Side by Side'),
 			'sideBySide',
 			ContextKeyExpr.and(ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true), ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', false)),
 			2,
 		],
 		[
 			SET_DIFF_VIEW_MODE_AUTOMATIC,
-			localize2({ bundle: 'ash.workbench', key: 'diffView.automatic' }, 'Use Automatic Diff Layout'),
+			localize2({ bundle: 'ash.workbench', key: 'diffView.automatic' }, 'Automatic'),
 			'automatic',
 			ContextKeyExpr.and(ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true), ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', true)),
 			3,
@@ -125,8 +125,8 @@ export function registerDiffEditorCommands(): void {
 
 	for (const [id, title, operation] of [
 		[DIFF_OPEN_SIDE, localize2({ bundle: 'ash.workbench', key: 'compare.openSide' }, 'Open Active Diff Side'), (service: IDiffEditorCommandsService) => service.openActiveDiffSide()],
-		[TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, localize2({ bundle: 'ash.workbench', key: 'diff.showWhitespace' }, 'Show Leading/Trailing Whitespace Differences'), (service: IDiffEditorCommandsService) => service.toggleDiffIgnoreTrimWhitespace()],
-		[DIFF_SWAP_SIDES, localize2({ bundle: 'ash.workbench', key: 'diff.swapSides' }, 'Swap Left and Right Editor Side'), (service: IDiffEditorCommandsService) => service.swapDiffSides()],
+		[TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, localize2({ bundle: 'ash.workbench', key: 'diff.showWhitespace' }, 'Show Whitespace Differences'), (service: IDiffEditorCommandsService) => service.toggleDiffIgnoreTrimWhitespace()],
+		[DIFF_SWAP_SIDES, localize2({ bundle: 'ash.workbench', key: 'diff.swapSides' }, 'Swap Sides'), (service: IDiffEditorCommandsService) => service.swapDiffSides()],
 	] as const) {
 		registerAction2(class DiffOperationAction extends Action2 {
 			constructor() {

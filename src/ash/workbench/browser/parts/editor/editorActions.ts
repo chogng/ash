@@ -364,7 +364,7 @@ registerAction2(class MoveEditorToNewWindowAction extends Action2 {
 	constructor() {
 		super({
 			id: MoveEditorToNewWindowCommandId,
-			title: localize2({ bundle: 'ash.workbench', key: 'command.MoveEditorToNewWindowAction' }, "Move Editor into New Window"),
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MoveEditorToNewWindowAction' }, "Move to New Window"),
 			f1: true,
 			menu: {
 				id: MenuId.EditorTitle,

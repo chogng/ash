@@ -6,6 +6,43 @@ test.beforeEach(async ({ page }) => {
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);
 });
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+	test(`pane headers and resize handles reach their click targets immediately with ${reducedMotion} motion`, async ({ page }) => {
+		await page.emulateMedia({ reducedMotion });
+		await page.goto('/composite.html?paneTransitions');
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		const host = page.locator('#pane-transitions');
+		for (const title of ['Changes', 'Graph', 'Agent Review', 'Changes']) {
+			const button = host.getByRole('button', { name: title, exact: true });
+			const expanded = await button.getAttribute('aria-expanded') === 'true';
+			await button.click();
+			await expect(button).toHaveAttribute('aria-expanded', String(!expanded));
+			const positions = await host.evaluate(async element => {
+				await new Promise(resolve => requestAnimationFrame(resolve));
+				const split = element.querySelector<HTMLElement>('.ash-split-view')!;
+				const origin = split.getBoundingClientRect().top;
+				return [...split.children].filter(child => child instanceof HTMLElement && child.style.top && child.getClientRects().length > 0).map(child => {
+					const node = child as HTMLElement;
+					const bounds = node.getBoundingClientRect();
+					const actual = bounds.top - origin + (node.classList.contains('ash-sash') ? bounds.height / 2 : 0);
+					return { actual, allocated: Number.parseFloat(node.style.top) };
+				});
+			});
+			for (const position of positions) {
+				expect(position.actual).toBeCloseTo(position.allocated, 0);
+			}
+		}
+		const graph = host.getByRole('button', { name: 'Graph', exact: true });
+		await graph.focus();
+		await graph.press('ArrowLeft');
+		await expect(graph).toHaveAttribute('aria-expanded', 'false');
+		await expect(graph).toBeFocused();
+		await graph.press('ArrowRight');
+		await expect(graph).toHaveAttribute('aria-expanded', 'true');
+		await expect(graph).toBeFocused();
+	});
+}
+
 test('typed case aliases reuse the open editor pane and unsaved model', async ({ page }) => {
 	expect(await page.evaluate(() => window.ashCompositeIntegration.openFileAliases())).toEqual({ tabs: 1, models: 1, retained: true, text: 'unsaved content' });
 	await expect(page.locator('.stanza-editor-line-text').filter({ hasText: 'unsaved content' })).toBeVisible();

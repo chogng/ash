@@ -186,6 +186,7 @@ export class SearchView extends ViewPane {
 			this.statusElement,
 			this.resultsElement,
 		);
+		this.trackBodyMinimum(this.resultsElement, this.minimumBodySize);
 		this.resultRenderer = this._register(instantiation.createInstance(SearchResultsRenderer, document,
 			(element: RenderableMatch, anchor: ContextMenuAnchor) => this.showResultContextMenu(element, anchor),
 			(element: RenderableMatch) => {

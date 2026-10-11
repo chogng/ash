@@ -2,7 +2,9 @@ import "./views.css";
 import { Emitter } from "../../../../base/common/event.js";
 import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
 import type { IView } from "../../../common/views.js";
-import { h } from '../../../../base/browser/dom.js';
+import { getWindow, h } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -32,6 +34,21 @@ export abstract class ViewPane extends Pane implements IView {
 
 	protected updateTitleArea(): void {
 		this.titleAreaUpdate.fire();
+	}
+
+	/** Includes fixed controls in the body constraint while retaining an independent content viewport. */
+	protected trackBodyMinimum(scrollableContent: HTMLElement, minimumContentHeight: number, enabled: () => boolean = () => true): void {
+		const minimumBodyHeight = this.minimumBodySize;
+		const update = this._register(new AnimationFrameScheduler(getWindow(this.element), () => {
+			if (!this.isBodyVisible()) { return; }
+			const reservedHeight = enabled()
+				? Math.max(0, Math.max(this.contentElement.clientHeight, this.contentElement.scrollHeight) - scrollableContent.offsetHeight)
+				: 0;
+			this.minimumBodySize = Math.max(minimumBodyHeight, minimumContentHeight + reservedHeight);
+		}));
+		// Apply constraints outside ResizeObserver delivery to avoid a resize/layout feedback loop.
+		this._register(observeResize([this.contentElement, ...this.contentElement.children], () => update.schedule()));
+		this._register(this.onDidChangeBodyVisibility(visible => { if (visible) { update.schedule(); } }));
 	}
 
 	public override setTitle(title: string): void {

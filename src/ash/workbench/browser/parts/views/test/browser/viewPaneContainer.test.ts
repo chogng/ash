@@ -196,6 +196,16 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	}
 	assert.equal(created, 2);
 	assert.equal(disposed, 0);
+	second.minimumBodySize = 300;
+	container.resizeView(second, 0);
+	assert.equal(container.getViewSize(second), 328);
+	options.model.setVisible(second.id, false);
+	second.minimumBodySize = 340;
+	assert.equal(container.getViewSize(first), 600);
+	assert.equal(container.openView(second.id), second);
+	assert.equal(container.getViewSize(second), 368);
+	assert.equal(second.input.value, 'unsent expression');
+	second.minimumBodySize = 120;
 	container.resizeView(second, 270);
 	second.setExpanded(false);
 	assert.deepEqual([container.getViewSize(first), container.getViewSize(second)], [572, 28]);

@@ -46,7 +46,7 @@ test('detached editor titles follow their own window when focus and dirty state 
 	await expect(page).toHaveTitle(`Untitled-2 — ${workspaceTitle}`);
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('Move Editor into New Window');
+	await command.fill('Move to New Window');
 	const opened = page.context().waitForEvent('page');
 	await command.press('Enter');
 	const popup = await opened;

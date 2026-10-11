@@ -119,6 +119,7 @@ export class TestingViewPane extends ViewPane {
 		this.scriptsDomNode.className = 'ash-testing-scripts';
 		details.append(this.scriptsDomNode);
 		this.contentElement.append(controls, this.statusDomNode, treeContainer, result, details);
+		this.trackBodyMinimum(treeContainer, this.minimumBodySize);
 		this._register(testing.onDidChangeTests(() => this.render()));
 		this._register(testing.onDidChangeProfiles(() => this.renderScripts()));
 		this._register(testing.onDidStartRun(() => this.renderScripts()));

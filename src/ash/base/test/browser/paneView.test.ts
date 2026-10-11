@@ -155,6 +155,35 @@ test("PaneView keeps minimum heights scrollable and supports header keyboard nav
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [148, 28]);
 });
 
+test('PaneView retains changing content constraints through overflow, collapse and detachment', () => {
+	const document = browserEnvironment.window.document;
+	using view = new PaneView(document.body);
+	using first = new Pane(document.body, { id: 'dynamic-first', title: 'First', maximumBodySize: 400 });
+	using second = new Pane(document.body, { id: 'dynamic-second', title: 'Second', minimumBodySize: 80, maximumBodySize: 200 });
+	view.addPane(first, 220);
+	view.addPane(second, 180);
+	view.layout(400, 280);
+	first.minimumBodySize = 300;
+	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [328, 108]);
+	assert.equal(view.element.firstElementChild?.getAttribute('style'), 'height: 436px;');
+	first.setCollapsed(true);
+	assert.equal(view.getPaneSize(first), 28);
+	first.minimumBodySize = 350;
+	assert.equal(view.getPaneSize(first), 28);
+	first.setCollapsed(false);
+	assert.equal(view.getPaneSize(first), 378);
+	assert.equal(view.element.firstElementChild?.getAttribute('style'), 'height: 486px;');
+	first.minimumBodySize = 120;
+	assert.equal(view.element.firstElementChild?.getAttribute('style'), 'height: 400px;');
+	assert.equal(view.getPaneSize(first) + view.getPaneSize(second), 400);
+	view.removePane(first);
+	first.minimumBodySize = 360;
+	assert.equal(view.getPaneSize(second), 228);
+	view.addPane(first, 100);
+	assert.equal(view.getPaneSize(first), 388);
+	assert.equal(view.getPaneSize(second), 108);
+});
+
 test("PaneView double-click resets expanded panes across a collapsed pane", () => {
 	const document = browserEnvironment.window.document;
 	using view = new PaneView(document.body);

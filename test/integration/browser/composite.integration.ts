@@ -1,5 +1,6 @@
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
+import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import '../../../src/ash/base/browser/ui/actionbar/actionbar.css';
 import '../../../src/ash/base/browser/ui/grid/grid.css';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
@@ -127,6 +128,21 @@ services.registerInstance(IContextMenuService, {
 	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 });
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
+if (new URLSearchParams(location.search).has('paneTransitions')) {
+	await import('../../../src/ash/base/browser/ui/sash/sash.css');
+	const paneHost = h(document, 'div');
+	paneHost.id = 'pane-transitions';
+	paneHost.style.cssText = 'position:fixed;top:0;right:0;width:300px;height:600px';
+	document.body.append(paneHost);
+	resources.add(toDisposable(() => paneHost.remove()));
+	resources.add(bindColorTheme(services.get(IThemeService), paneHost));
+	const paneView = resources.add(new PaneView(paneHost));
+	for (const title of ['Changes', 'Agent Review', 'Graph']) {
+		const pane = resources.add(new Pane(paneHost, { id: `transition.${title}`, title, collapsed: title !== 'Changes' }));
+		paneView.addPane(pane, title === 'Changes' ? 544 : 28);
+	}
+	paneView.layout(600, 300);
+}
 panel.domNode.style.cssText = 'position:relative;width:800px;height:160px;overflow:hidden';
 panel.layout({ width: 800, height: 160 });
 services.registerInstance(IWorkbenchLayoutService, {

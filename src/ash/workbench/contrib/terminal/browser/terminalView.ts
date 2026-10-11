@@ -56,7 +56,7 @@ export class TerminalViewPane extends ViewPane {
 		super(container, options);
 		this.terminalService = terminalService;
 		this.element.classList.add("ash-terminal-view");
-		this.headerElement.remove();
+		this.setHeaderVisible(false);
 		this.titleActions = this._register(instantiation.createInstance(TerminalTitleActions, this.headerActionsElement));
 
 		this.contentElement.classList.add("ash-terminal-content");

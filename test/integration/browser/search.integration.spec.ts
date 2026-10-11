@@ -1,5 +1,42 @@
 import { expect, test } from '@playwright/test';
 
+test('Search reserves its result viewport when expanded inputs and filters compete with another pane', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	await page.evaluate(() => window.ashSearchIntegration.setSecondView(true));
+	await page.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
+	await query.fill('long query '.repeat(100));
+	const pane = page.locator('[data-view-id="ash.searchView"]');
+	const split = pane.locator('xpath=../..');
+	const sash = split.locator(':scope > .ash-sash').first();
+	const resize = async (): Promise<void> => {
+		const handle = (await sash.boundingBox())!;
+		const bounds = (await split.boundingBox())!;
+		await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(handle.x + handle.width / 2, bounds.y + 1);
+		await page.mouse.up();
+	};
+	await resize();
+	const viewport = pane.locator('.ash-search-results .ash-scrollbar-viewport');
+	await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
+	await expect(pane.locator('.ash-search-match')).toBeInViewport();
+	const header = pane.locator('.ash-pane-view-header-button');
+	await header.press('ArrowLeft');
+	await header.press('ArrowRight');
+	await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
+	await expect(query).toHaveValue('long query '.repeat(100));
+	await query.fill('needle');
+	await resize();
+	await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
+	expect(errors).toEqual([]);
+});
+
 test('Search uses current model occurrences and suppresses stale disk hits without saving', async ({ page }) => {
 	await page.goto('/search.html');
 	await page.evaluate(() => window.ashSearchIntegration.setFileText('中文😀 needle needle'));

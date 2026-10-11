@@ -6,6 +6,7 @@
 	font-size: var(--ash-fontSize-body1);
 	color: var(--ash-foreground);
 	min-width: 0;
+	overflow: auto;
 }
 
 .ash-symphony-tasks p,

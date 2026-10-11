@@ -252,6 +252,11 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(IChatSpeechToTextService, resources.add(new ChatSpeechToTextService(undefined)));
 	services.registerInstance(IDictationOnboardingService, resources.add(services.createInstance(DictationOnboardingService)));
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
+	const unhosted = resources.add(services.createInstance(TerminalViewPane, browserEnvironment.window.document.body, { id: 'test.terminalGeometry', title: 'Terminal' }));
+	assert.equal(unhosted.minimumSize, unhosted.minimumBodySize, 'A hidden Terminal header must not reserve body space');
+	unhosted.setHeaderVisible(true);
+	assert.equal(unhosted.minimumSize, unhosted.minimumBodySize + 28);
+	assert.ok(unhosted.element.querySelector('.ash-pane-view-header-button'), 'A host must be able to show the retained header');
 	const registry = new WorkbenchViewRegistry();
 	const terminal = { id: 'test.terminal', title: 'Terminal', location: ViewContainerLocation.Panel };
 	const empty = { id: 'test.empty', title: 'Empty', location: ViewContainerLocation.Panel };

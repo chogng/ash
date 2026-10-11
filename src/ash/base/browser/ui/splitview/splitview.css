@@ -28,9 +28,9 @@
 .ash-split-view > .ash-sash {
 	transition-property: none;
 }
-.ash-split-view-vertical.animated > .ash-split-view-pane,
-.ash-split-view-vertical.animated > .ash-sash {
-	transition-property: top, height;
+/* Keep headers and resize targets at their allocated positions while bodies animate. */
+.ash-split-view-vertical.animated > .ash-split-view-pane {
+	transition-property: height;
 	transition-duration: var(--ash-animation-durationFast);
 	transition-timing-function: ease-out;
 }

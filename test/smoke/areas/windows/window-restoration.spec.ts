@@ -662,7 +662,7 @@ test('Workbench reopens detached editor windows with their tabs', async ({ }, te
 		await expect(page.locator('.ash-tab')).toHaveCount(1);
 		await page.keyboard.press('F1');
 		const command = page.locator('.ash-quick-pick').getByRole('combobox');
-		await command.fill('Move Editor into New Window');
+		await command.fill('Move to New Window');
 		const opened = page.context().waitForEvent('page');
 		await command.press('Enter');
 		const detached = await opened;
