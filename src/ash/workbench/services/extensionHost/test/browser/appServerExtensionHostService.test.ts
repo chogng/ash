@@ -1,3 +1,4 @@
+import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { ExtensionClientHandler } from '../../../../api/common/extHost.protocol.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
@@ -78,7 +79,7 @@ test('SCM registrations dispatch updates and Quick Diff, and retire before a res
 	const provider = {
 		id: 'repository', providerId: 'git', label: 'Git', rootUri: 'file:///workspace', selected: true, groups: [],
 		input: { value: '', placeholder: '', buttonLabel: 'Commit', buttonTooltip: 'Commit', enabled: true, canAccept: false },
-		statusMessage: '', isBusy: false, statusBarCommands: [], historyRef: null, historyRevision: 0, hasHistory: false, hasMerge: false,
+		statusMessage: '', isBusy: false, statusBarCommands: [], historyRef: null, historyRevision: 0, hasHistory: false, hasMerge: false, inputRevision: 0,
 	};
 	const registration = { kind: 'sourceControl' as const, registrationId: 'scm', revision: 1, providers: [provider] };
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.scm', [registration]));
@@ -863,6 +864,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(ISCMService, services.resources.add(new SCMService()));
 	services.registerSingleton(ISCMViewService, () => services.createInstance(SCMViewService));
 	services.registerInstance(IQuickDiffService, services.resources.add(new QuickDiffService()));
+	services.registerInstance(IMultiDiffSourceResolverService, services.resources.add(new MultiDiffSourceResolverService()));
 	services.registerInstance(IDecorationsService, { onDidChangeDecorations: Event.None, registerDecorationsProvider: () => toDisposable(() => { }), getDecoration: () => undefined });
 	services.registerInstance(IHostService, {
 		hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => assert.fail('Unexpected window'),

@@ -113,7 +113,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly statusbar: MainThreadStatusBar;
 	private readonly scmApi: MainThreadSCM;
 	private readonly backendApi: MainThreadExtensionBackend;
-	private readonly editorsApi: MainThreadEditors;
+	private editorsApi: MainThreadEditors | undefined;
 	private readonly taskApi: MainThreadTask;
 	private readonly debugApi: MainThreadDebugService;
 	private readonly remoteSources = new Map<string, ExtensionHostRuntime>();
@@ -129,7 +129,7 @@ export class MainThreadExtensionApi extends Disposable {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ITestingService testing: ITestingService,
 		@IOutputService private readonly outputService: IOutputService,
-		@IInstantiationService instantiation: IInstantiationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IFileService private readonly files: IFileService,
@@ -145,7 +145,6 @@ export class MainThreadExtensionApi extends Disposable {
 		super();
 		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
-		this.editorsApi = instantiation.createInstance(MainThreadEditors);
 		this.configurationApi = this._register(instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.workspaceApi = this._register(instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		// Host adapters validate callback messages; editor contracts stay in the Workbench.
@@ -186,7 +185,7 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal) };
-			case 'editorOperation': return { result: 'value', value: this.handleOutput(source, operation.payload) ? null : await this.editorsApi.handle(operation.payload, signal) };
+			case 'editorOperation': return { result: 'value', value: this.handleOutput(source, operation.payload) ? null : await (this.editorsApi ??= this.instantiation.createInstance(MainThreadEditors)).handle(operation.payload, signal) };
 			case 'addDebugBreakpoints':
 			case 'removeDebugBreakpoints':
 			case 'getDebugProtocolBreakpoint':
@@ -438,7 +437,7 @@ export class MainThreadExtensionApi extends Disposable {
 							if (!current || !registration) { throw new Error(localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command)); }
 							// Activating replaces process registrations. This command retains the connection
 							// lifetime signal and uses the new process fence, rather than the retired batch.
-							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtime.id, args) }), signal);
+							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args) }), signal);
 						}
 					});
 				}
@@ -460,16 +459,17 @@ export class MainThreadExtensionApi extends Disposable {
 					continue;
 				}
 				if (registration.kind === "command") {
+					const extensionId = runtime.id;
 					commands.push(Object.freeze({
 						id: registration.command, metadata: { description: registration.title }, handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
 							if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
-								return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtime.id, args) }), controller.signal);
+								return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args) }), controller.signal);
 							}
 							const part = accessor.get(IEditorPart);
 							const context = args[0] as { groupId?: string; editorIndex?: number; } | undefined;
 							const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
 							const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
-							return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtime.id, args), activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
+							return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args), activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
 						}
 					}));
 					for (const placement of registration.menus ?? []) {

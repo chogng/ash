@@ -183,7 +183,7 @@ test('display language picker opens Extensions with language packs selected', as
 });
 
 
-test('Chinese sidebar overflow localizes registered layout commands', async ({ workbench, application, restartWorkbench }) => {
+test('Chinese sidebar context menu localizes registered layout commands', async ({ workbench, application, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
@@ -192,7 +192,7 @@ test('Chinese sidebar overflow localizes registered layout commands', async ({ w
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^源代码管理(?:,|$)/u }).click();
 	const sidebar = page.locator('[data-part="sidebar"]');
-	const openSidebarMenu = () => sidebar.locator('.ash-pane-composite-title-part-actions').getByRole('button', { name: '更多操作', exact: true }).click();
+	const openSidebarMenu = () => sidebar.locator('.ash-workbench-part-title').click({ button: 'right' });
 	const sidebarMenu = await workbench.menus.inspect(application, openSidebarMenu);
 	expect(sidebarMenu).toEqual(expect.arrayContaining([
 		expect.objectContaining({ label: '更改', checked: true, enabled: false }),

@@ -1,6 +1,8 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
 import type { IAction, IActionRunner } from "../../../../base/common/actions.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from "../../../../nls.js";
 import { NotificationSeverity, type INotificationService, type NotificationItem } from "../../../../platform/notification/common/notification.js";
 
@@ -8,6 +10,7 @@ import { NotificationSeverity, type INotificationService, type NotificationItem 
 export class NotificationsToasts extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly visible = new Set<number>();
+	private readonly toastResources = this._register(new DisposableMap<number, DisposableStore>());
 	private hidden = false;
 	private previousFocus: HTMLElement | undefined;
 
@@ -78,11 +81,11 @@ export class NotificationsToasts extends Disposable {
 
 	private render(): void {
 		if (this.isDisposed) return;
-		if (this.hidden) { this.element.replaceChildren(); return; }
+		if (this.hidden) { this.toastResources.clearAndDisposeAll(); return; }
 		const document = this.element.ownerDocument;
 		const items = this.service.getNotifications().filter(item => this.visible.has(item.id));
 		for (const toast of [...this.element.children] as HTMLElement[]) {
-			if (!items.some(item => item.id === Number(toast.dataset.notificationId))) toast.remove();
+			if (!items.some(item => item.id === Number(toast.dataset.notificationId))) this.toastResources.deleteAndDispose(Number(toast.dataset.notificationId));
 		}
 		// Records are immutable and append-ordered. Retain their controls so background
 		// changes preserve focus without refocusing across another owner's transition.
@@ -93,7 +96,9 @@ export class NotificationsToasts extends Disposable {
 	}
 
 	private renderItem(document: Document, item: NotificationItem): HTMLElement {
+		const resources = this.toastResources.set(item.id, new DisposableStore());
 		const notification = h(document, "article");
+		resources.add(toDisposable(() => notification.remove()));
 		notification.className = `ash-notification ash-notification-${item.severity}`;
 		notification.dataset.notificationId = String(item.id);
 		notification.setAttribute("role", item.severity === NotificationSeverity.Error ? "alert" : "status");
@@ -107,19 +112,31 @@ export class NotificationsToasts extends Disposable {
 		if (item.actions?.length) {
 			const actions = h(document, "div"); actions.className = "ash-notification-actions";
 			for (const action of item.actions) {
-				const button = h(document, "button"); button.type = "button"; button.className = "ash-notification-action"; button.textContent = action.label;
 				const notificationAction: IAction = {
 					id: action.id, label: action.label, tooltip: "", enabled: true,
 					run: () => action.run(),
 				};
-				button.addEventListener("click", () => { void Promise.resolve().then(() => this.actionRunner.run(notificationAction)); });
-				actions.append(button);
+				const button = resources.add(new Button(actions, {
+					label: action.label,
+					title: action.label,
+					presentation: "secondary",
+					onClick: () => { void Promise.resolve().then(() => this.actionRunner.run(notificationAction)); },
+				}));
+				button.domNode.classList.add("ash-notification-action");
 			}
 			content.append(actions);
 		}
-		const close = h(document, "button"); close.type = "button"; close.className = "ash-notification-close"; close.dataset.notificationClose = String(item.id);
-		close.setAttribute("aria-label", localize('notifications.remove', 'Remove notification')); close.textContent = "×";
-		notification.append(content, close);
+		notification.append(content);
+		const closeLabel = localize('notifications.remove', 'Remove notification');
+		const close = resources.add(new Button(notification, {
+			label: closeLabel,
+			title: closeLabel,
+			icon: Lxicon.close,
+			iconOnly: true,
+			presentation: "quiet",
+		}));
+		close.domNode.classList.add("ash-notification-close");
+		close.domNode.dataset.notificationClose = String(item.id);
 		return notification;
 	}
 }

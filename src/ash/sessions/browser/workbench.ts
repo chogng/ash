@@ -1,3 +1,4 @@
+import { IWorkspaceOpenService, WorkspaceOpenService } from '../../workbench/services/workspaces/browser/workspaceOpenService.js';
 import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { WebWorkerExtensionHost } from '../../workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
@@ -301,6 +302,8 @@ export abstract class Workbench extends Disposable {
 			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		const commandService = this._register(new CommandService(services));
+		services.registerInstance(ICommandService, commandService);
 		const serviceContributionReady: Promise<void>[] = [];
 		if (options.browserViewService) { services.registerInstance(IBrowserViewService, options.browserViewService); }
 		services.registerInstance(IAssetService, options.api.assets);
@@ -448,8 +451,6 @@ export abstract class Workbench extends Disposable {
 		feedbackHost.className = "ash-feedback-host";
 		this.domNode.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
-		const commandService = this._register(new CommandService(services));
-		services.registerInstance(ICommandService, commandService);
 		const openerService = this._register(services.createInstance(OpenerService));
 		if (options.nativeHostApi) {
 			openerService.setDefaultExternalOpener({ openExternal: options.nativeHostApi.openExternal.bind(options.nativeHostApi) });
@@ -509,6 +510,8 @@ export abstract class Workbench extends Disposable {
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, this.domNode, feedbackHost, notificationActionRunner, undefined, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IFileDialogService, options.createFileDialogService(services));
+		// Session workspaces belong to their execution context; editor actions cannot replace that context.
+		services.registerInstance(IWorkspaceOpenService, new WorkspaceOpenService(undefined, services.get(IFileDialogService), () => dialogs));
 		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));

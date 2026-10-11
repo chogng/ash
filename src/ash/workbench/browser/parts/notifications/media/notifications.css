@@ -3,12 +3,22 @@
 	min-height: 0;
 	flex-direction: column;
 	gap: 8px;
+	/* Keep card shadows inside the scrollport without shifting the toast anchor. */
+	padding: 12px;
+	margin: -12px;
 	overflow-y: auto;
 	pointer-events: auto;
 	order: -1;
 }
 .ash-notification-host:empty {
 	display: none;
+}
+.ash-notification {
+	min-width: 0;
+	flex-shrink: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+	line-height: 1.5;
 }
 .ash-notification,
 .ash-notifications-row {
@@ -22,6 +32,18 @@
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background, var(--ash-workbench-background));
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+}
+.ash-notification-host > .ash-notification {
+	gap: 8px;
+	padding: 12px;
+	border-color: var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-dialog-background);
+}
+.ash-notification .ash-notification-source {
+	color: var(--ash-description-foreground);
+	opacity: 1;
+	font-size: var(--ash-fontSize-body2);
 }
 .ash-notification-content {
 	min-width: 0;
@@ -42,8 +64,7 @@
 	margin-top: 8px;
 	flex-wrap: wrap;
 }
-.ash-notification-action,
-.ash-notification-close,
+.ash-notifications-row .ash-notification-action,
 .ash-notifications-center button,
 .ash-notifications-toggle {
 	border: var(--ash-strokeThickness) solid
@@ -53,7 +74,6 @@
 	background: var(--ash-button-background, transparent);
 	cursor: pointer;
 }
-.ash-notification-close,
 .ash-notifications-remove,
 .ash-notifications-hide {
 	inline-size: 24px;
@@ -61,6 +81,24 @@
 	padding: 0;
 	font-size: 18px;
 	line-height: 20px;
+}
+.ash-notification .ash-notification-close {
+	inline-size: 28px;
+	block-size: 28px;
+	flex: 0 0 28px;
+	padding: 0;
+	margin-top: -4px;
+	margin-inline-end: -4px;
+}
+.ash-notification .ash-notification-close:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+.ash-notification .ash-notification-close:active {
+	background: var(--ash-button-activeBackground);
+}
+.ash-notification .ash-notification-action {
+	min-width: 0;
+	max-width: 100%;
 }
 .ash-notifications-center {
 	position: absolute;
@@ -112,7 +150,6 @@
 .ash-notifications-center:focus-visible,
 .ash-notifications-row:focus-visible,
 .ash-notifications-center button:focus-visible,
-.ash-notification button:focus-visible,
 .ash-notifications-toggle:focus-visible {
 	outline: 2px solid var(--ash-focusBorder, currentColor);
 	outline-offset: 2px;
