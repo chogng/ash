@@ -27,7 +27,15 @@ fn build_bubblewrap(source_directory: &Path) -> Result<(), String> {
             source_directory.display()
         ));
     }
-    for source in ["bubblewrap.c", "bind-mount.c", "network.c", "utils.c"] {
+    let sources = [
+        "bubblewrap.c",
+        "bind-mount.c",
+        "network.c",
+        "utils.c",
+        "chroot_realpath.c",
+        "safe_openat.c",
+    ];
+    for source in sources {
         let path = source_directory.join(source);
         if !path.is_file() {
             return Err(format!("missing Bubblewrap source: {}", path.display()));
@@ -35,11 +43,32 @@ fn build_bubblewrap(source_directory: &Path) -> Result<(), String> {
         println!("cargo:rerun-if-changed={}", path.display());
     }
 
+    // Cargo otherwise misses headers and version changes outside this crate.
+    for name in ["bind-mount.h", "network.h", "utils.h", "ash-source.json"] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            source_directory.join(name).display()
+        );
+    }
+    let metadata_path = source_directory.join("ash-source.json");
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&metadata_path).map_err(|error| error.to_string())?)
+            .map_err(|error| error.to_string())?;
+    let version = metadata["version"]
+        .as_str()
+        .filter(|version| {
+            !version.is_empty()
+                && version
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || byte == b'.')
+        })
+        .ok_or("invalid vendored Bubblewrap version")?;
+
     let output_directory = PathBuf::from(env::var("OUT_DIR").map_err(|error| error.to_string())?);
     let config_header = output_directory.join("config.h");
     std::fs::write(
         &config_header,
-        "#pragma once\n#define PACKAGE_STRING \"bubblewrap built for Ash\"\n",
+        format!("#pragma once\n#define PACKAGE_STRING \"bubblewrap {version}\"\n"),
     )
     .map_err(|error| format!("failed to write {}: {error}", config_header.display()))?;
 
@@ -49,11 +78,10 @@ fn build_bubblewrap(source_directory: &Path) -> Result<(), String> {
         .map_err(|error| format!("libcap is unavailable through pkg-config: {error}"))?;
 
     let mut build = cc::Build::new();
+    for source in sources {
+        build.file(source_directory.join(source));
+    }
     build
-        .file(source_directory.join("bubblewrap.c"))
-        .file(source_directory.join("bind-mount.c"))
-        .file(source_directory.join("network.c"))
-        .file(source_directory.join("utils.c"))
         .include(&output_directory)
         .include(source_directory)
         .define("_GNU_SOURCE", None)

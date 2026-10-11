@@ -308,7 +308,7 @@ class PackageTests(unittest.TestCase):
             self.assertIn(artifact["format"], ("tar.xz", "zip"))
 
         bubblewrap_source = load_vendored_source(PRODUCTION_BUBBLEWRAP_SOURCE)
-        self.assertEqual("0.11.2", bubblewrap_source.version)
+        self.assertEqual("0.13.0", bubblewrap_source.version)
         self.assertEqual(64, len(bubblewrap_source.archive_sha256))
 
     def test_node_lock_requires_an_explicit_musl_binary(self) -> None:
@@ -859,16 +859,17 @@ class PackageTests(unittest.TestCase):
                 b"bubblewrap",
                 (output / "ash-resources" / "bwrap").read_bytes(),
             )
-            self.assertTrue(
-                (
-                    output / "ash-resources" / "licenses" / "bubblewrap" / "COPYING"
-                ).is_file()
-            )
+            for name in ("COPYING", "COPYING.LIB"):
+                self.assertTrue(
+                    (
+                        output / "ash-resources" / "licenses" / "bubblewrap" / name
+                    ).is_file()
+                )
             metadata = json.loads(
                 (output / "ash-package.json").read_text(encoding="utf-8")
             )
             self.assertEqual(
-                "0.11.2",
+                "0.13.0",
                 metadata["components"]["bubblewrap"]["version"],
             )
             self.assertEqual(
@@ -1143,11 +1144,14 @@ def write_vendored_bubblewrap(root: Path) -> Path:
     source.mkdir(parents=True)
     for name in (
         "COPYING",
+        "COPYING.LIB",
         "bind-mount.c",
         "bind-mount.h",
         "bubblewrap.c",
+        "chroot_realpath.c",
         "network.c",
         "network.h",
+        "safe_openat.c",
         "utils.c",
         "utils.h",
     ):
@@ -1155,7 +1159,7 @@ def write_vendored_bubblewrap(root: Path) -> Path:
     metadata = {
         "schemaVersion": 1,
         "name": "bubblewrap",
-        "version": "0.11.2-test",
+        "version": "0.13.0-test",
         "repository": "https://example.invalid/bubblewrap",
         "release": "test",
         "archive": {

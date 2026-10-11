@@ -8,7 +8,7 @@
 
 | 模块 | 修正 |
 | --- | --- |
-| `mxc_common` | 独立 ACL 日志与严格恢复、继承标记和祖先属性授权；退出观察保留 PID；SOCKS 环境保持协议；Windows 命令行保留调用方的命令解释语义 |
+| `mxc_common` | 独立 ACL 日志与严格恢复、继承标记和祖先属性授权；Unix 退出观察使用 `rustix::process::waitid`，保留 `WNOWAIT`，最终等待负责回收 PID；SOCKS 环境保持协议；Windows 命令行保留调用方的命令解释语义 |
 | Bubblewrap | 指定执行路径、根挂载下的系统文件恢复、隐藏父目录内的授权例外、网络监控的 PID 生命周期、禁止 WSL 的 `AF_VSOCK` 绕过 |
 | Seatbelt | 隐藏父目录内的授权例外、独立禁止 Unix socket、完整环境和进程清理；固定可写根及受保护路径的祖先目录，拒绝通过只读描述符修改文件的 `fcntl` 80/110；允许 `confstr` 所需的系统目录查询，避免 Xcode 启动器反复初始化 |
 | ProcessContainer | 按完整请求准备 PSEC，区分能力缺失与系统调用故障；准备和启动使用相同的 PSEC 1.0 无包身份代理兼容判断；Ash 明确选择 PSEC 运行器 |

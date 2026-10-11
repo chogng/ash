@@ -703,7 +703,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             raise RuntimeError(
                 "Linux package is missing executable ash-resources/bwrap"
             )
-        for license_name in ("COPYING",):
+        for license_name in ("COPYING", "COPYING.LIB"):
             license_path = (
                 package / "ash-resources" / "licenses" / "bubblewrap" / license_name
             )

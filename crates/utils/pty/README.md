@@ -21,6 +21,7 @@ PTY integration 基于 `NOTICE` 中固定的 OpenAI Codex revision 并在 Ash �
 本 crate 的 Unix PTY 与 Windows ConPTY 底层实现统一位于 [`portable-pty 0.9.0`](../../../third_party/wezterm/README.md)
 的本地副本，MIT license 位于 `third_party/wezterm/LICENSE`。
 `src/win.rs` 只适配 Ash 的 Job 与正常退出策略，并为沙箱转换控制台接口。
+Unix 的 FD 标志和终端属性通过 `rustix` 访问；Linux fork 子进程使用栈缓冲的 `RawDir` 枚举继承 FD，保留白名单和 spawn 错误管道，清理失败仍阻止启动。stdin 关闭继续发送换行与终端当前的 VEOF。
 这是 source reuse，不是 Codex wire protocol/runtime dependency。
 
 同步上游实现时必须保留 provenance，并按 Ash 当前 public contract、process-group tests 和 Windows

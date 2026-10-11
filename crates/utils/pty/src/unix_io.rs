@@ -2,11 +2,15 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::io::Write;
-use std::os::fd::AsRawFd;
 use std::os::fd::BorrowedFd;
 use std::os::fd::RawFd;
 use std::sync::Arc;
 
+use rustix::fs::OFlags;
+use rustix::fs::fcntl_getfl;
+use rustix::fs::fcntl_setfl;
+use rustix::termios::SpecialCodeIndex;
+use rustix::termios::tcgetattr;
 use tokio::io::Interest;
 use tokio::io::unix::AsyncFd;
 use tokio::sync::mpsc;
@@ -20,12 +24,7 @@ impl PtyIo {
     pub(crate) fn new(master_fd: RawFd) -> io::Result<Self> {
         // The PTY owner remains alive while its descriptor is duplicated.
         let fd = unsafe { BorrowedFd::borrow_raw(master_fd) }.try_clone_to_owned()?;
-        let flags = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_GETFL) };
-        if flags == -1
-            || unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_SETFL, flags | libc::O_NONBLOCK) } == -1
-        {
-            return Err(io::Error::last_os_error());
-        }
+        fcntl_setfl(&fd, fcntl_getfl(&fd)? | OFlags::NONBLOCK)?;
         // Duplicates share O_NONBLOCK, so both reads and writes must use readiness.
         // Async tasks can be aborted even when a detached child keeps the PTY open
         // or the output channel is full; blocking read/send tasks cannot.
@@ -68,9 +67,8 @@ impl PtyIo {
             }
             // Preserve portable-pty's newline + current VEOF on stdin close,
             // including when the terminal input queue requires waiting.
-            let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
-            if unsafe { libc::tcgetattr(fd.get_ref().as_raw_fd(), termios.as_mut_ptr()) } == 0 {
-                let eof = unsafe { termios.assume_init() }.c_cc[libc::VEOF];
+            if let Ok(termios) = tcgetattr(fd.get_ref()) {
+                let eof = termios.special_codes[SpecialCodeIndex::VEOF];
                 if eof != 0 {
                     let _ = write_all(&fd, &[b'\n', eof]).await;
                 }

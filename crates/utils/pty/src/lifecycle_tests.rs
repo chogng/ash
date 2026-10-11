@@ -42,7 +42,7 @@ async fn dropping_driver_cancels_its_exit_forwarder() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn descriptor_cleanup_covers_sparse_fds_above_a_lowered_limit() -> anyhow::Result<()> {
     use std::os::fd::AsRawFd;
@@ -381,6 +381,7 @@ async fn pty_close_stdin_preserves_large_input_and_delivers_eof() -> anyhow::Res
 signal.alarm(10)
 attrs = termios.tcgetattr(0)
 attrs[3] &= ~termios.ECHO
+attrs[6][termios.VEOF] = b'\x1d'
 termios.tcsetattr(0, termios.TCSANOW, attrs)
 print('__ready__', flush=True)
 time.sleep(0.2)

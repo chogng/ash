@@ -1014,6 +1014,10 @@ mod runner_tests {
 }
 
 #[cfg(all(test, unix))]
+#[path = "sandbox_process_tests.rs"]
+mod exit_observation_tests;
+
+#[cfg(all(test, unix))]
 mod tests {
     use super::{wait_with_timeout, WaitError};
     use std::process::Command;
@@ -1077,30 +1081,19 @@ mod tests {
 /// Observes a Unix child without releasing its PID. Only wait may reap the process.
 #[cfg(unix)]
 pub fn poll_child_exit(child: &std::process::Child) -> std::io::Result<Option<i32>> {
-    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    use rustix::process::Pid;
+    use rustix::process::WaitId;
+    use rustix::process::WaitIdOptions;
+    use rustix::process::waitid;
+
     loop {
-        let result = unsafe {
-            libc::waitid(
-                libc::P_PID,
-                child.id(),
-                &mut info,
-                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-            )
-        };
-        if result == 0 {
-            break;
-        }
-        let error = std::io::Error::last_os_error();
-        if error.kind() != std::io::ErrorKind::Interrupted {
-            return Err(error);
+        match waitid(
+            WaitId::Pid(Pid::from_child(child)),
+            WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT,
+        ) {
+            Ok(status) => return Ok(status.map(|status| status.exit_status().unwrap_or(-1))),
+            Err(rustix::io::Errno::INTR) => continue,
+            Err(error) => return Err(error.into()),
         }
     }
-    if unsafe { info.si_pid() } == 0 {
-        return Ok(None);
-    }
-    Ok(Some(if info.si_code == libc::CLD_EXITED {
-        unsafe { info.si_status() }
-    } else {
-        -1
-    }))
 }

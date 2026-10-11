@@ -39,7 +39,7 @@ diff --git a/src/mxc-sdk/Cargo.toml b/src/mxc-sdk/Cargo.toml
  description = "Importable library for starting MXC sandboxes in-process, with streaming stdio."
  repository = "https://github.com/microsoft/mxc"
  readme = "README.md"
-@@ -44,68 +44,59 @@
+@@ -44,68 +44,62 @@
  schema-gen = ["dep:schemars"]
  
  [dependencies]
@@ -137,11 +137,13 @@ diff --git a/src/mxc-sdk/Cargo.toml b/src/mxc-sdk/Cargo.toml
 +windows-core = "0.62"
  windows-future = { version = "0.3", optional = true }
 -winreg.workspace = true
--
++winreg = "0.55"
+ 
 -[target.'cfg(windows)'.build-dependencies]
 -cc = "1"
 -winresource = { version = "0.1.31", default-features = false }
-+winreg = "0.55"
++[target.'cfg(unix)'.dependencies]
++rustix = { version = "1.1.4", features = ["process"] }
  
  [[example]]
  name = "isolation_session_console"
@@ -3328,7 +3330,18 @@ diff --git a/src/mxc-sdk/src/core/mxc_common/sandbox_process.rs b/src/mxc-sdk/sr
      }
  
      /// Resize the pseudo-terminal.
-@@ -1068,3 +1073,34 @@
+@@ -1009,6 +1014,10 @@
+ }
+ 
+ #[cfg(all(test, unix))]
++#[path = "sandbox_process_tests.rs"]
++mod exit_observation_tests;
++
++#[cfg(all(test, unix))]
+ mod tests {
+     use super::{wait_with_timeout, WaitError};
+     use std::process::Command;
+@@ -1068,3 +1077,23 @@
          assert!(status.success());
      }
  }
@@ -3336,32 +3349,65 @@ diff --git a/src/mxc-sdk/src/core/mxc_common/sandbox_process.rs b/src/mxc-sdk/sr
 +/// Observes a Unix child without releasing its PID. Only wait may reap the process.
 +#[cfg(unix)]
 +pub fn poll_child_exit(child: &std::process::Child) -> std::io::Result<Option<i32>> {
-+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
++    use rustix::process::Pid;
++    use rustix::process::WaitId;
++    use rustix::process::WaitIdOptions;
++    use rustix::process::waitid;
++
 +    loop {
-+        let result = unsafe {
-+            libc::waitid(
-+                libc::P_PID,
-+                child.id(),
-+                &mut info,
-+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-+            )
++        match waitid(
++            WaitId::Pid(Pid::from_child(child)),
++            WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT,
++        ) {
++            Ok(status) => return Ok(status.map(|status| status.exit_status().unwrap_or(-1))),
++            Err(rustix::io::Errno::INTR) => continue,
++            Err(error) => return Err(error.into()),
++        }
++    }
++}
+diff --git a/src/mxc-sdk/src/core/mxc_common/sandbox_process_tests.rs b/src/mxc-sdk/src/core/mxc_common/sandbox_process_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/mxc-sdk/src/core/mxc_common/sandbox_process_tests.rs
+@@ -0,0 +1,39 @@
++use super::poll_child_exit;
++
++use std::process::Command;
++use std::time::Duration;
++use std::time::Instant;
++
++#[test]
++fn observation_preserves_exit_codes_and_leaves_reaping_to_wait() {
++    for (script, expected) in [("exit 37", 37), ("kill -KILL $$", -1)] {
++        let mut child = Command::new("sh").args(["-c", script]).spawn().unwrap();
++        let deadline = Instant::now() + Duration::from_secs(10);
++        let observed = loop {
++            match poll_child_exit(&child).unwrap() {
++                Some(code) => break code,
++                None if Instant::now() < deadline => std::thread::yield_now(),
++                None => {
++                    child.kill().unwrap();
++                    child.wait().unwrap();
++                    panic!("child did not exit before the deadline");
++                }
++            }
 +        };
-+        if result == 0 {
-+            break;
-+        }
-+        let error = std::io::Error::last_os_error();
-+        if error.kind() != std::io::ErrorKind::Interrupted {
-+            return Err(error);
-+        }
++        // Repeated observation must retain the zombie and its PID for cleanup.
++        let again = poll_child_exit(&child).unwrap();
++        let status = child.wait().unwrap();
++        assert_eq!(observed, expected);
++        assert_eq!(again, Some(expected));
++        assert_eq!(status.code().unwrap_or(-1), expected);
 +    }
-+    if unsafe { info.si_pid() } == 0 {
-+        return Ok(None);
-+    }
-+    Ok(Some(if info.si_code == libc::CLD_EXITED {
-+        unsafe { info.si_status() }
-+    } else {
-+        -1
-+    }))
++}
++
++#[test]
++fn observing_a_running_child_does_not_block() {
++    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
++    let result = poll_child_exit(&child);
++    child.kill().unwrap();
++    child.wait().unwrap();
++    assert_eq!(result.unwrap(), None);
 +}
 diff --git a/src/mxc-sdk/src/core/mxc_common/telemetry/consent_cli.rs b/src/mxc-sdk/src/core/mxc_common/telemetry/consent_cli.rs
 --- a/src/mxc-sdk/src/core/mxc_common/telemetry/consent_cli.rs

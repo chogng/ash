@@ -16,11 +16,14 @@ from build.lib.targets import TargetSpec
 
 REQUIRED_SOURCE_FILES = (
     "COPYING",
+    "COPYING.LIB",
     "bind-mount.c",
     "bind-mount.h",
     "bubblewrap.c",
+    "chroot_realpath.c",
     "network.c",
     "network.h",
+    "safe_openat.c",
     "utils.c",
     "utils.h",
 )
@@ -77,7 +80,7 @@ def resolve_bubblewrap(
         binary_sha256=sha256(executable),
         source_archive=source.archive_name,
         source_archive_sha256=source.archive_sha256,
-        license_files=[source.directory / "COPYING"],
+        license_files=[source.directory / name for name in ("COPYING", "COPYING.LIB")],
         source=executable_source,
     )
 

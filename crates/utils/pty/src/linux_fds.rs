@@ -1,81 +1,55 @@
 //! Descriptor cleanup for a forked Linux child before `exec`.
 
-use std::ffi::CStr;
 use std::io;
-use std::os::fd::AsRawFd;
-use std::os::fd::FromRawFd;
-use std::os::fd::OwnedFd;
+use std::mem::MaybeUninit;
+use std::os::fd::BorrowedFd;
 use std::os::fd::RawFd;
+
+use rustix::fs::Mode;
+use rustix::fs::OFlags;
+use rustix::fs::RawDir;
+use rustix::fs::open;
+use rustix::io::Errno;
+use rustix::io::FdFlags;
+use rustix::io::fcntl_getfd;
+use rustix::io::fcntl_setfd;
 
 /// Marks unselected descriptors close-on-exec using only stack storage and syscalls.
 /// Rust's spawn-error pipe is already close-on-exec and must remain open until `exec`.
 pub(crate) fn close_inherited_fds_except(preserved_fds: &[RawFd]) -> io::Result<()> {
-    // SAFETY: this NUL-terminated path is opened only in the forked child.
-    let raw = unsafe {
-        libc::open(
-            c"/proc/self/fd".as_ptr(),
-            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC,
-        )
-    };
-    if raw == -1 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: open returned a descriptor owned by this child.
-    let directory = unsafe { OwnedFd::from_raw_fd(raw) };
-    let mut buffer = [0_u8; 4096];
-    loop {
-        // SAFETY: getdents64 writes no more than buffer.len() bytes to stack storage.
-        let count = unsafe {
-            libc::syscall(
-                libc::SYS_getdents64,
-                directory.as_raw_fd(),
-                buffer.as_mut_ptr(),
-                buffer.len(),
-            )
+    let directory = open(
+        c"/proc/self/fd",
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+        Mode::empty(),
+    )?;
+    // RawDir uses this stack buffer without allocating or locking after fork.
+    let mut buffer = [MaybeUninit::uninit(); 4096];
+    let mut entries = RawDir::new(directory, &mut buffer);
+    while let Some(entry) = entries.next() {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(Errno::INTR) => continue,
+            Err(error) => return Err(error.into()),
         };
-        if count == -1 {
-            let error = io::Error::last_os_error();
-            if error.raw_os_error() == Some(libc::EINTR) {
-                continue;
-            }
-            return Err(error);
+        let Ok(name) = entry.file_name().to_str() else {
+            continue;
+        };
+        let Ok(fd) = name.parse::<RawFd>() else {
+            continue;
+        };
+        if fd <= libc::STDERR_FILENO || preserved_fds.contains(&fd) {
+            continue;
         }
-        if count == 0 {
-            return Ok(());
-        }
-        if count as usize > buffer.len() {
-            return Err(io::Error::from_raw_os_error(libc::EIO));
-        }
-        let mut entries = &buffer[..count as usize];
-        while !entries.is_empty() {
-            if entries.len() < 20 {
-                return Err(io::Error::from_raw_os_error(libc::EIO));
+        // SAFETY: /proc enumerates this forked child's descriptors; no other thread
+        // changes its descriptor table, and this borrow neither owns nor closes them.
+        let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+        match fcntl_getfd(fd) {
+            Ok(flags) if !flags.contains(FdFlags::CLOEXEC) => {
+                fcntl_setfd(fd, flags | FdFlags::CLOEXEC)?;
             }
-            let length = u16::from_ne_bytes([entries[16], entries[17]]) as usize;
-            if length < 20 || length > entries.len() {
-                return Err(io::Error::from_raw_os_error(libc::EIO));
-            }
-            if let Ok(name) = CStr::from_bytes_until_nul(&entries[19..length])
-                && let Ok(name) = name.to_str()
-                && let Ok(fd) = name.parse::<RawFd>()
-                && fd > libc::STDERR_FILENO
-                && !preserved_fds.contains(&fd)
-            {
-                // SAFETY: fcntl only changes this child's descriptor flags.
-                let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-                if flags == -1 {
-                    let error = io::Error::last_os_error();
-                    if error.raw_os_error() != Some(libc::EBADF) {
-                        return Err(error);
-                    }
-                } else if flags & libc::FD_CLOEXEC == 0
-                    // SAFETY: the descriptor remains available to report an exec failure.
-                    && unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } == -1
-                {
-                    return Err(io::Error::last_os_error());
-                }
-            }
-            entries = &entries[length..];
+            Ok(_) | Err(Errno::BADF) => {}
+            Err(error) => return Err(error.into()),
         }
     }
+    Ok(())
 }

@@ -24,6 +24,7 @@ winapi = { workspace = true, features = ["handleapi", "namedpipeapi", "jobapi2",
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
+rustix = { workspace = true, features = ["fs", "termios"] }
 
 # This systems crate is the only local exception to the workspace unsafe ban:
 # its PTY and ConPTY implementation requires audited platform FFI.
