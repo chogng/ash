@@ -1203,7 +1203,7 @@ export function createApi(configuration, initialization) {
 		const translated = bundle && Object.hasOwn(bundle, key) ? bundle[key] : message;
 		return translated.replace(/\{([^}]+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? String(values[name]) : placeholder);
 	}
-	const scmBridge = createSCMApi(ashRuntime, request, invoke);
+	const scmBridge = createSCMApi(ashRuntime, request, invoke, promise => serviceOwner()?.push(promise));
 	let outputSequence = 0;
 	function createOutputChannel(name) {
 		if (typeof name !== 'string' || !name || name.length > 512 || name.includes('\0')) throw new TypeError('Invalid output channel label');
@@ -1215,7 +1215,8 @@ export function createApi(configuration, initialization) {
 			void pending.catch(error => console.error('Output channel failed', error));
 		};
 		send({ action: 'create', label: name });
-		const channel = Object.freeze({ name,
+		const channel = Object.freeze({
+			name,
 			append(text) { if (!disposed) send({ action: 'append', text: String(text) }); },
 			appendLine(text) { if (!disposed) send({ action: 'append', text: String(text) + '\n' }); },
 			replace(text) { if (!disposed) send({ action: 'replace', text: String(text) }); },
@@ -1489,8 +1490,13 @@ export function createApi(configuration, initialization) {
 			showErrorMessage: (text, ...items) => message('error', text, ...items),
 			async showQuickPick(items, options = {}) {
 				if (!Array.isArray(items) || options.canPickMany) return unsupported('window.showQuickPick input/multi-select');
-				const labels = items.map(item => typeof item === 'string' ? item : item.label);
-				const { index } = await request({ operation: 'showQuickPick', items: labels, placeholder: options.placeHolder ?? '' }, 'selection');
+				if (options.placeHolder !== undefined && typeof options.placeHolder !== 'string' || items.some(item => typeof item !== 'string' && (!item || typeof item.label !== 'string' || item.description !== undefined && typeof item.description !== 'string' || item.detail !== undefined && typeof item.detail !== 'string'))) throw new TypeError('Invalid Quick Pick item or placeholder');
+				const entries = items.map(item => typeof item === 'string' ? { label: item } : {
+					label: item.label,
+					...(item.description === undefined ? {} : { description: item.description }),
+					...(item.detail === undefined ? {} : { detail: item.detail }),
+				});
+				const { index } = await request({ operation: 'showQuickPick', items: entries, placeholder: options.placeHolder ?? '' }, 'selection');
 				return index === null ? undefined : items[index];
 			},
 		}),

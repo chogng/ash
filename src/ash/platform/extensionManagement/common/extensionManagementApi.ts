@@ -2,6 +2,8 @@ import type { ExtensionsAcquireCapabilityParams, ExtensionsAcquiredCapabilityDto
 
 /** Transport API mirroring the generic App Server Extensions contract. */
 export interface IExtensionManagementApi {
+	builtInProviders(): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProvidersResult>;
+	setBuiltInProviderEnablement(params: import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProviderEnablementParams): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProvidersResult>;
 	sources(): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsSourcesResult>;
 	addSource(params: import('../../../../../.build/protocol/typescript/index.js').ExtensionsAddSourceParams): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsSourcesResult>;
 	setSourceEnabled(params: import('../../../../../.build/protocol/typescript/index.js').ExtensionsSetSourceEnabledParams): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsSourcesResult>;

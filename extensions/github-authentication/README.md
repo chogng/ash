@@ -6,13 +6,13 @@ App 的产品启动入口显式选定安装目录中的扩展 executable；`Loca
 
 ## 公共接口与运行链
 
-| 边界          | 复用接口                                                                                                                                                     |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 边界          | 复用接口                                                                                                                                                       |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 注册与调用    | `external_ext_sdk::Extension`、`ExtensionContext.data_channels`，注册 `authentication.github`；Host RPC v1 的 `receiveData` 承载闭合的 typed request／response |
-| 通用认证能力  | `ash-login::extension::{AuthenticationRequest, AuthenticationResponse}`：读账号、开始登录、取消、注销与读取终态                                              |
-| GitHub 消费者 | `GitHubAccountManager`、`GitHubCredentialProvider` 与 `GitHubAuthenticationRequest`；grant 引用绑定主机、账号和授权代次                                      |
-| 通用核心服务  | `ExtensionContext.services` 与 `CoreServiceRequest`：SecretStore、一次 HTTP 请求；不开放 App Server method 或通用 IPC                                        |
-| 进程          | `ExtensionHostSupervisor`、`ProductExecutableLauncher`：握手、注册、配额、deadline、取消、重启和关闭                                                         |
+| 通用认证能力  | `ash-login::extension::{AuthenticationRequest, AuthenticationResponse}`：读账号、开始登录、取消、注销与读取终态                                                |
+| GitHub 消费者 | `GitHubAccountManager`、`GitHubCredentialProvider` 与 `GitHubAuthenticationRequest`；grant 引用绑定主机、账号和授权代次                                        |
+| 通用核心服务  | `ExtensionContext.services` 与 `CoreServiceRequest`：SecretStore、一次 HTTP 请求；不开放 App Server method 或通用 IPC                                          |
+| 进程          | `ExtensionHostSupervisor`、`ProductExecutableLauncher`：握手、注册、配额、deadline、取消、重启和关闭                                                           |
 
 App 的 `account/*` 和 `github/account/*` 契约保持不变。Renderer 不保存另一份 token；仓库请求在受信任后端通过 grant 取得凭据，并在每次请求时核对授权。核心 SecretStore／HTTP 服务消息只在 Rust 扩展的私有 stdio 通道传输，不进入 App Server 的 Renderer schema 或生成的 TS 请求类型。兼容第三方 `AuthenticationSession.accessToken` 的授权桥仍未实现。
 
@@ -25,6 +25,8 @@ App 的 `account/*` 和 `github/account/*` 契约保持不变。Renderer 不保�
 唯一扩展实例串行保护账号目录与刷新。登录请求在代理处转换为 profile 内唯一 ID，核心在驱动启动前绑定发起连接；路由键包含目录 scope 与本地 ID，完成通知只发送给该连接；其他窗口只收到重读后的脱敏账号变化。它们保留的是 UI control plane 视图，不拥有凭据或刷新任务。
 
 取消停止确切登录；窗口／目录释放取消该调用方仍持有的尝试，不停止其他调用方共享的 profile Provider。注销清理对应账号并使旧 grant 失效，也停止在途登录。扩展重启恢复既有凭据与公开配置，旧进程的登录尝试失败，不重放 token 连接或其他结果不确定的写入。profile 最后一个 owner 释放时关闭监管器及子进程。
+
+Extensions 的“内置”列表与详情可启用／禁用此 Provider。启用状态由 `LocalProfileRuntime` 的共享 Profile policy 持有；启动组合读取持久禁用状态，不启动已禁用的程序。禁用取消所有窗口的在途登录、停止子进程并发布空账号视图，保留保存的凭据；重新启用时由账号等消费者按需启动并重读保存的账号。停用期间认证和凭据调用返回不可用，不能绕过状态重新启动实例。
 
 公开 OAuth 配置在 profile Provider 创建时绑定；同一 profile 的冲突配置拒绝创建另一实例，调整配置需重启该 profile 的后端。
 

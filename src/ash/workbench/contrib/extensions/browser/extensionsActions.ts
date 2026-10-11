@@ -2,12 +2,14 @@ import { localize, localize2 } from '../../../../nls.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IExtensionManagementService, type ExtensionsEditorExtensionPolicy } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, type ExtensionsEditorExtensionPolicy } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IPluginService, type PluginPackageView, type PluginPermission } from '../../../../platform/plugins/common/pluginService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
+import { type IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
+import { ExtensionsInputSource, type ExtensionsInput } from '../common/extensionsInput.js';
 
 /** Both product windows use the same source, package and execution operations. */
 export function registerExtensionManagementActions(): DisposableStore {
@@ -15,30 +17,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 	registrations.add(registerAction2(class ManageBuiltInExtensions extends Action2 {
 		constructor() { super({ id: 'ash.extensions.manageBuiltIn', get title() { return localize2({ bundle: 'ash.extensions', key: 'manageBuiltInExtensions' }, 'Manage built-in editor extensions'); }, f1: true }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> {
-			const enablement = accessor.get(IGlobalExtensionEnablementService);
-			const quickInput = accessor.get(IQuickInputService);
-			const catalog = await createBrowserExtensionApi().list('cached');
-			const disabled = new Set(enablement.getDisabledExtensions().map(extension => extension.id));
-			using resources = new DisposableStore();
-			const picker = resources.add(quickInput.createQuickPick<IQuickPickItem & { readonly extensionId: string; }>());
-			picker.ariaLabel = localize({ bundle: 'ash.extensions', key: 'manageBuiltInExtensions' }, 'Manage built-in editor extensions');
-			picker.placeholder = localize({ bundle: 'ash.extensions', key: 'chooseBuiltInExtension' }, 'Select an editor extension to enable or disable for this profile');
-			picker.items = catalog.extensions.filter(extension => typeof JSON.parse(extension.manifestJson).browser === 'string').map(extension => ({
-				label: extension.id,
-				description: extension.version,
-				detail: disabled.has(extension.id.toLowerCase()) ? localize({ bundle: 'ash.extensions', key: 'enableBuiltInExtension' }, 'Disabled · select to enable') : localize({ bundle: 'ash.extensions', key: 'disableBuiltInExtension' }, 'Enabled · select to disable'),
-				extensionId: extension.id,
-			}));
-			const selected = await new Promise<string | undefined>(resolve => {
-				resources.add(picker.onDidAccept(item => { resolve(item.extensionId); picker.hide(); }));
-				resources.add(picker.onDidHide(() => resolve(undefined)));
-				resources.add(picker.onDidBlur(() => picker.hide()));
-				picker.show();
-			});
-			if (!selected) { return; }
-			const extension = { id: selected };
-			if (disabled.has(selected.toLowerCase())) { await enablement.enableExtension(extension); }
-			else { await enablement.disableExtension(extension); }
+			await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { mode: 'builtIn' });
 		}
 	}));
 	registrations.add(registerAction2(class ManageExtensionSources extends Action2 {
@@ -108,100 +87,16 @@ export function registerExtensionManagementActions(): DisposableStore {
 	registrations.add(registerAction2(class ManageLocalExtensions extends Action2 {
 		constructor() { super({ id: 'ash.extensions.manageLocal', get title() { return localize2({ bundle: 'ash.extensions', key: 'manageLocalExtensions' }, 'Manage local extensions'); }, f1: true }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> {
-			const plugins = accessor.get(IPluginService);
-			const dialogs = accessor.get(IDialogService);
-			const quickInput = accessor.get(IQuickInputService);
-			const catalog = await plugins.list();
-			const packages = catalog.packages.filter(plugin => plugin.hasEditorExtensions);
-			if (packages.length === 0) {
-				await dialogs.info(localize({ bundle: 'ash.extensions', key: 'noLocalExtensions' }, 'No local editor extensions are installed. Use Install extension from workspace to add one.'));
-				return;
-			}
-			using disposables = new DisposableStore();
-			const picker = disposables.add(quickInput.createQuickPick<IQuickPickItem & { readonly plugin: PluginPackageView; }>());
-			picker.ariaLabel = localize({ bundle: 'ash.extensions', key: 'manageLocalExtensions' }, 'Manage local extensions');
-			picker.placeholder = localize({ bundle: 'ash.extensions', key: 'chooseLocalExtension' }, 'Select an extension to manage');
-			picker.items = packages.map(plugin => ({
-				label: plugin.displayName,
-				description: `${plugin.id} · ${plugin.version}`,
-				detail: localize({ bundle: 'ash.extensions', key: 'localExtensionState' }, 'Enabled: {0}. Permissions granted: {1}. Revoked: {2}.', yesNo(plugin.enabled), yesNo(plugin.granted), yesNo(plugin.revoked)),
-				plugin,
-			}));
-			const selected = await new Promise<PluginPackageView | undefined>(resolve => {
-				disposables.add(picker.onDidAccept(item => { resolve(item.plugin); picker.hide(); }));
-				disposables.add(picker.onDidHide(() => resolve(undefined)));
-				disposables.add(picker.onDidBlur(() => picker.hide()));
-				picker.show();
-			});
-			if (!selected) { return; }
-			const buttons = [];
-			if (selected.enabled || !selected.revoked) {
-				buttons.push({ label: selected.enabled ? localize({ bundle: 'ash.extensions', key: 'disableLocalExtension' }, 'Disable') : localize({ bundle: 'ash.extensions', key: 'enableLocalExtension' }, 'Enable'), run: () => selected.enabled ? plugins.disable(selected, catalog.revision) : plugins.enable(selected, catalog.revision) });
-			}
-			if (selected.granted || !selected.revoked) {
-				buttons.push({ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeLocalExtension' }, 'Revoke permissions') : localize({ bundle: 'ash.extensions', key: 'grantLocalExtension' }, 'Grant permissions'), run: () => selected.granted ? plugins.revokeGrant(selected, catalog.revision) : plugins.grant(selected, catalog.revision) });
-			}
-			if (!selected.enabled && !selected.granted) {
-				buttons.push({ label: localize({ bundle: 'ash.extensions', key: 'uninstall' }, 'Uninstall'), run: () => plugins.uninstall(selected, catalog.revision) });
-			}
-			await dialogs.prompt({
-				title: selected.displayName,
-				message: `${selected.id} · ${selected.version}`,
-				detail: [
-					localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', selected.permissions.length ? selected.permissions.map(describePermission).join('; ') : localize({ bundle: 'ash.extensions', key: 'noPermissions' }, 'None')),
-					localize({ bundle: 'ash.extensions', key: 'localExtensionDocumentNotice' }, 'VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
-					localize({ bundle: 'ash.extensions', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.digest),
-				].join('\n\n'),
-				buttons,
-			});
+			await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { mode: 'installed' });
 		}
 	}));
 	registrations.add(registerAction2(class ManageExtensionExecution extends Action2 {
 		constructor() { super({ id: 'ash.extensions.manageExtensions', title: localize2({ bundle: 'ash.extensions', key: 'manageExtensionExecution' }, 'Manage extension execution'), f1: true }); }
 		async run(accessor: ServicesAccessor): Promise<void> {
-			const extensionManagement = accessor.get(IExtensionManagementService);
-			const dialogs = accessor.get(IDialogService);
-			const quickInput = accessor.get(IQuickInputService);
-			const catalog = await extensionManagement.listEditorExtensions();
-			if (!catalog.extensions.length) {
-				await dialogs.info(localize({ bundle: 'ash.extensions', key: 'noEditorExtensions' }, 'No editor extensions are installed. Install one from the Open VSX catalog first.'));
-				return;
-			}
-			using disposables = new DisposableStore();
-			const picker = disposables.add(quickInput.createQuickPick<IQuickPickItem & { readonly extension: ExtensionsEditorExtensionPolicy; }>());
-			picker.ariaLabel = localize({ bundle: 'ash.extensions', key: 'manageExtensionExecution' }, 'Manage extension execution');
-			picker.placeholder = localize({ bundle: 'ash.extensions', key: 'chooseLocalExtension' }, 'Select an extension to manage');
-			picker.items = catalog.extensions.map(extension => ({
-				label: extension.package.id, description: extension.package.version,
-				detail: extension.entrypoint === null ? localize({ bundle: 'ash.extensions', key: 'noExecutableEntry' }, 'Script execution is unavailable for this package or platform.') : localize({ bundle: 'ash.extensions', key: 'extensionsExtensionState' }, 'Enabled: {0}. Execution authorized: {1}.', yesNo(extension.enabled), yesNo(extension.granted)), extension
-			}));
-			const selected = await new Promise<ExtensionsEditorExtensionPolicy | undefined>(resolve => {
-				disposables.add(picker.onDidAccept(item => { resolve(item.extension); picker.hide(); }));
-				disposables.add(picker.onDidHide(() => resolve(undefined)));
-				disposables.add(picker.onDidBlur(() => picker.hide()));
-				picker.show();
-			});
-			if (!selected) { return; }
-			if (selected.entrypoint === null && !selected.enabled && !selected.granted) {
-				await dialogs.info(localize({ bundle: 'ash.extensions', key: 'noExecutableEntry' }, 'Script execution is unavailable for this package or platform.'));
-				return;
-			}
-			await dialogs.prompt({
-				title: selected.package.id, message: selected.package.version,
-				detail: [localize({ bundle: 'ash.extensions', key: 'extensionsExecutionNotice' }, 'Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Disable execution before uninstalling. Package or execution-contract changes require new authorization.'),
-				localize({ bundle: 'ash.extensions', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.package.digest)].join('\n\n'),
-				buttons: [
-					...(selected.enabled || selected.entrypoint !== null ? [{ label: selected.enabled ? localize({ bundle: 'ash.extensions', key: 'disableLocalExtension' }, 'Disable') : localize({ bundle: 'ash.extensions', key: 'enableLocalExtension' }, 'Enable'), run: () => extensionManagement.setEditorExtensionPolicy(selected, selected.enabled ? 'disable' : 'enable', catalog.revision) }] : []),
-					...(selected.granted || selected.entrypoint !== null ? [{ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeExtensionsExecution' }, 'Revoke execution authorization') : localize({ bundle: 'ash.extensions', key: 'grantExtensionsExecution' }, 'Authorize execution'), run: () => extensionManagement.setEditorExtensionPolicy(selected, selected.granted ? 'revoke' : 'grant', catalog.revision) }] : []),
-				],
-			});
+			await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { mode: 'installed', capabilityKind: 'editorExtension' });
 		}
 	}));
 	return registrations;
-}
-
-function yesNo(value: boolean): string {
-	return value ? localize({ bundle: 'ash.extensions', key: 'yes' }, 'Yes') : localize({ bundle: 'ash.extensions', key: 'no' }, 'No');
 }
 
 function describePermission(permission: PluginPermission): string {
@@ -212,3 +107,63 @@ function describePermission(permission: PluginPermission): string {
 	}
 }
 
+
+/** Resolve current authority at invocation time; rows and editors never retain a policy revision. */
+export async function changeExtensionEnablement(input: ExtensionsInput, enablement: IGlobalExtensionEnablementService, management: IExtensionManagementService, plugins: IPluginService): Promise<void> {
+	if (input.source === ExtensionsInputSource.BuiltIn) {
+		const descriptor = (await createBrowserExtensionApi().list('cached')).extensions.find(value => value.id === input.summary.id);
+		if (!descriptor) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
+		const manifest = JSON.parse(descriptor.manifestJson);
+		if (manifest.ashRuntime?.kind === 'rust' && !manifest.browser) {
+			const catalog = await management.listBuiltInProviders();
+			const provider = catalog.providers.find(value => value.id === descriptor.id);
+			if (!provider) { throw new Error(localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.')); }
+			await management.setBuiltInProviderEnabled(provider.id, !provider.enabled, catalog.revision);
+			return;
+		}
+		const extension = { id: input.summary.id };
+		if (enablement.getDisabledExtensions().some(value => value.id === extension.id.toLowerCase())) { await enablement.enableExtension(extension); }
+		else { await enablement.disableExtension(extension); }
+		return;
+	}
+	if (input.source === ExtensionsInputSource.Local) {
+		const catalog = await plugins.list();
+		const plugin = catalog.packages.find(value => value.id === input.summary.id && value.version === input.summary.version);
+		if (!plugin) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
+		if (plugin.enabled) { await plugins.disable(plugin, catalog.revision); }
+		else { await plugins.enable(plugin, catalog.revision); }
+		return;
+	}
+	const catalog = await management.listEditorExtensions();
+	const extension = catalog.extensions.find(value => value.installationId === input.installationId);
+	if (!extension) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
+	await management.setEditorExtensionPolicy(extension, extension.enabled ? 'disable' : 'enable', catalog.revision);
+}
+
+export async function reviewExtensionExecution(extension: ExtensionsEditorExtensionPolicy, management: IExtensionManagementService, dialogs: IDialogService): Promise<void> {
+	const catalog = await management.listEditorExtensions();
+	const selected = catalog.extensions.find(value => value.installationId === extension.installationId);
+	if (!selected) { return; }
+	await dialogs.prompt({
+		title: selected.package.id, message: selected.package.version,
+		detail: localize({ bundle: 'ash.extensions', key: 'extensionsExecutionNotice' }, 'Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Package or execution-contract changes require new authorization.'),
+		buttons: [{ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeExtensionsExecution' }, 'Revoke execution authorization') : localize({ bundle: 'ash.extensions', key: 'grantExtensionsExecution' }, 'Authorize execution'), run: () => management.setEditorExtensionPolicy(selected, selected.granted ? 'revoke' : 'grant', catalog.revision) }],
+	});
+}
+
+export async function reviewLocalExtensionPermissions(plugin: PluginPackageView, plugins: IPluginService, dialogs: IDialogService): Promise<void> {
+	const catalog = await plugins.list();
+	const selected = catalog.packages.find(value => value.id === plugin.id && value.digest === plugin.digest);
+	if (!selected) { return; }
+	await dialogs.prompt({
+		title: selected.displayName, message: `${selected.id} · ${selected.version}`,
+		detail: [localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', selected.permissions.length ? selected.permissions.map(describePermission).join('; ') : localize({ bundle: 'ash.extensions', key: 'noPermissions' }, 'None')),
+		localize({ bundle: 'ash.extensions', key: 'localExtensionDocumentNotice' }, 'VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
+		localize({ bundle: 'ash.extensions', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.digest)].join('\n\n'),
+		buttons: [{ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeLocalExtension' }, 'Revoke permissions') : localize({ bundle: 'ash.extensions', key: 'grantLocalExtension' }, 'Grant permissions'), run: () => selected.granted ? plugins.revokeGrant(selected, catalog.revision) : plugins.grant(selected, catalog.revision) }],
+	});
+}
+
+export function extensionEnablementLabel(enabled: boolean): string {
+	return enabled ? localize({ bundle: 'ash.extensions', key: 'disableLocalExtension' }, 'Disable') : localize({ bundle: 'ash.extensions', key: 'enableLocalExtension' }, 'Enable');
+}

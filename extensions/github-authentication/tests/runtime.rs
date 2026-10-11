@@ -50,7 +50,21 @@ impl LoginEvents for Events {
         let _ = self.1.send(completion);
     }
 }
+fn policy() -> Arc<ash_core_plugins::EditorExtensionPolicy> {
+    let profile = tempfile::tempdir().unwrap();
+    Arc::new(
+        ash_core_plugins::EditorExtensionPolicy::open(
+            profile.path().join("editor-extension-policy.json"),
+        )
+        .unwrap(),
+    )
+}
 fn runtime() -> (Arc<GitHubAuthenticationRuntime>, Arc<Http>) {
+    runtime_with_policy(policy())
+}
+fn runtime_with_policy(
+    policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
+) -> (Arc<GitHubAuthenticationRuntime>, Arc<Http>) {
     let http = Arc::new(Http::default());
     let runtime = GitHubAuthenticationRuntime::open(
         env!("CARGO_BIN_EXE_ash-github-authentication").into(),
@@ -61,6 +75,7 @@ fn runtime() -> (Arc<GitHubAuthenticationRuntime>, Arc<Http>) {
         }],
         http.clone(),
         Arc::new(MemorySecretStore::default()),
+        policy,
     )
     .unwrap();
     (runtime, http)
@@ -269,6 +284,7 @@ fn cancellation_during_token_validation_does_not_save_an_account() {
         Vec::new(),
         Arc::new(WaitingHttp(entered, Mutex::new(release_rx))),
         Arc::new(MemorySecretStore::default()),
+        policy(),
     )
     .unwrap();
     let (provider, _, _, _) = window(runtime);
@@ -316,4 +332,96 @@ fn logout_stops_another_windows_pending_login_with_one_terminal_event() {
     ));
     assert!(completed.try_recv().is_err());
     assert!(provider.accounts().unwrap().is_empty());
+}
+
+#[test]
+fn profile_disablement_stops_the_real_provider_and_restores_saved_accounts_on_enable() {
+    use ash_core_plugins::EditorExtensionPolicy;
+    use ash_core_plugins::EditorExtensionPolicyAction;
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("editor-extension-policy.json");
+    let policy = Arc::new(EditorExtensionPolicy::open(path.clone()).unwrap());
+    let (runtime, http) = runtime_with_policy(policy.clone());
+    let (first, first_login, _, completed) = window(runtime.clone());
+    let (second, second_login, _, _) = window(runtime.clone());
+    let control = first.runtime();
+    assert!(control.is_running());
+    let source = ash_async_utils::CancellationSource::new();
+    let account = first
+        .connect_token(
+            "github.com",
+            SecretValue::new(b"saved-token".to_vec()),
+            &source.token(),
+        )
+        .unwrap();
+    let grant = second.authorization_for(&account.id).unwrap();
+    first_login.begin(LoginMethod::GitHubBrowser).unwrap();
+    policy
+        .set_built_in_enablement(
+            control.id(),
+            EditorExtensionPolicyAction::Disable,
+            policy.generation(),
+        )
+        .unwrap();
+    control.reconcile_enablement().unwrap();
+    assert!(!control.is_running());
+    assert!(first_login.read().unwrap().accounts.is_empty());
+    assert!(second_login.read().unwrap().accounts.is_empty());
+    assert!(first.accounts().unwrap().is_empty());
+    assert!(second.token(&grant).is_err());
+    assert!(first_login.begin(LoginMethod::GitHubBrowser).is_err());
+    assert!(matches!(
+        completed
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .outcome,
+        ash_login::LoginCompletionOutcome::Failed { .. }
+    ));
+    assert!(
+        !EditorExtensionPolicy::open(path)
+            .unwrap()
+            .is_extension_enabled(control.id())
+    );
+    policy
+        .set_built_in_enablement(
+            control.id(),
+            EditorExtensionPolicyAction::Enable,
+            policy.generation(),
+        )
+        .unwrap();
+    control.reconcile_enablement().unwrap();
+    assert!(control.is_running());
+    assert_eq!(second.accounts().unwrap(), vec![account]);
+    assert_eq!(http.calls.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_disabled_profile_does_not_start_the_real_provider_until_enabled() {
+    use ash_core_plugins::EditorExtensionPolicyAction;
+    let profile = tempfile::tempdir().unwrap();
+    let policy = Arc::new(
+        ash_core_plugins::EditorExtensionPolicy::open(profile.path().join("policy.json")).unwrap(),
+    );
+    policy
+        .set_built_in_enablement(
+            "ash.github-authentication",
+            EditorExtensionPolicyAction::Disable,
+            policy.generation(),
+        )
+        .unwrap();
+    let (runtime, _) = runtime_with_policy(policy.clone());
+    let (provider, login, _, _) = window(runtime);
+    let control = provider.runtime();
+    assert!(!control.is_running());
+    assert!(login.refresh().unwrap().accounts.is_empty());
+    assert!(!control.is_running());
+    policy
+        .set_built_in_enablement(
+            control.id(),
+            EditorExtensionPolicyAction::Enable,
+            policy.generation(),
+        )
+        .unwrap();
+    control.reconcile_enablement().unwrap();
+    assert!(control.is_running());
 }

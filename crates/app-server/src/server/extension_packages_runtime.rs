@@ -13,6 +13,60 @@ pub(crate) struct ExtensionsChangeWatcher {
 }
 
 impl ExtensionsChangeWatcher {
+    pub(super) fn start_editor_policy(
+        policy: &ash_core_plugins::EditorExtensionPolicy,
+        runtime: super::extension_packages_language_runtime::ExtensionsLanguageRuntime,
+        language: Arc<std::sync::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
+    ) -> Option<Self> {
+        let changes = policy.subscribe();
+        let mut provider_ids = runtime
+            .providers()
+            .ok()
+            .map(|providers| providers.ids().map(str::to_owned).collect::<Vec<_>>());
+        let (shutdown, shutdown_receiver) = mpsc::channel();
+        let thread = match std::thread::Builder::new()
+            .name("ash-editor-policy-changes".into())
+            .spawn(move || {
+                loop {
+                    if shutdown_receiver.try_recv().is_ok() {
+                        break;
+                    }
+                    match changes.recv_timeout(Duration::from_millis(100)) {
+                        Ok(_) => {
+                            while changes.try_recv().is_ok() {}
+                            match runtime.providers() {
+                                Ok(providers) => {
+                                    let ids =
+                                        providers.ids().map(str::to_owned).collect::<Vec<_>>();
+                                    if provider_ids.as_ref() != Some(&ids) {
+                                        if let Ok(mut language) = language.lock() {
+                                            language.set_server_providers(providers);
+                                            provider_ids = Some(ids);
+                                        }
+                                    }
+                                }
+                                Err(error) => log::error!(
+                                    "failed to reconcile editor policy language servers: {error}"
+                                ),
+                            }
+                        }
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+            }) {
+            Ok(thread) => thread,
+            Err(error) => {
+                log::error!("failed to start editor policy change watcher: {error}");
+                return None;
+            }
+        };
+        Some(Self {
+            shutdown: Some(shutdown),
+            thread: Some(thread),
+        })
+    }
+
     pub(crate) fn start(
         manager: &Arc<ExtensionPackageManager>,
         updates: Arc<UpdateBroker>,

@@ -306,6 +306,20 @@ impl ExtensionHostSupervisor {
         graceful
     }
 
+    /// Reports the current process without activating or recovering an exited instance.
+    pub fn is_running(&self) -> bool {
+        let state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.status == ExtensionHostStatus::Ready
+            && state
+                .process
+                .as_ref()
+                .is_some_and(|process| !process.has_exited())
+    }
+
     pub fn snapshot(&self) -> ExtensionHostSnapshot {
         let mut state = self
             .inner

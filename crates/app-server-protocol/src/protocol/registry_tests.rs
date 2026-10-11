@@ -4,6 +4,38 @@ use super::SerializationAccess;
 use schemars::JsonSchema;
 
 #[test]
+fn built_in_provider_enablement_roundtrips_and_uses_global_serialization() {
+    use crate::protocol::extension_packages::ExtensionsBuiltInProviderEnablementParams;
+    let read = super::client_method_definition("extensions/builtInProviders").unwrap();
+    assert_eq!(
+        read.serialization_scope(&serde_json::json!({})).unwrap(),
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::SharedRead
+        })
+    );
+    let write = super::client_method_definition("extensions/setBuiltInProviderEnablement").unwrap();
+    let value = serde_json::json!({"id":"ash.github-authentication", "enabled":false, "expectedRevision":7});
+    let request: ExtensionsBuiltInProviderEnablementParams =
+        serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), value);
+    assert_eq!(
+        write.serialization_scope(&value).unwrap(),
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::Exclusive
+        })
+    );
+    for invalid in [
+        serde_json::json!({"id":"ash.github-authentication", "enabled":false}),
+        serde_json::json!({"id":"ash.github-authentication", "enabled":"false", "expectedRevision":7}),
+        serde_json::json!({"id":"ash.github-authentication", "enabled":false, "expectedRevision":7, "grant":true}),
+    ] {
+        assert!(
+            serde_json::from_value::<ExtensionsBuiltInProviderEnablementParams>(invalid).is_err()
+        );
+    }
+}
+
+#[test]
 fn extension_packages_execution_policy_roundtrips_and_serializes_global_mutations() {
     use crate::protocol::extension_packages::ExtensionsEditorExtensionPolicyParams;
     let read = super::client_method_definition("extensions/editorExtensions").unwrap();

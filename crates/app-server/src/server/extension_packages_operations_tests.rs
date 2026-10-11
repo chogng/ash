@@ -349,7 +349,8 @@ fn call(
 }
 
 #[test]
-fn extension_packages_source_mutations_share_authenticated_client_authority_and_persist_revisions() {
+fn extension_packages_source_mutations_share_authenticated_client_authority_and_persist_revisions()
+{
     let root = tempfile::tempdir().unwrap();
     let manager = Arc::new(
         ash_core_plugins::ExtensionPackageManager::open(
@@ -452,4 +453,122 @@ fn extension_packages_source_mutations_share_authenticated_client_authority_and_
     .unwrap();
     assert_eq!(reopened.sources().unwrap().revision, 2);
     assert!(!reopened.sources().unwrap().sources[0].enabled);
+}
+
+#[test]
+fn built_in_provider_policy_checks_authority_revision_and_change_notifications() {
+    use ash_core_plugins::EditorExtensionPolicy;
+    use ash_external_ext::BuiltInExtensionRuntime;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+    struct Runtime {
+        policy: Arc<EditorExtensionPolicy>,
+        running: AtomicBool,
+    }
+    impl BuiltInExtensionRuntime for Runtime {
+        fn id(&self) -> &str {
+            "ash.github-authentication"
+        }
+        fn is_running(&self) -> bool {
+            self.running.load(Ordering::Acquire)
+        }
+        fn reconcile_enablement(&self) -> Result<(), ash_external_ext::ExtensionHostError> {
+            self.running.store(
+                self.policy.is_extension_enabled(self.id()),
+                Ordering::Release,
+            );
+            Ok(())
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("editor-policy.json");
+    let policy = Arc::new(EditorExtensionPolicy::open(path.clone()).unwrap());
+    let runtime = Arc::new(Runtime {
+        policy: policy.clone(),
+        running: AtomicBool::new(true),
+    });
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+    )
+    .with_editor_extension_policy(policy.clone())
+    .with_built_in_extension_runtime(runtime);
+    let mut owner = server.product_host_connection();
+    let mut ordinary = server.connection();
+    let mut browser = server.browser_connection();
+    for connection in [&mut owner, &mut ordinary, &mut browser] {
+        call(
+            &server,
+            connection,
+            1,
+            "initialize",
+            json!({"clientInfo":{"name":"test","version":"1"},"capabilities":{}}),
+        );
+    }
+    let request = json!({"id":"ash.github-authentication", "enabled":false, "expectedRevision":1});
+    for connection in [&mut ordinary, &mut browser] {
+        assert!(
+            call(
+                &server,
+                connection,
+                2,
+                "extensions/setBuiltInProviderEnablement",
+                request.clone()
+            )
+            .get("error")
+            .is_some()
+        );
+    }
+    let generation = server.updates.extension_packages_generation();
+    let result = call(
+        &server,
+        &mut owner,
+        3,
+        "extensions/setBuiltInProviderEnablement",
+        request.clone(),
+    );
+    assert_eq!(
+        result["result"]["providers"][0],
+        json!({"id":"ash.github-authentication","enabled":false,"running":false})
+    );
+    assert_eq!(result["result"]["revision"], 2);
+    assert!(server.updates.extension_packages_generation() > generation);
+    assert!(
+        !EditorExtensionPolicy::open(path)
+            .unwrap()
+            .is_extension_enabled("ash.github-authentication")
+    );
+    assert!(
+        call(
+            &server,
+            &mut owner,
+            4,
+            "extensions/setBuiltInProviderEnablement",
+            request
+        )
+        .get("error")
+        .is_some()
+    );
+    assert!(
+        call(
+            &server,
+            &mut owner,
+            5,
+            "extensions/setBuiltInProviderEnablement",
+            json!({"id":"ash.unknown","enabled":true,"expectedRevision":2})
+        )
+        .get("error")
+        .is_some()
+    );
+    assert_eq!(policy.generation(), 2);
+    let enabled = call(
+        &server,
+        &mut owner,
+        6,
+        "extensions/setBuiltInProviderEnablement",
+        json!({"id":"ash.github-authentication","enabled":true,"expectedRevision":2}),
+    );
+    assert_eq!(enabled["result"]["providers"][0]["enabled"], true);
 }

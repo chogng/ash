@@ -51,6 +51,11 @@ import { WorkspaceContextService } from '../../../src/ash/workbench/services/wor
 import { FileEditorInput } from '../../../src/ash/workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { WorkbenchConfiguration, type ModernUIEditorTabStyle } from '../../../src/ash/workbench/common/configuration.js';
+import { EditorTabSizingConfiguration, type EditorTabSizing } from '../../../src/ash/workbench/services/editor/common/editorConfiguration.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
 interface CompositeState {
 	readonly id: string;
@@ -80,6 +85,8 @@ declare global {
 			readonly editorEvents: readonly string[];
 			readonly partEvents: readonly { id: string; focus?: boolean; visible: boolean; }[];
 			openEditor(name: string): Promise<void>;
+			configureEditorTabs(style: ModernUIEditorTabStyle, sizing?: EditorTabSizing): Promise<void>;
+			setEditorTheme(id: string): void;
 			closeEditor(name: string): Promise<void>;
 			openFileAliases(target?: 'modalGroup'): Promise<{ tabs: number; models: number; retained: boolean; text: string; }>;
 			editorState(): readonly { name: string; focused: boolean; visible: boolean; retained: boolean; }[];
@@ -103,6 +110,9 @@ class FocusView extends ViewPane {
 }
 
 const resources = new DisposableStore();
+if (new URLSearchParams(location.search).has('editorTabs')) {
+	await import('../../../src/ash/base/browser/ui/iconlabel/iconlabel.css');
+}
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
@@ -170,6 +180,7 @@ const partEvents: { id: string; focus?: boolean; visible: boolean; }[] = [];
 resources.add(panel.onDidCompositeOpen(({ composite, focus }) => partEvents.push({ id: composite.getId(), focus, visible: true })));
 resources.add(panel.onDidCompositeClose(composite => partEvents.push({ id: composite.getId(), visible: false })));
 const editorHost = h(document, 'div');
+editorHost.id = 'editor-tabs-host';
 editorHost.style.cssText = 'position:relative;display:flex;width:800px;height:260px';
 document.body.append(editorHost);
 resources.add(toDisposable(() => editorHost.remove()));
@@ -190,7 +201,7 @@ resources.add(editorRegistry.registerEditorPane({
 	id: CODE_EDITOR_ID, name: 'Text editor', canOpen: () => EditorPaneMatch.Default,
 	create: () => editorServices.createInstance(TextResourceEditor, resourceStore, { lineNumbers: 'on', createPart: options => StandaloneServices.initialize().createInstance(CodeEditorWidget, options) } satisfies EditorPaneOptions),
 }));
-const editor = resources.add(editorServices.createInstance(EditorPart, editorHost, { registry: editorRegistry }));
+const editor = resources.add(editorServices.createInstance(EditorPart, editorHost, { registry: editorRegistry, configurationService: editorServices.get(IConfigurationService) }));
 editor.layout({ width: 800, height: 260 });
 const editorPanes = new Map<string, { pane: IEditorPane; control: unknown; }>();
 const editorEvents: string[] = [];
@@ -221,6 +232,16 @@ window.ashCompositeIntegration = {
 		return { hostWidth: host.clientWidth, hostHeight: host.clientHeight, paneWidth: bounds.width, paneHeight: bounds.height };
 	},
 	openEditor,
+	configureEditorTabs: async (style, sizing = 'fit') => {
+		const configuration = editorServices.get(IConfigurationService);
+		await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, style);
+		await configuration.updateValue(EditorTabSizingConfiguration, sizing);
+	},
+	setEditorTheme: id => {
+		const theme = [darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme].find(theme => theme.id === id);
+		if (!theme) throw new Error(`Unknown editor test theme: ${id}`);
+		(editorServices.get(IThemeService) as TestThemeService).setColorTheme(theme);
+	},
 	openFileAliases: async target => {
 		const workspace = resources.add(new WorkspaceContextService({ id: 'composite', uri: URI.file('/composite') }));
 		const unavailable = (): never => { throw new Error('Unexpected file operation in editor identity fixture'); };

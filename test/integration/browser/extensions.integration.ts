@@ -1,3 +1,5 @@
+import { IGlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionManagement.js';
+import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { ExtensionsEditor } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsEditor.js';
 import { ExtensionsInput } from '../../../src/ash/workbench/contrib/extensions/common/extensionsInput.js';
@@ -88,13 +90,29 @@ function editorPolicySnapshot() {
 	return {
 		revision: editorPolicyRevision, extensions: installed.filter(entry => entry.capabilities.some(capability => capability.kind === 'editorExtension')).map(entry => ({
 			installationId: entry.installationId, package: entry.package, entrypoint: editorEntrypoint,
-			...(editorPolicies.get(entry.installationId) ?? { enabled: false, granted: false }),
+			...(editorPolicies.get(entry.installationId) ?? { enabled: true, granted: false }),
 		}))
 	};
 }
 let sourceRevision = 0;
 let sources = [{ id: 'ash', kind: 'ash' as const, enabled: true, productOwned: true }, { id: 'open-vsx', kind: 'openVsx' as const, enabled: true, productOwned: true }];
+let builtInProviderEnabled = true;
+let builtInProviderRunning = true;
+function builtInProviders() {
+	return { revision: editorPolicyRevision, providers: [{ id: 'ash.github-authentication', enabled: builtInProviderEnabled, running: builtInProviderRunning }] };
+}
 const api: IExtensionManagementApi = {
+	builtInProviders: async () => builtInProviders(),
+	setBuiltInProviderEnablement: async params => {
+		requests.push(['builtInPolicy', params]);
+		if (params.id !== 'ash.github-authentication' || params.expectedRevision !== editorPolicyRevision) { throw new Error('Policy revision conflict'); }
+		builtInProviderEnabled = params.enabled;
+		builtInProviderRunning = false;
+		editorPolicyRevision++;
+		generation++;
+		changed.fire();
+		return builtInProviders();
+	},
 	sources: async () => ({ revision: sourceRevision, sources }),
 	addSource: async params => {
 		requests.push(['addSource', params]);
@@ -113,11 +131,13 @@ const api: IExtensionManagementApi = {
 		requests.push(['editorPolicy', params]);
 		const entry = installed.find(entry => entry.installationId === params.installationId && entry.package.digest === params.packageDigest);
 		if (!entry || params.expectedRevision !== editorPolicyRevision) throw new Error('Policy revision conflict');
-		const state = editorPolicies.get(entry.installationId) ?? { enabled: false, granted: false };
+		const state = editorPolicies.get(entry.installationId) ?? { enabled: true, granted: false };
 		if (params.action === 'enable' || params.action === 'disable') state.enabled = params.action === 'enable';
 		if (params.action === 'grant' || params.action === 'revoke') state.granted = params.action === 'grant';
 		editorPolicies.set(entry.installationId, state);
 		editorPolicyRevision++;
+		generation++;
+		changed.fire();
 		return editorPolicySnapshot();
 	},
 	search: async params => {
@@ -205,6 +225,7 @@ services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAr
 services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'typescriptreact' }) }) } as unknown as ICodeEditorService);
 services.registerInstance(IThemeService, disposables.add(new TestThemeService(darkColorTheme)));
 services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
+services.registerInstance(IGlobalExtensionEnablementService, disposables.add(services.createInstance(GlobalExtensionEnablementService)));
 let pane: ExtensionsEditor | undefined;
 let editorAbort = new AbortController();
 disposables.add(toDisposable(() => { editorAbort.abort(); pane?.dispose(); }));

@@ -4,6 +4,12 @@ import type { ExtensionsPackageSummary } from '../../../../platform/extensionMan
 import { EditorInputSerializers, requireRecord, requireString, optionalString } from '../../../services/editor/common/editorInputSerializer.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 
+export enum ExtensionsInputSource {
+	Registry = 'registry',
+	BuiltIn = 'builtIn',
+	Local = 'local',
+}
+
 /** An installed version has a separate identity so actions always target the reviewed installation. */
 export class ExtensionsInput extends EditorInput {
 	public readonly typeId = 'ash.extensions.input';
@@ -13,9 +19,9 @@ export class ExtensionsInput extends EditorInput {
 	public readonly showBreadcrumbs = false;
 	public readonly resource: URI;
 
-	constructor(public readonly summary: ExtensionsPackageSummary, public readonly installationId?: string) {
+	constructor(public readonly summary: ExtensionsPackageSummary, public readonly installationId?: string, public readonly source = ExtensionsInputSource.Registry) {
 		super();
-		this.resource = URI.from({ scheme: Schemas.ashExtension, path: `/${installationId ?? summary.id}`, query: summary.version });
+		this.resource = URI.from({ scheme: Schemas.ashExtension, path: `/${source}/${installationId ?? summary.id}`, query: summary.version });
 	}
 
 	public getName(): string { return this.summary.displayName; }
@@ -27,16 +33,18 @@ EditorInputSerializers.registerStatic({
 	canSerialize: input => input instanceof ExtensionsInput,
 	serialize: input => {
 		if (!(input instanceof ExtensionsInput)) { throw new TypeError('Invalid Extensions input'); }
-		return { ...input.summary, installationId: input.installationId };
+		return { ...input.summary, installationId: input.installationId, source: input.source };
 	},
 	deserialize: value => {
 		const record = requireRecord(value, 'Extensions input');
+		const source = optionalString(record.source, 'extension source') ?? ExtensionsInputSource.Registry;
+		if (!Object.values(ExtensionsInputSource).includes(source as ExtensionsInputSource)) { throw new TypeError('Invalid extension source'); }
 		return new ExtensionsInput({
 			id: requireString(record.id, 'extension ID'),
 			version: requireString(record.version, 'extension version'),
 			displayName: requireString(record.displayName, 'extension name'),
 			packageType: requireString(record.packageType, 'extension type'),
 			description: optionalString(record.description, 'extension description') ?? '',
-		}, optionalString(record.installationId, 'extension installation ID'));
+		}, optionalString(record.installationId, 'extension installation ID'), source as ExtensionsInputSource);
 	},
 });

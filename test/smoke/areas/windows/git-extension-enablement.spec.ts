@@ -4,17 +4,22 @@ import type { Workbench } from '../../../automation/workbench.js';
 
 async function toggleGit(workbench: Workbench, state: 'Enabled' | 'Disabled'): Promise<void> {
 	await workbench.quickaccess.runCommand('ash.extensions.manageBuiltIn');
-	const option = workbench.quickaccess.items.filter({ has: workbench.page.locator('.ash-quick-pick-row-label').getByText('ash.git', { exact: true }) });
-	await expect(option).toContainText(state);
-	await option.click();
-	await expect(workbench.quickaccess.element).toBeHidden();
+	const extension = workbench.page.locator('.ash-extensions [data-package-id="ash.git"]');
+	await extension.click();
+	const details = workbench.page.locator('.ash-extension-editor');
+	await expect(details).toContainText(state);
+	await details.getByRole('button', { name: state === 'Enabled' ? 'Disable' : 'Enable', exact: true }).click();
+	await expect(details).toContainText(state === 'Enabled' ? 'Disabled' : 'Enabled');
+	await workbench.editors.groupAt(0).tabs.filter({ hasText: 'Independent comparison' }).click();
+	await workbench.git.open();
 }
 
 test.describe('Git extension enablement in the full product', () => {
 	test.use({ gitRepository: true });
 
 	for (const reloadMode of ['restart', 'renderer reload'] as const) {
-		test(`disabled Git preserves independent SCM, editable diff, undo and saving through enablement and ${reloadMode}`, async ({ target, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
+		const title = reloadMode === 'restart' ? 'disabled Git preserves independent SCM, editable diff, undo and saving through enablement and reload' : 'disabled Git preserves independent SCM, editable diff, undo and saving through enablement and renderer reload';
+		test(title, async ({ target, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
 			test.skip(target.appServerMode !== 'required', 'Requires the real Git backend.');
 			test.skip(!process.env.ASH_WEB_EXTENSION_PATHS?.includes('scm-extension'), 'Requires the independent SCM extension fixture.');
 			const reload = async (): Promise<void> => {

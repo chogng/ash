@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::mpsc;
@@ -41,7 +42,6 @@ pub struct EditorExtensionPolicySnapshot {
 struct Record {
     package: PackageRef,
     contract_version: u16,
-    enabled: bool,
     granted: bool,
 }
 
@@ -51,6 +51,24 @@ struct Durable {
     schema_version: u32,
     revision: u64,
     records: BTreeMap<String, Record>,
+    disabled_extensions: BTreeSet<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyRecord {
+    package: PackageRef,
+    contract_version: u16,
+    enabled: bool,
+    granted: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyDurable {
+    schema_version: u32,
+    revision: u64,
+    records: BTreeMap<String, LegacyRecord>,
 }
 
 struct State {
@@ -58,7 +76,7 @@ struct State {
     subscribers: Vec<mpsc::Sender<u64>>,
 }
 
-/// Profile-owned execution consent for exact Extensions editor artifacts. Package installation
+/// Profile-owned editor enablement and execution consent for exact Extensions artifacts. Installation
 /// and capability leases remain with Manager; this owner never mutates the verified package.
 pub struct EditorExtensionPolicy {
     path: PathBuf,
@@ -66,23 +84,126 @@ pub struct EditorExtensionPolicy {
 }
 
 impl EditorExtensionPolicy {
+    /// Reads whole-extension enablement without granting execution authority.
+    pub fn is_extension_enabled(&self, id: &str) -> bool {
+        !self
+            .state
+            .lock()
+            .expect("editor policy poisoned")
+            .durable
+            .disabled_extensions
+            .contains(id)
+    }
+
+    /// Persists enablement for a product-registered built-in runtime; executable admission remains with its host.
+    pub fn set_built_in_enablement(
+        &self,
+        id: &str,
+        action: EditorExtensionPolicyAction,
+        expected_revision: u64,
+    ) -> Result<EditorExtensionPolicySnapshot, EditorExtensionPolicyError> {
+        if !valid_built_in_id(id)
+            || matches!(
+                action,
+                EditorExtensionPolicyAction::Grant | EditorExtensionPolicyAction::Revoke
+            )
+        {
+            return Err(EditorExtensionPolicyError::InvalidBinding);
+        }
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| EditorExtensionPolicyError::Storage)?;
+        if state.durable.revision != expected_revision {
+            return Err(EditorExtensionPolicyError::RevisionConflict);
+        }
+        let mut next = state.durable.clone();
+        match action {
+            EditorExtensionPolicyAction::Enable => {
+                next.disabled_extensions.remove(id);
+            }
+            EditorExtensionPolicyAction::Disable => {
+                if next.disabled_extensions.len() >= 1024 && !next.disabled_extensions.contains(id)
+                {
+                    return Err(EditorExtensionPolicyError::Storage);
+                }
+                next.disabled_extensions.insert(id.into());
+            }
+            EditorExtensionPolicyAction::Grant | EditorExtensionPolicyAction::Revoke => {
+                return Err(EditorExtensionPolicyError::InvalidBinding);
+            }
+        }
+        let enabled = !next.disabled_extensions.contains(id);
+        let revision = self.commit(&mut state, next)?;
+        Ok(EditorExtensionPolicySnapshot {
+            revision,
+            enabled,
+            granted: false,
+        })
+    }
+
     pub fn open(path: PathBuf) -> Result<Self, EditorExtensionPolicyError> {
         let durable = match std::fs::read(&path) {
             Ok(bytes) if bytes.len() <= 4 * 1024 * 1024 => {
-                serde_json::from_slice::<Durable>(&bytes)
-                    .map_err(|_| EditorExtensionPolicyError::Storage)?
+                let value: serde_json::Value = serde_json::from_slice(&bytes)
+                    .map_err(|_| EditorExtensionPolicyError::Storage)?;
+                if value
+                    .get("schemaVersion")
+                    .and_then(serde_json::Value::as_u64)
+                    == Some(1)
+                {
+                    let legacy: LegacyDurable = serde_json::from_value(value)
+                        .map_err(|_| EditorExtensionPolicyError::Storage)?;
+                    if legacy.schema_version != 1 {
+                        return Err(EditorExtensionPolicyError::Storage);
+                    }
+                    let disabled_extensions = legacy
+                        .records
+                        .values()
+                        .filter(|record| !record.enabled)
+                        .map(|record| record.package.id.clone())
+                        .collect();
+                    Durable {
+                        schema_version: 2,
+                        revision: legacy.revision,
+                        disabled_extensions,
+                        records: legacy
+                            .records
+                            .into_iter()
+                            .map(|(key, record)| {
+                                (
+                                    key,
+                                    Record {
+                                        package: record.package,
+                                        contract_version: record.contract_version,
+                                        granted: record.granted,
+                                    },
+                                )
+                            })
+                            .collect(),
+                    }
+                } else {
+                    serde_json::from_value(value)
+                        .map_err(|_| EditorExtensionPolicyError::Storage)?
+                }
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Durable {
-                schema_version: 1,
+                schema_version: 2,
                 revision: 1,
                 records: BTreeMap::new(),
+                disabled_extensions: BTreeSet::new(),
             },
             _ => return Err(EditorExtensionPolicyError::Storage),
         };
-        if durable.schema_version != 1
+        if durable.schema_version != 2
             || durable.revision == 0
             || durable.revision > 9_007_199_254_740_991
             || durable.records.len() > 1024
+            || durable.disabled_extensions.len() > 1024
+            || durable
+                .disabled_extensions
+                .iter()
+                .any(|id| ash_plugin::PluginId::parse(id).is_err() && !valid_built_in_id(id))
             || durable.records.iter().any(|(key, record)| {
                 !valid_binding(&record.package, &CapabilityRef { id: key.clone() })
             })
@@ -127,7 +248,7 @@ impl EditorExtensionPolicy {
         });
         EditorExtensionPolicySnapshot {
             revision: state.durable.revision,
-            enabled: record.is_some_and(|record| record.enabled),
+            enabled: !state.durable.disabled_extensions.contains(&package.id),
             granted: record.is_some_and(|record| record.granted),
         }
     }
@@ -159,7 +280,6 @@ impl EditorExtensionPolicy {
             .or_insert_with(|| Record {
                 package: package.clone(),
                 contract_version: CONTRACT_VERSION,
-                enabled: false,
                 granted: false,
             });
         if record.package != *package {
@@ -167,17 +287,38 @@ impl EditorExtensionPolicy {
         }
         if record.contract_version != CONTRACT_VERSION {
             record.contract_version = CONTRACT_VERSION;
-            record.enabled = false;
             record.granted = false;
         }
         match action {
-            EditorExtensionPolicyAction::Enable => record.enabled = true,
-            EditorExtensionPolicyAction::Disable => record.enabled = false,
+            EditorExtensionPolicyAction::Enable => {
+                next.disabled_extensions.remove(&package.id);
+            }
+            EditorExtensionPolicyAction::Disable => {
+                if next.disabled_extensions.len() >= 1024
+                    && !next.disabled_extensions.contains(&package.id)
+                {
+                    return Err(EditorExtensionPolicyError::Storage);
+                }
+                next.disabled_extensions.insert(package.id.clone());
+            }
             EditorExtensionPolicyAction::Grant => record.granted = true,
             EditorExtensionPolicyAction::Revoke => record.granted = false,
         }
-        let enabled = record.enabled;
         let granted = record.granted;
+        let enabled = !next.disabled_extensions.contains(&package.id);
+        let revision = self.commit(&mut state, next)?;
+        Ok(EditorExtensionPolicySnapshot {
+            revision,
+            enabled,
+            granted,
+        })
+    }
+
+    fn commit(
+        &self,
+        state: &mut State,
+        mut next: Durable,
+    ) -> Result<u64, EditorExtensionPolicyError> {
         next.revision = next
             .revision
             .checked_add(1)
@@ -201,12 +342,22 @@ impl EditorExtensionPolicy {
         state
             .subscribers
             .retain(|sender| sender.send(revision).is_ok());
-        Ok(EditorExtensionPolicySnapshot {
-            revision,
-            enabled,
-            granted,
-        })
+        Ok(revision)
     }
+}
+
+fn valid_built_in_id(id: &str) -> bool {
+    id.len() <= 160
+        && id.split_once('.').is_some_and(|(publisher, name)| {
+            [publisher, name].into_iter().all(|part| {
+                !part.is_empty()
+                    && part.bytes().all(|byte| {
+                        byte.is_ascii_lowercase()
+                            || byte.is_ascii_digit()
+                            || matches!(byte, b'-' | b'_')
+                    })
+            })
+        })
 }
 
 fn valid_binding(package: &PackageRef, capability: &CapabilityRef) -> bool {

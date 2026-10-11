@@ -23,7 +23,7 @@ fn consent_is_separate_persistent_and_bound_to_the_exact_artifact() {
         policy.snapshot(&package, &capability),
         EditorExtensionPolicySnapshot {
             revision: 1,
-            enabled: false,
+            enabled: true,
             granted: false
         }
     );
@@ -65,7 +65,7 @@ fn consent_is_separate_persistent_and_bound_to_the_exact_artifact() {
         reopened.snapshot(&changed, &capability),
         EditorExtensionPolicySnapshot {
             revision: 3,
-            enabled: false,
+            enabled: true,
             granted: false
         }
     );
@@ -103,7 +103,7 @@ fn an_old_api_contract_does_not_authorize_the_current_host() {
     })).unwrap()).unwrap();
     let policy = EditorExtensionPolicy::open(path.clone()).unwrap();
     assert!(!policy.snapshot(&package, &capability).granted);
-    assert!(!policy.snapshot(&package, &capability).enabled);
+    assert!(policy.snapshot(&package, &capability).enabled);
     let enabled = policy
         .set(
             &package,
@@ -116,4 +116,137 @@ fn an_old_api_contract_does_not_authorize_the_current_host() {
     assert!(!enabled.granted);
     let reopened = EditorExtensionPolicy::open(path).unwrap();
     assert_eq!(reopened.snapshot(&package, &capability), enabled);
+}
+
+#[test]
+fn disablement_survives_updates_and_reopen_without_granting_the_new_artifact() {
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("editor-policy.json");
+    let policy = EditorExtensionPolicy::open(path.clone()).unwrap();
+    let package = PackageRef {
+        id: "publisher.hello@open-vsx".into(),
+        version: "1.0.0".into(),
+        digest: format!("sha256:{}", "a".repeat(64)),
+    };
+    let capability = CapabilityRef {
+        id: "version-one".into(),
+    };
+    policy
+        .set(&package, &capability, EditorExtensionPolicyAction::Grant, 1)
+        .unwrap();
+    let disabled = policy
+        .set(
+            &package,
+            &capability,
+            EditorExtensionPolicyAction::Disable,
+            2,
+        )
+        .unwrap();
+    assert!(!disabled.enabled);
+    assert!(disabled.granted);
+    let updated = PackageRef {
+        version: "2.0.0".into(),
+        digest: format!("sha256:{}", "b".repeat(64)),
+        ..package.clone()
+    };
+    let updated_capability = CapabilityRef {
+        id: "version-two".into(),
+    };
+    let reopened = EditorExtensionPolicy::open(path).unwrap();
+    assert_eq!(
+        reopened.snapshot(&updated, &updated_capability),
+        EditorExtensionPolicySnapshot {
+            revision: 3,
+            enabled: false,
+            granted: false
+        }
+    );
+    let enabled = reopened
+        .set(
+            &updated,
+            &updated_capability,
+            EditorExtensionPolicyAction::Enable,
+            3,
+        )
+        .unwrap();
+    assert!(enabled.enabled);
+    assert!(!enabled.granted);
+    assert!(reopened.snapshot(&package, &capability).enabled);
+    assert!(reopened.snapshot(&package, &capability).granted);
+}
+
+#[test]
+fn legacy_disabled_policy_migrates_to_package_enablement_on_the_next_commit() {
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("editor-policy.json");
+    let package = PackageRef {
+        id: "publisher.hello@open-vsx".into(),
+        version: "1.0.0".into(),
+        digest: format!("sha256:{}", "a".repeat(64)),
+    };
+    let capability = CapabilityRef {
+        id: "version-one".into(),
+    };
+    std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
+        "schemaVersion": 1, "revision": 4, "records": {
+            "version-one": { "package": package, "contractVersion": 5, "enabled": false, "granted": true }
+        }
+    })).unwrap()).unwrap();
+    let policy = EditorExtensionPolicy::open(path.clone()).unwrap();
+    assert_eq!(
+        policy.snapshot(&package, &capability),
+        EditorExtensionPolicySnapshot {
+            revision: 4,
+            enabled: false,
+            granted: true
+        }
+    );
+    policy
+        .set(
+            &package,
+            &capability,
+            EditorExtensionPolicyAction::Enable,
+            4,
+        )
+        .unwrap();
+    let durable: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(durable["schemaVersion"], 2);
+    assert!(durable["records"]["version-one"].get("enabled").is_none());
+    assert_eq!(durable["disabledExtensions"], serde_json::json!([]));
+}
+
+#[test]
+fn built_in_disablement_is_persistent_and_does_not_grant_execution() {
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("editor-policy.json");
+    let policy = EditorExtensionPolicy::open(path.clone()).unwrap();
+    let id = "ash.github-authentication";
+    assert!(policy.is_extension_enabled(id));
+    let changed = policy.subscribe();
+    let disabled = policy
+        .set_built_in_enablement(id, EditorExtensionPolicyAction::Disable, 1)
+        .unwrap();
+    assert!(!disabled.enabled);
+    assert!(!disabled.granted);
+    assert_eq!(changed.recv().unwrap(), 2);
+    assert_eq!(
+        policy.set_built_in_enablement(id, EditorExtensionPolicyAction::Enable, 1),
+        Err(EditorExtensionPolicyError::RevisionConflict)
+    );
+    assert_eq!(
+        policy.set_built_in_enablement(id, EditorExtensionPolicyAction::Grant, 2),
+        Err(EditorExtensionPolicyError::InvalidBinding)
+    );
+    assert_eq!(
+        policy.set_built_in_enablement("../../provider", EditorExtensionPolicyAction::Disable, 2),
+        Err(EditorExtensionPolicyError::InvalidBinding)
+    );
+    let reopened = EditorExtensionPolicy::open(path).unwrap();
+    assert!(!reopened.is_extension_enabled(id));
+    assert!(
+        reopened
+            .set_built_in_enablement(id, EditorExtensionPolicyAction::Enable, 2)
+            .unwrap()
+            .enabled
+    );
 }

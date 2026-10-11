@@ -53,6 +53,17 @@ test('SCM input completion preserves a draft edited while the command was runnin
 	assert.equal(await accepting, 'committed'); assert.equal(input.value, 'next commit');
 });
 
+test('SCM resource refreshes preserve the current selection until a new selection request', () => {
+	const first = { ...(provider() as Record<string, JsonValue>), selectionRevision: 1 };
+	const second = { ...first, id: 'other', selected: false, selectionRevision: 0 };
+	const value = fixture(async () => null, [first, second]); using cleanup = value.lifetime;
+	value.view.selectRepository('other');
+	value.bridge.set(source, 'ash.scm', 2, [{ ...first, statusMessage: 'Background refresh' }, second]);
+	assert.equal(value.view.activeRepository?.id, 'other');
+	value.bridge.set(source, 'ash.scm', 3, [{ ...first, selectionRevision: 2 }, second]);
+	assert.equal(value.view.activeRepository?.id, 'repo');
+});
+
 test('SCM retirement revokes callbacks and unregisters its repositories and decorations', async () => {
 	const pending = new DeferredPromise<JsonValue>(); let signal: AbortSignal | undefined;
 	const value = fixture(async (request, requestSignal) => { if ((request.payload as { method: string; }).method === 'refresh') { signal = requestSignal; return pending.p; } return null; }); using cleanup = value.lifetime;

@@ -21,6 +21,55 @@ async function expectTabActionCentered(item: Locator): Promise<void> {
 	expect(geometry.iconOffsetY).toBeCloseTo(0, 2);
 }
 
+test('standard editor tabs fill the title row and can be restored through Ash settings', async ({ workbench, reloadWorkbench }, testInfo) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await page.keyboard.press('ControlOrMeta+N');
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	const first = group.tabs.filter({ hasText: 'Untitled-1' });
+	const id = await first.getAttribute('id');
+	await group.editor.waitForEditorFocus();
+	await group.editor.waitForTypeInEditor('const title = "Standard editor tabs";');
+	const expectStandardTabs = async (title: Locator): Promise<void> => {
+		await expect(title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(/ash-standard-editor-tabs/u);
+		const geometry = await title.locator('.ash-tab').evaluateAll(tabs => tabs.map(tab => {
+			const bounds = tab.getBoundingClientRect();
+			const row = tab.closest('.ash-editor-tabs-and-actions')!.getBoundingClientRect();
+			return { top: bounds.top - row.top, bottom: row.bottom - bounds.bottom, radius: getComputedStyle(tab).borderRadius, border: getComputedStyle(tab).borderTopColor, weight: getComputedStyle(tab.querySelector('.ash-tab-label')!).fontWeight };
+		}));
+		expect(geometry.length).toBeGreaterThan(0);
+		for (const tab of geometry) expect(tab).toEqual({ top: 0, bottom: 0, radius: '0px', border: 'rgba(0, 0, 0, 0)', weight: '400' });
+	};
+	await expectStandardTabs(group.title);
+	for (const option of ['Pill', 'VS Code Standard']) {
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectEditorCategory('editor-opening');
+		const settings = page.locator('.ash-settings-editor');
+		await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
+		const select = settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox');
+		await select.click();
+		await page.getByRole('option', { name: option, exact: true }).click();
+		await expect(select).toContainText(option);
+		await page.locator('.ash-modal-editor-close').click();
+		await expect(first).toHaveAttribute('id', id!);
+	}
+	await expectStandardTabs(group.title);
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await group.editor.waitForEditorFocus();
+	const screenshot = testInfo.outputPath('standard-editor-tabs.png');
+	await page.screenshot({ path: screenshot });
+	await testInfo.attach('standard-editor-tabs', { path: screenshot, contentType: 'image/png' });
+	const restored = await reloadWorkbench();
+	await restored.workbench.page.keyboard.press('ControlOrMeta+N');
+	await expectStandardTabs(restored.workbench.editors.groupAt(0).title);
+	await restored.workbench.settingsEditor.openUserSettingsUI();
+	await restored.workbench.settingsEditor.selectEditorCategory('editor-opening');
+	const settings = restored.workbench.page.locator('.ash-settings-editor');
+	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
+	await expect(settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox')).toContainText('VS Code Standard');
+});
+
 test('editor tab width settings resize existing tabs and persist after reload', async ({ workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
@@ -116,7 +165,7 @@ test('editor pill style includes the action in tab width and survives reload', a
 		};
 	});
 	await expect(tab).toBeVisible();
-	const initialWidth = (await geometry()).width;
+	let initialWidth: number | undefined;
 	for (const option of ['Pill', 'Connected', 'Pill']) {
 		await workbench.settingsEditor.openUserSettingsUI();
 		await workbench.settingsEditor.selectEditorCategory('editor-opening');
@@ -130,6 +179,7 @@ test('editor pill style includes the action in tab width and survives reload', a
 		await expect(group.title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(option === 'Connected' ? /ash-connected-editor-tabs/u : /^(?!.*ash-connected-editor-tabs)/u);
 		await expect(tab).toHaveAttribute('id', id!);
 		const bounds = await geometry();
+		initialWidth ??= bounds.width;
 		await expectTabActionCentered(item);
 		expect(bounds).toMatchObject({ width: initialWidth, actionWidth: 22, labelOverlay: 'none', textOverflow: 'ellipsis' });
 		expect(bounds.rightInset).toBeCloseTo(2, 2);

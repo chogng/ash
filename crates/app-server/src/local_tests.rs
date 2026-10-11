@@ -5320,3 +5320,44 @@ fn external_kimi_snapshot_reads_only_the_current_cached_scope_without_network() 
         assert!(!cache.contains("credential-b"));
     }
 }
+
+#[test]
+fn shared_profile_runtime_owns_one_editor_extension_policy_across_real_env_hosts() {
+    let profile = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let open = |dir: &Path| {
+        open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_profile_runtime(runtime.clone())
+                .with_dir_root(dir)
+                .without_built_in_skills(),
+        )
+        .unwrap()
+    };
+    let first = open(first_dir.path());
+    let second = open(second_dir.path());
+    let read = |server: &AppServer| {
+        let mut connection = server.product_host_connection();
+        server.handle_json(&mut connection, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#);
+        let result: serde_json::Value = serde_json::from_str(&server.handle_json(
+            &mut connection,
+            r#"{"jsonrpc":"2.0","id":2,"method":"extensions/builtInProviders","params":{}}"#,
+        ))
+        .unwrap();
+        result["result"]["revision"].as_u64().unwrap()
+    };
+    assert_eq!(read(&first), 1);
+    assert_eq!(read(&second), 1);
+    runtime
+        .editor_extension_policy
+        .set_built_in_enablement(
+            "ash.github-authentication",
+            ash_core_plugins::EditorExtensionPolicyAction::Disable,
+            1,
+        )
+        .unwrap();
+    assert_eq!(read(&first), 2);
+    assert_eq!(read(&second), 2);
+}

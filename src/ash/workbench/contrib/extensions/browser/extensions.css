@@ -6,25 +6,112 @@
 	height: 100%;
 	font-size: var(--ash-fontSize-body1);
 }
-.ash-extensions .extensions-search { padding: 8px 12px 4px; }
-.ash-extensions .extensions-controls { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px; }
-.ash-extensions .extensions-status { padding: 4px 12px; color: var(--ash-description-foreground); font-size: var(--ash-fontSize-body2); }
-.ash-extensions .extensions-list { flex: 1; min-height: 0; }
-.ash-extensions .ash-list { height: 100%; }
-.ash-extensions .extension-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; min-width: 0; }
-.ash-extensions .extension-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 40px; height: 40px; color: var(--ash-description-foreground); background: var(--ash-editor-background); border: var(--ash-strokeThickness) solid var(--ash-contrastBorder); border-radius: var(--ash-cornerRadius-small); }
-.ash-extensions .extension-body { flex: 1; min-width: 0; }
+.ash-extensions .extensions-search {
+	padding: 8px 12px 4px;
+}
+.ash-extensions .extensions-controls-host {
+	flex-shrink: 0;
+	height: 24px;
+	min-width: 0;
+}
+.ash-extensions .extensions-controls-host > .ash-scrollable-element {
+	height: 100%;
+}
+.ash-extensions .extensions-controls {
+	display: flex;
+	gap: 4px;
+	padding: 0 12px;
+	width: max-content;
+}
+.ash-extensions .extensions-status {
+	padding: 4px 12px;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-extensions .extensions-list {
+	flex: 1;
+	min-height: 0;
+}
+.ash-extensions .ash-list {
+	height: 100%;
+}
+.ash-extensions .extension-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 12px;
+	min-width: 0;
+}
+.ash-extensions .extension-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 40px;
+	height: 40px;
+	color: var(--ash-description-foreground);
+	background: var(--ash-editor-background);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-extensions .extension-body {
+	flex: 1;
+	min-width: 0;
+}
 .ash-extensions .extension-name,
 .ash-extensions .extension-description,
-.ash-extensions .extension-metadata { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.ash-extensions .extension-name { font-weight: var(--ash-fontWeight-semiBold); }
-.ash-extensions .extension-description { margin-top: 4px; }
-.ash-extensions .extension-metadata { color: var(--ash-description-foreground); font-size: var(--ash-fontSize-body2); margin-top: 4px; }
-.ash-extensions .extension-row-actions { flex-shrink: 0; align-self: flex-end; }
-.ash-extensions .extension-state { color: var(--ash-description-foreground); font-size: var(--ash-fontSize-body2); }
-.ash-extension-editor { box-sizing: border-box; height: 100%; overflow: auto; padding: 24px 32px; font-size: var(--ash-fontSize-body1); overflow-wrap: anywhere; }
-.ash-extension-editor h1 { font-size: var(--ash-fontSize-heading1); font-weight: var(--ash-fontWeight-semiBold); margin: 0 0 8px; }
-.ash-extension-editor h2 { font-size: var(--ash-fontSize-heading2); font-weight: var(--ash-fontWeight-semiBold); margin: 24px 0 12px; }
-.ash-extension-editor .extension-metadata { color: var(--ash-description-foreground); }
-.ash-extension-editor .extension-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.ash-extension-editor .extension-capabilities { white-space: pre-wrap; line-height: 1.6; }
+.ash-extensions .extension-metadata {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.ash-extensions .extension-name {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-extensions .extension-description {
+	margin-top: 4px;
+}
+.ash-extensions .extension-metadata {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	margin-top: 4px;
+}
+.ash-extensions .extension-row-actions {
+	flex-shrink: 0;
+	align-self: flex-end;
+}
+.ash-extensions .extension-state {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-extension-editor {
+	box-sizing: border-box;
+	height: 100%;
+	overflow: auto;
+	padding: 24px 32px;
+	font-size: var(--ash-fontSize-body1);
+	overflow-wrap: anywhere;
+}
+.ash-extension-editor h1 {
+	font-size: var(--ash-fontSize-heading1);
+	font-weight: var(--ash-fontWeight-semiBold);
+	margin: 0 0 8px;
+}
+.ash-extension-editor h2 {
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+	margin: 24px 0 12px;
+}
+.ash-extension-editor .extension-metadata {
+	color: var(--ash-description-foreground);
+}
+.ash-extension-editor .extension-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 16px;
+}
+.ash-extension-editor .extension-capabilities {
+	white-space: pre-wrap;
+	line-height: 1.6;
+}

@@ -40,6 +40,81 @@ use super::extension_packages_projection;
 use super::result;
 
 impl AppServer {
+    pub(super) fn extension_packages_built_in_providers(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        result(&self.built_in_providers_snapshot()?)
+    }
+
+    pub(super) fn extension_packages_set_built_in_provider_enablement(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::extension_packages::ExtensionsBuiltInProviderEnablementParams;
+        let params: ExtensionsBuiltInProviderEnablementParams = decode(params)?;
+        let _change = self.updates.lock_extension_packages_change();
+        let runtime = self
+            .built_in_extension_runtimes
+            .iter()
+            .find(|runtime| runtime.id() == params.id)
+            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let policy = self
+            .editor_extension_policy
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        let action = if params.enabled {
+            ash_core_plugins::EditorExtensionPolicyAction::Enable
+        } else {
+            ash_core_plugins::EditorExtensionPolicyAction::Disable
+        };
+        policy
+            .set_built_in_enablement(runtime.id(), action, params.expected_revision)
+            .map_err(|error| match error {
+                ash_core_plugins::EditorExtensionPolicyError::RevisionConflict => {
+                    RpcError::new(-32041, AppServerErrorName::PluginRevisionConflict)
+                }
+                ash_core_plugins::EditorExtensionPolicyError::InvalidBinding => {
+                    RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                }
+                ash_core_plugins::EditorExtensionPolicyError::Storage => {
+                    RpcError::new(-32042, AppServerErrorName::PluginOperationFailed)
+                }
+            })?;
+        runtime
+            .reconcile_enablement()
+            .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
+        self.updates.publish_extension_packages_changed();
+        result(&self.built_in_providers_snapshot()?)
+    }
+
+    fn built_in_providers_snapshot(
+        &self,
+    ) -> Result<
+        ash_app_server_protocol::protocol::extension_packages::ExtensionsBuiltInProvidersResult,
+        RpcError,
+    > {
+        use ash_app_server_protocol::protocol::extension_packages::ExtensionsBuiltInProviderDto;
+        use ash_app_server_protocol::protocol::extension_packages::ExtensionsBuiltInProvidersResult;
+        let policy = self
+            .editor_extension_policy
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        Ok(ExtensionsBuiltInProvidersResult {
+            revision: policy.generation(),
+            providers: self
+                .built_in_extension_runtimes
+                .iter()
+                .map(|runtime| ExtensionsBuiltInProviderDto {
+                    id: runtime.id().into(),
+                    enabled: policy.is_extension_enabled(runtime.id()),
+                    running: runtime.is_running(),
+                })
+                .collect(),
+        })
+    }
+
     pub(super) fn extension_packages_editor_extensions(
         &self,
         params: &Value,
@@ -57,6 +132,7 @@ impl AppServer {
         use ash_core_plugins::EditorExtensionPolicyAction as PolicyAction;
         use ash_core_plugins::EditorExtensionPolicyError;
         let params: ExtensionsEditorExtensionPolicyParams = decode(params)?;
+        let _change = self.updates.lock_extension_packages_change();
         let policy = self
             .editor_extension_policy
             .as_ref()
@@ -74,14 +150,14 @@ impl AppServer {
                     && package.package.digest == params.package_digest
             })
             .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-        let source = manager
-            .local_capability_sources(ash_core_plugins::CapabilityKind::EditorExtension)
-            .map_err(extension_packages_error)?
+        let source = self
+            .editor_extension_policy_sources()?
             .into_iter()
             .find(|source| *source.package() == installed.package)
             .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-        if matches!(params.action, Action::Enable | Action::Grant)
-            && (!ash_external_ext::ProductJavaScriptLauncher::supports_platform()
+        if matches!(params.action, Action::Grant)
+            && (source.kind() != ash_core_plugins::CapabilityKind::EditorExtension
+                || !ash_external_ext::ProductJavaScriptLauncher::supports_platform()
                 || !crate::extension_packages_editor_extensions::javascript_entrypoint(&source)
                     .is_ok_and(|entry| entry.is_some()))
         {
@@ -120,6 +196,14 @@ impl AppServer {
                 .reconcile(super::extension_host_runtime::ExtensionHostReconcileMode::Refresh)
                 .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
         }
+        if matches!(
+            action,
+            ash_core_plugins::EditorExtensionPolicyAction::Enable
+                | ash_core_plugins::EditorExtensionPolicyAction::Disable
+        ) {
+            self.reconcile_extension_packages_consumers();
+        }
+        self.updates.publish_extension_packages_changed();
         result(&self.editor_extension_policy_snapshot()?)
     }
 
@@ -142,9 +226,7 @@ impl AppServer {
         let installed = manager
             .list_installed(ListInstalledRequest {})
             .map_err(extension_packages_error)?;
-        let sources = manager
-            .local_capability_sources(ash_core_plugins::CapabilityKind::EditorExtension)
-            .map_err(extension_packages_error)?;
+        let sources = self.editor_extension_policy_sources()?;
         let mut extensions = Vec::new();
         for source in sources {
             let Some(package) = installed
@@ -153,8 +235,18 @@ impl AppServer {
             else {
                 continue;
             };
+            if extensions
+                .iter()
+                .any(|extension: &ExtensionsEditorExtensionPolicyDto| {
+                    extension.installation_id == package.installation_id
+                })
+            {
+                continue;
+            }
             let state = policy.snapshot(source.package(), source.capability());
-            let entrypoint = if ash_external_ext::ProductJavaScriptLauncher::supports_platform() {
+            let entrypoint = if source.kind() == ash_core_plugins::CapabilityKind::EditorExtension
+                && ash_external_ext::ProductJavaScriptLauncher::supports_platform()
+            {
                 crate::extension_packages_editor_extensions::javascript_entrypoint(&source)
                     .ok()
                     .flatten()
@@ -173,6 +265,29 @@ impl AppServer {
             revision: policy.generation(),
             extensions,
         })
+    }
+
+    fn editor_extension_policy_sources(
+        &self,
+    ) -> Result<Vec<ash_core_plugins::LocalCapabilitySource>, RpcError> {
+        let manager = self
+            .plugins_manager
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        let mut sources = Vec::new();
+        // Select executable consent before other editor assets in a multi-capability package.
+        for kind in [
+            ash_core_plugins::CapabilityKind::EditorExtension,
+            ash_core_plugins::CapabilityKind::Language,
+            ash_core_plugins::CapabilityKind::Theme,
+        ] {
+            sources.extend(
+                manager
+                    .local_capability_sources(kind)
+                    .map_err(extension_packages_error)?,
+            );
+        }
+        Ok(sources)
     }
 
     pub(super) fn extension_packages_search(&self, params: &Value) -> Result<Value, RpcError> {
@@ -374,7 +489,7 @@ impl AppServer {
         }
     }
 
-    fn reconcile_extension_packages_consumers(&self) {
+    pub(super) fn reconcile_extension_packages_consumers(&self) {
         if let Some(skills) = &self.skills
             && let Err(error) = skills.list(SkillCatalogReload::Refresh)
         {

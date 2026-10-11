@@ -65,14 +65,15 @@ use std::time::UNIX_EPOCH;
 const EXTENSION_ID: &str = "ash.github-authentication";
 const CHANNEL_ID: &str = "authentication.github";
 
-struct ProductAuthority;
+struct ProductAuthority(Arc<ash_core_plugins::EditorExtensionPolicy>);
 impl ActivationLease for ProductAuthority {}
 impl ActivationAuthority for ProductAuthority {
     fn authorizes(&self) -> bool {
-        true
+        self.0.is_extension_enabled(EXTENSION_ID)
     }
     fn acquire(&self) -> Option<Box<dyn ActivationLease>> {
-        Some(Box::new(Self))
+        self.authorizes()
+            .then(|| Box::new(Self(self.0.clone())) as Box<dyn ActivationLease>)
     }
 }
 
@@ -80,6 +81,7 @@ impl ActivationAuthority for ProductAuthority {
 enum AttemptState {
     Active,
     Cancelled,
+    Disabled,
     LoggedOut,
 }
 
@@ -88,6 +90,8 @@ pub(crate) struct GitHubAuthenticationRuntime {
     executable: PathBuf,
     configurations: Vec<GitHubBrowserConfig>,
     supervisor: ExtensionHostSupervisor,
+    policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
+    lifecycle: Mutex<()>,
     allowed_http: Arc<Mutex<BTreeSet<String>>>,
     http: Arc<dyn HttpClient>,
     secrets: Arc<dyn SecretStore>,
@@ -102,6 +106,7 @@ impl GitHubAuthenticationRuntime {
         configurations: Vec<GitHubBrowserConfig>,
         http: Arc<dyn HttpClient>,
         secrets: Arc<dyn SecretStore>,
+        policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     ) -> Result<Arc<Self>, LoginError> {
         let executable = std::fs::canonicalize(executable).map_err(|_| unavailable())?;
         let launcher = Arc::new(
@@ -135,7 +140,7 @@ impl GitHubAuthenticationRuntime {
                 capabilities: vec![ExtensionCapability::DataChannel],
             },
             NonZeroU64::new(1).expect("activation generation"),
-            Arc::new(ProductAuthority),
+            Arc::new(ProductAuthority(Arc::clone(&policy))),
         );
         let supervisor = ExtensionHostSupervisor::new(
             launcher,
@@ -160,38 +165,49 @@ impl GitHubAuthenticationRuntime {
             );
         }
         let allowed_http = Arc::new(Mutex::new(urls));
-        let allowed = allowed_http.clone();
-        let background_http = http.clone();
-        let background_secrets = secrets.clone();
-        supervisor
-            .start_with_client(
-                None,
-                Some(Arc::new(move |_, operation, cancellation, _| {
-                    let ExtensionClientOperation::CoreService { request } = operation else {
-                        return Err(denied());
-                    };
-                    let response = service(
-                        request,
-                        &allowed,
-                        background_http.as_ref(),
-                        background_secrets.as_ref(),
-                        cancellation,
-                    )?;
-                    Ok(ExtensionClientResult::CoreService { response })
-                })),
-            )
-            .map_err(|_| unavailable())?;
-        Ok(Arc::new(Self {
+        let runtime = Arc::new(Self {
             executable,
             configurations,
             supervisor,
+            policy,
+            lifecycle: Mutex::new(()),
             allowed_http,
             http,
             secrets,
             subscribers: Mutex::new(Vec::new()),
             next_login: AtomicU64::new(1),
             attempts: Arc::new(Mutex::new(BTreeMap::new())),
-        }))
+        });
+        if runtime.policy.is_extension_enabled(EXTENSION_ID) {
+            runtime.start().map_err(|_| unavailable())?;
+        }
+        Ok(runtime)
+    }
+    fn start(&self) -> Result<(), ash_external_ext::ExtensionHostError> {
+        let _lifecycle = self
+            .lifecycle
+            .lock()
+            .map_err(|_| ash_external_ext::ExtensionHostError::HostExited)?;
+        let allowed = self.allowed_http.clone();
+        let background_http = self.http.clone();
+        let background_secrets = self.secrets.clone();
+        self.supervisor.start_with_client(
+            None,
+            Some(Arc::new(move |_, operation, cancellation, _| {
+                let ExtensionClientOperation::CoreService { request } = operation else {
+                    return Err(denied());
+                };
+                let response = service(
+                    request,
+                    &allowed,
+                    background_http.as_ref(),
+                    background_secrets.as_ref(),
+                    cancellation,
+                )?;
+                Ok(ExtensionClientResult::CoreService { response })
+            })),
+        )?;
+        Ok(())
     }
     pub(crate) fn matches(
         &self,
@@ -206,6 +222,10 @@ impl GitHubAuthenticationRuntime {
         request: GitHubAuthenticationRequest,
         cancellation: Option<&CancellationToken>,
     ) -> Result<GitHubAuthenticationResponse, LoginError> {
+        if !self.policy.is_extension_enabled(EXTENSION_ID) {
+            return Err(unavailable());
+        }
+        self.start().map_err(|_| unavailable())?;
         let deadline = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| unavailable())?
@@ -294,6 +314,33 @@ impl GitHubAuthenticationRuntime {
         }
     }
 }
+impl ash_external_ext::BuiltInExtensionRuntime for GitHubAuthenticationRuntime {
+    fn id(&self) -> &str {
+        EXTENSION_ID
+    }
+    fn is_running(&self) -> bool {
+        self.supervisor.is_running()
+    }
+    fn reconcile_enablement(&self) -> Result<(), ash_external_ext::ExtensionHostError> {
+        if !self.policy.is_extension_enabled(EXTENSION_ID) {
+            let _lifecycle = self
+                .lifecycle
+                .lock()
+                .map_err(|_| ash_external_ext::ExtensionHostError::HostExited)?;
+            for state in self
+                .attempts
+                .lock()
+                .map_err(|_| ash_external_ext::ExtensionHostError::HostExited)?
+                .values_mut()
+            {
+                *state = AttemptState::Disabled;
+            }
+            self.supervisor.shutdown()?;
+        }
+        self.publish_accounts();
+        Ok(())
+    }
+}
 impl Drop for GitHubAuthenticationRuntime {
     fn drop(&mut self) {
         let _ = self.supervisor.shutdown();
@@ -313,6 +360,9 @@ impl GitHubAuthenticationProvider {
             service: Mutex::new(Weak::new()),
             active: Arc::new(Mutex::new(BTreeMap::new())),
         })
+    }
+    pub(crate) fn runtime(&self) -> Arc<dyn ash_external_ext::BuiltInExtensionRuntime> {
+        self.runtime.clone()
     }
     pub(crate) fn install_login_service(&self, service: &Arc<LoginService>) {
         *self.service.lock().expect("authentication service lock") = Arc::downgrade(service);
@@ -334,6 +384,9 @@ impl InteractiveLoginDriver for GitHubAuthenticationProvider {
         Ok(self.read_accounts()?.into_iter().next())
     }
     fn read_accounts(&self) -> Result<Vec<AccountSnapshot>, LoginError> {
+        if !self.runtime.policy.is_extension_enabled(EXTENSION_ID) {
+            return Ok(Vec::new());
+        }
         if let AuthenticationResponse::Accounts(accounts) = self
             .runtime
             .authentication(AuthenticationRequest::ReadAccounts)?
@@ -391,6 +444,17 @@ impl InteractiveLoginDriver for GitHubAuthenticationProvider {
                     match state {
                         Some(AttemptState::Active) => {}
                         Some(AttemptState::Cancelled) | None => break,
+                        Some(AttemptState::Disabled) => {
+                            if let Some(service) = service.upgrade() {
+                                fail_login(
+                                    &service,
+                                    completion_id.clone(),
+                                    "github_extension_unavailable",
+                                    "GitHub authentication extension unavailable",
+                                );
+                            }
+                            break;
+                        }
                         Some(AttemptState::LoggedOut) => {
                             if let Some(service) = service.upgrade() {
                                 fail_login(
@@ -585,6 +649,9 @@ impl GitHubAuthenticationProvider {
 }
 impl GitHubAccountManager for GitHubAuthenticationProvider {
     fn accounts(&self) -> Result<Vec<GitHubAccount>, LoginError> {
+        if !self.runtime.policy.is_extension_enabled(EXTENSION_ID) {
+            return Ok(Vec::new());
+        }
         if let GitHubAuthenticationResponse::Accounts(accounts) = self
             .runtime
             .call(GitHubAuthenticationRequest::Accounts, None)?

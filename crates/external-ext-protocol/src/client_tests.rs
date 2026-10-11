@@ -8,6 +8,23 @@ use serde_json::Value;
 use serde_json::json;
 
 #[test]
+fn quick_pick_preserves_descriptions_and_rejects_invalid_peer_items() {
+    let wire = json!({"operation":"showQuickPick","placeholder":"Choose a branch","items":[{"label":"main"},{"label":"occupied","description":"origin/occupied","detail":"Checked out in another worktree"}]});
+    let operation: ExtensionClientOperation = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&operation).unwrap(), wire);
+    ExtensionClientRequest {
+        context: RequestContext::new(1, 2, 3),
+        call_id: 1,
+        operation,
+    }
+    .validate(&ProtocolLimits::default())
+    .unwrap();
+    for item in [json!("main"), json!({"label":4}), json!({"label":"main","detail":false}), json!({"label":"main","owner":"forged"})] {
+        assert!(serde_json::from_value::<ExtensionClientOperation>(json!({"operation":"showQuickPick","placeholder":"Choose","items":[item]})).is_err());
+    }
+}
+
+#[test]
 fn resource_operations_round_trip_and_reject_invalid_uris_and_forged_owners() {
     for operation in ["readResourceFile", "statResource", "readResourceDirectory"] {
         let wire = json!({"operation": operation, "uri": "vfs://workspace/folder/file.md"});

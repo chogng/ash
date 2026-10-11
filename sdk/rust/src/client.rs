@@ -226,7 +226,14 @@ impl Client {
     ) -> Result<Option<usize>, ExtensionError> {
         match self.call(
             ExtensionClientOperation::ShowQuickPick {
-                items,
+                items: items
+                    .into_iter()
+                    .map(|label| external_ext_protocol::ExtensionQuickPickItem {
+                        label,
+                        description: None,
+                        detail: None,
+                    })
+                    .collect(),
                 placeholder: placeholder.into(),
             },
             token,

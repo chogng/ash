@@ -22,7 +22,7 @@ test('Git branch picker explains occupancy and switches after the other worktree
 			await picker.getByRole('combobox').fill('occupied');
 			await expect(picker.getByRole('option', { name: 'occupied Checked out in another worktree', exact: true })).toBeVisible();
 			await picker.getByRole('combobox').press('Enter');
-			await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('status').filter({ hasText: 'Branch occupied is checked out in another worktree.' }).last()).toBeVisible();
+			await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('alert').filter({ hasText: 'Branch occupied is checked out in another worktree.' }).last()).toBeVisible();
 			await expect(picker).toHaveCount(0);
 		}
 		expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');

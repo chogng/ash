@@ -252,6 +252,7 @@ pub struct AppServer {
     extension_packages_editor_extension_admission:
         Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
     editor_extension_policy: Option<Arc<ash_core_plugins::EditorExtensionPolicy>>,
+    built_in_extension_runtimes: Vec<Arc<dyn ash_external_ext::BuiltInExtensionRuntime>>,
     extension_packages_language_runtime:
         Option<extension_packages_language_runtime::ExtensionsLanguageRuntime>,
     plugin_skill_sources: Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>>,
@@ -263,7 +264,7 @@ pub struct AppServer {
         Option<Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>>,
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
     pub(super) mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
-    language: Mutex<language_runtime::AppServerLanguageRuntime>,
+    language: Arc<Mutex<language_runtime::AppServerLanguageRuntime>>,
     syntax_documents: Mutex<HashMap<(u64, String), Arc<Mutex<syntax_operations::SyntaxSession>>>>,
     testing: testing::TestingService,
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
@@ -309,6 +310,7 @@ pub struct AppServer {
     _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
     _extension_packages_watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
+    _editor_extension_policy_watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     git_turn_changes: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
@@ -658,6 +660,7 @@ impl AppServer {
             plugins_manager: None,
             extension_packages_editor_extension_admission: None,
             editor_extension_policy: None,
+            built_in_extension_runtimes: Vec::new(),
             extension_packages_language_runtime: None,
             plugin_skill_sources: None,
             extension_packages_skill_sources: None,
@@ -667,9 +670,9 @@ impl AppServer {
             mcp_status: Arc::new(RwLock::new(
                 ash_mcp_extension::McpRuntimeStatusSnapshot::empty(1),
             )),
-            language: Mutex::new(language_runtime::AppServerLanguageRuntime::new(
+            language: Arc::new(Mutex::new(language_runtime::AppServerLanguageRuntime::new(
                 updates.clone(),
-            )),
+            ))),
             syntax_documents: Mutex::new(HashMap::new()),
             testing: testing::TestingService::default(),
             approval_review_model: None,
@@ -715,6 +718,7 @@ impl AppServer {
             _connector_watcher: None,
             _plugin_watcher: None,
             _extension_packages_watcher: None,
+            _editor_extension_policy_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             git_turn_changes: None,
@@ -924,11 +928,11 @@ impl AppServer {
 
     /// Installs immutable language-server providers prepared by the product composition root.
     pub fn with_language_server_providers(
-        mut self,
+        self,
         providers: ash_lsp_server_provider::LspServerProviders,
     ) -> Self {
         self.language
-            .get_mut()
+            .lock()
             .expect("new App Server language runtime mutex is not poisoned")
             .set_server_providers(providers);
         self
@@ -936,14 +940,18 @@ impl AppServer {
 
     pub(crate) fn with_extension_packages_language_runtime(
         mut self,
-        runtime: extension_packages_language_runtime::ExtensionsLanguageRuntime,
+        mut runtime: extension_packages_language_runtime::ExtensionsLanguageRuntime,
     ) -> Result<Self, String> {
+        if let Some(policy) = &self.editor_extension_policy {
+            runtime.set_editor_extension_policy(Arc::clone(policy));
+        }
         let providers = runtime.providers()?;
         self.language
-            .get_mut()
+            .lock()
             .map_err(|_| "new App Server language runtime mutex is poisoned".to_string())?
             .set_server_providers(providers);
         self.extension_packages_language_runtime = Some(runtime);
+        self.rebind_editor_extension_policy_watcher();
         Ok(self)
     }
 
@@ -993,6 +1001,7 @@ impl AppServer {
             Arc::new(
                 extension_packages_extension_sources::ExtensionsExtensionSourceProvider::new(
                     Arc::clone(&manager),
+                    self.editor_extension_policy.clone(),
                 ),
             );
         self.extension_packages_extension_sources = Some(extension_source);
@@ -1464,7 +1473,44 @@ impl AppServer {
                 Arc::clone(&policy),
             ),
         ));
+        if let Some(runtime) = &mut self.extension_packages_language_runtime {
+            runtime.set_editor_extension_policy(Arc::clone(&policy));
+        }
         self.editor_extension_policy = Some(policy);
+        self.rebind_editor_extension_policy_watcher();
+        if let Some(manager) = &self.plugins_manager {
+            self.extension_packages_extension_sources = Some(Arc::new(
+                extension_packages_extension_sources::ExtensionsExtensionSourceProvider::new(
+                    Arc::clone(manager),
+                    self.editor_extension_policy.clone(),
+                ),
+            ));
+            self.rebind_dynamic_extension_sources();
+            self.reconcile_extension_packages_consumers();
+        }
+        self
+    }
+
+    fn rebind_editor_extension_policy_watcher(&mut self) {
+        self._editor_extension_policy_watcher =
+            self.editor_extension_policy.as_ref().and_then(|policy| {
+                self.extension_packages_language_runtime
+                    .as_ref()
+                    .and_then(|runtime| {
+                        extension_packages_runtime::ExtensionsChangeWatcher::start_editor_policy(
+                            policy,
+                            runtime.clone(),
+                            Arc::clone(&self.language),
+                        )
+                    })
+            });
+    }
+
+    pub(crate) fn with_built_in_extension_runtime(
+        mut self,
+        runtime: Arc<dyn ash_external_ext::BuiltInExtensionRuntime>,
+    ) -> Self {
+        self.built_in_extension_runtimes.push(runtime);
         self
     }
 
@@ -2689,6 +2735,20 @@ impl AppServer {
             }
             Some(ClientMethod::ExtensionsAcquireCapability) => {
                 self.extension_packages_acquire_capability(connection, &request.params)
+            }
+            Some(
+                ClientMethod::ExtensionsBuiltInProviders
+                | ClientMethod::ExtensionsSetBuiltInProviderEnablement,
+            ) => {
+                if !connection.allows_product_host_capabilities() {
+                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+                }
+                if client_method(&request.method) == Some(ClientMethod::ExtensionsBuiltInProviders)
+                {
+                    self.extension_packages_built_in_providers(&request.params)
+                } else {
+                    self.extension_packages_set_built_in_provider_enablement(&request.params)
+                }
             }
             Some(ClientMethod::ExtensionsReleaseCapability) => {
                 self.extension_packages_release_capability(connection, &request.params)

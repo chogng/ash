@@ -43,26 +43,27 @@ export async function activate(context: ExtensionContext): Promise<void> {
 			const provider = owner.add(new GitSCMProvider(git, repository, history, { commandService: commandClient, dialogService: dialogClient, editorService: editorClient, viewsService: viewsClient, workingCopyService: workingCopyClient }));
 			owners.set(repository.id, owner);
 			providers.set(repository.id, provider);
-			owner.add(scm.registerSCMProvider(provider, { parseUri: URI.parse, quickDiff, multiDiff: {
-    metadata: {
-     resourcePrefix: URI.from({ scheme: 'ash-scm', authority: 'ash.git', path: `/${encodeURIComponent(repository.id)}` }).toString(),
-     sourceActions: ['staged', 'unstaged', 'uncommitted'].map(scope => ({ id: `git.source.${repository.id}.${scope}`, label: `${repository.label}: ${scope === 'staged' ? localize('git.stagedChanges', 'Staged Changes') : scope === 'unstaged' ? localize('git.changes', 'Changes') : localize('git.uncommittedChanges', 'Uncommitted Changes')}`, tooltip: repository.label, command: 'git.openChangesSource', arguments: [repository.id, scope] })),
-     repositoryActions: [
-      ['git.commitFromChanges', localize('git.commit', 'Commit'), 'git-commit'], ['git.commitAndPushFromChanges', localize('git.commitAndPush', 'Commit and Push'), 'repo-push'], ['git.push', localize('git.push', 'Push'), 'repo-push'], ['git.stageAll', localize('git.stageAll', 'Stage All'), 'check'], ['git.cleanAll', localize('git.discardChanges', 'Discard Changes'), 'discard'],
-     ].map(([command, label, icon]) => ({ id: command, label, tooltip: label, icon, command, arguments: [repository.id] })),
-    },
-    async resolve(resource) { const scope = new URLSearchParams(resource.query).get('scope'); if (scope !== 'staged' && scope !== 'unstaged' && scope !== 'uncommitted') throw new TypeError('Invalid Git change scope'); return createGitMultiDiffEditorInput(git, scope, await git.status(repository.id)); },
-   }, decorations: {
-				label: 'Git', onDidChange: listener => { const listeners = new DisposableStore(); listeners.add(provider.onDidChange(listener)); listeners.add(ignored.onDidChange(listener)); return listeners; },
-				async provideDecorations(resource, token) {
-					const decoration = provider.provideDecorations(resource);
-					if (decoration) { return decoration; }
-					return ignored.provideDecorations(resource, token);
-				},
-			} }));
+			owner.add(scm.registerSCMProvider(provider, {
+				parseUri: URI.parse, quickDiff, multiDiff: {
+					metadata: {
+						resourcePrefix: URI.from({ scheme: 'ash-scm', authority: 'ash.git', path: `/${encodeURIComponent(repository.id)}` }).toString(),
+						sourceActions: ['staged', 'unstaged', 'uncommitted'].map(scope => ({ id: `git.source.${repository.id}.${scope}`, label: `${repository.label}: ${scope === 'staged' ? localize('git.stagedChanges', 'Staged Changes') : scope === 'unstaged' ? localize('git.changes', 'Changes') : localize('git.uncommittedChanges', 'Uncommitted Changes')}`, tooltip: repository.label, command: 'git.openChangesSource', arguments: [repository.id, scope] })),
+						repositoryActions: [
+							['git.commitFromChanges', localize('git.commit', 'Commit'), 'git-commit'], ['git.commitAndPushFromChanges', localize('git.commitAndPush', 'Commit and Push'), 'repo-push'], ['git.push', localize('git.push', 'Push'), 'repo-push'], ['git.stageAll', localize('git.stageAll', 'Stage All'), 'check'], ['git.cleanAll', localize('git.discardChanges', 'Discard Changes'), 'discard'],
+						].map(([command, label, icon]) => ({ id: command, label, tooltip: label, icon, command, arguments: [repository.id] })),
+					},
+					async resolve(resource) { const scope = new URLSearchParams(resource.query).get('scope'); if (scope !== 'staged' && scope !== 'unstaged' && scope !== 'uncommitted') throw new TypeError('Invalid Git change scope'); return createGitMultiDiffEditorInput(git, scope, await git.status(repository.id)); },
+				}, decorations: {
+					label: 'Git', onDidChange: listener => { const listeners = new DisposableStore(); listeners.add(provider.onDidChange(listener)); listeners.add(ignored.onDidChange(listener)); return listeners; },
+					async provideDecorations(resource, token) {
+						const decoration = provider.provideDecorations(resource);
+						if (decoration) { return decoration; }
+						return ignored.provideDecorations(resource, token);
+					},
+				}
+			}));
 			owner.add(provider.onDidChangeResources(() => { if (provider.statusMessage) { channel.appendLine(`[${repository.label}] ${provider.statusMessage}`); } }));
 		}
-		scm.selectRepository(git.activeRepository?.id);
 	};
 	lifetime.add(git.onDidChangeRepositories(sync));
 	lifetime.add(git.onDidChangeActiveRepository(repository => scm.selectRepository(repository?.id)));

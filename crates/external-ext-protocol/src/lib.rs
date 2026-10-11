@@ -36,6 +36,7 @@ pub use client::ExtensionDocumentEdit;
 pub use client::ExtensionDocumentSnapshot;
 pub use client::ExtensionHostStdinFrame;
 pub use client::ExtensionMessageSeverity;
+pub use client::ExtensionQuickPickItem;
 pub use client::ExtensionTextEdit;
 pub use client::ExtensionTextPosition;
 mod transport;

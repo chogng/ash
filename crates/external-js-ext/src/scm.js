@@ -1,9 +1,10 @@
 /** Public Ash SCM provider bridge. Callback objects never leave the extension realm. */
-export function createSCMApi(runtime, request, invoke) {
+export function createSCMApi(runtime, request, invoke, retain) {
 	const providers = new Map();
 	const registrationId = 'ash.scm';
 	let registration;
 	let revision = 1;
+	let selectionRevision = 0;
 	let active = false;
 	let disposed = false;
 	let pending;
@@ -20,7 +21,7 @@ export function createSCMApi(runtime, request, invoke) {
 			entry.resources.clear();
 			const actions = values => values.map(value => { entry.actions.set(value.id, value); return action(value); });
 			return serial({
-				id: value.id, providerId: value.providerId, label: value.label, rootUri: value.rootUri?.toString(), selected: entry.selected,
+				id: value.id, providerId: value.providerId, label: value.label, rootUri: value.rootUri?.toString(), selected: entry.selected, selectionRevision: entry.selectionRevision,
 				groups: value.groups.map(group => ({
 					id: group.id, label: group.label, actions: actions(group.actions), resources: group.resources.map(resource => {
 						const id = `${group.id}:${resource.path}`;
@@ -45,6 +46,8 @@ export function createSCMApi(runtime, request, invoke) {
 			await request({ operation: 'scmUpdate', registrationId, revision: current, providers: snapshot() }, 'done');
 			return current;
 		}).then(current => { pending = undefined; if (current !== revision) publish(); }, error => { pending = undefined; if (!disposed) console.error('SCM update failed', error); });
+		// A queued replacement must send before the originating callback retires.
+		retain(pending);
 	}
 	function ensureRegistration() {
 		if (registration) return;
@@ -90,7 +93,7 @@ export function createSCMApi(runtime, request, invoke) {
 		registerSCMProvider(provider, options = {}) {
 			if (disposed || !provider || typeof provider.id !== 'string' || !provider.id || providers.has(provider.id)) throw new TypeError('SCM provider needs a unique identity');
 			ensureRegistration();
-			const entry = { provider, selected: false, actions: new Map(), resources: new Map(), historyRevision: 1, historyRefsRevision: 0, historyRefsItems: [], inputRevision: 0, ...options };
+			const entry = { provider, selected: false, selectionRevision: 0, actions: new Map(), resources: new Map(), historyRevision: 1, historyRefsRevision: 0, historyRefsItems: [], inputRevision: 0, ...options };
 			providers.set(provider.id, entry);
 			const listeners = [provider.onDidChangeResources(publish)];
 			if (provider.historyProvider) {
@@ -110,7 +113,7 @@ export function createSCMApi(runtime, request, invoke) {
 			const dispose = () => { if (removed) return; removed = true; for (const listener of listeners) listener.dispose(); providers.delete(provider.id); publish(); };
 			return { dispose, [Symbol.dispose]: dispose };
 		},
-		selectRepository(id) { for (const entry of providers.values()) entry.selected = entry.provider.id === id; publish(); },
+		selectRepository(id) { ++selectionRevision; for (const entry of providers.values()) { entry.selected = entry.provider.id === id; if (entry.selected) entry.selectionRevision = selectionRevision; } publish(); },
 	});
 	return { api, dispose() { disposed = true; active = false; providers.clear(); registration?.dispose(); } };
 }

@@ -28,6 +28,8 @@ getrandom.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+ash-core-plugins.workspace = true
+tempfile.workspace = true
 external-ext-protocol.workspace = true
 ash-external-ext.workspace = true
 ash-install-context.workspace = true

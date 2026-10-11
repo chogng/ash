@@ -16,7 +16,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	const extension = join(root, 'extension');
 	await mkdir(resources);
 	await mkdir(extension);
-	for (const [from, to] of [['node.mjs', 'node.mjs'], ['vscode.js', 'vscode.mjs']]) {
+	for (const [from, to] of [['node.mjs', 'node.mjs'], ['vscode.js', 'vscode.mjs'], ['scm.js', 'scm.js']]) {
 		await copyFile(new URL(from, import.meta.url), join(resources, to));
 	}
 	await copyFile(new URL('host.mjs', import.meta.url), join(resources, 'host.mjs'));
@@ -319,6 +319,21 @@ test('activation can await editor services before publishing its registrations',
 		{ protocolVersion: 1, incarnation: 2, activationGeneration: 3 },
 	]);
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'activated with editor IO');
+});
+
+test('Quick Pick preserves item metadata and returns the original item', { timeout: 10000 }, async t => {
+	const item = { label: 'occupied', description: 'origin/occupied', detail: 'Checked out elsewhere' };
+	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+        context.subscriptions.push(v.commands.registerCommand('test.node', async () => {
+            const item = ${JSON.stringify(item)};
+            const selected = await v.window.showQuickPick(['main', item], { placeHolder: 'Choose' });
+            return selected === item;
+        }));
+    };`, 'extension.cjs', ['command'], frame => {
+		assert.deepEqual(frame.operation, { operation: 'showQuickPick', items: [{ label: 'main' }, item], placeholder: 'Choose' });
+		return { result: 'selection', index: 1 };
+	});
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, true);
 });
 
 

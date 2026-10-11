@@ -1,4 +1,30 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+function collectErrors(page: Page): string[] {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	page.on('console', message => {
+		if (message.type() === 'error' && message.text().startsWith('SCM update failed')) errors.push(message.text());
+	});
+	return errors;
+}
+
+test('SCM delivers changes queued while its initialization update is in flight', async ({ page }) => {
+	const errors = collectErrors(page);
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitSCMTransportIntegration.hold());
+		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		await expect.poll(() => page.evaluate(() => window.gitSCMTransportIntegration.waiting())).toBe(1);
+		await page.evaluate(() => window.gitExtensionIntegration.stage());
+		await page.evaluate(() => window.gitSCMTransportIntegration.release());
+		await expect.poll(async () => ({ groups: await page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.groups), errors: [...errors] })).toEqual({ groups: ['Staged Changes'], errors: [] });
+		expect(errors).toEqual([]);
+		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).errors).toEqual([]);
+	} finally {
+		await page.evaluate(() => { window.gitSCMTransportIntegration.release(); window.gitExtensionIntegration.dispose(); });
+	}
+});
 
 test('SCM commit form separator disappears after a clean Git snapshot and returns with resource groups', async ({ page }, testInfo) => {
 	await page.goto('/gitExtension.html');
@@ -23,7 +49,7 @@ test('SCM commit form separator disappears after a clean Git snapshot and return
 });
 
 for (const language of ['en', 'zh-CN']) test(`distributed Git Worker registers SCM, commands and history in ${language}`, async ({ page }) => {
-	const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
 	try {
 		const activation = await page.evaluate(language => window.gitExtensionIntegration.activate(language), language);
@@ -33,6 +59,9 @@ for (const language of ['en', 'zh-CN']) test(`distributed Git Worker registers S
 		expect(before.repositories[0].groups).toContain(language === 'zh-CN' ? '更改' : 'Changes');
 		const history = await page.evaluate(() => window.gitExtensionIntegration.history());
 		expect(history).toMatchObject([{ id: 'a'.repeat(40), subject: 'First commit' }]);
+		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.switchBranch', ['root']));
+		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).errors).toEqual([]);
+		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).requests).toContainEqual({ operation: 'showQuickPick', placeholder: language === 'zh-CN' ? '选择 Git 分支' : 'Select a Git branch', items: [{ label: 'main', description: language === 'zh-CN' ? '当前分支' : 'Current' }, { label: 'occupied', description: 'origin/occupied', detail: language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree' }] });
 		await page.evaluate(() => window.gitExtensionIntegration.stage());
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.some(call => call.method === 'git/stage'))).toBe(true);
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.groups)).toContain(language === 'zh-CN' ? '暂存的更改' : 'Staged Changes');
@@ -49,7 +78,7 @@ for (const language of ['en', 'zh-CN']) test(`distributed Git Worker registers S
 });
 
 for (const language of ['en', 'zh-CN']) test(`disabled Git leaves another SCM Worker and editable diff intact in ${language}`, async ({ page }) => {
-	const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
 	try {
 		await page.evaluate(() => window.gitExtensionIsolation.addGeneric());
@@ -88,6 +117,7 @@ for (const language of ['en', 'zh-CN']) test(`disabled Git leaves another SCM Wo
 });
 
 for (const language of ['en', 'zh-CN']) test(`disabled Git stays inactive after reload while editing works in ${language}`, async ({ page }) => {
+	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
 	await page.evaluate(language => window.gitExtensionIntegration.activate(language), language);
 	await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories.length)).toBe(1);
@@ -104,5 +134,6 @@ for (const language of ['en', 'zh-CN']) test(`disabled Git stays inactive after 
 		await page.evaluate(() => window.gitExtensionIsolation.enable());
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories.map(repository => repository.id))).toEqual(['root']);
 		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).errors).toEqual([]);
+		expect(errors).toEqual([]);
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });

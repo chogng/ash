@@ -222,13 +222,13 @@ test("workbench configuration exposes modern and flat layout styles", () => {
 	);
 });
 
-test('editor tab style uses the VS Code setting key and validates persisted values', () => {
+test('editor tab style defaults to standard and preserves persisted rounded styles', () => {
 	const style = configurationRegistry.getConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)!;
 	assert.deepEqual({ key: style.key, defaultValue: style.defaultValue, scope: style.scope, schema: style.schema }, {
-		key: 'workbench.experimental.modernUIEditorTabStyle', defaultValue: 'connected', scope: ConfigurationScope.WINDOW,
-		schema: { type: 'string', enum: ['connected', 'pill'] },
+		key: 'workbench.experimental.modernUIEditorTabStyle', defaultValue: 'standard', scope: ConfigurationScope.WINDOW,
+		schema: { type: 'string', enum: ['standard', 'connected', 'pill'] },
 	});
-	assert.deepEqual(['connected', 'pill'].map(value => style.serialize(style.parse(value))), ['connected', 'pill']);
+	assert.deepEqual(['standard', 'connected', 'pill'].map(value => style.serialize(style.parse(value))), ['standard', 'connected', 'pill']);
 	assert.throws(() => style.parse('overlay'), /Invalid editor tab style/u);
 });
 

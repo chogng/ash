@@ -222,6 +222,8 @@ use external_ext_protocol::ExtensionLocalization;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionMessageSeverity;
 #[cfg(any(test, feature = "export"))]
+use external_ext_protocol::ExtensionQuickPickItem;
+#[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionStatusBarAlignment;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionStatusBarCommand;
@@ -1316,6 +1318,12 @@ use crate::protocol::extension_packages::ExtensionsActivationSpecDto;
 use crate::protocol::extension_packages::ExtensionsArtifactHandleDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsAvailableCapabilityDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsBuiltInProviderDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsBuiltInProviderEnablementParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsBuiltInProvidersResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsCapabilityDescriptorDto;
 #[cfg(any(test, feature = "export"))]
@@ -3778,6 +3786,16 @@ client_methods! {
         response: ExtensionsAcquiredCapabilityDto,
         serialization: GlobalExclusive,
     },
+    ExtensionsBuiltInProviders => "extensions/builtInProviders" {
+        params: EmptyParams,
+        response: ExtensionsBuiltInProvidersResult,
+        serialization: GlobalSharedRead,
+    },
+    ExtensionsSetBuiltInProviderEnablement => "extensions/setBuiltInProviderEnablement" {
+        params: ExtensionsBuiltInProviderEnablementParams,
+        response: ExtensionsBuiltInProvidersResult,
+        serialization: GlobalExclusive,
+    },
     ExtensionsReleaseCapability => "extensions/releaseCapability" {
         params: ExtensionsReleaseCapabilityParams,
         response: (),
@@ -5482,6 +5500,9 @@ typescript_bindings! {
     ExtensionsEditorExtensionPolicyParams,
     ExtensionsEditorExtensionPolicyDto,
     ExtensionsEditorExtensionsResult,
+    ExtensionsBuiltInProviderDto,
+    ExtensionsBuiltInProviderEnablementParams,
+    ExtensionsBuiltInProvidersResult,
     ExtensionsChanged,
     ExtensionsUninstallModeDto,
     ExtensionsUninstallParams,
@@ -5542,6 +5563,7 @@ typescript_bindings! {
     crate::protocol::app_tools::AppHostResult,
     TextDocumentsCapability,
     ExtensionClientOperation,
+    ExtensionQuickPickItem,
     external_ext_protocol::services::CoreServiceRequest,
     external_ext_protocol::services::CoreServiceResponse,
     external_ext_protocol::services::CoreHttpMethod,

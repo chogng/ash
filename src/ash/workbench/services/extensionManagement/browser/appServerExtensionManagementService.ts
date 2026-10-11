@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import type { ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import type { ExtensionsBuiltInProviders, ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { IExtensionManagementApi } from "../../../../platform/extensionManagement/common/extensionManagementApi.js";
@@ -30,6 +30,9 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		this.invalidateBrowse();
 		return result;
 	}
+
+	public listBuiltInProviders(): Promise<ExtensionsBuiltInProviders> { return this.api.builtInProviders(); }
+	public setBuiltInProviderEnabled(id: string, enabled: boolean, expectedRevision: number): Promise<ExtensionsBuiltInProviders> { return this.api.setBuiltInProviderEnablement({ id, enabled, expectedRevision }); }
 
 	listEditorExtensions(): Promise<ExtensionsEditorExtensions> {
 		return this.api.editorExtensions();

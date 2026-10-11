@@ -13,6 +13,7 @@ use ash_external_ext::packages::ExtensionDiagnosticCode;
 /// Projects installed Extensions declarative editor assets into the Extension catalog.
 pub(super) struct ExtensionsExtensionSourceProvider {
     manager: Arc<ExtensionPackageManager>,
+    policy: Option<Arc<ash_core_plugins::EditorExtensionPolicy>>,
     state: Mutex<ProjectionState>,
 }
 
@@ -23,9 +24,13 @@ struct ProjectionState {
 }
 
 impl ExtensionsExtensionSourceProvider {
-    pub(super) fn new(manager: Arc<ExtensionPackageManager>) -> Self {
+    pub(super) fn new(
+        manager: Arc<ExtensionPackageManager>,
+        policy: Option<Arc<ash_core_plugins::EditorExtensionPolicy>>,
+    ) -> Self {
         Self {
             manager,
+            policy,
             state: Mutex::new(ProjectionState::default()),
         }
     }
@@ -53,6 +58,13 @@ impl DynamicExtensionSourceProvider for ExtensionsExtensionSourceProvider {
                 }
             };
             for source in selected {
+                if self.policy.as_ref().is_some_and(|policy| {
+                    !policy
+                        .snapshot(source.package(), source.capability())
+                        .enabled
+                }) {
+                    continue;
+                }
                 let manifest = normalized_extension_manifest(&source);
                 match manifest {
                     Ok(manifest) => sources.push((source, manifest)),

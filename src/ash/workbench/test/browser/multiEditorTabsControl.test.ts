@@ -51,7 +51,7 @@ test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 		const tabStyle = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)?.setting;
 		assert.equal(tabStyle?.title, '编辑器标签样式');
 		assert.ok(tabStyle?.valueType === 'select');
-		assert.deepEqual(tabStyle.options.map(option => option.label), ['连接式', '独立圆角']);
+		assert.deepEqual(tabStyle.options.map(option => option.label), ['VS Code 标准', '连接式', '独立圆角']);
 		const sizing = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorTabSizingConfiguration)!.setting!;
 		assert.equal(sizing.title, '工作台 › 编辑器：标签宽度');
 		assert.ok(sizing.valueType === 'select');
@@ -295,6 +295,10 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	const stickyRow = control.domNode.querySelector('.ash-sticky-editor-tabs-row')!;
 	const close = firstTab!.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
 	close.focus();
+	assert.equal(ordinaryRow.classList.contains('ash-standard-editor-tabs'), true);
+	assert.equal(control.domNode.querySelector('.ash-tab-list')?.classList.contains('ash-tab-list-flush'), true);
+	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'connected');
+	assert.equal(ordinaryRow.classList.contains('ash-standard-editor-tabs'), false);
 	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), true);
 	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'pill');
 	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), false);
@@ -316,6 +320,8 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	assert.equal(control.height, 92);
 	assert.equal(control.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-tab-label')?.textContent, 'folder/first');
 	assert.deepEqual([stickyRow, ordinaryRow].map(row => row.classList.contains('ash-connected-editor-tabs')), [false, true]);
+	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'standard');
+	assert.deepEqual([stickyRow, ordinaryRow].map(row => row.classList.contains('ash-standard-editor-tabs')), [true, true]);
 	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'pill');
 	assert.deepEqual([stickyRow, ordinaryRow].map(row => row.classList.contains('ash-connected-editor-tabs')), [false, false]);
 	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'connected');

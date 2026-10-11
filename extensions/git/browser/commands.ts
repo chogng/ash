@@ -1,12 +1,12 @@
 import { commands, window, type ExtensionContext } from 'vscode';
 import { editors } from 'ash';
-import { localize, URI, extUriBiasedIgnorePathCase } from './support.js';
+import { AppServerRemoteError, localize, URI, extUriBiasedIgnorePathCase } from './support.js';
 import { runDiffChange } from './diffActions.js';
 import { gitErrorMessage } from './gitError.js';
 import type { GitService } from './gitService.js';
 import type { GitSCMProvider } from './gitSCMProvider.js';
 import type { GitBackendMonitor } from './monitor.js';
-import type { GitCommand, GitIndexSelection, GitIndexDiff, GitChangeFileComparison } from './types.js';
+import type { GitBranch, GitCommand, GitIndexSelection, GitIndexDiff, GitChangeFileComparison } from './types.js';
 import { input, dialogClient, editorClient, commandClient } from './editors.js';
 import { createGitMultiDiffEditorInput } from './multiDiff.js';
 import type { ISCMHistoryItemComparison, ISCMHistoryItem, ISCMHistoryItemRef, IResourceEditorInput } from '../../../sdk/browser/index.js';
@@ -48,19 +48,19 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 		register(id, value => provider(value)?.commit(options, async () => (await pickGitItem(ctx.input, [{ label: localize('git.commitTracked', 'Tracked changes only'), scope: 'tracked' as const }, { label: localize('git.commitIncludingUntracked', 'Tracked and untracked changes'), scope: 'includeUntracked' as const }], localize('git.commitScope', 'Choose changes to commit')))?.scope));
 	}
 	for (const [id, method] of [['git.undoCommit', 'undoCommit'], ['git.refresh', 'refresh'], ['git.stageAll', 'stageAll'], ['git.unstageAll', 'unstageAll'], ['git.cleanAll', 'discardAll']] as const) { register(id, value => provider(value)?.[method]()); }
-	for (const mode of ['choose', 'all'] as const) { register(mode === 'all' ? 'git.fetchAll' : 'git.fetch', async value => {
-		const id = (await git.getRepository(repositoryId(value))).id;
-		const remotes = (await git.catalog(id)).remotes;
-		if (!remotes.length) { ctx.notifications.warning(localize('git.fetchAllNoRemotes', 'This repository has no remotes configured to fetch from.')); return; }
-		let target: 'all' | 'default' | { remote: string; } = mode === 'all' ? 'all' : 'default';
-		if (mode === 'choose' && remotes.length > 1) { const selected = await pickGitItem(ctx.input, [...remotes.map(remote => ({ label: remote, remote })), { label: localize('git.fetchAllRemotesItem', 'Fetch all remotes'), remote: undefined }], localize('git.fetchChooseRemote', 'Select a remote to fetch')); if (!selected) { return; } target = selected.remote ? { remote: selected.remote } : 'all'; }
-		await provider(id)?.runTitleOperation(() => git.fetch(id, target));
-	}); }
+	for (const mode of ['choose', 'all'] as const) {
+		register(mode === 'all' ? 'git.fetchAll' : 'git.fetch', async value => {
+			const id = (await git.getRepository(repositoryId(value))).id;
+			const remotes = (await git.catalog(id)).remotes;
+			if (!remotes.length) { ctx.notifications.warning(localize('git.fetchAllNoRemotes', 'This repository has no remotes configured to fetch from.')); return; }
+			let target: 'all' | 'default' | { remote: string; } = mode === 'all' ? 'all' : 'default';
+			if (mode === 'choose' && remotes.length > 1) { const selected = await pickGitItem(ctx.input, [...remotes.map(remote => ({ label: remote, remote })), { label: localize('git.fetchAllRemotesItem', 'Fetch all remotes'), remote: undefined }], localize('git.fetchChooseRemote', 'Select a remote to fetch')); if (!selected) { return; } target = selected.remote ? { remote: selected.remote } : 'all'; }
+			await provider(id)?.runTitleOperation(() => git.fetch(id, target));
+		});
+	}
 	for (const method of ['pull', 'push'] as const) { register(`git.${method}`, value => provider(value)?.runTitleOperation(() => git[method](repositoryId(value)))); }
 	for (const definition of repositoryCommands) { register(definition.id, async value => { const id = (await git.getRepository(repositoryId(value))).id; const command = await prepareGitCommand(ctx, definition.kind, id); if (command) { const result = await git.executeCommand(command, id); if (result.outcome === 'conflicted') { ctx.notifications.warning(localize('git.integrationConflicts', 'Git stopped on conflicts. Resolve the files in Source Control, then run Git: Continue. Use Git: Abort to cancel an integration.')); } } }); }
-	register('git.switchBranch', async value => { const id = (await git.getRepository(repositoryId(value))).id; const selected = await pickGitItem(ctx.input, (await git.branches(id)).map(branch => ({ label: branch.name, description: branch.current ? localize('git.currentBranch', 'Current') : branch.upstream, detail: branch.checkedOutElsewhere ? localize('git.branchCheckedOutElsewhere', 'Branch {0} is checked out in another worktree.', branch.name) : undefined, branch })), localize('git.selectBranch', 'Select a Git branch')); if (selected && !selected.branch.current && !selected.branch.checkedOutElsewhere) { await git.switchBranch(selected.branch.name, id); } });
-	register('git.branch', async value => { const id = (await git.getRepository(repositoryId(value))).id; const name = await input({ placeHolder: localize('git.newBranchName', 'Name of the new branch at HEAD'), validateInput: async value => value.trim() ? undefined : localize('git.branchNameRequired', 'Enter a branch name.') }); if (name) { await git.createBranch(name.trim(), id); } });
-	register('git.deleteBranch', async value => { const id = (await git.getRepository(repositoryId(value))).id; const selected = await pickGitItem(ctx.input, (await git.branches(id)).filter(branch => !branch.current && !branch.checkedOutElsewhere).map(branch => ({ label: branch.name, branch })), localize('git.selectBranchToDelete', 'Select a Git branch to delete')); if (selected && (await dialogClient.confirm({ message: localize('git.deleteBranchConfirm', 'Delete local branch {0}?', selected.label) })).confirmed) { await git.deleteBranch(selected.label, id); } });
+	registerBranchCommands(register, ctx, repositoryId);
 	register('git.init', async () => { const folders = monitor.workspace.getWorkspace().folders; const selected = await pickGitItem(ctx.input, folders.map(folder => ({ label: folder.name, folder })), localize('git.initFolder', 'Choose a workspace folder to initialize')); if (!selected) { return; } const branch = await input({ value: 'main', placeHolder: localize('git.initBranch', 'Initial branch name') }); if (branch !== undefined) { await git.initializeRepository(branch.trim(), selected.folder.id); } });
 	register('git.clone', async () => { if (!git.canCloneRepository) { throw new Error(localize('git.cloneUnavailable', 'Cloning is unavailable in this host.')); } const url = await input({ title: localize('git.cloneUrlTitle', 'Clone Repository'), placeHolder: localize('git.cloneUrlPlaceholder', 'Enter a repository URL'), validateInput: async value => value.trim() ? undefined : localize('git.cloneUrlRequired', 'Enter a repository URL.') }); if (url === undefined) { return; } const parentPath = await editors.request<string | null>({ method: 'pickFolder' }); if (!parentPath) { return; } const path = await git.cloneRepository(url.trim(), parentPath); if ((await dialogClient.confirm({ message: localize('git.openClonedRepository', 'Open the cloned repository?') })).confirmed) { await editors.request({ method: 'openWorkspace', path }); } });
 	register('git.createWorktree', async value => { const id = (await git.getRepository(repositoryId(value))).id; const name = await input({ placeHolder: localize('git.newWorktreeName', 'Name of the new detached worktree at HEAD'), validateInput: async value => /^[a-zA-Z0-9_-]{1,64}$/.test(value.trim()) ? undefined : localize('git.worktreeNameInvalid', 'Use 1–64 letters, numbers, hyphens or underscores.') }); if (!name) { return; } const path = await git.createWorktree(name.trim(), id); if ((await dialogClient.confirm({ message: localize('git.openWorktreeConfirm', 'Open the worktree at {0}?', path) })).confirmed) { await editors.request({ method: 'openWorkspace', path }); } });
@@ -75,16 +75,16 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 	for (const scope of ['staged', 'unstaged', 'uncommitted'] as const) { register(`git.open${scope[0].toUpperCase()}${scope.slice(1)}Changes`, async () => editorClient.openEditor(await createGitMultiDiffEditorInput(git, scope), { pinned: true })); }
 	register('git.openChanges', async value => { const options = value as { status: Parameters<typeof createGitMultiDiffEditorInput>[2]; comparison: 'staged' | 'unstaged'; title: string; changes: Parameters<typeof createGitMultiDiffEditorInput>[4]; }; const current = await git.status(options.status!.repositoryId); if (current.streamInstanceId !== options.status!.streamInstanceId || current.revision !== options.status!.revision) { return 'stale'; } const input = await createGitMultiDiffEditorInput(git, options.comparison, options.status, options.title, options.changes); if (!input.items.length) { return 'empty'; } await editorClient.openEditor(input, { pinned: true }); return 'opened'; });
 	register('git.getRepositoryContexts', async () => Promise.all((await git.listRepositories()).map(async repository => ({ id: repository.id, label: repository.label, path: repository.path, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))));
- register('git.executeRepositoryCommand', async (id, command) => { if (typeof id !== 'string' || !command || typeof command !== 'object') throw new TypeError('Invalid Git command'); return git.executeCommand(command as GitCommand, id); });
- register('git.openChangesSource', async (id, scope) => { if (typeof id !== 'string' || scope !== 'staged' && scope !== 'unstaged' && scope !== 'uncommitted') throw new TypeError('Invalid Git source'); await editorClient.openEditor(await createGitMultiDiffEditorInput(git, scope, await git.status(id)), { pinned: true }); });
- for (const [command, action] of [['git.stageFile', 'stage'], ['git.unstageFile', 'unstage'], ['git.discardFile', 'discard']] as const) register(command, async (id, path) => { if (typeof id !== 'string' || typeof path !== 'string') throw new TypeError('Invalid Git path'); await provider(id)?.mutatePaths(action, [path]); });
- for (const push of [false, true]) register(push ? 'git.commitAndPushFromChanges' : 'git.commitFromChanges', async id => {
-  const target = provider(id); if (!target) return;
-  const message = await input({ title: localize('git.commitMessageTitle', 'Commit message'), value: target.input.value, validateInput: async value => value.trim() ? undefined : localize('git.commitMessageRequired', 'Enter a commit message.') });
-  if (message === undefined) return;
-  target.input.value = message; const objectId = await target.commit({}, async () => (await pickGitItem(ctx.input, [{ label: localize('git.commitStaged', 'Staged changes'), scope: 'staged' as const }, { label: localize('git.commitTracked', 'Tracked changes only'), scope: 'tracked' as const }, { label: localize('git.commitIncludingUntracked', 'Tracked and untracked changes'), scope: 'includeUntracked' as const }], localize('git.commitScope', 'Choose changes to commit')))?.scope);
-  if (push && objectId) await target.runTitleOperation(() => git.push(target.id));
- });
+	register('git.executeRepositoryCommand', async (id, command) => { if (typeof id !== 'string' || !command || typeof command !== 'object') throw new TypeError('Invalid Git command'); return git.executeCommand(command as GitCommand, id); });
+	register('git.openChangesSource', async (id, scope) => { if (typeof id !== 'string' || scope !== 'staged' && scope !== 'unstaged' && scope !== 'uncommitted') throw new TypeError('Invalid Git source'); await editorClient.openEditor(await createGitMultiDiffEditorInput(git, scope, await git.status(id)), { pinned: true }); });
+	for (const [command, action] of [['git.stageFile', 'stage'], ['git.unstageFile', 'unstage'], ['git.discardFile', 'discard']] as const) register(command, async (id, path) => { if (typeof id !== 'string' || typeof path !== 'string') throw new TypeError('Invalid Git path'); await provider(id)?.mutatePaths(action, [path]); });
+	for (const push of [false, true]) register(push ? 'git.commitAndPushFromChanges' : 'git.commitFromChanges', async id => {
+		const target = provider(id); if (!target) return;
+		const message = await input({ title: localize('git.commitMessageTitle', 'Commit message'), value: target.input.value, validateInput: async value => value.trim() ? undefined : localize('git.commitMessageRequired', 'Enter a commit message.') });
+		if (message === undefined) return;
+		target.input.value = message; const objectId = await target.commit({}, async () => (await pickGitItem(ctx.input, [{ label: localize('git.commitStaged', 'Staged changes'), scope: 'staged' as const }, { label: localize('git.commitTracked', 'Tracked changes only'), scope: 'tracked' as const }, { label: localize('git.commitIncludingUntracked', 'Tracked and untracked changes'), scope: 'includeUntracked' as const }], localize('git.commitScope', 'Choose changes to commit')))?.scope);
+		if (push && objectId) await target.runTitleOperation(() => git.push(target.id));
+	});
 	register('git.readSettings', async () => { await git.refreshAutoFetch(); return { autoFetch: git.autoFetch, autoFetchPeriod: git.autoFetchPeriod }; });
 	register('git.updateAutoFetch', value => git.setAutoFetch(value as false | true | 'all'));
 	register('git.updateAutoFetchPeriod', value => git.setAutoFetchPeriod(Number(value)));
@@ -93,6 +93,73 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 	register('git.showOutput', showOutput);
 	register('git.openFile', async context => { const state = await editors.request<{ input: { modified?: { resource: string; }; }; selection: NonNullable<Parameters<typeof editorClient.openEditor>[1]>['selection'] | null; }>({ method: 'activeEditor', context }); const resource = state.input?.modified?.resource; if (!resource) { return; } const target = new URLSearchParams(URI.parse(resource).query).get('resource'); if (target) { await editorClient.openEditor({ resource: URI.parse(target) }, { pinned: false, revealIfOpened: true, ...(state.selection ? { selection: state.selection } : {}) }); } });
 }
+function registerBranchCommands(register: (id: string, callback: (...args: readonly unknown[]) => unknown) => void, ctx: GitCommandContext, repositoryId: (value: unknown) => string | undefined): void {
+	register('git.switchBranch', async value => {
+		try {
+			const id = (await ctx.git.getRepository(repositoryId(value))).id;
+			const branches = await ctx.git.branches(id);
+			if (!branches.length) { ctx.notifications.info(localize('git.noBranches', 'This repository has no branches to switch to.')); return; }
+			const selected = await pickBranch(branches, localize('git.selectBranch', 'Select a Git branch'));
+			if (!selected || selected.current) { return; }
+			if (selected.checkedOutElsewhere) { ctx.notifications.warning(localize('git.branchCheckedOutElsewhere', 'Branch {0} is checked out in another worktree.', selected.name)); return; }
+			await ctx.git.switchBranch(selected.name, id);
+		} catch (error) {
+			const reason = error instanceof AppServerRemoteError && error.errorName === 'GitOperationFailed' ? localize('git.switchBranchRejected', 'Git rejected the switch. Check local changes and worktrees.') : gitErrorMessage(error);
+			ctx.notifications.error(localize('git.switchBranchFailed', 'Could not switch branch: {0}', reason));
+		}
+	});
+	register('git.branch', async value => {
+		try {
+			const id = (await ctx.git.getRepository(repositoryId(value))).id;
+			const branches = await ctx.git.branches(id);
+			const name = await input({
+				title: localize('git.createBranchCommandTitle', 'Git: Create Branch'),
+				placeHolder: localize('git.newBranchName', 'Name of the new branch at HEAD'),
+				validateInput: async value => {
+					if (!value.trim()) { return localize('git.branchNameRequired', 'Enter a branch name.'); }
+					if (branches.some(branch => branch.name === value.trim())) { return localize('git.branchAlreadyExists', 'This branch already exists.'); }
+					return undefined;
+				},
+			});
+			if (name === undefined) { return; }
+			await ctx.git.createBranch(name.trim(), id);
+			ctx.notifications.info(localize('git.branchCreated', 'Created branch {0}. The current branch is unchanged.', name.trim()));
+		} catch (error) { ctx.notifications.error(localize('git.createBranchFailed', 'Could not create branch: {0}', gitErrorMessage(error))); }
+	});
+	register('git.deleteBranch', async value => {
+		try {
+			const id = (await ctx.git.getRepository(repositoryId(value))).id;
+			const branches = (await ctx.git.branches(id)).filter(branch => !branch.current);
+			if (!branches.length) { ctx.notifications.info(localize('git.noBranchesToDelete', 'There are no other local branches to delete.')); return; }
+			const selected = await pickBranch(branches, localize('git.selectBranchToDelete', 'Select a Git branch to delete'));
+			if (!selected) { return; }
+			if (selected.checkedOutElsewhere) { ctx.notifications.warning(localize('git.branchCheckedOutElsewhere', 'Branch {0} is checked out in another worktree.', selected.name)); return; }
+			const confirmation = await dialogClient.confirm({
+				title: localize('git.deleteBranchCommandTitle', 'Git: Delete Branch'),
+				message: localize('git.deleteBranchConfirm', 'Delete local branch {0}?', selected.name),
+				detail: localize('git.deleteBranchDetail', 'Git only deletes merged branches that are not checked out in any worktree.'),
+				primaryButton: localize('git.deleteBranchButton', 'Delete Branch'),
+			});
+			if (!confirmation.confirmed) { return; }
+			await ctx.git.deleteBranch(selected.name, id);
+			ctx.notifications.info(localize('git.branchDeleted', 'Deleted branch {0}.', selected.name));
+		} catch (error) {
+			const reason = error instanceof AppServerRemoteError && error.errorName === 'GitOperationFailed' ? localize('git.deleteBranchRejected', 'Git rejected the deletion. Check unmerged commits and worktrees.') : gitErrorMessage(error);
+			ctx.notifications.error(localize('git.deleteBranchFailed', 'Could not delete branch: {0}', reason));
+		}
+	});
+}
+
+async function pickBranch(branches: readonly GitBranch[], placeHolder: string): Promise<GitBranch | undefined> {
+	const selected = await window.showQuickPick(branches.map(branch => ({
+		label: branch.name,
+		description: branch.current ? localize('git.currentBranch', 'Current') : branch.upstream,
+		detail: branch.checkedOutElsewhere ? localize('git.branchWorktreeOccupancy', 'Checked out in another worktree') : undefined,
+		branch,
+	})), { placeHolder });
+	return selected?.branch;
+}
+
 async function pickGitItem<T extends PickItem>(_input: GitCommandContext['input'], items: readonly (T | { type: 'separator'; })[], placeHolder: string): Promise<T | undefined> {
 	const values = items.filter((item): item is T => !('type' in item));
 	return await window.showQuickPick([...values], { placeHolder });

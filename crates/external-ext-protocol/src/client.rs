@@ -388,9 +388,23 @@ pub enum ExtensionClientOperation {
         severity: ExtensionMessageSeverity,
     },
     ShowQuickPick {
-        items: Vec<String>,
+        items: Vec<ExtensionQuickPickItem>,
         placeholder: String,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionQuickPickItem {
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export", ts(optional))]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export", ts(optional))]
+    pub detail: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

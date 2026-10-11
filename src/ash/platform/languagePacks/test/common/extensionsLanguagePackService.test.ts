@@ -85,6 +85,8 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 		update: () => Promise.reject(new Error("unused")),
 		uninstall: () => Promise.reject(new Error("unused")),
 		listInstalled: async () => installed,
+		listBuiltInProviders: async () => ({ revision: 1, providers: [] }),
+		setBuiltInProviderEnabled: () => Promise.reject(new Error('unused')),
 		listEditorExtensions: () => Promise.reject(new Error('Execution policy is outside this language-pack fixture')),
 		setEditorExtensionPolicy: () => Promise.reject(new Error('Execution policy is outside this language-pack fixture')),
 		acquireCapability: async id => ({

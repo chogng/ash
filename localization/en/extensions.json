@@ -32,8 +32,8 @@
     "thirdParty": "Third-party package",
     "operationFailed": "Extensions operation failed.",
     "filterEditorExtensions": "Editor extensions (Open VSX)",
-    "declarativeOnly": "Installation loads supported themes, syntax and snippets without running scripts. Use Manage extension execution to enable and authorize JavaScript separately.",
-    "accessibilityHelp": "Open /extensions to browse and manage extensions. Search by package, capability, or language. Use Installed to manage local versions even while sources are offline. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Installation includes all capabilities in a package. Execution and permissions are managed separately. Use Sources to add or pause an Ash open source. Escape closes this help.",
+    "declarativeOnly": "Installation loads supported themes, syntax and snippets without running scripts. Enable or disable the whole extension in its details. JavaScript execution requires separate authorization.",
+    "accessibilityHelp": "Open /extensions to browse and manage extensions. Use Built-in for bundled extensions and Installed for market and local extensions, even offline. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Use Sources to add or pause an Ash open source. Escape closes this help.",
     "installLocalExtension": "Install extension from workspace",
     "localExtensionPath": "Enter the extension package path relative to the selected workspace directory.",
     "localExtensionInstallNotice": "The package must contain .ash-plugin/plugin.json. Installation copies the package into your profile; enablement and permissions are managed separately.",
@@ -62,7 +62,7 @@
     "extensionsExtensionState": "Enabled: {0}. Execution authorized: {1}.",
     "grantExtensionsExecution": "Authorize execution",
     "revokeExtensionsExecution": "Revoke execution authorization",
-    "extensionsExecutionNotice": "Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Disable execution before uninstalling. Package or execution-contract changes require new authorization.",
+    "extensionsExecutionNotice": "Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Package or execution-contract changes require new authorization.",
     "extensionList": "Extensions",
     "manageSources": "Manage extension sources",
     "addSource": "Add Ash open source…",
@@ -94,6 +94,17 @@
     "installMessage": "{0} {1} {2}?",
     "installReview": "{0}\nSource: {1}\n{2}\nAll capabilities in this package are installed together.",
     "capabilities": "Capabilities",
-    "showInstalled": "Show installed versions"
+    "showInstalled": "Show installed versions",
+    "builtInFilter": "Built-in",
+    "enabledState": "Enabled",
+    "disabledState": "Disabled",
+    "localExtension": "Local extension",
+    "extensionMissing": "This extension is no longer installed. Refresh Extensions.",
+    "languagePackEnablement": "Language packs are managed through the display language setting and cannot be disabled.",
+    "uninstalled": "Uninstalled",
+    "backendUnavailable": "This provider is unavailable on the connected backend.",
+    "providerRunning": "Enabled · running",
+    "providerStopped": "Enabled · starts on demand",
+    "installLocalAction": "Install local…"
   }
 }

@@ -45,7 +45,7 @@ import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../../editor/common/core/range.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
-import type { ExtensionClientOperation, ExtensionClientResult } from '../common/extHost.protocol.js';
+import type { ExtensionClientOperation, ExtensionClientResult, ExtensionQuickPickItem } from '../common/extHost.protocol.js';
 import type { JsonValue, ExtensionClientSource } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { MainThreadDocuments, extensionDocumentSnapshot } from './mainThreadDocuments.js';
 import { MainThreadDiagnostics } from './mainThreadDiagnostics.js';
@@ -294,8 +294,9 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 	}
 
-	private showQuickPick(items: readonly string[], placeholder: string, signal: AbortSignal): Promise<ExtensionClientResult> {
-		const pick = this.quickInput.createQuickPick<{ label: string; index: number; }>();
+	private showQuickPick(items: readonly ExtensionQuickPickItem[], placeholder: string, signal: AbortSignal): Promise<ExtensionClientResult> {
+		if (!Array.isArray(items) || typeof placeholder !== 'string' || items.some(item => !item || typeof item.label !== 'string' || item.description !== undefined && typeof item.description !== 'string' || item.detail !== undefined && typeof item.detail !== 'string')) { throw new TypeError('Invalid Quick Pick request'); }
+		const pick = this.quickInput.createQuickPick<ExtensionQuickPickItem & { index: number; }>();
 		const listeners = new DisposableStore();
 		return new Promise<ExtensionClientResult>((resolve, reject) => {
 			const finish = (index: number | null): void => resolve({ result: 'selection', index });
@@ -304,7 +305,7 @@ export class MainThreadExtensionApi extends Disposable {
 			listeners.add(pick.onDidHide(() => finish(null)));
 			signal.addEventListener('abort', cancel, { once: true });
 			listeners.add(toDisposable(() => signal.removeEventListener('abort', cancel)));
-			pick.items = items.map((label, index) => ({ label, index }));
+			pick.items = items.map(({ label, description, detail }, index) => ({ label, description, detail, index }));
 			pick.ariaLabel = placeholder;
 			pick.placeholder = placeholder;
 			pick.show();

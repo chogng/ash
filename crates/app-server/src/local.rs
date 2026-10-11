@@ -807,6 +807,7 @@ pub struct LocalProfileRuntime {
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
     extension_packages: Mutex<Option<ProfileExtensionsAuthority>>,
     github_authentication: Mutex<Option<Arc<GitHubAuthenticationRuntime>>>,
+    editor_extension_policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
 }
 
 struct ProfileExtensionsAuthority {
@@ -909,7 +910,16 @@ impl LocalProfileRuntime {
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         let plugin_authority = PluginActivationAuthority::open(profile_root.join("plugins"))
             .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let editor_extension_policy = Arc::new(
+            ash_core_plugins::EditorExtensionPolicy::open(
+                profile_root.join("editor-extension-policy.json"),
+            )
+            .map_err(|error| {
+                open_error(format!("editor extension policy unavailable: {error:?}"))
+            })?,
+        );
         Ok(Self {
+            editor_extension_policy,
             diagnostics,
             telemetry,
             analytics: Arc::new(analytics::Analytics::default()),
@@ -1153,6 +1163,17 @@ pub fn open_app_server_with_codebase_providers(
             ));
         }
     }
+    let editor_extension_policy = match &profile_runtime {
+        Some(runtime) => Arc::clone(&runtime.editor_extension_policy),
+        None => Arc::new(
+            ash_core_plugins::EditorExtensionPolicy::open(
+                options.profile_root.join("editor-extension-policy.json"),
+            )
+            .map_err(|error| {
+                open_error(format!("editor extension policy unavailable: {error:?}"))
+            })?,
+        ),
+    };
     let state_runtime = match &profile_runtime {
         Some(runtime) => runtime.state_runtime(),
         None => Arc::new(ash_state::StateRuntime::open(&options.profile_root).map_err(open_error)?),
@@ -1606,6 +1627,7 @@ pub fn open_app_server_with_codebase_providers(
                     github_browser_configurations,
                     application_http.clone(),
                     profile_secrets.clone(),
+                    editor_extension_policy.clone(),
                 )
                 .map_err(open_error)?;
                 *shared = Some(runtime.clone());
@@ -1617,6 +1639,7 @@ pub fn open_app_server_with_codebase_providers(
                 github_browser_configurations,
                 application_http.clone(),
                 profile_secrets.clone(),
+                editor_extension_policy.clone(),
             )
             .map_err(open_error)?
         };
@@ -1737,6 +1760,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_cloud_codebase_providers(providers.cloud)
     .with_extension_roots(extension_roots);
     if let Some(github) = github_oauth {
+        server = server.with_built_in_extension_runtime(github.runtime());
         server = server
             .with_github_accounts(github.clone())
             .with_github_credentials(github, application_http.clone())
@@ -1885,16 +1909,10 @@ pub fn open_app_server_with_codebase_providers(
         } else {
             server.with_plugins_manager(manager)
         };
-        let policy = ash_core_plugins::EditorExtensionPolicy::open(
-            options.profile_root.join("editor-extension-policy.json"),
-        )
-        .map_err(|error| {
-            OpenAppServerError(format!("editor extension policy unavailable: {error:?}"))
-        })?;
-        server = server.with_editor_extension_policy(Arc::new(policy));
     } else if let Some(client) = plugin_package_service {
         server = server.with_plugin_package_service(client);
     }
+    server = server.with_editor_extension_policy(editor_extension_policy);
     let mcp_updates = McpCatalogUpdates::default();
     mcp_updates.bind_extensions(server.agent_extension_registry());
     let mcp_changes = mcp_updates.subscribe();

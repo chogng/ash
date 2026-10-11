@@ -11,7 +11,11 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { registerEditorPane } from '../../../browser/editor.js';
 import { EditorPane, EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import { ExtensionsInput } from '../common/extensionsInput.js';
+import { ExtensionsInput, ExtensionsInputSource } from '../common/extensionsInput.js';
+import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
+import { IPluginService } from '../../../../platform/plugins/common/pluginService.js';
+import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
+import { changeExtensionEnablement, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
 import './extensions.css';
 
 /** Package review and mutations share the same exact-version confirmation in rows and editor. */
@@ -41,7 +45,7 @@ export async function changeExtensionPackage(service: IExtensionManagementServic
 }
 
 function describeExtensionCapabilities(details: ExtensionsPackageDetails): string {
-	const notice = details.packageType === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'declarativeOnly' }, 'Installation loads supported themes, syntax and snippets without running scripts. Use Manage extension execution to enable and authorize JavaScript separately.') : '';
+	const notice = details.packageType === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'declarativeOnly' }, 'Installation loads supported themes, syntax and snippets without running scripts. Enable or disable the whole extension in its details. JavaScript execution requires separate authorization.') : '';
 	return [notice, ...details.capabilities.map(capability => `${capability.kind}: ${capability.id}${capability.permissions.length ? '\n' + localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', capability.permissions.join(', ')) : ''}`)].filter(Boolean).join('\n');
 }
 
@@ -58,11 +62,25 @@ export class ExtensionsEditor extends EditorPane {
 	private readonly actionResources = this._register(new DisposableStore());
 	private loadVersion = 0;
 	private working = false;
+	private currentInput: ExtensionsInput | undefined;
+	private currentSignal: AbortSignal | undefined;
 
 	constructor(@IExtensionManagementService private readonly extensions: IExtensionManagementService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@ICommandService private readonly commands: ICommandService,
-		@IThemeService theme: IThemeService, @IStorageService storage: IStorageService) { super('ash.extensions.editor', theme, storage); }
+		@IGlobalExtensionEnablementService private readonly enablement: IGlobalExtensionEnablementService,
+		@IPluginService private readonly plugins: IPluginService,
+		@IThemeService theme: IThemeService, @IStorageService storage: IStorageService) {
+		super('ash.extensions.editor', theme, storage);
+		const refresh = () => {
+			if (!this.working && this.currentInput && this.currentSignal && !this.currentSignal.aborted) {
+				void this.setInput(this.currentInput, this.currentSignal).catch(error => { if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); } });
+			}
+		};
+		this._register(extensions.onDidChangeInstalled(refresh));
+		this._register(enablement.onDidChangeEnablement(refresh));
+		this._register(plugins.onDidChange(refresh));
+	}
 
 	public override create(container: HTMLElement): void {
 		this.domNode = h(mainWindow.document, 'section');
@@ -82,6 +100,7 @@ export class ExtensionsEditor extends EditorPane {
 
 	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!(input instanceof ExtensionsInput)) { throw new TypeError('Extensions editor requires an Extensions input'); }
+		this.currentInput = input; this.currentSignal = signal;
 		const version = ++this.loadVersion;
 		this.actionResources.clear();
 		this.title.textContent = input.summary.displayName;
@@ -89,9 +108,67 @@ export class ExtensionsEditor extends EditorPane {
 		this.description.textContent = input.summary.description;
 		this.capabilities.textContent = '';
 		this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…');
+		const button = (label: string, action: () => Promise<void>, enabled = true) => {
+			const control = this.actionResources.add(new Button(this.actions, { label, presentation: 'secondary', enabled }));
+			this.actionResources.add(control.onDidClick(() => {
+				if (this.working) { return; }
+				this.working = true;
+				this.domNode.setAttribute('aria-busy', 'true');
+				void action().catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = error instanceof Error ? error.message : String(error); } }).finally(() => { this.working = false; if (!this.isDisposed) { this.domNode.setAttribute('aria-busy', 'false'); } });
+			}));
+		};
+		const toggle = async () => {
+			await changeExtensionEnablement(input, this.enablement, this.extensions, this.plugins);
+			if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
+		};
+		if (input.source === ExtensionsInputSource.BuiltIn) {
+			const catalog = await createBrowserExtensionApi().list('cached');
+			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+			const extension = catalog.extensions.find(value => value.sourceKind === 'builtIn' && value.id === input.summary.id);
+			if (!extension) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
+			const manifest = JSON.parse(extension.manifestJson);
+			if (manifest.ashRuntime?.kind === 'rust' && !manifest.browser) {
+				const catalog = await this.extensions.listBuiltInProviders();
+				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+				const provider = catalog.providers.find(value => value.id === extension.id);
+				if (!provider) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.'); return; }
+				this.status.textContent = provider.enabled ? provider.running ? localize({ bundle: 'ash.extensions', key: 'providerRunning' }, 'Enabled · running') : localize({ bundle: 'ash.extensions', key: 'providerStopped' }, 'Enabled · starts on demand') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+				this.capabilities.textContent = (manifest.ashRuntime.capabilities ?? []).join('\n');
+				button(extensionEnablementLabel(provider.enabled), toggle);
+				return;
+			}
+			const enabled = !this.enablement.getDisabledExtensions().some(value => value.id === extension.id.toLowerCase());
+			this.status.textContent = enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+			this.capabilities.textContent = Object.keys(manifest.contributes ?? {}).join('\n');
+			if (manifest.contributes?.localizations?.length) {
+				this.status.textContent = localize({ bundle: 'ash.extensions', key: 'languagePackEnablement' }, 'Language packs are managed through the display language setting and cannot be disabled.');
+			} else { button(extensionEnablementLabel(enabled), toggle); }
+			return;
+		}
+		if (input.source === ExtensionsInputSource.Local) {
+			const catalog = await this.plugins.list();
+			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+			const plugin = catalog.packages.find(value => value.id === input.summary.id && value.version === input.summary.version);
+			if (!plugin) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
+			this.status.textContent = plugin.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+			button(extensionEnablementLabel(plugin.enabled), toggle, plugin.enabled || !plugin.revoked);
+			button(plugin.granted ? localize({ bundle: 'ash.extensions', key: 'revokeLocalExtension' }, 'Revoke permissions') : localize({ bundle: 'ash.extensions', key: 'grantLocalExtension' }, 'Grant permissions'), async () => { await reviewLocalExtensionPermissions(plugin, this.plugins, this.dialogs); if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); } }, plugin.granted || !plugin.revoked);
+			button(localize({ bundle: 'ash.extensions', key: 'uninstall' }, 'Uninstall'), async () => {
+				const review = await this.dialogs.confirm({ title: localize({ bundle: 'ash.extensions', key: 'uninstallTitle' }, 'Uninstall extension'), message: localize({ bundle: 'ash.extensions', key: 'uninstallMessage' }, 'Uninstall {0} {1}?', plugin.id, plugin.version), primaryButton: localize({ bundle: 'ash.extensions', key: 'uninstall' }, 'Uninstall') });
+				if (!review.confirmed) { return; }
+				const latest = await this.plugins.list();
+				const selected = latest.packages.find(value => value.id === plugin.id && value.digest === plugin.digest);
+				if (!selected) { return; }
+				await this.plugins.uninstall(selected, latest.revision);
+				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+				this.clearInput(); this.actions.replaceChildren();
+				this.status.textContent = localize({ bundle: 'ash.extensions', key: 'uninstalled' }, 'Uninstalled');
+			}, !plugin.enabled && !plugin.granted);
+			return;
+		}
 		const installed = await this.extensions.listInstalled();
 		if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
-		const installation = installed.find(entry => entry.installationId === input.installationId);
+		const installation = installed.find(entry => input.installationId ? entry.installationId === input.installationId : entry.package.id === input.summary.id && entry.package.version === input.summary.version);
 		// Installed operations remain available even if every registry is offline.
 		const details = await this.extensions.get(input.summary.id, input.summary.version).catch(error => {
 			if (!installation) { throw error; }
@@ -104,15 +181,7 @@ export class ExtensionsEditor extends EditorPane {
 		this.capabilities.textContent = details ? describeExtensionCapabilities(details) : installation?.capabilities.map(capability => `${capability.kind}: ${capability.id}`).join('\n') ?? '';
 		const hasInstalled = installed.some(entry => entry.package.id === input.summary.id);
 		this.status.textContent = installation?.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : hasInstalled ? localize({ bundle: 'ash.extensions', key: 'installed' }, 'Installed · activation is separate') : '';
-		const button = (label: string, action: () => Promise<void>, enabled = true) => {
-			const control = this.actionResources.add(new Button(this.actions, { label, presentation: 'secondary', enabled }));
-			this.actionResources.add(control.onDidClick(() => {
-				if (this.working) { return; }
-				this.working = true;
-				this.domNode.setAttribute('aria-busy', 'true');
-				void action().catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = error instanceof Error ? error.message : String(error); } }).finally(() => { this.working = false; if (!this.isDisposed) { this.domNode.setAttribute('aria-busy', 'false'); } });
-			}));
-		};
+
 		const mutate = async (operation: 'install' | 'update' | 'uninstall') => {
 			const result = await changeExtensionPackage(this.extensions, this.dialogs, operation, details, installation);
 			if (result !== undefined && !this.isDisposed && version === this.loadVersion) {
@@ -124,15 +193,26 @@ export class ExtensionsEditor extends EditorPane {
 			button(localize({ bundle: 'ash.extensions', key: 'update' }, 'Update'), () => mutate('update'), installation.state === 'installed');
 			button(localize({ bundle: 'ash.extensions', key: 'uninstall' }, 'Uninstall'), () => mutate('uninstall'), installation.state === 'installed');
 		} else if (!hasInstalled) { button(localize({ bundle: 'ash.extensions', key: 'install' }, 'Install'), () => mutate('install'), !!details); }
-		if (hasInstalled) {
-			button(localize({ bundle: 'ash.extensions', key: 'showInstalled' }, 'Show installed versions'), () => this.commands.executeCommand('ash.extensions.installed', { query: input.summary.id }));
-			if (details?.packageType === 'editorExtension' || installation?.capabilities.some(capability => capability.kind === 'editorExtension')) {
-				button(localize({ bundle: 'ash.extensions', key: 'manageExtensionExecution' }, 'Manage extension execution'), () => this.commands.executeCommand('ash.extensions.manageExtensions'));
+		if (installation && installation.state === 'installed') {
+			const catalog = await this.extensions.listEditorExtensions();
+			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+			const policy = catalog.extensions.find(value => value.installationId === installation.installationId);
+			if (policy) {
+				this.status.textContent = policy.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+				button(extensionEnablementLabel(policy.enabled), async () => {
+					using target = new ExtensionsInput(input.summary, installation.installationId);
+					await changeExtensionEnablement(target, this.enablement, this.extensions, this.plugins);
+					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
+				});
+				if (policy.entrypoint !== null || policy.granted) {
+					button(policy.granted ? localize({ bundle: 'ash.extensions', key: 'revokeExtensionsExecution' }, 'Revoke execution authorization') : localize({ bundle: 'ash.extensions', key: 'grantExtensionsExecution' }, 'Authorize execution'), async () => { await reviewExtensionExecution(policy, this.extensions, this.dialogs); if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); } });
+				}
 			}
 		}
+		if (hasInstalled) { button(localize({ bundle: 'ash.extensions', key: 'showInstalled' }, 'Show installed versions'), () => this.commands.executeCommand('ash.extensions.installed', { query: input.summary.id })); }
 	}
 
-	public clearInput(): void { ++this.loadVersion; this.actionResources.clear(); }
+	public clearInput(): void { this.currentInput = undefined; this.currentSignal = undefined; ++this.loadVersion; this.actionResources.clear(); }
 	public layout(_dimension: IDimension): void { }
 	public focus(): void { this.actions.querySelector<HTMLButtonElement>('button')?.focus(); }
 }

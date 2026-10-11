@@ -62,7 +62,7 @@ export class MultiRowEditorControl extends EditorTabsControl {
 
 	private updatePresentation(): void {
 		// Only the row touching the editor can share its surface.
-		this.stickyRow.setPresentation(this.presentation, this.currentRows === 2 ? 'pill' : this.tabStyle);
+		this.stickyRow.setPresentation(this.presentation, this.currentRows === 2 && this.tabStyle === 'connected' ? 'pill' : this.tabStyle);
 		this.ordinaryRow.setPresentation(this.presentation, this.tabStyle);
 	}
 }

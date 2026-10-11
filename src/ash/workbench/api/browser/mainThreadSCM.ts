@@ -119,6 +119,8 @@ export class MainThreadSCM extends Disposable {
 		}
 		for (const value of snapshots) {
 			let provider = owner.providers.get(value.id);
+			// Resource updates must not replay a previously consumed selection request.
+			const select = value.selected && (!provider || value.selectionRevision > provider.selectionRevision);
 			if (!provider) {
 				if (this.scm.getRepository(value.id)) {
 					throw new Error('SCM repository identity is already registered');
@@ -174,7 +176,7 @@ export class MainThreadSCM extends Disposable {
 			} else {
 				provider.accept(value);
 			}
-			if (value.selected) {
+			if (select) {
 				this.view.selectRepository(value.id);
 			}
 		}
@@ -245,6 +247,7 @@ interface ProviderSnapshot {
 	readonly label: string;
 	readonly rootUri: string | undefined;
 	readonly selected: boolean;
+	readonly selectionRevision: number;
 	readonly groups: readonly Record<string, JsonValue>[];
 	readonly input: Record<string, JsonValue>;
 	readonly activeRepositoryName: string | undefined;
@@ -300,6 +303,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		dispose(): void;
 	}): void { this._register(toDisposable(() => value.dispose())); }
 	public get id(): string { return this.snapshot.id; }
+	public get selectionRevision(): number { return this.snapshot.selectionRevision; }
 	public get providerId(): string { return this.snapshot.providerId; }
 	public get label(): string { return this.snapshot.label; }
 	public get rootUri(): URI | undefined { return this.snapshot.rootUri ? URI.parse(this.snapshot.rootUri) : undefined; }
@@ -438,10 +442,12 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	const statusBarCommands = array(entry.statusBarCommands).map(object);
 	for (const command of statusBarCommands) { string(command.id); string(command.text); string(command.ariaLabel); string(command.tooltip); number(command.priority); optionalString(command.icon); optionalString(command.compactGroup); }
 	if (entry.rootUri != null) { URI.parse(string(entry.rootUri)); }
+	const selectionRevision = entry.selectionRevision == null ? 0 : number(entry.selectionRevision);
+	if (!Number.isSafeInteger(selectionRevision) || selectionRevision < 0) { throw new TypeError('Invalid SCM selection revision'); }
 	const historyRefsRevision = entry.historyRefsRevision == null ? 0 : number(entry.historyRefsRevision);
 	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) { throw new TypeError('Invalid SCM history refs revision'); }
 	const historyRefsItems = entry.historyRefsItems == null ? [] : array(entry.historyRefsItems).map(parseHistoryItem);
-	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
+	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }

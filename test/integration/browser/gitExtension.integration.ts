@@ -18,6 +18,7 @@ import type { TextModelReference } from '../../../src/ash/workbench/services/tex
 import type { IDecorationsProvider } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Event } from '../../../src/ash/base/common/event.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { createBrowserExtensionApi, withEnabledBuiltInExtensions } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
@@ -101,7 +102,8 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			case 'config/read': return { revision: 1, gitConfigured: true, git: { autofetch: 'off', autofetchPeriod: 180 } };
 			case 'git/repositories': return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
 			case 'git/status': return status();
-			case 'git/branch/create': case 'git/branch/list': return { branches: [] };
+			case 'git/branch/create': return { branches: [] };
+			case 'git/branch/list': return { branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }] };
 			case 'git/graph': return { commits: [{ objectId: 'a'.repeat(40), parentObjectIds: [], timestampSeconds: 1, subject: 'First commit' }], references: [], remotes: [], hasMore: false, nextCursor: null };
 			case 'git/init': return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
 			case 'git/clone': return { repositoryPath: '/downloads/clone' };
@@ -123,6 +125,8 @@ const decorationProviders = new Set<IDecorationsProvider>();
 const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService));
 const hostChanges = host.onDidChange(() => { void host.list().then(snapshot => bridge.update(snapshot)); });
 lifetime.add(toDisposable(() => hostChanges.dispose()));
+let scmUpdateGate: DeferredPromise<void> | undefined;
+let waitingSCMUpdates = 0;
 const clientHandler = host.registerClientHandler(async (raw, signal, source): Promise<ExtensionClientResult> => {
 	const operation = raw as ExtensionClientOperation;
 	switch (operation.operation) {
@@ -142,9 +146,17 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			if (request.method === 'open') return { result: 'value', value: null };
 			throw new Error(`Unexpected editor request ${request.method}`);
 		}
-		case 'scmUpdate': bridge.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
-		case 'showQuickPick': return { result: 'selection', index: 0 };
-		case 'showMessage': errors.push(operation.message); return { result: 'done' };
+		case 'scmUpdate': {
+			if (scmUpdateGate) {
+				++waitingSCMUpdates;
+				await scmUpdateGate.p;
+				signal.throwIfAborted();
+			}
+			bridge.set(source, operation.registrationId, operation.revision, operation.providers);
+			return { result: 'done' };
+		}
+		case 'showQuickPick': requests.push(operation as unknown as JsonValue); return { result: 'selection', index: 0 };
+		case 'showMessage': if (operation.severity === 'error') errors.push(operation.message); return { result: 'done' };
 		default: throw new Error(`Unexpected public SDK request ${operation.operation}`);
 	}
 });
@@ -200,6 +212,17 @@ const gitScmPaneIntegration = {
 };
 window.gitScmPaneIntegration = gitScmPaneIntegration;
 declare global { interface Window { gitScmPaneIntegration: typeof gitScmPaneIntegration; } }
+
+declare global {
+	interface Window {
+		gitSCMTransportIntegration: { hold(): void; release(): void; waiting(): number; };
+	}
+}
+window.gitSCMTransportIntegration = {
+	hold: () => { scmUpdateGate = new DeferredPromise<void>(); },
+	release: () => { const gate = scmUpdateGate; scmUpdateGate = undefined; void gate?.complete(undefined); },
+	waiting: () => waitingSCMUpdates,
+};
 
 let reference: TextModelReference | undefined;
 let editor: DiffEditorWidget | undefined;

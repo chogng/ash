@@ -23,6 +23,8 @@ import { AccessibilityService } from '../../../../../../platform/accessibility/b
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../../../../../services/editor/browser/codeEditorService.js';
+import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { WorkbenchQuickInputService } from '../../../../../services/quickinput/browser/quickInputService.js';
 import { IConfigurationResolverService } from '../../../../../services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverService } from '../../../../../services/configurationResolver/browser/configurationResolverService.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
@@ -711,7 +713,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	assert.equal(
 		titleControl?.querySelector(
 			".ash-editor-tabs-control .ash-tab-list",
-		)?.classList.contains("ash-tab-list-inset"),
+		)?.classList.contains("ash-tab-list-flush"),
 		true,
 	);
 	assert.equal(
@@ -1433,7 +1435,7 @@ test('EditorPart close empty groups setting validates booleans and localizes its
 	assert.equal(setting.parse(false), false);
 	assert.throws(() => setting.parse('false'), { message: '关闭空编辑器组必须为 true 或 false。' });
 	assert.equal(setting.setting?.title, '工作台 › 编辑器：关闭空编辑器组');
-	assert.equal(setting.setting?.description, '关闭组内最后一个标签页时关闭该编辑器组。保留最后一个编辑器组。');
+	assert.equal(setting.setting?.description, '关闭组内最后一个标签页时关闭该编辑器组，并在保存会话时省略空分组。保留最后一个编辑器组。');
 });
 
 for (const phase of ['factory', 'input'] as const) {
@@ -3973,8 +3975,12 @@ test('a missing file offers creation and retries into the same pinned tab', asyn
 });
 
 function createEditorParts(main: ConstructorParameters<typeof EditorParts>[0], windows: ConstructorParameters<typeof EditorParts>[1], factory: ConstructorParameters<typeof EditorParts>[2], accessibility: ConstructorParameters<typeof EditorParts>[3], storage: ConstructorParameters<typeof EditorParts>[4]): InstanceType<typeof EditorParts> {
-	const services = editorTestServices.add(createTestComponentServices(storage));
-	return services.createInstance(EditorParts, main, windows, factory, accessibility, storage);
+	const services = editorTestServices.add(createTestEditorServices(undefined, undefined, main.domNode.ownerDocument, storage));
+	const parts = services.createInstance(EditorParts, main, windows, factory, accessibility, storage);
+	services.registerSingleton(ICodeEditorService, () => new CodeEditorService(parts));
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IQuickInputService, () => new WorkbenchQuickInputService({ container: main.domNode.ownerDocument.body, contextKeyService: services.get(IContextKeyService) }));
+	return parts;
 }
 
 for (const scenario of [

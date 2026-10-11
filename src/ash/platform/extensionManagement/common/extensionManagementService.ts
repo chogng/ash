@@ -11,7 +11,7 @@ export interface ExtensionsSearchOptions {
 }
 
 export interface ExtensionsOpenOptions extends Pick<ExtensionsSearchOptions, "capabilityKind" | "languageId"> {
-	readonly mode?: "browse" | "installed";
+	readonly mode?: "browse" | "installed" | "builtIn";
 	readonly query?: string;
 }
 
@@ -86,6 +86,17 @@ export interface ExtensionsEditorExtensions {
 	readonly extensions: readonly ExtensionsEditorExtensionPolicy[];
 }
 
+export interface ExtensionsBuiltInProvider {
+	readonly id: string;
+	readonly enabled: boolean;
+	readonly running: boolean;
+}
+
+export interface ExtensionsBuiltInProviders {
+	readonly revision: number;
+	readonly providers: readonly ExtensionsBuiltInProvider[];
+}
+
 export interface ExtensionsBrowsePackage {
 	readonly summary: ExtensionsPackageSummary;
 	readonly details: ExtensionsPackageDetails | undefined;
@@ -150,6 +161,8 @@ export interface IExtensionManagementService {
 	uninstall(installationId: string, mode?: "ifUnused" | "whenUnused"): Promise<void>;
 	listInstalled(): Promise<readonly ExtensionsInstalledPackage[]>;
 	listEditorExtensions(): Promise<ExtensionsEditorExtensions>;
+	listBuiltInProviders(): Promise<ExtensionsBuiltInProviders>;
+	setBuiltInProviderEnabled(id: string, enabled: boolean, expectedRevision: number): Promise<ExtensionsBuiltInProviders>;
 	setEditorExtensionPolicy(extension: ExtensionsEditorExtensionPolicy, action: ExtensionsEditorExtensionPolicyAction, expectedRevision: number): Promise<ExtensionsEditorExtensions>;
 	acquireCapability(capabilityId: string): Promise<ExtensionsAcquiredCapability>;
 	releaseCapability(leaseId: string): Promise<void>;

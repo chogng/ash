@@ -6,6 +6,72 @@ test.beforeEach(async ({ page }) => {
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);
 });
 
+test('standard editor tabs fill the title row and switch styles without losing keyboard focus', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.openEditor('alpha');
+		await window.ashCompositeIntegration.openEditor('beta');
+	});
+	const host = page.locator('#editor-tabs-host');
+	const tabs = host.locator('.ash-tab');
+	const alpha = host.getByRole('tab', { name: 'alpha.ts', exact: true });
+	const beta = host.getByRole('tab', { name: 'beta.ts', exact: true });
+	const geometry = await tabs.evaluateAll(elements => {
+		const row = elements[0]!.closest('.ash-editor-tabs-and-actions')!.getBoundingClientRect();
+		const list = elements[0]!.closest('.ash-action-bar')!;
+		return {
+			gap: getComputedStyle(list).gap,
+			tabs: elements.map(element => {
+				const bounds = element.getBoundingClientRect();
+				return { top: bounds.top - row.top, height: bounds.height, rowHeight: row.height, radius: getComputedStyle(element).borderRadius };
+			}),
+		};
+	});
+	expect(geometry.gap).toBe('0px');
+	for (const tab of geometry.tabs) {
+		expect(tab.top).toBe(0);
+		expect(tab.height).toBe(tab.rowHeight);
+		expect(tab.radius).toBe('0px');
+	}
+	await expect(alpha).toHaveCSS('font-weight', '400');
+	await alpha.focus();
+	await expect(alpha).toHaveCSS('outline-style', 'solid');
+	await alpha.press('ArrowRight');
+	await expect(beta).toBeFocused();
+	await alpha.focus();
+	await alpha.press('Enter');
+	await expect(alpha).toHaveAttribute('aria-selected', 'true');
+	await alpha.focus();
+	const retained = await alpha.elementHandle();
+	for (const style of ['pill', 'connected', 'standard'] as const) {
+		await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style), style);
+		await expect(alpha).toBeFocused();
+		expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
+		await expect(host.locator('.ash-ordinary-editor-tabs-row .ash-tab-list')).toHaveClass(new RegExp(`ash-tab-list-${style === 'standard' ? 'flush' : 'inset'}`));
+	}
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await expect(alpha).toHaveCSS('outline-style', 'solid');
+		const colors = await tabs.evaluateAll(elements => elements.map(element => ({ background: getComputedStyle(element).backgroundColor, selection: getComputedStyle(element).borderTopColor })));
+		if (theme.includes('high-contrast')) {
+			expect(colors[0]!.selection).not.toBe('rgba(0, 0, 0, 0)');
+			expect(colors[0]!.selection).not.toBe(colors[1]!.selection);
+		} else {
+			expect(colors[0]!.selection).toBe('rgba(0, 0, 0, 0)');
+			expect(colors[0]!.background).not.toBe(colors[1]!.background);
+		}
+	}
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.openEditor('a-file-with-a-name-that-is-much-longer-than-the-fixed-editor-tab-width');
+		await window.ashCompositeIntegration.configureEditorTabs('standard', 'fixed');
+	});
+	const longTab = host.getByRole('tab', { name: /a-file-with-a-name/ });
+	const label = longTab.locator('.ash-icon-label-text');
+	await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+	expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+});
+
 test('Panel lays out active and retained panes before resize or activation returns', async ({ page }) => {
 	const samples = await page.evaluate(async () => {
 		const fixture = window.ashCompositeIntegration;
@@ -220,6 +286,7 @@ test('Sessions use editor drag and drop to arrange conversations vertically with
 	const alpha = host.getByRole('textbox', { name: 'alpha prompt', exact: true });
 	const beta = host.getByRole('textbox', { name: 'beta prompt', exact: true });
 	await alpha.fill('Keep this draft');
+	const retainedInput = (await alpha.elementHandle())!;
 	const source = host.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: 'alpha', exact: true }) });
 	const target = host.locator('.ash-editor-group').filter({ has: page.getByRole('textbox', { name: 'beta prompt', exact: true }) });
 	const bounds = (await target.boundingBox())!;
@@ -231,6 +298,8 @@ test('Sessions use editor drag and drop to arrange conversations vertically with
 		return { below: a.y > b.y, aligned: Math.abs(a.x - b.x) < 1, a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } };
 	}).toMatchObject({ below: true, aligned: true });
 	await expect(alpha).toHaveValue('Keep this draft');
+	expect(await retainedInput.evaluate(element => element.isConnected && element === element.ownerDocument.querySelector('[aria-label="alpha prompt"]'))).toBe(true);
+	await expect(alpha).toBeFocused();
 	await page.reload();
 	await page.waitForFunction(() => !!window.ashSessionGridIntegration);
 	await page.evaluate(() => window.ashSessionGridIntegration.show(['alpha', 'beta'], 'beta'));

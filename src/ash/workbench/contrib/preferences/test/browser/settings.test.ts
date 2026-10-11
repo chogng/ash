@@ -729,6 +729,13 @@ test('settingsLayout is the single projection from registered settings to catego
 		assert.equal(iconThemeSetting.options.some(option => option.value === iconThemeSetting.configuration.defaultValue), true);
 	}
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor-opening');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.modernUIEditorTabStyle), 'editor-opening');
+	const tabStyleSetting = defaults.get(WorkbenchConfiguration.modernUIEditorTabStyle);
+	assert.equal(tabStyleSetting.valueType, 'select');
+	if (tabStyleSetting.valueType === 'select') {
+		assert.equal(tabStyleSetting.configuration.defaultValue, 'standard');
+		assert.deepEqual(tabStyleSetting.options.map(option => option.value), ['standard', 'connected', 'pill']);
+	}
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor-display');
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.symbolPath'), 'editor-display');
 	assert.equal(findSettingCategory(layout, 'workbench.editorLargeFileConfirmation'), 'editor-opening');

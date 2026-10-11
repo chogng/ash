@@ -969,6 +969,15 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		// the receiving host cannot render before moving or closing its source input.
 		if (!this.groupOptions.registry.getEditorPanesForInput(event.input).length) return;
 		if (event.splitDirection) {
+			if (this.groupOptions.editorLimit === 1 && this.groupHosts.get(event.source.id)?.group === event.source) {
+				// A single-content tab represents its whole group. Move that group
+				// to retain its pane and identity instead of leaving an empty source.
+				const directions = { [Direction.Left]: GroupDirection.LEFT, [Direction.Right]: GroupDirection.RIGHT, [Direction.Up]: GroupDirection.UP, [Direction.Down]: GroupDirection.DOWN };
+				this.moveGroup(event.source, event.target, directions[event.splitDirection]);
+				this.setActiveGroup(event.source);
+				event.source.focus();
+				return;
+			}
 			const created = this.insertGroup(event.target, event.splitDirection);
 			void event.source.moveEditorTo(event.input, created.group, 0)
 				.then(() => {

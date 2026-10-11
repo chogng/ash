@@ -227,6 +227,31 @@ pub struct ExtensionsEditorExtensionsResult {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionsBuiltInProviderEnablementParams {
+    pub id: String,
+    pub enabled: bool,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionsBuiltInProviderDto {
+    pub id: String,
+    pub enabled: bool,
+    pub running: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionsBuiltInProvidersResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub providers: Vec<ExtensionsBuiltInProviderDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtensionsChanged {
     pub instance_id: String,

@@ -8,10 +8,12 @@ use ash_lsp_server_provider::ManagedNodeRuntime;
 use ash_lsp_server_provider::NodePackageLanguageServerProvider;
 
 /// Composes installed Extensions executable capabilities into language-server providers.
+#[derive(Clone)]
 pub(crate) struct ExtensionsLanguageRuntime {
     manager: Arc<ExtensionPackageManager>,
     node: Option<ManagedNodeRuntime>,
     base: LspServerProviders,
+    policy: Option<Arc<ash_core_plugins::EditorExtensionPolicy>>,
 }
 
 impl ExtensionsLanguageRuntime {
@@ -24,7 +26,15 @@ impl ExtensionsLanguageRuntime {
             manager,
             node,
             base,
+            policy: None,
         }
+    }
+
+    pub(crate) fn set_editor_extension_policy(
+        &mut self,
+        policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
+    ) {
+        self.policy = Some(policy);
     }
 
     pub(crate) fn providers(&self) -> Result<LspServerProviders, String> {
@@ -34,6 +44,13 @@ impl ExtensionsLanguageRuntime {
             .map_err(|error| error.to_string())?;
         let mut providers = self.base.clone();
         for executable in executables {
+            if self.policy.as_ref().is_some_and(|policy| {
+                !policy
+                    .snapshot(executable.package(), executable.capability())
+                    .enabled
+            }) {
+                continue;
+            }
             let languages = executable.language_ids();
             if languages.is_empty() {
                 continue;

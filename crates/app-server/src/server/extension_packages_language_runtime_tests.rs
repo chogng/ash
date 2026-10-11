@@ -77,7 +77,7 @@ fn vsix_declarations_enter_the_catalog_and_disappear_after_uninstall() {
         })
         .unwrap();
     let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(Arc::new(
-        ExtensionsExtensionSourceProvider::new(manager.clone()),
+        ExtensionsExtensionSourceProvider::new(manager.clone(), None),
     ));
     let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
     assert!(
@@ -170,7 +170,7 @@ fn installed_language_package_projects_assets_and_packaged_server() {
         })
         .unwrap();
 
-    let extension_snapshot = ExtensionsExtensionSourceProvider::new(manager.clone())
+    let extension_snapshot = ExtensionsExtensionSourceProvider::new(manager.clone(), None)
         .snapshot()
         .unwrap();
     assert_eq!(extension_snapshot.packages.len(), 1);
@@ -186,13 +186,13 @@ fn installed_language_package_projects_assets_and_packaged_server() {
     );
 
     let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(Arc::new(
-        ExtensionsExtensionSourceProvider::new(manager.clone()),
+        ExtensionsExtensionSourceProvider::new(manager.clone(), None),
     ));
     let catalog = catalog.list(ExtensionPackagesReload::Refresh);
     assert!(catalog.diagnostics.is_empty(), "{:?}", catalog.diagnostics);
     assert_eq!(catalog.extensions.len(), 1);
 
-    let runtime = ExtensionsLanguageRuntime::new(
+    let mut runtime = ExtensionsLanguageRuntime::new(
         manager.clone(),
         Some(ManagedNodeRuntime::from_path(&node).unwrap()),
         LspServerProviders::new(),
@@ -218,6 +218,74 @@ fn installed_language_package_projects_assets_and_packaged_server() {
         .iter()
         .find(|capability| capability.kind == CapabilityKind::Language)
         .unwrap();
+    let policy = Arc::new(
+        ash_core_plugins::EditorExtensionPolicy::open(root.path().join("editor-policy.json"))
+            .unwrap(),
+    );
+    runtime.set_editor_extension_policy(policy.clone());
+    let peer = Arc::new(std::sync::Mutex::new(
+        super::language_runtime::AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default())),
+    ));
+    peer.lock()
+        .unwrap()
+        .set_server_providers(runtime.providers().unwrap());
+    let _watcher =
+        ExtensionsChangeWatcher::start_editor_policy(&policy, runtime.clone(), peer.clone())
+            .unwrap();
+    let peer_servers = || {
+        peer.lock()
+            .unwrap()
+            .definitions(root.path(), &ash_config::LanguageServersConfig::default())
+            .unwrap()
+            .len()
+    };
+    assert_eq!(peer_servers(), 1);
+    policy
+        .set(
+            &installed.package,
+            &language.reference,
+            ash_core_plugins::EditorExtensionPolicyAction::Disable,
+            policy.generation(),
+        )
+        .unwrap();
+    assert!(
+        !runtime
+            .providers()
+            .unwrap()
+            .contains("demo-language-server")
+    );
+    for _ in 0..100 {
+        if peer_servers() == 0 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(
+        peer_servers(),
+        0,
+        "another directory consumer retires its disabled provider"
+    );
+    policy
+        .set(
+            &installed.package,
+            &language.reference,
+            ash_core_plugins::EditorExtensionPolicyAction::Enable,
+            policy.generation(),
+        )
+        .unwrap();
+    assert!(
+        runtime
+            .providers()
+            .unwrap()
+            .contains("demo-language-server")
+    );
+    for _ in 0..100 {
+        if peer_servers() == 1 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(peer_servers(), 1);
     let acquired = manager
         .acquire_capability(AcquireCapabilityRequest {
             capability: language.reference.clone(),
@@ -282,8 +350,9 @@ fn installed_theme_enters_the_shared_declarative_extension_catalog() {
             version: Some("1.0.0".into()),
         })
         .unwrap();
-    let provider: Arc<dyn DynamicExtensionSourceProvider> =
-        Arc::new(ExtensionsExtensionSourceProvider::new(Arc::clone(&manager)));
+    let provider: Arc<dyn DynamicExtensionSourceProvider> = Arc::new(
+        ExtensionsExtensionSourceProvider::new(Arc::clone(&manager), None),
+    );
     let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(provider);
     let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
     assert_eq!(snapshot.extensions.len(), 1);
@@ -357,7 +426,7 @@ fn a_corrupt_theme_does_not_remove_healthy_extension_packages_languages() {
         .remove(0);
     // A corrupt immutable artifact is retired without removing other capability families.
     fs::write(theme.host_path().join("package.json"), "invalid JSON").unwrap();
-    let provider = Arc::new(ExtensionsExtensionSourceProvider::new(manager));
+    let provider = Arc::new(ExtensionsExtensionSourceProvider::new(manager, None));
     let mut packages = ExtensionPackages::new(Vec::new()).with_dynamic_sources(provider);
     let snapshot = packages.list(ExtensionPackagesReload::Refresh);
     assert_eq!(
@@ -374,6 +443,64 @@ fn a_corrupt_theme_does_not_remove_healthy_extension_packages_languages() {
         ash_external_ext::packages::ExtensionDiagnosticCode::SourceUnavailable
     );
     assert_eq!(packages.list(ExtensionPackagesReload::Cached), snapshot);
+}
+
+#[test]
+fn disabling_an_editor_package_retires_its_declarative_catalog_and_restores_it_on_enable() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = Arc::new(
+        ExtensionPackageManager::open(
+            root.path().join("packages"),
+            providers(Arc::new(LanguageRegistry)),
+        )
+        .unwrap(),
+    );
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "publisher.sample@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let policy = Arc::new(
+        ash_core_plugins::EditorExtensionPolicy::open(root.path().join("policy.json")).unwrap(),
+    );
+    let source = manager
+        .local_capability_sources(CapabilityKind::EditorExtension)
+        .unwrap()
+        .remove(0);
+    let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(Arc::new(
+        ExtensionsExtensionSourceProvider::new(manager.clone(), Some(policy.clone())),
+    ));
+    let initial = catalog.list(ExtensionPackagesReload::Refresh);
+    assert_eq!(initial.extensions.len(), 1);
+    policy
+        .set(
+            source.package(),
+            source.capability(),
+            ash_core_plugins::EditorExtensionPolicyAction::Disable,
+            1,
+        )
+        .unwrap();
+    let disabled = catalog.list(ExtensionPackagesReload::Refresh);
+    assert!(disabled.extensions.is_empty());
+    assert!(disabled.generation > initial.generation);
+    assert_eq!(
+        manager
+            .list_installed(ash_core_plugins::ListInstalledRequest {})
+            .unwrap(),
+        [installed]
+    );
+    policy
+        .set(
+            source.package(),
+            source.capability(),
+            ash_core_plugins::EditorExtensionPolicyAction::Enable,
+            2,
+        )
+        .unwrap();
+    let restored = catalog.list(ExtensionPackagesReload::Refresh);
+    assert_eq!(restored.extensions.len(), 1);
+    assert!(restored.generation > disabled.generation);
 }
 
 struct LanguageRegistry;

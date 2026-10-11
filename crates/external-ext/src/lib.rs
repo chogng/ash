@@ -68,3 +68,11 @@ pub use supervisor::ExtensionHostSupervisor;
 pub use supervisor::ExtensionInvocation;
 pub use supervisor::ExtensionInvocationHandle;
 pub use supervisor::ExtensionInvocationTarget;
+
+/// A product-installed capability runtime controlled by the shared profile enablement owner.
+/// Disabling must cancel in-flight work and stop the current process before returning.
+pub trait BuiltInExtensionRuntime: Send + Sync {
+    fn id(&self) -> &str;
+    fn is_running(&self) -> bool;
+    fn reconcile_enablement(&self) -> Result<(), ExtensionHostError>;
+}

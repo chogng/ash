@@ -312,7 +312,9 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	}
 
 	setPresentation(presentation: TabListPresentation, tabStyle: ModernUIEditorTabStyle): void {
-		this.tabList.setPresentation(presentation);
+		const standard = tabStyle === 'standard';
+		this.domNode.classList.toggle('ash-standard-editor-tabs', standard);
+		this.tabList.setPresentation(standard ? 'flush' : presentation);
 		this.connected = presentation === "inset" && tabStyle === 'connected';
 		this.domNode.classList.toggle(CONNECTED_EDITOR_TABS_CLASS, this.connected);
 		this.updateConnectedTab();

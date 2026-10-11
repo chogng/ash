@@ -17,6 +17,8 @@ test("Extensions browse snapshots survive view recreation and invalidate after l
 	const detailRequests: string[] = [];
 	const installed = { installationId: "installed-1", package: packageReference, state: "installed" as const, capabilities: [] };
 	const api = {
+		builtInProviders: async () => ({ revision: 1, providers: [] }),
+		setBuiltInProviderEnablement: async () => { throw new Error('unused'); },
 		sources: async () => ({ revision: 0, sources: [] }),
 		addSource: async () => ({ revision: 1, sources: [] }),
 		setSourceEnabled: async () => ({ revision: 2, sources: [] }),

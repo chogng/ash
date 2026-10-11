@@ -13,6 +13,12 @@ export interface ExtensionDocumentEdit {
 	readonly edits: { start: { line: number; character: number; }; end: { line: number; character: number; }; text: string; }[];
 }
 
+export interface ExtensionQuickPickItem {
+	readonly label: string;
+	readonly description?: string;
+	readonly detail?: string;
+}
+
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
 	| { operation: 'scmUpdate'; registrationId: string; revision: number; providers: readonly JsonValue[]; }
@@ -42,7 +48,7 @@ export type ExtensionClientOperation =
 	| { operation: 'readConfiguration'; section: string; resource: string | null; }
 	| { operation: 'updateConfiguration'; section: string; value: JsonValue; target: 'user' | 'workspace'; }
 	| { operation: 'showMessage'; message: string; severity: 'information' | 'warning' | 'error'; }
-	| { operation: 'showQuickPick'; items: string[]; placeholder: string; };
+	| { operation: 'showQuickPick'; items: readonly ExtensionQuickPickItem[]; placeholder: string; };
 
 export type ExtensionClientResult =
 	| { result: 'value'; value: JsonValue; }

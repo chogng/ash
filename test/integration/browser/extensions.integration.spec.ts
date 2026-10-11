@@ -11,9 +11,9 @@ test('Extensions retains its list when wrapped filters share a short view contai
 	expect(errors).toEqual([]);
 });
 
-for (const [locale, installTitle, manageTitle, enable, grant, permission, disable, revoke, uninstall] of [
-	['en', 'Install extension from workspace', 'Manage local extensions', 'Enable', 'Grant permissions', 'Read workspace files', 'Disable', 'Revoke permissions', 'Uninstall'],
-	['zh-CN', '从工作区安装扩展', '管理本地扩展', '启用', '授予权限', '读取工作区文件', '禁用', '撤销权限', '卸载'],
+for (const [locale, installTitle, enable, grant, permission, disable, revoke, uninstall] of [
+	['en', 'Install extension from workspace', 'Enable', 'Grant permissions', 'Read workspace files', 'Disable', 'Revoke permissions', 'Uninstall'],
+	['zh-CN', '从工作区安装扩展', '启用', '授予权限', '读取工作区文件', '禁用', '撤销权限', '卸载'],
 ]) {
 	test(`Local SDK extension installation and permission review work in ${locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?locale=${locale}`);
@@ -30,27 +30,26 @@ for (const [locale, installTitle, manageTitle, enable, grant, permission, disabl
 		const request = await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'pluginInstall')) as [string, Record<string, unknown>];
 		expect(request[1]).toMatchObject({ expectedRevision: 0, path: 'examples/extensions/inspect', dirId: null });
 		expect(request[1].commandId).toMatch(/^desktop-plugin-install-/u);
-		for (const action of [enable, grant]) {
-			await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.manageLocal'));
-			const picker = page.getByRole('dialog', { name: manageTitle, exact: true });
-			await expect(picker).toContainText('SDK fixture');
-			await page.keyboard.press('Enter');
-			const review = page.getByRole('dialog', { name: 'SDK fixture', exact: true });
-			await expect(review).toContainText(permission);
-			await expect(review).toContainText('sha256:' + 'b'.repeat(64));
-			await review.getByRole('button', { name: action, exact: true }).click();
-			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
-		}
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageLocal'));
+		await page.locator('.ash-extensions').getByRole('option').filter({ hasText: 'SDK fixture' }).click();
+		const editor = page.locator('.ash-extension-editor');
+		await editor.getByRole('button', { name: enable, exact: true }).click();
+		await expect(editor.getByRole('button', { name: disable, exact: true })).toBeVisible();
+		await editor.getByRole('button', { name: grant, exact: true }).click();
+		const permissions = page.getByRole('dialog', { name: 'SDK fixture', exact: true });
+		await expect(permissions).toContainText(permission);
+		await expect(permissions).toContainText('sha256:' + 'b'.repeat(64));
+		await permissions.getByRole('button', { name: grant, exact: true }).click();
+		await expect(editor.getByRole('button', { name: revoke, exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.localPackages().map(({ enabled, granted }) => ({ enabled, granted })))).toEqual([{ enabled: true, granted: true }]);
-		for (const action of [disable, revoke, uninstall]) {
-			await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.manageLocal'));
-			await expect(page.getByRole('dialog', { name: manageTitle, exact: true })).toBeVisible();
-			await page.keyboard.press('Enter');
-			const review = page.getByRole('dialog', { name: 'SDK fixture', exact: true });
-			if (action !== uninstall) { await expect(review.getByRole('button', { name: uninstall, exact: true })).toHaveCount(0); }
-			await review.getByRole('button', { name: action, exact: true }).click();
-			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
-		}
+		await expect(editor.getByRole('button', { name: uninstall, exact: true })).toBeDisabled();
+		await editor.getByRole('button', { name: disable, exact: true }).click();
+		await expect(editor.getByRole('button', { name: enable, exact: true })).toBeVisible();
+		await editor.getByRole('button', { name: revoke, exact: true }).click();
+		await page.getByRole('dialog', { name: 'SDK fixture', exact: true }).getByRole('button', { name: revoke, exact: true }).click();
+		await expect(editor.getByRole('button', { name: uninstall, exact: true })).toBeEnabled();
+		await editor.getByRole('button', { name: uninstall, exact: true }).click();
+		await page.getByRole('dialog', { name: locale === 'en' ? 'Uninstall extension' : '卸载扩展', exact: true }).getByRole('button', { name: uninstall, exact: true }).click();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.localPackages())).toEqual([]);
 		await page.evaluate(() => window.ashExtensionsIntegration.dispose());
 		await expect(page.locator('.ash-quick-input-host')).toHaveCount(0);
@@ -113,33 +112,34 @@ for (const locale of ['en', 'zh-CN']) {
 		const review = page.getByRole('dialog', { name: install, exact: true });
 		await expect(review).toContainText('publisher.sample@open-vsx');
 		await review.getByRole('button', { name: install, exact: true }).click();
-		await expect(editor).toContainText(locale === 'en' ? 'Installed' : '已安装');
-		for (const action of locale === 'en' ? ['Enable', 'Authorize execution', 'Revoke execution authorization', 'Disable'] : ['启用', '授权执行', '撤销执行授权', '禁用']) {
-			await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.manageExtensions'));
-			await expect(page.getByRole('dialog', { name: locale === 'en' ? 'Manage extension execution' : '管理扩展执行', exact: true })).toBeVisible();
-			await page.keyboard.press('Enter');
-			await page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true }).getByRole('button', { name: action, exact: true }).click();
-			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
+		await expect(editor).toContainText(locale === 'en' ? 'Enabled' : '已启用');
+		for (const [action, policyAction] of locale === 'en' ? [['Disable', 'disable'], ['Authorize execution', 'grant'], ['Revoke execution authorization', 'revoke'], ['Enable', 'enable']] : [['禁用', 'disable'], ['授权执行', 'grant'], ['撤销执行授权', 'revoke'], ['启用', 'enable']]) {
+			await editor.getByRole('button', { name: action, exact: true }).click();
+			if (policyAction === 'grant' || policyAction === 'revoke') {
+				await page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true }).getByRole('button', { name: action, exact: true }).click();
+			}
+			await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy').map((entry: any) => entry[1].action).at(-1))).toBe(policyAction);
 		}
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy').map((entry: any) => [entry[1].action, entry[1].expectedRevision, entry[1].installationId]))).toEqual([['enable', 1, 'version-one'], ['grant', 2, 'version-one'], ['revoke', 3, 'version-one'], ['disable', 4, 'version-one']]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy').map((entry: any) => [entry[1].action, entry[1].expectedRevision, entry[1].installationId]))).toEqual([['disable', 1, 'version-one'], ['grant', 2, 'version-one'], ['revoke', 3, 'version-one'], ['enable', 4, 'version-one']]);
 	});
 }
 
 test('Extensions execution can be revoked when its entry becomes unavailable', async ({ page }) => {
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.open({ capabilityKind: 'editorExtension' }));
-	await page.locator('.ash-extensions').getByRole('button', { name: 'Install', exact: true }).click();
+	await page.locator('.ash-extensions').getByRole('option').click();
+	const editor = page.locator('.ash-extension-editor');
+	await editor.getByRole('button', { name: 'Install', exact: true }).click();
 	await page.getByRole('dialog', { name: 'Install', exact: true }).getByRole('button', { name: 'Install', exact: true }).click();
-	for (const action of ['Enable', 'Authorize execution', 'Revoke execution authorization', 'Disable']) {
-		if (action === 'Revoke execution authorization') { await page.evaluate(() => window.ashExtensionsIntegration.removeEditorEntrypoint()); }
-		await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.manageExtensions'));
-		await expect(page.getByRole('dialog', { name: 'Manage extension execution', exact: true })).toBeVisible();
-		await page.keyboard.press('Enter');
-		const review = page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true });
-		if (action === 'Disable') { await expect(review.getByRole('button', { name: 'Authorize execution', exact: true })).toHaveCount(0); }
-		await review.getByRole('button', { name: action, exact: true }).click();
-		await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
-	}
+	await editor.getByRole('button', { name: 'Authorize execution', exact: true }).click();
+	await page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true }).getByRole('button', { name: 'Authorize execution', exact: true }).click();
+	await expect(editor.getByRole('button', { name: 'Revoke execution authorization', exact: true })).toBeVisible();
+	await page.evaluate(() => window.ashExtensionsIntegration.removeEditorEntrypoint());
+	await editor.getByRole('button', { name: 'Revoke execution authorization', exact: true }).click();
+	await page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true }).getByRole('button', { name: 'Revoke execution authorization', exact: true }).click();
+	await expect(editor.getByRole('button', { name: 'Authorize execution', exact: true })).toHaveCount(0);
+	await editor.getByRole('button', { name: 'Disable', exact: true }).click();
+	await expect(editor.getByRole('button', { name: 'Enable', exact: true })).toBeVisible();
 });
 
 for (const trigger of ['command', 'view']) {
@@ -218,3 +218,57 @@ test('Third-party Ash sources can be added, paused and resumed through Extension
 	}
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'setSourceEnabled').map((entry: any) => entry[1]))).toEqual([{ sourceId: 'community', enabled: false, expectedRevision: 1 }, { sourceId: 'community', enabled: true, expectedRevision: 2 }]);
 });
+
+for (const [locale, disable, enable, disabled, languagePackReason] of [
+	['en', 'Disable', 'Enable', 'Disabled', 'cannot be disabled'],
+	['zh-CN', '禁用', '启用', '已禁用', '不能禁用'],
+]) {
+	test(`All built-in extensions share enablement management and preserve language-pack behavior in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+		const view = page.locator('.ash-extensions');
+		const extension = view.getByRole('option').filter({ hasText: 'vscode.javascript' });
+		await expect(extension.getByRole('button', { name: disable, exact: true })).toBeVisible();
+		await extension.getByRole('button', { name: disable, exact: true }).focus();
+		await page.keyboard.press('Enter');
+		await expect(extension.getByRole('button', { name: enable, exact: true })).toBeVisible();
+		await expect(page.locator('.ash-extension-editor')).toHaveCount(0);
+		await extension.click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.getByRole('status')).toContainText(disabled);
+		await page.reload();
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+		await expect(extension.getByRole('button', { name: enable, exact: true })).toBeVisible();
+		await extension.click();
+		await editor.getByRole('button', { name: enable, exact: true }).click();
+		await expect(extension.getByRole('button', { name: disable, exact: true })).toBeVisible();
+		const languagePack = view.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' });
+		await expect(languagePack.getByRole('button')).toHaveCount(0);
+		await languagePack.click();
+		await expect(editor.getByRole('status')).toContainText(languagePackReason);
+		await expect(editor.getByRole('button')).toHaveCount(0);
+	});
+}
+
+for (const [locale, disable, enable, disabled, running, onDemand] of [
+	['en', 'Disable', 'Enable', 'Disabled', 'Enabled · running', 'Enabled · starts on demand'],
+	['zh-CN', '禁用', '启用', '已禁用', '已启用 · 正在运行', '已启用 · 按需启动'],
+]) {
+	test(`Built-in Rust provider controls use backend authority and report on-demand activation in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+		const provider = page.locator('.ash-extensions').getByRole('option').filter({ hasText: 'ash.github-authentication' });
+		await provider.click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.getByRole('status')).toHaveText(running);
+		await editor.getByRole('button', { name: disable, exact: true }).click();
+		await expect(provider.getByRole('button', { name: enable, exact: true })).toBeVisible();
+		await expect(editor.getByRole('status')).toHaveText(disabled);
+		await provider.getByRole('button', { name: enable, exact: true }).click();
+		await expect(editor.getByRole('status')).toHaveText(onDemand);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'builtInPolicy'))).toEqual([
+			['builtInPolicy', { id: 'ash.github-authentication', enabled: false, expectedRevision: 1 }],
+			['builtInPolicy', { id: 'ash.github-authentication', enabled: true, expectedRevision: 2 }],
+		]);
+	});
+}
