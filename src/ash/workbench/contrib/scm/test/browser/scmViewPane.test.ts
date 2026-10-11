@@ -24,7 +24,7 @@ import assert from "node:assert/strict";
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import type { ISCMHistoryProvider } from '../../common/history.js';
+import type { ISCMHistoryItemRef, ISCMHistoryProvider } from '../../common/history.js';
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 import { suite, test } from "mocha";
@@ -321,6 +321,66 @@ test('SCM history title operations keep refresh and busy state with their starti
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+	}
+});
+
+
+test('SCM history restores a late HEAD and moves its marker without reloading or losing expansion', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	try {
+		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
+		const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+		const { MenuService } = await import('../../../../../platform/actions/common/menuService.js');
+		using context = new ContextKeyService();
+		using services = new InstantiationService();
+		const menus = new MenuService(new CommandService(services), context);
+		using scm = new SCMService();
+		using view = new SCMViewService(scm);
+		const head = observableValue<ISCMHistoryItemRef | undefined>('lateHead', undefined);
+		let queries = 0;
+		const provider: ISCMHistoryProvider = {
+			onDidChange: Event.None, historyItemRef: head, refresh: () => assert.fail('Unexpected refresh'),
+			provideHistoryItems: async () => { queries++; return [
+				{ id: 'one', parentIds: ['two'], subject: 'First commit', message: 'First commit', references: [] },
+				{ id: 'two', parentIds: [], subject: 'Second commit', message: 'Second commit', references: [] },
+			]; },
+			provideHistoryItemChanges: async () => [],
+			resolveHistoryItemDetails: async () => { throw new Error('Unexpected details'); },
+			resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected contents'); },
+			resolveHistoryItemChatContext: async () => undefined,
+			resolveHistoryItemChangeRangeChatContext: async () => undefined,
+		};
+		using registration = scm.registerSCMProvider(testSCMProvider('late-head', 'Repository', provider));
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.lateHead.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
+			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { },
+		}, testEditorService(), testResourceLabelService(), {
+			show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
+		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } });
+		pane.setVisible(true);
+		await waitFor(() => pane.element.querySelectorAll('.ash-scm-graph-commit').length === 2);
+		const rows = [...pane.element.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')];
+		rows[0].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await waitFor(() => rows[0].getAttribute('aria-expanded') === 'true' && rows[0].querySelector('.ash-scm-graph-change-state')?.textContent === 'No changed files.');
+		const loaded = queries;
+		head.set({ id: 'localBranch:main', name: 'main', revision: 'one', category: 'localBranch' });
+		assert.equal(rows[0].getAttribute('aria-current'), 'true');
+		assert.equal(rows[0].querySelector('.ash-scm-graph-label.head')?.textContent, 'main');
+		head.set(undefined);
+		assert.equal(pane.element.querySelector('.ash-scm-graph-label.head'), null);
+		head.set({ id: 'localBranch:topic', name: 'topic', revision: 'two', category: 'localBranch' });
+		assert.equal(rows[0].hasAttribute('aria-current'), false);
+		assert.equal(rows[1].getAttribute('aria-current'), 'true');
+		assert.equal(rows[1].querySelector('.ash-scm-graph-label.head')?.textContent, 'topic');
+		assert.equal(rows[0].getAttribute('aria-expanded'), 'true');
+		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-commit')[0], rows[0]);
+		assert.equal(queries, loaded);
+		pane.dispose();
+		head.set({ id: 'HEAD', name: 'detached', revision: 'one' });
+		assert.equal(rows[1].getAttribute('aria-current'), 'true', 'Disposed panes stop observing the old provider');
+	} finally {
+		browser.window.close();
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
 	}
 });
 

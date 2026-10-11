@@ -7,7 +7,7 @@ export class Git {
 	constructor(private readonly page: Page, private readonly menus: Menus) { }
 
 	async open(): Promise<void> {
-		const tab = this.page.getByRole('tab', { name: /^Git(?:,|$)/u });
+		const tab = this.page.getByRole('tab', { name: /^Source Control(?:,|$)/u });
 		if (await tab.getAttribute('aria-selected') !== 'true' || !await this.page.locator('[data-part="sidebar"]').isVisible()) await tab.click();
 		await expect(this.page.locator('[data-view-id="ash.gitView"]')).toBeVisible();
 	}
