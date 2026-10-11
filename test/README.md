@@ -47,6 +47,8 @@ Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 B
 
 真实 App Server 场景运行文件保存、BOM/CRLF、外部修改后的撤销，以及手动保存、未保存、延迟自动保存、切换编辑器自动保存后的重启恢复；Browser 还验证未保存内容在页面重载后的恢复。终端覆盖输入、工作区目录、面板关闭再打开、多实例输出隔离和 shell 退出后的重新启动。Search 验证大小写、正则、包含与排除条件及清除结果；Tasks 验证发现、执行、重跑、取消和实际输出；Settings 验证即时生效、重启保存和恢复默认。CI 配置覆盖 Linux Browser、macOS Electron 和 Windows Electron；终端进程在窗口重启后的恢复尚未实现，不属于当前覆盖。
 
+Electron 自动化窗口遵循 VS Code 测试的显示方式：本地普通测试隐藏窗口，CI 使用 `showInactive()`，`--debug` 显示并激活窗口。普通模式禁止系统窗口焦点，但 Playwright 仍可输入和验证页面内焦点；这项策略也覆盖新窗口和重新启动。确实依赖系统焦点、全屏或系统菜单输入的用例使用 `test.extend({ electronWindowMode: 'active' })` 或在自己的 `describe` 内设置 `test.use({ electronWindowMode: 'active' })`；直接调用启动器时传入 `windowMode: 'active'`。限制由测试启动器的预加载脚本安装，正常应用启动保持原行为。
+
 ## 发布成品检查
 
 `.github/workflows/platform-checks.yml` 先构建、签名和公证，上传 Actions 产物，再调用 `release-sanity.yml`；所有成品检查通过后才向 GitHub Release 上传安装包和更新描述。Desktop 检查 macOS arm64/x64 和 Windows x64；Code 与独立 App Server 分别在 macOS、Linux、Windows 的 arm64/x64 机器运行，Windows ARM64 的交叉编译结果也必须在 ARM64 机器通过运行验证。

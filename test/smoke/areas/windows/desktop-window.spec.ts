@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 
+const focusTest = test.extend({ electronWindowMode: 'active' });
+
 test.use({ openWorkspace: false });
 
 for (const entry of ['welcome', 'explorer'] as const) {
@@ -60,7 +62,7 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 	});
 }
 
-test('desktop window commands update zoom and open the window switcher', async ({ application, target, workbench }) => {
+focusTest('desktop window commands update zoom and open the window switcher', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'This scenario requires the Code desktop');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;

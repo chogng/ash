@@ -290,10 +290,15 @@ test('file tab copy and reveal actions target inactive and selected files', asyn
 	const menu = page.getByRole('menu').last();
 	const explorerAction = menu.getByRole('menuitem', { name: 'Reveal in Explorer View', exact: true });
 	await expect(explorerAction).toBeVisible();
+	const labels = await menu.getByRole('menuitem').evaluateAll(items => items.map(item => item.getAttribute('aria-label')));
+	const copyIndex = labels.indexOf('Copy Path');
+	expect(copyIndex).toBeGreaterThan(labels.indexOf('Reopen Editor With...'));
+	expect(labels.slice(copyIndex, copyIndex + 3)).toEqual(['Copy Path', 'Copy Relative Path', 'Reveal in Explorer View']);
+	expect(labels.indexOf('Pin Editor')).toBeGreaterThan(copyIndex + 2);
+	expect(labels.indexOf('Split Up')).toBeGreaterThan(labels.indexOf('Pin Editor'));
 	if (target.kind === 'electron') {
-		const labels = await menu.getByRole('menuitem').allTextContents();
 		const osLabel = process.platform === 'darwin' ? 'Reveal in Finder' : process.platform === 'win32' ? 'Reveal in File Explorer' : 'Open Containing Folder';
-		expect(labels.indexOf('Reveal in Explorer View')).toBe(labels.indexOf(osLabel) + 1);
+		expect(labels.indexOf(osLabel)).toBe(copyIndex + 3);
 		const electron = application as ElectronApplication;
 		await electron.evaluate(({ shell }) => {
 			const paths: string[] = [];
@@ -323,8 +328,11 @@ test('file tab copy and reveal actions target inactive and selected files', asyn
 	await untitled.focus();
 	await untitled.press('Shift+F10');
 	await expect(menu).toBeVisible();
-	await expect(explorerAction).toHaveCount(0);
+	await expect(explorerAction).toBeDisabled();
+	await expect(menu.getByRole('menuitem', { name: 'Copy Path', exact: true })).toBeDisabled();
+	await expect(menu.getByRole('menuitem', { name: 'Copy Relative Path', exact: true })).toBeDisabled();
 	await page.keyboard.press('Escape');
+	await expect(untitled).toBeFocused();
 });
 
 test("App Server workspace files open in Stanza and save through the editor region", async ({ target, testWorkspace, workbench }) => {

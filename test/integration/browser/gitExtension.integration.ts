@@ -32,6 +32,13 @@ import { MainThreadSCM } from '../../../src/ash/workbench/api/browser/mainThread
 import { MainThreadExtensionBackend } from '../../../src/ash/workbench/api/browser/mainThreadExtensionBackend.js';
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
+import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
+import { ScmViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmViewPane.js';
+import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import '../../../src/ash/base/browser/ui/splitview/splitview.css';
+import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
 import { QuickDiffService } from '../../../src/ash/workbench/contrib/scm/common/quickDiffService.js';
 import { MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import type { IDecorationsService } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
@@ -85,7 +92,8 @@ const requests: JsonValue[] = [];
 const answers: string[] = [];
 
 let revision = 1;
-const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null }, changes: [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false }] });
+let clean = false;
+const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false }] });
 const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 	request: async (method, params): Promise<JsonValue> => {
 		calls.push({ method, params });
@@ -165,6 +173,33 @@ window.gitExtensionIntegration = {
 	history: async () => scm.getRepository('root')!.provider.historyProvider!.provideHistoryItems({ limit: 1 }),
 	dispose: () => lifetime.dispose(),
 };
+
+function mountChangesPane(): void {
+	const host = document.createElement('div');
+	host.id = 'scm-pane';
+	host.style.cssText = 'width:320px;height:480px';
+	document.body.append(host);
+	lifetime.add(toDisposable(() => host.remove()));
+	const ui = lifetime.add(createTestEditorServices());
+	registerCodeEditorServices(ui);
+	lifetime.add(bindColorTheme(ui.get(IThemeService), host));
+	ui.registerInstance(ISCMService, scm);
+	ui.registerInstance(ISCMViewService, view);
+	const panes = lifetime.add(new PaneView(host));
+	const changes = lifetime.add(ui.createInstance(ScmViewPane, host, { id: 'fixture.changes', title: 'Changes' }));
+	panes.addPane(changes, 424);
+	panes.addPane(lifetime.add(new Pane(host, { id: 'fixture.review', title: 'Agent Review', collapsed: true })), 28);
+	panes.addPane(lifetime.add(new Pane(host, { id: 'fixture.graph', title: 'Graph', collapsed: true })), 28);
+	panes.layout(480, 320);
+	changes.setVisible(true);
+}
+
+const gitScmPaneIntegration = {
+	mount: mountChangesPane,
+	setClean: async (value: boolean) => { clean = value; revision++; await invoke('git.refresh', [scm.getRepository('root')!]); },
+};
+window.gitScmPaneIntegration = gitScmPaneIntegration;
+declare global { interface Window { gitScmPaneIntegration: typeof gitScmPaneIntegration; } }
 
 let reference: TextModelReference | undefined;
 let editor: DiffEditorWidget | undefined;

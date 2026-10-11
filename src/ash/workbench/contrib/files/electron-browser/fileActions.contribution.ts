@@ -32,7 +32,7 @@ registerAction2(class RevealFileInOSAction extends Action2 {
 			f1: true,
 			menu: [
 				{ id: MenuId.ExplorerContext, when: ContextKeyExpr.and(ContextKeyExpr.has('ashExplorerHasResource'), ResourceSchemeContext.isEqualTo(Schemas.file)), group: 'navigation', order: 20 },
-				{ id: MenuId.EditorTitleContext, when: ResourceSchemeContext.isEqualTo(Schemas.file), group: '2_files', order: 0 },
+				{ id: MenuId.EditorTitleContext, when: ResourceSchemeContext.isEqualTo(Schemas.file), group: '2_files', order: 40 },
 			],
 		});
 	}

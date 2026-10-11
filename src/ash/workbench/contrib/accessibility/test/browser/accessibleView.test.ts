@@ -213,6 +213,7 @@ test('editor help reads the editor state and its focus hint respects verbosity a
 	const text = fixture.browser.window.document.querySelector('textarea')!;
 	assert.match(text.value, /read-only text editor[\s\S]*optimization is enabled[\s\S]*Tab moves focus/u);
 	assert.match(text.value, /Shift\+F10[\s\S]*saved tabs in its group[\s\S]*most recently closed tab/u);
+	assert.match(text.value, /Copy Path, Copy Relative Path, and Reveal in Explorer View/u);
 	assert.match(text.value, /Focus into Panel[\s\S]*Hide Panel[\s\S]*Restore Editor Area/u);
 	fixture.browser.window.document.querySelector('dialog')!.close();
 	await Promise.resolve();

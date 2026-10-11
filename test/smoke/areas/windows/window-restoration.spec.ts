@@ -5,6 +5,7 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { launchElectronApplication, type ElectronApplicationLaunchResult } from '../../../automation/playwrightElectron.js';
 import { Workbench } from '../../../automation/workbench.js';
+import type { ElectronLaunchOptions } from '../../../automation/electron.js';
 
 test.beforeEach(({ }, testInfo) => {
 	test.skip(testInfo.project.name !== 'electron-ui', 'Window restoration is a Desktop process lifecycle scenario.');
@@ -309,7 +310,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
-	const session = await launch(userDataDirectory, undefined, ['--force-device-scale-factor=1']);
+	const session = await launch(userDataDirectory, undefined, ['--force-device-scale-factor=1'], { windowMode: 'active' });
 	const application = session.application;
 	try {
 		const page = await application.firstWindow();
@@ -371,7 +372,7 @@ for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) 
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.newWindowDimensions': policy }));
-		const session = await launch(userDataDirectory);
+		const session = await launch(userDataDirectory, undefined, undefined, { windowMode: 'active' });
 		try {
 			const application = session.application;
 			const page = await application.firstWindow();
@@ -433,7 +434,7 @@ for (const restoreFullscreen of [false, true]) {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.restoreFullscreen': restoreFullscreen }));
-		let session = await launch(userDataDirectory);
+		let session = await launch(userDataDirectory, undefined, undefined, { windowMode: 'active' });
 		try {
 			let application = session.application;
 			const page = await application.firstWindow();
@@ -442,7 +443,7 @@ for (const restoreFullscreen of [false, true]) {
 			await application.evaluate(({ BrowserWindow }) => { for (const window of BrowserWindow.getAllWindows()) window.setFullScreen(true); });
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.isFullScreen()))).toEqual([true, true]);
 			await session.quit();
-			session = await launch(userDataDirectory);
+			session = await launch(userDataDirectory, undefined, undefined, { windowMode: 'active' });
 			application = session.application;
 			await expect.poll(() => application.windows().length).toBe(2);
 			const restoredWorkbench = new Workbench(await application.firstWindow());
@@ -726,8 +727,8 @@ test('updated version restores all windows once despite a none preference', asyn
 	}
 });
 
-async function launch(userDataDirectory: string, folder?: string, extraArgs?: readonly string[]): Promise<ElectronApplicationLaunchResult> {
-	return launchElectronApplication({ appServerMode: 'disabled', userDataDirectory, workspaceDirectory: folder, extraArgs });
+async function launch(userDataDirectory: string, folder?: string, extraArgs?: readonly string[], options?: Pick<ElectronLaunchOptions, 'windowMode'>): Promise<ElectronApplicationLaunchResult> {
+	return launchElectronApplication({ appServerMode: 'disabled', userDataDirectory, workspaceDirectory: folder, extraArgs, ...options });
 }
 
 async function geometryDelta(application: ElectronApplication, expected: { x: number; y: number; width: number; height: number; }, kind: 'normal' | 'current'): Promise<number> {

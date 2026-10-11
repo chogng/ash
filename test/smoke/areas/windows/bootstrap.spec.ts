@@ -170,7 +170,7 @@ void app.whenReady().then(async () => {
 test('Desktop starts when its application entry loads after Electron is ready', async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
-	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
+	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory, windowMode: 'active' });
 	const entry = await writeShellEntry(testInfo);
 	const application = await _electron.launch({
 		executablePath: configuration.executablePath,

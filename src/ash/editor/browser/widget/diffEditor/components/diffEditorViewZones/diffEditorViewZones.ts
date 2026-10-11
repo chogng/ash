@@ -212,6 +212,10 @@ export class DiffEditorViewZones extends Disposable {
 	}
 
 	private addViewZones(accessor: IViewZoneChangeAccessor, zones: readonly DiffViewZone[]): string[] {
-		return zones.map(zone => accessor.addZone({ ...zone, domNode: h(this.modifiedEditor.getDomNode().ownerDocument, 'div') }));
+		return zones.map(zone => {
+			const domNode = h(this.modifiedEditor.getDomNode().ownerDocument, 'div');
+			domNode.className = 'ash-diff-alignment-zone';
+			return accessor.addZone({ ...zone, domNode });
+		});
 	}
 }

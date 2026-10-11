@@ -147,12 +147,11 @@ registerAction2(class RevealInExplorerAction extends Action2 {
 		super({
 			id: REVEAL_IN_EXPLORER_COMMAND_ID,
 			title: localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View'),
-			precondition: ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key),
+			precondition: ContextKeyExpr.and(fileResourceWhen, ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)),
 			menu: {
 				id: MenuId.EditorTitleContext,
-				when: fileResourceWhen,
 				group: '2_files',
-				order: 1,
+				order: 30,
 			},
 		});
 	}
@@ -249,15 +248,13 @@ MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_PATH_C
 MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') }, when: fileResourceWhen });
 
 MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
-	command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') },
-	when: fileResourceWhen,
-	group: '1_cutcopypaste',
+	command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), precondition: fileResourceWhen },
+	group: '2_files',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
-	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') },
-	when: fileResourceWhen,
-	group: '1_cutcopypaste',
+	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), precondition: fileResourceWhen },
+	group: '2_files',
 	order: 20,
 });
 

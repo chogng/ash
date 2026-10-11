@@ -33,7 +33,7 @@ test('Calls reject unsupported server connections and keep the microphone off', 
 	await expect(view.getByRole('button', { name: 'Unmute microphone', exact: true })).toBeDisabled();
 });
 
-test('Windows calls share a selected window, receive video, and clear it after stopping', async ({ target, workbench, application }) => {
+test.extend({ electronWindowMode: 'inactive' })('Windows calls share a selected window, receive video, and clear it after stopping', async ({ target, workbench, application }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.platform !== 'win32', 'Requires Windows capture and two connected Electron windows.');
 	if (!('windows' in application)) { return; }
 	test.setTimeout(120_000);

@@ -15,6 +15,8 @@ import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';
 import { USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../src/ash/platform/keyboardLayout/common/userKeyboardLayout.js';
 
+const focusTest = test.extend({ electronWindowMode: 'active' });
+
 test('Sessions keyboard layout commands inspect the active mapping and offer layout selection', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const quickAccess = new QuickAccess(page);
@@ -2741,7 +2743,7 @@ test('Open in Agents selects the same session thread in the Agents Window', asyn
 	await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
 });
 
-test('Agents macOS fullscreen hides window controls and restores them on exit', async ({ application, target, workbench }) => {
+focusTest('Agents macOS fullscreen hides window controls and restores them on exit', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'Requires macOS Code Electron window controls');
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
@@ -3343,7 +3345,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 	}
 });
 
-test('Sessions application menu follows its host and uses Sessions actions', async ({ application, target, workbench }) => {
+focusTest('Sessions application menu follows its host and uses Sessions actions', async ({ application, target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
 	if (target.kind === 'electron' && process.platform === 'darwin') {

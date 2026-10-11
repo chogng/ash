@@ -1866,6 +1866,71 @@ test('diff restores synchronized vertical scrolling when switching from inline t
 	})).toEqual({ original: 1800, modified: 1800 });
 });
 
+for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
+	test(`diff alignment gaps show diagonal fill on either side (${theme})`, async ({ page }, testInfo) => {
+		await openDiffPage(page, 'zh-CN');
+		await page.evaluate(themeId => {
+			window.ashDiffIntegration.setTheme(themeId);
+			window.ashDiffIntegration.setViewMode(true, false, 900);
+		}, theme);
+		const editor = page.locator('#single .stanza-diff-editor');
+		const tail = Array.from({ length: 60 }, (_, index) => `tail ${index}`);
+		for (const side of ['original', 'modified']) {
+			const shorter = ['head', 'shared', ...tail].join('\n');
+			const longer = ['head', 'extra one', 'extra two', 'extra three', 'shared', ...tail].join('\n');
+			await page.evaluate(([original, modified]) => window.ashDiffIntegration.setComparisonText(original, modified),
+				side === 'original' ? [shorter, longer] : [longer, shorter]);
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+			const gap = editor.locator(`.${side} .ash-diff-alignment-zone`);
+			await expect(gap).toHaveCount(1);
+			await expect(gap).toBeVisible();
+			await expect(gap).toHaveAttribute('aria-hidden', 'true');
+			const appearance = await gap.evaluate(node => {
+				const style = getComputedStyle(node);
+				return {
+					pattern: style.backgroundImage,
+					tile: style.backgroundSize,
+					background: style.backgroundColor,
+					pointerEvents: style.pointerEvents,
+					height: node.getBoundingClientRect().height,
+				};
+			});
+			expect(appearance.pattern).toContain('linear-gradient(135deg');
+			expect(appearance.tile).toBe('8px 8px');
+			expect(appearance.background).toBe('rgba(0, 0, 0, 0)');
+			if (theme === 'vs' || theme === 'vs-dark') {
+				expect(appearance.pattern).toContain(theme === 'vs' ? 'rgba(34, 34, 34, 0.2)' : 'rgba(204, 204, 204, 0.2)');
+			}
+			expect(appearance.pointerEvents).toBe('none');
+			const positions = await page.evaluate(side => window.ashDiffIntegration.linePositions(
+				side === 'original' ? 2 : 5, side === 'original' ? 5 : 2), side);
+			expect(positions.originalTop).toBe(positions.modifiedTop);
+			expect(appearance.height).toBeGreaterThan(0);
+			const rendered = await gap.screenshot();
+			// The reference tile has two stripes, each occupying one eighth of its diagonal.
+			await gap.evaluate(node => {
+				const fill = getComputedStyle(node).getPropertyValue('--ash-diffEditor-diagonalFill');
+				(node as HTMLElement).style.backgroundImage = `linear-gradient(-45deg, ${fill} 0% 12.5%, transparent 12.5% 50%, ${fill} 50% 62.5%, transparent 62.5% 100%)`;
+			});
+			try {
+				expect(await gap.screenshot()).toEqual(rendered);
+			} finally {
+				await gap.evaluate(node => { (node as HTMLElement).style.removeProperty('background-image'); });
+			}
+			await testInfo.attach(`${side}-${theme}`, { body: await editor.screenshot(), contentType: 'image/png' });
+		}
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+		await expect(editor.locator('.ash-diff-alignment-zone')).toHaveCount(0);
+		await expect(editor.locator('.stanza-diff-inline-original-line')).toHaveCount(3);
+		await page.evaluate(() => {
+			window.ashDiffIntegration.setViewMode(true, false, 900);
+			window.ashDiffIntegration.setComparisonText('same', 'same');
+		});
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await expect(editor.locator('.ash-diff-alignment-zone')).toHaveCount(0);
+	});
+}
+
 test('wrapped and inserted lines stay aligned while the two editors scroll', async ({ page }) => {
 	await openDiffPage(page);
 	const tail = Array.from({ length: 100 }, (_, index) => `tail ${index}`).join('\n');

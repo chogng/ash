@@ -79,6 +79,7 @@ export const diffInsertedLineBackground = color("diffEditor.insertedLineBackgrou
 export const diffRemovedTextBackground = color("diffEditor.removedTextBackground", "#7d2020", "#ffc6c2", "#550000", "#ffd6d6", "Background for removed inline diff ranges.");
 export const diffInsertedTextBackground = color("diffEditor.insertedTextBackground", "#1f6f35", "#a6ebb7", "#004400", "#c6f6c6", "Background for inserted inline diff ranges.");
 export const diffMissingLineBackground = color("diffEditor.missingLineBackground", "#202020", "#f8f8f9", "#000000", "#ffffff", "Background for a diff side without a corresponding source line.");
+export const diffDiagonalFill = color('diffEditor.diagonalFill', '#cccccc33', '#22222233', contrastBorder, contrastBorder, 'Stripe color for alignment gaps in side-by-side diff editors.');
 export const diffUnchangedRegionBackground = color("diffEditor.unchangedRegionBackground", "#1f2933", "#f1f6fc", "#000000", "#ffffff", "Background for collapsed unchanged diff regions.");
 export const diffUnchangedRegionForeground = alias("diffEditor.unchangedRegionForeground", mutedForeground, "Foreground for collapsed unchanged diff regions.");
 export const diffRemovedLineMarker = alias("diffEditor.removedLineMarker", errorForeground, "Marker foreground for removed diff lines.");

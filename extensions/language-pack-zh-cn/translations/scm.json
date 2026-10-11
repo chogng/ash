@@ -22,7 +22,7 @@
     "scm.history.references": "历史记录引用",
     "scm.history.openChanges": "打开更改",
     "scm.history.commitActions": "提交操作",
-    "scm.history.help": "在历史记录上按 Enter 或空格展开文件。按 Shift+F10 或上下文菜单键，使用源代码管理提供程序提供的操作。使用 Tab 移动到引用徽章和“打开更改”。在“打开更改”上按 Enter 可比较该提交的所有文本文件。在引用徽章上按 Enter 可使用提供程序的操作。按 Alt+下方向键聚焦历史详情并使用其中的操作；Escape 返回历史记录。",
+    "scm.history.help": "使用上下方向键在提交之间移动，Home 和 End 移至首个和最后一个已加载的提交，Page Up 和 Page Down 按页移动。使用右方向键展开文件，左方向键折叠文件。按 Enter 或空格切换文件列表。按 Shift+F10 或菜单键打开提供程序操作。使用 Tab 移至引用标记和“打开更改”。在“打开更改”上按 Enter 比较该提交的所有文本文件。在引用标记上按 Enter 打开提供程序操作。按 Alt+下方向键聚焦历史记录详情并使用其中的操作；Escape 返回历史记录项。",
     "scm.history.noChanges": "这两个版本之间没有改动。",
     "scm.history.loadingGraph": "正在读取提交图…",
     "scm.history.empty": "暂无提交。",
@@ -115,7 +115,9 @@
     "mergeEditor.verbosityDescription": "聚焦合并编辑器时提示如何打开无障碍帮助。",
     "scm.history.refresh": "刷新源代码管理历史记录",
     "scm.settings.group": "源代码管理",
-    "scm.settings.groupDescription": "配置源代码管理提供程序和差异标记。"
+    "scm.settings.groupDescription": "配置源代码管理提供程序和差异标记。",
+    "scm.history.openCommit": "打开提交 {0}",
+    "scm.history.goToCurrent": "转到当前历史记录项"
   },
   "ash.workbench": {
     "command.scm.quickDiff.next": "转到下一个快速差异更改",

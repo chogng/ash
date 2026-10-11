@@ -1,4 +1,5 @@
 import { OperatingSystem, isWindows } from '../../../../../base/common/platform.js';
+import type { IAction } from '../../../../../base/common/actions.js';
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -22,7 +23,7 @@ import { IEditorGroupsService } from '../../../../services/editor/common/editorG
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { FileEditorInput } from '../../browser/editors/fileEditorInput.js';
 import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../browser/fileConstants.js';
-import { MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
+import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
@@ -723,7 +724,8 @@ test('tab copy actions copy clicked and selected file paths without changing the
 	using context = new ContextKeyService();
 	context.setContext(ResourceSchemeContext.key, clicked.resource.scheme);
 	const menus = new MenuService(commands, context);
-	const actions = menus.getMenuActions(MenuId.EditorTitleContext, { arg: { groupId: group.id, editorIndex: 1 } }).find(([name]) => name === '1_cutcopypaste')![1];
+	const copyActions = (): readonly IAction[] => menus.getMenuActions(MenuId.EditorTitleContext, { arg: { groupId: group.id, editorIndex: 1 } }).find(([name]) => name === '2_files')![1].filter(action => action.id === COPY_PATH_COMMAND_ID || action.id === COPY_RELATIVE_PATH_COMMAND_ID);
+	const actions = copyActions();
 	assert.deepEqual(actions.map(action => action.id), [COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID]);
 	for (const action of actions) await action.run();
 	group.selectedInputs = [clicked, second];
@@ -734,11 +736,16 @@ test('tab copy actions copy clicked and selected file paths without changing the
 	await assert.rejects(commands.executeCommand(COPY_PATH_COMMAND_ID, { groupId: 'missing' }), TypeError);
 	assert.equal(copied.length, 4);
 	context.setContext(ResourceSchemeContext.key, Schemas.untitled);
-	assert.equal(menus.getMenuActions(MenuId.EditorTitleContext).some(([name]) => name === '1_cutcopypaste'), false);
+	assert.deepEqual(copyActions().map(action => ({ label: action.label, enabled: action.enabled })), [
+		{ label: 'Copy Path', enabled: false },
+		{ label: 'Copy Relative Path', enabled: false },
+	]);
 });
 
 test('Reveal tab menu groups both destinations and targets the clicked inactive file', async () => {
 	await import('../../browser/fileActions.contribution.js');
+	await import('../../../../browser/parts/editor/editorCommands.js');
+	await import('../../../../browser/parts/editor/editorActions.js');
 	const active = new FileEditorInput(URI.file('/project/active.ts'));
 	const clicked = new FileEditorInput(URI.file('/project/src/clicked.ts'));
 	const group = { id: 'main', inputs: [active, clicked], selectedInputs: [active], editors: [{ input: active }, { input: clicked }], activeInput: active };
@@ -770,13 +777,24 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	using context = new ContextKeyService();
 	context.setContext(ResourceSchemeContext.key, clicked.resource.scheme);
 	context.setContext(MultipleEditorsSelectedInGroupContext.key, false);
+	context.setContext(EditorsVisibleContext.key, true);
+	context.setContext(ActiveEditorPinnedContext.key, false);
+	context.setContext(ActiveEditorStickyContext.key, false);
 	const menus = new MenuService(commands, context);
 	const actions = menus.getMenuActions(MenuId.EditorTitleContext, { arg: { groupId: group.id, editorIndex: 1 } }).find(([name]) => name === '2_files')![1];
-	assert.deepEqual(actions.map(action => action.id), [REVEAL_IN_OS_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID]);
-	for (const action of actions) await action.run();
-	assert.deepEqual(effects, [['finder', clicked.resource.fsPath], ['open', 'ash.explorer'], ['select', clicked.resource.toString(), 'force'], ['focus']]);
+	assert.deepEqual(menus.getMenuActions(MenuId.EditorTitleContext).map(([name]) => name), ['1_close', '1_open', '2_files', '3_preview', '5_split']);
+	assert.deepEqual(actions.map(action => action.id), [COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, REVEAL_IN_OS_COMMAND_ID]);
+	for (const action of actions.filter(action => action.id === REVEAL_IN_EXPLORER_COMMAND_ID || action.id === REVEAL_IN_OS_COMMAND_ID)) await action.run();
+	assert.deepEqual(effects, [['open', 'ash.explorer'], ['select', clicked.resource.toString(), 'force'], ['focus'], ['finder', clicked.resource.fsPath]]);
 	context.setContext(MultipleEditorsSelectedInGroupContext.key, true);
-	assert.deepEqual(menus.getMenuActions(MenuId.EditorTitleContext).find(([name]) => name === '2_files')![1].map(action => action.enabled), [false, false]);
+	assert.deepEqual(menus.getMenuActions(MenuId.EditorTitleContext).find(([name]) => name === '2_files')![1].map(action => action.enabled), [true, true, false, false]);
+	context.setContext(MultipleEditorsSelectedInGroupContext.key, false);
+	context.setContext(ResourceSchemeContext.key, Schemas.untitled);
+	assert.deepEqual(menus.getMenuActions(MenuId.EditorTitleContext).find(([name]) => name === '2_files')![1].map(action => ({ id: action.id, enabled: action.enabled })), [
+		{ id: COPY_PATH_COMMAND_ID, enabled: false },
+		{ id: COPY_RELATIVE_PATH_COMMAND_ID, enabled: false },
+		{ id: REVEAL_IN_EXPLORER_COMMAND_ID, enabled: false },
+	]);
 });
 
 for (const scenario of [

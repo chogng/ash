@@ -110,6 +110,27 @@ test.describe('SCM commit input', () => {
 		test.skip(target.appServerMode !== 'required', 'Commit editing requires a connected repository.');
 	});
 
+	test('SCM commit form separates resource groups and removes the line when the repository becomes clean', async ({ testWorkspace, workbench }, testInfo) => {
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		const form = page.locator('.ash-scm-commit-form');
+		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+		await expect(form).toBeVisible();
+		await expect(tree.getByRole('treeitem')).toHaveCount(0);
+		await expect(form).toHaveCSS('border-bottom-width', '0px');
+		await writeFile(testWorkspace.file, 'const value = 2;\n');
+		await expect(tree.getByRole('button', { name: 'Open Changes for main.ts', exact: true })).toBeVisible();
+		await expect(form).toHaveCSS('border-bottom-width', '1px');
+		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
+		await run('git', ['commit', '-m', 'Clear resource groups'], { cwd: testWorkspace.directory });
+		await expect(tree.getByRole('treeitem')).toHaveCount(0);
+		await expect(form).toHaveCSS('border-bottom-width', '0px');
+		const boundaries = await page.locator('.ash-scm-viewlet .ash-split-view-pane').evaluateAll(panes => panes.slice(1).map(pane => getComputedStyle(pane, '::before').height));
+		expect(boundaries.length).toBeGreaterThan(0);
+		expect(boundaries.every(height => height === '1px')).toBe(true);
+		await testInfo.attach('clean-source-control', { body: await page.locator('.ash-scm-viewlet').screenshot(), contentType: 'image/png' });
+	});
+
 	test('SCM commit input grows, wraps, shrinks and supports undo and redo', async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();

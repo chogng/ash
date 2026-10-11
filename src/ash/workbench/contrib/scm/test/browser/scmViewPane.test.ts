@@ -42,6 +42,8 @@ import { getSingletonServiceDescriptors } from '../../../../../platform/instanti
 import { IContextMenuService, IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import { BrowserContextMenuService, transformContextMenuDelegate } from '../../../../../platform/contextview/browser/contextMenuService.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import type { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitCommitChanges, type GitRepository, type GraphQuery, type GraphPage, type GitStatus } from "../../../../../../../extensions/git/browser/types.js";
@@ -64,6 +66,9 @@ import { MenuService } from '../../../../../platform/actions/common/menuService.
 import { ISCMService, ISCMViewService, VIEW_PANE_ID, type ISCMProvider } from '../../common/scm.js';
 import type { ScmViewPane } from '../../browser/scmViewPane.js';
 import type { ISCMResourceGroup } from '../../common/scm.js';
+
+const testHistoryClipboard = { writeText: async () => { assert.fail('Unexpected clipboard write'); } } as unknown as IClipboardService;
+const testHistoryOpener = { open: async () => { assert.fail('Unexpected external opening'); } } as unknown as IOpenerService;
 
 const testDialogs: IDialogService = {
 	onWillShowDialog: Event.None,
@@ -282,7 +287,7 @@ test('SCM history title operations keep refresh and busy state with their starti
 			showAccessibleViewHelp: () => { },
 			dispose() { },
 			[Symbol.dispose]() { },
-		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } });
+		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener);
 		await waitFor(() => pane.element.querySelector('.ash-scm-empty') !== null);
 		const firstOperation = new DeferredPromise<void>();
 		const firstResult = pane.runTitleOperation(() => firstOperation.p);
@@ -325,6 +330,77 @@ test('SCM history title operations keep refresh and busy state with their starti
 });
 
 
+test('SCM history details expose copy and remote actions without extension menu entries', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	try {
+		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
+		const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+		using context = new ContextKeyService();
+		using services = new InstantiationService();
+		const menus = new MenuService(new CommandService(services), context);
+		using scm = new SCMService();
+		using view = new SCMViewService(scm);
+		const id = 'abcdef0123456789';
+		const uri = URI.parse(`https://github.com/test/history/commit/${id}`);
+		const openedEditors: Parameters<typeof testEditorService>[0] = [];
+		services.registerInstance(IEditorService, testEditorService(openedEditors));
+		const provider: ISCMHistoryProvider = {
+			onDidChange: Event.None, historyItemRef: observableValue('hoverHead', undefined), refresh() { },
+			provideHistoryItems: async () => [{ id, displayId: 'abcdef0', parentIds: [], subject: 'Details', message: 'Details', remoteLinks: [{ name: 'origin', uri }], references: [{ id: 'tag:v1', name: 'v1', category: 'tag' }, { id: 'localBranch:topic', name: 'topic', category: 'localBranch' }] }],
+			resolveHistoryItemDetails: async () => ({ authorName: 'Author', authorEmail: 'author@example.invalid', timestamp: 1700000000000, message: 'Details\n\nFull message', statistics: { files: 1, additions: 2, deletions: 0 } }),
+			provideHistoryItemChanges: async () => [{ uri: URI.file('/workspace/file.txt'), path: 'file.txt', status: 'added' }],
+			resolveHistoryItemChangeContents: async () => ({ parentId: undefined, original: { kind: 'missing' }, modified: { kind: 'text', text: 'Committed contents' } }),
+			resolveHistoryItemChatContext: async () => undefined,
+			resolveHistoryItemChangeRangeChatContext: async () => undefined,
+		};
+		using registration = scm.registerSCMProvider(testSCMProvider('hover', 'Repository', provider));
+		let hoverOptions: HoverSetupOptions | undefined;
+		let copied: string | undefined;
+		const opened: unknown[] = [];
+		const hover: IHoverService = {
+			setupDelayedHover: () => testManagedHover(),
+			setupHover: options => { hoverOptions = options; return testManagedHover(); },
+			showHover: () => testManagedHover(), hideHover() { },
+		};
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.hover.test', title: 'Graph' }, view, menus, testContextMenuProvider as IContextMenuService, context, hover, testEditorService(), testResourceLabelService(), {
+			show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
+		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } },
+		{ writeText: async (text: string) => { copied = text; } } as unknown as IClipboardService,
+		{ open: async (...args: unknown[]) => { opened.push(args); return true; } } as unknown as IOpenerService);
+		pane.setVisible(true);
+		await waitFor(() => hoverOptions !== undefined);
+		const content = hoverOptions!.content;
+		assert.ok(typeof content === 'function');
+		const card = content(CancellationToken.None);
+		assert.ok(card instanceof browser.window.HTMLElement);
+		browser.window.document.body.append(card);
+		await waitFor(() => card.querySelector('.ash-scm-graph-hover-message') !== null);
+		const buttons = [...card.querySelectorAll<HTMLButtonElement>('.ash-scm-graph-hover-actions button')];
+		assert.deepEqual(buttons.map(button => ({ label: button.getAttribute('aria-label'), text: button.textContent })), [
+			{ label: 'Copy Commit Hash', text: '' }, { label: 'Open on GitHub', text: 'Open on GitHub' },
+		]);
+		buttons[0].click();
+		await waitFor(() => copied !== undefined);
+		assert.equal(copied, id, 'Copy uses the complete ID rather than the shortened display ID');
+		buttons[1].click();
+		await waitFor(() => opened.length > 0);
+		assert.deepEqual(opened, [[uri, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }]]);
+		assert.equal(card.querySelector('.ash-scm-graph-hover-message-scroll')?.getAttribute('aria-label'), 'Commit message');
+		assert.equal(card.querySelector('.ash-scm-graph-hover-message')?.textContent, 'Full message');
+		assert.deepEqual([...card.querySelectorAll('.ash-scm-graph-hover-references > span')].map(label => label.textContent), ['topic', 'v1']);
+		const openCommit = card.querySelector<HTMLButtonElement>('.ash-scm-graph-hover-hash button')!;
+		assert.equal(openCommit.getAttribute('aria-label'), 'Open Commit abcdef0');
+		openCommit.click();
+		await waitFor(() => openedEditors.length === 1);
+		assert.ok(isMultiDiffEditorInput(openedEditors[0].input));
+		assert.equal(openedEditors[0].input.resource.path, `/scm-history/hover/parent/${id}`);
+	} finally {
+		browser.window.close();
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+	}
+});
+
 test('SCM history restores a late HEAD and moves its marker without reloading or losing expansion', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const globals = installDomGlobals(browser);
@@ -356,7 +432,7 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { },
 		}, testEditorService(), testResourceLabelService(), {
 			show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
-		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } });
+		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener);
 		pane.setVisible(true);
 		await waitFor(() => pane.element.querySelectorAll('.ash-scm-graph-commit').length === 2);
 		const rows = [...pane.element.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')];
@@ -374,6 +450,22 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		assert.equal(rows[1].querySelector('.ash-scm-graph-label.head')?.textContent, 'topic');
 		assert.equal(rows[0].getAttribute('aria-expanded'), 'true');
 		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-commit')[0], rows[0]);
+		assert.equal(queries, loaded);
+		rows[0].focus();
+		rows[0].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+		assert.equal(browser.window.document.activeElement, rows[1]);
+		rows[1].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+		assert.equal(browser.window.document.activeElement, rows[1], 'Navigation stops at the last commit');
+		rows[1].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+		assert.equal(browser.window.document.activeElement, rows[0]);
+		rows[0].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		assert.equal(rows[0].getAttribute('aria-expanded'), 'false');
+		rows[0].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		await waitFor(() => rows[0].getAttribute('aria-expanded') === 'true');
+		const reveal = menus.getMenuActions(MenuId.SCMHistoryTitle, { arg: pane }).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.revealCurrentHistoryItem')!;
+		assert.equal(reveal.enabled, true);
+		await reveal.run();
+		assert.equal(browser.window.document.activeElement, rows[1], 'The title action uses the latest HEAD without reloading');
 		assert.equal(queries, loaded);
 		pane.dispose();
 		head.set({ id: 'HEAD', name: 'detached', revision: 'one' });
@@ -443,7 +535,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } });
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener);
 		pane.setVisible(true);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph .ash-list') !== null);
@@ -516,6 +608,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		timestampSeconds: 1_753_000_000 - index,
 		subject: `Commit ${index}`,
 	}));
+	Object.assign(status, { head: { type: 'branch', name: 'main', objectId: 'commit-90', upstream: undefined } });
 	const gitService = {
 		onDidBecomeReady: noEvent,
 		onDidChangeActiveRepository: noEvent,
@@ -547,7 +640,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } });
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener);
 		pane.setVisible(true);
 		const graph = pane.element.querySelector<HTMLElement>(".ash-scm-graph");
 		assert.ok(graph);
@@ -555,6 +648,9 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelectorAll(".ash-scm-graph-commit").length > 0);
 		const viewport = graph.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		const reveal = menuService.getMenuActions(MenuId.SCMHistoryTitle, { arg: pane }).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.revealCurrentHistoryItem')!;
+		await reveal.run();
+		assert.equal(browser.window.document.activeElement?.querySelector('.ash-scm-graph-subject')?.textContent, 'Commit 90', 'Locating HEAD loads the page containing an initially unloaded commit');
 		viewport.scrollTop = 1100;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graph.querySelector<HTMLElement>('.ash-list')?.style.height === `${commits.length * 22}px`);
@@ -603,6 +699,11 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		viewport.scrollTop = 0;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Returning reuses the cached commit');
+		firstCommit.focus();
+		firstCommit.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		assert.equal(browser.window.document.activeElement?.querySelector('.ash-scm-graph-subject')?.textContent, 'Commit 99', 'End reveals and focuses an initially virtualized commit');
+		browser.window.document.activeElement?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+		assert.equal(browser.window.document.activeElement, firstCommit);
 		pane.dispose();
 		assert.equal(disposedHoverTargets.size, hoverTargets.length, 'Disposal releases visible and cached rows');
 	} finally {
@@ -675,7 +776,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	try {
 		using history = createHistoryViewFixture(gitService);
 		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.changes.test", title: "Graph" }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } });
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.changes.test", title: "Graph" }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-commit") !== null);
 
@@ -786,7 +887,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 		using history = createHistoryViewFixture(git);
 		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
 		const hover: IHoverService = { setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { } };
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history-multidiff', title: 'Graph' }, history.viewService, menus, testContextMenuProvider as IContextMenuService, contextKeys, hover, testEditorService(opened), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } });
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history-multidiff', title: 'Graph' }, history.viewService, menus, testContextMenuProvider as IContextMenuService, contextKeys, hover, testEditorService(opened), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-actions button') !== null);
 		const commit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!;

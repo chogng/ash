@@ -77,6 +77,21 @@ test('SCM history retains the reading position, expanded files and row actions a
 		await expect(graph.getByRole('treeitem').first()).toContainText('Commit without resetting history');
 		await expect(graph.locator('.ash-scm-graph-commit.current .ash-scm-graph-label.head')).toHaveText('main');
 		await expect(graph.locator('.ash-scm-graph-label.head')).toHaveCount(1);
+		const current = graph.getByRole('treeitem').filter({ hasText: 'Commit without resetting history' });
+		await current.focus();
+		await current.press('ArrowDown');
+		const next = graph.getByRole('treeitem').filter({ hasText: 'Retained history 79' });
+		await expect(next).toBeFocused();
+		await next.press('PageDown');
+		expect(await graph.locator('.ash-scm-graph-commit:focus').getAttribute('aria-posinset')).not.toBe('2');
+		await page.keyboard.press('End');
+		await expect(graph.locator('.ash-scm-graph-commit:focus')).toHaveAttribute('aria-posinset', '82');
+		await history.locator('[data-action-id="workbench.scm.action.graph.revealCurrentHistoryItem"] > button').click();
+		await expect(current).toBeFocused();
+		await current.press('ArrowRight');
+		await expect(current).toHaveAttribute('aria-expanded', 'true');
+		await current.press('ArrowLeft');
+		await expect(current).toHaveAttribute('aria-expanded', 'false');
 	} finally {
 		await retained?.dispose();
 		await actions?.dispose();
@@ -365,15 +380,18 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 });
 
 test('SCM history reserves title width and reveals commit details on pointer and keyboard focus', async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
+	test.setTimeout(90_000);
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	const cwd = testWorkspace.directory;
 	const subject = `History metadata: a long title that uses the space previously occupied by the commit hash and date ${'long-commit-identifier'.repeat(6)}`;
-	const body = '    The complete explanation remains available without taking space from the history title.';
+	const body = Array.from({ length: 24 }, (_, index) => `    Detail ${index + 1}: the complete explanation remains available without taking space from the history title.`).join('\n');
 	await writeFile(join(cwd, 'details.txt'), 'first line\nsecond line\n');
 	await writeFile(join(cwd, 'binary.dat'), Buffer.from([0, 1, 2]));
 	await run('git', ['add', 'details.txt', 'binary.dat'], { cwd });
 	await run('git', ['-c', 'user.name=History Author', '-c', 'user.email=history@example.invalid', 'commit', '-m', subject, '-m', body], { cwd });
 	await run('git', ['remote', 'add', 'origin', 'https://github.com/ash-test/history.git'], { cwd });
+	await run('git', ['branch', 'metadata-topic'], { cwd });
+	await run('git', ['tag', 'metadata-v1'], { cwd });
 	const { stdout } = await run('git', ['show', '-s', '--format=%H%n%ct', 'HEAD'], { cwd });
 	const [hash, timestamp] = stdout.trim().split('\n');
 	const page = workbench.page;
@@ -420,8 +438,24 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await expect(hover.locator('time')).toHaveAttribute('datetime', new Date(Number(timestamp) * 1000).toISOString());
 	await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
 	expect(await hover.locator('.ash-scm-graph-hover-message').textContent()).toBe(body);
+	const messageScroll = hover.getByRole('region', { name: 'Commit message', exact: true });
+	const messageViewport = messageScroll.locator('.ash-scrollbar-viewport');
+	await expect(messageScroll).toHaveCSS('height', '180px');
+	await expect(messageViewport).toHaveCSS('scrollbar-width', 'none');
+	await messageScroll.focus();
+	await expect(messageScroll.locator('.ash-scrollbar-track-vertical')).toHaveAttribute('data-visibility', 'visible');
+	await expect(messageScroll.locator('.ash-scrollbar-track-vertical')).toHaveCSS('opacity', '1');
+	await messageScroll.press('End');
+	await expect.poll(() => messageViewport.evaluate(element => element.scrollTop > 0 && Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 1)).toBe(true);
+	await messageScroll.press('Home');
+	await expect.poll(() => messageViewport.evaluate(element => element.scrollTop)).toBe(0);
+	await messageViewport.hover();
+	await page.mouse.wheel(0, 160);
+	await expect.poll(() => messageViewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 	await expect(hover.locator('.ash-scm-graph-hover-statistics > span')).toHaveText(['2 files changed', '2 insertions(+)', '0 deletions(-)']);
 	await expect(hover.locator('.ash-scm-graph-hover-hash')).toHaveAttribute('title', hash);
+	await expect(hover.getByRole('group', { name: 'History references', exact: true })).toContainText('metadata-topic');
+	await expect(hover.getByRole('group', { name: 'History references', exact: true })).toContainText('metadata-v1');
 	const contentGeometry = await hover.evaluate(element => {
 		const tooltip = element.closest<HTMLElement>('.ash-hover')!;
 		const bounds = tooltip.getBoundingClientRect();
@@ -437,6 +471,7 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await expect(openOnGitHub).toBeVisible();
 	await expect(openOnGitHub).toHaveText('Open on GitHub');
 	await expect(openOnGitHub.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
+	await test.info().attach('scm-history-hover', { body: await hover.screenshot(), contentType: 'image/png' });
 	const pointerCopy = hover.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 	const hoverId = await hover.getAttribute('id');
 	const commitBounds = (await commit.boundingBox())!;
@@ -515,6 +550,12 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await expect(hover).toHaveCount(0);
 	await expect(commit).toBeFocused();
 	await commit.press('Alt+ArrowDown');
+	await hover.getByRole('button', { name: `Open Commit ${hash.slice(0, 7)}`, exact: true }).click();
+	await expect(page.locator('.stanza-multi-diff-editor:visible')).toBeVisible();
+	await expect(page.locator('.stanza-multi-diff-editor:visible')).toContainText('details.txt');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await commit.focus();
+	await commit.press('Alt+ArrowDown');
 	await expect(copy).toBeFocused();
 	await page.keyboard.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
@@ -529,6 +570,29 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await expect(accessible.getByRole('textbox')).toHaveValue(new RegExp(`${body}[\\s\\S]*${hash}`, 'u'));
 	await page.keyboard.press('Escape');
 	await expect(commit).toBeFocused();
+	for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.select(theme);
+		await commit.focus();
+		await commit.press('Alt+ArrowDown');
+		await messageScroll.focus();
+		await messageScroll.press('Home');
+		await expect(messageScroll).toHaveCSS('outline-style', 'solid');
+		const thumb = messageScroll.locator('.ash-scrollbar-track-vertical > .ash-scrollbar-thumb');
+		await expect(thumb).toBeVisible();
+		expect(await thumb.evaluate(element => {
+			const probe = document.createElement('span');
+			probe.style.backgroundColor = 'var(--ash-scrollbarSlider-background)';
+			element.append(probe);
+			const color = getComputedStyle(element).backgroundColor;
+			const themed = color === getComputedStyle(probe).backgroundColor && color !== 'rgba(0, 0, 0, 0)';
+			probe.remove();
+			return themed;
+		})).toBe(true);
+		await test.info().attach(`scm-history-${theme}`, { body: await hover.screenshot(), contentType: 'image/png' });
+		await page.keyboard.press('Escape');
+		await expect(commit).toBeFocused();
+	}
 	await commit.press('Enter');
 	await expect(commit).toHaveAttribute('aria-expanded', 'true');
 	await expect(commit.getByRole('button', { name: /details\.txt/ })).toBeVisible();
@@ -544,7 +608,10 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await localizedCommit.press('Alt+ArrowDown');
 	const localizedHover = workbench.page.getByRole('tooltip').filter({ has: workbench.page.locator('.ash-scm-graph-hover') });
 	await expect(localizedHover.getByRole('button', { name: '复制提交哈希', exact: true })).toHaveText('');
+	await expect(localizedHover.getByRole('button', { name: `打开提交 ${hash.slice(0, 7)}`, exact: true })).toBeVisible();
+	await expect(localizedHistory.locator('[data-action-id="workbench.scm.action.graph.revealCurrentHistoryItem"] > button')).toHaveAttribute('aria-label', '转到当前历史记录项');
 	await expect(localizedHover.getByRole('button', { name: '在 GitHub 上打开', exact: true })).toHaveText('在 GitHub 上打开');
+	await expect(localizedHover.getByRole('region', { name: '提交消息', exact: true })).toHaveCSS('height', '180px');
 	await workbench.page.mouse.move(900, 100);
 	for (const width of target.kind === 'electron' ? [1100, 640] : [1100, 360]) {
 		if (target.kind === 'electron') {

@@ -10,6 +10,8 @@ import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
+const focusTest = test.extend({ electronWindowMode: 'active' });
+
 async function notificationClipboard(application: PlaywrightApplication, page: Page): Promise<{ read(): Promise<string>; }> {
 	// Start with a fixture value; never read or retain the user's previous clipboard.
 	const marker = 'ash-notification-copy-fixture';
@@ -257,7 +259,7 @@ async function notificationPopupProbe(application: PlaywrightApplication): Promi
 	};
 }
 
-test('notification Copy Text selected in a genuine Electron popup writes after its OS callback', async ({ target, application, workbench }, testInfo) => {
+focusTest('notification Copy Text selected in a genuine Electron popup writes after its OS callback', async ({ target, application, workbench }, testInfo) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.platform !== 'darwin', 'Uses macOS input targeted at the owned Electron process.');
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	test.skip(!await workbench.menus.isSystemMenu(application), 'Requires the system menu configuration.');
@@ -294,7 +296,7 @@ test('notification Copy Text selected in a genuine Electron popup writes after i
 });
 
 for (const waitForShow of [false, true]) {
-	test(`notification backend completion cancels a genuine Electron popup and releases the next presentation${waitForShow ? ' after its OS show event' : ''}`, async ({ target, application, workbench }, testInfo) => {
+	focusTest(`notification backend completion cancels a genuine Electron popup and releases the next presentation${waitForShow ? ' after its OS show event' : ''}`, async ({ target, application, workbench }, testInfo) => {
 		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the real desktop host and backend.');
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
 		test.skip(!await workbench.menus.isSystemMenu(application), 'Requires the system menu configuration.');

@@ -193,6 +193,7 @@ registerAction2(class CloseAllEditorsAction extends Action2 {
 			id: CloseAllEditorsCommandId,
 			title: localize2({ bundle: "ash", key: "workbench.closeAllEditors" }, "Close All Tabs"),
 			f1: true,
+			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: [
 				{ id: MenuId.MenubarFileMenu, group: "6_close", order: 1 },
 				{ id: MenuId.EditorTitleContext, group: '1_close', order: 60, when: EditorsVisibleContext.isEqualTo(true) },

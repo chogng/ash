@@ -1,6 +1,8 @@
 import { expect, test } from '../../../automation/test.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
+const focusTest = test.extend({ electronWindowMode: 'active' });
+
 test('detached editor window inherits workbench theme and accessibility state', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
@@ -60,7 +62,7 @@ test('detached editor window inherits workbench theme and accessibility state', 
 	}
 });
 
-test('detached editor windows participate in desktop window switching and close-other-windows', async ({ workbench, target, application }) => {
+focusTest('detached editor windows participate in desktop window switching and close-other-windows', async ({ workbench, target, application }) => {
 	test.skip(target.kind !== 'electron', 'Requires desktop window operations.');
 	if (!('windows' in application)) {
 		throw new Error('Expected an Electron application');

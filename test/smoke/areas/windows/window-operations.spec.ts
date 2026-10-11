@@ -1,6 +1,8 @@
 import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
 import { expect, test } from '../../../automation/test.js';
 
+test.use({ electronWindowMode: 'active' });
+
 for (const windowKind of ['Workbench', 'Agents'] as const) {
 	test(`Electron ${windowKind} window operations use the registered window host`, async ({ application, target, workbench }) => {
 		test.skip(target.kind !== 'electron', 'This scenario requires the Code Electron Workbench');

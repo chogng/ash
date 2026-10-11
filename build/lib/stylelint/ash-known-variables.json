@@ -46,6 +46,7 @@
 		"--ash-dialog-background",
 		"--ash-dialog-border",
 		"--ash-dialog-shadow",
+		"--ash-diffEditor-diagonalFill",
 		"--ash-diffEditor-insertedLineBackground",
 		"--ash-diffEditor-insertedLineMarker",
 		"--ash-diffEditor-insertedTextBackground",

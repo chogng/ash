@@ -11,12 +11,14 @@ import type { IStorageSnapshot } from '../../../../src/ash/platform/storage/comm
 
 import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
 
+const focusTest = test.extend({ electronWindowMode: 'active' });
+
 const workspacesToDispose: TestWorkspace[] = [];
 test.afterAll(async () => {
 	for (const workspace of workspacesToDispose) await disposeTestWorkspace(workspace);
 });
 
-test("a second instance opens an independent Workbench and reuses an existing Workspace window", async ({ application, target, testWorkspace, workbench }) => {
+focusTest("a second instance opens an independent Workbench and reuses an existing Workspace window", async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.kind !== "electron", "This scenario verifies the Electron Workbench window registry.");
 	if (target.kind !== "electron" || !("windows" in application)) return;
 
@@ -94,7 +96,7 @@ test("a second instance opens an independent Workbench and reuses an existing Wo
 	}
 });
 
-test('Open in Agents reuses one window across Workbench workspaces', async ({ application, target, workbench, testWorkspace }) => {
+focusTest('Open in Agents reuses one window across Workbench workspaces', async ({ application, target, workbench, testWorkspace }) => {
 	test.skip(target.kind !== 'electron', 'Requires Code Electron');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 

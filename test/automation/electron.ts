@@ -4,8 +4,12 @@ import { mkdirSync } from 'node:fs';
 import { createTestEnvironment } from './testEnvironment.js';
 import type { AppServerTestMode } from "./testTarget.js";
 
+export type ElectronWindowMode = 'hidden' | 'inactive' | 'active';
+
 export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
+	/** System focus/fullscreen tests opt into active; ordinary runs hide locally and show inactive in CI. */
+	readonly windowMode?: ElectronWindowMode;
 	/** Scenario-specific host inputs; the launcher still isolates the test home/profile. */
 	readonly environment?: Readonly<NodeJS.ProcessEnv>;
 	/** Total budget for process launch and Workbench restoration. */
@@ -65,12 +69,18 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;
+	const isCI = Boolean(environment.CI || environment.GITHUB_WORKSPACE || environment.BUILD_ARTIFACTSTAGINGDIRECTORY);
+	const isDebug = Boolean(environment.PWDEBUG && environment.PWDEBUG !== '0');
+	const windowMode = options.windowMode ?? (isDebug ? 'active' : isCI ? 'inactive' : 'hidden');
+	delete environment.ASH_TEST_WINDOW_MODE;
+	if (windowMode !== 'active') environment.ASH_TEST_WINDOW_MODE = windowMode;
 
 	return {
 		executablePath: electronExecutablePath,
 		args: [
 			"--disable-gpu",
 			"--in-process-gpu",
+			...(windowMode === 'active' ? [] : ['--require', join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')]),
 			...(bundle ? [] : [desktopDirectory]),
 			`--user-data-dir=${options.userDataDirectory}`,
 			// AppKit's recovery prompt can block ready after test-owned processes are terminated.

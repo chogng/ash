@@ -55,6 +55,19 @@
 	grid-column: 2;
 }
 
+.ash-diff-alignment-zone {
+	pointer-events: none;
+	/* Two stripes each cover one eighth of the tile's diagonal. */
+	background-image: linear-gradient(
+		135deg,
+		transparent 0% 37.5%,
+		var(--ash-diffEditor-diagonalFill) 37.5% 50%,
+		transparent 50% 87.5%,
+		var(--ash-diffEditor-diagonalFill) 87.5% 100%
+	);
+	background-size: 8px 8px;
+}
+
 .stanza-diff-inline-original-line {
 	box-sizing: border-box;
 	width: 100%;

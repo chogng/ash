@@ -9,6 +9,7 @@ import type { PlaywrightApplication, PlaywrightDriver, WorkbenchDiagnostics } fr
 import { playwrightTargetForProject, type PlaywrightTarget } from "./testTarget.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "./testWorkspace.js";
 import type { Workbench } from "./workbench.js";
+import type { ElectronWindowMode } from './electron.js';
 
 interface RunningApplication {
 	driver: PlaywrightDriver;
@@ -20,6 +21,7 @@ interface RunningApplication {
 }
 
 interface PlaywrightFixtures {
+	readonly electronWindowMode: ElectronWindowMode | undefined;
 	readonly webAppServer: WebLaunchResult | undefined;
 	readonly runningApplication: RunningApplication;
 	readonly restartWorkbench: RunningApplication['restart'];
@@ -49,6 +51,7 @@ export interface BackendFixture {
 }
 
 export const test = base.extend<PlaywrightFixtures>({
+	electronWindowMode: [undefined, { option: true }],
 	includeLargeTestFile: [false, { option: true }],
 	gitRepository: [false, { option: true }],
 	gitMergeConflict: [false, { option: true }],
@@ -77,7 +80,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode }, use, testInfo) => {
 		if (backendFixture && githubAccount) { throw new Error('Backend fixture and GitHub account fixture both select product services'); }
 		// Evidence scenarios opt into full recording; the launchers own every page until cleanup.
 		const videoOptions = typeof video === 'string' ? { mode: video, size: undefined } : video;
@@ -148,6 +151,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		const options = {
 			appServerMode: target.appServerMode, userDataDirectory, recordVideo,
 			productServicesPath: backendFixture?.productServicesPath ?? (githubAccount ? join(userDataDirectory, 'product-services.json') : undefined),
+			windowMode: electronWindowMode,
 			workspaceDirectory: openWorkspace ? testWorkspace.directory : undefined,
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,
 		};

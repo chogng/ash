@@ -52,6 +52,14 @@ test('tab close and split menus operate on the clicked group and selected editor
 	context.setContext(ActiveEditorFirstInGroupContext.key, false);
 	context.setContext(MultipleEditorsSelectedInGroupContext.key, false);
 	const menus = new MenuService(commands, context);
+	const fileCloseItems = () => menus.getMenuActions(MenuId.MenubarFileMenu).flatMap(([, actions]) => actions).filter(action => [CloseAllEditorsCommandId, 'workbench.action.closeActiveEditor'].includes(action.id)).map(action => ({ id: action.id, enabled: action.enabled }));
+	for (const visible of [true, false, true]) {
+		context.setContext(EditorsVisibleContext.key, visible);
+		assert.deepEqual(fileCloseItems(), [
+			{ id: CloseAllEditorsCommandId, enabled: visible },
+			{ id: 'workbench.action.closeActiveEditor', enabled: visible },
+		]);
+	}
 	const argument = { groupId: group.id, editorIndex: 1 };
 	const close = () => menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '1_close')![1];
 	assert.deepEqual(close().map(action => [action.id, action.label]), [

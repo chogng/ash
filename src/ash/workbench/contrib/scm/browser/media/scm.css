@@ -382,8 +382,11 @@
 
 .ash-scm-graph-hover-message {
 	white-space: pre-wrap;
-	max-height: 180px;
-	overflow: auto;
+	padding-right: var(--ash-spacing-size160);
+}
+
+.ash-scm-graph-hover-message-scroll {
+	width: 100%;
 }
 
 .ash-scm-graph-hover-time,
@@ -409,6 +412,19 @@
 .ash-scm-graph-hover-hash {
 	color: var(--ash-muted-foreground);
 	user-select: text;
+}
+
+.ash-scm-graph-hover-references {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.ash-scm-graph-hover-references > .ash-scm-graph-label {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	min-width: 0;
 }
 
 .ash-scm-remote-actions {
@@ -446,8 +462,11 @@
 	grid-template-columns: minmax(0, 1fr);
 	gap: var(--ash-spacing-size60);
 	margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size40);
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 	padding: 0 0 var(--ash-spacing-size120);
+}
+
+.ash-scm-commit-form.has-resource-groups {
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-scm-commit-form.hidden {

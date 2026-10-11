@@ -1,5 +1,27 @@
 import { expect, test } from '@playwright/test';
 
+test('SCM commit form separator disappears after a clean Git snapshot and returns with resource groups', async ({ page }, testInfo) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		await page.evaluate(() => window.gitScmPaneIntegration.mount());
+		const form = page.locator('#scm-pane .ash-scm-commit-form');
+		const tree = page.locator('#scm-pane').getByRole('tree', { name: 'Source control changes', exact: true });
+		await expect(form).toBeVisible();
+		await expect(form).toHaveCSS('border-bottom-width', '1px');
+		await page.evaluate(() => window.gitScmPaneIntegration.setClean(true));
+		await expect(tree.getByRole('treeitem')).toHaveCount(0);
+		await expect(form).toHaveCSS('border-bottom-width', '0px');
+		const boundaries = await page.locator('#scm-pane .ash-split-view-pane').evaluateAll(panes => panes.slice(1).map(pane => getComputedStyle(pane, '::before').height));
+		expect(boundaries).toEqual(['1px', '1px']);
+		await testInfo.attach('clean-source-control', { body: await page.locator('#scm-pane').screenshot(), contentType: 'image/png' });
+		await page.evaluate(() => window.gitScmPaneIntegration.setClean(false));
+		await expect(tree.locator('.ash-scm-change')).toHaveCount(1);
+		await expect(form).toHaveCSS('border-bottom-width', '1px');
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
 for (const language of ['en', 'zh-CN']) test(`distributed Git Worker registers SCM, commands and history in ${language}`, async ({ page }) => {
 	const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/gitExtension.html');

@@ -1,5 +1,5 @@
 import { execFile, type ChildProcess } from 'node:child_process';
-import { readdir, writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { readdir, writeFile, mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,67 @@ import { launchBrowser } from '../../automation/playwrightBrowser.js';
 import { Workbench } from '../../automation/workbench.js';
 import { captureElectronMenu } from '../../automation/menus.js';
 import { ElectronPlaywrightDriver, waitForElectronWindowState } from '../../automation/electronDriver.js';
+
+test('ordinary Electron tests keep startup, new windows and reloads from taking system focus', async ({ application, target, workbench, reloadWorkbench }) => {
+	test.skip(target.kind !== 'electron', 'Requires desktop windows.');
+	if (!('windows' in application)) throw new Error('Expected Electron windows');
+	const readWindows = () => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({
+		focused: window.isFocused(), focusable: window.isFocusable(), visible: window.isVisible(),
+	})));
+	const visible = await application.evaluate(() => process.env.ASH_TEST_WINDOW_MODE === 'inactive');
+	await expect.poll(readWindows).toEqual([{ focused: false, focusable: false, visible }]);
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const input = workbench.editors.groupAt(0).editor.input;
+	await input.focus();
+	await workbench.page.keyboard.insertText('background keyboard input');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'background keyboard input');
+	const detached = workbench.page.context().waitForEvent('page');
+	await workbench.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
+	const auxiliary = await detached;
+	await expect(auxiliary.locator('.ash-auxiliary-window-container .ash-workbench-editor')).toBeVisible();
+	await expect.poll(readWindows).toEqual(Array.from({ length: 2 }, () => ({ focused: false, focusable: false, visible })));
+	await auxiliary.close();
+	const agents = await workbench.openAgentsWindow('electron');
+	await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+	await application.evaluate(({ BrowserWindow }) => {
+		for (const window of BrowserWindow.getAllWindows()) { window.show(); window.focus(); }
+	});
+	await expect.poll(readWindows).toEqual(Array.from({ length: 2 }, () => ({ focused: false, focusable: false, visible })));
+	await input.focus();
+	await workbench.page.keyboard.press('ControlOrMeta+A');
+	await workbench.page.keyboard.press('Backspace');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	const reopened = await reloadWorkbench();
+	if (!('windows' in reopened.application)) throw new Error('Expected Electron windows');
+	expect(await reopened.application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({
+		focused: window.isFocused(), focusable: window.isFocusable(), visible: window.isVisible(),
+	})))).toEqual([{ focused: false, focusable: false, visible }]);
+});
+
+test.describe('background Electron test launches preserve the active application', () => {
+	test.use({ electronWindowMode: 'active' });
+	for (const windowMode of ['hidden', 'inactive'] as const) {
+		test(`Electron ${windowMode} launch preserves another application's system focus`, async ({ application, target, workbench }, testInfo) => {
+			test.skip(target.kind !== 'electron', 'Requires desktop windows.');
+			if (!('windows' in application)) throw new Error('Expected Electron windows');
+			await application.evaluate(({ app, BrowserWindow }) => {
+				app.focus({ steal: true });
+				BrowserWindow.getAllWindows()[0]!.focus();
+			});
+			await waitForElectronWindowState(application, workbench.page, { focused: true });
+			const userDataDirectory = testInfo.outputPath('background-user-data');
+			await mkdir(userDataDirectory, { recursive: true });
+			const background = await launchElectron({ appServerMode: 'disabled', userDataDirectory, windowMode });
+			try {
+				expect(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isFocused())).toBe(true);
+				expect(await background.application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({
+					focused: window.isFocused(), focusable: window.isFocusable(), visible: window.isVisible(),
+				})))).toEqual([{ focused: false, focusable: false, visible: windowMode === 'inactive' }]);
+				expect(await application.evaluate(() => process.env.ASH_TEST_WINDOW_MODE)).toBeUndefined();
+			} finally { await background.close(); }
+		});
+	}
+});
 
 test('all smoke projects collect without fixture dependency cycles', async () => {
 	const directory = resolve(import.meta.dirname, '../../..');
@@ -170,7 +231,7 @@ test('an Electron restoration timeout closes its process before rejecting launch
 		await new Promise<void>(() => { });
 	};
 	try {
-		await expect(launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000 })).rejects.toThrow('Workbench startup timed out');
+		await expect(launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000, windowMode: 'active' })).rejects.toThrow('Workbench startup timed out');
 		expect(reachedRestoration).toBe(true);
 		expect(child && (child.exitCode !== null || child.signalCode !== null)).toBe(true);
 	} finally {
@@ -222,17 +283,32 @@ test('a pending Dock request does not block the first desktop window', async ({ 
 	const entry = join(desktopDirectory, `.ash-test-dock-${randomUUID()}.cjs`);
 	const launch = _electron.launch;
 	try {
-		await writeFile(entry, `const { app } = require('electron/main');\nconst pendingDock = () => new Promise(() => {});\napp.dock.show = pendingDock;\nglobalThis.ashTestDockInstalled = app.dock.show === pendingDock;\nvoid import('.build/desktop/main/src/main.js');\n`);
+		await writeFile(entry, `const { app } = require('electron/main');
+const pendingDock = () => {
+	globalThis.ashTestDockRequested = true;
+	return new Promise(() => {});
+};
+app.dock.show = pendingDock;
+globalThis.ashTestDockInstalled = app.dock.show === pendingDock;
+globalThis.ashTestDockSettled = false;
+void app.whenReady().then(() => {
+	void app.dock.show().then(() => { globalThis.ashTestDockSettled = true; });
+});
+void import('./.build/desktop/main/src/main.js').catch(error => {
+	console.error(error);
+	app.exit(1);
+});
+`);
 		_electron.launch = function (options) {
 			expect(options!.args).toContain(desktopDirectory);
 			return launch.call(this, { ...options, args: options!.args!.map(argument => argument === desktopDirectory ? entry : argument) });
 		};
-		const running = await launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000 });
+		const running = await launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000, windowMode: 'active' });
 		try {
-			expect(await running.application.evaluate(({ app }) => ({
-				installed: (globalThis as typeof globalThis & { ashTestDockInstalled?: boolean; }).ashTestDockInstalled,
-				visible: app.dock!.isVisible(),
-			}))).toEqual({ installed: true, visible: true });
+			expect(await running.application.evaluate(({ app }) => {
+				const state = globalThis as typeof globalThis & { ashTestDockInstalled?: boolean; ashTestDockRequested?: boolean; ashTestDockSettled?: boolean; };
+				return { installed: state.ashTestDockInstalled, requested: state.ashTestDockRequested, settled: state.ashTestDockSettled, visible: app.dock!.isVisible() };
+			})).toEqual({ installed: true, requested: true, settled: false, visible: true });
 			await expect(running.driver.workbench.element).toBeVisible();
 		}
 		finally { await running.close(); }

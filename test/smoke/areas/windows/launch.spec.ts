@@ -10,6 +10,8 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { toDisposable } from '../../../../src/ash/base/common/lifecycle.js';
 import type { ConsoleMessage, Page } from '@playwright/test';
 
+const focusTest = test.extend({ electronWindowMode: 'active' });
+
 for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands the current directory to the real desktop window through ${launchKind === 'bundle' ? 'a bundle' : 'an executable'}`, async ({ application, target, testWorkspace }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled' || process.platform === 'win32', 'This scenario uses a Unix development launcher without a backend.');
 	test.skip(launchKind === 'bundle' && process.platform !== 'darwin', 'Application bundles use macOS LaunchServices.');
@@ -68,7 +70,7 @@ test('the first process opens its requested file after restoring the Workbench a
 	}
 });
 
-test('desktop launch opens files, positions the caret and distinguishes new and reused windows', async ({ application, target, testWorkspace, workbench }) => {
+focusTest('desktop launch opens files, positions the caret and distinguishes new and reused windows', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Disk files require the Electron App Server.');
 	if (!('windows' in application)) {
 		return;
@@ -179,7 +181,7 @@ test('a real second process waits until all requested files close while the firs
 	}
 });
 
-test('UI-only launches create a requested window and focus it on the next launch', async ({ application, target, testWorkspace, workbench }) => {
+focusTest('UI-only launches create a requested window and focus it on the next launch', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'This scenario checks window policy without a backend.');
 	if (!('windows' in application)) {
 		return;
