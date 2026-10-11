@@ -105,7 +105,7 @@ Electron、Browser、编辑器的构建和测试命令，以及测试是否启�
 
 #### 提交前本地验证与 CI
 
-交付前在当前平台完成受影响范围的必要验证；已有诊断和通过结果覆盖当前输入时直接复用，无需为提交或推送重复构建。Rust 包复用下方的 `just verify`，前端按改动选择已有类型检查、构建和 Playwright 入口。扩大到全量、跨平台或预计长时间验证前按 [测试规范](../.github/instructions/testing.instructions.md#learnings) 取得用户确认；人工审阅改动和结果是另一个环节，不代替测试范围确认或行为验证。
+交付前在当前平台完成受影响范围的必要验证；已有诊断和通过结果覆盖当前输入时直接复用，无需为提交或推送重复构建。Rust 按所属包及受影响消费者使用下方的 `just verify`，可用 `--lib`、`--test <target>` 和 `--filter <test-name>` 缩小测试范围；前端按改动选择已有类型检查、构建以及按文件或场景过滤的测试入口。完整 workspace 回归与跨平台 CI 矩阵由远端工作流执行；本地全量复现仅在明确要求时运行。预计长时间验证前按 [测试规范](../.github/instructions/testing.instructions.md#learnings) 确认范围。
 
 推送后，[已配置的 CI](#ci-检查) 继续验证提交的代码及对应平台、工作流环境。Windows 本地结果不代表 Linux 或 macOS 通过；本地执行构建、测试命令也不代表 GitHub 上的调度、权限、签名或上传流程已通过。工作流是否触发及覆盖哪些目标，以其事件和路径条件为准。
 
@@ -122,7 +122,7 @@ Electron、Browser、编辑器的构建和测试命令，以及测试是否启�
 | `just snapshot <path.snap>...` | 定位所属 TUI 测试并按组运行；展示待审阅差异，有待审阅基线时返回非零退出码                          |
 | `just snapshot --pending`      | 汇总 TUI 的 `.snap.new`，按测试分组复跑并展示差异                                                  |
 
-`verify` 支持 `--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；过滤条件只传给测试，feature 与 profile 传给三个步骤。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
+`verify` 支持 `--lib` 或可重复的 `--test <target>`、`--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；目标选择与过滤条件只传给测试，feature 与 profile 传给三个步骤。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
 
 只有 trait 契约或测试设施、由消费方覆盖行为的包，可以在自己的 Cargo 清单中声明
 `[package.metadata.ash.verify]` 的 `test-packages` 列表。例如 `ash-core-api` 声明 `["ash-core"]`，
@@ -135,7 +135,7 @@ Electron、Browser、编辑器的构建和测试命令，以及测试是否启�
 just context crates/tui/snapshots/fullscreen/composer/composer_focused.snap
 just snapshot crates/tui/snapshots/fullscreen/composer/composer_focused.snap
 just snapshot --pending --plan
-just verify ash-utils-home-dir
+just verify ash-utils-home-dir --lib
 ```
 
 `snapshot` 覆盖 `crates/tui/snapshots/` 下由带字面量名称的断言生成的外部快照，接受 `.snap` 和 `.snap.new`，同一测试只运行一次。动态名称、共享 helper 中的断言和真实 PTY 快照使用所属测试入口。需要进程内 App Server 时传入 `--features in-process-tests`。运行生成 `.snap.new`，不直接覆盖基线。
@@ -213,18 +213,18 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 清理保留源码、依赖包、用户级 pnpm store、`third_party/.cache/`、`.ash/` 配置，不遍历符号链接指向的目录。Bazel 外部输出缓存单独用 `bazel clean --expunge` 清理。
 
-日常 Cargo 和产品构建保留编译缓存，只记录使用时间并持有租约。目录盘点与回收通过 `just prune-build-cache` 单独执行，避免热构建等待扫描或清理后重新编译。
+仓库 Cargo 和产品构建入口每小时最多盘点并回收一次闲置缓存，其他热构建只记录使用时间并持有租约。`just prune-build-cache` 可立即检查预算并覆盖本次清理上限。扫描可能增加该次构建的启动时间；超过预算的闲置 profile 回收后需要重新编译。
 
 | 清理参数             | 默认值 | 回收内容                                                                          |
 | -------------------- | ------ | --------------------------------------------------------------------------------- |
 | `--max-gib`          | 32 GiB | 闲置增量缓存；保留依赖库和程序                                                    |
 | `--artifact-max-gib` | 64 GiB | 闲置 profile 的全部产物，包含增量缓存；按最近使用时间整组清理，下次使用需要重编译 |
 
-预算仅在显式清理时应用。回收保留锁文件，跳过正在构建、运行或完成不足一分钟的 profile，工作集可能暂时超限。自定义 `CARGO_TARGET_DIR` 不自动参与预算；仓库内的其他 Cargo 输出目录可用 `--target-dir` 指定。
+预算在定期检查及显式清理时应用，两项预算重叠，全部产物的 64 GiB 已包含增量缓存。回收保留锁文件，跳过持有运行租约或 Cargo 锁的 profile；全产物回收还保留完成不足一分钟的 profile，受保护工作集可能暂时超限。编译和测试通过仓库入口运行，租约覆盖整个命令执行期间；直接运行 Cargo 产物的进程不受运行租约保护。自定义 `CARGO_TARGET_DIR` 不自动参与预算；仓库内的其他 Cargo 输出目录可用 `--target-dir` 指定。
 
 开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/README.md)和 [Code 构建](../build/code/README.md)。
 
-`just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
+`scripts/cargo.py` 的普通 check、test、clippy 命令默认使用共享 `ci-test` profile，包括 `just check`、`just test` 和 `just rust-warnings`；显式 `--profile`、`--release` 或 `-r` 优先。`ci-test` 只是编译配置名，不执行 CI 流水线。产品开发程序和协议生成器继续复用 `dev-small`，发布使用 release；普通 build/run 保留 Cargo 默认配置及现有工具的产物路径，保留各自的体积与调试约束。`just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
 类型检查、Electron 主进程/preload 编译和开发 watch 使用 TypeScript 7.0.2。工作区将编译器固定在 `@ash/typescript-compiler` npm 别名下，`pnpm exec tsc` 和现有构建/测试脚本均调用 TS7。`typescript` 别名保留 `@typescript/typescript6@6.0.2` 兼容包提供的 TS6 JavaScript API，供本地化提取、热更新分析、格式化和架构测试使用；它提供独立的 `tsc6` 命令。升级时同步根目录和 `build/` 的编译器/API 依赖、`test/scenario/` 的编译器依赖及锁文件，并验证 host watch 的失败与恢复、preload 导入限制和 Web/Electron 启动。
 

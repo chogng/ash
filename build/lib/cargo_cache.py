@@ -1,10 +1,11 @@
-"""Explicitly trim compiler caches while protecting active builds and runs."""
+"""Bound compiler caches while protecting active builds and runs."""
 
 from __future__ import annotations
 
 import argparse
 import os
 import shutil
+import sys
 import time
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
@@ -14,6 +15,7 @@ from build.lib.file_lock import exclusive_lock, shared_lock
 MAX_INCREMENTAL_BYTES = 32 * 1024**3
 MAX_ARTIFACT_BYTES = 64 * 1024**3
 PROFILE_IDLE_SECONDS = 60
+CACHE_CHECK_INTERVAL_SECONDS = 60 * 60
 CARGO_LOCKS = {".cargo-lock", ".cargo-build-lock", ".cargo-artifact-lock"}
 
 
@@ -77,7 +79,11 @@ def trim_artifact_cache(
     """
     if not target.is_dir() or target.is_symlink():
         return 0
-    with exclusive_lock(target / ".incremental-maintenance.lock", create=True):
+    with exclusive_lock(
+        target / ".incremental-maintenance.lock", create=True, blocking=False
+    ) as acquired:
+        if not acquired:
+            return 0
         with ExitStack() as locks:
             candidates = []
             total = 0
@@ -134,7 +140,11 @@ def trim_incremental_cache(
     """
     if not target.is_dir() or target.is_symlink():
         return 0
-    with exclusive_lock(target / ".incremental-maintenance.lock", create=True):
+    with exclusive_lock(
+        target / ".incremental-maintenance.lock", create=True, blocking=False
+    ) as acquired:
+        if not acquired:
+            return 0
         with ExitStack() as locks:
             candidates = []
             total = 0
@@ -155,8 +165,13 @@ def trim_incremental_cache(
                     )
                 ):
                     continue
-                acquired = locks.enter_context(exclusive_lock(lock, blocking=False))
-                if not acquired:
+                if not all(
+                    locks.enter_context(
+                        exclusive_lock(incremental.parent / name, blocking=False)
+                    )
+                    for name in sorted(CARGO_LOCKS)
+                    if (incremental.parent / name).is_file()
+                ):
                     continue
                 for session in incremental.iterdir():
                     if not session.is_dir() or session.is_symlink():
@@ -182,13 +197,9 @@ def trim_incremental_cache(
 def leased_cache(
     repository: Path, *, profile: str = "debug", target_triple: str | None = None
 ):
-    """Protect compilation and execution from explicit cache reclamation.
-
-    Compilation only records use and holds a lease. Scanning here adds latency to
-    warm builds; reclaiming compiler state also makes subsequent builds repeat work.
-    Disk budgets are applied by the independent prune-build-cache command instead.
-    """
+    """Apply periodic budgets, then protect compilation and execution with a lease."""
     target = repository / ".build/cargo"
+    maintain_cache(target)
     directory = target / target_triple / profile if target_triple else target / profile
     directory.mkdir(parents=True, exist_ok=True)
     with shared_lock(directory / ".cache-lease", create=True):
@@ -197,6 +208,32 @@ def leased_cache(
             yield
         finally:
             (directory / ".cache-used").touch()
+
+
+def maintain_cache(target: Path) -> None:
+    if not target.is_dir() or target.is_symlink():
+        return
+    # A separate gate avoids duplicate scans across concurrent build entrypoints.
+    with exclusive_lock(
+        target / ".cache-check.lock", create=True, blocking=False
+    ) as acquired:
+        if not acquired:
+            return
+        marker = target / ".cache-checked"
+        if (
+            marker.exists()
+            and time.time() - marker.stat().st_mtime < CACHE_CHECK_INTERVAL_SECONDS
+        ):
+            return
+        removed = trim_incremental_cache(target, MAX_INCREMENTAL_BYTES)
+        removed += trim_artifact_cache(target, MAX_ARTIFACT_BYTES)
+        marker.touch()
+        if removed:
+            print(
+                f"Reclaimed {removed / 1024**3:.2f} GiB of idle build cache.",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 if __name__ == "__main__":

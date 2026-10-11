@@ -1,6 +1,8 @@
 """Disk budgets preserve active profiles and Cargo's coherent output groups."""
 
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -8,6 +10,7 @@ from pathlib import Path
 
 from build.lib.cargo_cache import (
     leased_cache,
+    maintain_cache,
     profile_from_arguments,
     trim_artifact_cache,
     trim_incremental_cache,
@@ -16,14 +19,13 @@ from build.lib.file_lock import exclusive_lock, shared_lock
 
 
 class CargoCacheTests(unittest.TestCase):
-    def test_build_entry_keeps_warm_artifacts_without_scanning_even_after_idle(self):
+    def test_warm_build_entry_does_not_repeat_cache_scans(self):
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
             target = repository / ".build/cargo"
             session = self.session(target, "ci-test", "cached", 1)
             marker = target / ".cache-checked"
             marker.touch()
-            os.utime(marker, (1, 1))
             with patch(
                 "build.lib.cargo_cache._file_stats",
                 side_effect=AssertionError("compilation must not wait for cache scans"),
@@ -34,6 +36,66 @@ class CargoCacheTests(unittest.TestCase):
                             (session / "state.bin").read_bytes(), b"12345678"
                         )
             self.assertEqual((session / "state.bin").read_bytes(), b"12345678")
+
+    def test_periodic_budget_preserves_running_tests_and_reclaims_idle_outputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            target = repository / ".build/cargo"
+            active = self.session(target, "ci-test", "active", 1)
+            idle = self.session(target, "debug", "idle", 2)
+            with (
+                shared_lock(target / "ci-test/.cache-lease", create=True),
+                patch("build.lib.cargo_cache.MAX_INCREMENTAL_BYTES", 0),
+                patch("build.lib.cargo_cache.MAX_ARTIFACT_BYTES", 0),
+            ):
+                with leased_cache(repository, profile="dev-small"):
+                    self.assertTrue(active.exists())
+                    self.assertFalse(idle.exists())
+            self.assertTrue((target / ".cache-checked").exists())
+
+    def test_concurrent_maintenance_does_not_block_builds_or_collect_outputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            target = repository / ".build/cargo"
+            session = self.session(target, "debug", "old", 1)
+            with exclusive_lock(target / ".cache-check.lock", create=True):
+                maintain_cache(target)
+                self.assertFalse((target / ".cache-checked").exists())
+            with exclusive_lock(target / ".incremental-maintenance.lock", create=True):
+                self.assertEqual(trim_incremental_cache(target, 0), 0)
+                self.assertEqual(trim_artifact_cache(target, 0, idle_seconds=0), 0)
+            self.assertTrue(session.exists())
+
+    def test_another_process_keeps_its_test_outputs_until_execution_finishes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            target = repository / ".build/cargo"
+            active = self.session(target, "ci-test", "active", 1)
+            script = (
+                "import sys\n"
+                "from pathlib import Path\n"
+                "from build.lib.cargo_cache import leased_cache\n"
+                "with leased_cache(Path(sys.argv[1]), profile='ci-test'):\n"
+                " print('running', flush=True)\n"
+                " sys.stdin.readline()\n"
+            )
+            with subprocess.Popen(
+                [sys.executable, "-B", "-c", script, str(repository)],
+                cwd=Path(__file__).resolve().parents[2],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                text=True,
+            ) as process:
+                try:
+                    self.assertEqual(process.stdout.readline().strip(), "running")
+                    self.assertEqual(trim_incremental_cache(target, 0), 0)
+                    self.assertEqual(trim_artifact_cache(target, 0, idle_seconds=0), 0)
+                    self.assertTrue(active.exists())
+                finally:
+                    process.communicate("finished\n", timeout=10)
+            self.assertEqual(process.returncode, 0)
+            self.assertEqual(trim_artifact_cache(target, 0, idle_seconds=0), 8)
+            self.assertFalse(active.exists())
 
     def session(self, root: Path, profile: str, name: str, timestamp: int) -> Path:
         directory = root / profile
@@ -98,6 +160,7 @@ class CargoCacheTests(unittest.TestCase):
                 lock.touch()
                 inode = lock.stat().st_ino
                 with exclusive_lock(lock):
+                    self.assertEqual(trim_incremental_cache(root, 0), 0)
                     self.assertEqual(trim_artifact_cache(root, 0, idle_seconds=0), 0)
                     self.assertTrue(session.exists())
                 self.assertEqual(trim_artifact_cache(root, 0, idle_seconds=0), 8)

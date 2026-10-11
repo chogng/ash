@@ -195,6 +195,19 @@ fn input_keeps_its_bottom_rule() {
         self.assertIn("request_", self.commands[1])
         self.assertNotIn("request_", self.commands[0] + self.commands[2])
 
+    def test_verify_selects_targets_only_for_the_test_step(self):
+        for options in (["--lib"], ["--test", "stdio", "--test", "commands"]):
+            with self.subTest(options=options):
+                self.commands.clear()
+                self.assertEqual(self.execute(["verify", "example", *options]), 0)
+                self.assertEqual(
+                    self.commands[1],
+                    ["just", "test", "example", "--profile", "ci-test", *options],
+                )
+                for command in (self.commands[0], self.commands[2]):
+                    self.assertNotIn("--lib", command)
+                    self.assertNotIn("--test", command)
+
     def test_verify_stops_on_each_failure_and_preserves_exit_code(self):
         for step in ("check", "test", "rust-warnings"):
             with self.subTest(step=step):

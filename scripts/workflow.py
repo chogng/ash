@@ -214,6 +214,11 @@ def verify(args: argparse.Namespace, root: Path) -> int:
     settings = ["--profile", args.profile]
     if args.features:
         settings += ["--features", args.features]
+    targets = (
+        ["--lib"]
+        if args.lib
+        else [argument for target in args.test or [] for argument in ("--test", target)]
+    )
     commands = [
         ["just", "check", args.package, *settings],
         *[
@@ -222,6 +227,7 @@ def verify(args: argparse.Namespace, root: Path) -> int:
                 "test",
                 test_package,
                 *settings,
+                *targets,
                 *([args.filter] if args.filter else []),
             ]
             for test_package in test_packages
@@ -469,6 +475,11 @@ def main(arguments: list[str] | None = None, root: Path = ROOT) -> int:
     )
     validation.add_argument("package")
     validation.add_argument("--filter", help="Cargo test-name filter")
+    targets = validation.add_mutually_exclusive_group()
+    targets.add_argument("--lib", action="store_true", help="test only the library")
+    targets.add_argument(
+        "--test", action="append", help="select integration test targets"
+    )
     validation.add_argument(
         "--profile", default="ci-test", help="shared Cargo profile (default: ci-test)"
     )

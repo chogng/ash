@@ -209,6 +209,15 @@ def main(arguments: list[str] | None = None) -> int:
         cargo_arguments = cargo_arguments[1:]
     if not cargo_arguments:
         parser.error("a Cargo command is required")
+    separator = (
+        cargo_arguments.index("--") if "--" in cargo_arguments else len(cargo_arguments)
+    )
+    options = cargo_arguments[:separator]
+    if cargo_arguments[0] in {"check", "test", "clippy"} and not any(
+        option in {"--profile", "--release", "-r"} or option.startswith("--profile=")
+        for option in options
+    ):
+        cargo_arguments[1:1] = ["--profile", "ci-test"]
     if args.process_tests:
         cargo_options = (
             cargo_arguments[: cargo_arguments.index("--")]

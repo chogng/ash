@@ -76,7 +76,7 @@ dependency-security *args:
 bench-build *args:
     {{ python }} -B scripts/benchmark.py {{ recipe_args }}
 
-# Explicitly trim idle Cargo caches; ordinary builds retain reusable compiler state.
+# Trim idle Cargo caches immediately, overriding the periodic maintenance budgets.
 prune-build-cache *args:
     {{ python }} -B -m build.lib.cargo_cache {{ recipe_args }}
 

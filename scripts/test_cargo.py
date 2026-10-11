@@ -29,6 +29,36 @@ class CodeModeHostTests(unittest.TestCase):
         target.start()
         self.addCleanup(target.stop)
 
+    @patch("scripts.cargo.cargo_command_packages", return_value=set())
+    @patch("scripts.cargo.subprocess.run")
+    def test_shared_profile_respects_explicit_settings_and_program_arguments(
+        self, run, packages
+    ):
+        run.return_value = subprocess.CompletedProcess([], 0)
+        for arguments, expected in [
+            (
+                ["test", "-p", "app", "--", "--profile=release"],
+                [
+                    "test",
+                    "--profile",
+                    "ci-test",
+                    "-p",
+                    "app",
+                    "--",
+                    "--profile=release",
+                ],
+            ),
+            (
+                ["check", "--profile=dev-small", "-p", "app"],
+                ["check", "--profile=dev-small", "-p", "app"],
+            ),
+            (["build", "--release", "-p", "app"], ["build", "--release", "-p", "app"]),
+            (["run", "-r", "-p", "app"], ["run", "-r", "-p", "app"]),
+        ]:
+            with self.subTest(arguments=arguments):
+                self.assertEqual(main(arguments), 0)
+                self.assertEqual(run.call_args.args[0], ["cargo", *expected])
+
     @patch.dict("scripts.cargo.os.environ", {}, clear=True)
     @patch(
         "scripts.cargo.resolve_v8_cargo_env", return_value={"RUSTY_V8_ARCHIVE": "v8"}
@@ -51,7 +81,9 @@ class CodeModeHostTests(unittest.TestCase):
         self.assertEqual(2, run.call_count)
         query, compile = run.call_args_list
         self.assertEqual(["cargo", "tree"], query.args[0][:2])
-        self.assertEqual(["cargo", "check", "-p", "app"], compile.args[0])
+        self.assertEqual(
+            ["cargo", "check", "--profile", "ci-test", "-p", "app"], compile.args[0]
+        )
         self.assertEqual(
             {"RUSTY_V8_ARCHIVE": "v8", "SHERPA_ONNX_LIB_DIR": "speech"},
             compile.kwargs["env"],
@@ -160,7 +192,10 @@ class CodeModeHostTests(unittest.TestCase):
         arguments = ["test", "-p", "ash-remote-server", "--test", "stdio"]
         self.assertEqual(main(arguments), 0)
         prepare.assert_called_once()
-        self.assertEqual(prepare.call_args.args[:2], ("cargo", arguments))
+        self.assertEqual(
+            prepare.call_args.args[:2],
+            ("cargo", ["test", "--profile", "ci-test", *arguments[1:]]),
+        )
         self.assertEqual(prepare.call_args.args[2]["RUSTY_V8_ARCHIVE"], "locked")
         self.assertEqual(prepare.call_args.args[3], "ash-app-server")
         self.assertEqual(
@@ -298,11 +333,12 @@ class CodeModeHostTests(unittest.TestCase):
         run.return_value = subprocess.CompletedProcess([], 0)
         arguments = ["test", "-p", "ash-app-server", "--lib"]
         self.assertEqual(main(arguments), 0)
+        expected = ["test", "--profile", "ci-test", *arguments[1:]]
         resolve_v8.assert_called_once()
         packages.assert_called_once_with(
-            "cargo", arguments, Path(__file__).resolve().parents[1]
+            "cargo", expected, Path(__file__).resolve().parents[1]
         )
-        self.assertEqual(prepare.call_args.args[1], arguments)
+        self.assertEqual(prepare.call_args.args[1], expected)
         self.assertEqual(prepare.call_args.args[2]["RUSTY_V8_ARCHIVE"], "locked")
         self.assertEqual(
             run.call_args.kwargs["env"]["ASH_CODE_MODE_HOST_BIN"], "/runtime/host"
