@@ -1235,6 +1235,7 @@
     "configuration.contributionLimit": "扩展最多可贡献 {0} 个配置部分。",
     "tasks.shellUnavailable": "没有可用于执行此任务的 shell。",
     "debug.adapterTrackerFailed": "调试适配器跟踪器失败：{0}",
+    "debug.adapterSessionUnavailable": "调试适配器会话已不可用。",
     "debug.adapterTrackerQueueExceeded": "调试适配器跟踪器的消息队列已超出上限；已停止观察消息。",
     "debug.invalidResolvedAdapter": "解析后的调试适配器可执行文件为空，或包含无效的进程参数。",
     "configurationResolver.invalidPlatform": "“{0}”配置必须是对象。",

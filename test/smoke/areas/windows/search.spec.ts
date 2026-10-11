@@ -592,6 +592,49 @@ test('Search replaces across lines on disk and undo restores the searched conten
 	expect((await readFile(path, 'utf8')).replace(/\r\n/g, '\n')).toBe('中文😀 second first end\n');
 });
 
+test('Search undoes replacement across 21 unopened files', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required' && target.kind !== 'browser', 'Uses workspace files or the browser filesystem.');
+	const paths = Array.from({ length: 21 }, (_, index) => join(testWorkspace.directory, `replace-${index}.txt`));
+	const original = 'ash_closed_file_undo_token\r\n';
+	const folderName = `replace-${Date.now()}`;
+	if (target.appServerMode === 'required') {
+		await Promise.all(paths.map(path => writeFile(path, original)));
+	} else {
+		await workbench.page.evaluate(async ({ folderName, original }) => {
+			const root = await navigator.storage.getDirectory();
+			const folder = await root.getDirectoryHandle(folderName, { create: true });
+			for (let index = 0; index < 21; index++) {
+				const writer = await (await folder.getFileHandle(`replace-${index}.txt`, { create: true })).createWritable();
+				await writer.write(original);
+				await writer.close();
+			}
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		}, { folderName, original });
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+		await expect(workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'replace-0.txt', exact: true })).toBeVisible();
+	}
+	const readContents = () => target.appServerMode === 'required'
+		? Promise.all(paths.map(path => readFile(path, 'utf8')))
+		: workbench.page.evaluate(async folderName => {
+			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(folderName);
+			return Promise.all(Array.from({ length: 21 }, async (_, index) => (await (await folder.getFileHandle(`replace-${index}.txt`)).getFile()).text()));
+		}, folderName);
+	await workbench.search.open();
+	await workbench.search.search('ash_closed_file_undo_token');
+	await expect(workbench.search.status).toHaveText('21 results');
+	await expect(workbench.page.getByRole('tab', { name: /^replace-\d+\.txt$/ })).toHaveCount(0);
+	await workbench.search.element.getByRole('textbox', { name: 'Replace', exact: true }).fill('updated');
+	const confirmation = await workbench.dialogs.confirm(application, 'Confirm', 'Replace All', () => workbench.search.element.getByRole('button', { name: 'Replace All', exact: true }).click());
+	expect(confirmation.message).toBe('Replace 21 matches in 21 files?');
+	await expect(workbench.search.status).toHaveText('No results found.');
+	expect(await readContents()).toEqual(paths.map(() => 'updated\r\n'));
+	const toolbar = workbench.page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['Undo replacement']);
+	await expect(workbench.search.status).toHaveText('21 results');
+	expect(await readContents()).toEqual(paths.map(() => original));
+	await expect(workbench.page.getByRole('tab', { name: /^replace-\d+\.txt$/ })).toHaveCount(0);
+});
+
 test.describe('Search with a granted browser folder', () => {
 	test.use({ openWorkspace: false });
 	test('preview, undo, Search Editor source navigation and saved searches use the real browser filesystem', async ({ target, workbench }) => {

@@ -211,6 +211,29 @@ test('group undo checks every latest snapshot before changing any resource', asy
 	assert.equal(fixture.store.text(first), '1a');
 });
 
+test('group undo restores sequential steps after more than 20 closed histories are released', async () => {
+	const others = Array.from({ length: 21 }, (_, index) => URI.file(`/workspace/group-${index}.ts`));
+	using fixture = new BulkEditTestServices([[first, 'a'], ...others.map(resource => [resource, 'b'] as const)]);
+	const one = await fixture.service.apply(textEdit(first, '1'), { undoRedoGroupId: 8 });
+	await fixture.service.apply({ entries: [...textEdit(first, '2').entries, ...others.flatMap(resource => textEdit(resource, '3').entries)] }, { undoRedoGroupId: 8 });
+	assert.ok(one.isApplied);
+	await one.undo();
+	assert.deepEqual([fixture.store.text(first), ...others.map(resource => fixture.store.text(resource))], ['a', ...others.map(() => 'b')]);
+});
+
+test('evicted transaction histories do not hide later edits that restore the same text', async () => {
+	const resources = Array.from({ length: 21 }, (_, index) => URI.file(`/workspace/conflict-${index}.ts`));
+	using fixture = new BulkEditTestServices(resources.map(resource => [resource, 'a'] as const));
+	const result = await fixture.service.apply({ entries: resources.flatMap(resource => textEdit(resource, '1').entries) });
+	using reference = await fixture.models.acquire({ resource: resources[20]! }, new AbortController().signal);
+	reference.model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '!' }]);
+	reference.model.applyEdits([{ range: new Range(1, 1, 1, 2), text: '' }]);
+	assert.ok(result.isApplied);
+	await assert.rejects(result.undo(), /changed before replacement/);
+	assert.deepEqual(resources.map(resource => fixture.store.text(resource)), resources.map(() => '1a'));
+	assert.equal(reference.model.getText(), '1a');
+});
+
 test('declining undo confirmation preserves the transaction and permits a later undo', async () => {
 	using fixture = new BulkEditTestServices([[first, 'a']]);
 	const result = await fixture.service.apply(textEdit(first, '1'), { label: 'Rename symbol', confirmBeforeUndo: true });

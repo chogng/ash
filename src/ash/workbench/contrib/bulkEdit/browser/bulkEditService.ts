@@ -2,7 +2,7 @@ import { BulkTextEdits } from './bulkTextEdits.js';
 import { BulkFileEdits } from './bulkFileEdits.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { normalizeTextLineEndings } from '../../../../editor/common/core/textChange.js';
-import { TextModel } from '../../../../editor/common/model/textModel.js';
+import { TextModel, type TextModelUndoRedoSnapshot } from '../../../../editor/common/model/textModel.js';
 import { ITextModelResourceService, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
@@ -46,6 +46,7 @@ interface AcquiredModel {
 	readonly reference: TextModelReference;
 	readonly wasOpen: boolean;
 	version: number;
+	undoRedoSnapshot?: TextModelUndoRedoSnapshot;
 }
 
 interface VirtualFile {
@@ -79,6 +80,7 @@ interface AppliedResourceState {
 	readonly expected: VirtualFile;
 	readonly textModel: boolean;
 	readonly alternativeVersionId?: number;
+	readonly undoRedoSnapshot?: TextModelUndoRedoSnapshot;
 }
 
 /** Owns preview approval, ordered workspace transactions and their inverse operations. */
@@ -250,7 +252,10 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 					resource,
 					expected: { ...states.get(resource.toString())! },
 					textModel,
-					...(textModel ? { alternativeVersionId: acquired.get(resource.toString())!.reference.model.getAlternativeVersionId() } : {}),
+					...(textModel ? {
+						alternativeVersionId: acquired.get(resource.toString())!.reference.model.getAlternativeVersionId(),
+						undoRedoSnapshot: acquired.get(resource.toString())!.undoRedoSnapshot,
+					} : {}),
 				};
 			});
 			let reverted = false;
@@ -274,10 +279,14 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 	}
 
 	private async verifyAppliedState(resources: readonly AppliedResourceState[]): Promise<void> {
-		for (const { resource, expected, textModel, alternativeVersionId } of resources) {
+		for (const { resource, expected, textModel, alternativeVersionId, undoRedoSnapshot } of resources) {
 			if (textModel) {
 				const reference = await this.models.acquire({ resource }, new AbortController().signal);
 				try {
+					// Transactions own their undo history independently of the resolver's reopen cache.
+					if (undoRedoSnapshot && reference.model.version === 1 && !reference.model.canUndo() && !reference.model.canRedo()) {
+						reference.model.restoreUndoRedoSnapshot(undoRedoSnapshot);
+					}
 					if (reference.model.getText() !== expected.text || reference.model.getAlternativeVersionId() !== alternativeVersionId) {
 						throw new Error(`Workspace edit target '${resource.toString()}' changed before replacement`);
 					}

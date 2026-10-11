@@ -4,10 +4,11 @@ import { WorkspaceEditConflictError } from '../../../../editor/browser/services/
 import type { ITextModelResourceService, TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import type { TextModelEditSource } from '../../../../editor/common/textModelEditSource.js';
 import type { DisposableMap } from '../../../../base/common/lifecycle.js';
+import type { TextModelUndoRedoSnapshot } from '../../../../editor/common/model/textModel.js';
 
 interface TextOperation {
 	readonly entry: LanguageTextDocumentEdit;
-	readonly model: { readonly reference: TextModelReference; readonly wasOpen: boolean; version: number; };
+	readonly model: { readonly reference: TextModelReference; readonly wasOpen: boolean; version: number; undoRedoSnapshot?: TextModelUndoRedoSnapshot; };
 	readonly before: string;
 	readonly after: string;
 }
@@ -38,7 +39,9 @@ export class BulkTextEdits {
 		model.reference.model.applyOperations(entry.edits, { editSource: this.reason });
 		model.version = model.reference.model.version;
 		const appliedVersion = model.reference.model.getAlternativeVersionId();
-		this.inverses.push(() => this.undoText(appliedVersion));
+		const snapshot = model.reference.model.createUndoRedoSnapshot();
+		model.undoRedoSnapshot = snapshot;
+		this.inverses.push(() => this.undoText(appliedVersion, snapshot));
 		if (!model.wasOpen && !this.skipSave) {
 			try {
 				// These writes persist the workspace transaction, rather than starting a user save.
@@ -54,9 +57,14 @@ export class BulkTextEdits {
 		return [entry.resource];
 	}
 
-	private async undoText(appliedVersion: number): Promise<void> {
+	private async undoText(appliedVersion: number, snapshot: TextModelUndoRedoSnapshot | undefined): Promise<void> {
 		const { entry, before, after, model } = this.operation;
 		using reference = await this.models.acquire({ resource: entry.resource }, new AbortController().signal);
+		// The resolver's bounded cache may evict this step between validation and rollback.
+		// Restore only a fresh model; live edits must still fail the version check below.
+		if (snapshot && reference.model.version === 1 && !reference.model.canUndo() && !reference.model.canRedo()) {
+			reference.model.restoreUndoRedoSnapshot(snapshot);
+		}
 		if (reference.model.getText() !== after || reference.model.getAlternativeVersionId() !== appliedVersion) {
 			throw new WorkspaceEditConflictError(`Workspace edit target '${entry.resource.toString()}' changed before replacement`);
 		}

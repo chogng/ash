@@ -4,31 +4,42 @@ import { type AppServerProtocolClient } from "../../agentHost/browser/appServerP
 import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService, type IDebugAdapterProcessStartOptions } from "../common/debugAdapterProcessService.js";
 import { type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
+import { generateUuid } from "../../../base/common/uuid.js";
+import { localize } from "../../../nls.js";
 
 /** App Server adapter for App Server-owned DAP processes. */
 export class AppServerDebugAdapterProcessService implements IDebugAdapterProcessService {
-	private readonly workspaceFolders = new Map<string, string | undefined>();
+	private readonly sessions = new Map<string, { readonly sessionId: string; readonly dirId?: string; }>();
 	constructor(private readonly connection: AppServerProtocolClient, private readonly appServer: IAppServerApi) { }
 
 	async start(options: IDebugAdapterProcessStartOptions): Promise<string> {
 		const sessionId = (await appServerRequest(this.connection, "debug/adapter/start", { ...options, arguments: [...options.arguments] })).sessionId;
-		this.workspaceFolders.set(sessionId, options.dirId);
-		return sessionId;
+		// Backend IDs are folder-scoped; callers need a handle unique across all folders.
+		const handle = generateUuid();
+		this.sessions.set(handle, { sessionId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
+		return handle;
 	}
 
-	send(sessionId: string, message: unknown): Promise<void> {
-		return voidResult(appServerRequest(this.connection, "debug/adapter/send", { ...this.folder(sessionId), sessionId, message }));
+	async send(sessionId: string, message: unknown): Promise<void> {
+		await voidResult(appServerRequest(this.connection, "debug/adapter/send", { ...this.session(sessionId), message }));
 	}
 
-	read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
-		return appServerRequest(this.connection, "debug/adapter/read", { ...this.folder(sessionId), sessionId, afterSequence, maxMessages });
+	async read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
+		return appServerRequest(this.connection, "debug/adapter/read", { ...this.session(sessionId), afterSequence, maxMessages });
 	}
 
-	close(sessionId: string): Promise<void> {
-		return voidResult(appServerRequest(this.connection, "debug/adapter/close", { ...this.folder(sessionId), sessionId })).finally(() => this.workspaceFolders.delete(sessionId));
+	async close(sessionId: string): Promise<void> {
+		const session = this.sessions.get(sessionId);
+		if (!session) { return; }
+		this.sessions.delete(sessionId);
+		await voidResult(appServerRequest(this.connection, "debug/adapter/close", session));
 	}
 
-	private folder(sessionId: string): { readonly dirId?: string; } { const dirId = this.workspaceFolders.get(sessionId); return dirId === undefined ? {} : { dirId }; }
+	private session(sessionId: string): { readonly sessionId: string; readonly dirId?: string; } {
+		const session = this.sessions.get(sessionId);
+		if (!session) { throw new Error(localize('debug.adapterSessionUnavailable', 'The debug adapter session is no longer available.')); }
+		return session;
+	}
 
 	getConnectionState() { return this.appServer.getConnectionState(); }
 

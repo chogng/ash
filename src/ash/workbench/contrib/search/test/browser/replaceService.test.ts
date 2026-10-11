@@ -13,6 +13,22 @@ const resource = URI.joinPath(root, 'main.ts');
 const query: IContentSearchQuery = { text: '(needle)', patternKind: 'regex', caseSensitivity: 'insensitive', includePatterns: [], excludePatterns: [] };
 const options = { preview: false, preserveCase: false, signal: new AbortController().signal };
 
+for (const count of [20, 21, 40]) {
+	test(`replacement undo restores all ${count} closed files after model history eviction`, async () => {
+		const resources = Array.from({ length: count }, (_, index) => URI.joinPath(root, `file-${index}.ts`));
+		using fixture = new BulkEditTestServices(resources.map(resource => [resource, 'needle'] as const));
+		const matches = new SearchResultImpl([{ id: 'workspace', index: 0, name: 'workspace', uri: root }]);
+		matches.add(resources.map((_, index) => ({ dirId: 'workspace', path: `file-${index}.ts`, lineNumber: 1, preview: 'needle', ranges: [{ start: 0, end: 6 }] })));
+		const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(matches.files.flatMap(file => file.matches), query, 'value', options);
+		assert.ok(applied.isApplied);
+		assert.equal(fixture.models.getModels().length, 0);
+		assert.deepEqual(resources.map(resource => fixture.store.text(resource)), resources.map(() => 'value'));
+		await applied.undo();
+		assert.deepEqual(resources.map(resource => fixture.store.text(resource)), resources.map(() => 'needle'));
+		assert.equal(fixture.models.getModels().length, 0);
+	});
+}
+
 function results(preview: string, ranges: readonly { start: number; end: number; }[]): SearchResultImpl {
 	const result = new SearchResultImpl([{ id: 'workspace', index: 0, name: 'workspace', uri: root }]);
 	result.add([{ dirId: 'workspace', path: 'main.ts', lineNumber: 1, preview, ranges }]);

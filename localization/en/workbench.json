@@ -101,6 +101,7 @@
     "files.invalidName": "Enter a valid name for the target file system.",
     "workbench.newFileInvalidName": "Enter a valid file name for the target file system.",
     "debug.adapterDescriptorUnavailable": "The Debug Adapter factory did not provide an adapter.",
+    "debug.adapterSessionUnavailable": "The debug adapter session is no longer available.",
     "configurationResolver.missingExtension": "Cannot resolve extension '{0}': its installation folder is unavailable.",
     "configurationResolver.missingEnvironmentName": "An environment variable name is required.",
     "configurationResolver.missingFolder": "Cannot resolve '{0}': open or select the referenced workspace folder.",
