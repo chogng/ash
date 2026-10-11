@@ -72,11 +72,17 @@ export class GitHubService extends Disposable implements IGitHubService {
 			}
 		}));
 		const providerListeners = this._register(new DisposableStore());
-  const observeProviders = (): void => { providerListeners.clear(); for (const repository of scm.repositories) providerListeners.add(repository.provider.onDidChangeResources(() => this.invalidateSelection())); this.invalidateSelection(); };
-  this._register(scm.onDidAddRepository(observeProviders));
-  this._register(scm.onDidRemoveRepository(observeProviders));
-  this._register(CommandsRegistry.onDidChangeCommands(() => this.invalidateSelection()));
-  observeProviders();
+		const observeProviders = (): void => {
+			providerListeners.clear();
+			for (const repository of scm.repositories) {
+				providerListeners.add(repository.provider.onDidChangeResources(() => this.invalidateSelection()));
+			}
+			this.invalidateSelection();
+		};
+		this._register(scm.onDidAddRepository(observeProviders));
+		this._register(scm.onDidRemoveRepository(observeProviders));
+		this._register(CommandsRegistry.onDidChangeCommands(() => this.invalidateSelection()));
+		observeProviders();
 		this._register(accounts.onDidChangeAccounts(() => {
 			this.operation.value?.cancel();
 			this.accountGeneration++;
@@ -175,20 +181,11 @@ export class GitHubService extends Disposable implements IGitHubService {
 		}
 	}
 
-
 	private invalidateSelection(): void {
 		this.operation.value?.cancel();
-		const selected = this.sessions.activeSelection;
-		if (selected?.kind !== 'session') {
-			return;
+		if (this.sessions.activeSelection?.kind === 'session') {
+			this.refresh.schedule(100);
 		}
-		// A branch change must remove the old PR before the new branch lookup finishes.
-		const entry = this.requests.get(selected.active.session.sessionId);
-		if (entry) {
-			this.requests.set(selected.active.session.sessionId, { ...entry, values: entry.values.filter(request => request.recordedReference !== undefined) });
-			this.changed.fire();
-		}
-		this.refresh.schedule(100);
 	}
 
 	private async resolveSelection(): Promise<void> {
@@ -210,16 +207,32 @@ export class GitHubService extends Disposable implements IGitHubService {
 			const [accounts, references] = await Promise.all([accountsPromise, this.github.listSessionPullRequests(session.sessionId)]);
 			const hosts = new Set(accounts.filter(account => account.status === 'ready').map(account => account.host.toLowerCase()));
 			const repositories = root ? (await readLocalRepositories(this.commands)).filter(repository => extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) || extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root)) : [];
+			if (token.isCancellationRequested || this.isDisposed) {
+				return;
+			}
+			for (const repository of repositories) {
+				if (repository.head.type === 'branch') {
+					branches.set(repository.id, repository.head.name);
+				}
+			}
+			const previousBranches = this.branches.get(session.sessionId);
+			if (previousBranches && (previousBranches.size !== branches.size || [...previousBranches].some(([id, branch]) => branches.get(id) !== branch))) {
+				// Clear old branch associations before remote lookups, while preserving focus on ordinary status refreshes.
+				const entry = this.requests.get(session.sessionId);
+				if (entry) {
+					this.requests.set(session.sessionId, { ...entry, values: entry.values.filter(request => request.recordedReference !== undefined) });
+					this.changed.fire();
+				}
+			}
 			const recorded = await Promise.all(references.map(reference => this.resolveReference(reference, accounts, token)));
 			const results = await Promise.all(repositories.map(async repository => {
-				const status = repository, graph = repository;
-				if (token.isCancellationRequested || status.head.type !== 'branch') {
+
+				if (token.isCancellationRequested || repository.head.type !== 'branch') {
 					return [];
 				}
 				// Enterprise remotes can be classified as "other" by Git; a GitHub grant identifies their host.
-				const identities = graph.remotes.flatMap(remote => remote.identity && hosts.has(remote.identity.host.toLowerCase()) ? [remote.identity] : []);
-				const branch = status.head.name;
-				branches.set(repository.id, branch);
+				const identities = repository.remotes.flatMap(remote => remote.identity && hosts.has(remote.identity.host.toLowerCase()) ? [remote.identity] : []);
+				const branch = repository.head.name;
 				const unique = new Map(identities.map(identity => [`${identity.host}/${identity.owner}/${identity.repository}`.toLowerCase(), identity]));
 				return Promise.all([...unique.values()].flatMap(identity => {
 					const account = accounts.find(account => account.host.toLowerCase() === identity.host.toLowerCase() && account.status === 'ready');

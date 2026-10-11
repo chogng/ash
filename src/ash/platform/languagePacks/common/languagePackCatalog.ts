@@ -2,11 +2,32 @@ import { decodeBase64 as decodeBase64Buffer } from "../../../base/common/buffer.
 import { isRecord } from "../../../base/common/types.js";
 import type { LanguagePackCatalog } from "./languagePacksService.js";
 import { ASH_LOCALIZATION_CATALOG_VERSION } from "./languagePackContract.js";
+import type { ILanguagePackStore } from "./languagePackStore.js";
 
 export function normalizeLocale(value: string): string {
 	const parts = value.trim().replaceAll("_", "-").split("-");
 	if (parts.length === 0 || !parts[0] || parts.some((part) => !/^[A-Za-z0-9]+$/u.test(part))) return "";
 	return parts.map((part, index) => index === 0 ? part.toLowerCase() : part.length === 2 || part.length === 3 ? part.toUpperCase() : part).join("-");
+}
+
+/** Startup must remain usable when an optional language resource is missing or damaged. */
+export async function resolveLanguagePackCatalog(locale: string, builtins: readonly LanguagePackCatalog[], store: ILanguagePackStore): Promise<LanguagePackCatalog> {
+	let candidate = normalizeLocale(locale);
+	while (candidate) {
+		const builtin = builtins.find(catalog => catalog.locale.toLowerCase() === candidate.toLowerCase());
+		if (builtin) { return builtin; }
+		try {
+			const catalog = await store.read(candidate);
+			if (catalog) { return catalog; }
+		} catch {
+			// Keep the preference so reinstalling the pack can restore it on a later startup.
+		}
+		const separator = candidate.lastIndexOf("-");
+		candidate = separator > 0 ? candidate.slice(0, separator) : "";
+	}
+	const english = builtins.find(catalog => catalog.locale === "en");
+	if (!english) { throw new Error("The built-in English catalog is required"); }
+	return english;
 }
 
 /** Validates the product-specific static resource after Extensions acquisition. */

@@ -49,8 +49,6 @@ import type { JsonValue, ExtensionClientSource } from '../../../platform/agentHo
 import { MainThreadDocuments, extensionDocumentSnapshot } from './mainThreadDocuments.js';
 import { MainThreadDiagnostics } from './mainThreadDiagnostics.js';
 import { MainThreadTask } from './mainThreadTask.js';
-import { MainThreadSCM } from './mainThreadSCM.js';
-import { MainThreadExtensionBackend } from './mainThreadExtensionBackend.js';
 
 export interface ExtensionApiIssue {
 	readonly extensionId: string;
@@ -118,8 +116,6 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly editorsApi: MainThreadEditors;
 	private readonly taskApi: MainThreadTask;
 	private readonly debugApi: MainThreadDebugService;
-	private readonly scmApi: MainThreadSCM;
-	private readonly backendApi: MainThreadExtensionBackend;
 	private readonly remoteSources = new Map<string, ExtensionHostRuntime>();
 
 	constructor(
@@ -161,8 +157,6 @@ export class MainThreadExtensionApi extends Disposable {
 		this.documents = this._register(instantiation.createInstance(MainThreadDocuments, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.taskApi = this._register(instantiation.createInstance(MainThreadTask, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.debugApi = this._register(instantiation.createInstance(MainThreadDebugService, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
-		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
-		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));

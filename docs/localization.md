@@ -17,8 +17,8 @@ source declarations and translations without requiring or writing generated cata
 | Built-in English and Simplified Chinese                              | `workbench/services/localization/common/localizationCatalogs.ts`                | Always available without Extensions access                       |
 | Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks`                                                        | `ILanguagePackService`; Extensions `packageType: "localization"` |
 | Locale selection and persistence                                     | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale`                |
-| Message lookup and NLS projection                                    | `workbench/services/localization` + `src/ash/nls.ts`                            | Selected catalog → English catalog → caller fallback              |
-| Remote package discovery and distribution                            | `../extensions`                                                                | `packageType: "localization"` and `localization/package.json`     |
+| Message lookup and NLS resolution                                    | `workbench/services/localization` + `src/ash/nls.ts`                            | Selected catalog → caller's English source message                |
+| Remote package discovery and distribution                            | Extensions distribution                                                        | `packageType: "localization"` and `localization/package.json`     |
 | Installed package lease and resource reads                           | Ash Extensions Manager                                                         | A localization capability exposes one static JSON catalog         |
 
 The Extensions does not know Ash bundle IDs, does not execute localization packages, and does not
@@ -53,17 +53,33 @@ catalog contract can reject a catalog without changing the generic Extensions sc
 ## Runtime behavior
 
 `ExtensionsLanguagePackService` starts with the built-in catalogs and loads installed Extensions
-catalogs through the normal capability lease. `WorkbenchLocaleService` owns the local-profile
-selection and applies it in the current Workbench. `WorkbenchLocalizationService` owns lookup and
-projects it into the low-level `nls.ts` resolver used by platform actions and Workbench chrome.
-Locale resolution prefers an exact match, then a case-insensitive match, then a base language, and
-finally English. Missing messages never erase the UI.
+catalogs through the normal capability lease. Built-in locales take precedence. When multiple
+installed providers supply the same normalized locale, that locale is excluded from discovery and
+does not overwrite saved resources; other locales remain available. Removing the duplicate provider
+allows the remaining catalog to load. Unreadable resources release their leases and do not prevent
+other providers from loading.
+
+`WorkbenchLocaleService` owns the local-profile selection and saves resources before the preference.
+Electron Main resolves one startup catalog for all windows and system menus; Web resolves its catalog
+before importing Workbench contributions. Resolution normalizes the requested locale, tries an exact
+match, then successively less specific locales, and finally built-in English. Missing, damaged or
+incompatible language resources do not block startup. The preference remains saved so reinstalling a
+valid pack can restore it on a later startup. `WorkbenchLocalizationService` uses the same startup NLS
+snapshot as direct `nls.ts` calls. Missing messages use the caller's English source message.
 
 The Command Palette provides **Configure Display Language** and **Clear Display Language Preference**.
-The picker lists installed locales and searches Extensions localization packages as the user types.
+The picker lists available locales and searches Extensions localization packages as the user types.
 Selecting a package installs it and selects its new locale; the Extensions entry opens the package
 browser when the user wants to browse. Clearing the preference removes `workbench.locale` from the
-local profile and restores English. The selected catalog updates the current Workbench immediately.
+local profile and selects English for the next startup. Changing the preference leaves the current
+interface unchanged and offers to restart now or later. Uninstalling a package keeps its saved startup
+resource usable, independently of backend availability.
+
+The [French example package](../localization/examples/fr/manifest.json) uses the Ash `ash-1` catalog
+contract and translates a small part of the shell and display-language settings. Its static resource
+is [localization/package.json](../localization/examples/fr/localization/package.json). The example is
+not published; installation uses the existing signed Extensions distribution flow. It does not adapt
+VS Code language-pack payloads.
 
 The current built-in catalog is consumed by the Workbench menu/action layer, core View Container and
 ViewPane titles, CompositeBar overflow labels, region accessibility labels, Settings navigation,

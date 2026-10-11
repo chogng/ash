@@ -5,6 +5,21 @@ use super::language_ids_for;
 use super::validate_manifest;
 
 #[test]
+fn accepts_ash_french_localization_example() {
+    let manifest: CatalogManifest = serde_json::from_str(include_str!(
+        "../../../../localization/examples/fr/manifest.json"
+    ))
+    .unwrap();
+    validate_manifest(&manifest).unwrap();
+    assert_eq!(manifest.localizations[0].locale, "fr");
+    assert_eq!(manifest.capabilities[0].path, "localization");
+    assert_eq!(
+        manifest.capabilities[0].public_kind(manifest.package_type),
+        crate::CapabilityKind::Localization
+    );
+}
+
+#[test]
 fn accepts_signed_official_mcp_registry_provenance() {
     let manifest: CatalogManifest = serde_json::from_str(
         r#"{

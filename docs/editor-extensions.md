@@ -925,7 +925,18 @@ ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm run test:smoke:desktop test/smoke/areas/chat/exte
 [`extensions/git`](../extensions/git/README.md) 是目录 scope 的 Rust 能力扩展，使用公共 SDK
 DataChannel 提供本地 Git 产品业务。App Server 保留目录授权、监管与现有 `git/*` adapter；
 仓库发现、状态版本、历史游标、监听、忽略规则通知和自动 fetch 只有扩展一份 owner。
-Desktop 的 SCM 展示与编辑器交互留在客户端；公共 `vscode.scm` extension-host API 仍是接入缺口。
+Git 的前端入口也已迁入扩展，在客户端所属的 Worker 中运行。扩展拥有 Git 命令、SCM provider、
+历史、quick diff、忽略规则装饰和多文件差异策略；manifest 拥有菜单、子菜单、颜色、欢迎内容、
+设置元数据与中英文 NLS。核心只提供通用 SCM 展示、编辑器模型、文件持久化和能力桥接。
+
+公共 `ash` 模块通过 `scm.registerSCMProvider` 注册 provider，`backend.request/state` 使用产品准许的
+后端能力，`editors.request` 使用客户端编辑器能力。客户端依据内置包来源和 manifest grant 限制路由、
+配置字段和通知；扩展不持有客户端的后端连接。调用和 provider 生命周期绑定扩展 incarnation，退役会
+取消回调并释放 SCM、装饰和差异源；输入版本防止异步提交覆盖后续草稿。
+
+GitHub 消费端通过可选的 `git.getRepositoryContexts` 与 `git.executeRepositoryCommand` 命令获取
+领域上下文或执行仓库意图，不导入 Git 扩展实现。Git 自动获取仍持久化到共享配置 owner，设置页仅
+使用通用的扩展设置绑定。`ash.scm` 是已接入的 Ash 合约，不表示完整实现 VS Code 的 `vscode.scm` API。
 
 [`build/builtin`](../build/builtin) 统一拥有内置扩展资源打包与浏览器快照。Rust 扩展的 manifest、
 NLS 和资源随 catalog 发布，Rust 源码及 Cargo 构建输入不进入资源包；可执行文件由共享后端

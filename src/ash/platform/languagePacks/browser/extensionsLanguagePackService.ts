@@ -81,7 +81,7 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 	private async load(): Promise<void> {
 		const installed = await this.extensionManagement.listInstalled();
 		const installedPackages = installed
-			.filter(packageValue => packageValue.state === "installed")
+			.filter(packageValue => packageValue.state === "installed" && packageValue.capabilities.some(capability => capability.kind === "localization"))
 			.map(packageValue => ({
 				id: packageValue.package.id,
 				version: packageValue.package.version,
@@ -89,8 +89,13 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 				description: "",
 				installed: true,
 			}));
-		const loaded = (await loadInstalledCatalogs(this.extensionManagement, installed))
-			.filter(catalog => !this.builtinLocales.has(normalizeLocale(catalog.locale)));
+		const candidates = new Map<string, LanguagePackCatalog | undefined>();
+		for (const catalog of await loadInstalledCatalogs(this.extensionManagement, installed)) {
+			if (this.builtinLocales.has(catalog.locale)) continue;
+			// Ambiguous providers must never overwrite a saved startup resource.
+			candidates.set(catalog.locale, candidates.has(catalog.locale) ? undefined : catalog);
+		}
+		const loaded = [...candidates.values()].filter((catalog): catalog is LanguagePackCatalog => catalog !== undefined);
 		// Only publish installed languages once their next-startup resources are saved.
 		for (const catalog of loaded) await this.store.write(catalog);
 		for (const locale of this.extensionManagementLocales) this.catalogsByLocale.delete(locale);
@@ -132,6 +137,8 @@ async function loadInstalledCatalogs(
 				}
 				const catalog = parseLanguagePackCatalog(parsed);
 				if (catalog) catalogs.push(catalog);
+			} catch {
+				// One unavailable resource must not hide other installed languages.
 			} finally {
 				await extensionManagement.releaseCapability(acquired.lease.id).catch(() => undefined);
 			}

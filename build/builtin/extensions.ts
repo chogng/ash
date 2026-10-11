@@ -46,6 +46,7 @@ export async function prepareBrowserExtensions(): Promise<void> {
 		async function collect(resourceDirectory: string): Promise<void> {
 			for (const entry of (await readdir(resourceDirectory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 				if (entry.name.startsWith('.') || ['node_modules', 'test'].includes(entry.name)) { continue; }
+				if (manifest.ashRuntime?.kind === 'rust' && entry.isFile() && entry.name.endsWith('.ts')) { continue; }
 				if (manifest.ashRuntime?.kind === 'rust' && ['src', 'tests', 'Cargo.toml', 'Cargo.lock', 'BUILD.bazel'].includes(entry.name)) { continue; }
 				const path = resolve(resourceDirectory, entry.name);
 				if (entry.isDirectory()) { await collect(path); }

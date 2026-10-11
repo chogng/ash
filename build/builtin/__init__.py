@@ -41,6 +41,7 @@ def copy_builtin_extensions(source_root: Path, destination: Path) -> None:
                 "BUILD.bazel",
                 "tests",
                 "src",
+                "browser",
             )
             if json.loads(manifest.read_text(encoding="utf-8"))
             .get("ashRuntime", {})

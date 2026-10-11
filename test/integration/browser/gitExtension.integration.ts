@@ -7,7 +7,7 @@ import { WebWorkerExtensionHost as BrowserExtensionHostApi } from '../../../src/
 import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
 import { type ExtensionClientSource, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
-import { type ExtensionClientResult } from '../../../src/ash/workbench/api/common/extHost.protocol.js';
+import { type ExtensionClientOperation, type ExtensionClientResult } from '../../../src/ash/workbench/api/common/extHost.protocol.js';
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { MainThreadSCM } from '../../../src/ash/workbench/api/browser/mainThreadSCM.js';
@@ -60,7 +60,8 @@ const quickDiff = lifetime.add(new QuickDiffService());
 const resolvers = lifetime.add(new MultiDiffSourceResolverService());
 const commands = { executeCommand: async (id: string, ...args: unknown[]) => invoke(id, args) } as unknown as ICommandService;
 const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: () => toDisposable(() => undefined) } as unknown as IDecorationsService));
-const clientHandler = host.registerClientHandler(async (operation, signal, source): Promise<ExtensionClientResult> => {
+const clientHandler = host.registerClientHandler(async (raw, signal, source): Promise<ExtensionClientResult> => {
+ const operation = raw as ExtensionClientOperation;
  switch (operation.operation) {
   case 'readInitialization': return { result: 'initialization', initialization: createExtensionHostInitialization(workspace, configuration) };
   case 'backendRequest': return { result: 'value', value: await backend.handle(source, operation.capability, operation.method, operation.params, 0, signal) };

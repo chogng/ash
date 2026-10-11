@@ -100,6 +100,7 @@
   "ash.workbench": {
     "command.OpenExtensions": "打开扩展",
     "command.OpenPlugins": "管理已安装的包",
-    "missingCommandAfterActivation": "扩展启动后未注册命令“{0}”。"
+    "missingCommandAfterActivation": "扩展启动后未注册命令“{0}”。",
+    "extension.editor.unsavedChanges": "打开的文件有尚未保存的更改。"
   }
 }

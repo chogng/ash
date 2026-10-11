@@ -35,4 +35,14 @@ pnpm localization:check --report-missing
 
 内置语言随程序发布。安装或更新 Extensions 语言包后，客户端把完整目录保存到本地 UI profile：Electron 使用 `<profile>/languagepacks/<locale>.json`，Web 使用 IndexedDB `ash-language-packs`。
 
-保存语言偏好之前必须先保存语言资源。启动读取本地资源，不等待 App Server 或 Extensions；资源不存在或格式不合法时报告启动错误。移除 Extensions 包不会删除已经保存的启动资源。
+保存语言偏好之前必须先保存语言资源。启动读取本地资源，不等待 App Server 或 Extensions；先匹配指定语言，再逐级尝试基础语言（例如 `fr-CA` → `fr`），最后使用内置英语。缺失、损坏或契约版本不兼容的资源不阻止启动，也不改写语言偏好；重新安装有效语言包后，下次启动可恢复原来的语言。移除 Extensions 包不会删除已经保存的启动资源。
+
+内置语言优先于扩展提供的同语言目录。多个已安装扩展提供同一语言时，该语言不进入可选列表，也不写入本地资源；卸载重复的包后，剩下的包会重新加载。其他语言正常加载。
+
+## Ash 语言包示例
+
+[`examples/fr`](examples/fr) 提供一个仅面向 Ash 的法语示例包。`manifest.json` 是 Extensions 分发目录的 manifest；`localization/package.json` 是 capability 读取的 Ash 翻译目录。法语示例只翻译命令搜索入口和语言设置，其余文案回退英文。
+
+发布者按现有 Extensions 签名分发流程发布该 manifest 和静态资源。可以在示例目录中运行 `zip -r ash-language-fr-example.zip localization` 生成资源包，再由分发流程生成摘要、统计和签名；ZIP 本身不代表已经发布或受信任。安装后通过“配置显示语言”选择 Français，再重启应用或刷新页面。
+
+新增语言时使用自己的包 ID、locale、语言名称和译文，保留 `catalogVersion: "ash-1"` 与 Ash 的 bundle/key。翻译参数必须与英文原文一致，例如 `{0}`；缺少的词条使用调用位置的英文。包只包含静态 JSON，不需要脚本或 Extension Host。

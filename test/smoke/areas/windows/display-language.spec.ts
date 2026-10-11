@@ -1,6 +1,79 @@
 import { expect, test } from '../../../automation/test.js';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 test.use({ openWorkspace: false });
+
+test('display language startup recovers from missing and damaged Ash packs and restores the saved base language', async ({ target, application, workbench, restartWorkbench, restartMessage }) => {
+	const catalog = JSON.parse(await readFile(resolve('localization/examples/fr/localization/package.json'), 'utf8'));
+	for (const state of ['missing', 'damaged', 'restored'] as const) {
+		// Request a real host restart, then inject the selected resource's persistence failure.
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+		await picker.getByRole('combobox').fill('简体中文');
+		await picker.getByRole('combobox').press('Enter');
+		await expect.poll(restartMessage).toBe('Restart Ash to use 简体中文?');
+		if (target.kind === 'electron' && 'windows' in application) {
+			const profile = await application.evaluate(() => process.env.ASH_HOME!);
+			if (state !== 'missing') {
+				await mkdir(join(profile, 'languagepacks'), { recursive: true });
+				await writeFile(join(profile, 'languagepacks/fr.json'), state === 'damaged' ? '{invalid JSON' : JSON.stringify(catalog));
+			}
+			await workbench.page.evaluate(async () => {
+				const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
+				const settings = { ...JSON.parse(snapshot.document.source), 'workbench.locale': 'fr-CA' };
+				await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+			});
+		} else {
+			await workbench.page.evaluate(async ({ catalog, state }) => {
+				const configuration = await new Promise<IDBDatabase>((resolve, reject) => {
+					const request = indexedDB.open('ash-configuration');
+					request.onsuccess = () => resolve(request.result);
+					request.onerror = () => reject(request.error);
+				});
+				try {
+					await new Promise<void>((resolve, reject) => {
+						const transaction = configuration.transaction('resources', 'readwrite');
+						const store = transaction.objectStore('resources');
+						const request = store.get('settings.json');
+						request.onsuccess = () => {
+							const current = request.result;
+							const settings = { ...JSON.parse(current.document.source), 'workbench.locale': 'fr-CA' };
+							store.put({ ...current, revision: current.revision + 1, document: { version: 1, source: JSON.stringify(settings) } });
+						};
+						transaction.oncomplete = () => resolve();
+						transaction.onerror = () => reject(transaction.error);
+					});
+				} finally { configuration.close(); }
+				if (state === 'missing') { return; }
+				const resources = await new Promise<IDBDatabase>((resolve, reject) => {
+					const request = indexedDB.open('ash-language-packs', 1);
+					request.onupgradeneeded = () => request.result.createObjectStore('catalogs', { keyPath: 'locale' });
+					request.onsuccess = () => resolve(request.result);
+					request.onerror = () => reject(request.error);
+				});
+				try {
+					await new Promise<void>((resolve, reject) => {
+						const transaction = resources.transaction('catalogs', 'readwrite');
+						transaction.objectStore('catalogs').put(state === 'damaged' ? { ...catalog, catalogVersion: 'incompatible' } : catalog);
+						transaction.oncomplete = () => resolve();
+						transaction.onerror = () => reject(transaction.error);
+					});
+				} finally { resources.close(); }
+			}, { catalog, state });
+		}
+		({ application, workbench } = await restartWorkbench());
+		const searchLabel = state === 'restored' ? 'Rechercher des commandes' : 'Search commands';
+		await expect(workbench.page.getByRole('button', { name: searchLabel, exact: true })).toBeVisible();
+		await expect(workbench.page.getByRole('button', { name: 'Manage', exact: true })).toBeVisible();
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = workbench.settingsEditor.element;
+		await settings.locator('[data-settings-category-id="general"]').click();
+		const languageLabel = state === 'restored' ? 'Langue de l’interface' : 'Interface language';
+		await expect(settings.getByRole('combobox', { name: languageLabel, exact: true })).toHaveText('fr-CA');
+		await settings.locator('.ash-modal-editor-close').click();
+	}
+});
 
 test('display language stays unchanged until restart and initializes Chinese command titles', async ({ target, workbench, restartWorkbench, deferRestart, restartMessage }) => {
 	let page = workbench.page;

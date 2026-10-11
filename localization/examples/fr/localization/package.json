@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "locale": "fr",
+  "languageName": "French",
+  "localizedLanguageName": "Français",
+  "catalogVersion": "ash-1",
+  "bundles": {
+    "ash.regions": {
+      "searchCommands": "Rechercher des commandes"
+    },
+    "ash.settings": {
+      "displayLanguage.configure": "Configurer la langue d’affichage",
+      "displayLanguage.choose": "Sélectionner la langue d’affichage",
+      "displayLanguage.clearPreference": "Réinitialiser la langue d’affichage",
+      "displayLanguage.select": "Langue de l’interface",
+      "displayLanguage.description": "Choisissez la langue de l’interface Ash.",
+      "displayLanguage.restartMessage": "Redémarrer Ash pour utiliser {0} ?",
+      "displayLanguage.restartDetail": "La langue sera appliquée après le redémarrage de l’application ou l’actualisation de la page.",
+      "displayLanguage.restartNow": "Redémarrer maintenant",
+      "displayLanguage.restartLater": "Plus tard"
+    }
+  }
+}

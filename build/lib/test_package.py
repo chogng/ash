@@ -800,6 +800,26 @@ class PackageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not a regular unlinked file"):
                 copy_builtin_extensions(root, root / "rejected-extensions")
 
+    def test_builtin_rust_package_keeps_resources_and_excludes_browser_sources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "extensions/git"
+            (package / "browser").mkdir(parents=True)
+            (package / "src").mkdir()
+            (package / "package.json").write_text(
+                '{"name":"git","browser":"./browser/extension.ts",'
+                '"ashRuntime":{"kind":"rust"}}', encoding="utf-8"
+            )
+            (package / "browser/extension.ts").write_text("export function activate() {}")
+            (package / "src/main.rs").write_text("fn main() {}")
+            (package / "Cargo.toml").write_text("[package]")
+            (package / "package.nls.json").write_text('{"name":"Git"}')
+            copy_builtin_extensions(root, root / "output")
+            self.assertEqual(
+                ["package.json", "package.nls.json"],
+                sorted(path.name for path in (root / "output/git").iterdir()),
+            )
+
     @unittest.skipIf(os.name == "nt", "symbolic links require Windows privileges")
     def test_builtin_extension_packaging_excludes_symlinks_inside_dependencies(self):
         with tempfile.TemporaryDirectory() as temporary:

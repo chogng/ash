@@ -120,7 +120,7 @@ import { AuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/elec
 import { nodeWorkspacePathService } from '../../platform/workspaces/node/workspaces.js';
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
 import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
-import { normalizeLocale } from '../../platform/languagePacks/common/languagePackCatalog.js';
+import { normalizeLocale, resolveLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePacksService.js';
 import { LanguagePackStore } from '../../platform/languagePacks/node/languagePackStore.js';
@@ -440,10 +440,8 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
 		this.mainProcessIpcServer.registerChannel('process', ProxyChannel.fromService(new ProcessMainService(), this._store));
 		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
-		const locale = typeof localeValue === 'string' ? normalizeLocale(localeValue) : 'en';
-		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale.toLowerCase() === locale.toLowerCase()) ?? await new LanguagePackStore(this.profileRoot).read(locale);
+		const catalog = await resolveLanguagePackCatalog(typeof localeValue === 'string' ? localeValue : 'en', builtinLanguagePackCatalogs, new LanguagePackStore(this.profileRoot));
 		throwIfCancelled(token);
-		if (!catalog) { throw new Error(`Display language '${locale}' is not installed locally`); }
 		this.activeLanguagePack = catalog;
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
 		await storage.initialize();

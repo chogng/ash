@@ -451,17 +451,37 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 	}
 
- private async localizeManifest(extension: TransportExtensionDescriptor, generation: number, resources: Map<string, Promise<Uint8Array>>): Promise<string> {
-  if (!extension.manifestJson.includes('%')) return extension.manifestJson;
-  const messages: Record<string, unknown> = {};
-  const language = getNLSLanguage();
-  for (const suffix of ['', ...(language !== 'en' ? ['.' + language.split('-')[0], '.' + language] : [])]) {
-   try { Object.assign(messages, parseJsonc(new TextDecoder().decode(await this.loadResource(resources, generation, extension.id, 'package.nls' + suffix + '.json')), 'Extension messages')); }
-   catch (error) { if (suffix === '') throw error; }
-  }
-  const visit = (value: unknown): unknown => typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => typeof messages[key] === 'string' ? messages[key] as string : match) : Array.isArray(value) ? value.map(visit) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, value]) => [key, visit(value)])) : value;
-  return JSON.stringify(visit(JSON.parse(extension.manifestJson)));
- }
+	private async localizeManifest(extension: TransportExtensionDescriptor, generation: number, resources: Map<string, Promise<Uint8Array>>): Promise<string> {
+		if (!extension.manifestJson.includes('%')) {
+			return extension.manifestJson;
+		}
+		const messages: Record<string, unknown> = {};
+		const language = getNLSLanguage();
+		for (const suffix of ['', ...(language !== 'en' ? ['.' + language.split('-')[0], '.' + language] : [])]) {
+			let bytes: Uint8Array;
+			try {
+				bytes = await this.loadResource(resources, generation, extension.id, 'package.nls' + suffix + '.json');
+			} catch {
+				// Static language packages may omit message files; locale bundles are optional too.
+				continue;
+			}
+			Object.assign(messages, parseJsonc(new TextDecoder().decode(bytes), 'Extension messages'));
+		}
+		const visit = (value: unknown): unknown => {
+			if (typeof value === 'string') {
+				return value.replace(/%([^%]+)%/g, (match, key) => typeof messages[key] === 'string' ? messages[key] as string : match);
+			}
+			if (Array.isArray(value)) {
+				return value.map(visit);
+			}
+			if (value && typeof value === 'object') {
+				return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, visit(item)]));
+			}
+			return value;
+		};
+		return JSON.stringify(visit(JSON.parse(extension.manifestJson)));
+	}
+
 
 	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[]): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;

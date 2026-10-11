@@ -549,13 +549,29 @@ suite('Workbench localization', () => {
 	}
 
 	for (const storageFailure of [false, true]) {
-		test(`browser bootstrap preserves the running language when the selected pack is ${storageFailure ? 'unreadable' : 'missing'}`, async () => {
+		test(`browser bootstrap falls back to English when the selected pack is ${storageFailure ? 'unreadable' : 'missing'}`, async () => {
 			initializeTestLocalization('zh-CN');
-			await assert.rejects(initializeBrowserLocalization(startupConfiguration('fr'), {
+			await initializeBrowserLocalization(startupConfiguration('fr'), {
 				read: async () => { if (storageFailure) { throw new Error('resource unreadable'); } return undefined; },
 				write: async () => { assert.fail('Bootstrap must only read resources'); },
-			}), storageFailure ? /resource unreadable/ : /Display language 'fr' is not installed locally/);
-			assert.equal(localize({ bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands'), '搜索命令');
+			});
+			assert.equal(localize({ bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands'), 'Search commands');
+		});
+	}
+
+	for (const exactMatch of [false, true]) {
+		test(`browser bootstrap prefers ${exactMatch ? 'the exact regional pack' : 'the base language after a damaged regional pack'}`, async () => {
+			const reads: string[] = [];
+			await initializeBrowserLocalization(startupConfiguration('FR_ca'), {
+				read: async locale => {
+					reads.push(locale);
+					if (locale === 'fr-CA' && !exactMatch) { throw new Error('Invalid JSON'); }
+					return { ...builtinLanguagePackCatalogs[0], locale, bundles: { ash: { greeting: locale === 'fr-CA' ? 'Allô' : 'Bonjour' } } };
+				},
+				write: async () => { assert.fail('Bootstrap must only read resources'); },
+			});
+			assert.deepEqual(reads, exactMatch ? ['fr-CA'] : ['fr-CA', 'fr']);
+			assert.equal(localize('greeting', 'Hello'), exactMatch ? 'Allô' : 'Bonjour');
 		});
 	}
 

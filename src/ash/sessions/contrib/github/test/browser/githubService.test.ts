@@ -43,10 +43,11 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 		graph: async () => ({ commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }], hasMore: false, nextCursor: undefined }),
 		...gitOverrides,
 	} as IGitService;
-	resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => {}));
- const commands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
- const scm = { onDidAddRepository: repositoriesChanged.event, onDidRemoveRepository: Event.None, get repositories() { return git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: statusChanged.event } })); } } as unknown as ISCMService;
- const service = resources.add(new GitHubService(
+	resources.add(statusChanged.event(value => Object.assign(status, value)));
+	resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => { }));
+	const commands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
+	const scm = { onDidAddRepository: repositoriesChanged.event, onDidRemoveRepository: Event.None, get repositories() { return git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: statusChanged.event } })); } } as unknown as ISCMService;
+	const service = resources.add(new GitHubService(
 		{ get activeSelection() { return selection; }, onDidChange: selectionChanged.event } as ISessionsService,
 		{ sessions: [session] } as unknown as ISessionsManagementService,
 		commands, scm, github, { onDidChangeAccounts: accountChanged.event } as IAccountService, new NullLoggerService(),
@@ -217,7 +218,7 @@ suite('Session GitHub associations', () => {
 		assert.deepEqual((await context.load()).map(request => [request.state, request.icon.id, request.status]), [['merged', 'git-pull-request-done', {}]]);
 	});
 
-	test('a branch change removes the previous PR before the new lookup completes', async () => {
+	test('an ordinary SCM refresh preserves branch PRs while their remote state is loading', async () => {
 		const started = new DeferredPromise<void>();
 		const pending = new DeferredPromise<GitHubPullRequest>();
 		let reads = 0;
@@ -229,7 +230,30 @@ suite('Session GitHub associations', () => {
 			}
 		});
 		await context.load();
+		const before = context.service.getSessionPullRequests('session');
+		context.statusChanged.fire({ ...context.status, revision: 2 });
+		await started.p;
+		assert.equal(context.service.getSessionPullRequests('session'), before);
+		context.select(undefined);
+		await pending.complete(pullRequest);
+	});
+
+	test('a branch change removes the previous PR before the new lookup completes', async () => {
+		const started = new DeferredPromise<void>();
+		const pending = new DeferredPromise<GitHubPullRequest>();
+		let reads = 0;
+		using context = fixture({
+			listPullRequests: async (_repository, state, _page, _token, filter) => ({ items: state === GitHubIssueState.Open ? [{ ...pullRequest, headBranch: filter?.head?.split(':')[1] ?? 'feature' }] : [], nextPage: null }),
+			readPullRequest: async () => {
+				if (++reads === 1) { return pullRequest; }
+				await started.complete();
+				return pending.p;
+			}
+		});
+		await context.load();
+		const invalidated = context.nextChange();
 		context.statusChanged.fire({ ...context.status, head: { type: 'branch', name: 'another-branch', objectId: 'b'.repeat(40), upstream: undefined } });
+		await invalidated;
 		assert.deepEqual(context.service.getSessionPullRequests('session'), []);
 		await started.p;
 		context.select(undefined);

@@ -3,7 +3,7 @@
 `ash.git` is the directory-scoped Rust provider for local Git workflows. It owns repository
 discovery, status revisions, graph cursors, directory authorization checks, file watchers,
 ignore invalidations and automatic fetch. Desktop and TUI consume the existing `git/*` domain
-API through App Server. Desktop owns its SCM presentation and editor adapters.
+API through App Server. Its browser entry owns Git commands, repository policy, SCM resources, history, quick diff and ignore decorations. Desktop retains generic SCM views, editor models and file persistence.
 
 The executable `ash-git-extension` uses the public Rust SDK's typed DataChannel
 `git.repository`. App Server admits the exact product executable through its extension
@@ -21,9 +21,19 @@ staging and browser snapshots; Rust sources and Cargo files are excluded from th
 Unbundled test and Code development launches use an explicit absolute `ASH_GIT_EXTENSION_BIN`;
 packaged and Desktop development hosts resolve their declared product layout.
 
+The browser entry runs in a window-owned Worker. The public `ash` module provides SCM
+registration, client editor operations and product-granted backend routes. The package manifest
+owns commands, menus, submenus, welcome content, colors, settings and English/Chinese NLS.
+`git.getRepositoryContexts` and `git.executeRepositoryCommand` are optional command contracts
+for GitHub consumers; core consumers do not import this extension's implementation.
+
+The client checks package provenance and grants before routing backend calls. Draft revisions,
+activation generations and provider retirement protect edits and cancel stale callbacks. Multi-diff
+sources and file actions use generic resolver and command descriptors; Git scopes, partial staging
+and reviewed-content checks stay in the extension. Shared configuration remains the autofetch owner.
+
 This is a trusted product capability process. Generic installed-extension enablement and
-third-party OS confinement are separate runtime capabilities; this implementation does not
-provide VS Code's `vscode.scm` author API.
+third-party OS confinement are separate runtime capabilities; the Ash SCM registration contract does not claim complete VS Code `vscode.scm` API compatibility.
 
 Validation: `just test ash-git-extension` runs the migrated domain suite and launches the real
 executable through the product adapter for reads, writes, watcher events, cancellation,
