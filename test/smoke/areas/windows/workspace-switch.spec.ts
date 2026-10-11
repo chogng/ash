@@ -62,8 +62,8 @@ test('opening a folder displays its files in Explorer', async ({ target, testWor
 	const nextFolder = join(testWorkspace.directory, 'visible-folder');
 	await mkdir(nextFolder);
 	await writeFile(join(nextFolder, 'visible.txt'), 'visible');
-	await mkdir(join(nextFolder, 'inner'));
-	await writeFile(join(nextFolder, 'inner', 'nested.txt'), 'nested');
+	await mkdir(join(nextFolder, 'inner', 'deep'), { recursive: true });
+	await writeFile(join(nextFolder, 'inner', 'deep', 'nested.txt'), 'nested');
 	const page = workbench.page;
 	const opening = page.evaluate(folder => {
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
@@ -75,8 +75,29 @@ test('opening a folder displays its files in Explorer', async ({ target, testWor
 	await opening;
 	const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'visible.txt' });
 	await expect(file).toHaveCount(1);
+	const tree = page.locator('.ash-explorer').getByRole('tree');
+	const compressed = tree.locator('.ash-tree-row').filter({ hasText: 'inner/deep' });
+	const segments = compressed.locator('[data-explorer-segment]');
+	await expect(segments).toHaveCount(2);
+	await expect(tree).not.toBeFocused();
+	for (const segment of await segments.all()) {
+		await expect(segment).toHaveCSS('outline-style', 'none');
+	}
+	await segments.last().click();
+	await expect(segments.last()).toHaveCSS('outline-style', 'none');
+	await page.keyboard.press('ArrowLeft');
+	await expect(segments.first()).toHaveClass(/ash-explorer-active-segment/u);
+	await expect(segments.first()).toHaveCSS('outline-style', 'solid');
+	await page.keyboard.press('ArrowRight');
+	await expect(segments.last()).toHaveClass(/ash-explorer-active-segment/u);
+	await expect(segments.last()).toHaveCSS('outline-style', 'solid');
+	await page.keyboard.press('Tab');
+	await expect(tree).not.toBeFocused();
+	await expect(segments.last()).toHaveCSS('outline-style', 'none');
 	const fileRow = await file.elementHandle();
-	const folder = page.locator('.ash-explorer').getByRole('treeitem', { name: 'inner', exact: true });
+	const folder = tree.getByRole('treeitem', { name: 'deep, folder 2 of 2', exact: true });
+	// The segment click expanded the compressed directory; restore the initial collapsed state.
+	await folder.click();
 	await folder.click();
 	await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(1);
 	await expect(folder).toHaveAttribute('aria-expanded', 'true');

@@ -204,14 +204,14 @@
     "@xterm/addon-search": "0.16.0",
     "@xterm/addon-web-links": "0.12.0",
     "@xterm/xterm": "^6.0.0",
+    "native-keymap": "3.3.9",
     "pdfjs-dist": "6.1.200",
     "playwright-core": "1.61.1",
     "vscode-oniguruma": "1.7.0",
     "vscode-textmate": "9.3.2"
   },
   "optionalDependencies": {
-    "native-is-elevated": "0.9.0",
-    "native-keymap": "3.3.9"
+    "native-is-elevated": "0.9.0"
   },
   "files": [
     "THIRD_PARTY_NOTICES.md",
