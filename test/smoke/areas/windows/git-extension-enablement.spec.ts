@@ -74,6 +74,9 @@ test.describe('Git extension enablement in the full product', () => {
 			await workbench.page.keyboard.insertText('kept without Git');
 			await changes.getByRole('button', { name: 'Record', exact: true }).click();
 			await expect(changes).toContainText('Recorded: kept without Git');
+			await workbench.quickaccess.runCommand('ash.scm.fixture.openBinaryChanges');
+			await expect(group.content).toContainText('Binary file changed. Text comparison is unavailable.');
+			await expect(group.content.locator('.stanza-diff-editor:visible')).toHaveCount(0);
 			await workbench.quickaccess.runCommand('ash.scm.fixture.openBinaryDiff');
 			const binary = group.content.locator('.ash-binary-editor-content:visible');
 			await expect(binary).toHaveCount(2);

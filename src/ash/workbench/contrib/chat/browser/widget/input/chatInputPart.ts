@@ -98,7 +98,7 @@ interface InputHistoryDraft {
 	readonly skills: readonly SkillReference[];
 }
 
-type HistorySearchItem = IQuickPickItem & ({ readonly kind: 'entry'; readonly entry: MessageHistoryEntry } | { readonly kind: 'more'; readonly before: string });
+type HistorySearchItem = IQuickPickItem & ({ readonly kind: 'entry'; readonly entry: MessageHistoryEntry; } | { readonly kind: 'more'; readonly before: string; });
 
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
 export class ChatInputPart extends Disposable implements IChatInputPart {
@@ -235,7 +235,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(this.input.onDidChange(() => {
 			if (!this.applyingHistory) this.draftSkills = undefined;
 			this.draftRevision++;
-			if (!this.applyingHistory) { this.history.invalidatePending(); this.historyInputRevision++; }
+			if (!this.applyingHistory) { this.history.reset(); this.historyInputRevision++; }
 			this.inputChanges.fire();
 			this.status.textContent = this.statusText(this.state);
 			this.renderToolbar();
@@ -244,7 +244,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
 		this._register(this.attachmentModel.onDidChange(() => {
 			this.draftRevision++;
-			if (!this.applyingHistory) { this.history.invalidatePending(); this.historyInputRevision++; }
+			if (!this.applyingHistory) { this.history.reset(); this.historyInputRevision++; }
 			this.renderAttachments();
 			this.renderToolbar();
 			this.inputChanges.fire();

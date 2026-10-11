@@ -2,6 +2,16 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { parseExtensionEditorInput } from '../../browser/mainThreadEditorInput.js';
 import { isMultiDiffEditorInput } from '../../../contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { isBinaryDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
+
+test('extension binary comparisons select the byte editor for immutable versions', () => {
+	const input = parseExtensionEditorInput({ kind: 'binaryDiff', label: 'Byte comparison', original: { resource: 'snapshot:/before', initialBytes: [0, 255] }, modified: { resource: 'snapshot:/after', initialBytes: [0, 254] } });
+	assert.ok(isBinaryDiffEditorInput(input));
+	assert.deepEqual(input.original.initialBytes, Uint8Array.from([0, 255]));
+	assert.deepEqual(input.modified.initialBytes, Uint8Array.from([0, 254]));
+	assert.equal(input.original.readOnly, true);
+	input.dispose();
+});
 
 test('extension comparisons retain binary versions without filesystem providers', () => {
 	const originalBytes = [0, 255, 1];

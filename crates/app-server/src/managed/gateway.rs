@@ -7,6 +7,8 @@ use crate::server::request_dispatch::RequestDispatcher;
 use crate::server::request_dispatch::RequestLane;
 use ash_app_server_protocol::protocol::error::AppServerError;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::registry::ClientMethod;
+use ash_app_server_protocol::protocol::registry::client_method;
 use ash_app_server_protocol::rpc::JsonRpcFailure;
 use ash_app_server_protocol::rpc::JsonRpcId;
 use ash_app_server_protocol::rpc::JsonRpcRequest;
@@ -885,6 +887,17 @@ fn selected_execution_target(
     request: &Value,
 ) -> Result<Option<SessionExecutionTarget>, String> {
     let method = request.get("method").and_then(Value::as_str);
+    // Input origins are informational: Profile history must never follow Thread execution routes.
+    if matches!(
+        method.and_then(client_method),
+        Some(
+            ClientMethod::MessageHistoryAppend
+                | ClientMethod::MessageHistoryRead
+                | ClientMethod::MessageHistoryClear
+        )
+    ) {
+        return Ok(None);
+    }
     let params = request.get("params");
     if method == Some("session/create") {
         let selected: Option<SessionExecutionTarget> = serde_json::from_value(

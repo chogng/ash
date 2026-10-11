@@ -4,6 +4,39 @@ use std::io::BufReader;
 use std::sync::mpsc;
 
 #[test]
+fn message_history_keeps_local_profile_authority_with_remote_thread_origins() {
+    let profile = tempfile::tempdir().unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = ProfileAppServerRegistry::open(options.clone()).unwrap();
+    let _server = registry.server_for(options).unwrap();
+    let remote: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
+        "remote-thread".into(),
+        ("build-host".into(), "/work/source".into()),
+    )])));
+    for method in [
+        "messageHistory/append",
+        "messageHistory/read",
+        "messageHistory/clear",
+    ] {
+        assert_eq!(
+            selected_execution_target(
+                &registry,
+                &remote,
+                &serde_json::json!({"method":method,"params":{"threadId":"remote-thread"}}),
+            )
+            .unwrap(),
+            None,
+            "{method} must use the local Profile even when its origin is remote"
+        );
+    }
+}
+
+#[test]
 fn session_directory_file_requests_route_to_the_session_execution_authority() {
     let profile = tempfile::tempdir().unwrap();
     let options = ash_app_server_daemon::ConnectionOptions::new(

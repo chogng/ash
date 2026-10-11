@@ -1391,7 +1391,18 @@
     "files.autoGuessEncodingDescription": "打开文本文件时尝试检测字符编码。BOM 和 UTF-16 检测始终优先。可按语言覆盖。",
     "files.candidateGuessEncodingsDescription": "将自动猜测限制为这些编码。空列表使用全部可检测编码。检测无法确定时，仅在候选旧编码是唯一无损匹配时使用它，否则使用默认文件编码。",
     "files.invalidCandidateGuessEncodings": "请输入不重复的可检测编码标识符列表。",
-    "status.editor.guessedEncoding": "根据内容猜测"
+    "status.editor.guessedEncoding": "根据内容猜测",
+    "messageHistory.unavailable": "当前连接不支持输入历史记录。",
+    "messageHistory.failed": "无法访问本机 Profile 的输入历史记录。",
+    "chat.history.recalled": "已回填历史输入。按 Escape 恢复草稿。",
+    "chat.history.unavailable": "当前连接不支持输入历史记录。",
+    "chat.history.readFailed": "无法读取输入历史记录：{0}",
+    "chat.history.saveFailed": "无法保存输入历史记录：{0}",
+    "chat.history.searchPlaceholder": "搜索输入历史记录。Enter 回填所选文本；Escape 保留草稿。",
+    "chat.history.searchLabel": "搜索输入历史记录",
+    "chat.history.loadMore": "加载更多输入",
+    "chat.history.help": "聊天输入：Enter 发送；Shift+Enter 换行。在输入的首行或末行，按上、下方向键回查历史输入。按 Ctrl+R 搜索全部输入历史记录；Enter 只回填所选文本，不会发送。Escape 恢复原草稿、光标、附件和 Skill 绑定。输入历史归本机 Profile 所有，只保存文本。",
+    "chat.history.clear": "聊天：清空输入历史记录"
   },
   "ash.menu": {
     "file": "文件",

@@ -6,7 +6,7 @@ import { localize, localize2 } from '../../../../../nls.js';
 export function registerChatActions(): void {
 	registerAction2(class ClearChatInputHistoryAction extends Action2 {
 		constructor() {
-			super({ id: 'workbench.action.chat.clearInputHistory', title: localize2('chat.history.clear', 'Clear Input History'), category: localize2('chat.category', 'Chat'), f1: true });
+			super({ id: 'workbench.action.chat.clearInputHistory', title: localize2('chat.history.clear', 'Chat: Clear Input History'), f1: true });
 		}
 
 		async run(accessor: ServicesAccessor): Promise<void> {

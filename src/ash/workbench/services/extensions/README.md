@@ -83,6 +83,8 @@ module. Activation receives the window language, registration callbacks, and com
 prefix palette labels while menus retain short titles, and declared enablement gates menu actions.
 Worker client requests queue at the host's concurrency limit; SCM state publication keeps its
 incarnation lifetime when an unrelated read callback is cancelled.
+`MainThreadEditors` reconstructs text and byte comparisons from plain descriptors and retains
+read-only version bytes and binary metadata without requiring a filesystem provider.
 `MainThreadCustomEditors` installs text-backed editor providers in the shared pane registry.
 The Markdown package under `extensions/markdown-language-features` owns its preview rendering and
 actions. `WebviewEditor` hosts the content, and `CustomTextEditorModel` holds a reference to the same

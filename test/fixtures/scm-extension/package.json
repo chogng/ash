@@ -7,6 +7,7 @@
 	"contributes": { "commands": [
 		{ "command": "ash.scm.fixture.activate", "title": "Activate independent SCM fixture" },
 		{ "command": "ash.scm.fixture.refresh", "title": "Refresh independent SCM fixture" },
-		{ "command": "ash.scm.fixture.openBinaryDiff", "title": "Open independent binary comparison" }
+		{ "command": "ash.scm.fixture.openBinaryDiff", "title": "Open independent binary comparison" },
+		{ "command": "ash.scm.fixture.openBinaryChanges", "title": "Open independent binary changes" }
 	] }
 }

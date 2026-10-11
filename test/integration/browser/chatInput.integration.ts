@@ -1,4 +1,4 @@
-import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
+import { IMessageHistoryService, type MessageHistoryEntry, type MessageHistoryQuery } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IInstructionService } from '../../../src/ash/platform/instructions/common/instructionService.js';
@@ -69,7 +69,7 @@ import { IChatService } from '../../../src/ash/workbench/services/chat/common/ch
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
+	interface Window { ashChatInputIntegration: { historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -87,7 +87,39 @@ if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	resources.add(addDisposableListener(main, EventType.Tap, event => { stopEvent(event); document.querySelector('output')!.textContent = 'Ancestor tap'; }));
 }
 const services = resources.add(new InstantiationService());
-services.registerInstance(IMessageHistoryService, undefined);
+const historyEnabled = new URLSearchParams(location.search).has('history');
+let historyEntries: MessageHistoryEntry[] = [
+	{ id: '3', text: 'third input', kind: 'agent', submittedAtMs: 3 },
+	{ id: '2', text: 'second input\nsecond line', kind: 'agent', submittedAtMs: 2 },
+	{ id: '1', text: 'first input', kind: 'agent', submittedAtMs: 1 },
+];
+const historyWrites: string[] = [];
+const historySubmissions: { text: string; skills: unknown; }[] = [];
+const historyReads: MessageHistoryQuery[] = [];
+const historyWaits = new Map<string, () => void>();
+let holdHistoryRead = false;
+const historyData = (query: MessageHistoryQuery) => {
+	const matches = historyEntries.filter(entry => (!query.before || Number(entry.id) < Number(query.before)) && entry.text.toLowerCase().includes(query.text.toLowerCase()));
+	const entries = matches.slice(0, 2);
+	return { entries, nextBefore: matches.length > 2 ? entries.at(-1)!.id : undefined };
+};
+services.registerInstance(IMessageHistoryService, historyEnabled ? {
+	append: async submission => {
+		historyWrites.push(submission.text);
+		const entry = { ...submission, id: String(Number(historyEntries[0]?.id ?? 0) + 1), submittedAtMs: 4 };
+		historyEntries.unshift(entry);
+		return entry;
+	},
+	read: async query => {
+		historyReads.push(query);
+		if (holdHistoryRead || query.text.startsWith('wait')) {
+			holdHistoryRead = false;
+			await new Promise<void>(resolve => { historyWaits.set(query.text, resolve); });
+		}
+		return historyData(query);
+	},
+	clear: async () => { historyEntries = []; },
+} : undefined);
 const destinations = document.createElement('output');
 destinations.setAttribute('aria-label', 'Opened sources');
 destinations.textContent = '[]';
@@ -351,6 +383,7 @@ resources.add(notifications.onDidAdd(item => { errorOutput.textContent = item.me
 
 const delegate: ChatInputDelegate = {
 	send: async (_text, _mode, _skills, contexts) => {
+		historySubmissions.push({ text: _text, skills: _skills });
 		submission.textContent = JSON.stringify(await Promise.all((contexts ?? []).map(context => context.resolve())));
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
 	}, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
@@ -399,6 +432,11 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	historyState: () => ({ writes: historyWrites, submissions: historySubmissions, reads: historyReads }),
+	holdNextHistoryRead: () => { holdHistoryRead = true; },
+	releaseHistorySearch: query => historyWaits.get(query)?.(),
+	addHistoryContext: () => part.addContext({ id: 'history-context', kind: 'file', name: 'draft.txt', resource: URI.parse('file:///workspace/draft.txt'), resolve: async () => ({ name: 'draft.txt', content: 'synthetic context' }) }),
+	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
 	modelState: () => ({ selectedModel, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
 	setModelsAvailable: available => { if (available) { models = hiddenModels ?? models; hiddenModels = undefined; } else { hiddenModels = models; models = []; } renderModels(); modelChanged.fire(); },
 	setDescription: description => { models = models.map(entry => ({ ...entry, description })); renderModels(); modelChanged.fire(); },

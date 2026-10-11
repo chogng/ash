@@ -8,12 +8,16 @@ export function activate(context) {
 	const changes = new EventEmitter();
 	context.subscriptions.push(changes);
 	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.refresh', () => provider.refresh()));
+	const originalBinary = { resource: 'snapshot:/independent/before', contentType: 'application/octet-stream', initialBytes: [0, 255, 1] };
+	const modifiedBinary = { resource: 'snapshot:/independent/after', contentType: 'application/octet-stream', initialBytes: [0, 254, 2] };
 	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.openBinaryDiff', () => editors.request({
+		method: 'open', input: { kind: 'binaryDiff', label: 'Independent binary comparison', original: originalBinary, modified: modifiedBinary },
+	})));
+	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.openBinaryChanges', () => editors.request({
 		method: 'open', input: {
-			kind: 'multiDiff', resource: 'comparison:/independent/binary', label: 'Independent binary comparison', items: [{
+			kind: 'multiDiff', resource: 'comparison:/independent/binary', label: 'Independent binary changes', items: [{
 				label: 'image.bin', binary: true,
-				original: { resource: 'snapshot:/independent/before', contentType: 'application/octet-stream', initialBytes: [0, 255, 1] },
-				modified: { resource: 'snapshot:/independent/after', contentType: 'application/octet-stream', initialBytes: [0, 254, 2] },
+				original: originalBinary, modified: modifiedBinary,
 			}],
 		},
 	})));

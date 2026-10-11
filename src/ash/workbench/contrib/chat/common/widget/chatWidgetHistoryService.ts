@@ -2,7 +2,7 @@ import { TaskQueue } from '../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IMessageHistoryService, type MessageHistoryEntry, type MessageHistoryKind, type MessageHistoryPage } from '../../../../../platform/messageHistory/common/messageHistory.js';
 
-export type ChatHistoryNavigationResult<TDraft> = { readonly kind: 'history'; readonly entry: MessageHistoryEntry } | { readonly kind: 'draft'; readonly draft: TDraft };
+export type ChatHistoryNavigationResult<TDraft> = { readonly kind: 'history'; readonly entry: MessageHistoryEntry; } | { readonly kind: 'draft'; readonly draft: TDraft; };
 
 type Navigation<TDraft> = { readonly draft: TDraft; readonly entries: MessageHistoryEntry[]; index: number; before: string | undefined; loaded: boolean; };
 
@@ -41,7 +41,7 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 	previous(draft: TDraft): Promise<ChatHistoryNavigationResult<TDraft> | undefined> {
 		if (!this.history) return Promise.resolve(undefined);
 		const generation = this.generation;
-		return this.operations.schedule(async () => {
+		return this.operations.scheduleSkipIfCleared(async () => {
 			if (this.isDisposed || generation !== this.generation) return undefined;
 			const navigation = this.navigation ??= { draft, entries: [], index: -1, before: undefined, loaded: false };
 			if (navigation.index + 1 >= navigation.entries.length && (!navigation.loaded || navigation.before !== undefined)) {
@@ -58,7 +58,7 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 
 	next(): Promise<ChatHistoryNavigationResult<TDraft> | undefined> {
 		const generation = this.generation;
-		return this.operations.schedule(() => {
+		return this.operations.scheduleSkipIfCleared(() => {
 			if (this.isDisposed || generation !== this.generation || !this.navigation) return undefined;
 			if (this.navigation.index <= 0) return { kind: 'draft', draft: this.restore()! };
 			return { kind: 'history', entry: this.navigation.entries[--this.navigation.index]! };

@@ -1,6 +1,6 @@
 import { URI } from '../../../base/common/uri.js';
 import type { IResourceEditorInput } from '../../common/editor.js';
-import { createDiffEditorInput } from '../../common/editor/diffEditorInput.js';
+import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../common/editor/diffEditorInput.js';
 import { createScmMergeEditorInput } from '../../contrib/scm/browser/scmMergeEditorInput.js';
 import { createMultiDiffEditorInput, requireActions, type MultiDiffEditorInputItem } from '../../contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
@@ -25,6 +25,9 @@ function bytes(value: JsonValue): Uint8Array {
 }
 export function parseExtensionEditorInput(value: JsonValue): IResourceEditorInput {
 	const input = record(value);
+	if (input.kind === 'binaryDiff') {
+		return createBinaryDiffEditorInput(parseExtensionEditorInput(input.original), parseExtensionEditorInput(input.modified), text(input.label));
+	}
 	if (input.kind === 'diff') {
 		return createDiffEditorInput(parseExtensionEditorInput(input.original), parseExtensionEditorInput(input.modified), text(input.label));
 	}

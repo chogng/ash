@@ -1,5 +1,95 @@
 import { expect, test } from '@playwright/test';
 
+test('Input history pages older records and restores draft selection, attachments and pinned skills', async ({ page }) => {
+	await page.goto('/chatInput.html?history=1');
+	const input = page.locator('.ash-chat-textarea-input');
+	await page.evaluate(() => { window.ashChatInputIntegration.addHistoryContext(); window.ashChatInputIntegration.setHistorySkill('original'); });
+	await input.fill('$commit draft');
+	await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, 0));
+	await input.press('ArrowUp');
+	await expect(input).toHaveValue('third input');
+	await expect(page.locator('.ash-chat-context-attachment')).toHaveCount(0);
+	await input.press('ArrowUp');
+	await expect(input).toHaveValue('second input\nsecond line');
+	await input.press('ArrowUp');
+	await expect(input).toHaveValue('first input');
+	await input.press('ArrowDown');
+	await expect(input).toHaveValue('second input\nsecond line');
+	await page.evaluate(() => window.ashChatInputIntegration.setHistorySkill('updated'));
+	await input.press('Escape');
+	await expect(input).toHaveValue('$commit draft');
+	await expect(page.getByRole('button', { name: 'Remove draft.txt' })).toBeVisible();
+	expect(await input.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([0, 0]);
+	await input.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({
+		writes: ['$commit draft'], submissions: [{ text: '$commit draft', skills: [{ version: { type: 'pinnedDigest', digest: 'original' } }] }],
+	});
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Input history search pages and fills text without sending in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?history=1&locale=${locale}`);
+		const input = page.locator('.ash-chat-textarea-input');
+		await input.fill('keep this draft');
+		await input.press('Control+r');
+		const search = page.getByRole('combobox', { name: locale === 'en' ? 'Search input history' : '搜索输入历史记录' });
+		await expect(search).toBeVisible();
+		await page.getByText(locale === 'en' ? 'Load more inputs' : '加载更多输入', { exact: true }).click();
+		await page.getByText('first input', { exact: true }).first().click();
+		await expect(search).toBeHidden();
+		await expect(input).toHaveValue('first input');
+		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ writes: [], submissions: [] });
+		await input.press('Escape');
+		await expect(input).toHaveValue('keep this draft');
+		await input.press('Control+r');
+		await search.fill('second');
+		await expect(page.getByText('second input', { exact: true })).toBeVisible();
+		await search.press('Escape');
+		await expect(input).toHaveValue('keep this draft');
+		await expect(input).toBeFocused();
+	});
+}
+
+test('Input history discards outdated search replies and safely closes a pending search', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/chatInput.html?history=1');
+	const input = page.locator('.ash-chat-textarea-input');
+	await input.fill('untouched draft');
+	await input.press('Control+r');
+	const search = page.getByRole('combobox', { name: 'Search input history' });
+	await search.fill('wait-old');
+	await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ reads: expect.arrayContaining([expect.objectContaining({ text: 'wait-old' })]) });
+	await search.fill('third');
+	await expect(page.getByText('third input', { exact: true }).first()).toBeVisible();
+	await page.evaluate(() => window.ashChatInputIntegration.releaseHistorySearch('wait-old'));
+	await expect(page.getByText('third input', { exact: true }).first()).toBeVisible();
+	await search.fill('wait-dispose');
+	await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ reads: expect.arrayContaining([expect.objectContaining({ text: 'wait-dispose' })]) });
+	await page.evaluate(() => { window.ashChatInputIntegration.dispose(); window.ashChatInputIntegration.releaseHistorySearch('wait-dispose'); });
+	await expect(search).toBeHidden();
+	expect(errors).toEqual([]);
+});
+
+test('Input history never overwrites a draft edited while recall is pending', async ({ page }) => {
+	await page.goto('/chatInput.html?history=1');
+	const input = page.locator('.ash-chat-textarea-input');
+	await input.fill('original');
+	await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, 0));
+	await page.evaluate(() => window.ashChatInputIntegration.holdNextHistoryRead());
+	await input.press('ArrowUp');
+	await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ reads: [expect.objectContaining({ text: '' })] });
+	await input.fill('edited while loading');
+	await page.evaluate(() => window.ashChatInputIntegration.releaseHistorySearch(''));
+	await input.press('Escape');
+	await expect(input).toHaveValue('edited while loading');
+	await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, 0));
+	await input.press('ArrowUp');
+	await expect(input).toHaveValue('third input');
+	await input.press('Escape');
+	await expect(input).toHaveValue('edited while loading');
+});
+
 test('Chat textarea fallback starts compact and resizes with multiline content without losing focus', async ({ page }) => {
 	await page.goto('/chatInput.html');
 	const composer = page.locator('.ash-chat-input-container');
