@@ -678,7 +678,6 @@ export abstract class Workbench extends Disposable {
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
 		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
 		services.registerInstance(ITerminalProcessService, options.api.terminal);
-		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const panel = this._register(services.createInstance(PanelPart, this.domNode));
 		const panes = this._register(services.createInstance(PaneCompositePartService, new Map<ViewContainerLocation, PaneCompositePart>([
 			[ViewContainerLocation.Sidebar, sidebar],
@@ -688,6 +687,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(services.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		// Extension adapters require the completed editor and view service graph.
+		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const parts = new Map<SessionsPartId, Part>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],

@@ -2,6 +2,8 @@ import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { createTestLanguagePacks, createTestLocaleService, initializeTestLocalization } from './localizationTestUtils.js';
 import { localize2, localize, resetNlsResolver } from '../../../../../nls.js';
 import assert from "node:assert/strict";
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { setup, suite, teardown, test } from "mocha";
 import { Event } from "../../../../../base/common/event.js";
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -10,7 +12,7 @@ import { initializeBrowserLocalization } from '../../browser/localizationBootstr
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import type { IExtensionManagementService } from "../../../../../platform/extensionManagement/common/extensionManagementService.js";
 import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.js";
-import { normalizeLocale } from "../../../../../platform/languagePacks/common/languagePackCatalog.js";
+import { normalizeLocale, parseLanguagePackCatalog } from "../../../../../platform/languagePacks/common/languagePackCatalog.js";
 import { LocalizationConfiguration } from "../../common/locale.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
 import { AppServerProtocolIncompatibleError } from '../../../../../platform/agentHost/common/appServerProtocolCompatibility.js';
@@ -536,6 +538,19 @@ suite('Workbench localization', () => {
 		const title = localize2('command', 'Hello {0}', 'Ash');
 		assert.deepEqual(title, { original: 'Hello Ash', value: 'Bonjour Ash' });
 		assert.equal(commandActionLabel(title), 'Bonjour Ash');
+	});
+
+	test('browser bootstrap applies the Ash French example to command metadata and parameterized text', async () => {
+		const catalog = parseLanguagePackCatalog(JSON.parse(await readFile(resolve('localization/examples/fr/localization/package.json'), 'utf8')));
+		assert.ok(catalog);
+		await initializeBrowserLocalization(startupConfiguration('fr-CA'), {
+			read: async locale => locale === 'fr' ? catalog : undefined,
+			write: async () => { assert.fail('Bootstrap must only read resources'); },
+		});
+		const title = localize2({ bundle: 'ash.settings', key: 'displayLanguage.configure' }, 'Configure Display Language');
+		assert.deepEqual(title, { original: 'Configure Display Language', value: 'Configurer la langue d’affichage' });
+		assert.equal(localize({ bundle: 'ash.settings', key: 'displayLanguage.restartMessage' }, 'Restart Ash to use {0}?', 'Français'), 'Redémarrer Ash pour utiliser Français ?');
+		assert.equal(localize('untranslated', 'Untranslated {0}', 'message'), 'Untranslated message');
 	});
 
 	for (const [preference, title] of [[undefined, 'Search commands'], ['EN', 'Search commands'], ['ZH_cn', '搜索命令']] as const) {

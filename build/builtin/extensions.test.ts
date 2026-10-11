@@ -42,6 +42,37 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 	}
 });
 
+test('combined Rust and browser packages publish the bundled frontend without its TypeScript sources', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-combined-extension-'));
+	try {
+		await mkdir(join(directory, 'build/builtin'), { recursive: true });
+		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await symlink(resolve(import.meta.dirname, '../node_modules'), join(directory, 'build/node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+		for (const name of ['node_modules', 'crates']) {
+			await symlink(resolve(import.meta.dirname, '../../' + name), join(directory, name), process.platform === 'win32' ? 'junction' : 'dir');
+		}
+		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });
+		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
+		await mkdir(join(directory, 'extensions/git/browser'), { recursive: true });
+		await mkdir(join(directory, 'extensions/git/src'));
+		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', ashRuntime: { kind: 'rust', entrypoint: 'ash-git-extension' } }));
+		await writeFile(join(directory, 'extensions/git/browser/main.ts'), "import { marker } from './helper.js'; export async function activate(): Promise<string> { return marker; }");
+		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export const marker: string = 'combined-entry-marker';");
+		await writeFile(join(directory, 'extensions/git/src/main.rs'), 'fn main() {}');
+		await writeFile(join(directory, 'extensions/git/Cargo.toml'), '[package]');
+		const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], { cwd: directory, encoding: 'utf8', timeout: 30_000, env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' } });
+		assert.ifError(result.error);
+		assert.equal(result.status, 0, result.stderr);
+		const bundle = JSON.parse(await readFile(join(directory, 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
+		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['browser/main.ts', 'package.json']);
+		const module = Buffer.from(bundle.resources['test.git']['browser/main.ts'], 'base64').toString('utf8');
+		assert.match(module, /combined-entry-marker/);
+		assert.doesNotMatch(module, /from ['"]\.\/helper\.js['"]|Promise<string>/);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 for (const resource of ['manifest', 'file'] as const) {
 	test(`browser packaging rejects an oversized ${resource} before publishing its snapshot`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-extension-budget-'));

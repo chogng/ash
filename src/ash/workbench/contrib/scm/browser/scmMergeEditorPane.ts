@@ -334,7 +334,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 			if (this.resultEditor.isDirty) await this.resultEditor.save();
 			const saved = await provider.resolve(input.path);
 			if (JSON.stringify(saved.stageIds) !== JSON.stringify(stageIds) || saved.result.kind !== 'text' || saved.result.text !== control.getValue()) {
-				throw new Error(localize({ bundle: 'ash', key: 'git.mergeIndexChanged' }, 'The conflict changed in Git. Reopen this merge editor to review the new versions.'));
+				throw new Error(localize({ bundle: 'ash', key: 'scm.mergeConflictChanged' }, 'The conflict changed. Reopen this merge editor to review the new versions.'));
 			}
 			await provider.complete(input.path, stageIds, saved.resultObjectId, { kind: 'edited', text: control.getValue() });
 			if (this.mergeStateKey) this.storageService.remove(this.mergeStateKey, StorageScope.WORKSPACE);

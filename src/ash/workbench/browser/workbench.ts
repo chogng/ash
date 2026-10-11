@@ -1074,10 +1074,6 @@ export class Workbench extends Disposable {
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
-		// Extension and Debug startup require both Quick Pick and retained editor panes.
-		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
-		performance.mark('ash.workbench.services-ready');
-		contributions.advance(WorkbenchPhase.BlockStartup);
 		// The URL opener requires the completed editor service graph before the window announces readiness.
 		services.get(IURLService);
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.
@@ -1146,6 +1142,10 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		// Extension adapters require the completed editor and view service graph.
+		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
+		performance.mark('ash.workbench.services-ready');
+		contributions.advance(WorkbenchPhase.BlockStartup);
 		// Workspace switches reuse this operation; startup marks describe only its first run.
 		let isStartupRestoration = true;
 		this.restoreActiveViewContainers = async () => {

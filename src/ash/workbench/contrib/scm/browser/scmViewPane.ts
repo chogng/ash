@@ -136,7 +136,7 @@ export class ScmViewPane extends ViewPane {
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar to commit or refresh, and More Actions to change list, tree and sorting or run Git operations. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Use Tab to reach the inline Open File action, then Enter or Space to open the working-tree file. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging. Previous resource group: workbench.scm.action.focusPreviousResourceGroup. Next resource group: workbench.scm.action.focusNextResourceGroup. Assign shortcuts in Keyboard Shortcuts to cycle through this repository\'s groups without changing their expansion.'));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar and More Actions to run provider actions or change list, tree and sorting. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Use Tab to reach the inline file actions. Press F1 to find commands contributed by the provider. Previous resource group: workbench.scm.action.focusPreviousResourceGroup. Next resource group: workbench.scm.action.focusNextResourceGroup. Assign shortcuts in Keyboard Shortcuts to cycle through this repository’s groups without changing their expansion.'));
 		this.welcomeController = this._register(instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry));
 		this.trackBodyMinimum(changesContainer, options.minimumBodySize ?? 120, () => !this.welcomeController.enabled);
 		this._register(this.onDidFocus(() => {
@@ -422,7 +422,7 @@ export class ScmViewPane extends ViewPane {
 		resources.add(registerOpenEditorListeners(open, options => {
 			this.tree.setFocus(element.id);
 			this.tree.setSelection([element.id]);
-			// Git snapshots replace row buttons; previews keep focus on the retained tree instead.
+			// Provider snapshots replace row buttons; previews keep focus on the retained tree instead.
 			if (options.editorOptions.preserveFocus) {
 				this.tree.domFocus();
 			}
