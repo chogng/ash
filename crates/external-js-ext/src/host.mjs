@@ -545,7 +545,7 @@ export const __runtime = Object.freeze({
 	},
 	// Browser contributions reuse the same registration and cancellation owner.
 	registerContribution(descriptor, operation, callback) {
-		return register({ ...descriptor, operation, callback, invokePayload: true });
+		return register(Object.defineProperties({ operation, callback, invokePayload: true }, Object.getOwnPropertyDescriptors(descriptor)));
 	},
 	async invoke(registrationId, payloadJson, requestId, operation) {
 		if (phase !== 'active') { throw new Error('Extension is not active'); }

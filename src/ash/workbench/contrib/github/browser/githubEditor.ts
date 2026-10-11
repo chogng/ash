@@ -25,7 +25,8 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
-import { IGitService } from '../../git/common/gitService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { readLocalRepositories } from '../common/localRepository.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -110,7 +111,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	constructor(
 		@IGitHubReviewModel private readonly model: IGitHubReviewModel,
 		@IGitHubService private readonly github: IGitHubService,
-		@IGitService private readonly git: IGitService,
+		@ICommandService private readonly commands: ICommandService,
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
 		@IGitHubConnectionService private readonly connection: IGitHubConnectionService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
@@ -593,14 +594,14 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	}
 	private async localOperation(kind: 'checkout' | 'push'): Promise<void> {
 		const selection = this.selection(); const pr = this.model.pullRequest!; const repository = this.model.repository!;
-		const repositories = await this.git.listRepositories(); selection();
+		const repositories = await readLocalRepositories(this.commands); selection();
 		if (!repositories.length) { await this.dialogs.info(localize('github.editor.noCheckout', 'Open a folder containing a Git repository first.')); return; }
 		const choice = await this.dialogs.prompt({ message: localize('github.editor.chooseCheckout', 'Choose the local repository'), buttons: repositories.map(repository => ({ label: `${repository.label} — ${repository.path}`, run: () => repository })) });
 		if (!choice.result) { return; }
 		selection(); const local = choice.result;
 		const target = kind === 'push' ? pr.headRepository! : `${repository.owner}/${repository.name}`;
 		const identity = `${repository.host}/${target}`;
-		const graph = await this.git.graph({ limit: 1 }, local.id); selection();
+		const graph = local; selection();
 		const remotes = graph.remotes.filter(remote => remote.identity && `${remote.identity.host}/${remote.identity.owner}/${remote.identity.repository}`.toLowerCase() === identity.toLowerCase());
 		if (!remotes.length) { await this.dialogs.info(localize('github.editor.remoteRequired', 'Add a Git remote for {0} in Source Control before continuing.', identity)); return; }
 		const remoteChoice = await this.dialogs.prompt({ message: localize('github.editor.chooseRemote', 'Choose the Git remote'), buttons: remotes.map(remote => ({ label: remote.name, run: () => remote.name })) });
@@ -611,13 +612,13 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			if (!result.confirmed || !result.values?.[0]?.trim()) { return; }
 			selection();
 			if (this.workingCopies.getAll().some(copy => copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, local.root))) { await this.dialogs.info(localize('github.editor.saveFiles', 'Save or close unsaved files in this repository before checking out the pull request.')); return; }
-			await this.model.runLocalOperation(async () => { await this.git.executeCommand({ kind: 'fetchAndCheckout', remote, remoteIdentity: identity, reference: `refs/pull/${pr.number}/head`, objectId: pr.headCommit, name: result.values![0]!.trim() }, local.id); });
+			await this.model.runLocalOperation(async () => { await this.commands.executeCommand('git.executeRepositoryCommand', local.id, { kind: 'fetchAndCheckout', remote, remoteIdentity: identity, reference: `refs/pull/${pr.number}/head`, objectId: pr.headCommit, name: result.values![0]!.trim() }); });
 		} else {
-			const status = await this.git.status(local.id); selection();
+			const status = (await readLocalRepositories(this.commands)).find(repository => repository.id === local.id)!; selection();
 			if (status.head.type !== 'branch') { await this.dialogs.info(localize('github.editor.branchRequired', 'Check out a local branch with commits before pushing.')); return; }
 			const head = status.head;
 			if (!(await this.dialogs.confirm({ message: localize('github.editor.pushConfirm', 'Push local commit {0} to {1}:{2}?', head.objectId, identity, pr.headBranch), detail: local.path, primaryButton: localize('github.editor.push', 'Push local commits to pull request') })).confirmed) { return; }
-			selection(); await this.model.runLocalOperation(async () => { await this.git.executeCommand({ kind: 'pushBranch', remote, remoteIdentity: identity, branch: head.name, name: pr.headBranch, expectedHead: head.objectId }, local.id); });
+			selection(); await this.model.runLocalOperation(async () => { await this.commands.executeCommand('git.executeRepositoryCommand', local.id, { kind: 'pushBranch', remote, remoteIdentity: identity, branch: head.name, name: pr.headBranch, expectedHead: head.objectId }); });
 		}
 	}
 

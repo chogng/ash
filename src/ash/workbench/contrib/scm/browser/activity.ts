@@ -31,7 +31,7 @@ export class SCMActiveRepositoryController extends Disposable {
 		const count = new Set(provider.groups.flatMap(group => group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)))).size;
 		if (!count) return;
 		const description = count === 1 ? localize('scm.activity.oneChange', '1 changed file') : localize('scm.activity.changes', '{0} changed files', count);
-		this.activity.value = this.activityService.showViewContainerActivity(WorkbenchViewContainerId.Git, new NumberBadge(count, description));
+		this.activity.value = this.activityService.showViewContainerActivity(WorkbenchViewContainerId.SourceControl, new NumberBadge(count, description));
 	}
 }
 

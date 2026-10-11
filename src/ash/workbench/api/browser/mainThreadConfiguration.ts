@@ -46,7 +46,7 @@ export class MainThreadConfiguration extends Disposable {
 	private snapshot(change?: IConfigurationChange): JsonValue {
 		return normalizeExtensionHostPayload({
 			type: 'configuration', revision: ++this.revision, emit: change !== undefined,
-			configurationValues: this.configuration.getValue(), configurationData: this.configuration.getConfigurationData(),
+			configurationValues: this.configuration.getValue() ?? {}, configurationData: this.configuration.getConfigurationData(),
 			change: change ? { keys: [...change.keys], overrides: change.overrides.map(([identifier, keys]) => [identifier, [...keys]]) } : { keys: [], overrides: [] },
 		});
 	}

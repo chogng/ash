@@ -2,7 +2,7 @@ import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
-import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -13,7 +13,9 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 import { computePullRequestIcon, type IPullRequestIconStatus } from '../../../../workbench/common/chatPullRequest.js';
-import { IGitService, type GitRepositoryIdentity, type GitStatus } from '../../../../workbench/contrib/git/common/gitService.js';
+import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { ISCMService } from '../../../../workbench/contrib/scm/common/scm.js';
+import { readLocalRepositories, type RepositoryIdentity } from '../../../../workbench/contrib/github/common/localRepository.js';
 import { getPullRequestChecksStatus, getPullRequestResourceStatus } from '../../../../workbench/contrib/github/browser/githubResourceHover.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -49,7 +51,8 @@ export class GitHubService extends Disposable implements IGitHubService {
 	constructor(
 		@ISessionsService private readonly sessions: ISessionsService,
 		@ISessionsManagementService private readonly management: ISessionsManagementService,
-		@IGitService private readonly git: IGitService,
+		@ICommandService private readonly commands: ICommandService,
+		@ISCMService scm: ISCMService,
 		@IGitHubApi private readonly github: IGitHubApi,
 		@IAccountService accounts: IAccountService,
 		@ILogService private readonly log: ILogService,
@@ -68,8 +71,12 @@ export class GitHubService extends Disposable implements IGitHubService {
 				this.refresh.schedule(0);
 			}
 		}));
-		this._register(git.onDidChangeRepositories(() => this.invalidateSelection()));
-		this._register(git.onDidChangeRepositoryStatus(status => this.handleStatus(status)));
+		const providerListeners = this._register(new DisposableStore());
+  const observeProviders = (): void => { providerListeners.clear(); for (const repository of scm.repositories) providerListeners.add(repository.provider.onDidChangeResources(() => this.invalidateSelection())); this.invalidateSelection(); };
+  this._register(scm.onDidAddRepository(observeProviders));
+  this._register(scm.onDidRemoveRepository(observeProviders));
+  this._register(CommandsRegistry.onDidChangeCommands(() => this.invalidateSelection()));
+  observeProviders();
 		this._register(accounts.onDidChangeAccounts(() => {
 			this.operation.value?.cancel();
 			this.accountGeneration++;
@@ -168,20 +175,6 @@ export class GitHubService extends Disposable implements IGitHubService {
 		}
 	}
 
-	private handleStatus(status: GitStatus): void {
-		const selected = this.sessions.activeSelection;
-		if (selected?.kind !== 'session') {
-			return;
-		}
-		const branch = status.head.type === 'branch' ? status.head.name : undefined;
-		const previous = this.branches.get(selected.active.session.sessionId)?.get(status.repositoryId);
-		if (previous !== branch) {
-			this.invalidateSelection();
-			return;
-		}
-		this.operation.value?.cancel();
-		this.refresh.schedule(100);
-	}
 
 	private invalidateSelection(): void {
 		this.operation.value?.cancel();
@@ -216,10 +209,10 @@ export class GitHubService extends Disposable implements IGitHubService {
 			const branches = new Map<string, string>();
 			const [accounts, references] = await Promise.all([accountsPromise, this.github.listSessionPullRequests(session.sessionId)]);
 			const hosts = new Set(accounts.filter(account => account.status === 'ready').map(account => account.host.toLowerCase()));
-			const repositories = root ? this.git.repositories.filter(repository => extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) || extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root)) : [];
+			const repositories = root ? (await readLocalRepositories(this.commands)).filter(repository => extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) || extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root)) : [];
 			const recorded = await Promise.all(references.map(reference => this.resolveReference(reference, accounts, token)));
 			const results = await Promise.all(repositories.map(async repository => {
-				const [status, graph] = await Promise.all([this.git.status(repository.id), this.git.graph({ limit: 1 }, repository.id)]);
+				const status = repository, graph = repository;
 				if (token.isCancellationRequested || status.head.type !== 'branch') {
 					return [];
 				}
@@ -255,7 +248,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 		}
 	}
 
-	private async resolveRepository(identity: GitRepositoryIdentity, branch: string, heads: readonly GitRepositoryIdentity[], accountId: string, token: CancellationToken, recorded: readonly GitHubPullRequestReference[]): Promise<IResolvedSessionPullRequest | undefined> {
+	private async resolveRepository(identity: RepositoryIdentity, branch: string, heads: readonly RepositoryIdentity[], accountId: string, token: CancellationToken, recorded: readonly GitHubPullRequestReference[]): Promise<IResolvedSessionPullRequest | undefined> {
 		const repository: GitHubRepository = { accountId, host: identity.host, owner: identity.owner, name: identity.repository };
 		let match: GitHubPullRequest | undefined;
 		const hostHeads = heads.filter(head => head.host.toLowerCase() === identity.host.toLowerCase());

@@ -6,12 +6,10 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { registerEditorPane } from '../../../browser/editor.js';
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';
 import { MultiDiffEditor } from './multiDiffEditor.js';
-import { OpenScmMultiDiffEditorAction } from './scmMultiDiffAction.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
 
 registerSingleton(IMultiDiffSourceResolverService, MultiDiffSourceResolverService, InstantiationType.Delayed);
@@ -21,7 +19,7 @@ registerAction2(MultiDiffGoToPreviousChangeAction);
 registerAction2(MultiDiffCollapseAllAction);
 registerAction2(MultiDiffExpandAllAction);
 registerAction2(MultiDiffGoToFileAction);
-registerAction2(OpenScmMultiDiffEditorAction);
+
 
 MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 	command: new ToggleCollapseUnchangedRegions().desc,
@@ -43,7 +41,6 @@ registerEditorPane({
 		return instantiationService.createInstance(MultiDiffEditor, {
 			modelService: getBrowserTextModelService(resourceStore, instantiationService),
 			createComputationService: () => diffService.createComputationService(),
-			gitService: instantiationService.getOptional(IGitService),
 			editorService: instantiationService.getOptional(IEditorService),
 			viewsService: instantiationService.getOptional(IViewsService),
 			fileActions: options.actionServices,

@@ -20,8 +20,8 @@ import { type IDocumentDiffProviderOptions } from '../../../../../editor/common/
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { DiffTestPort } from '../../../../../editor/test/browser/services/diffTestPort.js';
 import { DiffService } from '../../../../services/diff/browser/diffService.js';
-import { type GitStatus, type IGitService } from '../../../../contrib/git/common/gitService.js';
-import { GitQuickDiffProvider } from '../../../git/browser/gitQuickDiffProvider.js';
+import { type GitStatus, type IGitService } from '../../../../../../../extensions/git/browser/types.js';
+import { GitQuickDiffProvider } from '../../../../../../../extensions/git/browser/gitQuickDiffProvider.js';
 import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
 import { QuickDiffModelService } from '../../browser/quickDiffModel.js';
 import { QuickDiffService } from '../../common/quickDiffService.js';

@@ -23,7 +23,6 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 			|| /^platform\/[^/]+\/(?:browser|electron-browser|electron-main|node)\//u.test(name)
 			|| /^(?:workbench|sessions)\/services\/[^/]+\/(?:browser|electron-browser)\//u.test(name)
 			|| /^sessions\/contrib\/providers\/agentHost\/browser\//u.test(name)
-			|| name === 'workbench/contrib/git/browser/gitService.ts'
 			// This shared implementation adapts IModelApi into frontend model choices.
 			|| name === 'workbench/contrib/chat/common/languageModels.ts';
 		// Generated product definitions are metadata, not wire data or transport APIs.

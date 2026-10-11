@@ -1,3 +1,6 @@
+import { ICommandService } from "../../../../platform/commands/common/commands.js";
+import { Icon } from "../../../../base/common/icon.js";
+import { IMultiDiffSourceResolverService } from "./multiDiffSourceResolverService.js";
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
@@ -27,11 +30,9 @@ import type { IContextKeyService } from "../../../../platform/contextkey/browser
 import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
-import type { GitStatus, IGitService } from '../../../contrib/git/common/gitService.js';
 import type { IViewsService } from '../../../services/views/common/viewsService.js';
 import { VIEW_PANE_ID } from '../../scm/common/scm.js';
-import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
-import { isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
+import { createMultiDiffEditorInput, isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
 import { MultiDiffEditorToolbar } from './multiDiffEditorToolbar.js';
 import { localize } from '../../../../nls.js';
 import { extname } from '../../../../base/common/path.js';
@@ -50,7 +51,6 @@ export interface MultiDiffEditorOptions {
 	readonly showLineNumbers?: boolean;
 	readonly showInlineChanges?: boolean;
 	readonly loopChanges?: boolean;
-	readonly gitService?: IGitService;
 	readonly editorService?: IEditorService;
 	readonly viewsService?: IViewsService;
 	readonly fileActions?: {
@@ -194,7 +194,6 @@ class MultiDiffEditorSession extends Disposable {
 	private readonly model: MultiDiffEditorModel;
 	private readonly inputsById = new Map<string, MultiDiffEditorInputItem>();
 	private refreshGeneration = 0;
-	private refreshStatusKey: string | undefined;
 	private readonly computationService: IDocumentDiffProvider;
 	private readonly emptyDomNode: HTMLDivElement;
 	private readonly abortController = new AbortController();
@@ -211,6 +210,8 @@ class MultiDiffEditorSession extends Disposable {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@ICommandService private readonly commandService: ICommandService,
+		@IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService,
 	) {
 		super();
 		try {
@@ -276,16 +277,8 @@ class MultiDiffEditorSession extends Disposable {
 				} : {}),
 			}));
 			this.updateEmptyState();
-			if (paneInput.source?.kind === 'git' && options.gitService) {
-				this.refreshStatusKey = new URLSearchParams(paneInput.resource.query).get('stream') + ':' + new URLSearchParams(paneInput.resource.query).get('revision');
-				const reportError = (error: unknown): void => {
-					if (!this.isDisposed) void this.dialogs.error(error instanceof Error ? error.message : String(error));
-				};
-				this._register(options.gitService.onDidChangeRepositoryStatus(status => {
-					void this.refreshGitSource(status).catch(reportError);
-				}));
-				void options.gitService.status(paneInput.source.repositoryId).then(status => this.refreshGitSource(status)).catch(reportError);
-			}
+			this._register(this.sourceResolvers.onDidChange(() => { void this.refreshSource().catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); }); }));
+			void this.refreshSource().catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); });
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -349,24 +342,9 @@ class MultiDiffEditorSession extends Disposable {
 
 	private createFileActions(container: HTMLElement, item: IDocumentDiffItem, input: MultiDiffEditorInputItem, options: MultiDiffEditorOptions, contextMenuProvider: IContextMenuProvider): IDisposable {
 		const actions: IAction[] = [];
-		const change = input.gitChange;
-		if (change) {
-			actions.push(new PaneAction('multiDiff.discardFile', localize('multiDiff.discardChanges', 'Discard Changes'), localize('multiDiff.discardChanges', 'Discard Changes'), Lxicon.discard, change.hasWorktreeChanges, async item => {
-				const confirmation = await this.dialogs.confirm({
-					message: localize('multiDiff.discardFileConfirm', 'Discard changes in {0}? This cannot be undone.', item.gitChange!.path),
-					primaryButton: localize('multiDiff.discardChanges', 'Discard Changes'),
-				});
-				if (!confirmation.confirmed || this.isDisposed) return;
-				const status = await options.gitService?.discardWorktree([item.gitChange!.path], item.gitChange!.repositoryId);
-				if (status) await this.refreshGitSource(status);
-			}));
-			actions.push(new PaneAction(change.staged ? 'multiDiff.unstageFile' : 'multiDiff.stageFile', change.staged ? localize('multiDiff.unstageChanges', 'Unstage Changes') : localize('multiDiff.stageChanges', 'Stage Changes'), change.staged ? localize('multiDiff.unstageChanges', 'Unstage Changes') : localize('multiDiff.stageChanges', 'Stage Changes'), change.staged ? Lxicon.remove : Lxicon.check, options.gitService !== undefined, async item => {
-				const status = item.gitChange!.staged
-					? await options.gitService?.unstage([item.gitChange!.path], item.gitChange!.repositoryId)
-					: await options.gitService?.stage([item.gitChange!.path], item.gitChange!.repositoryId);
-				if (status) await this.refreshGitSource(status);
-			}, change.staged));
-		}
+		for (const action of input.actions ?? []) {
+   actions.push(new PaneAction(action.id, action.label, action.tooltip, action.icon ? Icon.fromId(action.icon) : undefined, action.enabled !== false, () => this.commandService.executeCommand(action.command, ...action.arguments)));
+  }
 		const resources = new DisposableStore();
 		const scoped = resources.add(options.fileActions!.contextKeyService.createScoped(container));
 		ActiveEditorContext.bindTo(scoped).set(MULTI_DIFF_EDITOR_ID);
@@ -425,7 +403,6 @@ class MultiDiffEditorSession extends Disposable {
 			container: this.domNode,
 			input: this.paneInput,
 			contextMenuProvider: this.options.fileActions.contextMenuProvider,
-			gitService: this.options.gitService,
 			editorService: this.options.editorService,
 			viewsService: this.options.viewsService,
 			collapseAll: () => this.editor?.collapseAll(),
@@ -452,15 +429,13 @@ class MultiDiffEditorSession extends Disposable {
 		});
 	}
 
-	private async refreshGitSource(status: GitStatus): Promise<void> {
-		const source = this.paneInput.source;
-		if (source?.kind !== 'git' || !this.options.gitService || source.repositoryId !== status.repositoryId) return;
-		const key = `${status.streamInstanceId}:${status.revision}`;
-		if (key === this.refreshStatusKey) return;
-		this.refreshStatusKey = key;
+	private async refreshSource(): Promise<void> {
+		if (this.paneInput.source?.kind !== 'external') return;
 		const generation = ++this.refreshGeneration;
 		try {
-			const next = await createGitMultiDiffEditorInput(this.options.gitService, source.scope, status, this.label);
+			const resolved = await this.sourceResolvers.resolve(this.paneInput.resource);
+			if (!resolved) return;
+			const next = createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source);
 			if (this.isDisposed || this.abortController.signal.aborted || generation !== this.refreshGeneration) return;
 			const state = this.editor?.saveViewState();
 			const resources = new DisposableStore();
@@ -473,7 +448,6 @@ class MultiDiffEditorSession extends Disposable {
 			this.createToolbar();
 		} catch (error) {
 			if (generation !== this.refreshGeneration || this.isDisposed) return;
-			this.refreshStatusKey = undefined;
 			throw error;
 		}
 	}

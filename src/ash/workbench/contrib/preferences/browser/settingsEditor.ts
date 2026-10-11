@@ -1,3 +1,4 @@
+import { ExtensionSettingBinding } from './extensionSettingBinding.js';
 import { GitHubSettingsModel } from '../../github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from './settingsSectionRenderer.js';
@@ -29,8 +30,6 @@ import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../.
 import { localize } from '../../../../nls.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
-import { GitConfiguration, type GitAutofetch } from '../../git/common/gitConfiguration.js';
-import { IGitService } from '../../git/common/gitService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../services/localization/common/locale.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
@@ -93,7 +92,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		@ILocalizationService localizationService: ILocalizationService,
 		@ILocaleService localeService: ILocaleService,
 		@ILanguagePackService private readonly languagePackService: ILanguagePackService,
-		@IGitService gitService: IGitService,
 		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
 		@IAppServerRemoteAgentService private readonly remoteAgentService: IAppServerRemoteAgentService,
 		@IDirPermissionsService private readonly dirPermissionsService: IDirPermissionsService,
@@ -109,9 +107,12 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			...new DefaultSettings().all.map(setting => {
 				if (setting.id === DESKTOP_UPDATE_POLICY_SETTING) return localUpdatePolicySetting(setting, configurationService);
 				if (setting.id === LocalizationConfiguration.locale) return displayLanguageSetting(setting, localeService, languagePackService, localizationService, configurationService);
-				return setting;
-			}),
-			...gitSettings(gitService),
+				if (setting.configuration.extensionBinding) {
+     const binding = this._register(this.instantiationService.createInstance(ExtensionSettingBinding, setting.configuration));
+     return { ...setting, binding } as ISetting;
+    }
+    return setting;
+   }),
 		]));
 		this.contextMenuProvider = contextMenuProvider;
 		this.contextViewProvider = contextViewProvider;
@@ -481,54 +482,6 @@ function localUpdatePolicySetting(setting: ISetting, configuration: IConfigurati
 			resetValue: () => configuration.updateValue(DESKTOP_UPDATE_POLICY_SETTING, undefined, ConfigurationTarget.USER_LOCAL),
 		},
 	};
-}
-
-function gitSettings(gitService: IGitService): readonly ISetting[] {
-	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-	const mode = registry.getConfiguration(GitConfiguration.autofetch) as IRegisteredConfiguration<GitAutofetch> | undefined;
-	const period = registry.getConfiguration(GitConfiguration.autofetchPeriod) as IRegisteredConfiguration<number> | undefined;
-	if (!mode || !period) throw new Error('Git settings require their migration definitions');
-	return [
-		{
-			id: mode.key,
-			valueType: 'select',
-			configuration: mode as IRegisteredConfiguration<string | boolean>,
-			get title() { return localize('git.autofetch.title', 'Auto Fetch'); },
-			get description() { return localize('git.autofetch.description', 'Periodically fetch updates without changing local branches or files.'); },
-			get options() {
-				return [
-					{ value: false, label: localize('git.autofetch.off', 'Off') },
-					{ value: true, label: localize('git.autofetch.default', 'Default remote') },
-					{ value: 'all', label: localize('git.autofetch.all', 'All remotes') },
-				] as const;
-			},
-			binding: {
-				id: mode.key,
-				defaultValue: false,
-				onDidChange: gitService.onDidChangeAutoFetch,
-				getValue: () => gitService.autoFetch,
-				updateValue: value => gitService.setAutoFetch(value as GitAutofetch),
-				resetValue: () => gitService.setAutoFetch(false),
-			},
-		},
-		{
-			id: period.key,
-			valueType: 'number',
-			configuration: period,
-			get title() { return localize('git.autofetchPeriod.title', 'Auto Fetch Period'); },
-			get description() { return localize('git.autofetchPeriod.description', 'Seconds between automatic fetches for each repository.'); },
-			minimum: 1,
-			maximum: 86_400,
-			binding: {
-				id: period.key,
-				defaultValue: 180,
-				onDidChange: gitService.onDidChangeAutoFetch,
-				getValue: () => gitService.autoFetchPeriod,
-				updateValue: value => gitService.setAutoFetchPeriod(value),
-				resetValue: () => gitService.setAutoFetchPeriod(180),
-			},
-		},
-	];
 }
 
 let nextSettingsEditorId = 1;

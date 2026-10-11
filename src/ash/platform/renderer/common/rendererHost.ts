@@ -18,7 +18,6 @@ import type { IExtensionApi } from "../../extensions/common/extensionApi.js";
 import type { IFileApi } from "../../files/common/fileApi.js";
 import type { IDiffApi } from "../../diff/common/diffApi.js";
 import type { ISyntaxApi } from "../../syntax/common/syntaxApi.js";
-import type { IGitApi } from "../../git/common/gitApi.js";
 import type { IContentSearchConfigurationService } from '../../search/common/search.js';
 import type { IContentSearchApi } from "../../search/common/searchApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
@@ -111,7 +110,6 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly diff: IDiffApi;
 	readonly syntax: ISyntaxApi;
 	readonly language: ILanguageApi;
-	readonly git: IGitApi;
 	readonly fileSearch: IFileSearchService;
 	readonly contentSearch: IContentSearchApi;
 	readonly contentSearchConfiguration: IContentSearchConfigurationService;

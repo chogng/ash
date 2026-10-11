@@ -1,3 +1,5 @@
+import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { Icon } from '../../../src/ash/base/common/icon.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/actionbar/actionbar.css';
@@ -70,15 +72,25 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { CodeEditorService } from '../../../src/ash/workbench/services/editor/browser/codeEditorService.js';
 import { IEditorPartsService } from '../../../src/ash/workbench/browser/parts/editor/editorParts.js';
 import { MultiDiffGoToFileAction } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorActions.js';
-import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
-import { IGitService, type GitStatus, type GitIndexDiff, type GitIndexSelection } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
+import { IGitService, type GitStatus, type GitIndexDiff, type GitIndexSelection } from '../../../extensions/git/browser/types.js';
 import { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
 import { TextFileContentSource } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { createGitMultiDiffEditorInput } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js';
+import { createGitMultiDiffEditorInput as gitMultiDiffInput } from '../../../extensions/git/browser/multiDiff.js';
+import { runDiffChange } from '../../../extensions/git/browser/diffActions.js';
+import { setLanguage as setGitLanguage, localize as gitLocalize } from '../../../extensions/git/browser/support.js';
+import gitManifest from '../../../extensions/git/package.json' with { type: 'json' };
+import gitEnglish from '../../../extensions/git/package.nls.json' with { type: 'json' };
+import gitChinese from '../../../extensions/git/package.nls.zh-CN.json' with { type: 'json' };
+import { MainThreadEditorChanges } from '../../../src/ash/workbench/api/browser/mainThreadEditorChanges.js';
+import { parseExtensionEditorInput } from '../../../src/ash/workbench/api/browser/mainThreadEditorInput.js';
+import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
+import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+async function createGitMultiDiffEditorInput(...args: Parameters<typeof gitMultiDiffInput>) { return parseExtensionEditorInput(normalizeExtensionHostPayload(JSON.parse(JSON.stringify(await gitMultiDiffInput(...args), wireReplacer)))); }
+function wireReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown { return this[key] instanceof URI ? this[key].toString() : value; }
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
-import { createMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../src/ash/workbench/services/chat/common/chatService.js';
@@ -235,8 +247,6 @@ const harness = {
 		const services = resources.add(createTestEditorServices(titleConfiguration));
 		titleServices = services;
 		if (kind === 'git') {
-			await import('../../../src/ash/workbench/contrib/git/browser/git.contribution.js');
-			services.registerInstance(IGitService, titleGit);
 			services.registerInstance(INotificationService, { error: (message: string) => gitGutterCalls.push({ error: message }), info: () => { } } as unknown as INotificationService);
 			services.registerInstance(ITextFileService, {
 				onDidChangeFiles: Event.None, onDidSave: Event.None,
@@ -268,6 +278,34 @@ const harness = {
 		resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 		registerCodeEditorServices(services);
 		services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
+		if (kind === 'git') {
+			const locale = new URLSearchParams(location.search).get('locale') === 'zh-CN' ? 'zh-CN' : 'en';
+			setGitLanguage(locale);
+			const labels: Record<string, string> = locale === 'zh-CN' ? gitChinese : gitEnglish;
+			const editorChanges = new MainThreadEditorChanges(services.get(ICodeEditorService), services.get(IWorkingCopyService), services.get(ITextFileService));
+			for (const [menuName, entries] of Object.entries(gitManifest.contributes.menus)) {
+				if (menuName !== 'diffEditor/hunkToolbar' && menuName !== 'diffEditor/selectionToolbar') continue;
+				for (const entry of entries) {
+					if (typeof entry.command !== 'string') continue;
+					const commandId = entry.command;
+					const definition = gitManifest.contributes.commands.find(command => command.command === entry.command)!;
+					const title = labels[definition.title.slice(1, -1)] ?? definition.title;
+					resources.add(CommandsRegistry.register(entry.command, async (_accessor, raw) => {
+						const value = normalizeExtensionHostPayload(JSON.parse(JSON.stringify(raw, wireReplacer)));
+						try { await runDiffChange({ git: titleGit, editors: { request: async <T>(payload: unknown) => await editorChanges.handle(normalizeExtensionHostPayload(payload), new AbortController().signal) as T }, dialogs: services.get(IDialogService) }, value, commandId.includes('unstage') ? 'staged' : 'unstaged', commandId.includes('revert') ? 'revert' : 'index'); }
+						catch (error) { services.get(INotificationService).error(gitLocalize('git.commandFailed', 'Git operation failed: {0}', error instanceof Error ? error.message : String(error))); }
+					}));
+					resources.add(MenusRegistry.appendMenuItem(menuName === 'diffEditor/hunkToolbar' ? MenuId.DiffEditorHunkToolbar : MenuId.DiffEditorSelectionToolbar, { command: { id: commandId, title, icon: definition.icon ? Icon.fromId(definition.icon.slice(2, -1)) : undefined }, group: entry.group, when: ContextKeyExpr.deserialize('when' in entry ? entry.when : undefined) }));
+				}
+			}
+			const resolver = services.get(IMultiDiffSourceResolverService);
+			resources.add(resolver.registerResolver({
+				canHandleUri: resource => resource.scheme === 'ash-scm',
+				resolveDiffSource: async () => { const input = await createGitMultiDiffEditorInput(titleGit, 'unstaged'); if (!isMultiDiffEditorInput(input)) throw new Error('Expected multi-diff'); return { resource: input.resource, resources: input.items, source: input.source, label: input.label }; },
+				sourceActions: () => [], primaryRepositoryAction: () => undefined,
+			}));
+			resources.add(titleGitEvents.event(() => resolver.notifyChanged()));
+		}
 		const contexts = services.get(IContextKeyService);
 		titleTheme = services.get(IThemeService) as TestThemeService;
 		resources.add(bindColorTheme(services.get(IThemeService), document.documentElement));
@@ -292,7 +330,8 @@ const harness = {
 				modelService: models,
 				createComputationService: () => service.createComputationService(),
 				editorService: services.get(IEditorService),
-				gitService: kind === 'git' ? titleGit : undefined,
+				commandService: services.get(ICommandService),
+				sourceResolverService: services.get(IMultiDiffSourceResolverService),
 				viewsService: {
 					focusView: async (viewId: string) => { focusedHistoryView = viewId; return true; },
 				} as IViewsService,

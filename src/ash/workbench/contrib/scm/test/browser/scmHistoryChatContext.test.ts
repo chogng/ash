@@ -4,8 +4,8 @@ import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
 import type { ChatContextPicker, IChatContextPickService } from '../../../../../workbench/services/chat/common/chatContextService.js';
-import type { GitCommitChange, GitCommitSummary, IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
-import { GitHistoryProvider } from '../../../git/browser/gitHistoryProvider.js';
+import type { GitCommitChange, GitCommitSummary, IGitService } from '../../../../../../../extensions/git/browser/types.js';
+import { GitHistoryProvider } from '../../../../../../../extensions/git/browser/gitHistoryProvider.js';
 import { SCMService } from '../../common/scmService.js';
 import type { ISCMProvider } from '../../common/scm.js';
 

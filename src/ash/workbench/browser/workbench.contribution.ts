@@ -10,9 +10,8 @@ import '../contrib/files/browser/files.contribution.js';
 import { registerOutlineView } from '../contrib/outline/browser/outline.contribution.js';
 import { registerTimelineView } from '../contrib/timeline/browser/timeline.contribution.js';
 import '../contrib/accessibility/browser/accessibility.contribution.js';
-import '../contrib/git/browser/git.contribution.js';
 import {
-	registerGitViews,
+	registerSCMViews,
 } from "../contrib/scm/browser/scm.contribution.js";
 import {
 	registerSearchViews,
@@ -90,7 +89,7 @@ registerFilesViews();
 registerOutlineView();
 registerTimelineView();
 registerSearchViews();
-registerGitViews();
+registerSCMViews();
 registerProblemsView();
 registerRemoteViews();
 registerTerminalView();

@@ -302,20 +302,20 @@ AccessibleViewRegistry.register({
 	},
 });
 
-/** Registers the Git Sidebar container and its initial pane. */
-export function registerGitViews(
+/** Registers the Source Control Sidebar container and its initial pane. */
+export function registerSCMViews(
 	registry: WorkbenchViewRegistry = ViewsRegistry,
 ): void {
 	registry.registerStaticViewContainer({
-		id: WorkbenchViewContainerId.Git,
-		title: "Git",
-		localizationKey: { bundle: "ash.views", key: "git" },
+		id: WorkbenchViewContainerId.SourceControl,
+		title: "Source Control",
+		localizationKey: { bundle: "ash.views", key: "sourceControl" },
 		location: ViewContainerLocation.Sidebar,
 		ctorDescriptor: new SyncDescriptor(SCMViewPaneContainer),
 		icon: Lxicon.gitBranch,
 		order: 3,
 	});
-	registry.registerStaticViews(WorkbenchViewContainerId.Git, [
+	registry.registerStaticViews(WorkbenchViewContainerId.SourceControl, [
 		{
 			id: REPOSITORIES_VIEW_PANE_ID,
 			title: 'Repositories',

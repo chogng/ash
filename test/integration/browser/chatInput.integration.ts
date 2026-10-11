@@ -16,7 +16,7 @@ import { IFileSearchService } from '../../../src/ash/platform/search/common/file
 import { BrowserFileSearchService } from '../../../src/ash/platform/search/browser/browserFileSearchService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
-import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { ICommandService, CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { FileKind, IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
@@ -65,7 +65,6 @@ import { IHostService } from '../../../src/ash/workbench/services/host/browser/h
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
-import { IGitService } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
 
 declare global {
 	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
@@ -93,7 +92,7 @@ document.body.append(destinations);
 const recordDestination = (value: unknown): void => { destinations.textContent = JSON.stringify([...JSON.parse(destinations.textContent!), value]); };
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: URI | string) => { recordDestination({ command: id, ...(resource !== undefined ? { resource: resource.toString() } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: URI | string) => { if (id === 'git.getRepositoryContexts') { return CommandsRegistry.getCommand(id)!(services); } recordDestination({ command: id, ...(resource !== undefined ? { resource: resource.toString() } : {}) }); } } as unknown as ICommandService);
 const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
 services.registerInstance(IClipboardService, {
 	triggerPaste: () => undefined,
@@ -149,10 +148,8 @@ services.registerInstance(IChatService, {
 		}
 	}),
 } as unknown as IChatService);
-services.registerInstance(IGitService, {
-	listRepositories: async () => [{ id: 'repo', label: 'workspace' }],
-	graph: async () => ({ remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'alpha' } }] }),
-} as unknown as IGitService);
+resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => [{ id: 'repo', label: 'workspace', path: '/workspace', root: 'file:///workspace', head: { type: 'branch', name: 'main', objectId: 'abc' }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'alpha' } }] }]));
+
 const githubReads = document.createElement('output');
 githubReads.setAttribute('aria-label', 'GitHub reads');
 githubReads.textContent = '[]';

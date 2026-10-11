@@ -17,6 +17,8 @@ export enum ConfigurationScope {
 export interface IConfigurationPropertySchema extends JsonSchema {
 	readonly scope?: ConfigurationScope;
 	readonly included?: boolean;
+	readonly ashBinding?: { readonly readCommand: string; readonly writeCommand: string; readonly property: string; };
+	readonly ashSetting?: IConfigurationSettingSchema;
 	readonly agentsWindow?: { readonly default: JsonValue; readonly readOnly?: boolean; };
 }
 
@@ -73,6 +75,7 @@ export interface IRegisteredConfiguration<T = unknown> {
 	readonly parse: (value: unknown) => T;
 	readonly serialize: (value: T) => unknown;
 	readonly setting?: IConfigurationSettingSchema;
+	readonly extensionBinding?: { readonly readCommand: string; readonly writeCommand: string; readonly property: string; };
 	readonly scope?: ConfigurationScope;
 	readonly schema?: JsonSchema;
 	readonly agentsWindow?: { readonly default: T; readonly readOnly?: boolean; };
@@ -148,7 +151,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 					};
 					const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
 					const defaultValue = schema.default === undefined ? (type === 'string' ? '' : type === 'boolean' ? false : type === 'number' || type === 'integer' ? 0 : type === 'array' ? [] : type === 'object' ? {} : null) : schema.default;
-					next.set(key, Object.freeze({ key, defaultValue: parse(defaultValue), parse, serialize: parse, schema, scope: schema.scope ?? node.scope ?? inheritedScope ?? ConfigurationScope.WINDOW }));
+					next.set(key, Object.freeze({ key, defaultValue: parse(defaultValue), parse, serialize: parse, schema, setting: schema.ashSetting, extensionBinding: schema.ashBinding, scope: schema.scope ?? node.scope ?? inheritedScope ?? ConfigurationScope.WINDOW }));
 					keys.push(key); properties.add(key);
 				}
 				for (const child of node.allOf ?? []) visit(child, node.scope ?? inheritedScope);

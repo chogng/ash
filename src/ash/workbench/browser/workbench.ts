@@ -230,8 +230,6 @@ import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
 import { ILanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
 import { WorkbenchLanguageFeatures } from '../services/language/browser/workbenchLanguageFeatures.js';
-import { GitService } from "../contrib/git/browser/gitService.js";
-import { IGitService } from "../contrib/git/common/gitService.js";
 import { ChatService } from "../services/chat/browser/chatService.js";
 import { IChatService } from "../services/chat/common/chatService.js";
 import { ICodebaseService } from "../../platform/codebase/common/codebaseService.js";
@@ -714,8 +712,6 @@ export class Workbench extends Disposable {
 		);
 		services.registerInstance(ISearchService, services.createInstance(SearchService));
 		services.registerInstance(ITerminalProcessService, api.terminal);
-		const gitService = this._register(services.createInstance(GitService, { api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext, canCloneRepository: nativeHostApi !== undefined }));
-		services.registerInstance(IGitService, gitService);
 		services.registerInstance(ICodebaseService, new AppServerCodebaseService(api.codebase));
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));
 		services.registerInstance(IAccountService, this._register(new AppServerAccountService(api.accounts, api.events)));

@@ -1,3 +1,4 @@
+import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
 import { IExtensionBackendApi } from '../../../platform/agentHost/common/extensionBackendApi.js';
@@ -49,7 +50,11 @@ export class MainThreadExtensionBackend extends Disposable {
 		if (!route || typeof route.route !== 'string') { throw new Error('Extension backend method is not authorized'); }
 		if (!params || typeof params !== 'object' || Array.isArray(params)) { throw new TypeError('Extension backend parameters must be an object'); }
 		if (Array.isArray(route.fields) && Object.keys(params).some(key => !route.fields.includes(key))) { throw new TypeError('Extension backend parameters exceed their capability'); }
-		const result = await this.backend.request(route.route, params, signal);
+		let result: JsonValue;
+		try { result = await this.backend.request(route.route, params, signal); } catch (error) {
+			signal.throwIfAborted();
+			return { backendError: { name: error instanceof AppServerRemoteError ? error.errorName : 'Unavailable', message: error instanceof Error ? error.message : String(error) } };
+		}
 		if (!Array.isArray(route.resultFields)) { return result; }
 		if (!result || typeof result !== 'object' || Array.isArray(result)) { throw new TypeError('Extension backend result must be an object'); }
 		return Object.fromEntries(route.resultFields.map((field: string) => [field, (result as Record<string, JsonValue>)[field] ?? null]));

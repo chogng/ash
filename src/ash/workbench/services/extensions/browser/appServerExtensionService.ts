@@ -1,3 +1,7 @@
+import { MenusRegistry, type ISubmenuItem } from '../../../../platform/actions/common/actions.js';
+import { extensionMenuId } from '../common/extensionMenus.js';
+import { ViewsRegistry } from '../../../common/views.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { URI } from "../../../../base/common/uri.js";
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -92,6 +96,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly debugAdapterRegistry: ExtensionDebugAdapterRegistry;
 	private activeGrammars: readonly TextMateGrammarDefinition[] = Object.freeze([]);
 	private activeConfigurations: IConfigurationNode[] = [];
+	private readonly submenuRegistrations = this._register(new DisposableStore());
+	private readonly welcomeRegistrations = this._register(new DisposableStore());
 	private activeLanguages: readonly LanguageDescriptionContribution[] = Object.freeze([]);
 	private activeLanguageConfigurations: readonly LanguageConfigurationContribution[] = Object.freeze([]);
 	private activeCompletionProviders: readonly LanguageCompletionProvider[] = Object.freeze([]);
@@ -243,6 +249,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
 		const problemMatchers: unknown[] = [];
 		const configurations: IConfigurationNode[] = [];
+		const submenus: { menu: string; item: ISubmenuItem }[] = [];
+		const welcome: Parameters<typeof ViewsRegistry.registerViewWelcomeContent>[] = [];
 		const problemPatterns: unknown[] = [];
 		const editorPanes: IEditorPaneDescriptor[] = [];
 		let activeExtension: ExtensionDescriptor | undefined;
@@ -258,8 +266,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				activeExtension = projectExtensionDescriptor(extension);
 				await verifyExtensionManifestDigest(extension);
 				if (this.isDisposed) return;
-				const manifest = parseExtensionManifest(extension.manifestJson, extension);
+				const manifestJson = await this.localizeManifest(extension, catalog.generation, resources);
+    if (this.isDisposed) return;
+    const manifest = parseExtensionManifest(manifestJson, extension);
+    welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
 				configurations.push(...manifest.contributes.configuration);
+				for (const submenu of manifest.contributes.submenus) {
+					for (const placement of submenu.placements) {
+						const [group, orderText] = (placement.group ?? '').split('@');
+						const order = orderText === undefined ? undefined : Number(orderText);
+						if (order !== undefined && !Number.isFinite(order)) throw new TypeError('Invalid submenu order');
+						submenus.push({ menu: placement.menu, item: { submenu: extensionMenuId(submenu.id), title: submenu.label, group, order, when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined } });
+					}
+				}
 				if (extension.sourceKind === 'builtIn') {
 					for (const editor of manifest.contributes.customEditors) {
 						const create = getBuiltinEditorPaneFactory(extension.id, editor.viewType);
@@ -403,6 +422,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				runWithBufferedEvents(() => {
 					preparedGrammars.commit();
 					this.editorPaneRegistration.replace(editorPanes);
+					this.submenuRegistrations.clear();
+					for (const submenu of submenus) this.submenuRegistrations.add(MenusRegistry.appendMenuItem(extensionMenuId(submenu.menu), submenu.item));
+					this.welcomeRegistrations.clear();
+					for (const args of welcome) this.welcomeRegistrations.add(ViewsRegistry.registerViewWelcomeContent(...args));
 					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations);
 					this.activeThemeContributions = themeContributions;
 					this.activeGrammars = Object.freeze([...grammars]);
@@ -427,6 +450,18 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			return Object.freeze({ extension: activeExtension, error });
 		}
 	}
+
+ private async localizeManifest(extension: TransportExtensionDescriptor, generation: number, resources: Map<string, Promise<Uint8Array>>): Promise<string> {
+  if (!extension.manifestJson.includes('%')) return extension.manifestJson;
+  const messages: Record<string, unknown> = {};
+  const language = getNLSLanguage();
+  for (const suffix of ['', ...(language !== 'en' ? ['.' + language.split('-')[0], '.' + language] : [])]) {
+   try { Object.assign(messages, parseJsonc(new TextDecoder().decode(await this.loadResource(resources, generation, extension.id, 'package.nls' + suffix + '.json')), 'Extension messages')); }
+   catch (error) { if (suffix === '') throw error; }
+  }
+  const visit = (value: unknown): unknown => typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => typeof messages[key] === 'string' ? messages[key] as string : match) : Array.isArray(value) ? value.map(visit) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, value]) => [key, visit(value)])) : value;
+  return JSON.stringify(visit(JSON.parse(extension.manifestJson)));
+ }
 
 	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[]): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;

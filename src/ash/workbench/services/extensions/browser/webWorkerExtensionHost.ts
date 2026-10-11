@@ -143,6 +143,10 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 						// the Worker receives its reply would invalidate the originating command.
 						this.snapshotGeneration++;
 					}
+					if (operation.operation === 'scmUpdate' && result.result === 'done' && !signal.aborted) {
+						this.snapshot = { ...this.snapshot, extensions: this.snapshot.extensions.map(runtime => runtime.id !== extension.id || runtime.incarnation !== generation ? runtime : { ...runtime, registrations: runtime.registrations.map(registration => registration.kind === 'sourceControl' && registration.registrationId === operation.registrationId && operation.revision > registration.revision ? { ...registration, revision: operation.revision, providers: operation.providers } : registration) }) };
+						this.snapshotGeneration++;
+					}
 					return result;
 				});
 				this.workers.set(extension.id, worker);
@@ -320,6 +324,7 @@ function normalizeBrowserClientOperation(value: JsonValue): ExtensionClientOpera
 		return { operation: 'scmUpdate', registrationId: identifier(input.registrationId), revision: Number(input.revision), providers: input.providers };
 	}
 	if (input.operation === 'backendRequest') { return { operation: 'backendRequest', capability: identifier(input.capability), method: identifier(input.method), params: input.params }; }
+	if (input.operation === 'editorOperation') { return { operation: 'editorOperation', payload: normalizeExtensionHostPayload(input.payload) }; }
 	if (input.operation === 'backendState') {
 		if (!Number.isSafeInteger(input.after) || Number(input.after) < 0) { throw new TypeError('Invalid backend event cursor'); }
 		return { operation: 'backendState', capability: identifier(input.capability), after: Number(input.after) };

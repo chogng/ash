@@ -1,3 +1,7 @@
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { IMultiDiffSourceResolverService } from '../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
+import { isMultiDiffEditorInput, requireActions } from '../../contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { parseExtensionEditorInput } from './mainThreadEditorInput.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -30,6 +34,8 @@ export class MainThreadSCM extends Disposable {
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
 		@ISCMService private readonly scm: ISCMService,
 		@ISCMViewService private readonly view: ISCMViewService,
+		@ICommandService private readonly commands: ICommandService,
+		@IMultiDiffSourceResolverService private readonly multiDiff: IMultiDiffSourceResolverService,
 		@IQuickDiffService private readonly quickDiff: IQuickDiffService,
 		@IDecorationsService private readonly decorations: IDecorationsService,
 	) { super(); }
@@ -69,47 +75,91 @@ export class MainThreadSCM extends Disposable {
 		// Normalize the whole replacement before changing the existing view.
 		const snapshots = values.map(parseProvider);
 		if (new Set(snapshots.map(value => value.id)).size !== snapshots.length) { throw new TypeError('Duplicate SCM provider'); }
+		for (const value of snapshots) {
+			const existing = owner.providers.get(value.id);
+			if (!existing && this.scm.getRepository(value.id)) { throw new TypeError('SCM repository identity is already registered'); }
+			if (existing && (existing.providerId !== value.providerId || existing.rootUri?.toString() !== value.rootUri || Boolean(existing.historyProvider) !== value.hasHistory || Boolean(existing.mergeProvider) !== value.hasMerge)) { throw new TypeError('SCM provider identity cannot change within a registration'); }
+			if (value.multiDiff) {
+				const prefix = URI.parse(string(value.multiDiff.resourcePrefix));
+				if (prefix.scheme !== 'ash-scm' || prefix.authority !== source.extensionId || prefix.query || prefix.fragment) { throw new TypeError('Multi-diff source must belong to its extension'); }
+				requireActions(value.multiDiff.sourceActions); requireActions(value.multiDiff.repositoryActions);
+			}
+		}
 		const current = new Set(snapshots.map(value => value.id));
 		for (const id of owner.providers.keys()) { if (!current.has(id)) { owner.providers.deleteAndDispose(id); } }
 		for (const value of snapshots) {
 			let provider = owner.providers.get(value.id);
 			if (!provider) {
 				if (this.scm.getRepository(value.id)) { throw new Error('SCM repository identity is already registered'); }
-				provider = owner.providers.set(value.id, new ExtensionSCMProvider(value, (method, payload) => this.invoke(owner, method, { providerId: value.id, ...payload }), this.reportError));
+				provider = owner.providers.set(value.id, new ExtensionSCMProvider(value, (method, payload, signal) => this.invoke(owner, method, { providerId: value.id, ...payload }, signal), this.reportError));
 				provider.add(this.scm.registerSCMProvider(provider));
-				const providerId = `${source.extensionId}:${value.id}`;
-				provider.add(this.quickDiff.addProvider({
-					id: providerId, label: value.label, rootUri: provider.rootUri, onDidChange: Event.map(provider.onDidChangeResources, () => undefined), provideOriginalResource: async (resource, signal) => {
-						const revision = owner.revision;
-						const result = await this.invoke(owner, 'quickDiff', { providerId: value.id, resource: resource.toString() }, signal);
-						if (result === null) { return undefined; }
-						const original = object(result);
-						return { providerId, providerLabel: provider!.label, label: provider!.label, originalResource: URI.parse(string(original.resource)), revision, text: string(original.text, 16 * 1024 * 1024) };
-					}
-				}));
-				provider.add(this.decorations.registerDecorationsProvider({
-					label: value.label, onDidChange: provider.onDidChangeDecorations, provideDecorations: async resource => {
-						const result = await provider!.call('decoration', { resource: resource.toString() });
-						if (result === null) { return undefined; }
-						const data = object(result);
-						return { tooltip: optionalString(data.tooltip), color: optionalString(data.color), letter: optionalString(data.letter), weight: typeof data.weight === 'number' ? data.weight : undefined };
-					}
-				}));
+    if (value.multiDiff) {
+     const metadata = value.multiDiff;
+     const prefix = string(metadata.resourcePrefix);
+     const uri = URI.parse(prefix);
+     if (uri.scheme !== 'ash-scm' || uri.authority !== source.extensionId) throw new TypeError('Multi-diff source must belong to its extension');
+     const actions = (values: JsonValue) => requireActions(values).map(action => ({ ...action, icon: action.icon ? Icon.fromId(action.icon) : undefined, enabled: !provider!.isBusy && action.enabled !== false, run: () => this.commands.executeCommand(action.command, ...action.arguments) }));
+     provider.add(this.multiDiff.registerResolver({
+      canHandleUri: resource => resource.with({ query: '', fragment: '' }).toString() === prefix,
+      resolveDiffSource: async resource => { const input = parseExtensionEditorInput(await provider!.call('multiDiff', { resource: resource.toString() })); if (!isMultiDiffEditorInput(input)) throw new TypeError('Source resolver must return a multi-diff input'); return { resource: input.resource, resources: input.items, label: input.label, source: input.source }; },
+      sourceActions: () => actions(metadata.sourceActions),
+      primaryRepositoryAction: input => input.source?.kind === 'external' && input.source.providerId === source.extensionId && input.source.repositoryId === value.id ? actions(metadata.repositoryActions)[0] : undefined,
+      repositoryActions: input => input.source?.kind === 'external' && input.source.providerId === source.extensionId && input.source.repositoryId === value.id ? actions(metadata.repositoryActions) : [],
+     }));
+     provider.add(provider.onDidChangeResources(() => this.multiDiff.notifyChanged()));
+    }
+				provider.add(this.quickDiff.addProvider({ id: `${source.extensionId}:${value.id}`, label: value.label, rootUri: provider.rootUri, onDidChange: listener => provider!.onDidChangeResources(() => listener(undefined)), provideOriginalResource: async (resource, signal) => {
+					const result = await provider!.call('quickDiff', { resource: resource.toString() }, signal);
+					if (result === null) { return undefined; }
+					const original = object(result);
+					return { providerId: string(original.providerId), providerLabel: string(original.providerLabel), label: string(original.label), originalResource: URI.parse(string(original.originalResource ?? original.resource)), revision: original.revision == null ? owner.revision : typeof original.revision === 'number' ? original.revision : string(original.revision), text: string(original.text, 16 * 1024 * 1024) };
+				} }));
+				provider.add(this.decorations.registerDecorationsProvider({ label: value.label, onDidChange: provider.onDidChangeDecorations, provideDecorations: async (resource, token) => {
+					const controller = new AbortController();
+					using listener = token.onCancellationRequested(() => controller.abort());
+					if (token.isCancellationRequested) controller.abort();
+					const result = await provider!.call('decoration', { resource: resource.toString() }, controller.signal);
+					if (result === null) { return undefined; }
+					const data = object(result);
+					return { tooltip: optionalString(data.tooltip), color: optionalString(data.color), letter: optionalString(data.letter), weight: typeof data.weight === 'number' ? data.weight : undefined, bubble: data.bubble === true, strikethrough: data.strikethrough === true };
+				} }));
 			} else { provider.accept(value); }
 			if (value.selected) { this.view.selectRepository(value.id); }
 		}
 		owner.revision = revision;
 	}
 
-	private async invoke(owner: SCMRegistration, method: string, payload: Record<string, unknown>, callerSignal?: AbortSignal): Promise<JsonValue> {
-		const signal = callerSignal ? AbortSignal.any([owner.controller.signal, callerSignal]) : owner.controller.signal;
-		signal.throwIfAborted();
+	private async invoke(owner: SCMRegistration, method: string, payload: Record<string, unknown>, requestSignal?: AbortSignal): Promise<JsonValue> {
+		owner.controller.signal.throwIfAborted();
 		const runtime = owner.runtime;
-		const result = await this.api.invoke({ extensionId: runtime.id, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration, registrationId: owner.registration.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload({ method, ...payload }), deadlineUnixMillis: Date.now() + this.timeout }, signal);
+		const signal = requestSignal ? AbortSignal.any([owner.controller.signal, requestSignal]) : owner.controller.signal;
+		const result = await this.api.invoke({ extensionId: runtime.id, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration, registrationId: owner.registration.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload(JSON.parse(JSON.stringify({ method, ...payload }))), deadlineUnixMillis: Date.now() + this.timeout }, signal);
 		signal.throwIfAborted();
 		return result;
 	}
 
+ public async prepareCommandArguments(extensionId: string, args: readonly unknown[]): Promise<JsonValue[]> {
+  for (const [, owner] of this.registrations) {
+   if (owner.runtime.id !== extensionId) continue;
+   for (const [, provider] of owner.providers) await provider.syncInput();
+  }
+  const encode = (value: unknown): unknown => {
+   if (value instanceof URI) return value.toString();
+   if (value && typeof value === 'object' && 'repositoryId' in value && typeof value.repositoryId === 'string' && 'runTitleOperation' in value) return { repositoryId: value.repositoryId };
+   if (value && typeof value === 'object' && 'repository' in value) { const context = value as { repository: unknown; type?: string; historyItemViewModel?: unknown; references?: unknown; }; return { type: context.type, repository: encode(context.repository), historyItemViewModel: encode(context.historyItemViewModel), references: encode(context.references) }; }
+   if (value && typeof value === 'object' && 'provider' in value) {
+    const provider = (value as { provider?: ISCMProvider }).provider;
+    if (provider && this.scm.getRepository(provider.id)?.provider === provider) {
+     const context = value as { type?: string; historyItemViewModel?: { historyItem: unknown }; references?: unknown };
+     return { repositoryId: provider.id, provider: { id: provider.id, providerId: provider.providerId }, ...(context.type === 'historyItemViewModel' ? { type: context.type, repository: { provider: { id: provider.id, providerId: provider.providerId } }, historyItemViewModel: encode(context.historyItemViewModel), references: encode(context.references) } : {}) };
+    }
+   }
+   if (Array.isArray(value)) return value.map(encode);
+   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).filter(([, value]) => value !== undefined).map(([key, value]) => [key, encode(value)]));
+   return value ?? null;
+  };
+  return args.map(value => normalizeExtensionHostPayload(encode(value)));
+ }
 	public clear(): void { this.registrations.clearAndDisposeAll(); }
 }
 
@@ -129,6 +179,8 @@ interface ProviderSnapshot {
 	readonly historyRevision: number;
 	readonly hasHistory: boolean;
 	readonly hasMerge: boolean;
+	readonly inputRevision: number;
+	readonly multiDiff: Record<string, JsonValue> | undefined;
 }
 
 class ExtensionSCMProvider extends Disposable implements ISCMProvider {
@@ -140,9 +192,10 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private readonly historyRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
 	private draft: string;
 	private draftRevision = 0;
+	private syncedDraftRevision = 0;
 	public readonly historyProvider: ISCMHistoryProvider | undefined;
 	public readonly mergeProvider;
-	constructor(private snapshot: ProviderSnapshot, public readonly call: (method: string, payload: Record<string, unknown>) => Promise<JsonValue>, private readonly reportError: (error: unknown) => void) {
+	constructor(private snapshot: ProviderSnapshot, public readonly call: (method: string, payload: Record<string, unknown>, signal?: AbortSignal) => Promise<JsonValue>, private readonly reportError: (error: unknown) => void) {
 		super();
 		this.draft = string(snapshot.input.value);
 		this.historyRef.set(snapshot.historyRef);
@@ -181,7 +234,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			buttonLabel: string(input.buttonLabel), buttonTooltip: string(input.buttonTooltip),
 			async accept() {
 				const revision = owner.draftRevision;
-				const result = await owner.call('acceptInput', { value: owner.draft });
+				const result = await owner.call('acceptInput', { value: owner.draft, inputRevision: owner.draftRevision });
 				if (owner.draftRevision === revision) { owner.draft = string(object(result).value); owner.changed.fire(); }
 				return optionalString(object(result).result);
 			},
@@ -209,10 +262,12 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const action = object(value);
 		return { id: string(action.id), label: string(action.label), tooltip: string(action.tooltip), enabled: action.enabled === true, checked: typeof action.checked === 'boolean' ? action.checked : undefined, icon: action.icon ? Icon.fromId(string(action.icon)) : undefined, run: () => this.call('action', { actionId: action.id }).catch(this.reportError) };
 	}
+	public async syncInput(): Promise<void> { if (this.syncedDraftRevision === this.draftRevision) return; const revision = this.draftRevision; await this.call('setInput', { value: this.draft, inputRevision: revision }); this.syncedDraftRevision = revision; }
 	public async refresh(): Promise<void> { await this.call('refresh', { value: this.draft }); }
 	public async activate(): Promise<void> { await this.call('activate', { value: this.draft }); }
 	public accept(value: ProviderSnapshot): void {
 		if (value.providerId !== this.providerId || value.rootUri !== this.snapshot.rootUri || value.hasHistory !== this.snapshot.hasHistory || value.hasMerge !== this.snapshot.hasMerge) { throw new Error('SCM provider identity changed within one registration'); }
+		if (value.inputRevision === this.draftRevision) this.draft = string(value.input.value);
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		this.snapshot = value;
 		this.historyRef.set(value.historyRef);
@@ -229,16 +284,22 @@ function string(value: JsonValue, limit = 32768): string { if (typeof value !== 
 function optionalString(value: JsonValue | undefined, limit = 32768): string | undefined { return value == null ? undefined : string(value, limit); }
 function number(value: JsonValue): number { if (typeof value !== 'number' || !Number.isFinite(value)) { throw new TypeError('Invalid SCM number'); } return value; }
 function parseRef(value: JsonValue): ISCMHistoryItemRef { const entry = object(value); return { id: string(entry.id), name: string(entry.name), revision: optionalString(entry.revision), category: optionalString(entry.category), description: optionalString(entry.description), upstream: optionalString(entry.upstream), canDelete: entry.canDelete === true, color: entry.color == null ? undefined : number(entry.color) }; }
+function parseActions(value: JsonValue): void {
+	for (const item of array(value)) { const action = object(item); string(action.id); string(action.label); string(action.tooltip); optionalString(action.icon); if (typeof action.enabled !== 'boolean') { throw new TypeError('Invalid SCM action'); } }
+}
 function parseProvider(value: JsonValue): ProviderSnapshot {
 	const entry = object(value);
 	const input = object(entry.input);
 	for (const key of ['value', 'placeholder', 'buttonLabel', 'buttonTooltip']) { string(input[key]); }
 	const groups = array(entry.groups).map(object);
 	for (const group of groups) {
-		string(group.id); string(group.label); array(group.actions);
-		for (const item of array(group.resources)) { const resource = object(item); string(resource.id); string(resource.sourceUri); string(resource.path); string(resource.openLabel); const data = object(resource.decorations); string(data.badge); string(data.tooltip); string(data.kind); array(resource.actions); }
+		string(group.id); string(group.label); parseActions(group.actions);
+		for (const item of array(group.resources)) { const resource = object(item); string(resource.id); string(resource.sourceUri); string(resource.path); string(resource.openLabel); const data = object(resource.decorations); string(data.badge); string(data.tooltip); string(data.kind); parseActions(resource.actions); URI.parse(string(resource.sourceUri)); }
 	}
-	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands: array(entry.statusBarCommands).map(object), historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRevision: number(entry.historyRevision), hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true };
+	const statusBarCommands = array(entry.statusBarCommands).map(object);
+	for (const command of statusBarCommands) { string(command.id); string(command.text); string(command.ariaLabel); string(command.tooltip); number(command.priority); optionalString(command.icon); optionalString(command.compactGroup); }
+	if (entry.rootUri != null) { URI.parse(string(entry.rootUri)); }
+	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRevision: number(entry.historyRevision), hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }

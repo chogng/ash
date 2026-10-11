@@ -62,6 +62,7 @@ export async function prepareBrowserExtensions(): Promise<void> {
 					name: 'ash-extension-webview',
 					async resolveId(source, importer) {
 						if (source === 'vscode') return '\0ash-vscode';
+						if (source === 'ash') return '\0ash-public-api';
 						if (source === '\0ash-vscode-bridge') return source;
 						if (source === resolve(packageRoot, '__ash_browser_entry__.js')) return '\0ash-browser-entry';
 						if (!source.endsWith('?webview')) return;
@@ -71,6 +72,7 @@ export async function prepareBrowserExtensions(): Promise<void> {
 					},
 					async load(id) {
 						const facade = JSON.stringify(resolve(root, 'crates/external-js-ext/src/vscode.js'));
+						if (id === '\0ash-public-api') { return `import { bridge } from '\0ash-vscode-bridge'; export const { scm, backend, editors } = bridge.api.ash;`; }
 						if (id === '\0ash-vscode') {
 							const names = ['commands', 'workspace', 'window', 'languages', 'tasks', 'debug', 'env', 'l10n', 'Uri', 'Position', 'Range', 'Location', 'Hover', 'Disposable', 'EventEmitter', 'CancellationTokenSource', 'Diagnostic', 'DiagnosticSeverity', 'CompletionItem', 'CompletionList', 'CompletionItemKind', 'TextEdit', 'WorkspaceEdit', 'CodeActionKind', 'SymbolKind', 'FileType', 'Task', 'TaskGroup', 'TaskScope', 'ProcessExecution', 'ShellExecution', 'CustomExecution'];
 							return `import { bridge } from '\0ash-vscode-bridge'; const api = bridge.api; ${names.map(name => `export const ${name} = api.${name};`).join(' ')} export default api;`;

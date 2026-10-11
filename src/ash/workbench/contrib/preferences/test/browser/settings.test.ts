@@ -1,3 +1,8 @@
+import gitMessages from '../../../../../../../extensions/git/package.nls.json' with { type: 'json' };
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import manifest from '../../../../../../../extensions/git/package.json' with { type: 'json' };
+import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { showConfigureHooksQuickPick } from '../../../chat/browser/promptSyntax/hookActions.js';
@@ -38,7 +43,7 @@ import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
-import type { IGitService } from '../../../git/common/gitService.js';
+import type { IGitService } from '../../../../../../../extensions/git/browser/types.js';
 import type { IChatService } from '../../../../services/chat/common/chatService.js';
 import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
@@ -108,9 +113,9 @@ const { EditorSelectionConfiguration } = await import('../../../../common/editor
 const { CodeEditorConfiguration } = await import('../../../codeEditor/common/editorConfiguration.js');
 const { EDITOR_FONT_DEFAULTS } = await import('../../../../../editor/common/config/fontInfo.js');
 const { ContentSearchConfiguration } = await import('../../../search/common/searchConfiguration.js');
-const { GitConfiguration } = await import('../../../git/common/gitConfiguration.js');
+const { GitConfiguration } = await import('../../../../../../../extensions/git/browser/configuration.js');
 await import('../../../scm/browser/scm.contribution.js');
-const { IGitService: GitServiceId } = await import('../../../git/common/gitService.js');
+
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
 await import('../../../../services/chat/common/modelCatalog.js');
 const { IContentSearchConfigurationService } = await import('../../../../../platform/search/common/search.js');
@@ -121,6 +126,7 @@ const { IFileDialogService } = await import('../../../../../platform/dialogs/com
 const { IAppServerRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/appServerRemoteAgentService.js');
 const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../../../../platform/dirPermissions/common/dirPermissionsService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
+configurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(manifest).replace(/%([^%]+)%/g, (match, key) => (gitMessages as Record<string, string>)[key] ?? match), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
@@ -732,7 +738,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'voice-input');
-	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
+	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), true);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
 	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text', 'stringMap'].includes(setting.valueType)), true);
@@ -1205,7 +1211,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IContextMenuService, contextMenuProvider);
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(LocalizationServiceId, workbenchLocalization);
-	services.registerInstance(GitServiceId, gitService);
+	disposables.add(CommandsRegistry.register('git.readSettings', () => ({ autoFetch, autoFetchPeriod })));
+ disposables.add(CommandsRegistry.register('git.updateAutoFetch', async (_accessor, value) => gitService.setAutoFetch(value as false | true | 'all')));
+ disposables.add(CommandsRegistry.register('git.updateAutoFetchPeriod', async (_accessor, value) => gitService.setAutoFetchPeriod(value as number)));
+ services.registerInstance(IServerEventApi, { subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })) });
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
 	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });

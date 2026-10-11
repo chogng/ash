@@ -139,7 +139,7 @@ export interface IViewContainerModel {
 export const WorkbenchViewContainerId = Object.freeze({
 	Sidebar: "ash.sidebar",
 	Search: "ash.search",
-	Git: "ash.git",
+	SourceControl: "ash.git",
 	Problems: "ash.panel.problems",
 	Output: "ash.panel.output",
 	BulkEdit: "ash.panel.bulkEdit",

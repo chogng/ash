@@ -1,3 +1,5 @@
+import { CommandsRegistry, type ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import type { ISCMService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
@@ -15,7 +17,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import type { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import type { IGitService, GitStatus } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
+import type { IGitService, GitStatus } from '../../../extensions/git/browser/types.js';
 import type { ISessionsService, SessionsViewSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../src/ash/sessions/services/sessions/common/session.js';
@@ -148,7 +150,10 @@ const git = {
 } as unknown as IGitService;
 const management = { sessions: [session], state: 'ready' } as unknown as ISessionsManagementService;
 const sessions = { get activeSelection() { return selection; }, get visibleSelections() { return selection ? [selection] : []; }, onDidChange: selected.event, openSession: () => { }, openNewSession: () => { } } as unknown as ISessionsService;
-const github = resources.add(new GitHubService(sessions, management, git, new AppServerGitHubService(client), { onDidChangeAccounts: accountsChanged.event } as IAccountService, new ConsoleLogger('sessions-pr-test')));
+resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => undefined));
+const repositoryCommands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
+const scm = { onDidAddRepository: Event.None, onDidRemoveRepository: Event.None, repositories: git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: (listener: () => void) => statusChanged.event(() => listener()) } })) } as unknown as ISCMService;
+const github = resources.add(new GitHubService(sessions, management, repositoryCommands, scm, new AppServerGitHubService(client), { onDidChangeAccounts: accountsChanged.event } as IAccountService, new ConsoleLogger('sessions-pr-test')));
 const main = document.createElement('main');
 main.style.width = '320px';
 document.body.append(main);

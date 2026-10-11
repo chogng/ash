@@ -5,12 +5,11 @@ import { CancellationToken } from './support.js';
 import { Disposable, toDisposable } from './support.js';
 import { extUriBiasedIgnorePathCase } from './support.js';
 import { URI } from './support.js';
-import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import type { BackendConnection, BackendEvents, WorkspaceFacts, WorkspaceFolder } from './monitor.js';
 import type { LegacyConfiguration } from './support.js';
 import type { IGitApi } from './backend.js';
 import type { ExtensionLog } from './support.js';
 import { getRemoteWorkspacePath, isRemoteResource } from './support.js';
-import type { IWorkspaceContextService, IWorkspaceFolder } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitConflictFile, type GitConflictResolution, type GitCommitChanges, type GitComparisonChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "./types.js";
 import { GitConfiguration, type GitAutofetch } from './configuration.js';
 import type { GitWorktree } from './types.js';
@@ -18,9 +17,9 @@ import type { GitWorktree } from './types.js';
 export interface GitServiceOptions {
 	readonly canCloneRepository: boolean;
 	readonly api: IGitApi;
-	readonly appServerApi: IAppServerApi;
-	readonly eventApi: IServerEventApi;
-	readonly workspaceContext: IWorkspaceContextService;
+	readonly appServerApi: BackendConnection;
+	readonly eventApi: BackendEvents;
+	readonly workspaceContext: WorkspaceFacts;
 }
 
 /** App Server-backed implementation of the frontend Git repository collection. */
@@ -100,7 +99,7 @@ export class GitService extends Disposable implements IGitService {
 			this.acceptStatus(toGitStatus(event.params.status, repository));
 		});
 		this._register(toDisposable(() => events.dispose()));
-		const handleConnectionState = (state: AppServerConnectionState): void => {
+		const handleConnectionState = (state: string): void => {
 			this.connectionReady = state === 'ready';
 			const revision = ++this.connectionRevision;
 			if (state !== 'ready') this.configRevision = -1;
@@ -427,7 +426,7 @@ export class GitService extends Disposable implements IGitService {
 		await this.refreshAutoFetch();
 	}
 
-	private async refreshAutoFetch(): Promise<void> {
+	public async refreshAutoFetch(): Promise<void> {
 		await this.ensureLegacyMigration();
 		const config = await this.api.readConfig();
 		if (this.isDisposed || config.revision < this.configRevision) return;
@@ -450,9 +449,11 @@ export class GitService extends Disposable implements IGitService {
 	}
 
 	private async migrateLegacyAutoFetch(): Promise<void> {
-		const legacyMode = this.configurationService.inspect<GitAutofetch>(GitConfiguration.autofetch).userLocalValue;
-		const legacyPeriod = this.configurationService.inspect<number>(GitConfiguration.autofetchPeriod).userLocalValue;
+		const legacyMode = this.configurationService.inspect(GitConfiguration.autofetch).userLocalValue;
+		const legacyPeriod = this.configurationService.inspect(GitConfiguration.autofetchPeriod).userLocalValue;
 		if (legacyMode === undefined && legacyPeriod === undefined) return;
+		if (legacyMode !== undefined && legacyMode !== false && legacyMode !== true && legacyMode !== 'all') throw new TypeError('Invalid legacy Git autofetch mode');
+		if (legacyPeriod !== undefined && (typeof legacyPeriod !== 'number' || !Number.isSafeInteger(legacyPeriod) || legacyPeriod < 1 || legacyPeriod > 86400)) throw new TypeError('Invalid legacy Git autofetch period');
 		const current = await this.api.readConfig();
 		const desired: GitConfigDto = {
 			autofetch: legacyMode === undefined ? current.git.autofetch : legacyMode === false ? 'off' : legacyMode === true ? 'default' : 'all',
@@ -512,14 +513,14 @@ export class GitService extends Disposable implements IGitService {
 		return this.options.workspaceContext.getWorkspace().folders.length > 0;
 	}
 
-	private requireWorkspaceFolders(): readonly IWorkspaceFolder[] {
+	private requireWorkspaceFolders(): readonly WorkspaceFolder[] {
 		const folders = this.options.workspaceContext.getWorkspace().folders;
 		if (folders.length === 0) throw new GitWorkspaceError('noFolder');
 		return folders;
 	}
 }
 
-function toGitRepository(repository: GitRepositoryDto, workspaceFolders: readonly IWorkspaceFolder[]): GitRepository {
+function toGitRepository(repository: GitRepositoryDto, workspaceFolders: readonly WorkspaceFolder[]): GitRepository {
 	const workspaceFolder = repository.dirId
 		? workspaceFolders.find(folder => folder.id === repository.dirId)
 		: workspaceFolders.length === 1 ? workspaceFolders[0] : undefined;
@@ -546,6 +547,7 @@ function toGitStatus(status: GitStatusResult, repository: GitRepository): GitSta
 		repositoryId: status.repositoryId,
 		streamInstanceId: status.streamInstanceId,
 		revision: status.revision,
+		historyRevision: status.historyRevision,
 		workspacePath: isRemoteResource(repository.root) ? getRemoteWorkspacePath(repository.root) : repository.root.fsPath,
 		head: toGitHead(status.head),
 		changes: status.changes.map(toGitChange),

@@ -1,3 +1,4 @@
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
@@ -33,7 +34,7 @@ import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResol
 import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { VIEW_ID } from '../../../files/common/files.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import type { GitStatus, IGitService } from '../../../../contrib/git/common/gitService.js';
+import type { GitStatus, IGitService } from '../../../../../../../extensions/git/browser/types.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService, type IMultiDiffSourceResolver } from '../../browser/multiDiffSourceResolverService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/config/editorOptions.js';
@@ -70,9 +71,11 @@ await import('../../../codeEditor/browser/toggleWordWrap.js');
 await import('../../../../../editor/browser/widget/diffEditor/commands.js');
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorActions.js');
-const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDiffAction.js');
+const { createGitMultiDiffEditorInput: resolveGitMultiDiff } = await import('../../../../../../../extensions/git/browser/multiDiff.js');
+async function createGitMultiDiffEditorInput(...args: Parameters<typeof resolveGitMultiDiff>) { const input = await resolveGitMultiDiff(...args); return createMultiDiffEditorInput(input.resource, input.items, input.label!, input.source); }
 
 function registerMultiDiffTestServices(services: InstantiationService): InstantiationService {
+	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerSingleton(IStorageService, () => new BrowserStorageService({
 		ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'multi-diff-tests',
 		backend: browserEnvironment.window.localStorage, flushInterval: 0,
@@ -123,7 +126,7 @@ test('Multi-diff source resolves uncommitted Git contents', async () => {
 		before: 'head',
 		after: 'worktree',
 		readOnly: true,
-		source: { kind: 'git', repositoryId: 'repo', scope: 'uncommitted', branchName: 'main' },
+		source: { kind: 'external', providerId: 'ash.git', label: 'Uncommitted Changes', repositoryId: 'repo', branchName: 'main' },
 	});
 
 });
@@ -136,6 +139,8 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using contexts = new ContextKeyService();
 	const gitActions: string[] = [];
+	using stageCommand = CommandsRegistry.register('test.stage', (_accessor, path) => { gitActions.push(`stage:${path}`); });
+	using discardCommand = CommandsRegistry.register('test.discard', (_accessor, path) => { gitActions.push(`discard:${path}`); });
 	const opened: string[] = [];
 	const focusedViews: string[] = [];
 	const contextMenus: string[][] = [];
@@ -174,12 +179,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		}),
 		lineHeight: 24,
 		showLineNumbers: false,
-		gitService: {
-			onDidChangeRepositoryStatus: Event.None,
-			status: async () => ({ repositoryId: 'repo', streamInstanceId: 'stream', revision: 0, historyRevision: 0, changes: [], workspacePath: '/workspace', head: { type: 'unborn', name: 'main' } }),
-			stage: async (paths: readonly string[]) => { gitActions.push(`stage:${paths.join(',')}`); return {} as never; },
-			discardWorktree: async (paths: readonly string[]) => { gitActions.push(`discard:${paths.join(',')}`); return {} as never; },
-		} as unknown as IGitService,
+
 		editorService: {
 			openEditor: async (input: IResourceEditorInput) => { opened.push(input.resource.toString()); },
 		} as unknown as IEditorService,
@@ -202,7 +202,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 			original: { resource: URI.parse('git-change:/first/original'), initialText: 'old', label: 'HEAD' },
 			modified: { resource: URI.parse('git-change:/first/modified'), initialText: 'new', languageId: 'typescript', label: 'Working Tree', readOnly: true },
 			goToFile: { resource: URI.parse('file:///workspace/src/first.ts') },
-			gitChange: { repositoryId: 'repo', path: 'src/first.ts', staged: false, hasWorktreeChanges: true },
+			id: 'src/first.ts', actions: [{ id: 'test.stage', label: 'Stage Changes', tooltip: 'Stage Changes', icon: 'check', command: 'test.stage', arguments: ['src/first.ts'] }, { id: 'test.discard', label: 'Discard Changes', tooltip: 'Discard Changes', icon: 'discard', command: 'test.discard', arguments: ['src/first.ts'] }],
 		},
 		{
 			label: 'src/second.ts',
@@ -254,7 +254,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor-repository-toolbar .ash-dropdown-with-primary-dropdown'), null);
 	requiredElement<HTMLButtonElement>(dom.window.document, '.stanza-multi-diff-editor-repository-toolbar .ash-toolbar-more-actions button').click();
 	assert.deepEqual(contextMenus, [
-		['Current Turn', 'Current Turn and Earlier', 'Previous Turn', 'Stage', 'Unstage', 'Uncommitted'],
+		['Current Turn', 'Current Turn and Earlier', 'Previous Turn'],
 		['Collapse All', 'Expand All'],
 	]);
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Commit"]').click();
@@ -295,7 +295,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.equal(services.get(ICodeEditorService).listDiffEditors().length, 0);
 	assert.equal(services.get(ICodeEditorService).listCodeEditors().length, 0);
 	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/empty'), [], 'No changes', {
-		kind: 'git', repositoryId: 'repo', scope: 'uncommitted', branchName: 'main',
+		kind: 'snapshot', repositoryId: 'repo', label: 'Changes',
 	}), new AbortController().signal);
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor-empty')?.textContent, 'No changes in this selection.');
 	pane.clearInput();
@@ -611,7 +611,7 @@ function requiredElement<T extends Element>(ownerDocument: ParentNode, selector:
 	return element;
 }
 
-suite('Multi-diff Git lifecycle', () => {
+suite('Multi-diff extension source lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	const dom = createTestDom();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -663,8 +663,11 @@ suite('Multi-diff Git lifecycle', () => {
 		},
 		dispose() { }, [Symbol.dispose]() { },
 	};
-	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-		modelService: tracked, gitService: git, createComputationService: () => new PaneTestDiffComputationService(),
+	const resolvers = services.get(IMultiDiffSourceResolverService);
+ resources.add(resolvers.registerResolver({ canHandleUri: uri => uri.scheme === 'ash-scm', resolveDiffSource: async () => { const input = await createGitMultiDiffEditorInput(git, 'unstaged', liveStatus); return { resource: input.resource, resources: input.items, label: input.label, source: input.source }; }, sourceActions: () => [], primaryRepositoryAction: () => undefined }));
+ resources.add(updates.event(status => { if (status.repositoryId === 'repo') resolvers.notifyChanged(); }));
+ const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
+  modelService: tracked, createComputationService: () => new PaneTestDiffComputationService(),
 	});
 	pane.create(parent);
 	pane.layout({ width: 600, height: 400 });

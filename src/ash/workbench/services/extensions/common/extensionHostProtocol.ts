@@ -11,7 +11,7 @@ export function createExtensionHostInitialization(workspace: IWorkspaceContextSe
 		workspaceFolders: Object.freeze(current.folders.map(folder => Object.freeze({ uri: folder.uri.toString(), name: folder.name, index: folder.index }))),
 		workspaceName: current.name ?? null,
 		workspaceFile: current.configuration?.toString() ?? null,
-		configurationValues: configuration.getValue<Readonly<Record<string, unknown>>>(),
+		configurationValues: configuration.getValue<Readonly<Record<string, unknown>>>() ?? {},
 		configurationData: configuration.getConfigurationData(),
 	});
 }

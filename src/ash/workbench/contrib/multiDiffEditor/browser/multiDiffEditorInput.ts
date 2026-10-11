@@ -16,10 +16,11 @@ EditorInputSerializers.registerStatic({
 			label: input.label,
 			items: Object.freeze(input.items.map(item => Object.freeze({
 				label: item.label,
+				...(item.id === undefined ? {} : { id: item.id }),
 				original: registry.serialize(item.original),
 				modified: registry.serialize(item.modified),
 				...(item.goToFile === undefined ? {} : { goToFile: registry.serialize(item.goToFile) }),
-				...(item.gitChange === undefined ? {} : { gitChange: item.gitChange }),
+				...(item.actions === undefined ? {} : { actions: item.actions }),
 			}))),
 			...(input.source === undefined ? {} : { source: input.source }),
 		});
@@ -31,10 +32,11 @@ EditorInputSerializers.registerStatic({
 			const entry = requireRecord(item, 'serialized multi-diff item');
 			return {
 				label: requireString(entry.label, 'serialized multi-diff item label'),
+				id: entry.id === undefined ? undefined : requireString(entry.id, 'multi-diff item identity'),
 				original: registry.deserialize(requireSerializedEditorInput(entry.original, 'serialized multi-diff original input')),
 				modified: registry.deserialize(requireSerializedEditorInput(entry.modified, 'serialized multi-diff modified input')),
 				...(entry.goToFile === undefined ? {} : { goToFile: registry.deserialize(requireSerializedEditorInput(entry.goToFile, 'serialized multi-diff Open File input')) }),
-				...(entry.gitChange === undefined ? {} : { gitChange: requireGitChange(entry.gitChange) }),
+				...(entry.actions === undefined ? {} : { actions: requireActions(entry.actions) }),
 			};
 		});
 		return createMultiDiffEditorInput(
@@ -46,43 +48,23 @@ EditorInputSerializers.registerStatic({
 	},
 });
 
-export type GitMultiDiffScope = 'staged' | 'unstaged' | 'uncommitted';
-
 export type MultiDiffEditorSource =
-	| {
-		/** Captured contents reopen as-is and do not require a source resolver. */
-		readonly kind: 'snapshot';
-		readonly label: string;
-		readonly repositoryId?: string;
-	}
-	| {
-		readonly kind: 'git';
-		readonly repositoryId: string;
-		readonly scope: GitMultiDiffScope;
-		readonly branchName: string | undefined;
-	}
-	| {
-		readonly kind: 'external';
-		readonly providerId: string;
-		readonly label: string;
-		readonly repositoryId?: string;
-		readonly branchName?: string;
-	};
+ | { readonly kind: 'snapshot'; readonly label: string; readonly repositoryId?: string; }
+ | { readonly kind: 'external'; readonly providerId: string; readonly label: string; readonly repositoryId?: string; readonly branchName?: string; };
 
-export interface MultiDiffEditorGitChange {
-	readonly repositoryId: string;
-	readonly path: string;
-	readonly staged: boolean;
-	readonly hasWorktreeChanges: boolean;
+export interface MultiDiffCommandAction {
+ readonly id: string; readonly label: string; readonly tooltip: string; readonly icon?: string;
+ readonly command: string; readonly arguments: readonly unknown[]; readonly enabled?: boolean;
 }
 
 export interface MultiDiffEditorInputItem {
+	readonly id?: string;
 	readonly label: string;
 	readonly original: IResourceEditorInput;
 	readonly modified: IResourceEditorInput;
 	/** Resource opened by the per-file Open File action. Defaults to the modified side. */
 	readonly goToFile?: IResourceEditorInput;
-	readonly gitChange?: MultiDiffEditorGitChange;
+	readonly actions?: readonly MultiDiffCommandAction[];
 }
 
 export interface MultiDiffEditorInput extends IResourceEditorInput {
@@ -106,13 +88,14 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 		assertTextResourceInput(item.original, 'Multi-diff original input');
 		assertTextResourceInput(item.modified, 'Multi-diff modified input');
 		if (item.goToFile !== undefined) assertTextResourceInput(item.goToFile, 'Multi-diff Open File input');
-		if (item.gitChange !== undefined) requireGitChange(item.gitChange);
+		if (item.actions !== undefined) requireActions(item.actions);
 		const normalized = Object.freeze({
 			label: item.label.trim(),
+			...(item.id === undefined ? {} : { id: requireString(item.id, 'multi-diff item identity') }),
 			original: item.original,
 			modified: item.modified,
 			...(item.goToFile ? { goToFile: item.goToFile } : {}),
-			...(item.gitChange ? { gitChange: Object.freeze({ ...item.gitChange }) } : {}),
+			...(item.actions ? { actions: requireActions(item.actions) } : {}),
 		});
 		const key = multiDiffEditorItemKey(normalized);
 		if (keys.has(key)) throw new TypeError(`Duplicate multi-diff comparison '${normalized.label}'`);
@@ -142,7 +125,7 @@ export function matchMultiDiffEditor(input: IResourceEditorInput): EditorPaneMat
 }
 
 export function multiDiffEditorItemKey(item: MultiDiffEditorInputItem): string {
-	if (item.gitChange) return `git\0${item.gitChange.repositoryId}\0${item.gitChange.path}`;
+	if (item.id !== undefined) return item.id;
 	return `${item.original.resource.toString()}\0${item.modified.resource.toString()}`;
 }
 
@@ -152,28 +135,23 @@ function isMultiDiffEditorInputItem(value: unknown): value is MultiDiffEditorInp
 		'original' in value && isTextResourceInput(value.original) &&
 		'modified' in value && isTextResourceInput(value.modified) &&
 		(!('goToFile' in value) || value.goToFile === undefined || isTextResourceInput(value.goToFile)) &&
-		(!('gitChange' in value) || value.gitChange === undefined || isGitChange(value.gitChange));
+		(!('actions' in value) || value.actions === undefined || Array.isArray(value.actions));
 }
 
-function requireGitChange(value: unknown): MultiDiffEditorGitChange {
-	if (!isGitChange(value)) throw new TypeError('Multi-diff Git change metadata is invalid');
-	return Object.freeze({ ...value });
-}
-
-function isGitChange(value: unknown): value is MultiDiffEditorGitChange {
-	return typeof value === 'object' && value !== null &&
-		'repositoryId' in value && typeof value.repositoryId === 'string' && value.repositoryId.length > 0 &&
-		'path' in value && typeof value.path === 'string' && value.path.length > 0 &&
-		'staged' in value && typeof value.staged === 'boolean' &&
-		'hasWorktreeChanges' in value && typeof value.hasWorktreeChanges === 'boolean';
+export function requireActions(value: unknown): readonly MultiDiffCommandAction[] {
+ if (!Array.isArray(value) || value.length > 64) throw new TypeError('Invalid multi-diff actions');
+ return Object.freeze(value.map(value => {
+  const entry = requireRecord(value, 'multi-diff action');
+  if (!Array.isArray(entry.arguments) || entry.arguments.length > 64 || (entry.enabled !== undefined && typeof entry.enabled !== 'boolean')) throw new TypeError('Invalid multi-diff action arguments');
+  return Object.freeze({ id: requireString(entry.id, 'action id'), label: requireString(entry.label, 'action label'), tooltip: requireString(entry.tooltip, 'action tooltip'), command: requireString(entry.command, 'action command'), arguments: Object.freeze([...entry.arguments]), ...(entry.icon === undefined ? {} : { icon: requireString(entry.icon, 'action icon') }), ...(entry.enabled === undefined ? {} : { enabled: entry.enabled }) });
+ }));
 }
 
 function requireMultiDiffSource(value: unknown): MultiDiffEditorSource {
 	if (!value || typeof value !== 'object' || !('kind' in value)) throw new TypeError('Multi-diff source is invalid');
 	const source = value as Partial<MultiDiffEditorSource>;
-	if (source.kind === 'git' && typeof source.repositoryId === 'string' && source.repositoryId.length > 0 && (source.scope === 'staged' || source.scope === 'unstaged' || source.scope === 'uncommitted') && (source.branchName === undefined || typeof source.branchName === 'string')) {
-		return freezeMultiDiffSource(source as MultiDiffEditorSource);
-	}
+	// Persisted inputs from the former built-in provider reopen as captured comparisons.
+ if ((value as { kind: string }).kind === 'git' && 'scope' in value && typeof value.scope === 'string') return { kind: 'snapshot', label: value.scope };
 	if (source.kind === 'snapshot' && typeof source.label === 'string' && source.label.length > 0 && (source.repositoryId === undefined || typeof source.repositoryId === 'string')) {
 		return freezeMultiDiffSource(source as MultiDiffEditorSource);
 	}

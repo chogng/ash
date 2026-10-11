@@ -11,10 +11,10 @@ import type { IDialogService } from '../../../../../platform/dialogs/common/dial
 import { ScmStatusContribution } from '../../browser/activity.js';
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
-import { GitSCMProvider, type GitSCMProviderServices } from '../../../git/browser/gitSCMProvider.js';
-import type { GitHistoryProvider } from '../../../git/browser/gitHistoryProvider.js';
-import { GitSwitchBranchCommandId } from '../../../git/common/gitCommands.js';
-import type { GitStatus, IGitService } from '../../../git/common/gitService.js';
+import { GitSCMProvider, type GitSCMProviderServices } from '../../../../../../../extensions/git/browser/gitSCMProvider.js';
+import type { GitHistoryProvider } from '../../../../../../../extensions/git/browser/gitHistoryProvider.js';
+import { GitSwitchBranchCommandId } from '../../../../../../../extensions/git/browser/commandIds.js';
+import type { GitStatus, IGitService } from '../../../../../../../extensions/git/browser/types.js';
 import { IStatusbarService, StatusbarAlignment, StatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
 import type { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';

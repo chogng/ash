@@ -17,6 +17,7 @@ export interface ExtensionDocumentEdit {
 export type ExtensionClientOperation =
 	| { operation: 'scmUpdate'; registrationId: string; revision: number; providers: readonly JsonValue[]; }
 	| { operation: 'backendRequest'; capability: string; method: string; params: JsonValue; }
+	| { operation: 'editorOperation'; payload: JsonValue; }
 	| { operation: 'backendState'; capability: string; after: number; }
 	| { operation: 'readResourceFile' | 'statResource' | 'readResourceDirectory'; uri: string; }
 	| { operation: 'readInitialization'; }

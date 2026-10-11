@@ -182,6 +182,7 @@
     "@types/mocha": "10.0.10",
     "@types/node": "^24.0.0",
     "@types/trusted-types": "2.0.7",
+    "@types/vscode": "1.110.0",
     "@webgpu/types": "0.1.66",
     "axe-playwright": "2.1.0",
     "concurrently": "^10.0.4",
@@ -189,12 +190,12 @@
     "electron": "^44.4.5",
     "jsdom": "^29.1.1",
     "mocha": "12.0.1",
+    "prettier": "3.9.9",
+    "sirv": "^3.0.2",
     "svgo": "4.0.1",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.0.13",
-    "wait-on": "^9.1.0",
-    "prettier": "3.9.9",
-    "sirv": "^3.0.2"
+    "wait-on": "^9.1.0"
   },
   "version": "0.1.0",
   "description": "Electron client for the Ash app-server protocol",

@@ -1,3 +1,4 @@
+import { createSCMApi } from './scm.js';
 import { languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource, ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError } from './host.mjs';
 
 // This is the public editor contract inside the confined process. Editor models and UI
@@ -1192,7 +1193,38 @@ export function createApi(configuration, initialization) {
 		const translated = bundle && Object.hasOwn(bundle, key) ? bundle[key] : message;
 		return translated.replace(/\{([^}]+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? String(values[name]) : placeholder);
 	}
+	const scmBridge = createSCMApi(ashRuntime, request, invoke);
+	let outputSequence = 0;
+	function createOutputChannel(name) {
+		if (typeof name !== 'string' || !name || name.length > 512 || name.includes('\0')) throw new TypeError('Invalid output channel label');
+		const channelId = `output.${++outputSequence}`;
+		let disposed = false;
+		let pending = Promise.resolve();
+		const send = operation => {
+			pending = pending.then(() => request({ operation: 'editorOperation', payload: { method: 'output', channelId, ...operation } }, 'value'));
+			void pending.catch(error => console.error('Output channel failed', error));
+		};
+		send({ action: 'create', label: name });
+		const channel = Object.freeze({ name,
+			append(text) { if (!disposed) send({ action: 'append', text: String(text) }); },
+			appendLine(text) { if (!disposed) send({ action: 'append', text: String(text) + '\n' }); },
+			replace(text) { if (!disposed) send({ action: 'replace', text: String(text) }); },
+			clear() { if (!disposed) send({ action: 'clear' }); },
+			show(preserveFocus = false) { if (!disposed) send({ action: 'show', preserveFocus: preserveFocus === true }); },
+			hide() { return unsupported('OutputChannel.hide'); },
+			dispose() { if (disposed) return; disposed = true; send({ action: 'dispose' }); },
+		});
+		subscriptions.push(channel);
+		return channel;
+	}
+
+	const ashApi = Object.freeze({
+		scm: scmBridge.api,
+		backend: Object.freeze({ request: (capability, method, params = {}) => request({ operation: 'backendRequest', capability, method, params }, 'value').then(result => result.value), state: (capability, after = 0) => request({ operation: 'backendState', capability, after }, 'value').then(result => result.value) }),
+		editors: Object.freeze({ request: payload => request({ operation: 'editorOperation', payload }, 'value').then(result => result.value) }),
+	});
 	const api = contract('vscode', {
+		ash: ashApi,
 		env: contract('env', { get language() { return windowFacts().language ?? 'en'; } }),
 		l10n: contract('l10n', {
 			t: localizeMessage,
@@ -1438,6 +1470,7 @@ export function createApi(configuration, initialization) {
 			},
 		}),
 		window: contract('window', {
+			createOutputChannel,
 			get activeTextEditor() { return activeEditor; },
 			registerCustomEditorProvider,
 			createStatusBarItem,
@@ -1537,6 +1570,7 @@ export function createApi(configuration, initialization) {
 			if (capabilities.includes('debugAdapter')) ensureDebugEvents();
 			if (capabilities.includes('statusBar')) subscriptions.push(ashWindow.registerStatusBar(statusRegistrationId, statusSnapshot));
 			subscriptions.push(new Disposable(() => {
+				scmBridge.dispose();
 				statusDisposed = true;
 				statusActive = false;
 				for (const item of [...statusItems.values()]) item.dispose();

@@ -1,19 +1,28 @@
+import manifest from '../../extensions/git/package.json' with { type: 'json' };
+import { Registry } from '../../src/ash/platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../src/ash/platform/configuration/common/configurationRegistry.js';
+import { parseExtensionManifest } from '../../src/ash/workbench/services/extensions/common/extensionManifest.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import { URI } from "../../../../../base/common/uri.js";
-import type { IAppServerApi, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import type { GitRepositoriesResult, GitStatusResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
-import { NullLoggerService } from '../../../../../platform/log/common/log.js';
-import type { IGitApi } from "../../../../../platform/git/common/gitApi.js";
-import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
-import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
-import { GitService } from "../../browser/gitService.js";
-import { GitHistoryProvider } from '../../browser/gitHistoryProvider.js';
-import { GitConfiguration } from '../../common/gitConfiguration.js';
-import { GitWorkspaceError } from '../../common/gitService.js';
-import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
-import { DeferredPromise } from '../../../../../base/common/async.js';
+import { test, suiteTeardown } from "mocha";
+import { toDisposable } from "../../src/ash/base/common/lifecycle.js";
+import { URI } from "../../src/ash/base/common/uri.js";
+import type { IAppServerApi, IServerEventApi } from "../../src/ash/platform/agentHost/common/appServerApi.js";
+import type { GitRepositoriesResult, GitStatusResult, ServerNotification } from '../../.build/protocol/typescript/index.js';
+import { NullLoggerService } from '../../src/ash/platform/log/common/log.js';
+import type { IGitApi } from "../../extensions/git/browser/backend.js";
+import { WorkbenchConfigurationService } from '../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { WorkspaceContextService } from "../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js";
+import { GitService } from "../../extensions/git/browser/gitService.js";
+import { GitHistoryProvider } from '../../extensions/git/browser/gitHistoryProvider.js';
+import { GitConfiguration } from '../../extensions/git/browser/configuration.js';
+import { GitWorkspaceError } from '../../extensions/git/browser/types.js';
+import { CancellationTokenSource, type CancellationToken } from '../../src/ash/base/common/cancellation.js';
+import { DeferredPromise } from '../../src/ash/base/common/async.js';
+
+const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+const nodes = [...parseExtensionManifest(JSON.stringify(manifest), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration];
+registry.updateConfigurations({ add: nodes, remove: [] });
+suiteTeardown(() => registry.updateConfigurations({ add: [], remove: nodes }));
 
 test('Git history retires an obsolete query without clearing the replacement query', async () => {
 	let notify!: (event: ServerNotification) => void;

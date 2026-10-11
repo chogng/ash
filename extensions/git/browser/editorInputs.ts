@@ -1,0 +1,3 @@
+import { createDiffEditorInput as createDiff, createScmMergeEditorInput as createMerge, type IResourceEditorInput, type URI } from '../../../sdk/browser/index.js';
+export function createDiffEditorInput(original: IResourceEditorInput, modified: IResourceEditorInput, label: string): IResourceEditorInput { return { ...createDiff(original, modified, label), ...{ kind: 'diff' } }; }
+export function createScmMergeEditorInput(repositoryId: string, path: string, resource: URI, resultResource: URI): IResourceEditorInput { return { ...createMerge(repositoryId, path, resource, resultResource), ...{ kind: 'merge' } }; }

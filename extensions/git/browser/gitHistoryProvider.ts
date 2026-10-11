@@ -26,14 +26,23 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	private hasMore = true;
 	private generation = 0;
 	private loading: Promise<void> | undefined;
+	private historyStatus: Pick<GitStatus, 'streamInstanceId' | 'historyRevision'> | undefined;
 
 	constructor(private readonly gitService: IGitService, readonly repositoryId: string) {
 		super();
-		this._register(gitService.onDidChangeRepositoryStatus(status => {
-			if (status.repositoryId !== repositoryId) return;
-			this.reset();
+		this._register(gitService.onDidChangeRepositoryStatus(status => this.handleStatus(status)));
+		this._register(gitService.onDidBecomeReady(async () => {
+			const generation = this.generation;
+			try {
+				const status = await gitService.status(repositoryId);
+				if (!this.isDisposed && generation === this.generation) this.handleStatus(status);
+			} catch {
+				if (!this.isDisposed && generation === this.generation) {
+					this.historyStatus = undefined;
+					this.reset();
+				}
+			}
 		}));
-		this._register(gitService.onDidBecomeReady(() => this.reset()));
 	}
 
 	public refresh(): void {
@@ -41,6 +50,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	}
 
 	public async provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[]> {
+		const generation = this.generation;
 		const skip = options.skip ?? 0;
 		const limit = options.limit ?? PageSize;
 		if (!Number.isSafeInteger(skip) || skip < 0 || !Number.isSafeInteger(limit) || limit < 1) {
@@ -53,7 +63,10 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		} catch (error) {
 			throw historyError(error);
 		}
-		this.setHistoryItemRef(currentRef(status.head));
+		if (generation === this.generation) {
+			this.historyStatus = status;
+			this.setHistoryItemRef(currentRef(status.head));
+		}
 		return this.commits.slice(skip, skip + limit).map(commit => ({
 			id: commit.objectId,
 			parentIds: commit.parentObjectIds,
@@ -131,11 +144,12 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 				continue;
 			}
 			const generation = this.generation;
-			this.loading = this.loadPage(generation);
+			const loading = this.loadPage(generation);
+			this.loading = loading;
 			try {
-				await this.loading;
+				await loading;
 			} finally {
-				this.loading = undefined;
+				if (this.loading === loading) this.loading = undefined;
 			}
 		}
 	}
@@ -188,8 +202,17 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		});
 	}
 
+	private handleStatus(status: GitStatus): void {
+		if (status.repositoryId !== this.repositoryId) return;
+		const previous = this.historyStatus;
+		if (previous?.streamInstanceId === status.streamInstanceId && previous.historyRevision >= status.historyRevision) return;
+		this.historyStatus = status;
+		this.reset();
+	}
+
 	private reset(notify = true): void {
 		this.generation += 1;
+		this.loading = undefined;
 		this.commits.length = 0;
 		this.references.clear();
 		this.branches = [];

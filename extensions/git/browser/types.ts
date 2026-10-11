@@ -36,6 +36,7 @@ export interface GitStatus {
 	readonly repositoryId: string;
 	readonly streamInstanceId: string;
 	readonly revision: number;
+	readonly historyRevision: number;
 	readonly workspacePath: string;
 	readonly head: GitHead;
 	readonly changes: readonly GitRepositoryChange[];

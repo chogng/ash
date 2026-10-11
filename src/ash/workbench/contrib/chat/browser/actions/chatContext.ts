@@ -23,7 +23,8 @@ import type { ChatContextAttachment } from '../../../../services/chat/common/cha
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
-import { IGitService } from '../../../git/common/gitService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { readLocalRepositories } from '../../../github/common/localRepository.js';
 
 export interface ChatContextSelection {
 	readonly attachment: ChatContextAttachment;
@@ -191,7 +192,7 @@ export class GitHubContextValuePick implements ChatContextSource {
 	constructor(
 		private readonly kind: 'issue' | 'pullRequest',
 		@IGitHubService private readonly github: IGitHubService,
-		@IGitService private readonly git: IGitService,
+		@ICommandService private readonly commands: ICommandService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) { }
 
@@ -214,9 +215,9 @@ export class GitHubContextValuePick implements ChatContextSource {
 			const account = selectedAccount?.kind === 'item' ? selectedAccount.item.account : accounts[0];
 			const repositories: RepositoryPick[] = [];
 			const seen = new Set<string>();
-			for (const checkout of await this.git.listRepositories()) {
+			for (const checkout of await readLocalRepositories(this.commands)) {
 				if (signal.aborted) return undefined;
-				const graph = await this.git.graph({ limit: 1 }, checkout.id);
+				const graph = checkout;
 				for (const remote of graph.remotes) {
 					const identity = remote.identity;
 					if (!identity || identity.provider !== 'github' || identity.host.toLowerCase() !== account.host.toLowerCase()) continue;

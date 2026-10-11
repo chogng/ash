@@ -40,6 +40,8 @@ export class GettingStarted extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly recentDisposables = this._register(new DisposableStore());
 	private readonly recentSection: HTMLElement;
+	private cloneAction: GettingStartedAction | undefined;
+	private cloneCard: HTMLButtonElement | undefined;
 	private recentProjects: readonly IGettingStartedProject[];
 
 	constructor(
@@ -138,7 +140,11 @@ export class GettingStarted extends Disposable {
 		const card = h(ownerDocument, 'button');
 		card.type = 'button';
 		card.className = `ash-getting-started-card${options.variant === 'featured' ? ' featured' : ''}`;
-		if (!options.action) {
+		if (options.labelKey === 'editorWelcome.cloneRepo') {
+			this.cloneCard = card;
+			this.setCloneRepositoryAction(options.action);
+			this._register(addDisposableListener(card, 'click', () => { if (this.cloneAction) { this.run(this.cloneAction); } }));
+		} else if (!options.action) {
 			card.disabled = true;
 			card.classList.add('is-disabled');
 		} else {
@@ -155,6 +161,14 @@ export class GettingStarted extends Disposable {
 		card.append(icon, label);
 		this.updateCardLabel(card, options);
 		return card;
+	}
+
+	public setCloneRepositoryAction(action: GettingStartedAction | undefined): void {
+		this.cloneAction = action;
+		if (this.cloneCard) {
+			this.cloneCard.disabled = action === undefined;
+			this.cloneCard.classList.toggle('is-disabled', action === undefined);
+		}
 	}
 
 	private updateCardLabel(card: HTMLButtonElement, options: WelcomeCardOptions): void {

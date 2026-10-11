@@ -24,9 +24,6 @@ import '../../../../common/theme.js';
 import { DefaultSettings } from '../../../preferences/common/settingsModels.js';
 import { ListConfiguration } from '../../../../../platform/list/browser/listService.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
-import '../../../../contrib/git/browser/gitBranches.js';
-import '../../../../contrib/git/browser/git.contribution.js';
-import '../../../../contrib/git/browser/gitWorktrees.js';
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
@@ -67,24 +64,6 @@ suite('Workbench localization', () => {
 		assert.match(localize('sessions.activity.help', ''), /每个会话恢复自己的编辑器标签/u);
 	});
 
-	test('registered Git commands retain the startup language until restart', async () => {
-		using localization = new WorkbenchLocalizationService();
-		await localization.whenReady;
-		initializeTestLocalization('zh-CN');
-		const commands = MenusRegistry.getMenuItems(MenuId.CommandPalette);
-		const labels = ['git.branch', 'git.deleteBranch', 'git.createWorktree', 'git.openWorktree', 'git.deleteWorktree', 'git.stash', 'git.merge', 'git.continue', 'git.stageSelectedRanges', 'git.init'].map(id => {
-			const item = commands.find(candidate => 'command' in candidate && candidate.command.id === id)!;
-			assert.ok('command' in item);
-			return commandActionLabel(item.command.title);
-		});
-		assert.deepEqual(labels, [
-			'Git: Create Branch', 'Git: Delete Branch', 'Git: Create Worktree', 'Git: Open Worktree', 'Git: Delete Worktree',
-			'Git: Stash Changes', 'Git: Merge Branch', 'Git: Continue Merge, Rebase or Cherry-Pick', 'Git: Stage Selected Lines', 'Git: Initialize Repository',
-		]);
-		assert.equal(localization.translate('ash', 'git.indexChanged', ''), '比较内容已变化。请从源代码管理重新打开当前比较，再选择更改。');
-		assert.equal(localization.translate('ash', 'git.deleteBranchConfirm', '', { '0': 'topic' }), '删除本地分支 topic？');
-		assert.equal(localization.translate('ash', 'git.worktreeNameInvalid', ''), '请使用 1–64 个英文字母、数字、连字符或下划线。');
-	});
 
 	test('document editor name uses the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
@@ -459,7 +438,6 @@ suite('Workbench localization', () => {
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFileName' }, 'New File Name'), '新建文件名称');
 		assert.equal(localize({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...'), '新建文件夹...');
 		assert.equal(localize({ bundle: 'ash', key: 'files.deleteConfirm' }, 'Permanently delete {0}?', 'old.ts'), '永久删除 old.ts？');
-		assert.equal(localize('git.ignored', 'Ignored by Git'), '被 Git 忽略');
 		assert.equal(localize('workbench.explorerDecoratedFile', '{0}, {1}', 'link', localize('workbench.explorerSymbolicLink', 'Symbolic Link')), 'link，符号链接');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...'), '下载文件...');
 	});
@@ -494,15 +472,6 @@ suite('Workbench localization', () => {
 	test('Source Control settings use the selected Chinese language catalog', () => {
 		initializeTestLocalization('zh-CN');
 		assert.deepEqual([
-			localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'),
-			localize('git.autofetch.title', 'Auto Fetch'),
-			localize('git.autofetch.description', 'Periodically fetch updates without changing local branches or files.'),
-			localize('git.autofetch.off', 'Off'),
-			localize('git.autofetch.default', 'Default remote'),
-			localize('git.autofetch.all', 'All remotes'),
-			localize('git.noFolder', 'Open a folder to use Git.'),
-			localize('git.noRepository', 'No Git repository found in the open folder.'),
-			localize('git.unavailable', 'Git is unavailable for this workspace. Check folder access and retry.'),
 			localize('git.keepCurrentDeletion', 'Keep Current Deletion'),
 			localize('git.keepIncomingDeletion', 'Keep Incoming Deletion'),
 			localize('git.previousConflict', 'Previous Conflict'),
@@ -513,15 +482,6 @@ suite('Workbench localization', () => {
 			localize('git.useColumns', 'Use Columns'),
 			localize('git.acceptRemainingIncoming', 'Accept Remaining Incoming'),
 		], [
-			'配置 Git 自动获取和源代码管理差异标记。',
-			'自动获取远端更新',
-			'定期获取所有已打开仓库的远端更新，不更改本地分支或文件。',
-			'关闭',
-			'默认远端',
-			'所有远端',
-			'打开文件夹后即可使用 Git。',
-			'打开的文件夹中未找到 Git 仓库。',
-			'此工作区暂时无法使用 Git。请检查文件夹访问权限后重试。',
 			'保留当前删除结果',
 			'保留传入删除结果',
 			'上一个冲突',

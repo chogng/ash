@@ -6,13 +6,12 @@ import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Event } from '../../../../../base/common/event.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, type ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { GettingStarted } from '../../browser/gettingStartedContent.js';
 import { GettingStartedPage } from '../../browser/gettingStarted.js';
-import { GitCloneCommandId } from '../../../git/common/gitCommands.js';
-import type { IGitService } from '../../../../contrib/git/common/gitService.js';
+import { GitCloneCommandId } from '../../../../../../../extensions/git/browser/commandIds.js';
 import type { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
 import type { IRecentWorkspacesService } from '../../../../services/workspaces/common/recentWorkspacesService.js';
 import type { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
@@ -21,9 +20,9 @@ suite('Welcome page', () => {
 	test('dispatches the Git clone command from an empty desktop window', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		const calls: string[] = [];
+		using registeredClone = CommandsRegistry.register('git.clone', () => {});
 		const recent = { onDidChange: Event.None, recentWorkspaces: [] } as unknown as IRecentWorkspacesService;
 		const workspace = { canOpenFolder: true, canOpenWorkspace: true } as IWorkspaceOpenService;
-		const git = { canCloneRepository: true } as IGitService;
 		let commandDispatched: (() => void) | undefined;
 		const dispatched = new Promise<void>(resolve => { commandDispatched = resolve; });
 		const commands = { executeCommand: async (id: string) => { calls.push(id); commandDispatched?.(); } } as ICommandService;
@@ -35,7 +34,6 @@ suite('Welcome page', () => {
 			commands,
 			contextKeys,
 			{} as IGitHubConnectionService,
-			git,
 			services.get(IThemeService),
 			services.get(IStorageService),
 		);

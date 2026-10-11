@@ -1,3 +1,4 @@
+import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
@@ -25,7 +26,7 @@ import { AppServerGitHubService } from '../../../src/ash/platform/github/browser
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import { IGitService, type GitCommand } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
+import type { GitCommand } from '../../../extensions/git/browser/types.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -136,12 +137,9 @@ services.registerInstance(IGitHubService, new AppServerGitHubService(client));
 const localRepository = { id: 'local-repo', label: 'Local repo', path: '/workspace', root: URI.file('/workspace') };
 const gitRequests: { method: string; params: Record<string, unknown>; }[] = [];
 let dirty = false;
-services.registerInstance(IGitService, {
-	listRepositories: async () => [localRepository],
-	graph: async () => ({ remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }, { name: 'fork', identity: { provider: 'github', host: 'github.com', owner: 'contributor', repository: 'fork' } }], references: [], commits: [], hasMore: false, nextCursor: undefined }),
-	status: async () => ({ repositoryId: 'local-repo', streamInstanceId: 'test', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'branch', name: 'pr/7', objectId: 'd'.repeat(40), upstream: undefined }, changes: [] }),
-	executeCommand: async (command: GitCommand, repositoryId?: string) => { gitRequests.push({ method: 'git/command', params: { command, repositoryId } }); return { outcome: 'completed', operation: undefined, status: await services.get(IGitService).status(repositoryId) }; },
-} as unknown as IGitService);
+resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => [{ ...localRepository, root: localRepository.root.toString(), head: { type: 'branch', name: 'pr/7', objectId: 'd'.repeat(40) }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }, { name: 'fork', identity: { provider: 'github', host: 'github.com', owner: 'contributor', repository: 'fork' } }] }]));
+resources.add(CommandsRegistry.register('git.executeRepositoryCommand', (_accessor, repositoryId, command) => { gitRequests.push({ method: 'git/command', params: { command, repositoryId } }); return { outcome: 'completed' }; }));
+
 services.registerInstance(IWorkingCopyService, { getAll: () => dirty ? [{ resource: URI.file('/workspace/a.rs'), isDirty: true }] : [] } as unknown as IWorkingCopyService);
 const accounts = resources.add(new Emitter<AccountState>());
 const loggedOut: { provider: string; accountId?: string; }[] = [];

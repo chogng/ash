@@ -12,7 +12,6 @@ import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
 import { createBrowserExtensionApi } from "../../extensions/browser/extensionApi.js";
 import { createDisconnectedDiffApi } from "../../diff/browser/diffApi.js";
 import { createDisconnectedSyntaxApi } from "../../syntax/browser/syntaxApi.js";
-import { createDisconnectedGitApi } from "../../git/browser/gitApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
 import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConfigurationApi } from "../../search/browser/searchApi.js";
@@ -62,7 +61,6 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		syntax: createDisconnectedSyntaxApi(unavailableOperation),
 		language: createDisconnectedLanguageApi(unavailableOperation),
 		languageServers: createDisconnectedLanguageServerService(unavailableOperation),
-		git: createDisconnectedGitApi(unavailableOperation),
 		extensionBackend: { request: () => unavailableOperation('extensionBackend.request') },
 		fileSearch: createDisconnectedFileSearchApi(unavailableOperation),
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),

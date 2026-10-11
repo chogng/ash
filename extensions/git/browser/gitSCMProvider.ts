@@ -8,10 +8,10 @@ import { localize } from './support.js';
 import { isMacintosh } from './support.js';
 import type { IDecorationData, IDecorationsProvider } from './support.js';
 import type { IEditorOptions } from '../../../sdk/browser/index.js';
-import { createDiffEditorInput } from './editors.js';
+import { createDiffEditorInput } from './editorInputs.js';
 import { OpenScmMultiDiffEditorCommandId, type OpenScmMultiDiffEditorOptions, type OpenScmMultiDiffEditorResult } from './multiDiff.js';
 import { repositoryFileUri, resolveGitChangeInputs } from './gitChangeEditorInput.js';
-import { createScmMergeEditorInput } from './editors.js';
+import { createScmMergeEditorInput } from './editorInputs.js';
 import type { ISCMConflictProvider, ISCMInput, ISCMProvider, ISCMResource, ISCMResourceGroup, ISCMStatusBarCommand } from '../../../sdk/browser/index.js';
 import { GitSwitchBranchCommandId } from './commandIds.js';
 import type { CommandClient, DialogClient, EditorClient, ViewsClient, WorkingCopyClient } from './editors.js';
@@ -57,7 +57,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	private busy = false;
 	private inputValue = '';
 	private inputRevision = 0;
-	private message = 'Reading Git status…';
+	private message = localize('git.readingStatus', 'Reading Git status…');
 
 	constructor(
 		private readonly gitService: IGitService,
@@ -85,8 +85,8 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			},
 			get enabled() { return provider.status !== undefined && !provider.busy; },
 			get canAccept() { return provider.status?.changes.some(change => !change.conflicted && change.indexStatus !== 'unmodified') === true; },
-			buttonLabel: 'Commit',
-			buttonTooltip: 'Commit staged changes',
+			buttonLabel: localize('git.commit', 'Commit'),
+			buttonTooltip: localize('git.commitStagedTooltip', 'Commit staged changes'),
 			accept: () => this.commit(),
 		};
 		this.mergeProvider = {
@@ -157,14 +157,14 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		const staged = status.changes.filter(change => !change.conflicted && change.indexStatus !== 'unmodified');
 		const working = status.changes.filter(change => !change.conflicted && change.worktreeStatus !== 'unmodified');
 		return [
-			this.group(status, 'merge', 'Merge Changes', conflicts, 'worktree'),
-			this.group(status, 'staged', 'Staged Changes', staged, 'index'),
-			this.group(status, 'changes', 'Changes', working, 'worktree'),
+			this.group(status, 'merge', localize('git.mergeChanges', 'Merge Changes'), conflicts, 'worktree'),
+			this.group(status, 'staged', localize('git.stagedChanges', 'Staged Changes'), staged, 'index'),
+			this.group(status, 'changes', localize('git.changes', 'Changes'), working, 'worktree'),
 		].filter(group => group.resources.length > 0);
 	}
 
 	public async activate(): Promise<void> {
-		this.setBusy(true, 'Switching repository…');
+		this.setBusy(true, localize('git.switchingRepository', 'Switching repository…'));
 		try {
 			this.acceptStatus(await this.gitService.selectRepository(this.id));
 			if (this.status) this.setMessage(statusSummary(this.status));
@@ -212,13 +212,13 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 
 	private group(status: GitStatus, id: string, label: string, changes: readonly GitRepositoryChange[], side: ChangeSide): ISCMResourceGroup {
 		const actions: IAction[] = [];
-		if (changes.some(change => !change.conflicted)) actions.push(this.action(`scm.section.viewAll.${side}.${id}`, `View All ${label}`, Lxicon.codeReview, () => this.openChanges(status, label, changes, side)));
+		if (changes.some(change => !change.conflicted)) actions.push(this.action(`scm.section.viewAll.${side}.${id}`, localize('git.viewAll', 'View All {0}', label), Lxicon.codeReview, () => this.openChanges(status, label, changes, side)));
 		if (side === 'index') {
-			actions.push(this.pathAction('scm.section.unstageAll', 'Unstage All Changes', 'unstage', uniquePaths(changes.flatMap(changePaths))));
+			actions.push(this.pathAction('scm.section.unstageAll', localize('git.menu.unstageAll', 'Unstage All Changes'), 'unstage', uniquePaths(changes.flatMap(changePaths))));
 		} else {
 			const discardable = changes.filter(isDiscardable).map(change => change.path);
-			if (discardable.length > 0) actions.push(this.pathAction('scm.section.discardAll', 'Discard All Changes', 'discard', uniquePaths(discardable)));
-			actions.push(this.pathAction(`scm.section.stageAll.${id}`, id === 'merge' ? 'Stage All Merge Changes' : 'Stage All Changes', 'stage', uniquePaths(changes.flatMap(changePaths))));
+			if (discardable.length > 0) actions.push(this.pathAction('scm.section.discardAll', localize('git.discardAllChanges', 'Discard All Changes'), 'discard', uniquePaths(discardable)));
+			actions.push(this.pathAction(`scm.section.stageAll.${id}`, id === 'merge' ? localize('git.stageAllMergeChanges', 'Stage All Merge Changes') : localize('git.stageAllChanges', 'Stage All Changes'), 'stage', uniquePaths(changes.flatMap(changePaths))));
 		}
 		return { id, label, resources: changes.map(change => this.resource(status, change, side)), actions };
 	}
@@ -226,10 +226,10 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	private resource(status: GitStatus, change: GitRepositoryChange, side: ChangeSide): ISCMResource {
 		const state = change.conflicted ? 'unmerged' : side === 'index' ? change.indexStatus : change.worktreeStatus;
 		const actions = side === 'index'
-			? [this.pathAction(`scm.change.unstage.${change.path}`, `Unstage ${change.path}`, 'unstage', changePaths(change))]
+			? [this.pathAction(`scm.change.unstage.${change.path}`, localize('git.unstagePath', 'Unstage {0}', change.path), 'unstage', changePaths(change))]
 			: [
-				...(isDiscardable(change) ? [this.pathAction(`scm.change.discard.${change.path}`, `Discard ${change.path}`, 'discard', [change.path])] : []),
-				this.pathAction(`scm.change.stage.${change.path}`, `Stage ${change.path}`, 'stage', changePaths(change)),
+				...(isDiscardable(change) ? [this.pathAction(`scm.change.discard.${change.path}`, localize('git.discardPath', 'Discard {0}', change.path), 'discard', [change.path])] : []),
+				this.pathAction(`scm.change.stage.${change.path}`, localize('git.stagePath', 'Stage {0}', change.path), 'stage', changePaths(change)),
 			];
 		const hasWorkingFile = change.worktreeStatus !== 'deleted' && !(change.indexStatus === 'deleted' && change.worktreeStatus === 'unmodified');
 		if (hasWorkingFile) {
@@ -242,19 +242,19 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			path: change.path,
 			originalPath: change.originalPath,
 			decorations: { badge: statusCode(state), tooltip: statusLabel(state), kind: state },
-			openLabel: change.conflicted ? `Open merge conflict in ${change.path}` : `Open ${side === 'index' ? 'staged changes' : 'changes'} for ${change.path}`,
+			openLabel: change.conflicted ? localize('git.openConflictPath', 'Open merge conflict in {0}', change.path) : localize('git.openChangePath', 'Open {0} for {1}', side === 'index' ? localize('git.stagedChanges', 'Staged Changes') : localize('git.changes', 'Changes'), change.path),
 			actions,
 			open: (options, sideBySide) => this.openChange(status, change, side, options, sideBySide),
 		};
 	}
 
 	private action(id: string, label: string, icon: IAction['icon'], run: () => Promise<void>): IAction {
-		return { id, label, tooltip: label, icon, enabled: true, checked: undefined, run: () => { void this.runAction(run); } };
+		return { id, label, tooltip: label, icon, enabled: true, checked: undefined, run: () => this.runAction(run) };
 	}
 
 	private pathAction(id: string, label: string, action: PathAction, paths: readonly string[]): IAction {
 		const icon = action === 'stage' ? Lxicon.add : action === 'unstage' ? Lxicon.remove : Lxicon.discard;
-		return { id, label, tooltip: label, icon, enabled: true, checked: undefined, run: () => { void this.mutatePaths(action, paths); } };
+		return { id, label, tooltip: label, icon, enabled: true, checked: undefined, run: () => this.mutatePaths(action, paths) };
 	}
 
 	public async runTitleOperation(operation: () => Promise<unknown>): Promise<void> {
@@ -282,24 +282,26 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		try { await run(); } catch (error) { this.showError(error); } finally { this.setBusy(false); }
 	}
 
-	private async mutatePaths(action: PathAction, paths: readonly string[]): Promise<void> {
+	public async mutatePaths(action: PathAction, paths: readonly string[]): Promise<void> {
 		if (this.busy) return;
 		const status = this.status;
 		if (!status || paths.length === 0) return;
 		if (action === 'stage') {
-			const dirty = status.changes.filter(change => change.conflicted && paths.includes(change.path) && (await this.services.workingCopyService.get(repositoryFileUri(status.workspacePath, change.path))).some(copy => copy.isDirty));
+			const conflicts = status.changes.filter(change => change.conflicted && paths.includes(change.path));
+			const checks = await Promise.all(conflicts.map(async change => ({ change, dirty: (await this.services.workingCopyService.get(repositoryFileUri(status.workspacePath, change.path))).some(copy => copy.isDirty) })));
+			const dirty = checks.filter(check => check.dirty).map(check => check.change);
 			if (dirty.length > 0) {
-				this.setMessage(dirty.length === 1 ? `Save ${dirty[0].path} before staging its conflict resolution.` : `Save ${dirty.length} conflicted files before staging their resolutions.`);
+				this.setMessage(dirty.length === 1 ? localize('git.action.saveConflict', 'Save {0} before staging its conflict resolution.', dirty[0].path) : localize('git.action.saveConflicts', 'Save {0} conflicted files before staging their resolutions.', dirty.length));
 				return;
 			}
 		}
 		if (action === 'discard') {
-			const target = paths.length === 1 ? paths[0] : `${paths.length} working-tree files`;
-			const decision = await this.services.dialogService.confirm({ message: `Discard changes in ${target}? This cannot be undone.` });
+			const target = paths.length === 1 ? paths[0] : localize('git.action.paths', '{0} paths', paths.length);
+			const decision = await this.services.dialogService.confirm({ message: localize('git.action.discardConfirm', 'Discard changes in {0}? This cannot be undone.', target) });
 			if (!decision.confirmed || this.status !== status) return;
 		}
 		await this.runAction(async () => {
-			this.setMessage(`${action === 'stage' ? 'Staging' : action === 'unstage' ? 'Unstaging' : 'Discarding'} ${paths.length === 1 ? paths[0] : `${paths.length} paths`}…`);
+			this.setMessage(localize(action === 'stage' ? 'git.action.stageProgress' : action === 'unstage' ? 'git.action.unstageProgress' : 'git.action.discardProgress', action === 'stage' ? 'Staging {0}…' : action === 'unstage' ? 'Unstaging {0}…' : 'Discarding {0}…', paths.length === 1 ? paths[0] : localize('git.action.paths', '{0} paths', paths.length)));
 			const result = action === 'stage' ? await this.gitService.stage(paths, this.id) : action === 'unstage' ? await this.gitService.unstage(paths, this.id) : await this.gitService.discardWorktree(paths, this.id);
 			this.acceptStatus(result);
 		});
@@ -429,26 +431,26 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 function branchCommand(head: GitHead, repositoryId: string, commandService: CommandClient): ISCMStatusBarCommand {
 	const shared = { id: 'ash.status.git.branch', priority: 900, compactGroup: 'ash.status.git', run: () => commandService.executeCommand(GitSwitchBranchCommandId, repositoryId) };
 	switch (head.type) {
-		case 'branch': return { ...shared, icon: Lxicon.gitBranch, text: head.name, ariaLabel: `Git branch ${head.name}`, tooltip: head.upstream ? `${head.name} tracks ${head.upstream.name}` : `${head.name} has no upstream` };
-		case 'unborn': return { ...shared, icon: Lxicon.gitBranch, text: head.name, ariaLabel: `Unborn Git branch ${head.name}`, tooltip: `${head.name} has no commits` };
+		case 'branch': return { ...shared, icon: Lxicon.gitBranch, text: head.name, ariaLabel: localize('git.status.branch', 'Git branch {0}', head.name), tooltip: head.upstream ? localize('git.status.tracks', '{0} tracks {1}', head.name, head.upstream.name) : localize('git.status.noUpstream', '{0} has no upstream', head.name) };
+		case 'unborn': return { ...shared, icon: Lxicon.gitBranch, text: head.name, ariaLabel: localize('git.status.unborn', 'Unborn Git branch {0}', head.name), tooltip: localize('git.status.noCommits', '{0} has no commits', head.name) };
 		case 'detached': {
 			const revision = head.objectId.slice(0, 8);
-			return { ...shared, icon: Lxicon.gitCommit, text: revision, ariaLabel: `Detached Git HEAD at ${revision}`, tooltip: `Detached HEAD at ${head.objectId}` };
+			return { ...shared, icon: Lxicon.gitCommit, text: revision, ariaLabel: localize('git.status.detached', 'Detached Git HEAD at {0}', revision), tooltip: localize('git.status.detachedTooltip', 'Detached HEAD at {0}', head.objectId) };
 		}
 	}
 }
 
 function syncCommand(head: GitHead, viewsService: ViewsClient): ISCMStatusBarCommand {
 	const shared = { id: 'ash.status.git.sync', priority: 800, compactGroup: 'ash.status.git', run: () => viewsService.focusView('ash.gitView') };
-	if (head.type !== 'branch') return { ...shared, icon: Lxicon.sync, text: '', ariaLabel: 'No Git branch to synchronize', tooltip: 'No Git branch to synchronize' };
-	if (!head.upstream) return { ...shared, icon: Lxicon.repoPush, text: '', ariaLabel: `Publish Git branch ${head.name}`, tooltip: `${head.name} has no upstream` };
+	if (head.type !== 'branch') return { ...shared, icon: Lxicon.sync, text: '', ariaLabel: localize('git.status.noBranch', 'No Git branch to synchronize'), tooltip: localize('git.status.noBranch', 'No Git branch to synchronize') };
+	if (!head.upstream) return { ...shared, icon: Lxicon.repoPush, text: '', ariaLabel: localize('git.status.publish', 'Publish Git branch {0}', head.name), tooltip: localize('git.status.noUpstream', '{0} has no upstream', head.name) };
 	const { ahead, behind, name } = head.upstream;
-	const summary = `${behind} incoming and ${ahead} outgoing ${ahead + behind === 1 ? 'change' : 'changes'}`;
-	return { ...shared, icon: Lxicon.sync, text: ahead === 0 && behind === 0 ? '' : `${behind}↓ ${ahead}↑`, ariaLabel: `Synchronize Git changes, ${summary}`, tooltip: `Synchronize Changes with ${name}: ${summary}` };
+	const summary = localize(ahead + behind === 1 ? 'git.status.syncOne' : 'git.status.syncMany', ahead + behind === 1 ? '{0} incoming and {1} outgoing change' : '{0} incoming and {1} outgoing changes', behind, ahead);
+	return { ...shared, icon: Lxicon.sync, text: ahead === 0 && behind === 0 ? '' : `${behind}↓ ${ahead}↑`, ariaLabel: localize('git.status.sync', 'Synchronize Git changes, {0}', summary), tooltip: localize('git.status.syncTooltip', 'Synchronize Changes with {0}: {1}', name, summary) };
 }
 
 function changePaths(change: GitRepositoryChange): string[] { return change.originalPath ? [change.originalPath, change.path] : [change.path]; }
-function statusSummary(status: GitStatus): string { return status.changes.length === 0 ? 'No changes.' : `${status.changes.length} changed ${status.changes.length === 1 ? 'file' : 'files'}`; }
+function statusSummary(status: GitStatus): string { return status.changes.length === 0 ? localize('git.noChanges', 'No changes.') : localize(status.changes.length === 1 ? 'git.changedFile' : 'git.changedFiles', status.changes.length === 1 ? '{0} changed file' : '{0} changed files', status.changes.length); }
 function uniquePaths(paths: readonly string[]): string[] { return [...new Set(paths)]; }
 function isDiscardable(change: GitRepositoryChange): boolean { return !change.conflicted && ['modified', 'deleted', 'typeChanged'].includes(change.worktreeStatus); }
 function statusLabel(status: GitChangeStatus): string {

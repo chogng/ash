@@ -159,7 +159,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	assert.equal(resolved?.resource.toString(), restored.resource.toString());
 	assert.deepEqual(resolved?.resources.map(item => item.label), restored.items.map(item => item.label));
 	assert.equal(resolved?.source?.kind, 'external');
-	assert.equal(resolvers.primaryRepositoryAction({ ...restored, source: { kind: 'git', repositoryId: 'repo', scope: 'uncommitted', branchName: 'main' } }), undefined);
+	assert.equal(resolvers.primaryRepositoryAction({ ...restored, source: { kind: 'external', providerId: 'test', label: 'Changes', repositoryId: 'repo', branchName: 'main' } }), undefined);
 	await resolvers.primaryRepositoryAction(restored)?.run();
 	assert.deepEqual(commits, []);
 	assert.equal(opened[1]?.items[0]?.original.initialText, 'target');

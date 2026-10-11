@@ -5,14 +5,12 @@ import { addDisposableListener, h, type IDimension } from '../../../../base/brow
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
-import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IRecentWorkspacesService } from '../../../services/workspaces/common/recentWorkspacesService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ConnectToRemoteCommandId } from '../../remote/browser/remoteActions.js';
-import { GitCloneCommandId } from '../../git/common/gitCommands.js';
 import { GettingStarted, type IGettingStartedProject } from './gettingStartedContent.js';
 import { isGettingStartedInput } from './gettingStartedInput.js';
 
@@ -32,11 +30,11 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		@ICommandService private readonly commandService: ICommandService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
-		@IGitService private readonly gitService: IGitService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
 		super(GettingStartedPageId, themeService, storageService);
+		this._register(CommandsRegistry.onDidChangeCommands(() => this.content?.setCloneRepositoryAction(this.cloneAction())));
 		this._register(this.recentWorkspaces.onDidChange(() => this.content?.setRecentProjects(this.projects())));
 	}
 
@@ -58,7 +56,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 			recentProjects: this.projects(),
 			actions: {
 				openFolder: this.workspaceOpenService.canOpenFolder ? () => this.workspaceOpenService.openFolder() : undefined,
-				cloneRepository: this.gitService.canCloneRepository ? () => this.commandService.executeCommand(GitCloneCommandId) : undefined,
+				cloneRepository: this.cloneAction(),
 				connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),
 				connectGitHub: () => this.githubConnection.connect(),
 			},
@@ -81,6 +79,10 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 
 	public override focus(): void {
 		this.domNode?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+	}
+
+	private cloneAction(): (() => Promise<void>) | undefined {
+		return CommandsRegistry.hasCommand('git.clone') && this.workspaceOpenService.canOpenWorkspace ? () => this.commandService.executeCommand('git.clone') : undefined;
 	}
 
 	private projects(): readonly IGettingStartedProject[] {

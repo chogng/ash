@@ -4,12 +4,999 @@
   "version": "0.1.0",
   "displayName": "%displayName%",
   "description": "%description%",
-  "engines": { "vscode": "*" },
+  "engines": {
+    "vscode": "*"
+  },
   "ashRuntime": {
     "kind": "rust",
     "entrypoint": "ash-git-extension",
     "scope": "directory",
-    "clients": ["app", "tui"],
-    "capabilities": ["git.repository"]
-  }
+    "clients": [
+      "app",
+      "tui"
+    ],
+    "capabilities": [
+      "git.repository"
+    ]
+  },
+  "browser": "./browser/extension.ts",
+  "ashFrontend": {
+    "capabilities": {
+      "git.repository": {
+        "methods": {
+          "initialize": {
+            "route": "git/init"
+          },
+          "catalog": {
+            "route": "git/catalog"
+          },
+          "executeCommand": {
+            "route": "git/command"
+          },
+          "indexDiff": {
+            "route": "git/indexDiff"
+          },
+          "editIndex": {
+            "route": "git/indexEdit"
+          },
+          "clone": {
+            "route": "git/clone"
+          },
+          "readConfig": {
+            "route": "config/read",
+            "resultFields": [
+              "revision",
+              "git",
+              "gitConfigured"
+            ]
+          },
+          "updateConfig": {
+            "route": "config/update",
+            "fields": [
+              "commandId",
+              "expectedRevision",
+              "git"
+            ],
+            "resultFields": [
+              "revision"
+            ]
+          },
+          "repositories": {
+            "route": "git/repositories"
+          },
+          "status": {
+            "route": "git/status"
+          },
+          "history": {
+            "route": "git/history"
+          },
+          "branches": {
+            "route": "git/branch/list"
+          },
+          "createBranch": {
+            "route": "git/branch/create"
+          },
+          "deleteBranch": {
+            "route": "git/branch/delete"
+          },
+          "switchBranch": {
+            "route": "git/branch/switch"
+          },
+          "worktrees": {
+            "route": "git/worktree/list"
+          },
+          "createWorktree": {
+            "route": "git/worktree/create"
+          },
+          "deleteWorktree": {
+            "route": "git/worktree/delete"
+          },
+          "resolveWorktree": {
+            "route": "git/worktree/resolve"
+          },
+          "graph": {
+            "route": "git/graph"
+          },
+          "compareChanges": {
+            "route": "git/compareChanges"
+          },
+          "commitMessage": {
+            "route": "git/commitMessage"
+          },
+          "commitDetails": {
+            "route": "git/commitDetails"
+          },
+          "commitChanges": {
+            "route": "git/commitChanges"
+          },
+          "commitFile": {
+            "route": "git/commitFile"
+          },
+          "changeFile": {
+            "route": "git/changeFile"
+          },
+          "conflictFile": {
+            "route": "git/conflictFile"
+          },
+          "completeConflict": {
+            "route": "git/completeConflict"
+          },
+          "stage": {
+            "route": "git/stage"
+          },
+          "unstage": {
+            "route": "git/unstage"
+          },
+          "discardWorktree": {
+            "route": "git/discardWorktree"
+          },
+          "commit": {
+            "route": "git/commit"
+          },
+          "fetch": {
+            "route": "git/fetch"
+          },
+          "pull": {
+            "route": "git/pull"
+          },
+          "push": {
+            "route": "git/push"
+          },
+          "checkIgnore": {
+            "route": "git/checkIgnore"
+          },
+          "cancelIgnore": {
+            "route": "git/checkIgnore/cancel"
+          }
+        },
+        "notifications": [
+          "git/statusChanged",
+          "git/repositoriesChanged",
+          "git/ignoreChanged",
+          "config/changed"
+        ]
+      }
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "ash.git.pull",
+        "title": "%git.menu.pull%"
+      },
+      {
+        "command": "ash.git.push",
+        "title": "%git.menu.push%"
+      },
+      {
+        "command": "git.abort",
+        "title": "%git.abortTitle%"
+      },
+      {
+        "command": "git.addRemote",
+        "title": "%git.addRemoteTitle%"
+      },
+      {
+        "command": "git.branch",
+        "title": "%git.menu.createBranch%"
+      },
+      {
+        "command": "git.cherryPick",
+        "title": "%git.cherryPickTitle%"
+      },
+      {
+        "command": "git.cleanAll",
+        "title": "%git.discardAllCommand%"
+      },
+      {
+        "command": "git.clone",
+        "title": "%git.menu.clone%"
+      },
+      {
+        "command": "git.commit",
+        "title": "%git.commitCommand%"
+      },
+      {
+        "command": "git.commitAll",
+        "title": "%git.commitAllCommand%"
+      },
+      {
+        "command": "git.commitAllAmend",
+        "title": "%git.commitAllAmendCommand%"
+      },
+      {
+        "command": "git.commitAllSigned",
+        "title": "%git.commitAllSignedCommand%"
+      },
+      {
+        "command": "git.commitAmend",
+        "title": "%git.amendTitle%"
+      },
+      {
+        "command": "git.commitSigned",
+        "title": "%git.commitSignedCommand%"
+      },
+      {
+        "command": "git.commitStaged",
+        "title": "%git.commitStagedCommand%"
+      },
+      {
+        "command": "git.commitStagedAmend",
+        "title": "%git.commitStagedAmendCommand%"
+      },
+      {
+        "command": "git.commitStagedSigned",
+        "title": "%git.commitStagedSignedCommand%"
+      },
+      {
+        "command": "git.continue",
+        "title": "%git.continueTitle%"
+      },
+      {
+        "command": "git.createTag",
+        "title": "%git.createTagTitle%"
+      },
+      {
+        "command": "git.createWorktree",
+        "title": "%git.createWorktreeCommandTitle%"
+      },
+      {
+        "command": "git.deleteBranch",
+        "title": "%git.menu.deleteBranch%"
+      },
+      {
+        "command": "git.deleteRemoteBranch",
+        "title": "%git.deleteRemoteBranchTitle%"
+      },
+      {
+        "command": "git.deleteTag",
+        "title": "%git.deleteTagTitle%"
+      },
+      {
+        "command": "git.deleteWorktree",
+        "title": "%git.deleteWorktreeCommandTitle%"
+      },
+      {
+        "command": "git.fetch",
+        "title": "%git.fetchTitle%"
+      },
+      {
+        "command": "git.fetchAll",
+        "title": "%git.fetchAllTitle%"
+      },
+      {
+        "command": "git.getRepositoryContexts",
+        "title": "%command.git.getRepositoryContexts%"
+      },
+      {
+        "command": "git.graph.checkoutBranch",
+        "title": "%command.git.graph.checkoutBranch%"
+      },
+      {
+        "command": "git.graph.checkoutDetached",
+        "title": "%command.git.graph.checkoutDetached%"
+      },
+      {
+        "command": "git.graph.cherryPick",
+        "title": "%command.git.graph.cherryPick%"
+      },
+      {
+        "command": "git.graph.compare",
+        "title": "%command.git.graph.compare%"
+      },
+      {
+        "command": "git.graph.compareMergeBase",
+        "title": "%command.git.graph.compareMergeBase%"
+      },
+      {
+        "command": "git.graph.compareRemote",
+        "title": "%command.git.graph.compareRemote%"
+      },
+      {
+        "command": "git.graph.copyHash",
+        "title": "%command.git.graph.copyHash%"
+      },
+      {
+        "command": "git.graph.copyMessage",
+        "title": "%command.git.graph.copyMessage%"
+      },
+      {
+        "command": "git.graph.createBranch",
+        "title": "%command.git.graph.createBranch%"
+      },
+      {
+        "command": "git.graph.createTag",
+        "title": "%command.git.graph.createTag%"
+      },
+      {
+        "command": "git.graph.deleteBranch",
+        "title": "%command.git.graph.deleteBranch%"
+      },
+      {
+        "command": "git.graph.openRemote",
+        "title": "%command.git.graph.openRemote%"
+      },
+      {
+        "command": "git.init",
+        "title": "%git.initTitle%"
+      },
+      {
+        "command": "git.merge",
+        "title": "%git.mergeBranchTitle%"
+      },
+      {
+        "command": "git.openChanges",
+        "title": "%command.git.openChanges%"
+      },
+      {
+        "command": "git.openFile",
+        "title": "%git.openFileCommand%"
+      },
+      {
+        "command": "git.openStagedChanges",
+        "title": "%command.git.openStagedChanges%"
+      },
+      {
+        "command": "git.openUncommittedChanges",
+        "title": "%command.git.openUncommittedChanges%"
+      },
+      {
+        "command": "git.openUnstagedChanges",
+        "title": "%command.git.openUnstagedChanges%"
+      },
+      {
+        "command": "git.openWorktree",
+        "title": "%git.openWorktreeCommandTitle%"
+      },
+      {
+        "command": "git.pull",
+        "title": "%command.git.pull%"
+      },
+      {
+        "command": "git.push",
+        "title": "%command.git.push%"
+      },
+      {
+        "command": "git.readSettings",
+        "title": "%command.git.readSettings%"
+      },
+      {
+        "command": "git.rebase",
+        "title": "%git.rebaseTitle%"
+      },
+      {
+        "command": "git.refresh",
+        "title": "%git.refreshCommand%"
+      },
+      {
+        "command": "git.removeRemote",
+        "title": "%git.removeRemoteTitle%"
+      },
+      {
+        "command": "git.renameBranch",
+        "title": "%git.renameBranchTitle%"
+      },
+      {
+        "command": "git.showOutput",
+        "title": "%git.showOutputCommand%"
+      },
+      {
+        "command": "git.stageAll",
+        "title": "%git.stageAllCommand%"
+      },
+      {
+        "command": "git.stageHunk",
+        "title": "%git.stageHunkTitle%"
+      },
+      {
+        "command": "git.stageSelectedRanges",
+        "title": "%git.stageSelectionTitle%"
+      },
+      {
+        "command": "git.stash",
+        "title": "%git.stashTitle%"
+      },
+      {
+        "command": "git.stashApply",
+        "title": "%git.stashApplyTitle%"
+      },
+      {
+        "command": "git.stashDrop",
+        "title": "%git.stashDropTitle%"
+      },
+      {
+        "command": "git.stashPop",
+        "title": "%git.stashPopTitle%"
+      },
+      {
+        "command": "git.switchBranch",
+        "title": "%git.menu.checkout%"
+      },
+      {
+        "command": "git.undoCommit",
+        "title": "%git.undoCommitTitle%"
+      },
+      {
+        "command": "git.unstageAll",
+        "title": "%git.unstageAllCommand%"
+      },
+      {
+        "command": "git.unstageHunk",
+        "title": "%git.unstageHunkTitle%"
+      },
+      {
+        "command": "git.unstageSelectedRanges",
+        "title": "%git.unstageSelectionTitle%"
+      },
+      {
+        "command": "git.updateAutoFetch",
+        "title": "%command.git.updateAutoFetch%"
+      },
+      {
+        "command": "git.updateAutoFetchPeriod",
+        "title": "%command.git.updateAutoFetchPeriod%"
+      },
+      {
+        "command": "git.diff.stageHunk",
+        "title": "%git.diff.stageHunk%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "git.diff.stageSelection",
+        "title": "%git.diff.stageSelection%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "git.diff.unstageHunk",
+        "title": "%git.diff.unstageHunk%",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "git.diff.unstageSelection",
+        "title": "%git.diff.unstageSelection%",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "git.diff.revertHunk",
+        "title": "%git.diff.revertHunk%",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "git.diff.revertSelection",
+        "title": "%git.diff.revertSelection%",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "git.commitAndPushFromChanges",
+        "title": "git.commitAndPushFromChanges"
+      },
+      {
+        "command": "git.commitFromChanges",
+        "title": "git.commitFromChanges"
+      },
+      {
+        "command": "git.discardFile",
+        "title": "git.discardFile"
+      },
+      {
+        "command": "git.executeRepositoryCommand",
+        "title": "git.executeRepositoryCommand"
+      },
+      {
+        "command": "git.openChangesSource",
+        "title": "git.openChangesSource"
+      },
+      {
+        "command": "git.stageFile",
+        "title": "git.stageFile"
+      },
+      {
+        "command": "git.unstageFile",
+        "title": "git.unstageFile"
+      }
+    ],
+    "colors": [
+      {
+        "id": "gitDecoration.modifiedResourceForeground",
+        "description": "%color.gitDecoration.modifiedResourceForeground%",
+        "defaults": {
+          "dark": "#e2c08d",
+          "light": "#895503",
+          "highContrast": "foreground",
+          "highContrastLight": "foreground"
+        }
+      },
+      {
+        "id": "gitDecoration.addedResourceForeground",
+        "description": "%color.gitDecoration.addedResourceForeground%",
+        "defaults": {
+          "dark": "#81b88b",
+          "light": "#587c0c",
+          "highContrast": "foreground",
+          "highContrastLight": "foreground"
+        }
+      },
+      {
+        "id": "gitDecoration.deletedResourceForeground",
+        "description": "%color.gitDecoration.deletedResourceForeground%",
+        "defaults": {
+          "dark": "#c74e39",
+          "light": "#ad0707",
+          "highContrast": "foreground",
+          "highContrastLight": "foreground"
+        }
+      },
+      {
+        "id": "gitDecoration.renamedResourceForeground",
+        "description": "%color.gitDecoration.renamedResourceForeground%",
+        "defaults": {
+          "dark": "#73c991",
+          "light": "#007100",
+          "highContrast": "foreground",
+          "highContrastLight": "foreground"
+        }
+      },
+      {
+        "id": "gitDecoration.untrackedResourceForeground",
+        "description": "%color.gitDecoration.untrackedResourceForeground%",
+        "defaults": {
+          "dark": "#73c991",
+          "light": "#007100",
+          "highContrast": "foreground",
+          "highContrastLight": "foreground"
+        }
+      },
+      {
+        "id": "gitDecoration.conflictingResourceForeground",
+        "description": "%color.gitDecoration.conflictingResourceForeground%",
+        "defaults": {
+          "dark": "#e4676b",
+          "light": "#ad0707",
+          "highContrast": "foreground",
+          "highContrastLight": "foreground"
+        }
+      },
+      {
+        "id": "gitDecoration.ignoredResourceForeground",
+        "description": "%color.gitDecoration.ignoredResourceForeground%",
+        "defaults": {
+          "dark": "#8c8c8c",
+          "light": "#767676",
+          "highContrast": "foreground",
+          "highContrastLight": "foreground"
+        }
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "git.refresh",
+          "when": "scmProvider == git",
+          "group": "navigation"
+        },
+        {
+          "command": "git.commit",
+          "when": "scmProvider == git",
+          "group": "navigation"
+        },
+        {
+          "command": "git.fetch",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "command": "git.fetchAll",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "command": "git.pull",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "command": "git.push",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "command": "git.showOutput",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "submenu": "git.commitMenu",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "submenu": "git.changesMenu",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "submenu": "git.branchMenu",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        },
+        {
+          "submenu": "git.worktreeMenu",
+          "when": "scmProvider == git",
+          "group": "2_git"
+        }
+      ],
+      "SCMHistoryTitle": [
+        {
+          "command": "git.fetch",
+          "when": "scmHistoryProviderId == git",
+          "group": "navigation"
+        },
+        {
+          "command": "git.fetchAll",
+          "when": "scmHistoryProviderId == git",
+          "group": "navigation"
+        },
+        {
+          "command": "git.pull",
+          "when": "scmHistoryProviderId == git",
+          "group": "navigation"
+        },
+        {
+          "command": "git.push",
+          "when": "scmHistoryProviderId == git",
+          "group": "navigation"
+        }
+      ],
+      "scm/historyItem/context": [
+        {
+          "command": "git.graph.openRemote",
+          "group": "scm_0_open@1",
+          "when": "scmHistoryProviderId == git && scmHistoryItemHasRemote"
+        },
+        {
+          "command": "git.graph.compare",
+          "group": "scm_1_compare@1",
+          "when": "scmHistoryProviderId == git"
+        },
+        {
+          "command": "git.graph.compareRemote",
+          "group": "scm_1_compare@2",
+          "when": "scmHistoryProviderId == git && scmHistoryItemHasUpstream"
+        },
+        {
+          "command": "git.graph.compareMergeBase",
+          "group": "scm_1_compare@3",
+          "when": "scmHistoryProviderId == git"
+        },
+        {
+          "command": "git.graph.createBranch",
+          "group": "scm_3_edit@1",
+          "when": "scmHistoryProviderId == git"
+        },
+        {
+          "command": "git.graph.cherryPick",
+          "group": "scm_3_edit@2",
+          "when": "scmHistoryProviderId == git"
+        },
+        {
+          "command": "git.graph.copyHash",
+          "group": "scm_5_copy@1",
+          "when": "scmHistoryProviderId == git"
+        },
+        {
+          "command": "git.graph.copyMessage",
+          "group": "scm_5_copy@2",
+          "when": "scmHistoryProviderId == git"
+        },
+        {
+          "submenu": "git.historyCheckoutMenu",
+          "when": "scmHistoryProviderId == git",
+          "group": "scm_2_checkout"
+        },
+        {
+          "submenu": "git.historyMoreMenu",
+          "when": "scmHistoryProviderId == git",
+          "group": "scm_4_more"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "git.openFile",
+          "group": "navigation@10",
+          "when": "resourceScheme == git-change"
+        }
+      ],
+      "diffEditor/hunkToolbar": [
+        {
+          "command": "git.diff.stageHunk",
+          "group": "primary",
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\// && diffEditorModifiedUri =~ /^git-change:\\/unstaged\\//"
+        },
+        {
+          "command": "git.diff.unstageHunk",
+          "group": "primary",
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/staged\\// && diffEditorModifiedUri =~ /^git-change:\\/staged\\//"
+        },
+        {
+          "command": "git.diff.revertHunk",
+          "group": "primary",
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\// && diffEditorModifiedUri =~ /^git-change:\\/unstaged\\//"
+        }
+      ],
+      "diffEditor/selectionToolbar": [
+        {
+          "command": "git.diff.stageSelection",
+          "group": "primary",
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\// && diffEditorModifiedUri =~ /^git-change:\\/unstaged\\//"
+        },
+        {
+          "command": "git.diff.unstageSelection",
+          "group": "primary",
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/staged\\// && diffEditorModifiedUri =~ /^git-change:\\/staged\\//"
+        },
+        {
+          "command": "git.diff.revertSelection",
+          "group": "primary",
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\// && diffEditorModifiedUri =~ /^git-change:\\/unstaged\\//"
+        }
+      ],
+      "git.commitMenu": [
+        {
+          "command": "git.commitStaged",
+          "group": "1"
+        },
+        {
+          "command": "git.commitAll",
+          "group": "1"
+        },
+        {
+          "command": "git.commitSigned",
+          "group": "1"
+        },
+        {
+          "command": "git.commitStagedSigned",
+          "group": "1"
+        },
+        {
+          "command": "git.commitAllSigned",
+          "group": "2"
+        },
+        {
+          "command": "git.commitAmend",
+          "group": "2"
+        },
+        {
+          "command": "git.commitStagedAmend",
+          "group": "2"
+        },
+        {
+          "command": "git.commitAllAmend",
+          "group": "2"
+        },
+        {
+          "command": "git.undoCommit",
+          "group": "3"
+        }
+      ],
+      "git.changesMenu": [
+        {
+          "command": "git.stageAll",
+          "group": "1"
+        },
+        {
+          "command": "git.unstageAll",
+          "group": "1"
+        },
+        {
+          "command": "git.cleanAll",
+          "group": "1"
+        },
+        {
+          "command": "git.stageHunk",
+          "group": "1"
+        },
+        {
+          "command": "git.unstageHunk",
+          "group": "2"
+        },
+        {
+          "command": "git.stageSelectedRanges",
+          "group": "2"
+        },
+        {
+          "command": "git.unstageSelectedRanges",
+          "group": "2"
+        }
+      ],
+      "git.branchMenu": [
+        {
+          "command": "git.branch",
+          "group": "1"
+        },
+        {
+          "command": "git.switchBranch",
+          "group": "1"
+        },
+        {
+          "command": "git.deleteBranch",
+          "group": "1"
+        },
+        {
+          "command": "git.renameBranch",
+          "group": "1"
+        },
+        {
+          "command": "git.deleteRemoteBranch",
+          "group": "2"
+        },
+        {
+          "command": "git.merge",
+          "group": "2"
+        },
+        {
+          "command": "git.rebase",
+          "group": "2"
+        },
+        {
+          "command": "git.cherryPick",
+          "group": "2"
+        },
+        {
+          "command": "git.continue",
+          "group": "3"
+        },
+        {
+          "command": "git.abort",
+          "group": "3"
+        }
+      ],
+      "git.worktreeMenu": [
+        {
+          "command": "git.createWorktree",
+          "group": "1"
+        },
+        {
+          "command": "git.openWorktree",
+          "group": "1"
+        },
+        {
+          "command": "git.deleteWorktree",
+          "group": "1"
+        }
+      ],
+      "git.historyCheckoutMenu": [
+        {
+          "command": "git.graph.checkoutBranch",
+          "group": "1"
+        },
+        {
+          "command": "git.graph.checkoutDetached",
+          "group": "1"
+        }
+      ],
+      "git.historyMoreMenu": [
+        {
+          "command": "git.graph.createTag",
+          "group": "1"
+        },
+        {
+          "command": "git.graph.deleteBranch",
+          "group": "1"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ash.gitView",
+        "contents": "%git.welcome.empty%",
+        "when": "workspaceFolderCount == 0"
+      },
+      {
+        "view": "ash.gitView",
+        "contents": "[%git.welcome.openFolder%](command:workbench.action.files.openFolder)",
+        "when": "workspaceFolderCount == 0 && openFolderWorkspaceSupport"
+      },
+      {
+        "view": "ash.gitView",
+        "contents": "[%git.welcome.clone%](command:git.clone)",
+        "when": "workspaceFolderCount == 0 && isNative && appServerAvailable"
+      },
+      {
+        "view": "ash.gitView",
+        "contents": "%git.welcome.noRepository%\n[%git.welcome.initialize%](command:git.init)",
+        "when": "workspaceFolderCount != 0 && appServerAvailable"
+      }
+    ],
+    "configuration": {
+      "title": "Git",
+      "properties": {
+        "git.autofetch": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "enum": [
+            false,
+            true,
+            "all"
+          ],
+          "default": false,
+          "scope": "application",
+          "ashSetting": {
+            "valueType": "select",
+            "title": "%git.autofetch.title%",
+            "description": "%git.autofetch.description%",
+            "options": [
+              {
+                "value": false,
+                "label": "%git.autofetch.off%"
+              },
+              {
+                "value": true,
+                "label": "%git.autofetch.default%"
+              },
+              {
+                "value": "all",
+                "label": "%git.autofetch.all%"
+              }
+            ]
+          },
+          "ashBinding": {
+            "readCommand": "git.readSettings",
+            "writeCommand": "git.updateAutoFetch",
+            "property": "autoFetch"
+          }
+        },
+        "git.autofetchPeriod": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400,
+          "default": 180,
+          "scope": "application",
+          "ashSetting": {
+            "valueType": "number",
+            "title": "%git.autofetchPeriod.title%",
+            "description": "%git.autofetchPeriod.description%",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "ashBinding": {
+            "readCommand": "git.readSettings",
+            "writeCommand": "git.updateAutoFetchPeriod",
+            "property": "autoFetchPeriod"
+          }
+        }
+      }
+    },
+    "submenus": [
+      {
+        "id": "git.commitMenu",
+        "label": "%git.menu.commit%"
+      },
+      {
+        "id": "git.changesMenu",
+        "label": "%git.menu.changes%"
+      },
+      {
+        "id": "git.branchMenu",
+        "label": "%git.menu.branch%"
+      },
+      {
+        "id": "git.worktreeMenu",
+        "label": "%git.menu.worktrees%"
+      },
+      {
+        "id": "git.historyCheckoutMenu",
+        "label": "%git.graph.checkout%"
+      },
+      {
+        "id": "git.historyMoreMenu",
+        "label": "%git.graph.more%"
+      }
+    ]
+  },
+  "activationEvents": [
+    "*"
+  ],
+  "type": "module"
 }

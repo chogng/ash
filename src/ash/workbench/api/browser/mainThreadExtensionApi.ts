@@ -1,3 +1,7 @@
+import { extensionMenuId } from '../../services/extensions/common/extensionMenus.js';
+import { MainThreadSCM } from './mainThreadSCM.js';
+import { MainThreadExtensionBackend } from './mainThreadExtensionBackend.js';
+import { MainThreadEditors } from './mainThreadEditors.js';
 import { MainThreadDebugService } from './mainThreadDebugService.js';
 import { IFileService, FileKind } from '../../../platform/files/common/files.js';
 import { MainThreadConfiguration } from './mainThreadConfiguration.js';
@@ -41,7 +45,7 @@ import { Range } from '../../../editor/common/core/range.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import type { ExtensionClientOperation, ExtensionClientResult } from '../common/extHost.protocol.js';
-import type { ExtensionClientSource } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue, ExtensionClientSource } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { MainThreadDocuments, extensionDocumentSnapshot } from './mainThreadDocuments.js';
 import { MainThreadDiagnostics } from './mainThreadDiagnostics.js';
 import { MainThreadTask } from './mainThreadTask.js';
@@ -109,6 +113,9 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly documents: MainThreadDocuments;
 	private readonly diagnostics: MainThreadDiagnostics;
 	private readonly statusbar: MainThreadStatusBar;
+	private readonly scmApi: MainThreadSCM;
+	private readonly backendApi: MainThreadExtensionBackend;
+	private readonly editorsApi: MainThreadEditors;
 	private readonly taskApi: MainThreadTask;
 	private readonly debugApi: MainThreadDebugService;
 	private readonly scmApi: MainThreadSCM;
@@ -140,6 +147,9 @@ export class MainThreadExtensionApi extends Disposable {
 		@IHostService private readonly host: IHostService,
 	) {
 		super();
+		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
+		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
+		this.editorsApi = instantiation.createInstance(MainThreadEditors);
 		this.configurationApi = this._register(instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.workspaceApi = this._register(instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		// Host adapters validate callback messages; editor contracts stay in the Workbench.
@@ -179,13 +189,10 @@ export class MainThreadExtensionApi extends Disposable {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
-			case 'scmUpdate':
-				this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers);
-				return { result: 'done' };
-			case 'backendRequest':
-				return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal) };
-			case 'backendState':
-				return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, null, operation.after, signal) };
+			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
+			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal) };
+			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal) };
+			case 'editorOperation': return { result: 'value', value: this.handleOutput(source, operation.payload) ? null : await this.editorsApi.handle(operation.payload, signal) };
 			case 'addDebugBreakpoints':
 			case 'removeDebugBreakpoints':
 			case 'getDebugProtocolBreakpoint':
@@ -437,7 +444,7 @@ export class MainThreadExtensionApi extends Disposable {
 							if (!current || !registration) { throw new Error(localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command)); }
 							// Activating replaces process registrations. This command retains the connection
 							// lifetime signal and uses the new process fence, rather than the retired batch.
-							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: args }), signal);
+							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtime.id, args) }), signal);
 						}
 					});
 				}
@@ -460,15 +467,15 @@ export class MainThreadExtensionApi extends Disposable {
 				}
 				if (registration.kind === "command") {
 					commands.push(Object.freeze({
-						id: registration.command, metadata: { description: registration.title }, handler: (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
+						id: registration.command, metadata: { description: registration.title }, handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
 							if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
-								return invoke('execute', normalizeExtensionHostPayload({ arguments: args }), controller.signal);
+								return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtime.id, args) }), controller.signal);
 							}
 							const part = accessor.get(IEditorPart);
 							const context = args[0] as { groupId?: string; editorIndex?: number; } | undefined;
 							const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
 							const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
-							return invoke('execute', normalizeExtensionHostPayload({ arguments: args, activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
+							return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtime.id, args), activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
 						}
 					}));
 					for (const placement of registration.menus ?? []) {
@@ -478,7 +485,7 @@ export class MainThreadExtensionApi extends Disposable {
 							throw new TypeError(`Invalid menu order for extension command '${registration.command}'`);
 						}
 						const alternate = runtime.registrations.find(candidate => candidate.kind === 'command' && candidate.command === placement.alt);
-						let id = MenuId.for(placement.menu);
+						let id = extensionMenuId(placement.menu);
 						if (placement.menu === 'editor/title') {
 							id = MenuId.EditorTitle;
 						} else if (placement.menu === 'editor/title/context') {
@@ -610,6 +617,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.activeContributions = next;
 		this.commandMenus.clear();
 		for (const command of next.commands) {
+			if (command.metadata?.description === command.id) continue;
 			this.commandMenus.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: command.id, title: command.metadata!.description } }));
 		}
 		// Menu declarations belong to the activated package, and disappear with its command authority.
@@ -652,6 +660,31 @@ export class MainThreadExtensionApi extends Disposable {
 			this.outputCursors.set(runtime.id, { incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, stderrLength: runtime.stderr.length, failureKey });
 			if (runtime.lifecycle === 'ready') this.projectNamedOutput(runtime);
 		}
+	}
+
+	private handleOutput(source: ExtensionClientSource, payload: JsonValue): boolean {
+		if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !('method' in payload) || payload.method !== 'output') { return false; }
+		const value = payload as Record<string, JsonValue>;
+		const text = (input: JsonValue, maximum: number): string => { if (typeof input !== 'string' || input.length > maximum || input.includes('\0')) { throw new TypeError('Invalid extension output text'); } return input; };
+		const id = text(value.channelId, 256), key = namedOutputKey(source.extensionId, id);
+		const cursor = this.namedOutputCursors.get(source.extensionId);
+		if (cursor && (cursor.incarnation !== source.incarnation || cursor.activationGeneration !== source.activationGeneration)) this.disposeNamedOutputChannels(source.extensionId);
+		this.namedOutputCursors.set(source.extensionId, { incarnation: source.incarnation, activationGeneration: source.activationGeneration, sequence: 0 });
+		if (value.action === 'create') {
+			if (this.namedOutputChannels.has(key)) throw new TypeError('Output channel is already registered');
+			if ([...this.namedOutputChannels].filter(([, channel]) => channel.descriptor.extensionId === source.extensionId).length >= 128) throw new RangeError('Too many extension output channels');
+			this.namedOutputChannels.set(key, this.outputService.createChannel({ id: `extension.${encodeURIComponent(source.extensionId)}.${encodeURIComponent(id)}`, label: text(value.label, 512), kind: 'output', source: 'extension', extensionId: source.extensionId }));
+			return true;
+		}
+		const channel = this.namedOutputChannels.get(key);
+		if (!channel) throw new TypeError('Output channel is unavailable');
+		if (value.action === 'append') channel.append({ text: text(value.text, 524_288) });
+		else if (value.action === 'replace') channel.replace({ text: text(value.text, 524_288) });
+		else if (value.action === 'clear') channel.clear();
+		else if (value.action === 'show') channel.show({ focus: value.preserveFocus === true ? 'preserve' : 'take' });
+		else if (value.action === 'dispose') this.namedOutputChannels.deleteAndDispose(key);
+		else if (value.action !== 'hide') throw new TypeError('Invalid extension output operation');
+		return true;
 	}
 
 	private projectNamedOutput(runtime: ExtensionHostRuntime): void {

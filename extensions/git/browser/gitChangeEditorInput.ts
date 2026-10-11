@@ -51,6 +51,7 @@ function changeFileUri(status: GitStatus, comparison: GitChangeFileComparison, p
 	const encodedPath = path.split('/').map(encodeURIComponent).join('/');
 	const query = new URLSearchParams({
 		side,
+		repository: status.repositoryId,
 		stream: status.streamInstanceId,
 		revision: String(status.revision),
 	});

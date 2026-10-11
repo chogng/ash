@@ -1,3 +1,5 @@
+import { CommandsRegistry, type ICommandService } from '../../../../../platform/commands/common/commands.js';
+import type { ISCMService } from '../../../../../workbench/contrib/scm/common/scm.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -8,7 +10,7 @@ import type { CancellationToken } from '../../../../../base/common/cancellation.
 import type { IAccountService, AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { GitHubIssueState, type IGitHubService, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
-import type { IGitService, GitRepository, GitStatus } from '../../../../../workbench/contrib/git/common/gitService.js';
+import type { IGitService, GitRepository, GitStatus } from '../../../../../../../extensions/git/browser/types.js';
 import type { ISessionsService, SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
@@ -41,10 +43,13 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 		graph: async () => ({ commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }], hasMore: false, nextCursor: undefined }),
 		...gitOverrides,
 	} as IGitService;
-	const service = resources.add(new GitHubService(
+	resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => {}));
+ const commands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
+ const scm = { onDidAddRepository: repositoriesChanged.event, onDidRemoveRepository: Event.None, get repositories() { return git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: statusChanged.event } })); } } as unknown as ISCMService;
+ const service = resources.add(new GitHubService(
 		{ get activeSelection() { return selection; }, onDidChange: selectionChanged.event } as ISessionsService,
 		{ sessions: [session] } as unknown as ISessionsManagementService,
-		git, github, { onDidChangeAccounts: accountChanged.event } as IAccountService, new NullLoggerService(),
+		commands, scm, github, { onDidChangeAccounts: accountChanged.event } as IAccountService, new NullLoggerService(),
 	));
 	const nextChange = (): Promise<void> => new Promise(resolve => {
 		const listener = resources.add(service.onDidChange(() => { listener.dispose(); resolve(); }));

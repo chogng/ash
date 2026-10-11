@@ -64,6 +64,8 @@ export interface ExtensionManifest {
 	readonly displayName: string;
 	readonly contributes: {
 		readonly configuration: readonly IConfigurationNode[];
+		readonly submenus: readonly { id: string; label: string; placements: readonly { menu: string; when?: string; group?: string; }[]; }[];
+		readonly viewsWelcome: readonly { view: string; contents: string; when?: string; precondition?: string; group?: string; order?: number; }[];
 		readonly languages: readonly ExtensionLanguageContribution[];
 		readonly grammars: readonly ExtensionGrammarContribution[];
 		readonly snippets: readonly ExtensionSnippetContribution[];
@@ -127,6 +129,8 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		displayName,
 		contributes: Object.freeze({
 			configuration: parseConfigurations(contributes.configuration),
+			submenus: parseSubmenus(contributes.submenus, contributes.menus),
+			viewsWelcome: parseViewsWelcome(contributes.viewsWelcome),
 			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),
 			grammars: Object.freeze(contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id)),
 			snippets: Object.freeze(contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id)),
@@ -156,7 +160,16 @@ function parseConfigurations(value: unknown): readonly IConfigurationNode[] {
 			const schema = record(value, `contributes.configuration.properties.${key}`);
 			const scope = schema.scope === undefined ? ConfigurationScope.WINDOW : typeof schema.scope === 'string' ? scopes[schema.scope] : undefined;
 			if (scope === undefined) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", key));
-			properties[key] = Object.freeze({ ...schema, scope }) as IConfigurationPropertySchema;
+			if (schema.ashBinding !== undefined) {
+    const binding = record(schema.ashBinding, 'extension setting binding');
+    for (const field of ['readCommand', 'writeCommand', 'property']) requiredString(binding[field], 'extension setting binding ' + field, 256);
+    const setting = record(schema.ashSetting, 'extension setting presentation');
+    requiredString(setting.title, 'setting title', 32768); requiredString(setting.description, 'setting description', 32768);
+    if (setting.valueType === 'number') { if (typeof setting.minimum !== 'number' || typeof setting.maximum !== 'number' || setting.minimum > setting.maximum) throw new TypeError('Invalid setting range'); }
+    else if (setting.valueType === 'select') { if (!Array.isArray(setting.options) || setting.options.length > 128) throw new TypeError('Invalid setting options'); for (const option of setting.options) { const entry = record(option, 'setting option'); requiredString(entry.label, 'setting option label', 32768); if (!['string', 'boolean'].includes(typeof entry.value)) throw new TypeError('Invalid setting option value'); } }
+    else if (setting.valueType !== 'boolean' && setting.valueType !== 'text') throw new TypeError('Invalid setting presentation');
+   }
+   properties[key] = Object.freeze({ ...schema, scope }) as IConfigurationPropertySchema;
 		}
 		if (node.allOf !== undefined && !Array.isArray(node.allOf)) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'allOf'));
 		return Object.freeze({ ...(typeof node.id === 'string' ? { id: node.id } : {}), ...(typeof node.title === 'string' ? { title: node.title } : {}), properties: Object.freeze(properties), ...(Array.isArray(node.allOf) ? { allOf: Object.freeze(node.allOf.map(parseNode)) } : {}) });
@@ -552,5 +565,39 @@ function parseIcons(value: unknown): readonly ExtensionIconContribution[] {
 		const fontCharacter = requiredString(defaults.fontCharacter, 'Icon font character', 16);
 		if (!/^(?:\\[\da-f]{1,6}|[^\\])$/iu.test(fontCharacter)) { throw new TypeError('Invalid icon font character'); }
 		return { id, description, defaults: { fontPath, fontCharacter } };
+	});
+}
+
+function parseViewsWelcome(value: unknown): ExtensionManifest['contributes']['viewsWelcome'] {
+ if (value === undefined) return [];
+ if (!Array.isArray(value) || value.length > 128) throw new TypeError('Invalid view welcome contributions');
+ return value.map(value => {
+  const entry = record(value, 'view welcome contribution');
+  const result = { view: requiredString(entry.view, 'welcome view', 256), contents: welcomeContents(entry.contents), when: entry.when === undefined ? undefined : requiredString(entry.when, 'welcome condition', 2048), precondition: entry.precondition === undefined ? undefined : requiredString(entry.precondition, 'welcome precondition', 2048), group: entry.group === undefined ? undefined : requiredString(entry.group, 'welcome group', 256), order: entry.order as number | undefined };
+  if (result.order !== undefined && !Number.isFinite(result.order)) throw new TypeError('Invalid welcome order');
+  return Object.freeze(result);
+ });
+}
+
+function welcomeContents(value: unknown): string { if (typeof value !== 'string' || !value.trim() || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid view welcome contents'); return value; }
+
+function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['contributes']['submenus'] {
+	if (value === undefined) return [];
+	if (!Array.isArray(value) || value.length > 128) throw new TypeError('Invalid submenu contributions');
+	const menus = placements === undefined ? {} : record(placements, 'extension menus');
+	const seen = new Set<string>();
+	return value.map(value => {
+		const entry = record(value, 'extension submenu');
+		const id = requiredString(entry.id, 'submenu identity', 256);
+		if (seen.has(id)) throw new TypeError('Duplicate extension submenu');
+		seen.add(id);
+		const contributions = Object.entries(menus).flatMap(([menu, values]) => {
+			if (!Array.isArray(values) || values.length > 128) throw new TypeError('Invalid submenu placements');
+			return values.filter(value => value && typeof value === 'object' && value.submenu === id).map(value => {
+				const placement = record(value, 'submenu placement');
+				return { menu: requiredString(menu, 'submenu menu', 256), when: placement.when === undefined ? undefined : requiredString(placement.when, 'submenu condition', 2048), group: placement.group === undefined ? undefined : requiredString(placement.group, 'submenu group', 256) };
+			});
+		});
+		return { id, label: requiredString(entry.label, 'submenu label', 512), placements: contributions };
 	});
 }
