@@ -2,7 +2,9 @@ import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import { AbstractDisposable, Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionClientOperation, type ExtensionClientResult, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { type ExtensionClientOperation, type ExtensionClientResult } from '../common/extHost.protocol.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IDebugService, type DebugConfiguration, type IDebugSessionOptions, type IDebugSession, type IDebugBreakpoint, type IFunctionBreakpoint } from '../../services/debug/common/debugService.js';
 

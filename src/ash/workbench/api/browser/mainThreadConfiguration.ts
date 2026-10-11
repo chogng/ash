@@ -2,7 +2,8 @@ import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { IConfigurationService, type IConfigurationChange } from '../../../platform/configuration/common/configuration.js';
-import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 
 /** ConfigurationService owns values; this bridge retains only ordered, fenced deliveries. */
 export class MainThreadConfiguration extends Disposable {

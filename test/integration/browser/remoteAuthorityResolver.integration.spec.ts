@@ -1,15 +1,16 @@
 import { expect, test } from '@playwright/test';
 
-test('the distributed SSH package declares a V8 entry and localized labels', async ({ page }) => {
+test('the distributed Rust SSH package has localized labels and no JavaScript entry', async ({ page }) => {
 	await page.goto('/remoteAuthorityResolver.html');
 	try {
 		const info = await page.evaluate(() => window.remoteAuthorityIntegration.packageInfo());
-		expect(info).toMatchObject({ manifest: { main: './src/extension.js' }, english: 'SSH Remote Connections', chinese: 'SSH 远程连接' });
+		expect(info).toMatchObject({ manifest: { publisher: 'ash', name: 'remote-ssh' }, english: 'SSH Remote Connections', chinese: 'SSH 远程连接' });
+		expect(info.manifest.main).toBeUndefined();
 		expect(info.manifest.browser).toBeUndefined();
 	} finally { await page.evaluate(() => window.remoteAuthorityIntegration.dispose()); }
 });
 
-test('Browser Workers cannot register SSH or impersonate the V8 product extension', async ({ page }) => {
+test('Browser Workers cannot register SSH or impersonate the Rust product extension', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/remoteAuthorityResolver.html');
@@ -17,9 +18,9 @@ test('Browser Workers cannot register SSH or impersonate the V8 product extensio
 		const external = await page.evaluate(() => window.remoteAuthorityIntegration.activate());
 		expect(external).toMatchObject({ lifecycle: 'failed', failure: { code: 'activationFailed', message: expect.stringContaining('ssh prefix') }, registrations: [] });
 		const impersonated = await page.evaluate(() => window.remoteAuthorityIntegration.activate('builtIn', 'ash.remote-ssh'));
-		expect(impersonated).toMatchObject({ lifecycle: 'failed', failure: { code: 'activationFailed', message: expect.stringContaining('V8 host') }, registrations: [] });
+		expect(impersonated).toMatchObject({ lifecycle: 'failed', failure: { code: 'activationFailed', message: expect.stringContaining('Rust provider') }, registrations: [] });
 		const localized = await page.evaluate(() => window.remoteAuthorityIntegration.activate('user', 'ash.remote-ssh', 'zh-CN'));
-		expect(localized).toMatchObject({ failure: { message: 'TypeError: 产品 SSH 扩展必须在 V8 宿主中执行' }, registrations: [] });
+		expect(localized).toMatchObject({ failure: { message: 'TypeError: 产品 SSH 扩展必须作为 Rust Provider 执行' }, registrations: [] });
 		expect(errors).toEqual([]);
 	} finally { await page.evaluate(() => window.remoteAuthorityIntegration.dispose()); }
 });

@@ -1,7 +1,7 @@
 import { match } from '../../../base/common/glob.js';
 import { basename } from '../../../base/common/resources.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostCustomEditorRegistration, type JsonValue } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostCustomEditorRegistration, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { EditorPanes } from '../../browser/editor.js';
 import { EditorPaneMatch } from '../../browser/parts/editor/editorPane.js';

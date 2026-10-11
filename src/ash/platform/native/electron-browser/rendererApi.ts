@@ -1,5 +1,5 @@
-import type { IExtensionHostApi } from '../../extensionHost/common/extensionHostApi.js';
-import { createAppServerExtensionHostApi } from '../../extensionHost/browser/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../agentHost/common/extensionHostApi.js';
+import { createAppServerExtensionHostApi } from '../../agentHost/browser/extensionHostApi.js';
 import type { IAddress } from '../../remote/common/remoteAgentConnection.js';
 import { AppServerSocketTransport } from '../../agentHost/browser/appServerSocketTransport.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../remote/common/remoteSocketFactoryService.js';

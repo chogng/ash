@@ -2,7 +2,7 @@ import { NativeExtensionService } from '../services/extensions/electron-browser/
 import { IRemoteAuthorityResolverService } from '../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
 import { IRemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
-import { IExtensionHostApi } from '../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { MutableDisposable, DisposableStore } from '../../base/common/lifecycle.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { RelayURLService } from '../services/url/electron-browser/urlService.js';

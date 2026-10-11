@@ -1,4 +1,4 @@
-import { IExtensionBackendApi } from '../../platform/extensionHost/common/extensionBackendApi.js';
+import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { ITraceService } from '../../workbench/services/trace/common/traceService.js';
 import { AppServerTraceService } from '../../workbench/services/trace/browser/appServerTraceService.js';
@@ -170,7 +170,7 @@ import { IMenuService } from "../../platform/actions/common/actions.js";
 import { MenuService } from "../../platform/actions/common/menuService.js";
 import { CommandsRegistry, ICommandService } from "../../platform/commands/common/commands.js";
 import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
-import { IExtensionHostApi } from '../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";

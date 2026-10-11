@@ -1,4 +1,4 @@
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { createDisconnectedAppServerApi } from '../../../src/ash/platform/agentHost/browser/appServerApi.js';
@@ -6,7 +6,8 @@ import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appSer
 import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
 import type { ExtensionSourceKind } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import { BrowserExtensionHostApi, createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensionHost/browser/extensionHostApi.js';
+import { WebWorkerExtensionHost } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -22,13 +23,13 @@ const unavailable = (operation: string): never => { throw new Error(`Unexpected 
 services.registerInstance(IFileService, resources.add(new FileService()));
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'empty', folders: [] }), getWorkbenchState: () => WorkbenchState.EMPTY, getWorkspaceFolder: () => null });
 services.registerInstance(IAppServerApi, createDisconnectedAppServerApi(unavailable));
-let host: BrowserExtensionHostApi | undefined;
+let host: WebWorkerExtensionHost | undefined;
 
 async function activate(sourceKind: ExtensionSourceKind = 'user', id = 'attacker.ssh', language = 'en') {
 	setNlsMessages(language, language === 'zh-CN' ? chinese : {});
 	host?.dispose();
-	const source = `export function activate(context) { context.register({ kind: 'remoteConnectionResolver', registrationId: 'ssh', authorityPrefix: 'ssh' }, () => ({ connectionName: 'build' })); }`;
-	host = resources.add(services.createInstance(BrowserExtensionHostApi, {
+	const source = `export function activate() { return [{ kind: 'remoteConnectionResolver', registrationId: 'ssh', authorityPrefix: 'ssh' }]; } export function deactivate() {}`;
+	host = resources.add(services.createInstance(WebWorkerExtensionHost, {
 		resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode(source)),
 		list: async () => {
 			const catalog = await packages.list('cached');
@@ -37,6 +38,13 @@ async function activate(sourceKind: ExtensionSourceKind = 'user', id = 'attacker
 			return { ...catalog, extensions: [{ ...extension, sourceKind, id, manifestJson: JSON.stringify({ browser: './extension.js' }) }] };
 		},
 	}, createDisconnectedExtensionHostApi(unavailable)));
+	const handler = host.registerClientHandler(async operation => {
+		if (!operation || typeof operation !== 'object' || !('operation' in operation) || operation.operation !== 'readInitialization') {
+			throw new Error('SSH registration must not execute a client operation');
+		}
+		return { result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } };
+	});
+	resources.add(toDisposable(() => handler.dispose()));
 	return (await host.reconcile('refresh')).extensions[0];
 }
 

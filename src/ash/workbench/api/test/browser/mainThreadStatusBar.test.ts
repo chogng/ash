@@ -4,7 +4,8 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { Event } from '../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { type ICommandService } from '../../../../platform/commands/common/commands.js';
-import { normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, normalizeExtensionStatusBarUpdate, type ExtensionStatusBarEntry } from '../../../../platform/extensionHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, normalizeExtensionStatusBarUpdate } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { type ExtensionStatusBarEntry } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { MainThreadStatusBar } from '../../browser/mainThreadStatusBar.js';
 import { StatusbarAlignment, StatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 

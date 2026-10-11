@@ -11,7 +11,7 @@ import { DebugContentProvider } from '../../../../contrib/debug/common/debugCont
 import { getUriFromSource } from '../../../../contrib/debug/common/debugSource.js';
 import { DebugConsoleService } from '../../browser/debugConsoleService.js';
 import { MainThreadDebugService } from '../../../../api/browser/mainThreadDebugService.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { TaskService } from '../../../../contrib/tasks/browser/taskService.js';
 import { TerminalService } from '../../../../contrib/terminal/browser/terminalService.js';

@@ -6,7 +6,7 @@ import { RemoteExtensionHost } from '../common/remoteExtensionHost.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostFleetSnapshot } from '../../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { IRemoteAuthorityResolverService, getRemoteAuthorityPrefix, RemoteConnectionType, RemoteAuthorityResolverError, RemoteAuthorityResolverErrorCode, type ResolverResult } from '../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { IRemoteSocketFactoryService } from '../../../../platform/remote/common/remoteSocketFactoryService.js';
 import { BrowserSocketFactory } from '../../../../platform/remote/browser/browserSocketFactory.js';

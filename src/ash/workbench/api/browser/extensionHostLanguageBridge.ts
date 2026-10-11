@@ -9,7 +9,7 @@ import { type ITextModel } from '../../../editor/common/model.js';
 import { type TextSnapshot } from "../../../editor/common/core/textChange.js";
 
 import type { LanguageProviderBatch } from '../../../editor/common/services/languageFeatures.js';
-import type { ExtensionHostLanguageRegistration, JsonValue } from "../../../platform/extensionHost/common/extensionHostApi.js";
+import type { ExtensionHostLanguageRegistration, JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 
 export const SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS = Object.freeze(["diagnostics", "selectionRanges", "documentHighlights", "workspaceSymbols", "completion", "hover", "formatting", "inlayHints", "linkedEditing", "parameterHints", "definition", "references", "rename", "documentSymbols", "foldingRanges", "documentLinks", "codeAction"] as const);
 

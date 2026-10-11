@@ -4,7 +4,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IExtensionHostApi } from '../../../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IRemoteAuthorityResolverService, WebSocketRemoteConnection } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../../../../platform/remote/electron-browser/remoteAuthorityResolverService.js';

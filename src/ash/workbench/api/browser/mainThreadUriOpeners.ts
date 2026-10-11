@@ -2,7 +2,7 @@ import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import type { URI } from '../../../base/common/uri.js';
 import { ExternalUriOpenerPriority } from '../../../editor/common/languages.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../common/contributions.js';

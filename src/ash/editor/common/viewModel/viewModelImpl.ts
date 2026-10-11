@@ -198,13 +198,10 @@ export class ViewModel extends Disposable implements IViewModel {
 		return /[\u0590-\u08ff]/u.test(content) ? TextDirection.RTL : TextDirection.LTR;
 	}
 
-	getViewportViewLineRenderingData(_visibleRange: Range, lineNumber: number): ViewLineRenderingData {
-		return this.getViewLineRenderingData(lineNumber);
-	}
-
-	getViewLineRenderingData(lineNumber: number): ViewLineRenderingData {
+	getViewportViewLineRenderingData(visibleRange: Range, lineNumber: number): ViewLineRenderingData {
 		const line = this.lines.getViewLineData(lineNumber);
-		const decorations = this.decorations.getDecorationsOnLine(lineNumber);
+		const decorations = this.decorations.getDecorationsViewportData(visibleRange);
+		const lineIndex = lineNumber - visibleRange.startLineNumber;
 		return new ViewLineRenderingData(
 			line.minColumn,
 			line.maxColumn,
@@ -213,12 +210,16 @@ export class ViewModel extends Disposable implements IViewModel {
 			this.model.mightContainRTL(),
 			this.model.mightContainNonBasicASCII(),
 			line.tokens,
-			[...decorations.inlineDecorations[0] ?? [], ...line.inlineDecorations ?? []],
+			[...decorations.inlineDecorations[lineIndex] ?? [], ...line.inlineDecorations ?? []],
 			this.model.getOptions().tabSize,
 			line.startVisibleColumn,
 			this.getTextDirection(lineNumber),
-			decorations.hasVariableFonts[0] ?? false,
+			decorations.hasVariableFonts[lineIndex] ?? false,
 		);
+	}
+
+	getViewLineRenderingData(lineNumber: number): ViewLineRenderingData {
+		return this.getViewportViewLineRenderingData(new Range(lineNumber, this.getLineMinColumn(lineNumber), lineNumber, this.getLineMaxColumn(lineNumber)), lineNumber);
 	}
 
 	getViewLineData(lineNumber: number): ViewLineData {

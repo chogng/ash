@@ -2,7 +2,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IFileSearchService, type FileSearchResult } from '../../../../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
 import { MainThreadTask } from '../../../../api/browser/mainThreadTask.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -1249,11 +1249,11 @@ test('configured provider tasks resolve only at dispatch and preserve their defi
 	const create = terminals.createTerminal.bind(terminals);
 	terminals.createTerminal = async options => { creations.push(options); return create(options); };
 	let calls = 0;
-	using registration = service.registerTaskProvider(createExtensionHostTaskProvider('builder-provider', async (operation, payload): Promise<import('../../../../../platform/extensionHost/common/extensionHostApi.js').JsonValue> => {
+	using registration = service.registerTaskProvider(createExtensionHostTaskProvider('builder-provider', async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 		if (operation === 'provideTasks') return { tasks: [] };
 		assert.equal(operation, 'resolveTask');
 		calls++;
-		const definition = (payload as { task: { definition: import('../../../../../platform/extensionHost/common/extensionHostApi.js').JsonValue; }; }).task.definition;
+		const definition = (payload as { task: { definition: import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue; }; }).task.definition;
 		return { task: { id: 'app', label: 'App', group: 'build', definition, execution: { type: 'process', program: 'builder', args: ['app'] }, env: { MODE: 'provider', EXTRA: 'inherited' } } };
 	}, workspace, 'builder'));
 	const task = (await service.refresh())[0];
@@ -1352,7 +1352,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 	const input = new DeferredPromise<void>();
 	const closed = new DeferredPromise<void>();
 	const operations: string[] = [];
-	using registration = service.registerTaskProvider(createExtensionHostTaskProvider('custom-host', async (operation, payload): Promise<import('../../../../../platform/extensionHost/common/extensionHostApi.js').JsonValue> => {
+	using registration = service.registerTaskProvider(createExtensionHostTaskProvider('custom-host', async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 		operations.push(operation);
 		if (operation === 'provideTasks') return { tasks: [{ id: 'custom', label: 'Host Custom', group: 'build', definition: { type: 'builder' }, execution: { type: 'custom', id: 'custom' } }] };
 		if (operation === 'createTaskTerminal') return { ptyId: 'pty.1', acceptsInput: true };

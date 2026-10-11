@@ -1,4 +1,4 @@
-import { createExtensionBackendApi } from '../../extensionHost/browser/extensionBackendApi.js';
+import { createExtensionBackendApi } from './extensionBackendApi.js';
 import { createAppServerExecutionSettingsApi } from '../../execution/browser/executionSettingsApi.js';
 import { AppServerSymphonyService } from '../../symphony/browser/appServerSymphonyService.js';
 import { createAppServerInstructionService } from '../../instructions/browser/appServerInstructionService.js';
@@ -35,7 +35,7 @@ import { createAppServerConnectorApi, type BrowserConnectorHostServices } from "
 import { createAppServerToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createAppServerLanguageApi } from "../../language/browser/languageApi.js";
 import { createAppServerPluginApi } from "../../plugins/browser/pluginApi.js";
-import { createAppServerExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
+import { createAppServerExtensionHostApi } from './extensionHostApi.js';
 import { createAppServerExtensionManagementApi } from "../../extensionManagement/browser/extensionManagementApi.js";
 import { createAppServerDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createAppServerAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';

@@ -11,7 +11,8 @@ import type { AppServerConnectionState } from '../../../src/ash/platform/agentHo
 import { IContextKeyService, ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IDataChannelService, ILinkPresentationService } from '../../../src/ash/platform/dataChannel/common/dataChannel.js';
 import { DataChannelForwardingTelemetryService } from '../../../src/ash/platform/dataChannel/browser/forwardingTelemetryService.js';
-import { IExtensionHostApi, normalizeExtensionHostSnapshot, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../src/ash/platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { ITelemetryService } from '../../../src/ash/platform/telemetry/common/telemetry.js';

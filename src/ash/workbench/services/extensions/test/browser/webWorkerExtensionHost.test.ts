@@ -1,17 +1,19 @@
-import { ExtensionResourceLoaderService } from '../../../extensionResourceLoader/browser/extensionResourceLoaderService.js';
+import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
-import { Emitter } from '../../../../base/common/event.js';
-import { DeferredPromise } from '../../../../base/common/async.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { AppServerConnectionState } from '../../../agentHost/common/appServerApi.js';
-import { BrowserExtensionHostApi, type BrowserExtensionHostRequest } from '../../browser/extensionHostApi.js';
-import { ICommandService } from '../../../commands/common/commands.js';
-import { IFileService } from '../../../files/common/files.js';
-import { IWorkspaceContextService } from '../../../workspace/common/workspace.js';
-import { IAppServerApi } from '../../../agentHost/common/appServerApi.js';
-import { normalizeExtensionHostSnapshot, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type IExtensionHostApi, type JsonValue } from '../../common/extensionHostApi.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { WebWorkerExtensionHost } from '../../browser/webWorkerExtensionHost.js';
+import { type BrowserExtensionHostRequest } from '../../common/extensionHostProtocol.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type IExtensionHostApi, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 
 class RemoteHost extends Disposable implements IExtensionHostApi {
 	readonly instantiation = this._register(new InstantiationService());
@@ -46,8 +48,8 @@ function snapshot(generation: number, lifecycle: 'dormant' | 'ready'): Extension
 	});
 }
 
-function browser(remote: RemoteHost): BrowserExtensionHostApi {
-	return new BrowserExtensionHostApi({
+function browser(remote: RemoteHost): WebWorkerExtensionHost {
+	return new WebWorkerExtensionHost({
 		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
 		resources: new ExtensionResourceLoaderService(async () => { throw new Error('Bundled resources are outside this fixture'); }),
 	}, remote, remote.instantiation);
@@ -87,7 +89,7 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 		remote.instantiation.registerInstance(IFileService, {} as IFileService);
 		remote.instantiation.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
 		remote.instantiation.registerInstance(IAppServerApi, {} as IAppServerApi);
-		using api = new BrowserExtensionHostApi({
+		using api = new WebWorkerExtensionHost({
 			list: async () => ({
 				generation: 1, diagnostics: [], extensions: [{
 					id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn',
@@ -97,7 +99,7 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 		}, remote, remote.instantiation);
 		const registration = api.registerClientHandler(async operation => {
-			assert.equal(operation.operation, 'readInitialization');
+			assert.deepEqual(operation, { operation: 'readInitialization' });
 			return { result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } };
 		});
 		using handler = toDisposable(() => registration.dispose());

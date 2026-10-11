@@ -1,4 +1,4 @@
-import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostRemoteAuthorityResolverRegistration, type JsonValue } from '../../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostRemoteAuthorityResolverRegistration, type JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { ManagedRemoteConnection, WebSocketRemoteConnection, RemoteAuthorityResolverError, RemoteAuthorityResolverErrorCode, type ResolverResult, type ResolvedOptions } from '../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';

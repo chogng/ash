@@ -1,5 +1,5 @@
-import type { BrowserExtensionHostRequest } from './extensionHostApi.js';
-import type { JsonValue } from '../common/extensionHostApi.js';
+import type { BrowserExtensionHostRequest } from '../../services/extensions/common/extensionHostProtocol.js';
+import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 
 interface BrowserRuntime {
 	activate(): Promise<JsonValue>;
@@ -13,14 +13,14 @@ let currentInvocation: number | undefined;
 // Bundled extensions downlevel await to Promise.then. Each continuation carries its
 // originating invocation, including concurrent callbacks and cancelled late replies.
 const originalThen = Promise.prototype.then;
-Promise.prototype.then = function (fulfilled, rejected) {
+Promise.prototype.then = function <TResult1 = unknown, TResult2 = never>(fulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null, rejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null): Promise<TResult1 | TResult2> {
 	const owner = currentInvocation;
-	const bind = (callback: typeof fulfilled): typeof fulfilled => callback && function (value) {
+	const bind = <TResult>(callback: ((value: unknown) => TResult | PromiseLike<TResult>) | null | undefined): typeof callback => callback && function (value: unknown): TResult | PromiseLike<TResult> {
 		const previous = currentInvocation;
 		currentInvocation = owner;
 		try { return callback(value); } finally { currentInvocation = previous; }
 	};
-	return originalThen.call(this, bind(fulfilled), bind(rejected));
+	return originalThen.call(this, bind(fulfilled), bind(rejected)) as Promise<TResult1 | TResult2>;
 };
 const commands = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
 let nextCommand = 1;

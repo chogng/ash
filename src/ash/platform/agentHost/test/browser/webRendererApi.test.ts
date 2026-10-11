@@ -998,8 +998,10 @@ test('extension client callbacks round-trip immutable JSON and release their req
 	using cleanup = toDisposable(() => connected.dispose());
 	const registration = connected.api.extensionHost.registerClientHandler(async (operation, _signal, source) => {
 		assert.deepEqual(source, { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3 });
+		assert.ok(isRecord(operation));
 		assert.equal(operation.operation, 'executeCommand');
 		if (operation.operation !== 'executeCommand') throw new Error('Unexpected extension operation');
+		assert.ok(Array.isArray(operation.arguments));
 		assert.equal(JSON.stringify(operation.arguments), '[{"paths":["src/main.ts"]}]');
 		assert.equal(Object.isFrozen(operation.arguments[0]), true);
 		return { result: 'command', value: Object.freeze({ paths: Object.freeze(['src/main.ts']) }) };

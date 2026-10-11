@@ -2,7 +2,8 @@ import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 
 /** WorkspaceContextService commits window identities; the bridge owns delivery lifetimes only. */
 export class MainThreadWorkspace extends Disposable {

@@ -2,7 +2,8 @@ import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../..
 import { URI } from '../../../base/common/uri.js';
 import { IModelService } from '../../../editor/common/services/model.js';
 import { IMarkerService, MarkerSeverity, type MarkerInput } from '../../../platform/markers/common/markers.js';
-import type { ExtensionClientSource, ExtensionDiagnosticEntry, ExtensionHostFleetSnapshot } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionDiagnosticEntry } from '../common/extHost.protocol.js';
 
 /** Marker ownership includes the broker-supplied incarnation; extensions cannot clear each other's collections. */
 export class MainThreadDiagnostics extends Disposable {

@@ -1,9 +1,10 @@
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
-import { IExtensionBackendApi } from '../../../platform/extensionHost/common/extensionBackendApi.js';
+import { IExtensionBackendApi } from '../../../platform/agentHost/common/extensionBackendApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { normalizeExtensionHostPayload, type ExtensionClientSource, type JsonValue } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { type ExtensionClientSource, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 
 /** Routes package-declared capabilities without exposing the client's backend connection. */
 export class MainThreadExtensionBackend extends Disposable {

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { CancellationError } from "../../../../base/common/errors.js";
-import { invokeExtensionHost, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from "../../common/extensionHostApi.js";
+import { invokeExtensionHost, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../browser/extensionHostProtocol.js';
+import { type ExtensionHostInvocationRequest, type JsonValue } from '../../common/extensionHostApi.js';
 
 const DIGEST = `sha256:${"a".repeat(64)}`;
 

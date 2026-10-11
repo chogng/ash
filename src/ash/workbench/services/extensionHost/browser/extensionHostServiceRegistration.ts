@@ -1,7 +1,7 @@
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../extensions/common/extensionService.js';
-import { IExtensionHostApi } from "../../../../platform/extensionHost/common/extensionHostApi.js";
+import { IExtensionHostApi } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import { ILogService } from "../../../../platform/log/common/log.js";
 import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";

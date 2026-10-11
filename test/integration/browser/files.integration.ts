@@ -26,7 +26,8 @@ import { EditorPart } from '../../../src/ash/workbench/browser/parts/editor/edit
 import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
 import { binaryDiffEditorDescriptor } from '../../../src/ash/workbench/browser/parts/editor/binaryDiffEditor.js';
 import { createTestFileService, createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { BrowserExtensionHostApi, createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensionHost/browser/extensionHostApi.js';
+import { WebWorkerExtensionHost } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
@@ -300,7 +301,7 @@ const integration = {
 		services.registerInstance(IWorkspaceContextService, lifetime.add(new WorkspaceContextService({
 			id: 'offline-folders', folders: [browserRoot, backendRoot, unknownRoot].map((uri, index) => ({ uri, index, id: String(index), name: `Root ${index}` })),
 		})));
-		const host = lifetime.add(new BrowserExtensionHostApi({
+		const host = lifetime.add(new WebWorkerExtensionHost({
 			list: async () => ({
 				generation: 1, diagnostics: [], extensions: [{
 					id: 'offline-folders', name: 'folders', publisher: 'test', displayName: 'Folders', version: '1', sourceKind: 'builtIn',

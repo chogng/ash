@@ -1,4 +1,4 @@
-import type { IExtensionBackendApi } from '../../extensionHost/common/extensionBackendApi.js';
+import type { IExtensionBackendApi } from '../../agentHost/common/extensionBackendApi.js';
 import type { ISymphonyBackend } from '../../symphony/common/symphonyService.js';
 import type { IInstructionService } from '../../instructions/common/instructionService.js';
 import type { IFileSearchService } from '../../search/common/fileSearch.js';
@@ -33,7 +33,7 @@ import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";
 import type { ILanguageApi } from "../../language/common/languageApi.js";
 import type { IPluginApi } from "../../plugins/common/pluginApi.js";
 import type { IDebugAdapterProcessService } from "../../debug/common/debugAdapterProcessService.js";
-import type { IExtensionHostApi } from "../../extensionHost/common/extensionHostApi.js";
+import type { IExtensionHostApi } from '../../agentHost/common/extensionHostApi.js';
 import type { ICodebaseSymbolsApi } from "../../codebaseSymbols/common/codebaseSymbolsApi.js";
 import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
 import type { IRemoteConnectionApi } from "../../remote/common/remoteConnectionService.js";

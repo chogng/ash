@@ -262,6 +262,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "collapse-all",
+      "file": "collapse-all.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "command",
       "file": "command.svg",
       "rendering": "symbolic"
@@ -404,6 +409,11 @@
     {
       "id": "download-box",
       "file": "download-box.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "download-file",
+      "file": "download-file.svg",
       "rendering": "symbolic"
     },
     {

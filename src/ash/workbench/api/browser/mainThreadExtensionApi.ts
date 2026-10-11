@@ -13,7 +13,9 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../
 import { MenuId, MenusRegistry, type IMenuItem } from '../../../platform/actions/common/actions.js';
 import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
-import { createExtensionHostInitialization, IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { createExtensionHostInitialization } from '../../services/extensions/common/extensionHostProtocol.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../../editor/common/services/languageFeatures.js';
 import { ITaskService, type TaskProvider, type TaskProviderRegistration } from '../../services/tasks/common/taskService.js';
 import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from '../../services/testing/common/testingService.js';
@@ -38,7 +40,8 @@ import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../../editor/common/core/range.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
-import type { ExtensionClientOperation, ExtensionClientResult, ExtensionClientSource } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import type { ExtensionClientOperation, ExtensionClientResult } from '../common/extHost.protocol.js';
+import type { ExtensionClientSource } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { MainThreadDocuments, extensionDocumentSnapshot } from './mainThreadDocuments.js';
 import { MainThreadDiagnostics } from './mainThreadDiagnostics.js';
 import { MainThreadTask } from './mainThreadTask.js';
@@ -139,7 +142,8 @@ export class MainThreadExtensionApi extends Disposable {
 		super();
 		this.configurationApi = this._register(instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.workspaceApi = this._register(instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
-		const clientHandler = this.api.registerClientHandler((operation, signal, source) => this.handleClientOperation(operation, signal, source));
+		// Host adapters validate callback messages; editor contracts stay in the Workbench.
+		const clientHandler = this.api.registerClientHandler((operation, signal, source) => this.handleClientOperation(operation as ExtensionClientOperation, signal, source));
 		this._register(toDisposable(() => clientHandler.dispose()));
 		this.customEditors = this._register(instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis));
 		this.diagnostics = this._register(instantiation.createInstance(MainThreadDiagnostics));

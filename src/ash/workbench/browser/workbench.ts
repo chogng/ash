@@ -1,4 +1,4 @@
-import { IExtensionBackendApi } from '../../platform/extensionHost/common/extensionBackendApi.js';
+import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { ITraceService } from '../services/trace/common/traceService.js';
 import { AppServerTraceService } from '../services/trace/browser/appServerTraceService.js';
@@ -75,8 +75,8 @@ import type { LogService } from "../../platform/log/common/logServiceImpl.js";
 import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
 import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
-import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
-import { BrowserExtensionHostApi } from '../../platform/extensionHost/browser/extensionHostApi.js';
+import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
+import { WebWorkerExtensionHost } from '../services/extensions/browser/webWorkerExtensionHost.js';
 import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
@@ -548,7 +548,7 @@ export class Workbench extends Disposable {
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
 		// Browser packages always execute in Workers; server executable packages keep their process host.
-		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(BrowserExtensionHostApi, createBrowserExtensionApi(), api.extensionHost)));
+		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, createBrowserExtensionApi(), api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);

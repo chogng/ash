@@ -26,6 +26,93 @@ const { EditorLineWrapping } = await import(
 	"../../common/config/editorOptions.js"
 );
 
+test('Viewport decoration queries are shared across line rendering data', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	try {
+		using model = new DecorationQueryModel(Array.from({ length: 60 }, (_, index) => `row ${index}`).join('\n'));
+		model.deltaDecorations([], Array.from({ length: 60 }, (_, index) => ({
+			range: new Range(index + 1, 1, index + 1, 4),
+			options: { description: 'inline sample', inlineClassName: 'viewport-inline' },
+		})));
+		using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false }, textMeasurer: new FixedTextMeasurer() });
+		view.layout({ width: 300, height: 200 });
+		const range = new Range(6, 1, 25, model.getLineMaxColumn(25));
+		model.decorationQueries.length = 0;
+		for (let line = 6; line <= 25; line++) {
+			const data = view.testViewModel.getViewportViewLineRenderingData(range, line);
+			assert.deepEqual(data.inlineDecorations.map(decoration => ({ range: decoration.range, className: decoration.inlineClassName })), [{
+				range: new Range(line, 1, line, 4), className: 'viewport-inline',
+			}]);
+		}
+		assert.equal(model.decorationQueries.length, 1);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Viewport text rendering keeps decoration queries bounded after an update', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	try {
+		using model = new DecorationQueryModel(Array.from({ length: 200 }, (_, index) => `row ${index}`).join('\n'));
+		using view = new View({
+			container: requiredElement(dom.window.document, 'main'), model, glyphMargin: false,
+			minimap: { enabled: false }, lineHeight: 20, textMeasurer: new FixedTextMeasurer(),
+		});
+		view.layout({ width: 300, height: 720 });
+		view.render(true, false);
+		model.deltaDecorations([], Array.from({ length: 200 }, (_, index) => ({
+			range: new Range(index + 1, 1, index + 1, 4),
+			options: { description: 'inline sample', inlineClassName: 'viewport-inline' },
+		})));
+		model.decorationQueries.length = 0;
+		view.render(true, false);
+		assert.ok(view.domNode.domNode.querySelectorAll('.viewport-inline').length > 25);
+		assert.ok(model.decorationQueries.length <= 8, `Expected bounded viewport queries, got ${model.decorationQueries.length}`);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Viewport decoration data refreshes after filtering, edits and wrapping changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	try {
+		using model = new TextModel('abcdefghij\nsecond');
+		const range = new Range(1, 1, 2, model.getLineMaxColumn(2));
+		const [id] = model.deltaDecorations([], [{
+			range: new Range(1, 2, 1, 5),
+			options: { description: 'validation', className: 'squiggly-error', inlineClassName: 'viewport-inline' },
+		}]);
+		using view = new View({
+			container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false },
+			renderValidationDecorations: 'on', textMeasurer: new FixedTextMeasurer(),
+		});
+		view.layout({ width: 300, height: 100 });
+		const read = () => view.testViewModel.getViewportViewLineRenderingData(range, 1).inlineDecorations;
+		assert.equal(read().length, 1);
+		view.testConfiguration.updateOptions({ renderValidationDecorations: 'off' });
+		assert.deepEqual(read(), []);
+		view.testConfiguration.updateOptions({ renderValidationDecorations: 'editable', readOnly: true });
+		assert.deepEqual(read(), []);
+		view.testConfiguration.updateOptions({ readOnly: false });
+		assert.equal(read().length, 1);
+		model.deltaDecorations([id], [{
+			range: new Range(1, 6, 1, 9), options: { description: 'moved', inlineClassName: 'viewport-moved' },
+		}]);
+		assert.deepEqual(read().map(decoration => decoration.range), [new Range(1, 6, 1, 9)]);
+		model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'X\n' }]);
+		assert.deepEqual(read(), []);
+		assert.deepEqual(view.testViewModel.getViewportViewLineRenderingData(range, 2).inlineDecorations.map(decoration => decoration.range), [new Range(2, 6, 2, 9)]);
+		view.testConfiguration.updateOptions({ wordWrap: 'on' });
+		view.layout({ width: 70, height: 200 });
+		const wrappedRange = new Range(1, 1, view.testViewModel.getLineCount(), view.testViewModel.getLineMaxColumn(view.testViewModel.getLineCount()));
+		const batched = Array.from({ length: wrappedRange.endLineNumber }, (_, index) => view.testViewModel.getViewportViewLineRenderingData(wrappedRange, index + 1).inlineDecorations);
+		const standalone = Array.from({ length: wrappedRange.endLineNumber }, (_, index) => view.testViewModel.getViewLineRenderingData(index + 1).inlineDecorations);
+		assert.deepEqual(batched, standalone);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("Model decorations project, update, and follow tracked ranges", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	recordCanvasPaint(dom);
@@ -550,6 +637,15 @@ function overviewMarkerColors(paint: readonly CanvasPaint[]): readonly string[] 
 function overviewCursorColors(paint: readonly CanvasPaint[]): readonly string[] {
 	const frame = paint.filter(entry => entry.kind === 'overview').at(-1)?.frame;
 	return paint.filter(entry => entry.kind === 'overview' && entry.frame === frame && entry.height === 2).map(entry => entry.fill);
+}
+
+class DecorationQueryModel extends TextModel {
+	readonly decorationQueries: Range[] = [];
+
+	public override getDecorationsInRange(...args: Parameters<TextModel['getDecorationsInRange']>): ReturnType<TextModel['getDecorationsInRange']> {
+		this.decorationQueries.push(Range.lift(args[0]));
+		return super.getDecorationsInRange(...args);
+	}
 }
 
 class FixedTextMeasurer implements TextMeasurer {

@@ -1,6 +1,6 @@
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../src/ash/platform/extensionHost/common/extensionHostApi.js';
-import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensionHost/browser/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';

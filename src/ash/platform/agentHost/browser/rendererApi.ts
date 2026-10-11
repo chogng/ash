@@ -26,7 +26,7 @@ import { createDisconnectedConnectorApi } from "../../connectors/browser/connect
 import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
 import { createDisconnectedPluginApi } from "../../plugins/browser/pluginApi.js";
-import { createDisconnectedExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
+import { createDisconnectedExtensionHostApi } from './extensionHostApi.js';
 import { createDisconnectedExtensionsApi } from "../../extensionManagement/browser/extensionManagementApi.js";
 import { createDisconnectedDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createDisconnectedAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';

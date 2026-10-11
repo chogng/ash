@@ -55,8 +55,8 @@ V8 的第三方系统隔离在 macOS 与 64 位 Windows 实现；标准 Node 包
 
 Web 和 Electron 的工作台共用可信浏览器扩展入口：`build/builtin/extensions.ts` 将内置包及显式配置的
 `ASH_WEB_EXTENSION_PATHS` 冻结为 Browser catalog 和资源快照。`platform/extensions/browser/extensionApi.ts`
-提供目录与 `IExtensionResourceLoaderService` 资源契约；`platform/extensionHost/browser/extensionHostApi.ts` 持有每个可执行包的 Worker，
-`extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口。
+提供目录与 `IExtensionResourceLoaderService` 资源契约；`workbench/services/extensions/browser/webWorkerExtensionHost.ts` 持有每个可执行包的 Worker，
+`workbench/api/worker/extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口。
 Markdown 只从标准 `vscode` 导入命令、语言 Provider、文档事件和文本自定义编辑器 API。
 构建阶段将产品私有的 `host.mjs` 注册与生命周期 adapter、共享 `vscode.js` 兼容实现和作者模块编入同一快照；不发布额外的作者模块。
 零起始 UTF-16 `line`/`character` 在适配边界转换成 Host RPC 坐标，文档与配置来自发起窗口。
@@ -255,7 +255,7 @@ flowchart TD
 | 作者接口               | TS/JS 的标准 VS Code / Node 契约、[`sdk/rust`](../sdk/rust/README.md)                                                                                                       | JS 兼容实现与 Rust SDK 适配上述契约、语言对象与取消；不能复制权限状态、注册 registry 或另建宿主协议                  |
 | 接入与监管             | [`external-ext`](../crates/external-ext/README.md)                                                                                                                          | 唯一的身份验证、注册发布、live authority gate、调用 fencing、配额、取消和进程监管语义                                |
 | 产品组合               | App Server 与各客户端宿主                                                                                                                                                   | 从现有包来源取得有效授权，选择 scope 和 launcher，绑定后端服务及发起客户端；不链接具体 Provider 实现                 |
-| Workbench 适配         | [`IExtensionHostApi`](../src/ash/platform/extensionHost/common/extensionHostApi.ts)、[`MainThreadExtensionApi`](../src/ash/workbench/api/browser/mainThreadExtensionApi.ts) | 把注册接入现有 TS 服务，把客户端请求交给其真实 owner；不建立语言专用分发器                                           |
+| Workbench 适配         | [`IExtensionHostApi`](../src/ash/platform/agentHost/common/extensionHostApi.ts)、[`MainThreadExtensionApi`](../src/ash/workbench/api/browser/mainThreadExtensionApi.ts) | 把注册接入现有 TS 服务，把客户端请求交给其真实 owner；不建立语言专用分发器                                           |
 
 共享 wire 的 Rust 定义是跨语言格式的唯一源。TS wire 类型与 schema 从该源生成，沿用仓库现有 `schemars` / `ts-rs` 和 protocol generation 设施；内部扩展消息与 Renderer 可见消息必须有各自明确的导出范围。含凭据的 `CoreService` 请求与结果不能为了类型复用进入 Renderer RPC。领域消费者继续使用自身领域类型，生成 DTO 只留在 adapter；语言包装可以手写，但不能手写另一份 wire 枚举、错误码或协议版本。
 
@@ -319,7 +319,7 @@ Host RPC 与 App Server 客户端协议是两个真实传输边界，允许机�
 | `external-js-ext/src/runtime.rs` 与私有标准 API adapter                        | 目前仅放行支持的编辑器/工作区操作，尚无与 Rust Services 对等的公共服务入口           | 按公共契约完善 JS 适配和授权，不能增加 Remote 私有 RPC                                                     |
 | `app-server/src/server/extension_host_runtime.rs` 的 `EditorClientBinding`     | 编辑器扩展的 `CoreService` 明确拒绝；GitHub profile 宿主另有按实例绑定的服务 handler | 将可复用的公共服务绑定按 scope/权限闭合，不能把 GitHub handler 复制给每个 Provider，也不能直接放开全部服务 |
 | `app-server-protocol`、现有 schema / TS export                                 | 已引用共享扩展类型；核心服务操作被排除出 Renderer operation 导出                     | 补齐内部扩展契约的生成与一致性验证，保持凭据边界；不新建手写协议源                                         |
-| `platform/extensionHost/common/extensionHostApi.ts`                            | 仍有手写的 operation/result 和注册描述，部分使用生成类型                             | 在现有 adapter 内逐项收敛到生成契约；保留 frontend 领域对象，不增加第二个注册 owner                        |
+| `platform/agentHost` 与 `workbench/api/common/extHost.protocol.ts`             | 宿主契约、传输校验与编辑器客户端契约已分离；生成 DTO 只用于运行时 adapter             | 保持生成协议校验与领域契约转换，保留 frontend 领域对象，不增加第二个注册 owner                              |
 | Workbench、TUI、Node、V8、Rust SDK                                             | 各自支持范围不相等，完整 VS Code/Node 与第三方 Rust 执行隔离尚未完成                 | 能力按实际支持协商/拒绝；同一能力两种语言的语义必须一致，不用类型存在替代运行验证                          |
 
 **迁移顺序与验收**
@@ -623,7 +623,7 @@ Desktop 的 `NativeExtensionService` 在远端 Workbench 启动前选择本地�
 | 可执行进程、Host RPC、incarnation、取消和 crash recovery                                  | `ash-external-ext`                                            | package discovery、目录权限决定、领域 payload     |
 | source normalization + Dir Authorization adapter、Host fleet 与客户端 RPC                 | App Server composition                                        | OS sandbox implementation、Workbench UI           |
 | 生产 sandbox、hard resources 与 killable process tree                                     | 注入的 platform `ExtensionHostLauncher`                       | package enable/grant 或 provider semantics        |
-| Host snapshot normalization 与 transport                                                  | `platform/extensionHost` adapter                              | 领域 provider ownership                           |
+| Host snapshot normalization 与 transport                                                  | `platform/agentHost/browser/extensionHostProtocol.ts`、`extensionHostApi.ts` | 领域 provider ownership                           |
 | Host fleet 生命周期、刷新和连接状态                                                       | `IExtensionHostService` implementation                        | 扩展 provider 注册、generated DTO 作为 domain API |
 | 扩展 API 的 Workbench 接入、原子注册、调用和 Output 生命周期                              | `workbench/api/browser`                                       | 进程监管、WebSocket、App Server 协议定义          |
 | Renderer Host service 安装与启动阻塞                                                      | Code 产品入口选择的 `workbench/contrib/extensionHost`         | 通用 Workbench 或 Academic 产品隐式安装           |

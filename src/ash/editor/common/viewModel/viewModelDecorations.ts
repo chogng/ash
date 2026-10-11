@@ -37,7 +37,10 @@ export class ViewModelDecorations extends Disposable {
 		this._cachedModelDecorationsResolverViewRange = null;
 		this._register(toDisposable(() => this.reset()));
 		this._register(configuration.onDidChangeFast(event => {
-			if (event.hasChanged(EditorOption.bracketPairColorization)) {
+			if (event.hasChanged(EditorOption.bracketPairColorization)
+				|| event.hasChanged(EditorOption.readOnly)
+				|| event.hasChanged(EditorOption.renderValidationDecorations)
+				|| event.hasChanged(EditorOption.effectiveAllowVariableFonts)) {
 				this.reset();
 			}
 		}));

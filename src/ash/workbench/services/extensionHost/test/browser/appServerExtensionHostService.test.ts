@@ -1,4 +1,5 @@
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import type { ExtensionClientHandler } from '../../../../api/common/extHost.protocol.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { getNLSLanguage } from '../../../../../nls.js';
@@ -30,7 +31,8 @@ import { CommandRegistry, CommandsRegistry } from "../../../../../platform/comma
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { type ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { IExtensionHostApi, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -61,7 +63,7 @@ import { ILanguageService } from '../../../../../editor/common/languages/languag
 import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
 import { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import { IExtensionBackendApi } from '../../../../../platform/extensionHost/common/extensionBackendApi.js';
+import { IExtensionBackendApi } from '../../../../../platform/agentHost/common/extensionBackendApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ISCMService, ISCMViewService } from '../../../../contrib/scm/common/scm.js';
 import { SCMService } from '../../../../contrib/scm/common/scmService.js';
@@ -710,9 +712,9 @@ class FixtureLifecycleService extends AbstractLifecycleService { }
 
 class FakeExtensionHostApi implements IExtensionHostApi {
 	async start(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Startup is outside this fixture'); }
-	public clientHandler: Parameters<IExtensionHostApi['registerClientHandler']>[0] | undefined;
+	public clientHandler: ExtensionClientHandler | undefined;
 	public registerClientHandler(handler: Parameters<IExtensionHostApi['registerClientHandler']>[0]): { dispose(): void; } {
-		this.clientHandler = handler;
+		this.clientHandler = handler as ExtensionClientHandler;
 		return { dispose: () => { this.clientHandler = undefined; } };
 	}
 	readonly activations: Parameters<IExtensionHostApi['activateByEvent']>[0][] = [];

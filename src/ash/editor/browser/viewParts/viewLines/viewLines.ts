@@ -430,7 +430,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 
 	private projectLineText(line: ViewLine, visualLine: EditorVisualLine, tokens: readonly ResolvedSemanticToken[]): void {
 		const viewLineNumber = visualLine.visualLineIndex + 1;
-		const lineData = this._context.viewModel.getViewLineRenderingData(viewLineNumber);
+		const lineData = this.lastViewportData!.getViewLineRenderingData(viewLineNumber);
 		const hasInjectedText = !!visualLine.projectionData?.injectionOffsets;
 		const inlineDecorations = [...lineData.inlineDecorations];
 		if (this._context.theme.value.getColor(editorSelectionForeground)) {

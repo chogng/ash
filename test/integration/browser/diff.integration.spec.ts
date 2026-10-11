@@ -70,6 +70,8 @@ for (const theme of ['vs', 'hc-black']) {
 
 test('diff scrolling keeps retained decorations stable during wheel input', async ({ page }, testInfo) => {
 	await openDiffPage(page);
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await page.locator('#single').evaluate(node => { node.style.height = '720px'; });
 	const original = Array.from({ length: 1200 }, (_, index) => `export const entry${index} = ${index};`);
 	const modified = original.map((line, index) => index % 5 === 0 ? `${line} // changed` : line);
 	await page.evaluate(([left, right]) => {

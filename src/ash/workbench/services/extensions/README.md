@@ -73,8 +73,11 @@ releases the registrations. This mechanism activates the packaged `media-preview
 does not execute extension JavaScript or acquire text models for binary media. Workbench and
 Sessions both start this declarative loader.
 
-The Workbench composition root also creates `BrowserExtensionHostApi` for packaged `browser`
+The Workbench composition root also creates `WebWorkerExtensionHost` for packaged `browser`
 entries. It owns the window's extension Workers alongside the App Server executable-host transport.
+The Worker entry lives in `workbench/api/worker/extensionHostWorker.ts`; editor callback contracts
+live in `workbench/api/common/extHost.protocol.ts`. `platform/agentHost` owns the App Server
+transport, invocation cancellation and wire validation, without importing Workbench contracts.
 `build/resources/extensions.ts` bundles each browser entry and its dependencies into an immutable ES
 module. Activation receives the window language, registration callbacks, and command execution.
 `MainThreadExtensionApi` installs extension commands and manifest editor menus;
