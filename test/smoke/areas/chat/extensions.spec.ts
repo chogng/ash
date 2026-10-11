@@ -185,7 +185,7 @@ exports.activate = function(context) {
 	expect(empty.message).toContain('No local editor extensions are installed.');
 });
 
-test('Open VSX JavaScript extension starts on first command, survives restart and retires on revoke', async ({ target, application, workbench, reloadWorkbench }) => {
+test('Open VSX JavaScript extension starts on first command, survives restart and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, application, workbench, reloadWorkbench }) => {
 	test.skip(process.env.ASH_PLAYWRIGHT_OPEN_VSX !== '1' || process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Explicit live Open VSX execution check requires macOS Electron with App Server');
 	test.setTimeout(120_000);
 	let page = workbench.page;
@@ -253,7 +253,7 @@ test('Open VSX JavaScript extension starts on first command, survives restart an
 	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).getByRole('option')).toHaveCount(0);
 });
 
-test('Open VSX installs a real theme, restores it and removes its contributions', async ({ target, application, workbench, reloadWorkbench }) => {
+test('Open VSX installs a real theme, restores it and removes its contributions', { tag: '@electron-app-server' }, async ({ target, application, workbench, reloadWorkbench }) => {
 	test.skip(process.env.ASH_PLAYWRIGHT_OPEN_VSX !== '1' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Explicit live Open VSX check requires Electron with App Server');
 	test.setTimeout(90_000);
 	let page = workbench.page;

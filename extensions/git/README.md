@@ -58,3 +58,5 @@ Committed binary file content includes bounded base64 bytes alongside its binary
 browser adapter decodes them into domain byte arrays; history editors retain these immutable
 versions independently of the working tree. The bundled provider contract is version 3. Older
 window-facing requests without graph revisions and binary markers without data still decode.
+
+The SCM host bridge advertises optional reference-selection and merge-base callbacks, publishes the upstream reference as an observable snapshot, and serializes immutable binary content as bounded byte arrays. Older providers without these capabilities retain the existing history view and binary marker behavior.

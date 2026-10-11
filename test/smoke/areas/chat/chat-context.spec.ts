@@ -276,7 +276,7 @@ instructionTest('instruction context discovers the authorized directory and open
 	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-input:visible')).toBeFocused();
 });
 
-test('live GitHub account attaches a real issue and pull request through the context picker', async ({ target, workbench, webAppServer }) => {
+test('live GitHub account attaches a real issue and pull request through the context picker', { tag: '@browser-app-server' }, async ({ target, workbench, webAppServer }) => {
 	test.skip(target.kind !== 'browser' || !webAppServer || process.env.ASH_TEST_GITHUB_LIVE !== '1', 'Opt-in account integration against an isolated Web test profile.');
 	const page = workbench.page;
 	let accountId: string | undefined;

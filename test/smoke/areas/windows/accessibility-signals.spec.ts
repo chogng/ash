@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('terminal bell, clear, formatting and save signals play only after their real operations', async ({ target, workbench, testWorkspace, application }) => {
+test('terminal bell, clear, formatting and save signals play only after their real operations', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace, application }) => {
 	test.skip(target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER, 'Requires terminal execution and the smoke language server.');
 	test.setTimeout(120_000);
 	const page = workbench.page;
@@ -60,7 +60,7 @@ test('terminal bell, clear, formatting and save signals play only after their re
 });
 
 for (const shell of ['Bash', 'Zsh', 'PowerShell', 'Windows PowerShell']) {
-	test(`${shell} interactive command signals play once after success or failure`, async ({ target, workbench, application }) => {
+	test(`${shell} interactive command signals play once after success or failure`, { tag: process.platform === 'win32' && (shell === 'Bash' || shell === 'Zsh') ? '@unsupported' : ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application }) => {
 		test.skip(target.appServerMode !== 'required' || (process.platform === 'win32' && (shell === 'Bash' || shell === 'Zsh')), 'Requires a supported interactive shell.');
 		test.setTimeout(90_000);
 		const page = workbench.page;

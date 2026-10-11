@@ -132,3 +132,39 @@ test('SCM bridge forwards reference-only HEAD moves once without invalidating hi
 	assert.equal(updates.length, 1);
 	assert.throws(() => value.bridge.set(source, 'ash.scm', 5, [{ ...changed, historyRefsRevision: -1 }]), /history refs revision/);
 });
+
+test('SCM bridges advertised reference filters, upstream changes and immutable binary bytes', async () => {
+	const ref = { id: 'remoteBranch:origin/main', name: 'origin/main', revision: 'remote', category: 'remoteBranch' };
+	const snapshot = { ...(provider() as Record<string, JsonValue>), hasHistory: true, hasHistoryItemRefs: true, hasHistoryMergeBase: true, historyRemoteRef: ref };
+	const calls: Array<Record<string, JsonValue>> = [];
+	let bytes: JsonValue = [0, 1, 255];
+	const value = fixture(async request => {
+		const payload = request.payload as Record<string, JsonValue>;
+		calls.push(payload);
+		switch (payload.methodName) {
+			case 'provideHistoryItemRefs': return [ref];
+			case 'resolveHistoryItemRefsCommonAncestor': return 'base';
+			case 'resolveHistoryItemChangeContents': return { original: { kind: 'binary', bytes }, modified: { kind: 'missing' } };
+			default: return null;
+		}
+	}, [snapshot]);
+	using lifetime = value.lifetime;
+	const history = value.scm.getRepository('repo')!.provider.historyProvider!;
+	assert.deepEqual(await history.provideHistoryItemRefs!([ref.id]), [{ ...ref, description: undefined, upstream: undefined, canDelete: false, color: undefined }]);
+	assert.deepEqual(calls.at(-1)!.arguments, [[ref.id]]);
+	assert.equal(await history.resolveHistoryItemRefsCommonAncestor!(['head', 'remote']), 'base');
+	assert.deepEqual(calls.at(-1)!.arguments, [['head', 'remote']]);
+	assert.equal(history.historyItemRemoteRef!.get()!.revision, 'remote');
+	let upstreamChanges = 0;
+	using listener = history.historyItemRemoteRef!.onDidChange(() => upstreamChanges++);
+	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, historyRemoteRef: { ...ref, revision: 'new-remote' } }]);
+	assert.equal(upstreamChanges, 1);
+	const change = { uri: URI.parse('git:/image.bin'), path: 'image.bin', status: 'modified' };
+	const result = await history.resolveHistoryItemChangeContents('head', change);
+	assert.deepEqual(result.original, { kind: 'binary', bytes: new Uint8Array([0, 1, 255]) });
+	assert.deepEqual(result.modified, { kind: 'missing' });
+	bytes = [256];
+	await assert.rejects(history.resolveHistoryItemChangeContents('head', change), /Invalid SCM binary bytes/u);
+	bytes = null;
+	assert.deepEqual((await history.resolveHistoryItemChangeContents('head', change)).original, { kind: 'binary' });
+});

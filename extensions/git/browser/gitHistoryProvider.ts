@@ -61,7 +61,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	public async provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[]> {
 		const roots = options.historyItemRefs === undefined ? undefined : [...new Set(options.historyItemRefs)].sort();
 		if (JSON.stringify(roots) !== JSON.stringify(this.historyRoots)) {
-			this.reset(false);
+			this.reset(false, true);
 			this.historyRoots = roots;
 		}
 		const generation = this.generation;
@@ -297,19 +297,22 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		}
 	}
 
-	private reset(notify = true): void {
+	private reset(notify = true, preserveReferences = false): void {
 		this.generation += 1;
 		this.loading = undefined;
 		this.referencesLoading = undefined;
 		this.graphRevision = undefined;
-		this.referencesRevision = 0;
 		this.commits.length = 0;
-		this.references.clear();
-		this.branches = [];
-		this.remotes = [];
+		// Changing traversal roots does not change the repository's HEAD or upstream.
+		if (!preserveReferences) {
+			this.referencesRevision = 0;
+			this.references.clear();
+			this.branches = [];
+			this.remotes = [];
+			this.setHistoryItemRef(undefined);
+		}
 		this.nextCursor = undefined;
 		this.hasMore = true;
-		this.setHistoryItemRef(undefined);
 		if (notify) this.changeEmitter.fire();
 	}
 

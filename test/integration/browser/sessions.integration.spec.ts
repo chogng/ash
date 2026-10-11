@@ -50,6 +50,10 @@ test.beforeEach(async ({ page }) => {
 	await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
 });
 
+test.afterEach(async ({ page }) => {
+	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.errors)).toEqual([]);
+});
+
 test('Sessions navigation icons and surface controls follow the selected component', async ({ page }) => {
 	const activityBar = page.locator('[data-part="activitybar"]');
 	await expect(activityBar).toBeVisible();
@@ -122,6 +126,39 @@ test.describe('Sessions settings components', () => {
 		await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 	});
 
+	test('modified settings refresh after configuration changes and reset without replacing search', async ({ page }) => {
+		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const search = settings.getByRole('searchbox', { name: 'Search settings' });
+		const setting = settings.locator('[data-settings-item-id="sessions.activityBar.compact"]');
+		const empty = settings.locator('.ash-sessions-settings-empty');
+		await search.fill('@id:sessions.activityBar.compact');
+		await setting.getByRole('switch').focus();
+		await setting.getByRole('switch').press('Space');
+		await settings.getByRole('button', { name: 'Filter Settings', exact: true }).click();
+		await settings.getByRole('menuitem', { name: 'Modified', exact: true }).click();
+		await expect(search).toHaveValue('@id:sessions.activityBar.compact @modified');
+		await expect(search).toBeFocused();
+		await expect(setting.getByRole('switch')).toBeChecked();
+		await expect(settings.locator('.ash-sessions-customize')).toHaveCount(0);
+		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.compact', undefined));
+		await expect(setting).toHaveCount(0);
+		await expect(empty).toBeVisible();
+		await expect(search).toBeFocused();
+		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.compact', true));
+		await expect(setting.getByRole('switch')).toBeChecked();
+		await expect(empty).toBeHidden();
+		await expect(search).toBeFocused();
+		await setting.hover();
+		await setting.getByRole('button', { name: 'More actions for Compact Activity Bar', exact: true }).click();
+		await settings.getByRole('menuitem', { name: 'Reset Setting', exact: true }).click();
+		await expect(setting).toHaveCount(0);
+		await expect(empty).toBeVisible();
+		await expect(search).toHaveValue('@id:sessions.activityBar.compact @modified');
+		await search.fill('@id:sessions.activityBar.compact');
+		await expect(setting.getByRole('switch')).not.toBeChecked();
+		await expect(empty).toBeHidden();
+	});
+
 	test('settings cards and responsive panes preserve their geometry', async ({ page }) => {
 		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 		await expect(settings).toBeVisible();
@@ -188,6 +225,7 @@ test.describe('Sessions settings components', () => {
 		await expect(settingsPage.locator('.ash-configuration-setting')).toHaveCount(0);
 		await expect(settings.getByText('No settings found.')).toBeHidden();
 		await navigation.getByRole('button', { name: 'Appearance' }).click();
+		await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
 		const searchSettings = settings.getByRole('searchbox', { name: 'Search settings' });
 		await expect(settings.locator('.ash-sessions-settings-search svg[data-ash-icon-id="search"]')).toBeVisible();

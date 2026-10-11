@@ -287,7 +287,7 @@ test('Local model management reports backend import errors and unavailable captu
 	}
 });
 
-test('Desktop Voice imports after Settings closes and shares model deletion with Sessions', async ({ application, target, workbench }) => {
+test('Desktop Voice imports after Settings closes and shares model deletion with Sessions', { tag: '@electron-app-server' }, async ({ application, target, workbench }) => {
 	const source = process.env.ASH_DICTATION_MODEL_TEST_SOURCE;
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || !source, 'Requires the connected desktop and a prepared voice model fixture');
 	if (!source || !('windows' in application)) { return; }

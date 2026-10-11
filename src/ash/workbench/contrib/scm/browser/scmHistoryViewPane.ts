@@ -388,7 +388,8 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	public async revealCurrentHistoryItem(): Promise<void> {
-		if (this.head?.revision && this.historyItemRefs && !this.historyItemRefs.includes(this.head.revision)) {
+		const filter = this.filters.get(this.filterKey) ?? 'auto';
+		if (this.head?.revision && (Array.isArray(filter) && !filter.includes(this.head.id) || this.historyItemRefs && !this.historyItemRefs.includes(this.head.revision))) {
 			this.filters.delete(this.filterKey);
 			this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
 			this.page = undefined;
@@ -446,6 +447,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.providerListener.value = listeners;
 			if (provider) {
 				listeners.add(provider.onDidChange(() => void this.refresh()));
+				if (provider.historyItemRemoteRef) { listeners.add(provider.historyItemRemoteRef.onDidChange(() => void this.refresh())); }
 				listeners.add(provider.historyItemRef.onDidChange(head => {
 					this.head = head;
 					if (this.page) this.renderGraph(this.page);
@@ -496,7 +498,8 @@ export class SCMHistoryViewPane extends ViewPane {
 				this.historyItemRefs = filter === 'all' ? undefined : selected.flatMap(ref => ref.revision ? [ref.revision] : []);
 				this.comparison = undefined;
 				if (this.head?.revision && remote?.revision && remote.revision !== this.head.revision && provider.resolveHistoryItemRefsCommonAncestor) {
-					const base = await provider.resolveHistoryItemRefsCommonAncestor([this.head.revision, remote.revision]);
+					// A missing merge base must not hide otherwise readable commit history.
+					const base = await provider.resolveHistoryItemRefsCommonAncestor([this.head.revision, remote.revision]).catch(() => undefined);
 					if (this.isDisposed || generation !== this.generation) { return; }
 					if (base) {
 						this.comparison = {
@@ -649,7 +652,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		const row = this.rowResources.get(historyItem.id);
 		if (row) { row.changesDirty = true; }
 		const index = this.rows.findIndex(model => model.historyItem.id === historyItem.id);
-		this.list?.updateElementHeight(index, this.rowHeight(historyItem));
+		// Recompute from the owning expansion state instead of retaining an override across filters.
+		this.list?.updateElementHeight(index, undefined);
 		this.list?.rerender(index);
 	}
 

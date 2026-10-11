@@ -136,7 +136,7 @@ startElectronApplication();
 	}
 });
 
-test('remote session proxies DNS, subresources, fetch, WebSocket and loopback, then rejects direct requests after disconnect', async ({ network: { application, page, workbench, port, hosts, requests, stopProxy } }) => {
+test('remote session proxies DNS, subresources, fetch, WebSocket and loopback, then rejects direct requests after disconnect', { tag: '@electron-ui' }, async ({ network: { application, page, workbench, port, hosts, requests, stopProxy } }) => {
 	await workbench.quickaccess.runCommand('ash.browser.open');
 	const editor = page.locator('.ash-browser-editor');
 	const address = editor.getByRole('textbox', { name: 'Browser address' });

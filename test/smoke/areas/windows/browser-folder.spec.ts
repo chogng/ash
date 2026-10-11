@@ -44,7 +44,7 @@ test('standalone browser searches granted files and disables process commands', 
 	expect(driver.diagnostics.consoleErrors.filter(error => /WebAppServerUnavailable|Unable to create workbench contribution/.test(error))).toEqual([]);
 });
 
-test('standalone browser executes its extension command in a Worker and retires it on reload', async ({ target, workbench }) => {
+test('standalone browser executes its extension command in a Worker and retires it on reload', { tag: '@browser-ui' }, async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled' || !process.env.ASH_WEB_EXTENSION_PATHS?.includes('web-extension'));
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.web.fixture.run');

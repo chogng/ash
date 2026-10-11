@@ -10,6 +10,7 @@ export function createSCMApi(runtime, request, invoke, retain) {
 	let pending;
 	const serial = value => JSON.parse(JSON.stringify(value, function (key, entry) {
 		const original = this[key];
+		if (original instanceof Uint8Array) return Array.from(original);
 		if (original?.scheme && typeof original.toString === 'function') return original.toString();
 		return entry;
 	}));
@@ -33,6 +34,9 @@ export function createSCMApi(runtime, request, invoke, retain) {
 				activeRepositoryName: value.activeRepositoryName, statusMessage: value.statusMessage, isBusy: value.isBusy,
 				statusBarCommands: value.statusBarCommands.map(command => ({ id: command.id, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, priority: command.priority, compactGroup: command.compactGroup, icon: command.icon?.id })),
 				hasHistory: !!value.historyProvider, historyRef: value.historyProvider?.historyItemRef.get(), historyRevision: entry.historyRevision,
+				historyRemoteRef: value.historyProvider?.historyItemRemoteRef?.get(),
+				hasHistoryItemRefs: typeof value.historyProvider?.provideHistoryItemRefs === 'function',
+				hasHistoryMergeBase: typeof value.historyProvider?.resolveHistoryItemRefsCommonAncestor === 'function',
 				historyRefsRevision: entry.historyRefsRevision, historyRefsItems: entry.historyRefsItems,
 				hasMerge: !!value.mergeProvider, multiDiff: entry.multiDiff?.metadata ?? null, inputRevision: entry.inputRevision,
 			});
@@ -69,8 +73,8 @@ export function createSCMApi(runtime, request, invoke, retain) {
 				case 'decoration': return serial(await entry.decorations?.provideDecorations(entry.parseUri(payload.resource), sdkToken(_context.cancellationToken)) ?? null);
 				case 'quickDiff': { const controller = new AbortController(); const listener = _context.cancellationToken.onCancellationRequested(() => controller.abort()); if (_context.cancellationToken.isCancellationRequested) controller.abort(); try { return serial(await entry.quickDiff?.provideOriginalResource(entry.parseUri(payload.resource), controller.signal) ?? null); } finally { listener.dispose(); } }
 				case 'history': {
-					const allowed = ['refresh', 'provideHistoryItems', 'resolveHistoryItemDetails', 'provideHistoryItemChanges', 'resolveHistoryItemChangeContents', 'resolveHistoryItemChatContext', 'resolveHistoryItemChangeRangeChatContext'];
-					if (!provider.historyProvider || !allowed.includes(payload.methodName)) throw new Error('SCM history method is unavailable');
+					const allowed = ['refresh', 'provideHistoryItemRefs', 'resolveHistoryItemRefsCommonAncestor', 'provideHistoryItems', 'resolveHistoryItemDetails', 'provideHistoryItemChanges', 'resolveHistoryItemChangeContents', 'resolveHistoryItemChatContext', 'resolveHistoryItemChangeRangeChatContext'];
+					if (!provider.historyProvider || !allowed.includes(payload.methodName) || typeof provider.historyProvider[payload.methodName] !== 'function') throw new Error('SCM history method is unavailable');
 					const args = payload.arguments.map(value => value === null ? undefined : value);
 					if (payload.methodName === 'resolveHistoryItemChangeContents') {
 						const change = args[1];
@@ -98,6 +102,7 @@ export function createSCMApi(runtime, request, invoke, retain) {
 			const listeners = [provider.onDidChangeResources(publish)];
 			if (provider.historyProvider) {
 				listeners.push(provider.historyProvider.historyItemRef.onDidChange(publish));
+				if (provider.historyProvider.historyItemRemoteRef) listeners.push(provider.historyProvider.historyItemRemoteRef.onDidChange(publish));
 				listeners.push(provider.historyProvider.onDidChange(() => { ++entry.historyRevision; entry.historyRefsItems = []; publish(); }));
 				if (provider.historyProvider.onDidChangeHistoryItemRefs) {
 					listeners.push(provider.historyProvider.onDidChangeHistoryItemRefs(items => {

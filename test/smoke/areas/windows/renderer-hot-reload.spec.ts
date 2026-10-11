@@ -59,8 +59,8 @@ declare global {
 }
 
 for (const chatSurface of ['code', 'cowork'] as const) {
-	test(`development rebuilds model cards, chat transcripts, and the Sessions sidebar while retaining their state (${chatSurface})`, async ({ playwright }, testInfo) => {
-		test.skip(!['browser-ui', 'electron-ui'].includes(testInfo.project.name), 'Component hot reload runs in Web and Electron UI projects.');
+	test(`development rebuilds model cards, chat transcripts, and the Sessions sidebar while retaining their state (${chatSurface})`, { tag: ['@browser-ui', '@electron-ui'] }, async ({ playwright }, testInfo) => {
+
 		test.setTimeout(180_000);
 		const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 		const paths = {
@@ -293,8 +293,8 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 	});
 }
 
-test('development DomWidget rebuilds chat tips twice while retaining draft, focus, and dismissal state', async ({ playwright }, testInfo) => {
-	test.skip(!['browser-ui', 'electron-ui'].includes(testInfo.project.name), 'Widget hot reload runs in browser and Electron UI projects.');
+test('development DomWidget rebuilds chat tips twice while retaining draft, focus, and dismissal state', { tag: ['@browser-ui', '@electron-ui'] }, async ({ playwright }, testInfo) => {
+
 	test.setTimeout(120_000);
 	const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 	const sourceFile = resolve(desktopDirectory, 'src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatTipContentPart.ts');
@@ -389,8 +389,8 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 	}
 });
 
-test('development Renderer replaces contribution initialization twice while retaining its editor and model', async ({ playwright }, testInfo) => {
-	test.skip(!['browser-ui', 'electron-ui'].includes(testInfo.project.name), 'Development hot reload runs in the browser and Electron UI projects.');
+test('development Renderer replaces contribution initialization twice while retaining its editor and model', { tag: ['@browser-ui', '@electron-ui'] }, async ({ playwright }, testInfo) => {
+
 	test.setTimeout(120_000);
 	const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 	const sourceFile = resolve(desktopDirectory, 'src/ash/editor/contrib/placeholderText/browser/placeholderTextContribution.ts');
@@ -506,8 +506,8 @@ test('development Renderer replaces contribution initialization twice while reta
 	}
 });
 
-test('development Sessions applies successive CSS saves without reloading its page', async ({ playwright }, testInfo) => {
-	test.skip(!['browser-ui', 'electron-ui'].includes(testInfo.project.name), 'Development CSS hot reload runs in browser and Electron UI projects.');
+test('development Sessions applies successive CSS saves without reloading its page', { tag: ['@browser-ui', '@electron-ui'] }, async ({ playwright }, testInfo) => {
+
 	test.setTimeout(120_000);
 	const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 	const sourceFile = resolve(desktopDirectory, 'src/ash/sessions/browser/parts/activitybar/media/activityBarPart.css');
@@ -586,8 +586,8 @@ test('development Sessions applies successive CSS saves without reloading its pa
 	}
 });
 
-test('development CSS imports load and deduplicate in a plain ESM page', async ({ playwright }, testInfo) => {
-	test.skip(!['browser-ui', 'electron-ui'].includes(testInfo.project.name), 'CSS module loading runs in browser and Electron UI projects.');
+test('development CSS imports load and deduplicate in a plain ESM page', { tag: ['@browser-ui', '@electron-ui'] }, async ({ playwright }, testInfo) => {
+
 	const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 	const template = await readFile(resolve(desktopDirectory, 'src/ash/code/browser/workbench/workbench-dev.html'), 'utf8');
 	const prelude = template.replace('{{WORKBENCH_DEV_CSS_MODULES}}', JSON.stringify([

@@ -22,7 +22,7 @@ interface ConnectionSample {
 	readonly error?: string;
 }
 
-test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
+test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, testWorkspace }, testInfo) => {
 	test.skip(process.env.ASH_DESKTOP_STARTUP_TRACE !== '1' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Run explicitly to measure Desktop startup.');
 	test.setTimeout(240_000);
 	const directory = await mkdtemp(join(tmpdir(), 'ash-trace-'));

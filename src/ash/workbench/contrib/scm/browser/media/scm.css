@@ -75,8 +75,7 @@
 	min-width: 0;
 	min-height: 22px;
 	align-items: center;
-	padding: 0 8px 0
-		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
+	padding: 0 8px 0 0;
 	line-height: 22px;
 }
 
@@ -280,16 +279,18 @@
 	list-style: none;
 }
 
-.ash-scm-graph-folder {
+.ash-scm-graph-folder.ash-button {
 	display: flex;
 	width: calc(100% - var(--scm-graph-content-x, 22px));
 	margin-left: var(--scm-graph-content-x, 22px);
 	height: 22px;
 	min-height: 22px;
 	justify-content: flex-start;
-	padding-left: calc(
-		var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120)
-	);
+	padding: 0 8px 0
+		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
+	border: 0;
+	border-radius: 0;
+	color: inherit;
 }
 
 .ash-scm-graph-graph.incoming-changes .ash-scm-graph-node,
@@ -306,7 +307,8 @@
 	border: 0;
 	border-radius: 0;
 	margin-left: var(--scm-graph-content-x, 22px);
-	padding: 0 8px 0 0;
+	padding: 0 8px 0
+		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
 	color: inherit;
 	background: transparent;
 	font: inherit;

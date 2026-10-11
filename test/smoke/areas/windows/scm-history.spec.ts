@@ -967,7 +967,8 @@ test.describe('SCM folding', () => {
 	});
 });
 
-test('SCM history filters references, compares branch ranges, switches file trees and restores binary snapshots', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
+test('SCM history filters references, compares branch ranges, switches file trees and restores binary snapshots', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench, restartWorkbench }) => {
+	test.setTimeout(120_000);
 	const cwd = testWorkspace.directory;
 	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 	await mkdir(join(cwd, 'src', 'nested'), { recursive: true });
@@ -1011,11 +1012,18 @@ test('SCM history filters references, compares branch ranges, switches file tree
 	const incoming = () => history.getByRole('treeitem', { name: /^Incoming Changes/u });
 	await expect(outgoing()).toBeVisible();
 	await expect(incoming()).toBeVisible();
+	await page.locator('[data-view-id="ash.gitView"]').getByRole('button', { name: 'Changes', exact: true }).click();
 	await expect(history.getByRole('treeitem', { name: /Topic only/u })).toHaveCount(0);
 	await incoming().focus();
 	await incoming().press('Enter');
 	await expect(incoming().locator('.ash-scm-graph-change')).toHaveCount(1);
 	await expect(incoming().locator('.ash-scm-graph-change')).toContainText('incoming.txt');
+	await incoming().press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Copy Commit Hash', exact: true })).toHaveCount(0);
+	await page.getByRole('menuitem', { name: 'Open Changes', exact: true }).click();
+	const rangeComparison = page.locator('.stanza-multi-diff-editor:visible');
+	await expect(rangeComparison.locator('.stanza-multi-diff-editor-section')).toHaveCount(1);
+	await expect(rangeComparison.locator('.stanza-multi-diff-editor-title')).toHaveText('src/incoming.txt');
 	await outgoing().focus();
 	await outgoing().press('Enter');
 	await expect(outgoing().locator('.ash-scm-graph-change')).toHaveCount(2);
@@ -1025,16 +1033,23 @@ test('SCM history filters references, compares branch ranges, switches file tree
 	await expect(hover.getByRole('button', { name: 'Copy Commit Hash', exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await history.locator('.ash-pane-view-header').getByRole('button', { name: 'More Actions', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'View as Tree', exact: true }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'View as Tree', exact: true }).click();
 	const folder = outgoing().getByRole('button', { name: 'Folder src', exact: true });
 	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await expect(folder).toHaveCSS('height', '22px');
+	await expect(folder).toHaveCSS('justify-content', 'flex-start');
 	await folder.focus();
 	await folder.press('ArrowLeft');
 	await expect(folder).toHaveAttribute('aria-expanded', 'false');
 	await expect(outgoing().getByRole('button', { name: 'Folder src/nested', exact: true })).toBeHidden();
 	await folder.press('ArrowRight');
 	await expect(outgoing().getByRole('button', { name: 'Folder src/nested', exact: true })).toBeVisible();
-	await test.info().attach('scm-history-branch-ranges-tree', { body: await history.screenshot(), contentType: 'image/png' });
+	await expect(outgoing().locator('.ash-scm-graph-change').filter({ hasText: 'details.txt' })).toHaveCSS('padding-left', '24px');
+	const detailsBounds = await outgoing().locator('.ash-scm-graph-change').filter({ hasText: 'details.txt' }).boundingBox();
+	const headBounds = await history.getByRole('treeitem', { name: /Local outgoing/u }).boundingBox();
+	expect(detailsBounds!.y + detailsBounds!.height).toBeLessThanOrEqual(headBounds!.y + 1);
+	await history.screenshot({ path: test.info().outputPath('scm-history-branch-ranges-tree.png') });
+	await test.info().attach('scm-history-branch-ranges-tree', { path: test.info().outputPath('scm-history-branch-ranges-tree.png'), contentType: 'image/png' });
 	const binary = outgoing().locator('.ash-scm-graph-change').filter({ hasText: 'image.bin' });
 	await binary.click();
 	const hex = page.locator('.ash-binary-editor-content:visible');
@@ -1047,7 +1062,9 @@ test('SCM history filters references, compares branch ranges, switches file tree
 	await expect(hex).toHaveCount(1);
 	await expect(hex).toContainText('00 02 fe');
 	await expect(page.getByRole('button', { name: 'Open as Read-Only Text', exact: true })).toBeVisible();
-	await test.info().attach('scm-history-binary-file', { body: await page.screenshot(), contentType: 'image/png' });
+	await expect(page.getByRole('button', { name: 'Open with Encoding', exact: true })).toHaveCount(0);
+	await page.screenshot({ path: test.info().outputPath('scm-history-binary-file.png') });
+	await test.info().attach('scm-history-binary-file', { path: test.info().outputPath('scm-history-binary-file.png'), contentType: 'image/png' });
 	const selectReferences = async (names: readonly string[]) => {
 		await history.locator('[data-action-id="workbench.scm.action.graph.selectHistoryItemRefs"] > button').click();
 		for (const name of names) {
@@ -1068,6 +1085,12 @@ test('SCM history filters references, compares branch ranges, switches file tree
 	for (const name of ['topic', 'topic-tag']) {
 		await expect(page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText(name, { exact: true }) })).toHaveAttribute('aria-selected', 'true');
 	}
+	const referenceInput = page.getByRole('combobox');
+	await referenceInput.fill('topic-tag');
+	await referenceInput.press('Control+Space');
+	await expect(page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText('topic-tag', { exact: true }) })).toHaveAttribute('aria-selected', 'false');
+	await referenceInput.fill('');
+	await expect(page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText('topic', { exact: true }) })).toHaveAttribute('aria-selected', 'true');
 	await page.keyboard.press('Escape');
 	await selectReferences(['All References']);
 	await expect(history.getByRole('treeitem', { name: /Topic only/u })).toBeVisible();
@@ -1076,7 +1099,38 @@ test('SCM history filters references, compares branch ranges, switches file tree
 	await outgoing().press('Enter');
 	await expect(outgoing().getByRole('button', { name: 'Folder src', exact: true })).toBeVisible();
 	await history.locator('.ash-pane-view-header').getByRole('button', { name: 'More Actions', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'View as List', exact: true }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'View as List', exact: true }).click();
 	await expect(outgoing().locator('.ash-scm-graph-folder')).toHaveCount(0);
 	await expect(outgoing().locator('.ash-scm-graph-change')).toHaveCount(2);
+	await selectReferences(['topic']);
+	await expect(history.getByRole('treeitem', { name: /Local outgoing/u })).toHaveCount(0);
+	await expect(history.getByRole('treeitem', { name: /Topic only/u })).toBeVisible();
+	await history.locator('[data-action-id="workbench.scm.action.graph.revealCurrentHistoryItem"] > button').click();
+	await expect(history.getByRole('treeitem', { name: /Local outgoing/u })).toBeFocused();
+	await expect(history.getByRole('treeitem', { name: /Topic only/u })).toHaveCount(0);
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.element.getByRole('searchbox').fill('scm.graph');
+	const visibility = workbench.settingsEditor.element.locator('[data-settings-item-id="scm.graph.showOutgoingChanges"]').getByRole('switch');
+	await expect(visibility).toHaveAttribute('aria-checked', 'true');
+	await visibility.press('Space');
+	await expect(outgoing()).toHaveCount(0);
+	await expect(incoming()).toBeVisible();
+	await visibility.press('Space');
+	await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+	await expect(outgoing()).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	history = page.locator('[data-view-id="ash.gitGraph"]');
+	await expect(history.getByRole('treeitem', { name: /^传出更改/u })).toBeVisible();
+	await expect(history.getByRole('treeitem', { name: /^传入更改/u })).toBeVisible();
+	await expect(history.locator('[data-action-id="workbench.scm.action.graph.selectHistoryItemRefs"] > button')).toHaveAttribute('aria-label', '筛选历史记录引用');
+	await history.locator('[data-action-id="workbench.scm.action.graph.selectHistoryItemRefs"] > button').click();
+	await expect(page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText('origin/main', { exact: true }) }).locator('.ash-quick-pick-row-description')).toHaveText('远程分支');
+	await page.keyboard.press('Escape');
+	await history.screenshot({ path: test.info().outputPath('scm-history-localized-ranges.png') });
+	await test.info().attach('scm-history-localized-ranges', { path: test.info().outputPath('scm-history-localized-ranges.png'), contentType: 'image/png' });
 });

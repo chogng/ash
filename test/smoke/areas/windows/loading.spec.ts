@@ -2,7 +2,7 @@ import type { CDPSession, Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import { expect, test } from '../../../automation/test.js';
 
-test('production loading baseline', async ({ target, workbench }, testInfo) => {
+test('production loading baseline', { tag: '@browser-app-server' }, async ({ target, workbench }, testInfo) => {
 	test.skip(process.env.ASH_LOADING_BASELINE !== '1' || target.kind !== 'browser' || target.appServerMode !== 'required', 'Opt-in production Web loading measurement');
 	test.setTimeout(90_000);
 	const page = workbench.page;

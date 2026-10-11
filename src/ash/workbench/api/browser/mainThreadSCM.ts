@@ -99,7 +99,7 @@ export class MainThreadSCM extends Disposable {
 			if (!existing && this.scm.getRepository(value.id)) {
 				throw new TypeError('SCM repository identity is already registered');
 			}
-			if (existing && (existing.providerId !== value.providerId || existing.rootUri?.toString() !== value.rootUri || Boolean(existing.historyProvider) !== value.hasHistory || Boolean(existing.mergeProvider) !== value.hasMerge)) {
+			if (existing && (existing.providerId !== value.providerId || existing.rootUri?.toString() !== value.rootUri || Boolean(existing.historyProvider) !== value.hasHistory || Boolean(existing.mergeProvider) !== value.hasMerge || Boolean(existing.historyProvider?.provideHistoryItemRefs) !== value.hasHistoryItemRefs || Boolean(existing.historyProvider?.resolveHistoryItemRefsCommonAncestor) !== value.hasHistoryMergeBase)) {
 				throw new TypeError('SCM provider identity cannot change within a registration');
 			}
 			if (value.multiDiff) {
@@ -255,6 +255,9 @@ interface ProviderSnapshot {
 	readonly isBusy: boolean;
 	readonly statusBarCommands: readonly Record<string, JsonValue>[];
 	readonly historyRef: ISCMHistoryItemRef | undefined;
+	readonly historyRemoteRef: ISCMHistoryItemRef | undefined;
+	readonly hasHistoryItemRefs: boolean;
+	readonly hasHistoryMergeBase: boolean;
 	readonly historyRevision: number;
 	readonly historyRefsRevision: number;
 	readonly historyRefsItems: readonly ISCMHistoryItem[];
@@ -271,6 +274,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private readonly historyChanged = this._register(new Emitter<void>());
 	private readonly historyRefsChanged = this._register(new Emitter<readonly ISCMHistoryItem[]>());
 	private readonly historyRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
+	private readonly historyRemoteRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
 	private draft: string;
 	private draftRevision = 0;
 	private syncedDraftRevision = 0;
@@ -280,9 +284,12 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		super();
 		this.draft = string(snapshot.input.value);
 		this.historyRef.set(snapshot.historyRef);
+		this.historyRemoteRef.set(snapshot.historyRemoteRef);
 		if (snapshot.hasHistory) {
 			this.historyProvider = {
-				onDidChange: this.historyChanged.event, historyItemRef: this.historyRef,
+				onDidChange: this.historyChanged.event, historyItemRef: this.historyRef, historyItemRemoteRef: this.historyRemoteRef,
+				...(snapshot.hasHistoryItemRefs ? { provideHistoryItemRefs: async (refs?: readonly string[]) => array(await this.call('history', { methodName: 'provideHistoryItemRefs', arguments: [refs ?? null] })).map(parseRef) } : {}),
+				...(snapshot.hasHistoryMergeBase ? { resolveHistoryItemRefsCommonAncestor: async (refs: readonly string[]) => optionalString(await this.call('history', { methodName: 'resolveHistoryItemRefsCommonAncestor', arguments: [refs] })) } : {}),
 				onDidChangeHistoryItemRefs: this.historyRefsChanged.event,
 				refresh: () => { void this.call('history', { methodName: 'refresh', arguments: [] }).catch(this.reportError); },
 				provideHistoryItems: async (options) => array(await this.call('history', { methodName: 'provideHistoryItems', arguments: [options] })).map(parseHistoryItem),
@@ -363,7 +370,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	public async refresh(): Promise<void> { await this.call('refresh', { value: this.draft }); }
 	public async activate(): Promise<void> { await this.call('activate', { value: this.draft }); }
 	public accept(value: ProviderSnapshot): void {
-		if (value.providerId !== this.providerId || value.rootUri !== this.snapshot.rootUri || value.hasHistory !== this.snapshot.hasHistory || value.hasMerge !== this.snapshot.hasMerge) {
+		if (value.providerId !== this.providerId || value.rootUri !== this.snapshot.rootUri || value.hasHistory !== this.snapshot.hasHistory || value.hasMerge !== this.snapshot.hasMerge || value.hasHistoryItemRefs !== this.snapshot.hasHistoryItemRefs || value.hasHistoryMergeBase !== this.snapshot.hasHistoryMergeBase) {
 			throw new Error('SCM provider identity changed within one registration');
 		}
 		if (value.inputRevision === this.draftRevision) {
@@ -373,6 +380,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		this.snapshot = value;
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
+		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }
 		this.changed.fire();
 		this.decorationChanged.fire([]);
 		if (historyChanged) { this.historyChanged.fire(); }
@@ -416,6 +424,9 @@ function parseActions(value: JsonValue): void {
 }
 function parseProvider(value: JsonValue): ProviderSnapshot {
 	const entry = object(value);
+	for (const key of ['hasHistoryItemRefs', 'hasHistoryMergeBase']) {
+		if (entry[key] != null && typeof entry[key] !== 'boolean') { throw new TypeError('Invalid SCM history capability'); }
+	}
 	const input = object(entry.input);
 	for (const key of ['value', 'placeholder', 'buttonLabel', 'buttonTooltip']) {
 		string(input[key]);
@@ -447,7 +458,7 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	const historyRefsRevision = entry.historyRefsRevision == null ? 0 : number(entry.historyRefsRevision);
 	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) { throw new TypeError('Invalid SCM history refs revision'); }
 	const historyRefsItems = entry.historyRefsItems == null ? [] : array(entry.historyRefsItems).map(parseHistoryItem);
-	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
+	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }
@@ -456,8 +467,14 @@ function parseDetails(value: JsonValue): ISCMHistoryItemDetails { const entry = 
 function parseContent(value: JsonValue): ISCMHistoryItemChangeContents['original'] {
 	const entry = object(value); if (entry.kind === 'text') {
 		return { kind: 'text', text: string(entry.text, 16 * 1024 * 1024) };
-	} if (entry.kind === 'binary' || entry.kind === 'missing') {
-		return { kind: entry.kind };
+	} if (entry.kind === 'binary') {
+		if (entry.bytes == null) { return { kind: 'binary' }; }
+		if (!Array.isArray(entry.bytes) || entry.bytes.length > 2 * 1024 * 1024 || entry.bytes.some(byte => typeof byte !== 'number' || !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+			throw new TypeError('Invalid SCM binary bytes');
+		}
+		return { kind: 'binary', bytes: Uint8Array.from(entry.bytes as number[]) };
+	} if (entry.kind === 'missing') {
+		return { kind: 'missing' };
 	} throw new TypeError('Invalid SCM content');
 }
 function parseContents(value: JsonValue): ISCMHistoryItemChangeContents { const entry = object(value); return { parentId: optionalString(entry.parentId), original: parseContent(entry.original), modified: parseContent(entry.modified) }; }

@@ -334,6 +334,7 @@
 		"--ash-z-index-sash",
 		"--dropdown-trigger-width",
 		"--scm-graph-accent",
+		"--scm-graph-change-depth",
 		"--scm-graph-content-x",
 		"--scm-graph-lane-0",
 		"--scm-graph-lane-1",

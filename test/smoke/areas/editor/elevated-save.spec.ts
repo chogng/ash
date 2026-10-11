@@ -63,7 +63,7 @@ test('system permission save failures require an explicit desktop authorization 
 
 
 for (const outcome of ['approve', 'cancel'] as const) {
-	test(`real system authorization ${outcome} retains file permissions and editor state`, async ({ target, application, testWorkspace, workbench }) => {
+	test(`real system authorization ${outcome} retains file permissions and editor state`, { tag: '@electron-app-server' }, async ({ target, application, testWorkspace, workbench }) => {
 		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.env.ASH_TEST_SYSTEM_AUTHORIZATION !== outcome, 'Opt-in interactive system authorization acceptance');
 		test.setTimeout(240_000);
 		const directory = join(testWorkspace.directory, 'system-authorization');

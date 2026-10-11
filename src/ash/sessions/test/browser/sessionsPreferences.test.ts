@@ -4,7 +4,11 @@ import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyn
 import { IMenuService } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { errorHandler } from '../../../base/common/errors.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { IGlobalExtensionEnablementService } from '../../../platform/extensionManagement/common/extensionManagement.js';
+import { IPluginService } from '../../../platform/plugins/common/pluginService.js';
 import { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IDirPermissionsService } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -60,6 +64,10 @@ test('Sessions modified filtering excludes window defaults, fixed values and lan
 });
 
 test('Sessions Models switches control the model picker visibility preference', async () => {
+	const unexpectedErrors: unknown[] = [];
+	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
+	errorHandler.setUnexpectedErrorHandler(error => unexpectedErrors.push(error));
+	using restoreErrorHandler = toDisposable(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const { window } = browser;
 	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
@@ -166,7 +174,22 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerInstance(AccessibleView, accessibleView);
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
-	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None, listInstalled: async () => [] } as unknown as IExtensionManagementService);
+	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None, listInstalled: async () => [], listEditorExtensions: async () => ({ extensions: [] }) } as unknown as IExtensionManagementService);
+	// Search renders Customize as well as Models; its required services belong to this dialog fixture.
+	const unsupportedExtensionAction = async (): Promise<never> => { throw new Error('Extension mutation is outside this Preferences test'); };
+	services.registerInstance(IQuickInputService, {
+		createQuickPick: () => { throw new Error('Extension filter selection is outside this Preferences test'); },
+		input: unsupportedExtensionAction,
+	});
+	services.registerInstance(IGlobalExtensionEnablementService, {
+		onDidChangeEnablement: Event.None, getDisabledExtensions: () => [],
+		enableExtension: unsupportedExtensionAction, disableExtension: unsupportedExtensionAction,
+	});
+	services.registerInstance(IPluginService, {
+		onDidChange: Event.None, list: async () => ({ revision: 0, activationGeneration: 0, packages: [] }),
+		installLocal: unsupportedExtensionAction, enable: unsupportedExtensionAction, disable: unsupportedExtensionAction,
+		grant: unsupportedExtensionAction, revokeGrant: unsupportedExtensionAction, uninstall: unsupportedExtensionAction,
+	});
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
@@ -299,6 +322,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	assert.equal(window.document.querySelector('.ash-models-settings-model-row'), null);
 	modelSearch.focus();
 	await configuration.updateValue('sessions.activityBar.compact', undefined);
+	assert.deepEqual(unexpectedErrors, [], 'configuration changes must refresh Preferences without listener errors');
 	assert.equal(window.document.querySelector('[data-settings-item-id="sessions.activityBar.compact"]'), null);
 	assert.equal(window.document.querySelector<HTMLElement>('.ash-sessions-settings-empty')?.hidden, false);
 	assert.equal(window.document.activeElement, modelSearch);
@@ -390,4 +414,5 @@ test('Sessions Models switches control the model picker visibility preference', 
 	}
 	changed.dispose();
 	browser.window.close();
+	assert.deepEqual(unexpectedErrors, [], 'Preferences interactions must not leave a stale UI after a listener error');
 });

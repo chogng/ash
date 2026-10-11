@@ -58,7 +58,10 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		await super.setInput(input, signal);
 		this.resource = input.resource;
 		this.initialBytes = input.initialBytes;
-		if (this.encodingButton) { this.encodingButton.hidden = input.initialBytes !== undefined; }
+		if (this.encodingButton) {
+			this.encodingButton.hidden = input.initialBytes !== undefined;
+			this.encodingButton.classList.toggle('hidden', this.encodingButton.hidden);
+		}
 	}
 
 	override clearInput(): void {
@@ -74,11 +77,11 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		const resources = new DisposableStore();
 		this.encodingPicker.value = resources;
 		try {
-			const picker = resources.add(this.quickInput.createQuickPick<{ label: string; id: string }>());
+			const picker = resources.add(this.quickInput.createQuickPick<{ label: string; id: string; }>());
 			picker.items = Object.keys(SUPPORTED_ENCODINGS).filter(id => !SUPPORTED_ENCODINGS[id].hidden && !SUPPORTED_ENCODINGS[id].encodeOnly).map(id => ({ label: getEncodingLabel(id), id, description: id }));
 			picker.sortByLabel = false;
 			picker.placeholder = picker.ariaLabel = localize('status.editor.selectEncoding', 'Select File Encoding');
-			const selected = await new Promise<{ id: string } | undefined>(resolve => {
+			const selected = await new Promise<{ id: string; } | undefined>(resolve => {
 				resources.add(toDisposable(() => resolve(undefined)));
 				resources.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
 				resources.add(picker.onDidHide(() => resolve(undefined)));

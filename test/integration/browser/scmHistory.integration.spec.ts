@@ -8,9 +8,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('history rows retain identity and reserve title width when the pane resizes', async ({ page }) => {
-	const { hash, timestamp, subject, message: body } = await page.evaluate(() => window.ashSCMHistoryIntegration);
 	const commit = page.getByRole('treeitem', { name: /History metadata:/u });
-	const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 	const retainedCommit = await commit.elementHandle();
 	const retainedActions = await commit.locator('.ash-scm-graph-actions').elementHandle();
 	for (const width of [280, 560]) {
@@ -79,7 +77,6 @@ test('commit details preserve whitespace, metadata, scrolling and long-title geo
 });
 
 test('slow pointer movement and action tooltip delays retain the details card', async ({ page }) => {
-	const { hash, timestamp, subject, message: body } = await page.evaluate(() => window.ashSCMHistoryIntegration);
 	const commit = page.getByRole('treeitem', { name: /History metadata:/u });
 	const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 	await commit.locator('.ash-scm-graph-subject').hover({ position: { x: 3, y: 8 } });
@@ -109,7 +106,6 @@ test('slow pointer movement and action tooltip delays retain the details card', 
 });
 
 test('commit message focus and scrollbars follow all four color themes', async ({ page }) => {
-	const { hash, timestamp, subject, message: body } = await page.evaluate(() => window.ashSCMHistoryIntegration);
 	const commit = page.getByRole('treeitem', { name: /History metadata:/u });
 	const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 	await commit.focus();
@@ -140,9 +136,7 @@ test('commit message focus and scrollbars follow all four color themes', async (
 });
 
 test('Chinese history hover labels and narrow viewports preserve complete details', async ({ page }) => {
-	const { hash, timestamp, subject, message: body } = await page.evaluate(() => window.ashSCMHistoryIntegration);
-	const commit = page.getByRole('treeitem', { name: /History metadata:/u });
-	const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+	const { hash, subject } = await page.evaluate(() => window.ashSCMHistoryIntegration);
 	await page.goto('/scmHistory.html?locale=zh-CN');
 	const localizedHistory = page.locator('[data-view-id="fixture.history"]');
 	const localizedCommit = page.getByRole('treeitem', { name: /History metadata:/u });
@@ -162,16 +156,14 @@ test('Chinese history hover labels and narrow viewports preserve complete detail
 		await localizedCommit.focus();
 		await localizedCommit.press('Alt+ArrowDown');
 		await expect(localizedHover).toBeVisible();
-		const geometry = await localizedHover.evaluate(element => {
+		await expect.poll(() => localizedHover.evaluate(element => {
 			const tooltip = element.closest<HTMLElement>('.ash-hover')!;
 			const bounds = tooltip.getBoundingClientRect();
 			return {
 				horizontalOverflow: tooltip.scrollWidth > tooltip.clientWidth,
 				insideWindow: bounds.left >= 0 && bounds.right <= element.ownerDocument.defaultView!.innerWidth,
 			};
-		});
-		expect(geometry).toEqual({ horizontalOverflow: false, insideWindow: true });
+		})).toEqual({ horizontalOverflow: false, insideWindow: true });
 		await expect(localizedHover.locator('.ash-scm-graph-hover-subject')).toHaveText(subject);
 	}
 });
-
