@@ -1,6 +1,3 @@
-#![allow(clippy::expect_used)]
-#![allow(clippy::upper_case_acronyms)]
-
 // This file is copied from https://github.com/wezterm/wezterm (MIT license).
 // Copyright (c) 2018-Present Wez Furlong
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,7 +17,7 @@
 // SOFTWARE.
 
 use super::WinChild;
-use crate::win::job::JobObject;
+use crate::cmdbuilder::CommandBuilder;
 use crate::win::procthreadattr::ProcThreadAttributeList;
 use anyhow::Error;
 use anyhow::bail;
@@ -28,20 +25,17 @@ use anyhow::ensure;
 use filedescriptor::FileDescriptor;
 use filedescriptor::OwnedHandle;
 use lazy_static::lazy_static;
-use portable_pty::cmdbuilder::CommandBuilder;
 use shared_library::shared_library;
-use std::env;
-use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::io::Error as IoError;
 use std::mem;
-use std::os::windows::ffi::OsStrExt;
 use std::os::windows::ffi::OsStringExt;
 use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::BorrowedHandle;
 use std::os::windows::io::FromRawHandle;
 use std::path::Path;
 use std::ptr;
-use std::sync::Arc;
+use std::sync::Mutex;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::ntdef::NTSTATUS;
 use winapi::shared::ntstatus::STATUS_SUCCESS;
@@ -60,8 +54,6 @@ use winapi::um::winnt::OSVERSIONINFOW;
 pub type HPCON = HANDLE;
 
 pub const PSEUDOCONSOLE_RESIZE_QUIRK: DWORD = 0x2;
-#[allow(dead_code)]
-pub const PSEUDOCONSOLE_PASSTHROUGH_MODE: DWORD = 0x8;
 
 // https://learn.microsoft.com/en-gb/windows/console/createpseudoconsole
 // https://learn.microsoft.com/en-gb/windows/release-health/release-information
@@ -99,10 +91,12 @@ lazy_static! {
         ConPtyReleaseFuncs::open(Path::new("kernel32.dll")).ok();
 }
 
-pub(crate) fn supports_client_lifetime() -> bool {
+/// Whether console clients can determine EOF without closing HPCON on root exit.
+pub fn supports_client_lifetime() -> bool {
     CONPTY_RELEASE.is_some()
 }
 
+/// Whether this Windows version provides ConPTY.
 pub fn conpty_supported() -> bool {
     windows_build_number().is_some_and(|build| build >= MIN_CONPTY_BUILD)
 }
@@ -143,6 +137,8 @@ impl PsuedoCon {
     pub fn new(size: COORD, input: FileDescriptor, output: FileDescriptor) -> Result<Self, Error> {
         let mut con: HPCON = INVALID_HANDLE_VALUE;
         let result = unsafe {
+            // Clients send VT bytes. Cursor inheritance would require a query
+            // responder, and Win32 input mode would require structured input events.
             (CONPTY.CreatePseudoConsole)(
                 size,
                 input.as_raw_handle() as _,
@@ -190,8 +186,11 @@ impl PsuedoCon {
         Ok(())
     }
 
-    pub fn spawn_command(&mut self, cmd: CommandBuilder) -> anyhow::Result<WinChild> {
-        let job = Arc::new(JobObject::create()?);
+    pub fn spawn_command(
+        &mut self,
+        cmd: CommandBuilder,
+        job: Option<BorrowedHandle<'_>>,
+    ) -> anyhow::Result<WinChild> {
         let mut si: STARTUPINFOEXW = unsafe { mem::zeroed() };
         si.StartupInfo.cb = mem::size_of::<STARTUPINFOEXW>() as u32;
         si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
@@ -199,18 +198,20 @@ impl PsuedoCon {
         si.StartupInfo.hStdOutput = INVALID_HANDLE_VALUE;
         si.StartupInfo.hStdError = INVALID_HANDLE_VALUE;
 
-        let mut attrs = ProcThreadAttributeList::with_capacity(/*num_attributes*/ 2)?;
+        let mut attrs = ProcThreadAttributeList::with_capacity(if job.is_some() { 2 } else { 1 })?;
         attrs.set_pty(self.con)?;
-        attrs.set_job(job.as_raw_handle().cast())?;
+        if let Some(job) = job {
+            attrs.set_job(job.as_raw_handle().cast())?;
+        }
         si.lpAttributeList = attrs.as_mut_ptr();
 
         let mut pi: PROCESS_INFORMATION = unsafe { mem::zeroed() };
 
-        let (mut exe, mut cmdline) = build_cmdline(&cmd)?;
+        let (mut exe, mut cmdline) = cmd.cmdline()?;
         let cmd_os = OsString::from_wide(&cmdline);
 
-        let cwd = resolve_current_directory(&cmd);
-        let mut env_block = build_environment_block(&cmd);
+        let cwd = cmd.current_directory();
+        let mut env_block = cmd.environment_block();
 
         let res = unsafe {
             CreateProcessW(
@@ -241,146 +242,13 @@ impl PsuedoCon {
         let _main_thread = unsafe { OwnedHandle::from_raw_handle(pi.hThread as _) };
         let proc = unsafe { OwnedHandle::from_raw_handle(pi.hProcess as _) };
 
-        self.client_attached()?;
-        Ok(WinChild::new(proc, job))
-    }
-}
-
-fn resolve_current_directory(cmd: &CommandBuilder) -> Option<Vec<u16>> {
-    let home = cmd
-        .get_env("USERPROFILE")
-        .and_then(|path| Path::new(path).is_dir().then(|| path.to_owned()));
-    let cwd = cmd
-        .get_cwd()
-        .and_then(|path| Path::new(path).is_dir().then(|| path.to_owned()));
-    let dir = cwd.or(home)?;
-
-    let mut wide = Vec::new();
-    if Path::new(&dir).is_relative() {
-        if let Ok(current_dir) = env::current_dir() {
-            wide.extend(current_dir.join(&dir).as_os_str().encode_wide());
-        } else {
-            wide.extend(dir.encode_wide());
+        if let Err(error) = self.client_attached() {
+            // A launch that cannot finish attachment must not leave a running child behind.
+            unsafe { TerminateProcess(proc.as_raw_handle().cast(), 1) };
+            return Err(error);
         }
-    } else {
-        wide.extend(dir.encode_wide());
-    }
-    wide.push(0);
-    Some(wide)
-}
-
-fn build_environment_block(cmd: &CommandBuilder) -> Vec<u16> {
-    let mut block = Vec::new();
-    for (key, value) in cmd.iter_full_env_as_str() {
-        block.extend(OsStr::new(key).encode_wide());
-        block.push(b'=' as u16);
-        block.extend(OsStr::new(value).encode_wide());
-        block.push(0);
-    }
-    block.push(0);
-    block
-}
-
-fn build_cmdline(cmd: &CommandBuilder) -> anyhow::Result<(Vec<u16>, Vec<u16>)> {
-    let exe_os: OsString = if cmd.is_default_prog() {
-        cmd.get_env("ComSpec")
-            .unwrap_or(OsStr::new("cmd.exe"))
-            .to_os_string()
-    } else {
-        let argv = cmd.get_argv();
-        let Some(first) = argv.first() else {
-            anyhow::bail!("missing program name");
-        };
-        search_path(cmd, first)
-    };
-
-    let mut cmdline = Vec::new();
-    append_quoted(&exe_os, &mut cmdline);
-    for arg in cmd.get_argv().iter().skip(1) {
-        cmdline.push(' ' as u16);
-        ensure!(
-            !arg.encode_wide().any(|c| c == 0),
-            "invalid encoding for command line argument {arg:?}"
-        );
-        append_quoted(arg, &mut cmdline);
-    }
-    cmdline.push(0);
-
-    let mut exe: Vec<u16> = exe_os.encode_wide().collect();
-    exe.push(0);
-
-    Ok((exe, cmdline))
-}
-
-fn search_path(cmd: &CommandBuilder, exe: &OsStr) -> OsString {
-    if let Some(path) = cmd.get_env("PATH") {
-        let extensions = cmd.get_env("PATHEXT").unwrap_or(OsStr::new(".EXE"));
-        for path in env::split_paths(path) {
-            let candidate = path.join(exe);
-            if candidate.exists() {
-                return candidate.into_os_string();
-            }
-
-            for ext in env::split_paths(extensions) {
-                let ext = ext.to_str().unwrap_or("");
-                let path = path
-                    .join(exe)
-                    .with_extension(ext.strip_prefix('.').unwrap_or(ext));
-                if path.exists() {
-                    return path.into_os_string();
-                }
-            }
-        }
-    }
-
-    exe.to_os_string()
-}
-
-fn append_quoted(arg: &OsStr, cmdline: &mut Vec<u16>) {
-    if !arg.is_empty()
-        && !arg.encode_wide().any(|c| {
-            c == ' ' as u16
-                || c == '\t' as u16
-                || c == '\n' as u16
-                || c == '\x0b' as u16
-                || c == '\"' as u16
+        Ok(WinChild {
+            proc: Mutex::new(proc),
         })
-    {
-        cmdline.extend(arg.encode_wide());
-        return;
     }
-    cmdline.push('"' as u16);
-
-    let arg: Vec<_> = arg.encode_wide().collect();
-    let mut i = 0;
-    while i < arg.len() {
-        let mut num_backslashes = 0;
-        while i < arg.len() && arg[i] == '\\' as u16 {
-            i += 1;
-            num_backslashes += 1;
-        }
-
-        if i == arg.len() {
-            for _ in 0..num_backslashes * 2 {
-                cmdline.push('\\' as u16);
-            }
-            break;
-        } else if arg[i] == b'"' as u16 {
-            for _ in 0..num_backslashes * 2 + 1 {
-                cmdline.push('\\' as u16);
-            }
-            cmdline.push(arg[i]);
-        } else {
-            for _ in 0..num_backslashes {
-                cmdline.push('\\' as u16);
-            }
-            cmdline.push(arg[i]);
-        }
-        i += 1;
-    }
-    cmdline.push('"' as u16);
 }
-
-#[cfg(test)]
-#[path = "psuedocon_tests.rs"]
-mod tests;

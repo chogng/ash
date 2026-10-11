@@ -1,182 +1,153 @@
-#![allow(clippy::unwrap_used)]
-
-// This file is copied from https://github.com/wezterm/wezterm (MIT license).
-// Copyright (c) 2018-Present Wez Furlong
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to authorization persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
-// Local modifications:
-// - Place spawned processes in a Job Object so kill operations terminate the
-//   full process tree, while normal root exit preserves background descendants.
-
-use anyhow::Context as _;
-use filedescriptor::OwnedHandle;
 use portable_pty::Child;
 use portable_pty::ChildKiller;
+use portable_pty::CommandBuilder;
 use portable_pty::ExitStatus;
-use std::io::Error as IoError;
-use std::io::Result as IoResult;
-use std::os::windows::io::AsRawHandle;
-use std::pin::Pin;
+use portable_pty::PtyPair;
+use portable_pty::PtySize;
+use portable_pty::PtySystem;
+use portable_pty::SlavePty;
+use std::io;
+use std::os::windows::io::AsHandle;
+use std::os::windows::io::RawHandle;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::task::Context;
-use std::task::Poll;
-use winapi::shared::minwindef::DWORD;
-use winapi::um::minwinbase::STILL_ACTIVE;
-use winapi::um::processthreadsapi::*;
-use winapi::um::synchapi::WaitForSingleObject;
-use winapi::um::winbase::INFINITE;
 
-pub(crate) mod conpty;
 mod job;
-mod procthreadattr;
-mod psuedocon;
 
-pub use conpty::ConPtySystem;
 pub use job::JobObject;
-pub use psuedocon::PsuedoCon;
-pub use psuedocon::conpty_supported;
-pub(crate) use psuedocon::supports_client_lifetime;
+pub use portable_pty::win::conpty_supported;
+pub(crate) use portable_pty::win::supports_client_lifetime;
+
+/// Adds Ash's process-tree policy to the shared PTY implementation.
+#[derive(Default)]
+pub(crate) struct ConPtySystem {}
+
+impl PtySystem for ConPtySystem {
+    fn openpty(&self, size: PtySize) -> anyhow::Result<PtyPair> {
+        let mut pair = portable_pty::win::conpty::ConPtySystem::default().openpty(size)?;
+        pair.slave = Box::new(JobSlave { inner: pair.slave });
+        Ok(pair)
+    }
+}
+
+struct JobSlave {
+    inner: Box<dyn SlavePty + Send>,
+}
+
+impl SlavePty for JobSlave {
+    fn spawn_command(
+        &self,
+        command: CommandBuilder,
+    ) -> anyhow::Result<Box<dyn Child + Send + Sync>> {
+        let job = Arc::new(JobObject::create()?);
+        let inner = self.inner.spawn_command_in_job(command, job.as_handle())?;
+        Ok(Box::new(JobChild { inner, job }))
+    }
+}
 
 #[derive(Debug)]
-pub struct WinChild {
-    proc: Mutex<OwnedHandle>,
+struct JobChild {
+    inner: Box<dyn Child + Send + Sync>,
     job: Arc<JobObject>,
 }
 
-impl WinChild {
-    pub(crate) fn new(proc: OwnedHandle, job: Arc<JobObject>) -> Self {
-        Self {
-            proc: Mutex::new(proc),
-            job,
-        }
-    }
-
-    fn is_complete(&mut self) -> IoResult<Option<ExitStatus>> {
-        let mut status: DWORD = 0;
-        let proc = self.proc.lock().unwrap().try_clone().unwrap();
-        let res = unsafe { GetExitCodeProcess(proc.as_raw_handle() as _, &mut status) };
-        if res != 0 {
-            if status == STILL_ACTIVE {
-                Ok(None)
-            } else {
-                self.preserve_descendants();
-                Ok(Some(ExitStatus::with_exit_code(status)))
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn do_kill(&mut self) -> IoResult<()> {
-        self.job.terminate()
-    }
-
+impl JobChild {
     fn preserve_descendants(&self) {
-        if let Err(err) = self.job.preserve_descendants() {
-            log::warn!("ConPTY failed to preserve descendants after root exit: {err}");
+        if let Err(error) = self.job.preserve_descendants() {
+            log::warn!("ConPTY failed to preserve descendants after root exit: {error}");
         }
     }
 }
 
-impl ChildKiller for WinChild {
-    fn kill(&mut self) -> IoResult<()> {
-        if let Err(err) = self.do_kill() {
-            log::warn!("ConPTY failed to terminate process tree: {err}");
+impl Child for JobChild {
+    fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+        let status = self.inner.try_wait()?;
+        if status.is_some() {
+            self.preserve_descendants();
+        }
+        Ok(status)
+    }
+
+    fn wait(&mut self) -> io::Result<ExitStatus> {
+        let status = self.inner.wait()?;
+        self.preserve_descendants();
+        Ok(status)
+    }
+
+    fn process_id(&self) -> Option<u32> {
+        self.inner.process_id()
+    }
+
+    fn as_raw_handle(&self) -> Option<RawHandle> {
+        self.inner.as_raw_handle()
+    }
+}
+
+impl ChildKiller for JobChild {
+    fn kill(&mut self) -> io::Result<()> {
+        JobKiller {
+            job: Arc::clone(&self.job),
+        }
+        .kill()
+    }
+
+    fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
+        Box::new(JobKiller {
+            job: Arc::clone(&self.job),
+        })
+    }
+}
+
+#[derive(Debug)]
+struct JobKiller {
+    job: Arc<JobObject>,
+}
+
+impl ChildKiller for JobKiller {
+    fn kill(&mut self) -> io::Result<()> {
+        if let Err(error) = self.job.terminate() {
+            log::warn!("ConPTY failed to terminate process tree: {error}");
         }
         Ok(())
     }
 
     fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
-        Box::new(WinChildKiller {
+        Box::new(Self {
             job: Arc::clone(&self.job),
         })
     }
 }
 
-#[derive(Debug)]
-pub struct WinChildKiller {
-    job: Arc<JobObject>,
+/// A console prepared for a launcher that owns restricted process creation.
+pub struct PreparedConPty {
+    inner: portable_pty::win::conpty::PreparedConPty,
 }
 
-impl ChildKiller for WinChildKiller {
-    fn kill(&mut self) -> IoResult<()> {
-        self.job.terminate()
-    }
-
-    fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
-        Box::new(WinChildKiller {
-            job: Arc::clone(&self.job),
+impl PreparedConPty {
+    pub fn new(size: crate::TerminalSize) -> anyhow::Result<Self> {
+        Ok(Self {
+            inner: portable_pty::win::conpty::PreparedConPty::new(size.into())?,
         })
     }
-}
 
-impl Child for WinChild {
-    fn try_wait(&mut self) -> IoResult<Option<ExitStatus>> {
-        self.is_complete()
+    /// The launcher borrows this handle while this console remains alive.
+    pub fn pseudoconsole_handle(&self) -> RawHandle {
+        self.inner.pseudoconsole_handle()
     }
 
-    fn wait(&mut self) -> IoResult<ExitStatus> {
-        if let Ok(Some(status)) = self.try_wait() {
-            return Ok(status);
-        }
-        let proc = self.proc.lock().unwrap().try_clone().unwrap();
-        unsafe {
-            WaitForSingleObject(proc.as_raw_handle() as _, INFINITE);
-        }
-        let mut status: DWORD = 0;
-        let res = unsafe { GetExitCodeProcess(proc.as_raw_handle() as _, &mut status) };
-        if res != 0 {
-            self.preserve_descendants();
-            Ok(ExitStatus::with_exit_code(status))
-        } else {
-            Err(IoError::last_os_error())
-        }
+    /// Completes attachment after the external launcher has created its client.
+    pub fn client_attached(&mut self) -> anyhow::Result<()> {
+        self.inner.client_attached()
     }
 
-    fn process_id(&self) -> Option<u32> {
-        let res = unsafe { GetProcessId(self.proc.lock().unwrap().as_raw_handle() as _) };
-        if res == 0 { None } else { Some(res) }
+    pub fn take_writer(&mut self) -> Option<Box<dyn std::io::Write + Send>> {
+        self.inner.take_writer()
     }
 
-    fn as_raw_handle(&self) -> Option<std::os::windows::io::RawHandle> {
-        let proc = self.proc.lock().unwrap();
-        Some(proc.as_raw_handle())
+    pub fn take_reader(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
+        self.inner.take_reader()
     }
-}
 
-impl std::future::Future for WinChild {
-    type Output = anyhow::Result<ExitStatus>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<anyhow::Result<ExitStatus>> {
-        match self.is_complete() {
-            Ok(Some(status)) => Poll::Ready(Ok(status)),
-            Err(err) => Poll::Ready(Err(err).context("Failed to retrieve process exit status")),
-            Ok(None) => {
-                let proc = self.proc.lock().unwrap().try_clone()?;
-                let waker = cx.waker().clone();
-                std::thread::spawn(move || {
-                    unsafe {
-                        WaitForSingleObject(proc.as_raw_handle() as _, INFINITE);
-                    }
-                    waker.wake();
-                });
-                Poll::Pending
-            }
-        }
+    pub fn resize(&self, size: crate::TerminalSize) -> anyhow::Result<()> {
+        self.inner.resize(size.into())
     }
 }

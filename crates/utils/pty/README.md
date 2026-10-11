@@ -18,8 +18,10 @@ pipe 的进程组信号与强制终止整棵子进程树的语义保持不变。
 ## 来源边界
 
 PTY integration 基于 `NOTICE` 中固定的 OpenAI Codex revision 并在 Ash 内适配，Apache-2.0。
-`src/win/` 的 ConPTY 部分来自 WezTerm，MIT license 位于
-`third_party/wezterm/LICENSE`。这是 source reuse，不是 Codex wire protocol/runtime dependency。
+ConPTY 底层实现统一位于 [`portable-pty 0.9.0`](../../../third_party/wezterm/README.md)
+的本地副本，MIT license 位于 `third_party/wezterm/LICENSE`。
+`src/win.rs` 只适配 Ash 的 Job 与正常退出策略，并为沙箱转换控制台接口。
+这是 source reuse，不是 Codex wire protocol/runtime dependency。
 
 同步上游实现时必须保留 provenance，并按 Ash 当前 public contract、process-group tests 和 Windows
 tests 审查行为；不能用“来自上游”替代本地 correctness review。
@@ -120,7 +122,11 @@ ConPTY 继续通过进程创建属性加入 Job。正常根进程退出后，现
 
 `JobObject::spawn_contained` 也供 `ash-git` 使用。调用方必须在整个操作期间保留 Job；取消或错误退出时
 释放 Job 会结束后代。只有完整成功后才调用 `preserve_descendants`，释放后的 Job 不能再次创建进程。
-Windows 模块入口由 `src/win/mod.rs` 移到 `src/win.rs`，子模块仍位于 `src/win/`。
+Windows 控制台、管道、进程属性和命令构造
+由 portable-pty 拥有；Ash 的 Job 也供 pipe 与 Git 使用，保留在本 crate。
+沙箱通过 `PreparedConPty` 复用同一控制台实现，自行创建受限进程。
+CLI PTY 测试也通过根 Cargo 依赖使用同一份 portable-pty。
+CLI 宿主保留原有进程启动策略，不套用执行命令的 Job 包装，允许 App Server 启动后台进程。
 
 ## PTY spawn 调用图
 
@@ -129,7 +135,7 @@ spawn_pty_process
 ├─ validate non-empty program
 ├─ inherited_fds empty / non-Unix
 │  └─ spawn_process_portable
-│     ├─ platform_native_pty_system
+│     ├─ pty_system
 │     ├─ openpty(size)
 │     ├─ CommandBuilder + env_clear
 │     ├─ spawn child
@@ -214,8 +220,8 @@ terminate / Drop
 - PTY caller 期待 split stderr：terminal stream contract 被误读；
 - Driver 在 final output 前关闭 sender：tail output 被丢弃；
 - Driver sender 永不关闭：exit 后 reader task 泄漏；
-- Public API 暴露 portable-pty/Tokio child/Windows raw handles（Windows interop exports除外）；
-- 修改 `src/win/` 不维护 WezTerm attribution；
+- Public API 暴露 portable-pty/Tokio child/Windows raw handles（Windows interop exports 除外）；
+- 修改 portable-pty 的本地副本不维护 WezTerm attribution；
 - Non-Unix no-op process-group helper 被上层当作 containment guarantee。
 
 ## 测试、限制与演进

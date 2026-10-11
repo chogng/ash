@@ -17,7 +17,7 @@ inputs.
 | [`ripgrep`](ripgrep/README.md)                     | Download lock, licenses, Bazel exports                              | Package builders install `rg` in `ash-path`                                                 | Codex downloads its bundled executable through `scripts/codex_package/rg`; it also needs ripgrep                     |
 | [`v8`](v8/README.md)                               | Archive/binding locks, source-build rules and compatibility patches | Code Mode and JavaScript extension hosts                                                    | Codex also keeps V8 build rules and patches; Ash uses its own pinned crate/engine pair                               |
 | [`rules_rs`](rules_rs/README.md)                   | Bazel compatibility patches and exports                             | Root `MODULE.bazel`                                                                         | Codex also patches its pinned Bazel Rust rules; Ash's GNU Windows execution ABI and linker fixes serve its toolchain |
-| [`wezterm`](wezterm/README.md)                     | MIT license and source provenance                                   | `crates/utils/pty/src/win`                                                                  | Codex also retains this license for reused ConPTY code                                                               |
+| [`wezterm`](wezterm/README.md)                     | portable-pty source, MIT license and provenance                      | Shared PTY implementation; Ash Job and sandbox adapters                                    | Ash consolidates its ConPTY changes in one portable-pty copy                                                        |
 | `vscode`                                           | MIT license only                                                    | Editor source, bundled extensions and package notices                                       | Ash distributes VS Code-derived editor material                                                                      |
 | [`node`](node/README.md)                           | Official runtime download lock                                      | Package-provided JavaScript language servers; Electron development supplies its own runtime | Ash's shared language-server runtime needs its own version and checksum lock                                         |
 | [`sherpa-onnx`](sherpa-onnx/README.md)             | Static-library download lock                                        | `ash-realtime-voice`; Cargo/build wrappers prepare verified link inputs                     | Ash's local speech recognition uses Sherpa; this is not a copied Rust crate                                          |
@@ -25,9 +25,10 @@ inputs.
 | [`livekit-rust-sdks`](livekit-rust-sdks/README.md) | License and notices only                                            | LiveKit SDK dependencies and release package notices                                        | SDK source stays under Cargo management                                                                              |
 | [`tgrep`](tgrep/README.md)                         | Fixed source archive, integration patch, checksums and MIT license  | `build/lib/tgrep.py`, `ash-tgrep`, file search and package builders                         | Ash's indexed search uses this separate program; the source archive and patch are active build inputs                |
 
-The tgrep source snapshot is the only retained upstream program source here.
+The tgrep source snapshot is the retained upstream program source here.
 Its build verifies the source, patch and shared ranking/discovery digests before
-compiling. V8 engine source and all runtime downloads remain in build caches.
+compiling. WezTerm contributes the portable-pty library source.
+V8 engine source and all runtime downloads remain in build caches.
 Neither V8 nor Sherpa keeps a local Rust package copy.
 
 ## Removed residual inputs

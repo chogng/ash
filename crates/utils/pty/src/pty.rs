@@ -112,7 +112,7 @@ impl ChildTerminator for RawPidTerminator {
     }
 }
 
-fn platform_native_pty_system() -> Box<dyn portable_pty::PtySystem + Send> {
+fn pty_system() -> Box<dyn portable_pty::PtySystem + Send> {
     #[cfg(windows)]
     {
         Box::new(crate::win::ConPtySystem::default())
@@ -159,7 +159,7 @@ async fn spawn_process_portable(
     arg0: &Option<String>,
     size: TerminalSize,
 ) -> Result<SpawnedProcess> {
-    let pty_system = platform_native_pty_system();
+    let pty_system = pty_system();
     let pair = pty_system.openpty(size.into())?;
     #[cfg(unix)]
     let io = crate::unix_io::PtyIo::new(

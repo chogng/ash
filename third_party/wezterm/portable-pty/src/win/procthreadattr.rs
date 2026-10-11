@@ -1,5 +1,3 @@
-#![allow(clippy::uninit_vec)]
-
 // This file is copied from https://github.com/wezterm/wezterm (MIT license).
 // Copyright (c) 2018-Present Wez Furlong
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,7 +16,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::psuedocon::HPCON;
+use crate::win::psuedocon::HPCON;
 use anyhow::Error;
 use anyhow::ensure;
 use std::io::Error as IoError;
@@ -48,8 +46,7 @@ impl ProcThreadAttributeList {
                 &mut bytes_required,
             )
         };
-        let mut data = Vec::with_capacity(bytes_required);
-        unsafe { data.set_len(bytes_required) };
+        let mut data = vec![0; bytes_required];
 
         let attr_ptr = data.as_mut_slice().as_mut_ptr() as *mut _;
         let res = unsafe {
@@ -82,7 +79,7 @@ impl ProcThreadAttributeList {
     }
 
     pub fn set_job(&mut self, job: HANDLE) -> Result<(), Error> {
-        // Atomic job attachment is intentionally required for native ConPTY
+        // Atomic job attachment is intentionally required for ConPTY
         // spawns. If Windows cannot honor the job list (for example, because a
         // parent job forbids nesting), fail the spawn rather than briefly run
         // an uncontained process tree.

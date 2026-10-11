@@ -4,11 +4,26 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
+use portable_pty::CommandBuilder;
+use portable_pty::PtySize;
+use portable_pty::PtySystem;
 use pretty_assertions::assert_eq;
+
+#[test]
+fn portable_child_killer_reports_success() -> anyhow::Result<()> {
+    let pair = portable_pty::win::conpty::ConPtySystem::default().openpty(PtySize::default())?;
+    let mut command = CommandBuilder::new("cmd.exe");
+    command.args(["/d", "/q"]);
+    let mut child = pair.slave.spawn_command(command)?;
+    // Exercise the shared library's split killer, independent of Ash's Job wrapper.
+    child.clone_killer().kill()?;
+    assert_eq!(child.wait()?.exit_code(), 1);
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn output_closes_after_client_exit_while_session_is_retained() -> anyhow::Result<()> {
-    if !super::supports_client_lifetime() {
+    if !portable_pty::win::supports_client_lifetime() {
         eprintln!("automatic ConPTY closure requires Windows 11 24H2 or newer");
         return Ok(());
     }
@@ -44,7 +59,7 @@ async fn output_closes_after_client_exit_while_session_is_retained() -> anyhow::
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn output_remains_open_for_surviving_console_child() -> anyhow::Result<()> {
-    if !super::supports_client_lifetime() {
+    if !portable_pty::win::supports_client_lifetime() {
         eprintln!("automatic ConPTY closure requires Windows 11 24H2 or newer");
         return Ok(());
     }
@@ -98,7 +113,7 @@ async fn output_remains_open_for_surviving_console_child() -> anyhow::Result<()>
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn output_closes_after_termination_while_session_is_retained() -> anyhow::Result<()> {
-    if !super::supports_client_lifetime() {
+    if !portable_pty::win::supports_client_lifetime() {
         eprintln!("automatic ConPTY closure requires Windows 11 24H2 or newer");
         return Ok(());
     }
@@ -138,6 +153,6 @@ async fn output_closes_after_termination_while_session_is_retained() -> anyhow::
 }
 
 #[test]
-fn windows_build_number_returns_value() {
-    assert!(super::windows_build_number().unwrap() >= super::MIN_CONPTY_BUILD);
+fn conpty_supported_on_current_windows() {
+    assert!(crate::conpty_supported());
 }

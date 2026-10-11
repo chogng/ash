@@ -7,5 +7,8 @@ bdd3118c71a29f26b9df3a47f91efea38a0d58bd (2026-07-21), licensed Apache-2.0.
 Unix asynchronous PTY I/O and lifecycle regression scenarios were adapted
 from OpenAI Codex revision 954fa9057bf3a4521ea34dbd010ff291d5b39763.
 
-The Windows ConPTY files under src/win/ are derived from WezTerm and remain
-licensed under MIT. See ../../../third_party/wezterm/LICENSE.
+The Windows ConPTY implementation is maintained in the portable-pty 0.9.0
+source under ../../../third_party/wezterm/portable-pty, derived from WezTerm
+revision f8921727a11b9f8b073e8c24821d72fd41283500 and licensed under MIT.
+Ash's Job and process lifecycle adapters remain in this crate.
+See ../../../third_party/wezterm/LICENSE.

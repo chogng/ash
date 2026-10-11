@@ -20,9 +20,7 @@ pretty_assertions = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 filedescriptor = { workspace = true }
-lazy_static = { workspace = true }
 log = { workspace = true }
-shared_library = { workspace = true }
 winapi = { workspace = true, features = ["handleapi", "namedpipeapi", "jobapi2", "minwinbase", "processthreadsapi", "synchapi", "winbase", "wincon", "winerror", "winnt"] }
 
 [target.'cfg(unix)'.dependencies]
