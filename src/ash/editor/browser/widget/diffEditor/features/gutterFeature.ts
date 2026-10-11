@@ -185,6 +185,7 @@ export class DiffEditorGutter extends Disposable {
 			}] : [],
 			ariaLabel: localize('diffEditor.hunkActions', 'Change actions'),
 			orientation: 'vertical',
+			presentation: 'inherit-foreground',
 			contextKeyService: this.scope,
 			menuOptions: { arg: context, shouldForwardArgs: true },
 			toolbarOptions: { primaryGroup: group => group.startsWith('primary') || group === 'navigation' },

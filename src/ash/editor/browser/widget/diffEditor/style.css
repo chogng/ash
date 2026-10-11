@@ -406,8 +406,8 @@
 .ash-diff-gutter-item > .ash-toolbar {
 	position: absolute;
 	border-radius: var(--ash-cornerRadius-small);
-	color: var(--ash-editor-foreground);
-	background: var(--ash-editor-background);
+	color: var(--ash-editorGutter-itemGlyphForeground);
+	background: var(--ash-editorGutter-itemBackground);
 }
 
 [data-color-scheme="hcDark"] .ash-diff-gutter-item::before,

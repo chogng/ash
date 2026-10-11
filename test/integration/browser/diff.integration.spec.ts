@@ -746,7 +746,7 @@ for (const [originalLength, modifiedLength] of [[6, 2], [2, 6]]) {
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
-	for (const theme of ['vs', 'hc-black']) {
+	for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
 		test(`diff gutter centers controls in the visible hunk and reveals on intent (${locale}, ${theme})`, async ({ page }, testInfo) => {
 			await openDiffPage(page, locale);
 			await page.evaluate(themeId => {
@@ -766,6 +766,19 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(item).toHaveCSS('opacity', '0');
 			await gutter.hover();
 			await expect(item).toHaveCSS('opacity', '1');
+			const colors = await toolbar.evaluate(node => ({
+				background: getComputedStyle(node).backgroundColor,
+				gutter: getComputedStyle(node.closest('.ash-diff-gutter')!).backgroundColor,
+				foreground: getComputedStyle(node).color,
+				buttons: [...node.querySelectorAll('button')].map(button => getComputedStyle(button).color),
+			}));
+			expect(colors.background).not.toBe(colors.gutter);
+			expect(colors.background).toMatch(/^rgb\(/);
+			expect(colors.buttons).toEqual([colors.foreground, colors.foreground]);
+			for (const icon of await toolbar.locator('svg.ash-icon').all()) {
+				await expect(icon).toHaveCSS('width', '16px');
+				await expect(icon).toHaveCSS('height', '16px');
+			}
 			for (const scrollTop of [0, 500]) {
 				await page.evaluate(top => window.ashDiffIntegration.scrollModified(top), scrollTop);
 				await expect.poll(async () => {

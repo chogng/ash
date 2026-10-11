@@ -133,6 +133,8 @@
 		"--ash-editorGroupHeader-tabsBackground",
 		"--ash-editorGutter-background",
 		"--ash-editorGutter-foldingControlForeground",
+		"--ash-editorGutter-itemBackground",
+		"--ash-editorGutter-itemGlyphForeground",
 		"--ash-editorIndentGuide-activeBackground1",
 		"--ash-editorIndentGuide-background1",
 		"--ash-editorLineNumber-activeForeground",

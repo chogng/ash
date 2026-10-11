@@ -1,5 +1,6 @@
-import { registerColor, transparent } from '../../../platform/theme/common/colorUtils.js';
+import { opaque, registerColor, transparent } from '../../../platform/theme/common/colorUtils.js';
 import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/editorColors.js';
+import { listInactiveSelectionBackground } from '../../../platform/theme/common/colors/listColors.js';
 
 import { descriptionForeground, mutedForeground, selectionBackground, selectionForeground } from '../../../platform/theme/common/colors/baseColors.js';
 
@@ -21,6 +22,13 @@ export const editorInactiveSelection = registerColor('editor.inactiveSelectionBa
 	hcDark: editorSelectionBackground, hcLight: editorSelectionBackground,
 }, { description: 'Background of selections in an unfocused editor.', owner });
 export const editorGutter = editorColor('editorGutter.background', editorBackground, 'Background of the editor gutter.');
+registerColor('editorGutter.itemBackground', {
+	dark: opaque(listInactiveSelectionBackground, editorBackground),
+	light: opaque(listInactiveSelectionBackground, editorBackground),
+	hcDark: listInactiveSelectionBackground,
+	hcLight: listInactiveSelectionBackground,
+}, { description: 'Opaque background behind editor gutter actions.', owner });
+editorColor('editorGutter.itemGlyphForeground', editorForeground, 'Foreground of editor gutter actions.');
 export const editorWhitespace = editorColor('editorWhitespace.foreground', mutedForeground, 'Foreground of visible editor whitespace.');
 export const editorLineNumbers = editorColor('editorLineNumber.foreground', descriptionForeground, 'Foreground of editor line numbers.');
 export const editorActiveLineNumber = editorColor('editorLineNumber.activeForeground', editorForeground, 'Foreground of the current editor line number.');
