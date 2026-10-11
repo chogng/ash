@@ -149,12 +149,17 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
     std::fs::create_dir_all(root.path().join("example")).unwrap();
     std::fs::write(
         root.path().join(".ash-plugin/plugin.json"),
-        include_bytes!("../../../../../sdk/typescript/example/.ash-plugin/plugin.json"),
+        include_bytes!("../../../../../examples/extensions/inspect/.ash-plugin/plugin.json"),
     )
     .unwrap();
     std::fs::write(
-        root.path().join("example/extension.js"),
-        "export function activate() {}",
+        root.path().join("extension.cjs"),
+        "exports.activate = () => {};",
+    )
+    .unwrap();
+    std::fs::write(
+        root.path().join("package.json"),
+        include_bytes!("../../../../../examples/extensions/inspect/package.json"),
     )
     .unwrap();
     let package = LocalPluginPackage::load(root.path()).unwrap();
@@ -200,7 +205,7 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
     let snapshot = plugin_deployments(&authority).unwrap();
     assert_eq!(snapshot.deployments.len(), 1);
     let deployment = &snapshot.deployments[0];
-    assert_eq!(deployment.id, "ash/sdk-example:inspect");
+    assert_eq!(deployment.id, "ash/inspect-example:inspect");
     assert!(deployment.command.executable().ends_with(format!(
         "ash-external-js-ext{}",
         std::env::consts::EXE_SUFFIX
@@ -215,24 +220,26 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
         arguments,
         [
             "--extension-id",
-            "ash/sdk-example:inspect",
+            "ash/inspect-example:inspect",
             "--package",
             deployment.command.working_directory().to_str().unwrap(),
             "--entry",
-            "example/extension.js"
+            "extension.cjs",
+            "--api",
+            "vscode"
         ]
     );
     assert!(deployment.workspace_read == WorkspaceReadAccess::Read);
     assert!(deployment.authority.authorizes());
-    assert!(deployment.scope == super::EditorExtensionScope::Profile);
-    // Remote JS activation is package-granted; workspace reads still use each invocation's filesystem.
+    assert!(deployment.scope == super::EditorExtensionScope::Workspace);
+    // A document provider cannot activate without the requesting workspace's grant.
     assert!(
         super::super::authority::prepare_extension(
             None,
             deployment,
             std::num::NonZeroU64::new(1).unwrap()
         )
-        .is_ok()
+        .is_err()
     );
 }
 
@@ -289,7 +296,7 @@ fn task_and_debug_activation_match_only_the_requested_type_and_phase() {
 }
 
 #[test]
-fn sdk_task_and_debug_packages_wait_for_their_declared_activation_event() {
+fn standard_task_and_debug_packages_wait_for_their_declared_activation_event() {
     for (event, capability, expected) in [
         (
             serde_json::json!({"type": "onTaskType", "taskType": "build"}),
@@ -299,13 +306,13 @@ fn sdk_task_and_debug_packages_wait_for_their_declared_activation_event() {
         (
             serde_json::json!({"type": "onDemand", "capability": "debugAdapter"}),
             "debugAdapter",
-            "onDemand:debugAdapter",
+            "onDebug",
         ),
     ] {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(root.path().join(".ash-plugin")).unwrap();
         let mut manifest: serde_json::Value = serde_json::from_slice(include_bytes!(
-            "../../../../../sdk/typescript/example/.ash-plugin/plugin.json"
+            "../../../../../examples/extensions/inspect/.ash-plugin/plugin.json"
         ))
         .unwrap();
         let contribution = &mut manifest["contributions"]["editorExtensions"][0];
@@ -319,7 +326,16 @@ fn sdk_task_and_debug_packages_wait_for_their_declared_activation_event() {
         .unwrap();
         std::fs::write(
             root.path().join("extension.js"),
-            "export function activate() {}",
+            "exports.activate = () => {};",
+        )
+        .unwrap();
+        std::fs::write(
+            root.path().join("package.json"),
+            serde_json::json!({
+                "name": "fixture", "publisher": "ash", "version": "1.0.0", "main": "extension.js",
+                "activationEvents": [expected], "contributes": {}
+            })
+            .to_string(),
         )
         .unwrap();
         let package = LocalPluginPackage::load(root.path()).unwrap();

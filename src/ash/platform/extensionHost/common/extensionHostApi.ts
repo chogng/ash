@@ -251,6 +251,7 @@ export interface ExtensionDocumentEdit {
 
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
+	| Extract<ProtocolExtensionClientOperation, { operation: "readResourceFile" | "statResource" | "readResourceDirectory"; }>
 	| { operation: 'readInitialization'; }
 	| { operation: 'openRemoteConnection'; authority: string; }
 	| { operation: 'setStatusBarEntries'; registrationId: string; revision: number; entries: readonly ExtensionStatusBarEntry[]; }
@@ -276,6 +277,9 @@ export type ExtensionClientOperation =
 	| { operation: 'showQuickPick'; items: string[]; placeholder: string; };
 
 export type ExtensionClientResult =
+	| { readonly result: "resourceFile"; readonly bytes: readonly number[]; }
+	| { readonly result: "resourceStat"; readonly fileType: number; readonly size: number; readonly mtime: number; }
+	| { readonly result: "resourceDirectory"; readonly entries: readonly (readonly [string, number])[]; }
 	| { result: 'initialization'; initialization: ExtensionHostInitialization; }
 	| { result: 'debugSessions'; sequence: number; sessions: readonly JsonValue[]; activeSession: string | null; breakpoints: readonly JsonValue[]; }
 	| { result: 'debugStarted'; started: boolean; }

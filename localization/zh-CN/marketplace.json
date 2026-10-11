@@ -48,7 +48,7 @@
     "grantLocalExtension": "授予权限",
     "localExtensionPermissions": "请求的权限：{0}",
     "noPermissions": "无",
-    "localExtensionDocumentNotice": "VS Code 扩展使用产品 Node 宿主，可访问当前用户的文件、网络和子进程，并继承开发环境变量。Ash SDK 扩展继续使用受限 V8 宿主。编辑器回调可接收未保存的文本。请只向可信的包授予权限。",
+    "localExtensionDocumentNotice": "VS Code 扩展使用产品 Node 宿主，可访问当前用户的文件、网络和子进程，并继承开发环境变量。编辑器回调可接收未保存的文本。请只向可信的包授予权限。",
     "localExtensionDigest": "扩展包摘要：{0}",
     "yes": "是",
     "no": "否",

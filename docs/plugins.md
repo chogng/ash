@@ -97,8 +97,7 @@ language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declar
 这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
 runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 
-Legacy Plugin v1 提供显式 `editorExtensions[]`：`runtime: javascript` 默认执行 Ash SDK ESM，
-当前仍由受限 Rust V8 宿主执行；显式 `api: vscode` 加载包根标准 `package.json`，由真实 Node Host 执行受支持的标准入口。
+Legacy Plugin v1 提供显式 `editorExtensions[]`：`runtime: javascript` 默认使用 `api: vscode`，加载包根标准 `package.json`，由选定宿主的私有兼容层执行受支持的标准入口。旧 `api: ash` 不再接受。
 `runtime: hostRpc` 指向自己实现共享协议的独立程序；它不是新的 Rust 能力扩展 API 或生产支持承诺。
 compatibility authority 只验证并授权声明，
 `ash-external-ext` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
@@ -110,7 +109,7 @@ enable + grant 后才进入静态 catalog，disable、grant revoke、package rev
 下一次 catalog refresh 移除旧 exact package。Workbench 监听 Plugin activation generation 并自动刷新。
 独立可执行扩展的生产执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
 termination 的 platform launcher；没有该 launcher 时 Host capability 必须为 false，不能用
-`TrustedDevelopmentLauncher` 降级。Node 扩展按其精确包执行授权契约运行，不声称拥有 SDK V8 的系统沙箱。该 Host RPC v1 是 Ash 的内部程序契约；Node 的 VS Code API 兼容由单独桥接提供。
+`TrustedDevelopmentLauncher` 降级。Node 扩展按其精确包执行授权契约运行，不声称拥有受限 V8 的系统沙箱。Host RPC v1 是 TS/JS 兼容层与 Rust SDK 共用的后端扩展契约；标准作者 API 的适配由执行宿主负责。
 
 安装、启用、授权和调用是四个不同动作：
 
@@ -314,15 +313,15 @@ Manifest 必须 strict-parse：
 
 `editorExtensions[]` 是 strict typed control-plane declaration：ID 与 entrypoint 各自唯一；entrypoint
 必须是包内 regular file。`runtime` 必须显式声明为 `javascript` 或 `hostRpc`，不根据文件名猜测。
-`hostRpc` 要求完全相同路径的 `process` permission。JavaScript 入口的 `api` 默认为 `ash`，使用 ESM
-`.js` 或 `.mjs`；显式 `api: vscode` 使用标准 `require('vscode')`，并接受 `.cjs`。标准扩展的
+`hostRpc` 要求完全相同路径的 `process` permission。JavaScript 入口的 `api` 默认为 `vscode`，使用标准 `vscode` API；入口接受
+`.js`、`.mjs` 或 `.cjs`，实际模块格式按所选运行时支持范围验证。标准扩展的
 `package.json` 位于插件包根，入口仍由 `entrypoint` 指定；安装不会自动启用或授权执行。
 标准 manifest 的命令标题和激活事件用于首次调用前的发现，实际回调由对应 Node Host 激活，
 该包的静态声明同时进入既有 Extension catalog，problem matcher 等贡献与脚本共享 enable/grant
 和撤销生命周期，无需再声明一个独立启用的 `declarativeExtensions` 载体。一个插件包只有一个
-标准包根 manifest，因此只允许一个 `api: vscode` 入口；其他 Ash SDK 入口仍可并存。
+标准包根 manifest，因此只允许一个 JavaScript 标准入口。
 声明式 `declarativeExtensions` 仍只加载资源。`api` 不适用于 `hostRpc`。
-JS v1 允许 command、languageProvider、statusBar、taskProvider 和 debugAdapter ceiling；
+JS v1 允许 command、languageProvider、statusBar、taskProvider、debugAdapter 和 customTextEditor ceiling；
 读取工作区还需要 `directory: read` 与当前目录读授权。`runtimeApiVersion` 仅接受数值 `1`；activation event 和 capability ceiling 都必须 non-empty、unique、bounded。v1 triggers 是
 `startup`、`onCommand`、`onLanguage`、`onDemand`、`onDebugType`、`onTaskType` 和
 `onTestProfile`。除 `startup` 外，trigger 不得请求 ceiling 中未声明的 capability。

@@ -449,17 +449,27 @@ fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
         json!([{"type": "onLanguage", "id": "typescript"}]);
     assert!(parse(&unsupported).is_ok());
     for (capability, event) in [
-        ("taskProvider", json!({"type": "onTaskType", "taskType": "builder"})),
-        ("debugAdapter", json!({"type": "onDebugType", "debugType": "example"})),
+        (
+            "taskProvider",
+            json!({"type": "onTaskType", "taskType": "builder"}),
+        ),
+        (
+            "debugAdapter",
+            json!({"type": "onDebugType", "debugType": "example"}),
+        ),
     ] {
         unsupported["contributions"]["editorExtensions"][0]["capabilities"] = json!([capability]);
         unsupported["contributions"]["editorExtensions"][0]["activationEvents"] = json!([event]);
         let admitted = parse(&unsupported).unwrap();
         assert_eq!(admitted.permissions.len(), 1);
-        assert!(matches!(admitted.permissions[0], Permission::Directory { .. }));
+        assert!(matches!(
+            admitted.permissions[0],
+            Permission::Directory { .. }
+        ));
     }
     unsupported["contributions"]["editorExtensions"][0]["capabilities"] = json!(["dataChannel"]);
-    unsupported["contributions"]["editorExtensions"][0]["activationEvents"] = json!([{"type": "startup"}]);
+    unsupported["contributions"]["editorExtensions"][0]["activationEvents"] =
+        json!([{"type": "startup"}]);
     assert!(parse(&unsupported).is_err());
     value["contributions"]["editorExtensions"][0]["entrypoint"] = json!("bin/program");
     assert!(parse(&value).is_err());
@@ -468,7 +478,7 @@ fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
 #[test]
 fn sdk_example_manifest_declares_the_supported_javascript_contract() {
     let manifest = PluginManifest::from_json(include_bytes!(
-        "../../../../sdk/typescript/example/.ash-plugin/plugin.json"
+        "../../../../examples/extensions/inspect/.ash-plugin/plugin.json"
     ))
     .unwrap();
     assert_eq!(
@@ -478,7 +488,7 @@ fn sdk_example_manifest_declares_the_supported_javascript_contract() {
 }
 
 #[test]
-fn vscode_api_is_explicit_and_only_admits_javascript_module_entries() {
+fn javascript_defaults_to_vscode_and_rejects_retired_api_contracts() {
     let mut value = valid_manifest();
     value["contributions"]["editorExtensions"] = json!([{
         "id": "review-runtime", "runtime": "javascript", "api": "vscode", "entrypoint": "extension.cjs",
@@ -491,9 +501,10 @@ fn vscode_api_is_explicit_and_only_admits_javascript_module_entries() {
         manifest.contributions.editor_extensions[0].api,
         super::super::EditorExtensionApi::Vscode
     );
-    assert_eq!(
-        serde_json::to_value(&manifest).unwrap()["contributions"]["editorExtensions"][0]["api"],
-        "vscode"
+    assert!(
+        serde_json::to_value(&manifest).unwrap()["contributions"]["editorExtensions"][0]
+            .get("api")
+            .is_none()
     );
     for entry in ["extension.js", "extension.mjs", "extension.cjs"] {
         value["contributions"]["editorExtensions"][0]["entrypoint"] = json!(entry);
@@ -503,6 +514,10 @@ fn vscode_api_is_explicit_and_only_admits_javascript_module_entries() {
     assert!(parse(&value).is_err());
     value["contributions"]["editorExtensions"][0]["api"] = json!("ash");
     assert!(parse(&value).is_err());
+    value["contributions"]["editorExtensions"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("api");
     value["contributions"]["editorExtensions"][0]["entrypoint"] = json!("extension.js");
     let manifest = parse(&value).unwrap();
     assert!(
@@ -526,13 +541,8 @@ fn vscode_api_is_explicit_and_only_admits_javascript_module_entries() {
             .contains("only one VS Code API entry")
     );
     multiple["contributions"]["editorExtensions"][1]["api"] = json!("ash");
-    assert!(parse(&multiple).is_ok());
+    assert!(parse(&multiple).is_err());
     value["contributions"]["editorExtensions"][0]["runtime"] = json!("hostRpc");
     value["permissions"] = json!([{"type": "process", "executable": "extension.js"}]);
-    assert!(
-        parse(&value)
-            .unwrap_err()
-            .to_string()
-            .contains("only available for JavaScript")
-    );
+    assert!(parse(&value).is_ok());
 }

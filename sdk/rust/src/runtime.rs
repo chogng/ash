@@ -260,6 +260,7 @@ impl<E: Extension> Runtime<E> {
                         data_channels: crate::data_channels::DataChannels::default(),
                         commands: Commands::default(),
                         languages: Languages::default(),
+                        workspace: crate::workspace::Workspace::default(),
                         window: Window::new(self.writer.clone(), fence, self.options.protocol),
                         activation: params.clone(),
                         environment: self.environment.clone().unwrap_or_default(),

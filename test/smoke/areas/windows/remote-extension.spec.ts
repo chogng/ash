@@ -1,4 +1,4 @@
-import { expect, test } from '../../../automation/test.js';
+import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { MethodResult } from '../../../../.build/protocol/typescript/index.js';
 import { appServerRequest } from '../../../../src/ash/platform/agentHost/browser/appServerRequest.js';
@@ -8,7 +8,7 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 // The product resolver is needed on the Desktop home page, before a directory grant exists.
 test.use({ openWorkspace: false });
 
-test('the product SSH resolver runs in V8 on Web and Electron and survives window reload', async ({ target, workbench, application, webAppServer, testWorkspace, reloadWorkbench }) => {
+test('the product SSH resolver runs as a Rust provider on Web and Electron and survives window reload', async ({ target, workbench, application, webAppServer, testWorkspace, reloadWorkbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires the product extension host');
 	let current = { application, workbench };
 	for (let generation = 0; generation < 2; generation++) {
@@ -131,10 +131,10 @@ test.describe('standard resolver startup', () => {
 				contributions: { editorExtensions: [{ id: 'environment', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'startup' }], capabilities: ['command'] }] }, permissions: [],
 			}));
 			await writeFile(join(remoteRoot, 'extension.js'), `
-import { commands } from '@ash/extension';
+const vscode = require('vscode'); const { commands, window } = vscode;
 const loaded = { value: process.env.FIXTURE_REMOTE_ENV ?? null, removed: process.env.FIXTURE_REMOVE ?? null };
-export function activate(context) {
-	context.subscriptions.push(commands.registerCommand('fixture.remote.environment', 'Show remote environment', async call => call.window.showInformationMessage('REMOTE_ENV:' + JSON.stringify(loaded))));
+exports.activate = function(context) {
+	context.subscriptions.push(commands.registerCommand('fixture.remote.environment', async () => window.showInformationMessage('REMOTE_ENV:' + JSON.stringify(loaded))));
 }
 `);
 			const remoteProfile = await test.step('Connect remote profile for package installation', () => connectProfile(application, remote, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true }));
@@ -153,9 +153,9 @@ export function activate(context) {
 				contributions: { editorExtensions: [{ id: 'remote', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'startup' }], capabilities: ['command', 'remoteAuthorityResolver'] }] },
 				permissions: [],
 			}));
-			await writeFile(join(root, 'extension.js'), `
-import { commands, workspace, ResolvedAuthority } from '@ash/extension';
-export function activate(context) {
+			await writeEditorExtensionFixture(root, `
+const vscode = require('vscode'); const { commands, workspace, ResolvedAuthority, window } = vscode;
+exports.activate = function(context) {
 	context.subscriptions.push(workspace.registerRemoteAuthorityResolver('fixture', {
 		resolve(authority, context) {
 			if (authority !== 'fixture+backend' || context.resolveAttempt < 1) throw new Error('Invalid resolution');
@@ -166,7 +166,7 @@ export function activate(context) {
 			return uri.with({ authority: 'fixture+other-host' });
 		}
 	}));
-	context.subscriptions.push(commands.registerCommand('fixture.remote.open', 'Open resolver fixture', async call => call.workspace.openRemoteConnection('fixture+backend')));
+	context.subscriptions.push(commands.registerCommand('fixture.remote.open', async () => JSON.parse(await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation: 'openRemoteConnection', authority: 'fixture+backend'}))));
 }
 `);
 			const page = workbench.page;

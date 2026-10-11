@@ -390,7 +390,7 @@
     "tasks.terminalCloseMessage": "Press any key to close the terminal.",
     "tunnel.invalidPort": "Remote port must be an integer from 1 to 65535.",
     "tunnel.unsupportedOptions": "SSH forwarding supports private loopback ports with an automatically assigned local port.",
-    "extensionHost.browser.productSsh": "The product SSH extension must execute in the V8 host",
+    "extensionHost.browser.productSsh": "The product SSH extension must execute as a Rust provider",
     "remote.extension.openTitle": "Open Remote Window",
     "remote.extension.openMessage": "Extension '{0}' wants to open '{1}'.",
     "remote.extension.openButton": "Open Remote Window",

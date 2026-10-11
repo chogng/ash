@@ -709,6 +709,18 @@ impl EditorClientBinding {
         }
         if matches!(
             operation,
+            external_ext_protocol::ExtensionClientOperation::ReadResourceFile { .. }
+                | external_ext_protocol::ExtensionClientOperation::StatResource { .. }
+                | external_ext_protocol::ExtensionClientOperation::ReadResourceDirectory { .. }
+        ) && self.workspace_read == source::WorkspaceReadAccess::Denied
+        {
+            return Err(external_ext_protocol::HostFailure {
+                code: external_ext_protocol::HostErrorCode::PermissionDenied,
+                message: "extension has no directory read permission".into(),
+            });
+        }
+        if matches!(
+            operation,
             external_ext_protocol::ExtensionClientOperation::CoreService { .. }
         ) {
             return Err(external_ext_protocol::HostFailure {
@@ -958,6 +970,7 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "remoteEnd"
                 | "remoteRelease"
         ),
+        RegistrationKind::CustomTextEditor { .. } => operation == "resolveCustomTextEditor",
         RegistrationKind::StatusBar { .. } => false,
         RegistrationKind::WorkspaceEvents {} => operation == "workspaceEvent",
         RegistrationKind::TextDocumentEvents {} => operation == "documentEvent",

@@ -1258,7 +1258,7 @@
     "tasks.terminalCloseMessage": "按任意键关闭终端。",
     "tunnel.invalidPort": "远程端口必须是 1 到 65535 的整数。",
     "tunnel.unsupportedOptions": "SSH 转发仅支持专用环回端口，本地端口由系统自动分配。",
-    "extensionHost.browser.productSsh": "产品 SSH 扩展必须在 V8 宿主中执行",
+    "extensionHost.browser.productSsh": "产品 SSH 扩展必须作为 Rust Provider 执行",
     "remote.extension.openTitle": "打开远程窗口",
     "remote.extension.openMessage": "扩展“{0}”请求打开“{1}”。",
     "remote.extension.openButton": "打开远程窗口",

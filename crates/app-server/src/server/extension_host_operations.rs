@@ -502,6 +502,17 @@ fn registration_dto(
             RegistrationKind::Command { command, title } => {
                 ExtensionHostRegistrationKindDto::Command { command, title }
             }
+            RegistrationKind::CustomTextEditor {
+                view_type,
+                display_name,
+                selectors,
+                priority,
+            } => ExtensionHostRegistrationKindDto::CustomTextEditor {
+                view_type,
+                display_name,
+                selectors,
+                priority,
+            },
             RegistrationKind::LanguageProvider {
                 language_ids,
                 operations,

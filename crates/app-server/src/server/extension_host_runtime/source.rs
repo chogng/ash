@@ -86,9 +86,9 @@ pub(super) fn built_in_deployments(
 fn product_ssh_deployment(
     directory: &Path,
 ) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
-    let source = include_str!("../../../../../extensions/remote-ssh/src/extension.js");
+    let source = include_str!("../../../../../extensions/remote-ssh/src/main.rs");
     let manifest = include_str!("../../../../../extensions/remote-ssh/package.json");
-    let sdk = include_str!("../../../../../sdk/typescript/index.js");
+    let sdk = include_str!("../../../../../sdk/rust/src/workspace.rs");
     let digest = format!(
         "sha256:{:x}",
         Sha256::digest(format!("{manifest}\0{source}\0{sdk}"))
@@ -99,13 +99,14 @@ fn product_ssh_deployment(
         id: id.clone(),
         version: "1.0.0".into(),
         package_digest: digest.clone(),
-        command: ExtensionLaunchCommand::product_javascript(
+        command: ExtensionLaunchCommand::new(
             directory.join(format!(
-                "ash-external-js-ext{}",
+                "ash-remote-ssh-extension{}",
                 std::env::consts::EXE_SUFFIX
             )),
-            "remote-ssh",
+            std::iter::empty::<String>(),
             directory,
+            BTreeMap::new(),
         )
         .map_err(ExtensionHostRuntimeError::Host)?,
         workspace_read: WorkspaceReadAccess::Denied,
@@ -115,7 +116,7 @@ fn product_ssh_deployment(
             package: PackageBinding {
                 package_id: "ash.remote-ssh@1.0.0".into(),
                 package_digest: digest,
-                entrypoint: "src/extension.js".into(),
+                entrypoint: "ash-remote-ssh-extension".into(),
             },
             runtime_api_version: 1,
             activation_events: vec!["startup".into()],
@@ -130,7 +131,7 @@ fn product_ssh_deployment(
     })
 }
 
-// This authority admits only the module compiled into the product executable. Fleet retirement
+// This authority admits only the extension shipped in the product installation. Fleet retirement
 // owns process cancellation; a release update replaces the bytes on the next backend start.
 struct ProductAuthority;
 struct ProductLease;
@@ -281,15 +282,14 @@ pub(super) fn plugin_deployments(
                 ),
                 ash_plugin::EditorExtensionRuntime::JavaScript => {
                     let launch = match contribution.api {
-                        EditorExtensionApi::Ash => ExtensionLaunchCommand::javascript,
                         EditorExtensionApi::Vscode => ExtensionLaunchCommand::vscode,
                     };
                     launch(executable, arguments, package.package_root())
                 }
             }
             .map_err(ExtensionHostRuntimeError::Host)?;
-            let (activation, activation_failure) = match contribution.api {
-                EditorExtensionApi::Vscode => {
+            let (activation, activation_failure) = match contribution.runtime {
+                ash_plugin::EditorExtensionRuntime::JavaScript => {
                     match marketplace_editor_extensions::javascript_activation_plan(
                         package.package_root(),
                     ) {
@@ -297,33 +297,7 @@ pub(super) fn plugin_deployments(
                         Err(message) => (None, Some(message)),
                     }
                 }
-                // SDK task/debug registrations wait for their declared first use. Other SDK
-                // entries retain their existing activation behavior.
-                EditorExtensionApi::Ash => (
-                    contribution
-                        .activation_events
-                        .iter()
-                        .all(|event| {
-                            matches!(
-                                event,
-                                EditorExtensionActivationEvent::OnTaskType { .. }
-                                    | EditorExtensionActivationEvent::OnDebugType { .. }
-                                    | EditorExtensionActivationEvent::OnDemand {
-                                        capability: EditorExtensionCapability::TaskProvider
-                                            | EditorExtensionCapability::DebugAdapter
-                                    }
-                            )
-                        })
-                        .then(|| ActivationPlan {
-                            events: contribution
-                                .activation_events
-                                .iter()
-                                .map(activation_event)
-                                .collect(),
-                            commands: Vec::new(),
-                        }),
-                    None,
-                ),
+                ash_plugin::EditorExtensionRuntime::HostRpc => (None, None),
             };
             deployments.push(EditorExtensionDeployment {
                 scope: if contribution.runtime == ash_plugin::EditorExtensionRuntime::JavaScript
@@ -467,6 +441,7 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         EditorExtensionCapability::StatusBar => ExtensionCapability::StatusBar,
         EditorExtensionCapability::Command => ExtensionCapability::Command,
         EditorExtensionCapability::LanguageProvider => ExtensionCapability::LanguageProvider,
+        EditorExtensionCapability::CustomTextEditor => ExtensionCapability::CustomTextEditor,
         EditorExtensionCapability::DebugAdapter => ExtensionCapability::DebugAdapter,
         EditorExtensionCapability::TaskProvider => ExtensionCapability::TaskProvider,
         EditorExtensionCapability::TestProfileProvider => ExtensionCapability::TestProfileProvider,
@@ -484,6 +459,7 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::StatusBar => "statusBar",
         EditorExtensionCapability::Command => "command",
         EditorExtensionCapability::LanguageProvider => "languageProvider",
+        EditorExtensionCapability::CustomTextEditor => "customTextEditor",
         EditorExtensionCapability::DebugAdapter => "debugAdapter",
         EditorExtensionCapability::TaskProvider => "taskProvider",
         EditorExtensionCapability::TestProfileProvider => "testProfileProvider",

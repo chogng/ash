@@ -298,9 +298,6 @@ importers:
 
   extensions/markdown-language-features:
     dependencies:
-      '@ash/extension':
-        specifier: workspace:*
-        version: link:../../sdk/typescript
       '@vscode/l10n':
         specifier: ^0.0.18
         version: 0.0.18
@@ -328,8 +325,6 @@ importers:
       vscode-uri:
         specifier: ^3.2.0
         version: 3.2.0
-
-  sdk/typescript: {}
 
   test/scenario:
     dependencies:

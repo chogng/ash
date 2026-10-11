@@ -1,0 +1,17 @@
+[package]
+name = "ash-remote-ssh-extension"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[dependencies]
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
+
+[dev-dependencies]
+ash-external-ext.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -52,35 +52,17 @@ JSON-RPC，未切换成 VS Code 的 PersistentProtocol。Web 的鉴权 WebSocket
 
 ## 扩展连接入口
 
-可安装 Remote 扩展用 TS 编写、以 JS 在隔离扩展宿主执行。它负责解析目标、组织流程和调用
-工作台交互；受授权的连接执行、凭据和资源生命周期由核心 host 管理。Rust 扩展宿主运行 JS
-不改变扩展作者接口的语言，也不把 SSH 子进程变成扩展自己的资源。
+Remote 使用[统一后端扩展接口](editor-extensions.md#统一后端扩展接口规范)。标准 TS/JS 扩展使用 `vscode.workspace.registerRemoteAuthorityResolver`，所选宿主提供兼容 API，并把注册、调用、取消和资源释放转换为同一个 Host RPC；Rust 扩展使用 `sdk/rust`。SSH 安装、升级和完整标准 Remote 兼容仍需继续建设，本次不宣称这些能力完成。
 
-`@ash/extension` 的 `workspace.registerRemoteConnectionResolver(prefix, resolver)` 需要 manifest
-声明 `remoteAuthorityResolver`。核心将 `prefix+target` 交给当前有效实例，扩展返回已保存连接的
-`connectionName`；`call.workspace.openRemoteConnection(authority)` 再通过同一注册链请求连接。
-Workbench 读取权威目录，展示扩展身份、实际主机和目录，确认后交给原有命名连接入口。Main
-重新读取目标，核对其与确认值一致，发生编辑或删除时拒绝启动。普通 SSH 选择器也通过这个
-`remoteConnectionService` 解析 `ssh+连接名称`；它只持有窗口内的注册及取消状态，
-目录、凭据与 SSH 进程继续由后端管理。这是 Ash 的已保存连接选择接口，与 VS Code 返回
-WebSocket 或 managed transport 端点的 resolver 职责不同，也与远端资源里的 `ssh+host` 含义不同。
-manifest capability 保留原有名称；已保存连接使用 `remoteConnectionResolver` / `resolveConnection`，
-标准端点解析使用 `registerRemoteAuthorityResolver` / `resolveAuthority`。
+产品内置 `extensions/remote-ssh` 是独立 Rust 程序，通过 `context.workspace.register_connection_resolver("ssh", callback)` 返回 `SavedConnection { connection_name }`。这是已有保存连接选择行为，使用 `remoteConnectionResolver` / `resolveConnection`，与标准 endpoint resolver 的 `remoteAuthorityResolver` / `resolveAuthority` 区分。标准 JS 作者不能注册产品保留的 `ssh` 前缀。
 
-解析器重复前缀会使整批注册替换失败，不能按加载顺序覆盖。取消、断开、停用或重启会退役旧
-实例及在途解析；确认后已交给 host 的新窗口有独立生命周期。`ssh` 前缀保留给产品内置解析器。
-已保存连接选择器不接受凭据、SSH 参数、任意命令或 socket。标准 resolver 可返回连接端点或
-受管消息通道，token 只用于其授权连接。用法见 [SDK](../sdk/typescript/README.md)。
+Workbench 读取权威连接目录，展示扩展身份、主机和目录，确认后交给现有命名连接入口；Main 再核对目标，发生编辑或删除时拒绝启动。目录、凭据与 SSH carrier 继续由后端管理。解析重复前缀使整批注册失败，取消、撤权和重启使旧注册及在途结果失效，已交给 host 的新窗口有独立生命周期。
 
-内置 `extensions/remote-ssh` 通过同一 SDK 在 Rust V8 宿主注册 `ssh`，模块与 SDK 随产品
-编译分发，核心不直接解析这个前缀。App Server 的产品授权仅选择固定编译模块，宿主核对
-发布源码摘要；安装包和 Browser Worker 均不能取得该前缀。产品模块不读取工作区文件，
-可以在未打开工作区的首页激活。可安装 SDK 扩展仍要求启用、权限授权和平台隔离；声明 remote resolver 能力的 JS 包按
-profile 执行，其他可执行扩展继续要求工作区授权；两者共用
-V8 执行、注册和生命周期。远端扩展宿主部署与完整 VS Code resolver 兼容尚未实现；
-本机入站 Tunnels 已通过应用级服务和自有 SSH 中继托管，职责与限制见下文。
+App Server 对精确产品可执行文件授予产品 authority，并交给同一个 Supervisor 启动和监管。该 Rust Provider 不需要 Node 或 V8，也不读取工作区，可以在首页激活。通用第三方 Rust 包的安装与系统隔离仍未完成。
 
-标准端点窗口先建立本地扩展控制连接，在本地 V8 扩展解析 authority 后，再通过
+标准 TS resolver 返回 `ResolvedAuthority(host, port, token)` 或 `ManagedResolvedAuthority(makeConnection, token)`，token 只用于其授权连接；支持限制见[宿主](../crates/external-js-ext/README.md)。安装、启用和执行授权仍是独立动作。
+
+标准端点窗口先建立本地扩展控制连接，在本地标准扩展解析 authority 后，再通过
 `IRemoteSocketFactoryService` 建立远端 App Server 连接；远端初始化成功后才启动 Workbench。
 `workbench/services/extensions/electron-browser/nativeExtensionService.ts` 协调解析与重试，
 `common/extensionHostManager.ts` 执行扩展调用，`platform/remote/electron-browser/remoteAuthorityResolverService.ts`
@@ -91,7 +73,7 @@ owner 发起释放，避免一个窗口的重连销毁另一窗口的受管资�
 本地 `LocalProfileRuntime` 持有唯一的扩展安装、启用与授权状态，目录窗口和空远端窗口共享
 这个 owner；在一个窗口安装、授权或撤销扩展后，另一个窗口的解析会读取当前状态。
 
-canonical URI 沿同一本地扩展实例调用链执行：`ExtensionHostManager.getCanonicalURI` 调用 SDK
+canonical URI 沿同一本地扩展实例调用链执行：`ExtensionHostManager.getCanonicalURI` 调用私有标准 API 适配器
 resolver 的可选回调，`NativeExtensionService` 注册 provider，平台 resolver 合并相同 URI 的查询并
 缓存结果。省略回调或返回 null/undefined 保留原 URI。重连、provider 替换、扩展实例退役和窗口
 关闭清除旧缓存及在途查询；Web 的对应平台实现默认保留 URI。
@@ -103,7 +85,7 @@ Rust 权限，不允许 canonical URI 将目录授权改向其他主机或本机
 
 `ResolvedOptions` 随端点一起发布、重连一起清除；`isTrusted=false` 限制 UI 信任视图，true 不能
 替代 Rust 目录能力授权。空远端窗口先核对 canonical 远端命名空间仍指向当前主机，再使用
-resolver 的信任提示；不会读取或授权文件系统根目录。SDK 的
+resolver 的信任提示；不会读取或授权文件系统根目录。兼容层的
 `authenticationSessionForInitializingExtensions` 只转换成 `{ id, providerId }`，不传递 access token、
 账户信息或 scopes。`workbench/services/extensions/common/remoteExtensionHost.ts` 在远端连接就绪后、
 Workbench 扩展启动前读取 `extensionHostEnv`，通过既有 Rust 协议启动连接专属的扩展进程。
@@ -138,8 +120,8 @@ Terminal、Search、Codebase 和语言协议。前端不会为每个领域复制
 | App Server 断线                            | `ash code` CLI host 和 `app` Agent 都在 30 秒窗口内按 250ms 到 2s 的退避重连并重读 durable Session/Thread snapshot。ash code TUI 先交还纯 durable identity，丢弃本代 pending request 与 queued action，再由 CLI 重建 SSH；app 断线期命令明确失败而不延迟回放，旧 generation 的语言请求立即失效，重连后重新同步打开的文档。`app` 与 Desktop Remote Terminal 都在 30 秒 bearer lease 内重新连接同一共享后端并 attach 原 PTY；Desktop Renderer 的终端进程适配层保管 token，实例服务只在首次续读成功后显示已恢复。Desktop 自动重试耗尽后可在原窗口发起受信 stop/start | 短暂断线无需操作；Desktop 显示 Disconnected 后可执行 `Remote: Reconnect to SSH Host`。超过 Terminal lease 或远端主机/daemon 重启后需 Relaunch 终端                                                                                                                                          |
 | 回退 Desktop Remote runtime                | 命令面板的 `Remote: Roll Back Remote Runtime` 请求 Main 验证 previous runtime；验证成功并原子切换 profile 后，Main 通知 Renderer 关闭或放弃旧后端 lease，再替换 Remote backend，不会把必然失败的 attach 重试到 30 秒超时。Renderer 将这些终端标成可 Relaunch 的 error                                                                                                                                                                                                                                                                                             | 确认回滚；验证失败时现有连接和终端保持不变，成功后按需 Relaunch 原终端实例                                                                                                                                                                                                                  |
 | 从 Remote 窗口打开本地文件夹               | 当前 Remote 窗口保持原 Workspace，Main 为本地文件夹打开独立窗口；目标已打开时聚焦已有窗口                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 使用普通 Open Folder 动作，无需重启产品                                                                                                                                                                                                                                                     |
-| 在 Desktop Remote Browser 打开远端本机服务 | Browser 与 App Server Browser Automation 保留请求 URL；Electron Main 为 Remote BrowserSession 持有 SSH SOCKS5 代理，Chromium 的导航、DNS、子资源和 WebSocket 经该代理访问 Remote 网络                                                                                                                                                                                                                                                                                                                                        | 照常输入远端服务 URL；同一 BrowserSession 的页面共享代理，最后一个页面释放会话网络 owner 后关闭代理                                                                                                                                                                        |
-| 端口转发                                   | `ash-remote-host` 提供可复用的 loopback-only Tunnel 生命周期、稳定 listener gate、同端口有界恢复和 typed events；app 图形宿主使用该 Rust 生命周期实现；Electron Main 当前直接持有 OpenSSH 子进程及窗口级 coordinator。Desktop 的 Ports 面板经 `ITunnelService` 读取 Main-owned Tunnel catalog，可新增、Stop、Stop All 并显示 Open/Recovering/Failed；Remote app 窗口可从 location picker 或可绑定命令 `workbench.action.manageRemoteTunnels` 打开管理面板；`app remote tunnel <name> --remote-port <port>` 仍提供前台 CLI                                                                                             | 图形入口可关闭面板而保留 Tunnel，再次打开可查看或 Stop；首次启动失败立即报告，CLI 需保持前台运行。readiness 只证明本地 forward，不证明远端应用协议已 ready；Debug stdio adapter 已直接在 Remote App Server 执行而不需要 Tunnel，socket/server adapter 与统一 Remote Explorer 连接树仍未接入 |
+| 在 Desktop Remote Browser 打开远端本机服务 | Browser 与 App Server Browser Automation 保留请求 URL；Electron Main 为 Remote BrowserSession 持有 SSH SOCKS5 代理，Chromium 的导航、DNS、子资源和 WebSocket 经该代理访问 Remote 网络                                                                                                                                                                                                                                                                                                                                                                             | 照常输入远端服务 URL；同一 BrowserSession 的页面共享代理，最后一个页面释放会话网络 owner 后关闭代理                                                                                                                                                                                         |
+| 端口转发                                   | `ash-remote-host` 提供可复用的 loopback-only Tunnel 生命周期、稳定 listener gate、同端口有界恢复和 typed events；app 图形宿主使用该 Rust 生命周期实现；Electron Main 当前直接持有 OpenSSH 子进程及窗口级 coordinator。Desktop 的 Ports 面板经 `ITunnelService` 读取 Main-owned Tunnel catalog，可新增、Stop、Stop All 并显示 Open/Recovering/Failed；Remote app 窗口可从 location picker 或可绑定命令 `workbench.action.manageRemoteTunnels` 打开管理面板；`app remote tunnel <name> --remote-port <port>` 仍提供前台 CLI                                         | 图形入口可关闭面板而保留 Tunnel，再次打开可查看或 Stop；首次启动失败立即报告，CLI 需保持前台运行。readiness 只证明本地 forward，不证明远端应用协议已 ready；Debug stdio adapter 已直接在 Remote App Server 执行而不需要 Tunnel，socket/server adapter 与统一 Remote Explorer 连接树仍未接入 |
 | 远程多根 Workspace                         | 尚未完成                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 等待后续独立能力                                                                                                                                                                                                                                                                            |
 
 启动参数使用 OpenSSH 配置中的 host 名称，而不是包含密码或私钥的连接串：
@@ -288,8 +270,8 @@ URL 票据只存在 fragment，需与 SSH 访问权限一同使用；票据只�
 | Electron Main 安装准备窗口               | 每个 Remote 窗口启动门禁持有自己的安装 operation、`AbortSignal` 和无凭据状态；独立 sandboxed Renderer 只能读取 host/phase、订阅变化或请求取消。关闭/取消只终止该窗口的本机安装命令，完成后仍等待精确 runtime 复核再打开 Workbench                                                                   | artifact 路径、SSH option、凭据、安装决策或普通 Workbench IPC                                                                        |
 | Desktop Workbench 窗口 registry          | 合并同一 Workspace 的并发打开；为每个不同目标建立独立 Workspace context、supervisor、Browser Automation、IPC 与 Remote context；保存多个窗口的位置并按最近活动顺序聚焦                                                                                                                              | 跨窗口共享 supervisor、把 Remote authority 热切换进已有窗口                                                                          |
 | Electron Main Remote 窗口上下文          | `RemoteWindowMainContext` 将一个窗口的 Agent、命名连接、Tunnel、手动重连、回滚路由和状态事件绑定到同一个 `AppServerSupervisor` 与 Workspace context；重连和回滚共用串行恢复门；Workspace 变化时关闭该窗口的全部 Tunnel，窗口销毁时再释放监听器和 Tunnel coordinator                                 | 创建应用窗口、在多个窗口之间共享 supervisor、保存 SSH 凭据                                                                           |
-| Electron Main Remote Tunnel coordinator  | 当前直接启动和监督 `ssh -N`，拥有本地/远端 loopback 绑定、同端口有界恢复、窗口/Workspace Tunnel 引用和 catalog；`ash-remote-host` 是其他宿主可复用的 Rust 实现，Desktop 尚未调用它                                                                                                                                                              | 公开监听、反向转发或领域协议                                                                                                         |
-| Electron Main Remote Browser adapter     | 识别当前窗口的 Remote authority；BrowserSession 持有 SSH SOCKS5 代理，Chromium 负责 DNS、导航和子资源请求；代理失效时关闭现有网络连接，最后一个页面释放网络 owner 后关闭代理                                                                            | Browser DOM、通用导航策略、SSH child、非 loopback 公网 URL 或任意子资源代理                                                          |
+| Electron Main Remote Tunnel coordinator  | 当前直接启动和监督 `ssh -N`，拥有本地/远端 loopback 绑定、同端口有界恢复、窗口/Workspace Tunnel 引用和 catalog；`ash-remote-host` 是其他宿主可复用的 Rust 实现，Desktop 尚未调用它                                                                                                                  | 公开监听、反向转发或领域协议                                                                                                         |
+| Electron Main Remote Browser adapter     | 识别当前窗口的 Remote authority；BrowserSession 持有 SSH SOCKS5 代理，Chromium 负责 DNS、导航和子资源请求；代理失效时关闭现有网络连接，最后一个页面释放网络 owner 后关闭代理                                                                                                                        | Browser DOM、通用导航策略、SSH child、非 loopback 公网 URL 或任意子资源代理                                                          |
 | app Native Tunnel host                   | 从当前 Remote 窗口复用 host 与 OpenSSH executable；通过 `ash-remote-host` 后台监督 `ssh -N`、自动本地端口和同端口有界恢复，自己负责 `WorkbenchEvent`、可访问管理状态、Stop 和窗口级销毁                                                                                                             | Local 窗口任意选择 host、公开监听、反向转发、凭据输入或 Remote Server endpoint discovery                                             |
 | `platform/remote`                        | Remote URI、authority、原生连接元数据和 IPC 契约                                                                                                                                                                                                                                                    | 各领域业务状态                                                                                                                       |
 | `workbench/services/remote`              | 后端状态的只读 Workbench 投影                                                                                                                                                                                                                                                                       | 启动 SSH 或决定重连                                                                                                                  |

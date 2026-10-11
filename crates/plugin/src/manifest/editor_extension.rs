@@ -16,7 +16,7 @@ pub struct EditorExtensionContribution {
     pub id: ManifestLocalId,
     pub entrypoint: PluginPath,
     pub runtime: EditorExtensionRuntime,
-    #[serde(default, skip_serializing_if = "EditorExtensionApi::is_ash")]
+    #[serde(default, skip_serializing_if = "EditorExtensionApi::is_vscode")]
     pub api: EditorExtensionApi,
     pub runtime_api_version: EditorExtensionRuntimeApiVersion,
     pub activation_events: Vec<EditorExtensionActivationEvent>,
@@ -37,13 +37,12 @@ pub enum EditorExtensionRuntime {
 #[serde(rename_all = "camelCase")]
 pub enum EditorExtensionApi {
     #[default]
-    Ash,
     Vscode,
 }
 
 impl EditorExtensionApi {
-    fn is_ash(&self) -> bool {
-        *self == Self::Ash
+    fn is_vscode(&self) -> bool {
+        *self == Self::Vscode
     }
 }
 
@@ -137,6 +136,7 @@ pub enum EditorExtensionCapability {
     StatusBar,
     Command,
     LanguageProvider,
+    CustomTextEditor,
     DebugAdapter,
     TaskProvider,
     TestProfileProvider,

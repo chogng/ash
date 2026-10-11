@@ -47,7 +47,6 @@ enum LaunchRuntime {
     Executable,
     JavaScript,
     Vscode,
-    ProductJavaScript,
 }
 
 impl ExtensionLaunchCommand {
@@ -113,28 +112,12 @@ impl ExtensionLaunchCommand {
     pub fn is_javascript(&self) -> bool {
         matches!(
             self.runtime,
-            LaunchRuntime::JavaScript | LaunchRuntime::Vscode | LaunchRuntime::ProductJavaScript
+            LaunchRuntime::JavaScript | LaunchRuntime::Vscode
         )
     }
 
     pub fn is_vscode(&self) -> bool {
         self.runtime == LaunchRuntime::Vscode
-    }
-
-    /// Executes only modules compiled into the product host, without a side-loaded package root.
-    pub fn product_javascript(
-        executable: impl Into<PathBuf>,
-        name: &str,
-        working_directory: impl Into<PathBuf>,
-    ) -> Result<Self, ExtensionHostError> {
-        let mut command = Self::new(
-            executable,
-            ["--builtin", name],
-            working_directory,
-            BTreeMap::new(),
-        )?;
-        command.runtime = LaunchRuntime::ProductJavaScript;
-        Ok(command)
     }
 
     pub fn executable(&self) -> &Path {
@@ -318,7 +301,7 @@ struct PendingEntry {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TrustedDevelopmentLauncher;
 
-/// Launches only product-bound runtimes: the confined V8 executable for the Ash SDK,
+/// Launches only product-bound runtimes: the confined V8 executable for standard JS packages,
 /// or the frozen Node executable/bootstrap for authorized standard extensions.
 pub struct ProductJavaScriptLauncher {
     executable: PathBuf,
@@ -402,21 +385,16 @@ impl ExtensionHostLauncher for ProductJavaScriptLauncher {
         let ProcessIsolationPolicy::RequireJavaScriptEnforcement(memory) = limits.isolation else {
             return Err(ExtensionHostError::IsolationUnavailable);
         };
-        if (!Self::supports_platform() && command.runtime != LaunchRuntime::ProductJavaScript)
+        if !Self::supports_platform()
             || !command.is_javascript()
             || command.executable() != self.executable
         {
             return Err(ExtensionHostError::IsolationUnavailable);
         }
         let mut command = command.clone();
-        let isolation = if command.runtime == LaunchRuntime::ProductJavaScript {
-            "product-javascript"
-        } else {
-            "javascript"
-        };
         command.arguments.extend([
             "--isolation".into(),
-            isolation.into(),
+            "javascript".into(),
             "--heap-bytes".into(),
             memory.heap_bytes.to_string().into(),
             "--array-buffer-bytes".into(),

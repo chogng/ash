@@ -374,6 +374,12 @@ pub enum ExtensionHostRegistrationKindDto {
         #[schemars(length(min = 1, max = 512))]
         title: String,
     },
+    CustomTextEditor {
+        view_type: String,
+        display_name: String,
+        selectors: Vec<String>,
+        priority: String,
+    },
     LanguageProvider {
         #[schemars(length(min = 1, max = 64))]
         language_ids: Vec<String>,

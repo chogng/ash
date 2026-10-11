@@ -35,6 +35,84 @@ fn activation() -> ActivateParams {
 }
 
 #[test]
+fn custom_text_editors_require_capability_and_bounded_valid_selectors() {
+    for (capability, selectors, priority, accepted) in [
+        (
+            ExtensionCapability::CustomTextEditor,
+            vec!["*.md".into()],
+            "option",
+            true,
+        ),
+        (
+            ExtensionCapability::Command,
+            vec!["*.md".into()],
+            "option",
+            false,
+        ),
+        (
+            ExtensionCapability::CustomTextEditor,
+            vec![],
+            "default",
+            false,
+        ),
+        (
+            ExtensionCapability::CustomTextEditor,
+            vec![String::new()],
+            "default",
+            false,
+        ),
+        (
+            ExtensionCapability::CustomTextEditor,
+            vec!["x".repeat(2049)],
+            "default",
+            false,
+        ),
+        (
+            ExtensionCapability::CustomTextEditor,
+            vec!["*.md".into(); 65],
+            "default",
+            false,
+        ),
+        (
+            ExtensionCapability::CustomTextEditor,
+            vec!["*.md".into()],
+            "unknown",
+            false,
+        ),
+    ] {
+        let mut params = activation();
+        params.capabilities = vec![capability];
+        let request = ExtensionHostRequest {
+            context: RequestContext::new(1, 2, 3),
+            request: HostRequestKind::Activate(params),
+        };
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![RegistrationDescriptor {
+                    registration_id: "editor.markdown".into(),
+                    kind: RegistrationKind::CustomTextEditor {
+                        view_type: "editor.markdown".into(),
+                        display_name: "Markdown".into(),
+                        selectors,
+                        priority: priority.into(),
+                    },
+                }],
+            })),
+        };
+        assert_eq!(
+            response
+                .validate_for(&request, &ProtocolLimits::default())
+                .is_ok(),
+            accepted
+        );
+        let decoded: ExtensionHostResponse =
+            serde_json::from_value(serde_json::to_value(&response).unwrap()).unwrap();
+        assert_eq!(decoded, response);
+    }
+}
+
+#[test]
 fn reserved_ssh_registration_requires_product_authority() {
     let mut params = activation();
     params.capabilities = vec![ExtensionCapability::RemoteAuthorityResolver];

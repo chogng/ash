@@ -141,7 +141,6 @@
   },
   "private": true,
   "dependencies": {
-    "@ash/extension": "workspace:*",
     "@vscode/l10n": "^0.0.18",
     "@vscode/markdown-editor": "0.0.2-107",
     "@vscode/observables": "0.1.1-0",

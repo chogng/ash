@@ -174,7 +174,7 @@ fn validate_editor_extensions(manifest: &PluginManifest) -> Result<(), PluginErr
     }
     if extensions
         .iter()
-        .filter(|extension| extension.api == super::EditorExtensionApi::Vscode)
+        .filter(|extension| extension.runtime == super::EditorExtensionRuntime::JavaScript)
         .count()
         > 1
     {
@@ -210,17 +210,11 @@ fn validate_editor_extensions(manifest: &PluginManifest) -> Result<(), PluginErr
 }
 
 fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<(), PluginError> {
-    if extension.runtime == super::EditorExtensionRuntime::HostRpc
-        && extension.api != super::EditorExtensionApi::Ash
-    {
-        return invalid("Editor Extension api is only available for JavaScript entries");
-    }
     if extension.runtime == super::EditorExtensionRuntime::JavaScript {
         let suffix = std::path::Path::new(extension.entrypoint.as_str())
             .extension()
             .and_then(|extension| extension.to_str());
         let supported = match extension.api {
-            super::EditorExtensionApi::Ash => matches!(suffix, Some("js" | "mjs")),
             super::EditorExtensionApi::Vscode => matches!(suffix, Some("js" | "mjs" | "cjs")),
         };
         if !supported {
@@ -233,6 +227,7 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
                 capability,
                 super::EditorExtensionCapability::RemoteAuthorityResolver
                     | super::EditorExtensionCapability::Command
+                    | super::EditorExtensionCapability::CustomTextEditor
                     | super::EditorExtensionCapability::LanguageProvider
                     | super::EditorExtensionCapability::StatusBar
                     | super::EditorExtensionCapability::TaskProvider
@@ -240,7 +235,7 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
             )
         }) {
             return invalid(
-                "JavaScript SDK v1 supports command, language provider, status bar, Task provider, Debug and Remote resolver registrations",
+                "JavaScript host contract v1 supports command, language provider, status bar, Task provider, Debug and Remote resolver registrations",
             );
         }
     }

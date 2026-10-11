@@ -1,4 +1,4 @@
-// This module is embedded in the product host. It contains no transport or product permissions.
+// Private Host RPC callback and activation owner. Extensions obtain only the standard vscode API.
 export const apiVersion = 1;
 export class ExtensionError extends Error {
 	constructor(code, message) { super(message); this.name = 'ExtensionError'; this.code = code; }
@@ -133,37 +133,24 @@ export class ResolvedAuthority {
 	}
 }
 
-export class Uri {
-	constructor(components, external) {
-		for (const key of ['scheme', 'authority', 'path', 'query', 'fragment']) {
-			const value = components[key] ?? '';
-			if (typeof value !== 'string' || value.length > 16384 || /[\u0000-\u001f\u007f]/.test(value)) throw new TypeError('Invalid URI component');
-			this[key] = value;
-		}
-		if (!/^[A-Za-z][A-Za-z0-9+.-]*$/.test(this.scheme) || /[@/?#]/.test(this.authority) || (this.authority && this.path && !this.path.startsWith('/'))) throw new TypeError('Invalid resource URI');
-		if (external !== undefined) {
-			const encoded = /^([^:]+):(?:\/\/([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?$/.exec(external);
-			if (!encoded || encoded[1] !== this.scheme || (encoded[2] ?? '') !== this.authority || decodeURIComponent(encoded[3]) !== this.path || decodeURIComponent(encoded[4] ?? '') !== this.query || decodeURIComponent(encoded[5] ?? '') !== this.fragment) throw new TypeError('Inconsistent resource URI components');
-		}
-		this.external = external ?? `${this.scheme}:${this.authority || this.scheme === 'file' ? `//${this.authority}` : ''}${encodeURI(this.path).replaceAll('?', '%3F').replaceAll('#', '%23')}${this.query ? `?${encodeURI(this.query).replaceAll('#', '%23')}` : ''}${this.fragment ? `#${encodeURI(this.fragment)}` : ''}`;
-		Object.freeze(this);
+export class ManagedResolvedAuthority {
+	constructor(makeConnection, connectionToken) {
+		if (typeof makeConnection !== 'function') throw new TypeError('Managed authority requires a connection factory');
+		checkedToken(connectionToken);
+		this.makeConnection = makeConnection;
+		this.connectionToken = connectionToken;
 	}
-	static from(components) { return new Uri(components); }
-	with(change) {
-		const components = { ...this };
-		for (const key of ['scheme', 'authority', 'path', 'query', 'fragment']) {
-			if (change[key] !== undefined) components[key] = change[key] ?? '';
-		}
-		// Retain escaped separators in unchanged components instead of re-encoding decoded values.
-		const encoded = /^([^:]+):(?:\/\/([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?$/.exec(this.external);
-		const next = Uri.from(components);
-		const path = change.path === undefined ? encoded[3] : encodeURI(next.path).replaceAll('?', '%3F').replaceAll('#', '%23');
-		const query = change.query === undefined ? encoded[4] ?? '' : encodeURI(next.query).replaceAll('#', '%23');
-		const fragment = change.fragment === undefined ? encoded[5] ?? '' : encodeURI(next.fragment);
-		return new Uri(components, `${next.scheme}:${next.authority || next.scheme === 'file' ? `//${next.authority}` : ''}${path}${query ? `?${query}` : ''}${fragment ? `#${fragment}` : ''}`);
+}
+
+export class RemoteAuthorityResolverError extends Error {
+	constructor(message, code = 'Unknown', handled = false) {
+		super(message);
+		this.name = 'RemoteAuthorityResolverError';
+		this.code = code;
+		this.handled = handled;
 	}
-	toString() { return this.external; }
-	toJSON() { return { scheme: this.scheme, authority: this.authority, path: this.path, query: this.query, fragment: this.fragment, external: this.external }; }
+	static NotAvailable(message, handled = false) { return new RemoteAuthorityResolverError(message, 'NotAvailable', handled); }
+	static TemporarilyNotAvailable(message) { return new RemoteAuthorityResolverError(message, 'TemporarilyNotAvailable'); }
 }
 
 function checkedResolvedOptions(result) {
@@ -189,25 +176,6 @@ function checkedResolvedOptions(result) {
 	return Object.keys(options).length ? { options } : {};
 }
 
-export class ManagedResolvedAuthority {
-	constructor(makeConnection, connectionToken) {
-		if (typeof makeConnection !== 'function') throw new TypeError('Managed authority requires a connection factory');
-		checkedToken(connectionToken);
-		this.makeConnection = makeConnection;
-		this.connectionToken = connectionToken;
-	}
-}
-
-export class RemoteAuthorityResolverError extends Error {
-	constructor(message, code = 'Unknown', handled = false) {
-		super(message);
-		this.name = 'RemoteAuthorityResolverError';
-		this.code = code;
-		this.handled = handled;
-	}
-	static NotAvailable(message, handled = false) { return new RemoteAuthorityResolverError(message, 'NotAvailable', handled); }
-	static TemporarilyNotAvailable(message) { return new RemoteAuthorityResolverError(message, 'TemporarilyNotAvailable'); }
-}
 
 function checkedToken(token) {
 	if (token !== undefined && (typeof token !== 'string' || token.length > 8192 || /[\u0000-\u001f\u007f]/.test(token))) throw new TypeError('Invalid remote connection token');
@@ -220,11 +188,11 @@ function bytesFromHex(hex) {
 }
 
 export const workspace = Object.freeze({
-    registerWorkspaceEvents(registrationId, listener) {
-        if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Workspace events require an ID and listener');
-        return register({ registrationId, kind: 'workspaceEvents', operation: 'workspaceEvent', callback: listener });
-    },
-	registerRemoteAuthorityResolver(authorityPrefix, resolver) {
+	registerWorkspaceEvents(registrationId, listener) {
+		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Workspace events require an ID and listener');
+		return register({ registrationId, kind: 'workspaceEvents', operation: 'workspaceEvent', callback: listener });
+	},
+	registerRemoteAuthorityResolver(authorityPrefix, resolver, Uri) {
 		if (typeof authorityPrefix !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(authorityPrefix) || typeof resolver?.resolve !== 'function') throw new TypeError('Invalid Remote resolver');
 		if (resolver.getCanonicalURI !== undefined && typeof resolver.getCanonicalURI !== 'function') throw new TypeError('Invalid canonical URI provider');
 		let nextId = 0;
@@ -253,11 +221,12 @@ export const workspace = Object.freeze({
 				}
 				if (operation === 'getCanonicalURI') {
 					if (typeof payload.authority !== 'string' || !payload.authority.startsWith(`${authorityPrefix}+`) || payload.authority.length > 2048 || payload.uri?.scheme !== 'ash-remote' || payload.uri?.authority !== payload.authority || typeof payload.uri?.external !== 'string' || payload.uri.external.length > 16384) throw new TypeError('Invalid canonical URI request');
-					const uri = new Uri(payload.uri, payload.uri.external);
+					const uri = Uri.parse(payload.uri.external);
+					if (['scheme', 'authority', 'path', 'query', 'fragment'].some(key => uri[key] !== (payload.uri[key] ?? ''))) throw new TypeError('Inconsistent canonical URI components');
 					const result = await resolver.getCanonicalURI?.(uri);
 					if (result == null) return null;
 					if (!(result instanceof Uri)) throw new TypeError('Canonical URI provider must return a Uri');
-					return result.toJSON();
+					return { ...result.toJSON(), external: result.toString() };
 				}
 				if (operation === 'resolveAuthority') {
 					if (typeof payload?.authority !== 'string' || payload.authority.length > 2048 || !payload.authority.startsWith(`${authorityPrefix}+`) || !Number.isSafeInteger(payload.resolveAttempt) || payload.resolveAttempt < 1) throw new TypeError('Invalid Remote resolution request');
@@ -317,18 +286,6 @@ export const workspace = Object.freeze({
 				if (operation === 'remoteDrain') { await state.connection.drain?.(); return null; }
 				if (operation === 'remoteEnd') { state.connection.end(); return null; }
 				throw new TypeError('Invalid Remote operation');
-			}
-		});
-	},
-	registerRemoteConnectionResolver(authorityPrefix, resolver) {
-		// Reserved prefixes are admitted by the host's package authority, not extension-owned state.
-		if (typeof authorityPrefix !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(authorityPrefix) || typeof resolver?.resolve !== 'function') throw new TypeError('Invalid Remote resolver');
-		return register({
-			registrationId: `remote:${authorityPrefix}`, kind: 'remoteConnectionResolver', authorityPrefix, operation: 'resolveConnection', async callback(context, payload) {
-				if (typeof payload?.authority !== 'string' || !payload.authority.startsWith(`${authorityPrefix}+`)) throw new TypeError('Invalid Remote authority');
-				const result = await resolver.resolve(context, payload.authority);
-				if (!result || Object.keys(result).join(',') !== 'connectionName' || typeof result.connectionName !== 'string' || !/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/.test(result.connectionName)) throw new TypeError('Invalid saved Remote connection reference');
-				return result;
 			}
 		});
 	},
@@ -507,7 +464,8 @@ export const debug = Object.freeze({
 			try { state.listener?.dispose(); }
 			finally { state.messages = []; state.bytes = 0; try { await state.implementation.dispose(context); } finally { if (!enabled && !adapters.size) { registration.dispose(); } } }
 		}
-		const registration = register({ registrationId, kind: 'debugAdapter', debuggerType,
+		const registration = register({
+			registrationId, kind: 'debugAdapter', debuggerType,
 			operation: ['createDebugAdapterDescriptor', 'sendInlineDebugAdapter', 'readInlineDebugAdapter', 'closeInlineDebugAdapter'],
 			async callback(context, payload, operation) {
 				if (operation === 'createDebugAdapterDescriptor') {
@@ -571,58 +529,7 @@ function checkedRange(range, text) {
 	return { start: { lineIndex: start.line, columnIndex: start.character }, end: { lineIndex: end.line, columnIndex: end.character } };
 }
 
-function commandContext(requestId, cancellationToken) {
-	async function request(operation, resultKind) {
-		if (cancellationToken.isCancellationRequested) throw new ExtensionError('cancelled', 'Invocation has been cancelled');
-		let result;
-		try { result = JSON.parse(await globalThis.__ashRequest(requestId, JSON.stringify(operation))); }
-		catch (error) {
-			if (typeof error?.code === 'string') { throw new ExtensionError(error.code, error.message); }
-			throw error;
-		}
-		if (result.result !== resultKind) { throw new Error(`Invalid result for '${operation.operation}'`); }
-		return result;
-	}
-	async function showMessage(message, severity) {
-		await request({ operation: 'showMessage', message, severity }, 'done');
-	}
-	return Object.freeze({
-		cancellationToken,
-		languages: Object.freeze({
-			async setDiagnostics(collection, entries) {
-				await request({ operation: 'setDiagnostics', collection, entries }, 'done');
-			},
-		}),
-		workspace: Object.freeze({
-			async openRemoteConnection(authority) {
-				await request({ operation: 'openRemoteConnection', authority }, 'done');
-			},
-			async openTextDocument(uri) {
-				const { document } = await request({ operation: 'readDocument', uri }, 'document');
-				return Object.freeze({ ...document, getText() { return document.text; } });
-			},
-			async readTextFile(path) {
-				return (await request({ operation: 'readWorkspaceFile', path }, 'file')).text;
-			},
-		}),
-		window: Object.freeze({
-			async setStatusBarEntries(registrationId, revision, entries) {
-				await request({ operation: 'setStatusBarEntries', registrationId, revision, entries }, 'done');
-			},
-			showInformationMessage: message => showMessage(message, 'information'),
-			showWarningMessage: message => showMessage(message, 'warning'),
-			showErrorMessage: message => showMessage(message, 'error'),
-			async showQuickPick(items, placeholder) {
-				const { index } = await request({ operation: 'showQuickPick', items: [...items], placeholder }, 'selection');
-				if (index === null) { return undefined; }
-				if (!Number.isSafeInteger(index) || index < 0 || index >= items.length) { throw new Error('Invalid Quick Pick selection'); }
-				return items[index];
-			},
-		}),
-	});
-}
-
-// Only the host uses this export. Authority remains in Rust even if an extension calls it directly.
+// The runtime module is not resolved from extension packages; Rust owns final authority.
 export const __runtime = Object.freeze({
 	get isDisposed() { return phase === 'disposed'; },
 	beginActivation(extensionId) {
@@ -649,7 +556,7 @@ export const __runtime = Object.freeze({
 		const source = new CancellationTokenSource();
 		invocations.set(requestId, source);
 		try {
-			const context = commandContext(requestId, source.token);
+			const context = Object.freeze({ cancellationToken: source.token });
 			let result;
 			if (registration.dispatch) {
 				result = await registration.dispatch(payload, operation);

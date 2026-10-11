@@ -124,11 +124,7 @@ fn install_node_fixture(root: &Path) -> (ProductJavaScriptLauncher, EditorExtens
     for (from, to) in [("node.mjs", "node.mjs"), ("vscode.js", "vscode.mjs")] {
         std::fs::copy(source.join(from), root.join(to)).unwrap();
     }
-    std::fs::copy(
-        source.join("../../../sdk/typescript/index.js"),
-        root.join("sdk.mjs"),
-    )
-    .unwrap();
+    std::fs::copy(source.join("host.mjs"), root.join("host.mjs")).unwrap();
     let package = root.join("extension");
     std::fs::create_dir(&package).unwrap();
     std::fs::write(

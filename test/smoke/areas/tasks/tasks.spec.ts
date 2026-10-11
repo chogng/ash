@@ -1,6 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { basename, join, sep } from 'node:path';
-import { expect, test } from '../../../automation/test.js';
+import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 
 test.beforeEach(async ({ target, testWorkspace }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires workspace tasks and terminal execution.');
@@ -1081,30 +1081,26 @@ test('first task discovery activates an installed dormant provider and disable r
 	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ ...taskDocument, [platform]: { group: 'build' }, tasks: [...taskDocument.tasks, { label: 'Configured platform build', type: 'lazy-build', target: 'configured' }] }));
 	await writeFile(join(directory, 'lazy-task-runs.txt'), '0');
 	await writeFile(join(directory, 'lazy-task-run.cjs'), "const fs = require('node:fs'); const count = Number(fs.readFileSync('lazy-task-runs.txt', 'utf8')) + 1; fs.writeFileSync('lazy-task-runs.txt', String(count)); console.log('LAZY_TASK_RUN_' + count);");
-	await writeFile(join(root, 'extension.js'), `import { tasks } from '@ash/extension';
-export function activate(context) {
-	context.subscriptions.push(tasks.registerTaskProvider('build', 'lazy-build', {
-		resolveTask(invocation, task) {
-			return {
-				id: 'resolved', label: task.label, group: 'test', groupIsDefault: true,
-				definition: task.definition, cwd: ${JSON.stringify(directory)},
-				execution: { type: 'process', program: ${JSON.stringify(process.execPath)}, args: [${JSON.stringify(join(directory, 'lazy-task-run.cjs'))}] }
-			};
-		},
-		provideTasks() { return [{ id: 'build', label: 'Lazy provider build', group: 'build', definition: { type: 'lazy-build' }, presentation: { panel: 'dedicated', clear: true }, cwd: ${JSON.stringify(directory)} }]; }
-	}), tasks.registerTaskEvents('configured-group', async (invocation, event) => {
-		if (event.type !== 'start') return;
-		if (event.execution.task.name === 'Lazy provider build') {
-			if (event.execution.task.group !== 'build' || event.execution.task.groupIsDefault !== undefined) throw Error('Provided group lost precedence');
-			await invocation.window.showInformationMessage('PROVIDED_GROUP_RETAINED');
-			return;
-		}
-		if (event.execution.task.name !== 'Configured platform build') return;
-		if (event.execution.task.group !== 'build' || event.execution.task.groupIsDefault !== undefined) throw Error('Configured platform group lost precedence');
-		await invocation.window.showInformationMessage('CONFIGURED_PLATFORM_GROUP_RETAINED');
-	}));
-}`);
-	const page = workbench.page;
+	await writeEditorExtensionFixture(root, `const vscode = require('vscode'); const { tasks, window } = vscode;
+exports.activate = function(context) {
+ context.subscriptions.push(tasks.registerTaskProvider('lazy-build', {
+  resolveTask(task) {
+   const resolved = new vscode.Task(task.definition, task.scope, task.name, task.source, new vscode.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'lazy-task-run.cjs'))}], {cwd:${JSON.stringify(directory)}}));
+   resolved.group = {id:'test',isDefault:true};
+   return resolved;
+  },
+  provideTasks() {
+   const task = new vscode.Task({type:'lazy-build'}, vscode.TaskScope.Workspace, 'Lazy provider build', 'Lazy task smoke');
+   task.group = vscode.TaskGroup.Build;
+   task.presentationOptions = {panel:vscode.TaskPanelKind.Dedicated,clear:true};
+   return [task];
+  }
+ }), tasks.onDidStartTask(async event => {
+  if (!['Lazy provider build','Configured platform build'].includes(event.execution.task.name)) return;
+  if (event.execution.task.group.id !== 'build' || event.execution.task.group.isDefault) throw Error('Configured or provided group lost precedence');
+  await window.showInformationMessage(event.execution.task.name === 'Lazy provider build' ? 'PROVIDED_GROUP_RETAINED' : 'CONFIGURED_PLATFORM_GROUP_RETAINED');
+ }));
+}`); const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 	await installation.getByRole('textbox').fill('task-extension');
@@ -1411,22 +1407,24 @@ test('installed task observer receives ordered process events after termination 
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeFile(join(directory, 'task-events-run.cjs'), "require('node:fs').writeFileSync('task-events-pid.txt', String(process.pid)); console.log('TASK_EVENTS_READY'); setInterval(() => {}, 1000);");
-	await writeFile(join(root, 'extension.js'), `import { tasks } from '@ash/extension';
-export function activate(context) {
-	const events = [];
-	let executionId;
-	context.subscriptions.push(tasks.registerTaskEvents('events', async (invocation, event) => {
-		if (event.type === 'snapshot') return;
-		if (!executionId) executionId = event.execution.id;
-		if (event.execution.id !== executionId) throw Error('Execution identity changed');
-		if (event.execution.task.group !== 'rebuild' || event.execution.task.groupIsDefault !== true) throw Error('Task group changed across execution events');
-		events.push(event.type);
-		if (event.type === 'end') await invocation.window.showInformationMessage('TASK_EVENTS:' + events.join(',') + ':active=' + event.execution.active);
-	}), tasks.registerTaskProvider('watch', 'event-watch', {
-		provideTasks() { return [{ id: 'watch', label: 'Event observer watch', group: 'rebuild', groupIsDefault: true, definition: { type: 'event-watch' }, cwd: ${JSON.stringify(directory)}, execution: { type: 'process', program: ${JSON.stringify(process.execPath)}, args: [${JSON.stringify(join(directory, 'task-events-run.cjs'))}] } }]; }
-	}));
-}`);
-	const page = workbench.page;
+	await writeEditorExtensionFixture(root, `const vscode = require('vscode'); const { tasks, window } = vscode;
+exports.activate = function(context) {
+ const events = []; let execution;
+ async function observe(type, event) {
+  execution ??= event.execution;
+  if (event.execution !== execution) throw Error('Execution identity changed');
+  if (execution.task.group.id !== 'rebuild' || execution.task.group.isDefault !== true) throw Error('Task group changed across execution events');
+  events.push(type);
+  if (type === 'end') await window.showInformationMessage('TASK_EVENTS:' + events.join(',') + ':active=' + tasks.taskExecutions.includes(execution));
+ }
+ context.subscriptions.push(tasks.onDidStartTask(event => observe('start', event)), tasks.onDidStartTaskProcess(event => observe('processStart', event)), tasks.onDidEndTaskProcess(event => observe('processEnd', event)), tasks.onDidEndTask(event => observe('end', event)), tasks.registerTaskProvider('event-watch', {
+  provideTasks() {
+   const task = new vscode.Task({type:'event-watch'}, vscode.TaskScope.Workspace, 'Event observer watch', 'Task events smoke', new vscode.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'task-events-run.cjs'))}], {cwd:${JSON.stringify(directory)}}));
+   task.group = {id:'rebuild',isDefault:true};
+   return [task];
+  }
+ }));
+}`); const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 	await installation.getByRole('textbox').fill('task-events-extension');
@@ -1543,31 +1541,31 @@ test('superseding an extension task query delivers cancellation and retains the 
 	const root = join(directory, 'cancellation-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/task-cancellation', version: '1.0.0', displayName: 'Task cancellation smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.taskCancellation.arm' }], capabilities: ['command', 'taskProvider'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
-	await writeFile(join(root, 'extension.js'), `
-import { commands, tasks } from '@ash/extension';
+	await writeEditorExtensionFixture(root, `
+const vscode = require('vscode'); const { commands, tasks, window } = vscode;
 let armed = false;
 let cancellations = 0;
-export function activate(context) {
-	context.subscriptions.push(commands.registerCommand('acme.taskCancellation.arm', 'Arm task cancellation', async call => {
+exports.activate = function(context) {
+	context.subscriptions.push(commands.registerCommand('acme.taskCancellation.arm', async () => {
 		armed = true;
-		await call.window.showInformationMessage('Task cancellation armed');
+		await window.showInformationMessage('Task cancellation armed');
 	}));
-	context.subscriptions.push(commands.registerCommand('acme.taskCancellation.probe', 'Probe task cancellation', async call => {
-		await call.window.showInformationMessage('Task cancellation count: ' + cancellations);
+	context.subscriptions.push(commands.registerCommand('acme.taskCancellation.probe', async () => {
+		await window.showInformationMessage('Task cancellation count: ' + cancellations);
 	}));
-	context.subscriptions.push(tasks.registerTaskProvider('provider', 'cancellation-smoke', {
-		async provideTasks(call) {
+	context.subscriptions.push(tasks.registerTaskProvider('cancellation-smoke', {
+		async provideTasks(token) {
 			if (armed) {
 				armed = false;
-				const finished = new Promise(resolve => call.cancellationToken.onCancellationRequested(() => {
-					if (!call.cancellationToken.isCancellationRequested) throw Error('Missing cancellation flag');
+				const finished = new Promise(resolve => token.onCancellationRequested(() => {
+					if (!token.isCancellationRequested) throw Error('Missing cancellation flag');
 					cancellations++;
 					resolve();
 				}));
-				await call.window.showInformationMessage('Task query waiting').catch(() => {});
+				await window.showInformationMessage('Task query waiting').catch(() => {});
 				await finished;
 			}
-			return [{ id: 'provided', label: 'Retained task provider', group: 'other', source: 'Cancellation smoke', definition: { type: 'cancellation-smoke' }, execution: { type: 'process', program: ${JSON.stringify(process.execPath)}, args: [${JSON.stringify(join(directory, 'smoke-task.cjs'))}] } }];
+			return [new vscode.Task({type:'cancellation-smoke'}, vscode.TaskScope.Workspace, 'Retained task provider', 'Cancellation smoke', new vscode.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'smoke-task.cjs'))}]))];
 		}
 	}));
 }`);
@@ -1592,8 +1590,10 @@ export function activate(context) {
 	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: [] }));
 	await expect(workbench.quickaccess.items.filter({ hasText: 'Retained task provider' })).toBeVisible();
 	await workbench.quickaccess.close();
-	await workbench.quickaccess.runCommand('acme.taskCancellation.probe');
-	await expect(page.locator('.ash-notification', { hasText: 'Task cancellation count: 1' })).toBeVisible();
+	await expect.poll(async () => {
+		await workbench.quickaccess.runCommand('acme.taskCancellation.probe');
+		return page.locator('.ash-notification', { hasText: 'Task cancellation count: 1' }).first().isVisible();
+	}).toBe(true);
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await workbench.quickaccess.select('Retained task provider');
 	await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('1');

@@ -1,0 +1,17 @@
+{
+  "name": "inspect-example",
+  "publisher": "ash",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "main": "./extension.cjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ash.example.inspect",
+        "title": "Inspect document"
+      }
+    ]
+  }
+}

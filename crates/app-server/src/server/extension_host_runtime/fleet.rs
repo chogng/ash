@@ -153,6 +153,21 @@ impl RuntimeInner {
         let prepared = prepare_extension(authorization, deployment, generation);
         let supervisor = prepared.and_then(|prepared| {
             let mut limits = self.limits.clone();
+            let mut launcher = Arc::clone(&self.launcher);
+            if deployment.scope == source::EditorExtensionScope::Product
+                && !prepared.command.is_javascript()
+                && !matches!(
+                    limits.isolation,
+                    ash_external_ext::ProcessIsolationPolicy::TrustedDevelopment
+                )
+            {
+                // Product executables use the same supervisor; the exact installed executable
+                // is the launch authority, without granting this policy to package programs.
+                limits.isolation = ash_external_ext::ProcessIsolationPolicy::AuthorizedProduct;
+                launcher = Arc::new(ash_external_ext::ProductExecutableLauncher::new(
+                    prepared.command.executable().to_path_buf(),
+                )?);
+            }
             if prepared.command.is_vscode() {
                 // prepare_extension has checked exact artifact consent and the live workspace lease.
                 limits.isolation = ash_external_ext::ProcessIsolationPolicy::AuthorizedNode;
@@ -172,7 +187,7 @@ impl RuntimeInner {
                     );
             }
             ExtensionHostSupervisor::new(
-                Arc::clone(&self.launcher),
+                launcher,
                 match &self.environment {
                     Some(environment) => prepared
                         .command

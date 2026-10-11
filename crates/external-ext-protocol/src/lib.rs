@@ -241,6 +241,7 @@ pub enum ExtensionCapability {
     StatusBar,
     Command,
     LanguageProvider,
+    CustomTextEditor,
     DebugAdapter,
     TaskProvider,
     TestProfileProvider,
@@ -347,6 +348,13 @@ pub enum RegistrationKind {
     Command {
         command: String,
         title: String,
+    },
+    /// Client owns the text model, webview and resource access; provider supplies content.
+    CustomTextEditor {
+        view_type: String,
+        display_name: String,
+        selectors: Vec<String>,
+        priority: String,
     },
     LanguageProvider {
         language_ids: Vec<String>,

@@ -24,13 +24,13 @@ class PrepareTests(unittest.TestCase):
             root = Path(temporary)
             for relative in (
                 "Cargo.toml",
-                "sdk/typescript/index.js",
+                "crates/external-js-ext/src/host.mjs",
                 "build/source-layout.json",
                 "build/download/artifacts.py",
                 "build/prepare.py",
                 "crates/external-js-ext/src/node.mjs",
                 "crates/external-js-ext/src/vscode.js",
-                "sdk/typescript/index.js",
+                "crates/external-js-ext/src/host.mjs",
                 "build/desktop/appServer.ts",
                 "build/lib/package-layout.json",
                 "build/lib/package.py",
@@ -62,7 +62,9 @@ class PrepareTests(unittest.TestCase):
             after_layout = prepare.package_input_digest(
                 prepare.package_sources(root), {}
             )
-            (root / "sdk/typescript/index.js").write_text("updated embedded SDK")
+            (root / "crates/external-js-ext/src/host.mjs").write_text(
+                "updated embedded SDK"
+            )
             self.assertNotEqual(
                 after_layout,
                 prepare.package_input_digest(prepare.package_sources(root), {}),
@@ -324,6 +326,7 @@ class PrepareTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-external-js-ext",
                 "ash-github-authentication",
+                "ash-remote-ssh-extension",
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-windows-sandbox",

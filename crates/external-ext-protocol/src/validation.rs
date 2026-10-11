@@ -103,6 +103,27 @@ pub(super) fn validate_registrations(
                 )?;
                 ExtensionCapability::RemoteAuthorityResolver
             }
+            RegistrationKind::CustomTextEditor {
+                view_type,
+                display_name,
+                selectors,
+                priority,
+            } => {
+                validate_identifier(view_type)?;
+                validate_display_text(display_name, "custom editor display name")?;
+                if selectors.is_empty()
+                    || selectors.len() > 64
+                    || selectors
+                        .iter()
+                        .any(|value| value.is_empty() || value.len() > 2048)
+                    || !matches!(priority.as_str(), "default" | "option")
+                {
+                    return Err(protocol_error(
+                        "invalid custom text editor selectors or priority",
+                    ));
+                }
+                ExtensionCapability::CustomTextEditor
+            }
             RegistrationKind::TextDocumentEvents {} => ExtensionCapability::LanguageProvider,
             RegistrationKind::TaskEvents {} => ExtensionCapability::TaskProvider,
             RegistrationKind::DebugEvents {} => ExtensionCapability::DebugAdapter,

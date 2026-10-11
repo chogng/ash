@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { test } from 'mocha';
+import { test, afterEach } from 'mocha';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, type ExtensionHostRegistration, type JsonValue } from '../../../../platform/extensionHost/common/extensionHostApi.js';
 import { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import { CustomEditorInput } from '../../../contrib/customEditor/browser/customEditorInput.js';
@@ -11,6 +11,55 @@ import { EditorInputSerializerRegistry } from '../../../services/editor/common/e
 import { URI } from '../../../../base/common/uri.js';
 
 type Handler = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
+
+let activeRuntime: { deactivate(): Promise<void>; } | undefined;
+let fixtureSequence = 0;
+const invocationScope = new AsyncLocalStorage<number>();
+const globals = globalThis as unknown as Record<string, unknown>;
+let previousGlobals: Map<string, PropertyDescriptor | undefined> | undefined;
+afterEach(async () => {
+	try { await activeRuntime?.deactivate(); }
+	finally {
+		activeRuntime = undefined;
+		for (const [name, descriptor] of previousGlobals ?? []) {
+			if (descriptor) Object.defineProperty(globals, name, descriptor);
+			else delete globals[name];
+		}
+		previousGlobals = undefined;
+	}
+});
+
+async function loadMarkdown(language: string, documents: readonly unknown[] = [], configuration: unknown = {}, folders: readonly string[] = [], clientRequest: (request: { operation: string; uri?: string; command?: string; arguments?: unknown[]; }) => Promise<unknown> = async () => ({ result: 'done' })) {
+	const bundle = JSON.parse(await readFile(resolve(process.cwd(), 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
+	const entry = bundle.resources['vscode.markdown-language-features']['src/extension.js'];
+	const manifest = JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.json'), 'utf8'));
+	const empty = { contents: {}, keys: [], overrides: [] };
+	previousGlobals = new Map(['__ashConfiguration', '__ashInitialization', '__ashInvocation', '__ashRequest', '__ashBackgroundRequest'].map(name => [name, Object.getOwnPropertyDescriptor(globals, name)]));
+	globals.__ashConfiguration = { extensionId: 'vscode.markdown-language-features', extensionPath: '/', pathSeparator: '/', manifest, commands: manifest.contributes.commands };
+	globals.__ashInitialization = { language, workspaceFolders: folders.map((uri, index) => ({ uri, name: 'Workspace', index })), workspaceName: null, workspaceFile: null, configurationValues: configuration, configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] } };
+	globals.__ashInvocation = (required = true) => { const id = invocationScope.getStore(); if (required && id === undefined) throw new Error('No invocation'); return id; };
+	globals.__ashRequest = async (_id: number, encoded: string) => JSON.stringify(await clientRequest(JSON.parse(encoded)));
+	globals.__ashBackgroundRequest = async (encoded: string) => JSON.stringify(await clientRequest(JSON.parse(encoded)));
+	const runtime = await import(`data:text/javascript;base64,${entry}#${++fixtureSequence}`);
+	activeRuntime = runtime;
+	const registrations = await runtime.activate() as ExtensionHostRegistration[];
+	const handlers = new Map<string, Handler>();
+	for (const registration of registrations) handlers.set(registration.registrationId, async (operation, payload, signal) => {
+		signal.throwIfAborted();
+		const id = ++fixtureSequence;
+		const cancel = () => runtime.cancel(id);
+		signal.addEventListener('abort', cancel, { once: true });
+		try { return await invocationScope.run(id, () => runtime.invoke(registration.registrationId, payload, id, operation)); }
+		finally { signal.removeEventListener('abort', cancel); }
+	});
+	const invoke = async (operation: string, payload: JsonValue, signal: AbortSignal): Promise<JsonValue> => {
+		const registration = registrations.find(value => value.kind === 'languageProvider' && value.operations.includes(operation as never));
+		if (!registration) throw new Error(`Missing provider ${operation}`);
+		return handlers.get(registration.registrationId)!(operation, { ...(payload as Record<string, JsonValue>), languageId: 'markdown', context: { kind: 'invoke' } }, signal);
+	};
+	for (const document of documents) await handlers.get('vscode.documents')!('documentEvent', { type: 'open', document } as JsonValue, new AbortController().signal);
+	return { registrations, handlers, invoke };
+}
 
 test('custom editor tabs retain source identity and survive working-set serialization independently', () => {
 	const source = { resource: URI.file('/notes/draft.md'), languageId: 'markdown', initialText: '# Unsaved' };
@@ -30,23 +79,8 @@ test('custom editor tabs retain source identity and survive working-set serializ
 });
 
 test('packaged Markdown extension activates Chinese labels and renders the supplied unsaved document', async () => {
-	const bundle = JSON.parse(await readFile(resolve(process.cwd(), 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
-	const entry = bundle.resources['vscode.markdown-language-features']['src/extension.js'];
-	const extension = await import(`data:text/javascript;base64,${entry}`) as { activate(context: unknown): Promise<void>; };
-	const registrations: ExtensionHostRegistration[] = [];
-	using resources = new DisposableStore();
-	const handlers = new Map<string, Handler>();
 	const commands: unknown[][] = [];
-	await extension.activate({
-		language: 'zh-CN',
-		createWebviewResource: (content: string, mediaType: string) => {
-			const url = URL.createObjectURL(new Blob([content], { type: mediaType }));
-			resources.add(toDisposable(() => URL.revokeObjectURL(url)));
-			return url;
-		},
-		register: (registration: ExtensionHostRegistration, handler: Handler) => { registrations.push(registration); handlers.set(registration.registrationId, handler); },
-		executeCommand: async (...args: unknown[]) => { commands.push(args); },
-	});
+	const { registrations, handlers } = await loadMarkdown('zh-CN', [], {}, [], async request => { if (request.operation === 'executeCommand') { commands.push([request.command, ...request.arguments!]); return { result: 'command', value: null, hasValue: false }; } return { result: 'done' }; });
 	const normalized = normalizeExtensionHostSnapshot({
 		generation: 1, extensions: [{
 			id: 'vscode.markdown-language-features', activationGeneration: 1, incarnation: 1, lifecycle: 'ready',
@@ -67,46 +101,32 @@ test('packaged Markdown extension activates Chinese labels and renders the suppl
 	assert.doesNotMatch(result.html, /alert\(1\)/u);
 	const activeEditor = { resource: URI.file('/notes/draft.md').toJSON(), groupId: 'source-group', editorIndex: 2 };
 	for (const command of ['markdown.showPreview', 'markdown.showPreviewToSide', 'markdown.showSource', 'markdown.reopenAsPreview', 'markdown.reopenAsSource', 'markdown.showRichEditor', 'markdown.reopenAsRichEditor']) {
-		await handlers.get(command)!('execute', normalizeExtensionHostPayload({ activeEditor }), signal);
+		await handlers.get(command)!('execute', normalizeExtensionHostPayload({ activeEditor, arguments: [] }), signal);
 	}
 	assert.deepEqual(JSON.parse(JSON.stringify(commands)), [
-		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-1], 'source-group'],
-		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-2], 'source-group'],
-		['_workbench.openWith', activeEditor.resource, 'default', [-1], 'source-group'],
+		['_workbench.openWith', { scheme: 'file', authority: '', path: '/notes/draft.md', query: '', fragment: '' }, 'vscode.markdown.preview.editor', [-1], 'source-group'],
+		['_workbench.openWith', { scheme: 'file', authority: '', path: '/notes/draft.md', query: '', fragment: '' }, 'vscode.markdown.preview.editor', [-2], 'source-group'],
+		['_workbench.openWith', { scheme: 'file', authority: '', path: '/notes/draft.md', query: '', fragment: '' }, 'default', [-1], 'source-group'],
 		['reopenActiveEditorWith', 'vscode.markdown.preview.editor', { groupId: 'source-group', editorIndex: 2 }],
 		['reopenActiveEditorWith', 'default', { groupId: 'source-group', editorIndex: 2 }],
-		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.editor', [-1], 'source-group'],
+		['_workbench.openWith', { scheme: 'file', authority: '', path: '/notes/draft.md', query: '', fragment: '' }, 'vscode.markdown.editor', [-1], 'source-group'],
 		['reopenActiveEditorWith', 'vscode.markdown.editor', { groupId: 'source-group', editorIndex: 2 }],
 	]);
 });
 
 test('packaged Markdown language service resolves unsaved headings and diagnoses broken links', async () => {
-	const bundle = JSON.parse(await readFile(resolve(process.cwd(), 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
-	const extension = await import(`data:text/javascript;base64,${bundle.resources['vscode.markdown-language-features']['src/extension.js']}`);
-	using resources = new DisposableStore();
-	const handlers = new Map<string, Handler>();
 	const text = '# Shared draft\n\n[go](#shared-draft)\n\n[missing](#not-here)';
 	const uri = 'untitled:/draft.md';
-	await extension.activate({
-		createWebviewResource: (content: string, mediaType: string) => {
-			const url = URL.createObjectURL(new Blob([content], { type: mediaType }));
-			resources.add(toDisposable(() => URL.revokeObjectURL(url)));
-			return url;
-		}, language: 'en', register: (registration: ExtensionHostRegistration, handler: Handler) => handlers.set(registration.registrationId, handler), clientRequest: async (request: { operation: string; }) => {
-			if (request.operation === 'readConfiguration') return { value: null };
-			if (request.operation === 'workspaceFolders') return [];
-			if (request.operation === 'stat') return { isDirectory: false };
-			if (request.operation === 'readDirectory') return [];
-			if (request.operation === 'listDocuments') return { documents: [{ uri, text, version: 7, languageId: 'markdown' }] };
-			throw new Error(`Unexpected request: ${request.operation}`);
-		}
+	let published: { diagnostics: { code: string; message: string; }[]; }[] = [];
+	const { invoke } = await loadMarkdown('en', [{ uri, text, version: 7, languageId: 'markdown' }], {}, [], async request => {
+		if (request.operation === 'setDiagnostics') published = (request as unknown as { entries: typeof published; }).entries;
+		return { result: 'done' };
 	});
-	const invoke = handlers.get('markdown.languageFeatures')!;
 	const signal = new AbortController().signal;
 	const request = { resource: uri, text, version: 7, position: { lineIndex: 2, columnIndex: 9 } };
 	const definitions = await invoke('definition', request, signal) as { resource: string; range: unknown; }[];
 	assert.deepEqual(definitions, [{ resource: uri, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 14 } } }]);
-	const diagnostics = await invoke('diagnostics', request, signal) as { diagnostics: { code: string; message: string; }[]; };
+	const diagnostics = published[0]!;
 	assert.deepEqual(diagnostics.diagnostics.map(value => value.code), ['link.no-such-header-in-own-file']);
 	const symbols = await invoke('documentSymbols', request, signal) as { name: string; }[];
 	assert.equal(symbols[0]!.name, '# Shared draft');
@@ -123,34 +143,15 @@ test('packaged Markdown language service resolves unsaved headings and diagnoses
 });
 
 test('Markdown workspace edits use dirty documents and localized validation respects configuration', async () => {
-	const bundle = JSON.parse(await readFile(resolve(process.cwd(), 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
-	const extension = await import(`data:text/javascript;base64,${bundle.resources['vscode.markdown-language-features']['src/extension.js']}`);
-	using resources = new DisposableStore();
-	const handlers = new Map<string, Handler>();
 	const heading = { uri: 'file:///workspace/heading.md', text: '# Current heading\n\n[broken](#missing)', languageId: 'markdown', version: 7 };
 	const referring = { uri: 'file:///workspace/referring.md', text: '[go](./heading.md#current-heading)', languageId: 'markdown', version: 9 };
-	let validationEnabled = true;
-	await extension.activate({
-		language: 'zh-CN',
-		createWebviewResource: (content: string, mediaType: string) => {
-			const url = URL.createObjectURL(new Blob([content], { type: mediaType }));
-			resources.add(toDisposable(() => URL.revokeObjectURL(url)));
-			return url;
-		},
-		register: (registration: ExtensionHostRegistration, handler: Handler) => handlers.set(registration.registrationId, handler),
-		clientRequest: async (request: { operation: string; section?: string; resource?: string; uri?: string; }) => {
-			switch (request.operation) {
-				case 'listDocuments': return { documents: [heading, referring] };
-				case 'workspaceFolders': return ['file:///workspace'];
-				case 'readConfiguration': return { value: request.section === 'markdown' ? { validate: { enabled: validationEnabled } } : {} };
-				case 'stat': return { isDirectory: request.resource === 'file:///workspace' };
-				case 'readDirectory': return [['heading.md', { isDirectory: false }], ['referring.md', { isDirectory: false }]];
-				case 'readDocument': throw new Error(`Dirty documents must precede disk reads: ${request.uri}`);
-				default: throw new Error(`Unexpected request: ${request.operation}`);
-			}
-		},
+	let published: { diagnostics: { message: string; }[]; }[] = [];
+	const { handlers, invoke } = await loadMarkdown('zh-CN', [heading, referring], { markdown: { validate: { enabled: true } } }, ['file:///workspace'], async request => {
+		if (request.operation === 'setDiagnostics') { published = (request as unknown as { entries: typeof published; }).entries; return { result: 'done' }; }
+		if (request.operation === 'statResource') return { result: 'resourceStat', fileType: request.uri === 'file:///workspace' ? 2 : 1, size: 0, mtime: 0 };
+		if (request.operation === 'readResourceDirectory') return { result: 'resourceDirectory', entries: [['heading.md', 1], ['referring.md', 1]] };
+		throw new Error(`Dirty documents must precede disk reads: ${request.uri}`);
 	});
-	const invoke = handlers.get('markdown.languageFeatures')!;
 	const signal = new AbortController().signal;
 	const request = { resource: heading.uri, text: heading.text, version: heading.version, position: { lineIndex: 0, columnIndex: 4 } };
 	const references = await invoke('references', { ...request, includeDeclaration: true }, signal) as { resource: string; }[];
@@ -164,11 +165,12 @@ test('Markdown workspace edits use dirty documents and localized validation resp
 			{ kind: 'rename', source: heading.uri, target: 'file:///workspace/moved.md', existing: 'error' },
 		]
 	});
-	const diagnostics = await invoke('diagnostics', request, signal) as { diagnostics: { message: string; }[]; };
+	const diagnostics = published[0]!;
 	assert.match(diagnostics.diagnostics[0]!.message, /找不到标题/u);
-	validationEnabled = false;
-	assert.deepEqual(await invoke('diagnostics', request, signal), { diagnostics: [] });
+	const empty = { contents: {}, keys: [], overrides: [] };
+	await handlers.get('vscode.workspace.events')!('workspaceEvent', { type: 'configuration', revision: 1, emit: true, configurationValues: { markdown: { validate: { enabled: false } } }, configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] }, change: { keys: ['markdown.validate.enabled'], overrides: [] } }, signal);
+	assert.ok(published.every(value => value.diagnostics.length === 0));
 	const cancelled = new AbortController();
 	cancelled.abort();
-	await assert.rejects(invoke('diagnostics', request, cancelled.signal), error => error instanceof Error && error.name === 'AbortError');
+	await assert.rejects(invoke('references', request, cancelled.signal), error => error instanceof Error && error.name === 'AbortError');
 });

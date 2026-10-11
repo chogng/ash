@@ -152,6 +152,15 @@ fn validate_operation(
         }
     }
     match operation {
+        ExtensionClientOperation::ReadResourceFile { uri }
+        | ExtensionClientOperation::StatResource { uri }
+        | ExtensionClientOperation::ReadResourceDirectory { uri } => {
+            if uri.is_empty() || uri.len() > 8192 || uri.contains('\0') || !uri.contains(':') {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid resource URI".into(),
+                ));
+            }
+        }
         ExtensionClientOperation::SetDebugSessionName { session_id, name } => {
             if session_id.is_empty()
                 || session_id.len() > 4096
@@ -344,6 +353,16 @@ pub enum ExtensionClientOperation {
     ReadWorkspaceFile {
         path: String,
     },
+    /// URI resources are serviced by the bound client filesystem, including virtual providers.
+    ReadResourceFile {
+        uri: String,
+    },
+    StatResource {
+        uri: String,
+    },
+    ReadResourceDirectory {
+        uri: String,
+    },
     ListDocuments,
     /// Replaces only this extension incarnation's named diagnostic collection.
     SetDiagnostics {
@@ -521,6 +540,19 @@ pub enum ExtensionClientResult {
     },
     File {
         text: String,
+    },
+    ResourceFile {
+        bytes: Vec<u8>,
+    },
+    ResourceStat {
+        file_type: u8,
+        #[cfg_attr(feature = "export", ts(type = "number"))]
+        size: u64,
+        #[cfg_attr(feature = "export", ts(type = "number"))]
+        mtime: u64,
+    },
+    ResourceDirectory {
+        entries: Vec<(String, u8)>,
     },
     Documents {
         documents: Vec<ExtensionDocumentSnapshot>,

@@ -267,13 +267,15 @@ fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
     let launcher = Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0)));
+    let mut limits = ExtensionHostLimits::default();
+    limits.isolation = ash_external_ext::ProcessIsolationPolicy::TrustedDevelopment;
     let runtime = super::ExtensionHostRuntime::start(
         super::source::BuiltInEditorExtensions::Product,
         None,
         None,
         None,
         launcher.clone(),
-        ExtensionHostLimits::default(),
+        limits,
         RestartPolicy::default(),
         Arc::new(super::super::update_broker::UpdateBroker::default()),
         Arc::new(crate::client_host::ClientHost::default()),

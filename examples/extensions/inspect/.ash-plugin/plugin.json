@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "ash/sdk-example",
+  "id": "ash/inspect-example",
   "version": "0.1.0",
-  "displayName": "Ash SDK example",
-  "description": "Read editor and disk content and provide a plaintext hover through the SDK.",
+  "displayName": "Ash VS Code API example",
+  "description": "Read a document and provide a plaintext hover through the standard VS Code API.",
   "license": "Apache-2.0",
   "compatibility": {
     "ash": ">=0.1.0"
@@ -13,7 +13,7 @@
       {
         "id": "inspect",
         "runtime": "javascript",
-        "entrypoint": "example/extension.js",
+        "entrypoint": "extension.cjs",
         "runtimeApiVersion": 1,
         "activationEvents": [
           {
@@ -23,17 +23,10 @@
           {
             "type": "onLanguage",
             "id": "plaintext"
-          },
-          {
-            "type": "onCommand",
-            "id": "ash.example.connect"
           }
         ],
-        "capabilities": [
-          "command",
-          "languageProvider",
-          "remoteAuthorityResolver"
-        ]
+        "capabilities": ["command", "languageProvider"],
+        "api": "vscode"
       }
     ]
   },

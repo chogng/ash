@@ -98,6 +98,55 @@ impl Client {
         }
     }
 
+    /// Reads bytes through the initiating client's authorized resource provider.
+    pub fn read_resource_file(
+        &self,
+        uri: impl Into<String>,
+        token: &CancellationToken,
+    ) -> Result<Vec<u8>, ExtensionError> {
+        match self.call(
+            ExtensionClientOperation::ReadResourceFile { uri: uri.into() },
+            token,
+        )? {
+            ExtensionClientResult::ResourceFile { bytes } => Ok(bytes),
+            _ => Err(unexpected_result()),
+        }
+    }
+
+    /// Returns provider file type, byte size and modification time in Unix milliseconds.
+    pub fn stat_resource(
+        &self,
+        uri: impl Into<String>,
+        token: &CancellationToken,
+    ) -> Result<(u8, u64, u64), ExtensionError> {
+        match self.call(
+            ExtensionClientOperation::StatResource { uri: uri.into() },
+            token,
+        )? {
+            ExtensionClientResult::ResourceStat {
+                file_type,
+                size,
+                mtime,
+            } => Ok((file_type, size, mtime)),
+            _ => Err(unexpected_result()),
+        }
+    }
+
+    /// Lists child names and provider file types through the same client authorization.
+    pub fn read_resource_directory(
+        &self,
+        uri: impl Into<String>,
+        token: &CancellationToken,
+    ) -> Result<Vec<(String, u8)>, ExtensionError> {
+        match self.call(
+            ExtensionClientOperation::ReadResourceDirectory { uri: uri.into() },
+            token,
+        )? {
+            ExtensionClientResult::ResourceDirectory { entries } => Ok(entries),
+            _ => Err(unexpected_result()),
+        }
+    }
+
     pub fn text_documents(
         &self,
         token: &CancellationToken,

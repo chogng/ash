@@ -73,9 +73,6 @@ impl StdioExtensionHostProcess {
                 launch.working_directory(),
             );
             let sources = match launch.runtime {
-                super::LaunchRuntime::ProductJavaScript => {
-                    windows_sandbox::LockedProcessSources::Embedded
-                }
                 super::LaunchRuntime::JavaScript => windows_sandbox::LockedProcessSources::Package,
                 super::LaunchRuntime::Executable | super::LaunchRuntime::Vscode => {
                     return Err(ExtensionHostError::IsolationUnavailable);

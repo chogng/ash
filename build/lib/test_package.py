@@ -109,6 +109,7 @@ class PackageTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-external-js-ext",
                 "ash-github-authentication",
+                "ash-remote-ssh-extension",
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-remote",
@@ -362,6 +363,9 @@ class PackageTests(unittest.TestCase):
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,
+                remote_ssh_extension_binary=executable_file(
+                    root / "remote-ssh-extension", b"remote-ssh-extension"
+                ),
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
                 ),
@@ -591,6 +595,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 None,
                 protocol_metadata=generated_protocol,
+                remote_ssh_extension_binary=executable_file(
+                    root / "remote-ssh-extension", b"remote-ssh-extension"
+                ),
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
                 ),
@@ -623,7 +630,7 @@ class PackageTests(unittest.TestCase):
                     (output / "ash-resources/protocol/metadata.json").read_text()
                 ),
             )
-            for script in ("node.mjs", "vscode.mjs", "sdk.mjs"):
+            for script in ("node.mjs", "vscode.mjs", "host.mjs"):
                 resource = f"ash-resources/extension-host/{script}"
                 self.assertIn(resource, metadata["files"])
                 self.assertTrue((output / resource).is_file())
@@ -830,6 +837,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 node,
                 bubblewrap,
+                remote_ssh_extension_binary=executable_file(
+                    root / "remote-ssh-extension", b"remote-ssh-extension"
+                ),
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
                 ),
@@ -909,6 +919,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 windows_sandbox_service_binary=executable_file(
                     root / "sandbox-service-source.exe", b"sandbox-service"
+                ),
+                remote_ssh_extension_binary=executable_file(
+                    root / "remote-ssh-extension", b"remote-ssh-extension"
                 ),
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"

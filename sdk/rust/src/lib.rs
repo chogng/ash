@@ -22,6 +22,7 @@ pub mod languages;
 mod runtime;
 pub mod services;
 pub mod window;
+pub mod workspace;
 
 pub use cancellation::CancellationToken;
 pub use external_ext_protocol::CancelReason;
@@ -164,6 +165,7 @@ pub struct ExtensionContext {
     pub commands: Commands,
     pub languages: languages::Languages,
     pub window: window::Window,
+    pub workspace: workspace::Workspace,
     activation: ActivateParams,
     environment: BTreeMap<String, Option<String>>,
 }
@@ -189,6 +191,7 @@ impl ExtensionContext {
             .registrations
             .iter()
             .chain(self.data_channels.registrations.iter())
+            .chain(self.workspace.registrations.iter())
         {
             if registrations
                 .insert(id.clone(), registration.clone())

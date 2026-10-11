@@ -1,4 +1,5 @@
 import { MainThreadDebugService } from './mainThreadDebugService.js';
+import { IFileService, FileKind } from '../../../platform/files/common/files.js';
 import { MainThreadConfiguration } from './mainThreadConfiguration.js';
 import { MainThreadWorkspace } from './mainThreadWorkspace.js';
 import { DebugAdapterFactoriesRegistry, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from '../../services/debug/common/debugAdapterFactory.js';
@@ -121,6 +122,7 @@ export class MainThreadExtensionApi extends Disposable {
 		@IInstantiationService instantiation: IInstantiationService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IFileService private readonly files: IFileService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
 		@ITextModelService private readonly textModels: ITextModelService,
 		@IBulkEditService private readonly bulkEdits: IBulkEditService,
@@ -207,6 +209,27 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'executeCommand': {
 				const value = await this.commandService.executeCommand(operation.command, ...operation.arguments);
 				return { result: 'command', value: value === undefined ? null : normalizeExtensionHostPayload(value), hasValue: value !== undefined };
+			}
+			case 'readResourceFile':
+			case 'statResource':
+			case 'readResourceDirectory': {
+				const resource = URI.parse(operation.uri);
+				// Filesystem permissions and virtual resource identity belong to the existing client provider.
+				if (!this.workspace.getWorkspaceFolder(resource)) throw new Error('Resource is outside the workspace');
+				const type = (kind: FileKind): number => kind === FileKind.Directory ? 2 : kind === FileKind.File ? 1 : kind === FileKind.SymbolicLink ? 64 : 0;
+				if (operation.operation === 'readResourceFile') {
+					const value = await this.files.readFileBytes(resource);
+					throwIfCancelled(signal);
+					return { result: 'resourceFile', bytes: Array.from(value.bytes) };
+				}
+				if (operation.operation === 'statResource') {
+					const value = await this.files.stat(resource);
+					throwIfCancelled(signal);
+					return { result: 'resourceStat', fileType: type(value.kind), size: value.sizeBytes, mtime: value.modifiedAtMillis ?? 0 };
+				}
+				const entries = await this.files.readDirectory(resource);
+				throwIfCancelled(signal);
+				return { result: 'resourceDirectory', entries: entries.map(entry => [entry.name, type(entry.kind)] as const) };
 			}
 			case 'listDocuments':
 				return { result: 'documents', documents: this.models.getModels().map(extensionDocumentSnapshot) };

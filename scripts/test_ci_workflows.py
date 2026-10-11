@@ -51,7 +51,7 @@ class CiWorkflowTests(unittest.TestCase):
         cases = {
             "src/ash/editor/browser/view.ts": {"frontend"},
             "sdk/rust/src/lib.rs": {"bazel", "frontend"},
-            "sdk/typescript/src/index.ts": {"bazel", "frontend"},
+            "examples/extensions/inspect/extension.cjs": {"bazel", "frontend"},
             "crates/tui/src/app.rs": {
                 "bazel",
                 "frontend",

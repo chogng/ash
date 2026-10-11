@@ -29,8 +29,6 @@ use host::RestartPolicy;
 use host::TrustedDevelopmentLauncher;
 use serde_json::Value;
 use serde_json::json;
-use sha2::Digest;
-use sha2::Sha256;
 
 struct Authority(AtomicBool);
 struct Lease;
@@ -76,12 +74,18 @@ fn start_with_launcher(
     isolation: ProcessIsolationPolicy,
     launcher: Arc<dyn host::ExtensionHostLauncher>,
 ) -> Result<Running, ExtensionHostError> {
-    start_with_api(source, capabilities, isolation, launcher, TestApi::Ash, &[])
+    start_with_api(
+        source,
+        capabilities,
+        isolation,
+        launcher,
+        TestApi::Vscode,
+        &[],
+    )
 }
 
 #[derive(Clone, Copy)]
 enum TestApi {
-    Ash,
     Vscode,
 }
 
@@ -232,9 +236,7 @@ fn start_with_environment(
             serde_json::to_vec(&json!({
                 "name": "example", "publisher": "test", "version": "1.0.0", "browser": "main.js",
                 "contributes": { "commands": [
-                    {"command": "example.hello", "title": "Hello"},
-                    {"command": "example.async", "title": "Async"},
-                    {"command": "example.probe", "title": "Probe"}
+                    {"command": "example.allocate", "title": "allocate"},{"command": "example.async", "title": "async"},{"command": "example.buffers", "title": "buffers"},{"command": "example.capture", "title": "capture"},{"command": "example.connect", "title": "connect"},{"command": "example.continuationSpin", "title": "continuationSpin"},{"command": "example.disposeHover", "title": "disposeHover"},{"command": "example.echo", "title": "echo"},{"command": "example.env", "title": "env"},{"command": "example.fail", "title": "fail"},{"command": "example.forge", "title": "forge"},{"command": "example.globals", "title": "globals"},{"command": "example.heap", "title": "heap"},{"command": "example.hello", "title": "hello"},{"command": "example.inspect", "title": "inspect"},{"command": "example.pick", "title": "pick"},{"command": "example.probe", "title": "probe"},{"command": "example.read", "title": "read"},{"command": "example.readFailure", "title": "readFailure"},{"command": "example.rejectionSpin", "title": "rejectionSpin"},{"command": "example.retired", "title": "retired"},{"command": "example.spin", "title": "spin"},{"command": "example.update", "title": "update"},{"command": "example.wait", "title": "wait"}
                 ], "debuggers": [{"type": "example", "label": "Example"}]}
             }))
             .unwrap(),
@@ -298,132 +300,9 @@ fn invocation(id: &str, arguments: Value, timeout: Duration) -> ExtensionInvocat
     }
 }
 
-fn product_params() -> ActivateParams {
-    let manifest = include_str!("../../../extensions/remote-ssh/package.json");
-    let source = include_str!("../../../extensions/remote-ssh/src/extension.js");
-    let sdk = include_str!("../../../sdk/typescript/index.js");
-    ActivateParams {
-        initialization: None,
-        extension_id: "ash.remote-ssh".into(),
-        package: PackageBinding {
-            package_id: "ash.remote-ssh@1.0.0".into(),
-            package_digest: format!(
-                "sha256:{:x}",
-                Sha256::digest(format!("{manifest}\0{source}\0{sdk}"))
-            ),
-            entrypoint: "src/extension.js".into(),
-        },
-        runtime_api_version: 1,
-        activation_events: vec!["startup".into()],
-        capabilities: vec![
-            ExtensionCapability::RemoteAuthorityResolver,
-            ExtensionCapability::ProductRemoteAuthorityResolver,
-        ],
-    }
-}
-
-fn start_product(params: ActivateParams) -> Result<Running, ExtensionHostError> {
-    // The product loader must work without a package directory or workspace grant.
-    let directory = tempfile::tempdir().unwrap();
-    start_product_in(params, directory)
-}
-
-fn start_product_in(
-    params: ActivateParams,
-    directory: tempfile::TempDir,
-) -> Result<Running, ExtensionHostError> {
-    let executable = PathBuf::from(env!("CARGO_BIN_EXE_ash-external-js-ext"));
-    let authority = Arc::new(Authority(AtomicBool::new(true)));
-    let running = Running {
-        supervisor: ExtensionHostSupervisor::new(
-            Arc::new(host::ProductJavaScriptLauncher::new(executable.clone())),
-            ExtensionLaunchCommand::product_javascript(executable, "remote-ssh", directory.path())
-                .unwrap(),
-            ExtensionActivationSpec::new(params, NonZeroU64::new(1).unwrap(), authority.clone()),
-            ExtensionHostLimits {
-                isolation: ProcessIsolationPolicy::RequireJavaScriptEnforcement(
-                    host::JavaScriptMemoryLimits::default(),
-                ),
-                ..ExtensionHostLimits::default()
-            },
-            RestartPolicy::default(),
-        )?,
-        authority,
-        _package: directory,
-    };
-    running.supervisor.start()?;
-    Ok(running)
-}
-
-fn ssh_invocation() -> ExtensionInvocation {
-    ExtensionInvocation {
-        registration_id: "remote:ssh".into(),
-        operation: "resolveConnection".into(),
-        payload: json!({"authority": "ssh+build"}),
-        deadline_unix_millis: invocation("unused", json!(null), Duration::from_secs(5))
-            .deadline_unix_millis,
-    }
-}
-
 #[test]
-fn compiled_ssh_uses_the_sdk_and_fences_old_incarnations_after_restart() {
-    let running = start_product(product_params()).unwrap();
-    let initial = running.supervisor.snapshot();
-    assert_eq!(initial.registrations.len(), 1);
-    assert_eq!(
-        running.supervisor.invoke(ssh_invocation()).unwrap().payload,
-        json!({"connectionName": "build"})
-    );
-    running.supervisor.shutdown().unwrap();
-    assert!(running.supervisor.snapshot().registrations.is_empty());
-    let restarted = running.supervisor.start().unwrap();
-    assert!(restarted.incarnation > initial.incarnation);
-    assert!(matches!(
-        running.supervisor.begin_fenced_invoke(
-            ExtensionInvocationTarget {
-                incarnation: NonZeroU64::new(initial.incarnation).unwrap(),
-                activation_generation: NonZeroU64::new(1).unwrap(),
-            },
-            ssh_invocation()
-        ),
-        Err(ExtensionHostError::RegistrationNotFound)
-    ));
-    assert_eq!(
-        running.supervisor.invoke(ssh_invocation()).unwrap().payload,
-        json!({"connectionName": "build"})
-    );
-}
-
-#[test]
-fn compiled_ssh_rejects_a_stale_release_binding() {
-    let mut params = product_params();
-    params.package.package_digest = format!("sha256:{}", "a".repeat(64));
-    assert!(start_product(params).is_err());
-}
-
-#[cfg(windows)]
-#[test]
-fn compiled_ssh_does_not_traverse_its_working_directory() {
-    let directory = tempfile::tempdir().unwrap();
-    // Product sources are embedded. Unrelated build/install artifacts must not be
-    // treated as a package, even when they exceed the installed-package depth limit.
-    let mut nested = directory.path().to_path_buf();
-    for _ in 0..34 {
-        nested.push("a");
-        std::fs::create_dir(&nested).unwrap();
-    }
-    std::fs::write(nested.join("unrelated.txt"), "host-only").unwrap();
-    let running = start_product_in(product_params(), directory).unwrap();
-    assert_eq!(
-        running.supervisor.invoke(ssh_invocation()).unwrap().payload,
-        json!({"connectionName": "build"})
-    );
-    running.supervisor.shutdown().unwrap();
-}
-
-#[test]
-fn installed_sdk_packages_cannot_acquire_the_product_ssh_authority() {
-    let source = "import { workspace } from '@ash/extension'; export function activate(context) { context.subscriptions.push(workspace.registerRemoteConnectionResolver('ssh', { resolve() { return { connectionName: 'build' }; } })); }";
+fn installed_packages_cannot_acquire_the_product_ssh_authority() {
+    let source = "const vscode = require('vscode'); exports.activate = context => context.subscriptions.push(vscode.workspace.registerRemoteAuthorityResolver('ssh', { resolve() { return new vscode.ResolvedAuthority('localhost', 8080); } }));";
     assert!(
         start_with_capabilities(source, vec![ExtensionCapability::RemoteAuthorityResolver])
             .is_err()
@@ -607,28 +486,16 @@ fn vscode_activation_context_uses_captured_package_location_and_exports() {
 }
 
 #[test]
-fn malformed_extension_source_does_not_write_engine_diagnostics_to_protocol_stdout() {
-    let package = tempfile::tempdir().unwrap();
-    std::fs::write(
-        package.path().join("main.js"),
-        "export function activate( {",
-    )
-    .unwrap();
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_ash-external-js-ext"))
-        .args(["--extension-id", "example", "--package"])
-        .arg(package.path())
-        .args(["--entry", "main.js"])
-        .output()
-        .unwrap();
-
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty(), "{:?}", output.stdout);
-    let diagnostic = String::from_utf8(output.stderr).unwrap();
+fn malformed_extension_source_returns_a_protocol_error_without_engine_diagnostics_on_stdout() {
+    let outcome = start("exports.activate = function( {");
+    let error = match outcome {
+        Err(error) => error,
+        Ok(_) => panic!("malformed source activated"),
+    };
     assert!(
-        diagnostic.contains("cannot compile module 'main.js'"),
-        "{diagnostic}"
+        matches!(error, ExtensionHostError::HostRejected { .. }),
+        "{error:?}"
     );
-    assert!(diagnostic.contains("SyntaxError"), "{diagnostic}");
 }
 
 #[test]
@@ -959,15 +826,15 @@ fn completed_tasks_are_not_resurrected_by_late_execute_or_query_replies() {
 }
 
 #[test]
-fn sdk_task_only_activation_publishes_and_invokes_its_provider() {
+fn vscode_task_only_activation_publishes_and_invokes_its_provider() {
     if !host::ProductJavaScriptLauncher::supports_platform() {
         return;
     }
     let running = start_with_launcher(r#"
-        import { tasks } from '@ash/extension';
-        export function activate(context) {
-            context.subscriptions.push(tasks.registerTaskProvider('build', 'lazy-build', {
-                provideTasks() { return [{ id: 'build', label: 'Build', group: 'build', definition: { type: 'lazy-build' }, execution: { type: 'process', program: 'compiler', args: [] } }]; }
+        const { tasks } = require('vscode');
+        exports.activate = function(context) {
+            context.subscriptions.push(tasks.registerTaskProvider('lazy-build', {
+                provideTasks() { const v = require('vscode'); return [new v.Task({ type: 'lazy-build' }, v.TaskScope.Workspace, 'Build', 'Builder', new v.ProcessExecution('compiler', []))]; }
             }));
         }
     "#, vec![ExtensionCapability::TaskProvider],
@@ -975,7 +842,7 @@ fn sdk_task_only_activation_publishes_and_invokes_its_provider() {
         Arc::new(host::ProductJavaScriptLauncher::new(PathBuf::from(env!("CARGO_BIN_EXE_ash-external-js-ext")))),
     ).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "build".into();
+    request.registration_id = "vscode.tasks.1".into();
     request.operation = "provideTasks".into();
     request.payload = json!({});
     let provided = running.supervisor.invoke(request).unwrap().payload;
@@ -1222,11 +1089,11 @@ fn vscode_status_bar_replaces_hidden_arguments_and_releases_published_entries() 
 #[test]
 fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations() {
     let running = start_with_capabilities(r#"
-        import { commands, window } from '@ash/extension';
-        export function activate(context) {
-            context.subscriptions.push(window.registerStatusBar('status', () => ({ revision: 1, entries: [] })));
-            context.subscriptions.push(commands.registerCommand('example.update', 'Update', async (call, id, revision) => {
-                try { await call.window.setStatusBarEntries(id, revision, []); return 'ok'; }
+        const { commands, window } = require('vscode');
+        exports.activate = function(context) {
+            context.subscriptions.push(window.createStatusBarItem('status'));
+            context.subscriptions.push(commands.registerCommand('example.update', async (id, revision) => {
+                try { await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({ operation: 'setStatusBarEntries', registrationId: id, revision, entries: [] })); return 'ok'; }
                 catch (error) { return error.code; }
             }));
         }
@@ -1234,9 +1101,9 @@ fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations
     for (id, revision, permit, expected) in [
         ("foreign", 2, true, "registrationNotFound"),
         ("example.update", 2, true, "registrationNotFound"),
-        ("status", 2, true, "ok"),
-        ("status", 1, true, "ok"),
-        ("status", 3, false, "permissionDenied"),
+        ("vscode.statusBar", 2, true, "ok"),
+        ("vscode.statusBar", 1, true, "ok"),
+        ("vscode.statusBar", 3, false, "permissionDenied"),
     ] {
         let handle = running
             .supervisor
@@ -1261,13 +1128,13 @@ fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations
             })
             .unwrap();
         assert_eq!(result.payload, json!(expected));
-        assert_eq!(calls, usize::from(id == "status"));
+        assert_eq!(calls, usize::from(id == "vscode.statusBar"));
     }
     let snapshot = running.supervisor.snapshot();
     let status = snapshot
         .registrations
         .iter()
-        .find(|registration| registration.registration_id == "status")
+        .find(|registration| registration.registration_id == "vscode.statusBar")
         .unwrap();
     assert!(matches!(
         status.kind,
@@ -1279,6 +1146,7 @@ fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations
 fn hover_invocation(text: &str) -> ExtensionInvocation {
     let mut request = invocation("hover", json!([]), Duration::from_secs(5));
     request.operation = "hover".into();
+    request.registration_id = "vscode.hover.1".into();
     request.payload = json!({
         "resource": "file:///workspace/data.ts", "languageId": "typescript",
         "version": 7, "text": text, "position": {"lineIndex": 0, "columnIndex": 1}
@@ -1287,24 +1155,25 @@ fn hover_invocation(text: &str) -> ExtensionInvocation {
 }
 
 #[test]
-fn author_sdk_document_callbacks_publish_diagnostics_and_completion_ranges() {
+fn standard_document_callbacks_publish_diagnostics_and_completion_ranges() {
     let running = start_with_capabilities(r#"
-        import { workspace, languages } from '@ash/extension';
-        export function activate(context) {
-            context.subscriptions.push(workspace.registerTextDocumentEvents('example.documents', async (call, event) => {
-                await call.languages.setDiagnostics('lint', [{ uri:event.document.uri, version:event.document.version, diagnostics:[{
-                    start:{line:0,character:2}, end:{line:0,character:4}, message:'Check word', severity:'hint', source:'example', code:null
-                }] }]);
-            }), languages.registerCompletionProvider('example.complete', ['typescript'], {
-                provideCompletionItems(call, document, position, trigger) {
-                    if (document.getText() !== '😀ab' || position.character !== 4 || trigger.kind !== 'invoke') throw Error('Author completion context lost');
-                    return { isIncomplete:false, items:[{ id:'word', label:'abcd', kind:'text', range:{start:{line:0,character:2},end:position}, insertText:'abcd', insertTextFormat:'plainText' }] };
+        const v = require('vscode');
+        exports.activate = context => {
+            const lint = v.languages.createDiagnosticCollection('lint');
+            context.subscriptions.push(lint, v.workspace.onDidOpenTextDocument(document => {
+                lint.set(document.uri, [new v.Diagnostic(new v.Range(0,2,0,4), 'Check word', v.DiagnosticSeverity.Hint)]);
+            }), v.languages.registerCompletionItemProvider('typescript', {
+                provideCompletionItems(document, position, token, trigger) {
+                    if (document.getText() !== '😀ab' || position.character !== 4 || trigger.triggerKind !== 0) throw Error('Author completion context lost');
+                    const item = new v.CompletionItem('abcd', v.CompletionItemKind.Text);
+                    item.range = new v.Range(0,2,0,4); item.insertText = 'abcd';
+                    return [item];
                 }
-            }, ['.']));
-        }
+            }, '.'));
+        };
     "#, vec![ExtensionCapability::LanguageProvider]).unwrap();
     let mut request = hover_invocation("😀ab");
-    request.registration_id = "example.documents".into();
+    request.registration_id = "vscode.documents".into();
     request.operation = "documentEvent".into();
     request.payload = json!({"type":"open","document":{"uri":"file:///main.ts","version":7,"languageId":"typescript","text":"😀ab"}});
     running.supervisor.begin_invoke(request).unwrap().wait_with_client(|operation, _, _| {
@@ -1312,7 +1181,7 @@ fn author_sdk_document_callbacks_publish_diagnostics_and_completion_ranges() {
         Ok(ExtensionClientResult::Done)
     }).unwrap();
     let mut completion = hover_invocation("😀ab");
-    completion.registration_id = "example.complete".into();
+    completion.registration_id = "vscode.completion.1".into();
     completion.operation = "completion".into();
     completion.payload["position"]["columnIndex"] = json!(4);
     completion.payload["context"] = json!({"kind":"invoke"});
@@ -1665,12 +1534,12 @@ fn hover_receives_frozen_unsaved_utf16_snapshot_and_can_call_authorized_services
         .wait_with_client(|operation, _, _| {
             assert_eq!(
                 operation,
-                ExtensionClientOperation::ReadWorkspaceFile {
-                    path: "data.txt".into()
+                ExtensionClientOperation::ReadResourceFile {
+                    uri: "file:///workspace/data.txt".into()
                 }
             );
-            Ok(ExtensionClientResult::File {
-                text: "disk content".into(),
+            Ok(ExtensionClientResult::ResourceFile {
+                bytes: b"disk content".to_vec(),
             })
         })
         .unwrap();
@@ -1771,12 +1640,12 @@ fn cancelling_a_pending_hover_retires_its_isolate_and_restores_the_provider_in_a
 }
 
 #[test]
-fn activates_esm_sdk_and_releases_subscriptions_without_node_globals() {
+fn activates_standard_commonjs_and_releases_subscriptions_without_node_io() {
     let running = start(include_str!("fixtures/main.js")).unwrap();
-    assert_eq!(running.supervisor.snapshot().registrations.len(), 15);
+    assert_eq!(running.supervisor.snapshot().registrations.len(), 16);
     assert_eq!(
         run(&running, "globals", json!([])).unwrap(),
-        json!(["undefined", "undefined", "undefined", "undefined"])
+        json!(["function", "undefined", "undefined", "undefined"])
     );
     assert_eq!(
         run(&running, "echo", json!([{"nested": [1, true]}])).unwrap(),
@@ -1826,14 +1695,12 @@ fn editor_snapshot_and_rust_disk_read_stay_distinct() {
                         text: "unsaved editor".into(),
                     },
                 },
-                ExtensionClientOperation::ReadWorkspaceFile { path } => {
-                    ExtensionClientResult::File {
-                        text: String::from_utf8(
-                            files
-                                .read_file(std::path::Path::new(&path), 256 * 1024)
-                                .unwrap(),
-                        )
-                        .unwrap(),
+                ExtensionClientOperation::ReadResourceFile { uri } => {
+                    let path = uri.strip_prefix("file:///workspace/").unwrap();
+                    ExtensionClientResult::ResourceFile {
+                        bytes: files
+                            .read_file(std::path::Path::new(&path), 256 * 1024)
+                            .unwrap(),
                     }
                 }
                 ExtensionClientOperation::ShowMessage { .. } => ExtensionClientResult::Done,
@@ -1923,7 +1790,7 @@ fn rust_failure_code_is_available_to_the_extension_author() {
         .wait_with_client(|operation, _, _| {
             assert!(matches!(
                 operation,
-                ExtensionClientOperation::ReadWorkspaceFile { .. }
+                ExtensionClientOperation::ReadResourceFile { .. }
             ));
             Err(external_ext_protocol::HostFailure {
                 code: HostErrorCode::InvalidRequest,
@@ -1939,29 +1806,29 @@ fn rust_failure_code_is_available_to_the_extension_author() {
 
 #[test]
 fn cooperative_cancellation_rejects_queued_services_and_preserves_the_extension_incarnation() {
-    let running = start(r#"
-        import { commands } from '@ash/extension';
+    let running = start_with_capabilities(r#"
+        const { commands, languages, window } = require('vscode');
         let state;
-        export function activate(context) {
-            context.subscriptions.push(commands.registerCommand('example.wait', 'Wait', async call => {
+        exports.activate = function(context) {
+            context.subscriptions.push(languages.registerHoverProvider('typescript', { async provideHover(document, position, token) {
                 state = { cancelled: false, notifications: 0, blocked: false, childRejected: false };
-                const child = call.window.showInformationMessage('queued').catch(() => { state.childRejected = true; });
-                await new Promise(resolve => call.cancellationToken.onCancellationRequested(async () => {
-                    state.cancelled = call.cancellationToken.isCancellationRequested;
+                const child = window.showInformationMessage('queued').catch(() => { state.childRejected = true; });
+                await new Promise(resolve => token.onCancellationRequested(async () => {
+                    state.cancelled = token.isCancellationRequested;
                     state.notifications++;
-                    try { await call.window.showInformationMessage('after cancellation'); } catch (error) { state.blocked = error.code === 'cancelled'; }
+                    try { await window.showInformationMessage('after cancellation'); } catch (error) { state.blocked = /no active invocation|no longer active/.test(error.message); }
                     resolve();
                 }));
                 await child;
-                return 'discard this result';
-            }));
-            context.subscriptions.push(commands.registerCommand('example.probe', 'Probe', () => state));
+                return { contents: ['discard this result'] };
+            } }));
+            context.subscriptions.push(commands.registerCommand('example.probe', () => state));
         }
-    "#).unwrap();
+    "#, vec![ExtensionCapability::Command, ExtensionCapability::LanguageProvider]).unwrap();
     let incarnation = running.supervisor.snapshot().incarnation;
     let pending = running
         .supervisor
-        .begin_invoke(invocation("wait", json!([]), Duration::from_secs(5)))
+        .begin_invoke(hover_invocation("pending"))
         .unwrap();
     assert_eq!(
         run(&running, "probe", json!([])).unwrap()["cancelled"],
@@ -2236,11 +2103,11 @@ fn product_js_launcher_enforces_aggregate_and_implicit_backing_store_budgets() {
     ] {
         let source = format!(
             r#"
-import {{ commands }} from '@ash/extension';
+const {{ commands }} = require('vscode');
 let retained;
-export function activate(context) {{
-    context.subscriptions.push(commands.registerCommand('example.echo', 'Echo', (_, value) => value));
-    context.subscriptions.push(commands.registerCommand('example.allocate', 'Allocate', () => {{
+exports.activate = function(context) {{
+    context.subscriptions.push(commands.registerCommand('example.echo', value => value));
+    context.subscriptions.push(commands.registerCommand('example.allocate', () => {{
         try {{ {expression}; return 'unexpected allocation'; }} catch (error) {{ return error.name; }}
     }}));
 }}"#
@@ -2288,9 +2155,9 @@ export function activate(context) {{
 #[test]
 fn product_js_context_excludes_unbudgeted_memory_and_constructor_paths() {
     let running = start_confined(r#"
-import { commands } from '@ash/extension';
-export function activate(context) {
-    context.subscriptions.push(commands.registerCommand('example.buffers', 'Buffers', () => {
+const { commands } = require('vscode');
+exports.activate = function(context) {
+    context.subscriptions.push(commands.registerCommand('example.buffers', () => {
         const buffer = new Uint8Array(4).buffer;
         const constructors = [ArrayBuffer, buffer.constructor, Object.getPrototypeOf(buffer).constructor,
             buffer.slice(0).constructor, new Uint8Array(4).buffer.transfer().constructor];
@@ -2560,13 +2427,13 @@ fn vscode_debug_sessions_preserve_early_event_identity_and_route_custom_requests
 #[test]
 fn remote_resolver_runs_in_javascript_and_connection_intent_uses_the_invocation_broker() {
     let source = r#"
-        import { commands, workspace } from '@ash/extension';
-        export function activate(context) {
-            context.subscriptions.push(workspace.registerRemoteConnectionResolver('team', {
-                resolve(_call, authority) { if (authority !== 'team+linux') throw Error('Wrong authority'); return { connectionName: 'build' }; }
+        const { commands, workspace } = require('vscode');
+        exports.activate = function(context) {
+            context.subscriptions.push(workspace.registerRemoteAuthorityResolver('team', {
+                resolve(authority) { if (authority !== 'team+linux') throw Error('Wrong authority'); return new (require('vscode').ResolvedAuthority)('localhost', 8080); }
             }));
-            context.subscriptions.push(commands.registerCommand('example.connect', 'Connect', async call => {
-                await call.workspace.openRemoteConnection('team+linux'); return 'requested';
+            context.subscriptions.push(commands.registerCommand('example.connect', async () => {
+                await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({ operation: 'openRemoteConnection', authority: 'team+linux' })); return 'requested';
             }));
         }
     "#;
@@ -2583,12 +2450,12 @@ fn remote_resolver_runs_in_javascript_and_connection_intent_uses_the_invocation_
     )
     .unwrap();
     let mut resolve = invocation("unused", json!([]), Duration::from_secs(5));
-    resolve.registration_id = "remote:team".into();
-    resolve.operation = "resolveConnection".into();
-    resolve.payload = json!({"authority":"team+linux"});
+    resolve.registration_id = "remote-authority:team".into();
+    resolve.operation = "resolveAuthority".into();
+    resolve.payload = json!({"authority":"team+linux","resolveAttempt":1,"__connectionOwner":"7"});
     assert_eq!(
         running.supervisor.invoke(resolve).unwrap().payload,
-        json!({"connectionName":"build"})
+        json!({"type":"webSocket","host":"localhost","port":8080,"connectionToken":null})
     );
     let mut calls = Vec::new();
     let result = running
@@ -2770,10 +2637,10 @@ fn vscode_debug_adapter_trackers_keep_session_identity_and_active_hooks_after_fa
 #[test]
 fn remote_connection_calls_without_an_active_resolver_do_not_reach_the_client() {
     let running = start(r#"
-        import { commands } from '@ash/extension';
-        export function activate(context) {
-            context.subscriptions.push(commands.registerCommand('example.connect', 'Connect', async call => {
-                try { await call.workspace.openRemoteConnection('ssh+build'); }
+        const { commands } = require('vscode');
+        exports.activate = function(context) {
+            context.subscriptions.push(commands.registerCommand('example.connect', async () => {
+                try { await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({ operation: 'openRemoteConnection', authority: 'ssh+build' })); }
                 catch (error) { return error.code; }
                 throw Error('Expected refusal');
             }));
@@ -2791,8 +2658,8 @@ fn remote_connection_calls_without_an_active_resolver_do_not_reach_the_client() 
 #[test]
 fn standard_authority_resolution_preserves_endpoints_attempts_and_error_categories() {
     let source = r#"
-        import { workspace, ResolvedAuthority, RemoteAuthorityResolverError } from '@ash/extension';
-        export function activate(context) {
+        const { workspace, ResolvedAuthority, RemoteAuthorityResolverError } = require('vscode');
+        exports.activate = function(context) {
             context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
                 resolve(authority, context) {
                     if (authority === 'test+offline') throw RemoteAuthorityResolverError.NotAvailable('Offline', true);
@@ -2831,10 +2698,10 @@ fn standard_authority_resolution_preserves_endpoints_attempts_and_error_categori
 }
 
 #[test]
-fn canonical_uri_and_resolver_options_cross_the_sdk_boundary_without_session_tokens() {
+fn canonical_uri_and_resolver_options_cross_the_host_boundary_without_session_tokens() {
     let source = r#"
-        import { workspace, ResolvedAuthority } from '@ash/extension';
-        export function activate(context) {
+        const { workspace, ResolvedAuthority } = require('vscode');
+        exports.activate = function(context) {
             context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
                 resolve(authority) {
                     return Object.assign(new ResolvedAuthority('localhost', 5000), {
@@ -3175,8 +3042,8 @@ fn vscode_task_presentation_rejects_invalid_values_before_requesting_execution()
 #[test]
 fn managed_authority_sockets_preserve_bytes_and_retire_on_resolution_and_restart() {
     let source = r#"
-        import { workspace, ManagedResolvedAuthority } from '@ash/extension';
-        export function activate(context) {
+        const { workspace, ManagedResolvedAuthority } = require('vscode');
+        exports.activate = function(context) {
             context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
                 resolve() {
                     return new ManagedResolvedAuthority(async () => {
@@ -3539,11 +3406,11 @@ fn vscode_workspace_and_configuration_are_synchronous_during_package_evaluation_
 #[test]
 fn extension_environment_is_available_during_module_loading_and_isolated_per_process() {
     let source = r#"
-        import { commands } from '@ash/extension';
+        const { commands } = require('vscode');
         if (process.exit !== undefined || process.dlopen !== undefined || process.binding !== undefined || process.cwd !== undefined) throw new Error('Unexpected Node capability');
         const loaded = { set: process.env.SET ?? null, removed: process.env.REMOVE ?? null, prototype: process.env.__proto__ ?? null };
-        export function activate(context) {
-            context.subscriptions.push(commands.registerCommand('example.env', 'Env', () => loaded));
+        exports.activate = function(context) {
+            context.subscriptions.push(commands.registerCommand('example.env', () => loaded));
         }
     "#;
     let launch = |value: &str| {
@@ -3552,7 +3419,7 @@ fn extension_environment_is_available_during_module_loading_and_isolated_per_pro
             vec![ExtensionCapability::Command],
             ProcessIsolationPolicy::TrustedDevelopment,
             Arc::new(TrustedDevelopmentLauncher),
-            TestApi::Ash,
+            TestApi::Vscode,
             &[],
             Some(
                 [
@@ -3592,7 +3459,7 @@ fn extension_environment_is_available_during_module_loading_and_isolated_per_pro
         vec![ExtensionCapability::Command],
         ProcessIsolationPolicy::TrustedDevelopment,
         Arc::new(TrustedDevelopmentLauncher),
-        TestApi::Ash,
+        TestApi::Vscode,
         &[],
         Some(Default::default()),
     )

@@ -1,4 +1,4 @@
-import { expect, test } from '../../../automation/test.js';
+import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -123,47 +123,47 @@ test('Marketplace view tab uses the extensions icon', async ({ workbench }) => {
 	await expect(search).toBeFocused();
 });
 
-test('Local SDK extension installs, runs only after grant, survives restart and retires on revoke', async ({ target, testWorkspace, application, workbench, reloadWorkbench }) => {
+test('Local standard extension installs, runs only after grant, survives restart and retires on revoke', async ({ target, testWorkspace, application, workbench, reloadWorkbench }) => {
 	test.skip(process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Product JS confinement currently supports macOS Electron with App Server');
 	test.setTimeout(90_000);
-	const root = join(testWorkspace.directory, 'sdk-extension');
+	const root = join(testWorkspace.directory, 'standard-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
-		schemaVersion: 1, id: 'acme/sdk-smoke', version: '1.0.0', displayName: 'SDK smoke',
+		schemaVersion: 1, id: 'acme/standard-smoke', version: '1.0.0', displayName: 'Standard extension smoke',
 		compatibility: { ash: '>=0.1.0' },
 		contributions: {
 			editorExtensions: [{
 				id: 'inspect', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
-				activationEvents: [{ type: 'onCommand', id: 'acme.sdkSmoke.inspect' }], capabilities: ['command']
+				activationEvents: [{ type: 'onCommand', id: 'acme.standardSmoke.inspect' }], capabilities: ['command']
 			}]
 		},
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
-	await writeFile(join(root, 'extension.js'), `
-import { commands } from '@ash/extension';
-export function activate(context) {
-	context.subscriptions.push(commands.registerCommand('acme.sdkSmoke.inspect', 'Inspect SDK smoke', async call => {
-		const text = await call.workspace.readTextFile('main.ts');
-		await call.window.showInformationMessage('SDK disk: ' + text.trim() + '; globals: ' + [typeof process, typeof fetch, typeof WebAssembly].join(','));
+	await writeEditorExtensionFixture(root, `
+const vscode = require('vscode'); const { commands, window } = vscode;
+exports.activate = function(context) {
+	context.subscriptions.push(commands.registerCommand('acme.standardSmoke.inspect', async () => {
+		const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, 'main.ts')));
+		await window.showInformationMessage('Standard disk: ' + text.trim() + '; globals: ' + [typeof process, typeof fetch, typeof WebAssembly].join(','));
 		return text;
 	}));
 }`);
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
-	await installation.getByRole('textbox').fill('sdk-extension');
+	await installation.getByRole('textbox').fill('standard-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
-	expect(installed.message).toContain('Installed acme/sdk-smoke 1.0.0');
+	expect(installed.message).toContain('Installed acme/standard-smoke 1.0.0');
 
 	const absent = async (): Promise<void> => {
-		await workbench.quickaccess.open('>acme.sdkSmoke.inspect');
-		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('acme.sdkSmoke.inspect', { exact: true }) })).toHaveCount(0);
+		await workbench.quickaccess.open('>acme.standardSmoke.inspect');
+		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('acme.standardSmoke.inspect', { exact: true }) })).toHaveCount(0);
 		await workbench.quickaccess.close();
 	};
 	const manage = async (button: string): Promise<void> => {
-		const review = await workbench.dialogs.confirm(application, 'SDK smoke', button, async () => {
+		const review = await workbench.dialogs.confirm(application, 'Standard extension smoke', button, async () => {
 			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('SDK smoke', { exact: true }) }).click();
+			await page.getByRole('option').filter({ has: page.getByText('Standard extension smoke', { exact: true }) }).click();
 		});
 		expect(review.detail).toContain('Read workspace files');
 		expect(review.detail).toContain('Package digest: sha256:');
@@ -172,14 +172,14 @@ export function activate(context) {
 	await manage('Enable');
 	await absent();
 	await manage('Grant permissions');
-	await workbench.quickaccess.runCommand('acme.sdkSmoke.inspect');
-	await expect(page.locator('.ash-notification', { hasText: 'SDK disk: const value = 1;; globals: undefined,undefined,undefined' })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.inspect');
+	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object' })).toBeVisible();
 
 	({ workbench, application } = await reloadWorkbench());
 	page = workbench.page;
 	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
-	await workbench.quickaccess.runCommand('acme.sdkSmoke.inspect');
-	await expect(page.locator('.ash-notification', { hasText: 'SDK disk: const value = 1;; globals: undefined,undefined,undefined' })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.inspect');
+	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object' })).toBeVisible();
 	await manage('Revoke permissions');
 	await absent();
 	await manage('Disable');

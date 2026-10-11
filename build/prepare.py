@@ -221,7 +221,7 @@ def package_sources(root: Path) -> list[Path]:
         # The JS host embeds this module; SDK edits must rebuild the backend package.
         root / "crates/external-js-ext/src/node.mjs",
         root / "crates/external-js-ext/src/vscode.js",
-        root / "sdk/typescript/index.js",
+        root / "crates/external-js-ext/src/host.mjs",
     ]
     sources += [
         path
@@ -339,6 +339,7 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-code-mode-host",
             "ash-external-js-ext",
             "ash-github-authentication",
+            "ash-remote-ssh-extension",
             "ash-voice-host",
             "ash-collaboration-server",
         ]
@@ -485,6 +486,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             windows_sandbox_binary=binaries.get("ash-windows-sandbox"),
             windows_sandbox_service_binary=binaries.get("ash-windows-sandbox-service"),
             github_authentication_binary=binaries["ash-github-authentication"],
+            remote_ssh_extension_binary=binaries["ash-remote-ssh-extension"],
             remote_host_binary=binaries["ash-remote-host"],
             voice_host_binary=binaries["ash-voice-host"],
             collaboration_server_binary=binaries["ash-collaboration-server"],

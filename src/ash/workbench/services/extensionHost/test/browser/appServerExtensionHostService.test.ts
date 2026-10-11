@@ -1,4 +1,6 @@
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { getNLSLanguage } from '../../../../../nls.js';
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
@@ -766,6 +768,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, debug = new ProviderSink<IDebugConfigurationProvider>(), remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
+	services.registerInstance(IFileService, services.resources.add(new FileService()));
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	services.registerInstance(IExtensionHostApi, api);
 	services.registerInstance(IHostService, {

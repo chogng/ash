@@ -44,7 +44,7 @@ class TestWorkbenchServices extends InstantiationService {
 	public readonly resources = this._register(new DisposableStore());
 }
 
-export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add'>, storage?: IStorageService, overrides: { readonly languageFeatures?: ILanguageFeaturesService; readonly output?: IOutputService; } = {}): InstantiationService {
+export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add'>, storage?: IStorageService, overrides: { readonly languageFeatures?: ILanguageFeaturesService; readonly output?: IOutputService; } = {}): TestWorkbenchServices {
 	const services = new TestWorkbenchServices();
 	owner?.add(services);
 	const resources = services.resources;

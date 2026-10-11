@@ -9,7 +9,7 @@ for (const [locale, installTitle, manageTitle, enable, grant, permission, disabl
 		await page.evaluate(() => window.ashMarketplaceIntegration.startCommand('ash.extensions.installLocal'));
 		const installation = page.getByRole('dialog', { name: installTitle, exact: true });
 		await expect(installation).toContainText('.ash-plugin/plugin.json');
-		await installation.getByRole('textbox').fill('.build/sdk/typescript');
+		await installation.getByRole('textbox').fill('examples/extensions/inspect');
 		await installation.getByRole('textbox').press('Enter');
 		const installedMessage = page.getByRole('dialog').filter({ hasText: 'acme/sdk 1.0.0' });
 		await expect(installedMessage).toBeVisible();
@@ -17,7 +17,7 @@ for (const [locale, installTitle, manageTitle, enable, grant, permission, disabl
 		await page.evaluate(() => window.ashMarketplaceIntegration.waitCommand());
 		expect(await page.evaluate(() => window.ashMarketplaceIntegration.localPackages().map(({ enabled, granted }) => ({ enabled, granted })))).toEqual([{ enabled: false, granted: false }]);
 		const request = await page.evaluate(() => window.ashMarketplaceIntegration.requests.find((entry: any) => entry[0] === 'pluginInstall')) as [string, Record<string, unknown>];
-		expect(request[1]).toMatchObject({ expectedRevision: 0, path: '.build/sdk/typescript', dirId: null });
+		expect(request[1]).toMatchObject({ expectedRevision: 0, path: 'examples/extensions/inspect', dirId: null });
 		expect(request[1].commandId).toMatch(/^desktop-plugin-install-/u);
 		for (const action of [enable, grant]) {
 			await page.evaluate(() => window.ashMarketplaceIntegration.startCommand('ash.extensions.manageLocal'));
@@ -78,7 +78,7 @@ for (const [locale, label, notice] of [
 			await expect(page.getByRole('dialog', { name: manageTitle, exact: true })).toBeVisible();
 			await page.keyboard.press('Enter');
 			const review = page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true });
-			await expect(review).toContainText(locale === 'en' ? 'A new package version requires new authorization.' : '新版本需要重新授权。');
+			await expect(review).toContainText(locale === 'en' ? 'Package or execution-contract changes require new authorization.' : '包版本或执行契约变化后需重新授权。');
 			await review.getByRole('button', { name: action, exact: true }).click();
 			await page.evaluate(() => window.ashMarketplaceIntegration.waitCommand());
 		}

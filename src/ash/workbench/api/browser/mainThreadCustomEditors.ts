@@ -119,7 +119,9 @@ export class MainThreadCustomEditors extends Disposable {
 						// Resource bytes execute only inside the opaque sandbox, outside the JSON edit channel.
 						html = `<style>${style.replaceAll(/<\/style/gi, '<\\/style')}</style>${html}<script>${script.replaceAll(/<\/script/gi, '<\\/script')}</script>`;
 					}
-					return 'update' in result ? { html, update: result.update } : { html };
+					const update = result.update;
+					// Readonly policy belongs to the editor model owner, including after configuration changes.
+					return 'update' in result ? { html, update: update && typeof update === 'object' && !Array.isArray(update) ? { ...update, readOnly: document.readOnly } : update } : { html };
 				},
 			} satisfies CustomTextEditorProvider, options.onSave),
 		});

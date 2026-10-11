@@ -272,7 +272,10 @@ fn product_node_process_speaks_the_shared_protocol_and_uses_real_node() {
             "vscode.mjs",
             include_str!("../../external-js-ext/src/vscode.js"),
         ),
-        ("sdk.mjs", include_str!("../../../sdk/typescript/index.js")),
+        (
+            "host.mjs",
+            include_str!("../../external-js-ext/src/host.mjs"),
+        ),
     ] {
         std::fs::write(root.join(name), source).unwrap();
     }

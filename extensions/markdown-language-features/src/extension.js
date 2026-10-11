@@ -1,5 +1,5 @@
 import { registerLanguageFeatures } from './languageFeatures.js';
-import { commands, defineBrowserExtension, throwIfCancelled, window } from '@ash/extension/browser';
+import * as vscode from 'vscode';
 import { Marked } from 'marked';
 import manifest from '../package.json';
 import english from '../package.nls.json';
@@ -11,64 +11,59 @@ const parser = new Marked({ gfm: true, renderer: { html: () => '' } });
 const preview = manifest.contributes.customEditors[0];
 
 /** Executed by the browser Extension Host Worker, with no access to Workbench DOM. */
-export const { activate, deactivate } = defineBrowserExtension(async context => {
+export async function activate(context) {
 	await registerLanguageFeatures(context);
-	const messages = context.language === 'zh-CN' ? chinese : english;
-	const label = value => value.replace(/^%(.+)%$/, (_, key) => messages[key]);
+	const messages = vscode.env.language === 'zh-CN' ? chinese : english;
 	for (const command of manifest.contributes.commands) {
-		const menus = Object.entries(manifest.contributes.menus).flatMap(([menu, entries]) => entries
-			.filter(entry => entry.command === command.command).map(({ command: _command, ...entry }) => ({ menu, ...entry })));
-		context.subscriptions.push(commands.registerCommand(command.command, label(command.title), async call => {
-			const editor = call.activeEditor;
+		context.subscriptions.push(vscode.commands.registerCommand(command.command, async () => {
+			const editor = vscode.window.activeTextEditor;
 			if (!editor) {
 				return null;
 			}
 			if (command.command === 'markdown.showPreviewToSide') {
-				await call.commands.executeCommand('_workbench.openWith', editor.resource.toJSON(), preview.viewType, [-2], editor.groupId);
+				await vscode.commands.executeCommand('vscode.openWith', editor.document.uri, preview.viewType, { viewColumn: -2 });
 			} else if (command.command === 'markdown.showPreview') {
-				await call.commands.executeCommand('_workbench.openWith', editor.resource.toJSON(), preview.viewType, [-1], editor.groupId);
+				await vscode.commands.executeCommand('vscode.openWith', editor.document.uri, preview.viewType, { viewColumn: -1 });
 			} else if (command.command === 'markdown.showSource') {
-				await call.commands.executeCommand('_workbench.openWith', editor.resource.toJSON(), 'default', [-1], editor.groupId);
+				await vscode.commands.executeCommand('vscode.openWith', editor.document.uri, 'default', { viewColumn: -1 });
 			} else if (command.command === 'markdown.showRichEditor') {
-				await call.commands.executeCommand('_workbench.openWith', editor.resource.toJSON(), 'vscode.markdown.editor', [-1], editor.groupId);
+				await vscode.commands.executeCommand('vscode.openWith', editor.document.uri, 'vscode.markdown.editor', { viewColumn: -1 });
 			} else {
 				const source = command.command === 'markdown.reopenAsSource';
 				const viewType = command.command === 'markdown.reopenAsRichEditor' ? 'vscode.markdown.editor' : preview.viewType;
-				await call.commands.executeCommand('reopenActiveEditorWith', source ? 'default' : viewType, { groupId: editor.groupId, editorIndex: editor.editorIndex });
+				await vscode.commands.executeCommand('reopenActiveEditorWith', source ? 'default' : viewType);
 			}
 			return null;
-		}, { icon: command.icon.slice(2, -1), menus }));
+		}));
 	}
-	context.subscriptions.push(window.registerCustomTextEditorProvider(preview.viewType, {
-		async resolveCustomTextEditor(call, document) {
-			throwIfCancelled(call.cancellationToken);
-			const content = parser.parse(document.text);
-			return {
-				html: `<style>${previewStyle}</style><main>${content}</main><script>
-			const api = acquireAshWebviewApi();
+	context.subscriptions.push(vscode.window.registerCustomEditorProvider(preview.viewType, {
+		async resolveCustomTextEditor(document, panel, token) {
+			if (token.isCancellationRequested) return;
+			panel.webview.html = `<style>${previewStyle}</style><main>${parser.parse(document.getText())}</main><script>
+			const api = acquireVsCodeApi();
 			document.addEventListener('click', event => {
 				const anchor = event.target.closest('a');
 				if (anchor) { event.preventDefault(); api.postMessage({ href: anchor.getAttribute('href') }); }
-			});
-			</script>` };
+			});</script>`;
 		},
-	}, { displayName: label(preview.displayName), priority: preview.priority, selectors: preview.selector.map(selector => selector.filenamePattern), languageIds: ['markdown'] }));
+	}));
 	const bytes = Uint8Array.from(atob(richEditor), character => character.charCodeAt(0));
 	const content = JSON.parse(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
-	const resources = { script: window.createWebviewResource(content.script, 'text/javascript').uri, style: window.createWebviewResource(content.style, 'text/css').uri };
+	const script = vscode.Uri.parse(URL.createObjectURL(new Blob([content.script], { type: 'text/javascript' })));
+	const style = vscode.Uri.parse(URL.createObjectURL(new Blob([content.style], { type: 'text/css' })));
+	context.subscriptions.push({ dispose() { URL.revokeObjectURL(script.toString()); URL.revokeObjectURL(style.toString()); } });
 	const rich = manifest.contributes.customEditors[1];
 	const richMessages = Object.fromEntries(Object.entries(messages).filter(([key]) => key.startsWith('markdown.rich.')).map(([key, value]) => [key.slice('markdown.rich.'.length), value]));
-	context.subscriptions.push(window.registerCustomTextEditorProvider(rich.viewType, {
-		async resolveCustomTextEditor(call, document) {
-			throwIfCancelled(call.cancellationToken);
-			return {
-				html: richEditorHtml(document, richMessages),
-				resources,
-				update: { type: 'document', ...document },
-			};
+	context.subscriptions.push(vscode.window.registerCustomEditorProvider(rich.viewType, {
+		async resolveCustomTextEditor(document, panel, token) {
+			if (token.isCancellationRequested) return;
+			const resources = { script: panel.webview.asWebviewUri(script).toString(), style: panel.webview.asWebviewUri(style).toString() };
+			const snapshot = { uri: document.uri.toString(), text: document.getText(), version: document.version, languageId: document.languageId };
+			panel.webview.html = richEditorHtml(snapshot, richMessages) + `<link rel="stylesheet" href="${resources.style}"><script src="${resources.script}"></script>`;
+			await panel.webview.postMessage({ type: 'document', ...snapshot });
 		},
-	}, { displayName: label(rich.displayName), priority: rich.priority, selectors: rich.selector.map(selector => selector.filenamePattern), languageIds: ['markdown'] }));
-});
+	}));
+}
 
 /** Library code is immutable package data; only the document snapshot crosses the edit boundary. */
 function richEditorHtml(document, messages) {

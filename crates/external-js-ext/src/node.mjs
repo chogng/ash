@@ -5,7 +5,7 @@ import { registerHooks } from 'node:module';
 import { createConnection } from 'node:net';
 import { resolve, relative, isAbsolute, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { __runtime as runtime } from './sdk.mjs';
+import { __runtime as runtime } from './host.mjs';
 
 const maximumFrame = 1024 * 1024;
 const maximumPayload = 512 * 1024;
@@ -172,13 +172,12 @@ Object.defineProperty(globalThis, '__ashBackgroundRequest', {
 });
 
 // Synchronous public hooks preserve Node's CJS/ESM resolution and cache. Only the
-// editor API and its product SDK are substituted; builtins and package modules stay Node-owned.
+// editor API is substituted; builtins and package modules stay Node-owned.
 const facadeURL = new URL('./vscode.mjs', import.meta.url).href;
-const sdkURL = new URL('./sdk.mjs', import.meta.url).href;
 let apiSource;
 const hooks = registerHooks({
 	resolve(specifier, ctx, next) {
-		if (specifier === '@ash/extension' && ctx.parentURL === facadeURL) return { url: sdkURL, shortCircuit: true };
+		if (specifier === '@ash/extension' || specifier === '@ash/extension/browser') throw new Error('Ash TypeScript SDK has been removed; use vscode');
 		if (specifier === 'vscode') {
 			if (!apiSource) throw new Error('Editor API is not initialized');
 			return { url: 'ash:vscode', shortCircuit: true };
@@ -242,7 +241,9 @@ async function dispatch(frame) {
 				break;
 			}
 			case 'cancel': {
-				const id = frame.params?.requestId;
+				const id = frame.params?.targetRequestId;
+				if (!Number.isSafeInteger(id) || id < 1 || !['caller', 'deadline', 'authorityRevoked', 'shutdown'].includes(frame.params?.reason)
+					|| Object.keys(frame.params).some(key => !['targetRequestId', 'reason'].includes(key))) throw new Error('Invalid cancellation target');
 				const owned = active.get(id);
 				if (owned) owned.cancelled = true;
 				failCalls(id, 'Invocation was cancelled');

@@ -4,26 +4,23 @@ import type { UnavailableOperation } from "../../renderer/browser/disconnectedHo
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
 import { APP_SERVER_SERVER_REQUESTS } from '../../../../../.build/protocol/typescript/index.js';
+import { decodeAppServerServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import type { JsonValue as ProtocolJsonValue } from '../../../../../.build/protocol/typescript/index.js';
 import type { ExtensionClientHandler } from '../common/extensionHostApi.js';
 import { inertSubscription } from "../../renderer/browser/disconnectedHost.js";
 import { Disposable, DisposableMap, combinedDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { IFileService, FileKind, FileNotFoundError } from '../../files/common/files.js';
-import { IAppServerApi } from '../../agentHost/common/appServerApi.js';
-import { IWorkspaceContextService } from '../../workspace/common/workspace.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import type { ExtensionClientOperation } from '../common/extensionHostApi.js';
 import { Emitter } from '../../../base/common/event.js';
 import type { IExtensionApi, ExtensionDescriptor } from '../../extensions/common/extensionApi.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
-import { ICommandService } from '../../commands/common/commands.js';
 import { normalizeExtensionStatusBarUpdate, normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type JsonValue } from '../common/extensionHostApi.js';
 
 const BUILT_IN_SSH_EXTENSION_ID = 'ash.remote-ssh';
 
 export type BrowserExtensionHostRequest =
-	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string; readonly extensionId: string; }
+	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string; readonly extensionId: string; readonly configuration: JsonValue; readonly initialization: JsonValue; }
 	| { readonly id: number; readonly type: 'invoke'; readonly request: Parameters<IExtensionHostApi['invoke']>[0]; }
 	| { readonly id: number; readonly type: 'deactivate'; }
 	| { readonly id: number; readonly type: 'cancel'; readonly invocationId: number; }
@@ -141,7 +138,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 			if (typeof manifest.browser !== 'string') { continue; }
 			let worker: BrowserExtensionWorker | undefined;
 			try {
-				if (extension.id === BUILT_IN_SSH_EXTENSION_ID) { throw new TypeError(localize('extensionHost.browser.productSsh', 'The product SSH extension must execute in the V8 host')); }
+				if (extension.id === BUILT_IN_SSH_EXTENSION_ID) { throw new TypeError(localize('extensionHost.browser.productSsh', 'The product SSH extension must execute as a Rust provider')); }
 				const path = manifest.browser.replace(/^\.\//, '');
 				const source = await this.extensions.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
@@ -163,7 +160,10 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 					return result;
 				});
 				this.workers.set(extension.id, worker);
-				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage(), extensionId: extension.id }, Date.now() + 30_000);
+				if (!this.clientHandler) throw new Error('No extension client handler is registered');
+				const initialized = await this.clientHandler({ operation: 'readInitialization' }, new AbortController().signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
+				if (initialized.result !== 'initialization') throw new Error('Invalid extension initialization');
+				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage(), extensionId: extension.id, initialization: normalizeExtensionHostPayload(initialized.initialization), configuration: normalizeExtensionHostPayload({ commands: manifest.contributes?.commands ?? [], extensionId: extension.id, extensionPath: '/', pathSeparator: '/', manifest, debuggers: manifest.contributes?.debuggers ?? [] }) }, Date.now() + 30_000);
 				this.assertNotDisposed();
 				const runtime = normalizeExtensionHostSnapshot({ generation, extensions: [{ ...runtimeIdentity(extension, generation), lifecycle: 'ready', failure: null, registrations }] }).extensions[0];
 				assertRemoteResolverOwnership(runtime, false);
@@ -205,11 +205,7 @@ class BrowserExtensionWorker extends Disposable {
 	private nextId = 1;
 	private readonly pending = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
 
-	constructor(extensionId: string, source: Uint8Array, clientHandler: (operation: ExtensionClientOperation, signal: AbortSignal) => ReturnType<ExtensionClientHandler>,
-		@ICommandService commandService: ICommandService,
-		@IFileService files: IFileService,
-		@IWorkspaceContextService workspace: IWorkspaceContextService,
-		@IAppServerApi appServer: IAppServerApi) {
+	constructor(extensionId: string, source: Uint8Array, clientHandler: (operation: ExtensionClientOperation, signal: AbortSignal) => ReturnType<ExtensionClientHandler>) {
 		super();
 		const clients = new Map<number, AbortController>();
 		const webviewResources = this._register(new DisposableMap<string>());
@@ -244,7 +240,7 @@ class BrowserExtensionWorker extends Disposable {
 			}
 			if (message?.type === 'clientCancel') { clients.get(message.id)?.abort(); return; }
 			if (message?.type === 'clientRequest') {
-				if (!Number.isSafeInteger(message.id) || message.id <= 0 || clients.has(message.id)) {
+				if (!Number.isSafeInteger(message.id) || message.id <= 0 || clients.has(message.id) || clients.size >= 32) {
 					this.fail(new TypeError('Invalid browser extension client request ID'));
 					return;
 				}
@@ -252,41 +248,11 @@ class BrowserExtensionWorker extends Disposable {
 				clients.set(message.id, client);
 				void (async (): Promise<JsonValue> => {
 					const payload = normalizeExtensionHostPayload(message.request);
-					if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Invalid browser extension client request');
-					const value = payload as Record<string, JsonValue>;
-					if (typeof value.operation !== 'string') throw new TypeError('Invalid browser extension client request');
-					if (value.operation === 'executeCommand') {
-						if (typeof value.command !== 'string' || !Array.isArray(value.arguments)) throw new TypeError('Expected a command and arguments');
-						return await commandService.executeCommand(value.command, ...value.arguments) ?? null;
-					}
-					if (value.operation === 'workspaceFolders') {
-						const connected = await appServer.getConnectionState() === 'ready';
-						const folders = workspace.getWorkspace().folders;
-						if (connected) return folders.map(folder => folder.uri.toString());
-						// Registration survives a backend disconnect, so test access before offering offline roots.
-						const accessible = await Promise.all(folders.map(async folder => {
-							if (!files.hasProvider(folder.uri)) return undefined;
-							try { await files.stat(folder.uri); return folder.uri.toString(); }
-							catch { return undefined; }
-						}));
-						return accessible.filter(uri => uri !== undefined);
-					}
-					if (value.operation === 'stat' || value.operation === 'readDirectory') {
-						if (typeof value.resource !== 'string') throw new TypeError('Expected a resource URI');
-						const resource = URI.parse(value.resource);
-						try {
-							if (value.operation === 'stat') return { isDirectory: (await files.stat(resource)).kind === FileKind.Directory };
-							return (await files.readDirectory(resource)).map(entry => [entry.name, { isDirectory: entry.kind === FileKind.Directory }]);
-						} catch (error) {
-							if (error instanceof FileNotFoundError) return value.operation === 'stat' ? null : [];
-							throw error;
-						}
-					}
-					if (value.operation === 'setStatusBarEntries') return await clientHandler(normalizeExtensionStatusBarUpdate(value), AbortSignal.any([lifetime.signal, client.signal])) as unknown as JsonValue;
-					if (value.operation !== 'listDocuments' && value.operation !== 'readDocument' && value.operation !== 'readConfiguration') throw new TypeError('Unsupported browser extension client operation');
-					if (value.operation === 'readDocument' && typeof value.uri !== 'string') throw new TypeError('Expected a document URI');
-					if (value.operation === 'readConfiguration' && (typeof value.section !== 'string' || value.resource !== null && typeof value.resource !== 'string')) throw new TypeError('Expected a configuration section and resource');
-					return await clientHandler(value as unknown as ExtensionClientOperation, AbortSignal.any([lifetime.signal, client.signal])) as unknown as JsonValue;
+					// The generated Rust contract validates both Worker and backend client requests.
+					// These fields validate shape only; the window binding supplies the actual fence.
+					const { operation } = decodeAppServerServerRequestParams('extensionClient/request', { extensionId, activationGeneration: 1, incarnation: 1, operation: payload });
+					if (operation.operation === 'readWorkspaceFile') throw new TypeError('Workspace file requests belong to the backend');
+					return await clientHandler(operation as ExtensionClientOperation, AbortSignal.any([lifetime.signal, client.signal])) as unknown as JsonValue;
 				})().then(result => {
 					clients.delete(message.id);
 					if (client.signal.aborted) return;
@@ -298,18 +264,7 @@ class BrowserExtensionWorker extends Disposable {
 				});
 				return;
 			}
-			if (message?.type === 'executeCommand') {
-				const payload = normalizeExtensionHostPayload(message);
-				if (typeof payload !== 'object' || payload === null || Array.isArray(payload) || !Number.isSafeInteger(message.id) || typeof message.command !== 'string' || !Array.isArray(message.args)) {
-					this.fail(new Error(localize('extensionHost.browser.invalidResponse', 'Invalid browser extension Worker response'))); return;
-				}
-				void commandService.executeCommand(message.command, ...message.args).then(result => {
-					if (!this.isDisposed) this.worker.postMessage({ type: 'commandResult', id: message.id, success: true, result: normalizeExtensionHostPayload(result ?? null) } satisfies BrowserExtensionHostRequest);
-				}).catch(error => {
-					if (!this.isDisposed) this.worker.postMessage({ type: 'commandResult', id: message.id, success: false, error: String(error) } satisfies BrowserExtensionHostRequest);
-				});
-				return;
-			}
+
 			if (!message || !Number.isSafeInteger(message.id) || typeof message.success !== 'boolean') { this.fail(new Error(localize('extensionHost.browser.invalidResponse', 'Invalid browser extension Worker response'))); return; }
 			const pending = this.pending.get(message.id);
 			if (!pending) { return; }
@@ -325,7 +280,7 @@ class BrowserExtensionWorker extends Disposable {
 
 	public async close(): Promise<void> {
 		if (this.isDisposed) return;
-		// Refresh allows SDK cleanup; a blocked callback cannot keep the old Worker alive.
+		// Refresh allows extension cleanup; a blocked callback cannot keep the old Worker alive.
 		try { await this.request({ type: 'deactivate' }, Date.now() + 1_000); }
 		catch (error) { console.error('Browser extension cleanup failed', error); }
 		finally { this.dispose(); }
@@ -354,7 +309,7 @@ class BrowserExtensionWorker extends Disposable {
 }
 
 function assertRemoteResolverOwnership(runtime: ExtensionHostRuntime, builtInSsh: boolean): void {
-	// The backend admits this identity only from its compiled product module. Worker packages
+	// The backend admits this identity only from its authorized Rust executable. Worker packages
 	// cannot acquire the reserved prefix, even if their catalog provenance is built-in.
 	if (!builtInSsh && runtime.registrations.some(registration => (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'remoteConnectionResolver') && registration.authorityPrefix === 'ssh')) {
 		throw new TypeError('Remote ssh prefix belongs to the built-in SSH extension');
@@ -409,6 +364,8 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			const result = await handler(request, context.signal, source);
 			// Domain payloads are immutable; the transport owns a separate mutable wire value.
 			switch (result.result) {
+				case 'resourceFile': return { ...result, bytes: [...result.bytes] };
+				case 'resourceDirectory': return { ...result, entries: result.entries.map(([name, type]) => [name, type] as [string, number]) };
 				case 'initialization': return { result: result.result, initialization: { ...result.initialization, workspaceFolders: result.initialization.workspaceFolders.map(folder => ({ ...folder })), configurationValues: protocolJsonValue(normalizeExtensionHostPayload(result.initialization.configurationValues)), configurationData: protocolJsonValue(normalizeExtensionHostPayload(result.initialization.configurationData)) } };
 				case 'debugSessions': return { ...result, sessions: result.sessions.map(protocolJsonValue), breakpoints: result.breakpoints.map(protocolJsonValue) };
 				case 'debugResponse': return { ...result, value: protocolJsonValue(result.value) };

@@ -32,7 +32,7 @@ def create_package_sources(root: Path) -> Path:
     for name in (
         "crates/external-js-ext/src/node.mjs",
         "crates/external-js-ext/src/vscode.js",
-        "sdk/typescript/index.js",
+        "crates/external-js-ext/src/host.mjs",
     ):
         destination = root / name
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -134,6 +134,7 @@ def create_runtime_package(
         )
         if bwrap is not None
         else None,
+        remote_ssh_extension_binary=executable("ash-remote-ssh-extension"),
         github_authentication_binary=executable("ash-github-authentication"),
         windows_sandbox_binary=executable("ash-windows-sandbox")
         if spec.is_windows

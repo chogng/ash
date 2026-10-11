@@ -48,7 +48,7 @@
     "grantLocalExtension": "Grant permissions",
     "localExtensionPermissions": "Requested permissions: {0}",
     "noPermissions": "None",
-    "localExtensionDocumentNotice": "VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Ash SDK extensions retain the confined V8 host. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.",
+    "localExtensionDocumentNotice": "VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.",
     "localExtensionDigest": "Package digest: {0}",
     "yes": "Yes",
     "no": "No",

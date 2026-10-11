@@ -1,6 +1,15 @@
 load("//:defs.bzl", "ash_rust_crate")
 
+exports_files(["src/workspace.rs"], visibility = ["//crates/app-server:__pkg__"])
+
 ash_rust_crate(
     name = "external-ext-sdk",
     crate_name = "external_ext_sdk",
+)
+
+# rules_rs derives workspace dependency labels from the package directory.
+alias(
+    name = "rust",
+    actual = ":external-ext-sdk",
+    visibility = ["//visibility:public"],
 )

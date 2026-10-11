@@ -1,0 +1,16 @@
+load("//:defs.bzl", "ash_rust_binary")
+
+exports_files(["src/main.rs", "package.json"], visibility = ["//crates/app-server:__pkg__"])
+
+filegroup(
+    name = "artifacts",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
+
+ash_rust_binary(
+    name = "ash-remote-ssh-extension",
+    crate_name = "ash_remote_ssh_extension",
+    crate_root = "src/main.rs",
+    deps = [],
+)

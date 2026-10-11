@@ -1,4 +1,4 @@
-import { commands as ashCommands, languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource } from '@ash/extension';
+import { languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource, ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError } from './host.mjs';
 
 // This is the public editor contract inside the confined process. Editor models and UI
 // remain with the initiating client; this module owns only extension callback lifetimes.
@@ -14,6 +14,11 @@ export function createApi(configuration, initialization) {
 	const pending = new Map();
 	let subscriptions;
 	let providerSequence = 0;
+	let activeEditor;
+	const editorContexts = new Map();
+	const workspaceEdits = new WeakMap();
+	const customPanels = new Map();
+	const webviewAssets = new Set();
 	const documents = new Map();
 	// Live documents can change during an await; diagnostic versions belong to the invocation's reads.
 	const observedDocuments = new Map();
@@ -554,6 +559,97 @@ export function createApi(configuration, initialization) {
 		return new StatusBarItem(id, alignment, order);
 	}
 
+	class WorkspaceEdit {
+		constructor() { workspaceEdits.set(this, []); }
+		replace(uri, range, newText) { workspaceEdits.get(this).push({ uri, range, newText }); }
+		insert(uri, position, newText) { this.replace(uri, new Range(position, position), newText); }
+		delete(uri, range) { this.replace(uri, range, ''); }
+		set(uri, edits) { const entries = workspaceEdits.get(this); workspaceEdits.set(this, entries.filter(entry => entry.uri.toString() !== uri.toString())); for (const edit of edits ?? []) this.replace(uri, edit.range, edit.newText); }
+		renameFile(oldUri, newUri, options = {}) { workspaceEdits.get(this).push({ oldUri, newUri, options }); }
+		entries() { const entries = new Map(); for (const entry of workspaceEdits.get(this)) { if (!entry.uri) continue; const key = entry.uri.toString(); if (!entries.has(key)) entries.set(key, [entry.uri, []]); entries.get(key)[1].push(new api.TextEdit(entry.range, entry.newText)); } return [...entries.values()]; }
+	}
+	async function encodeWorkspaceEdit(edit) {
+		if (!(edit instanceof WorkspaceEdit)) throw new TypeError('Provider must return a WorkspaceEdit');
+		const entries = [];
+		for (const value of workspaceEdits.get(edit)) {
+			if (value.oldUri) { entries.push({ kind: 'rename', source: value.oldUri.toString(), target: value.newUri.toString(), existing: value.options.overwrite ? 'overwrite' : value.options.ignoreIfExists ? 'ignore' : 'error' }); continue; }
+			const resource = value.uri.toString();
+			let previous = entries.at(-1);
+			if (previous?.resource !== resource) {
+				const snapshot = documents.get(resource)?.value ?? await api.workspace.openTextDocument(value.uri);
+				previous = { kind: 'textDocument', resource, expectedText: snapshot.getText(), edits: [] };
+				entries.push(previous);
+			}
+			previous.edits.push({ range: value.range, text: value.newText });
+		}
+		return { entries };
+	}
+	function coordinates(value, outbound) {
+		if (value instanceof Uri) return value.toString();
+		if (Array.isArray(value)) return value.map(entry => coordinates(entry, outbound));
+		if (!value || typeof value !== 'object') return value;
+		const names = outbound ? { line: 'lineIndex', character: 'columnIndex', startLine: 'startLineIndex', endLine: 'endLineIndex' } : { lineIndex: 'line', columnIndex: 'character', startLineIndex: 'startLine', endLineIndex: 'endLine' };
+		return Object.fromEntries(Object.entries(value).map(([key, entry]) => [names[key] ?? key, coordinates(entry, outbound)]));
+	}
+	function registerLanguageOperation(selector, operation, provider, method) {
+		ensureDocumentEvents();
+		const entries = (Array.isArray(selector) ? selector : [selector]).map(entry => typeof entry === 'string' ? entry : entry.language);
+		if (entries.some(entry => typeof entry !== 'string') || typeof provider?.[method] !== 'function') throw new TypeError('Invalid language provider');
+		const registration = ashRuntime.registerContribution({ kind: 'languageProvider', registrationId: `vscode.${operation}.${++providerSequence}`, languageIds: entries, operations: [operation] }, operation, (call, payload) => invoke(async () => {
+			const request = coordinates(payload, false);
+			const snapshot = operation === 'workspaceSymbols' ? undefined : document({ uri: payload.resource, ...payload });
+			const point = request.position && new Position(request.position.line, request.position.character);
+			const token = call.cancellationToken;
+			let result;
+			if (operation === 'workspaceSymbols') result = await provider[method](request.query, token);
+			else if (operation === 'rename') result = request.kind === 'prepare' ? await provider.prepareRename?.(snapshot, point, token) : await provider[method](snapshot, point, request.newName, token);
+			else if (operation === 'references') result = await provider[method](snapshot, point, { includeDeclaration: request.includeDeclaration }, token);
+			else if (operation === 'codeAction') result = await provider[method](snapshot, new Range(request.range.start, request.range.end), { diagnostics: [], only: request.only?.[0] ? new api.CodeActionKind(request.only[0]) : undefined, triggerKind: 1 }, token);
+			else if (operation === 'selectionRanges') result = await provider[method](snapshot, request.positions.map(value => new Position(value.line, value.character)), token);
+			else if (operation === 'foldingRanges') result = await provider[method](snapshot, {}, token);
+			else if (operation === 'definition' || operation === 'documentHighlights') result = await provider[method](snapshot, point, token);
+			else result = await provider[method](snapshot, token);
+			if (operation === 'rename' && request.kind !== 'prepare') return coordinates(await encodeWorkspaceEdit(result), true);
+			if (operation === 'definition' || operation === 'references') result = (Array.isArray(result) ? result : result ? [result] : []).map(value => ({ resource: value.uri.toString(), range: value.range }));
+			if (operation === 'workspaceSymbols') result = (result ?? []).map(value => ({ name: value.name, kind: value.kind + 1, resource: value.location.uri.toString(), range: value.location.range }));
+			if (operation === 'documentSymbols') { const encode = values => values.map(value => ({ ...value, kind: value.kind + 1, children: encode(value.children ?? []) })); result = encode(result ?? []); }
+			if (operation === 'selectionRanges') { const flat = []; for (let value of result ?? []) { while (value) { flat.push(value.range); value = value.parent; } } result = flat; }
+			if (operation === 'documentLinks') result = (result ?? []).map(value => ({ range: value.range, target: value.target?.toString() }));
+			if (operation === 'codeAction') result = await Promise.all((result ?? []).map(async value => ({ title: value.title, ...(value.kind ? { kind: value.kind.value } : {}), ...(value.edit ? { edit: await encodeWorkspaceEdit(value.edit) } : {}), ...(value.disabled ? { disabledReason: value.disabled.reason } : {}) })));
+			return coordinates(result ?? (operation === 'rename' ? null : []), true);
+		}));
+		subscriptions.push(registration);
+		return registration;
+	}
+	function registerCustomEditorProvider(viewType, provider) {
+		const contribution = configuration.manifest?.contributes?.customEditors?.find(entry => entry.viewType === viewType);
+		if (!contribution || typeof provider.resolveCustomTextEditor !== 'function') throw new TypeError('Custom editor must be declared in package.json');
+		const registration = ashRuntime.registerContribution({ kind: 'customTextEditor', registrationId: viewType, viewType, displayName: contribution.displayName, selectors: contribution.selector.map(value => value.filenamePattern), priority: contribution.priority ?? 'default' }, 'resolveCustomTextEditor', (call, payload) => invoke(async () => {
+			const value = document(payload.document, true);
+			const listeners = new Set();
+			const disposalListeners = new Set();
+			const resources = {};
+			const assetUris = new Set();
+			const panel = { webview: { html: '', options: {}, asWebviewUri(uri) { return uri; }, onDidReceiveMessage: listener => { listeners.add(listener); return new Disposable(() => listeners.delete(listener)); }, async postMessage(message) { panel.update = message; return true; } }, onDidDispose: listener => { disposalListeners.add(listener); return new Disposable(() => disposalListeners.delete(listener)); }, dispose() { for (const listener of disposalListeners) listener(); disposalListeners.clear(); listeners.clear(); } };
+			// Worker-owned object URLs are immutable package assets; renderer revokes them on retirement.
+			panel.webview.asWebviewUri = uri => { if (uri.scheme === 'blob') { assetUris.add(uri.toString()); if (!webviewAssets.has(uri.toString())) { webviewAssets.add(uri.toString()); globalThis.__ashWebviewResource?.(uri.toString()); } } return uri; };
+			customPanels.get(payload.document.uri)?.dispose();
+			customPanels.set(payload.document.uri, panel);
+			await provider.resolveCustomTextEditor(value, panel, call.cancellationToken);
+			// Asset roles come from HTML, independent of the author's asWebviewUri call order.
+			for (const match of panel.webview.html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi)) {
+				const uri = match[1] ?? match[2];
+				if (!assetUris.has(uri)) continue;
+				const role = match[1] ? 'script' : 'style';
+				if (resources[role] && resources[role] !== uri) return unsupported('multiple custom editor script/style assets');
+				resources[role] = uri;
+			}
+			return { html: Object.keys(resources).length ? panel.webview.html.replace(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>\s*<\/script>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi, (tag, script, style) => script === resources.script || style === resources.style ? '' : tag) : panel.webview.html, ...(Object.keys(resources).length ? { resources } : {}), ...(panel.update ? { update: panel.update } : {}) };
+		}));
+		subscriptions.push(registration, new Disposable(() => { for (const panel of customPanels.values()) panel.dispose(); customPanels.clear(); }));
+		return registration;
+	}
+
 	function unsupported(name) { throw new Error(`Unsupported VS Code API: ${name}`); }
 	let workspaceFolders;
 	const workspaceFolderStates = new WeakMap();
@@ -608,11 +704,13 @@ export function createApi(configuration, initialization) {
 				const after = Object.freeze({ ...before, configurationValues: copyConfig(event.configurationValues), configurationData: copyConfig(event.configurationData) });
 				initialization = after;
 				const keys = [...event.change.keys, ...event.change.overrides.flatMap(entry => entry[1])];
-				content = Object.freeze({ affectsConfiguration(section, scope) {
-					if (typeof section !== 'string') throw new TypeError('Configuration section must be a string');
-					if (!keys.some(key => section === '' || key === section || key.startsWith(section + '.') || section.startsWith(key + '.'))) return false;
-					return scope == null || !equalConfig(getConfiguration(undefined, scope, before).get(section), getConfiguration(undefined, scope, after).get(section));
-				} });
+				content = Object.freeze({
+					affectsConfiguration(section, scope) {
+						if (typeof section !== 'string') throw new TypeError('Configuration section must be a string');
+						if (!keys.some(key => section === '' || key === section || key.startsWith(section + '.') || section.startsWith(key + '.'))) return false;
+						return scope == null || !equalConfig(getConfiguration(undefined, scope, before).get(section), getConfiguration(undefined, scope, after).get(section));
+					}
+				});
 			} else {
 				if (!Array.isArray(event.workspaceFolders) || event.workspaceFolders.length > 256 || event.workspaceFolders.some((folder, index) => typeof folder.uri !== 'string' || typeof folder.name !== 'string' || folder.index !== index)
 					|| event.workspaceName !== null && typeof event.workspaceName !== 'string' || event.workspaceFile !== null && typeof event.workspaceFile !== 'string') throw new TypeError('Invalid workspace snapshot');
@@ -733,7 +831,7 @@ export function createApi(configuration, initialization) {
 			if (result.result !== resultKind) throw new Error(`Invalid result for ${operation.operation}`);
 			return result;
 		})();
-		// The SDK callback retains its IO. Node lifecycle calls survive callback return
+		// The runtime callback retains its IO. Node lifecycle calls survive callback return
 		// and are cancelled by the supervisor when this authorized incarnation retires.
 		const settled = promise.then(() => undefined, () => undefined);
 		owned?.push(settled);
@@ -756,6 +854,7 @@ export function createApi(configuration, initialization) {
 			return result;
 		} finally {
 			pending.delete(id);
+			if (editorContexts.has(id)) editorContexts.delete(id);
 			observedDocuments.delete(id);
 		}
 	}
@@ -846,6 +945,7 @@ export function createApi(configuration, initialization) {
 		}
 		get functionName() { return breakpointStates.get(this).name; }
 	}
+	const uriPaths = new WeakMap();
 	class Uri {
 		constructor(scheme, authority, path, query = '', fragment = '') {
 			Object.assign(this, { scheme, authority, path, query, fragment });
@@ -854,7 +954,9 @@ export function createApi(configuration, initialization) {
 		static parse(value) {
 			const match = /^([a-zA-Z][\w+.-]*):(?:(\/\/)([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?$/.exec(value);
 			if (!match) throw new TypeError('Invalid URI');
-			return new Uri(match[1], decodeURIComponent(match[3] ?? ''), decodeURIComponent(match[4]), match[5] ?? '', match[6] ?? '');
+			const uri = new Uri(match[1], decodeURIComponent(match[3] ?? ''), decodeURIComponent(match[4]), match[5] ?? '', match[6] ?? '');
+			uriPaths.set(uri, match[4]);
+			return uri;
 		}
 		static file(path) {
 			if (typeof path !== 'string') throw new TypeError('File path required');
@@ -880,14 +982,14 @@ export function createApi(configuration, initialization) {
 			return base.with({ path: (path.startsWith('/') ? '/' : '') + parts.join('/') + (path.endsWith('/') && parts.length ? '/' : '') });
 		}
 		static from(components) { return new Uri(components.scheme, components.authority ?? '', components.path ?? '', components.query ?? '', components.fragment ?? ''); }
-		with(change) { return Uri.from({ ...this, ...change }); }
+		with(change) { const next = Uri.from({ ...this, ...change }); if (change.path === undefined && uriPaths.has(this)) uriPaths.set(next, uriPaths.get(this)); return next; }
 		get fsPath() {
 			let path = this.authority ? `//${this.authority}${this.path}` : this.path;
 			if (!this.authority && /^\/[a-zA-Z]:/.test(path)) path = path[1].toLowerCase() + path.slice(2);
 			return configuration.pathSeparator === '\\' ? path.replaceAll('/', '\\') : path;
 		}
 		toString(skipEncoding = false) {
-			const path = skipEncoding ? this.path : this.path.split('/').map(part => encodeURIComponent(part).replace(/%3A/gi, ':')).join('/');
+			const path = skipEncoding ? this.path : uriPaths.get(this) ?? this.path.split('/').map(part => encodeURIComponent(part).replace(/%3A/gi, ':')).join('/');
 			return `${this.scheme}:${this.authority || this.scheme === 'file' ? `//${this.authority}` : ''}${path}${this.query ? `?${this.query}` : ''}${this.fragment ? `#${this.fragment}` : ''}`;
 		}
 		toJSON() { return { scheme: this.scheme, authority: this.authority, path: this.path, query: this.query, fragment: this.fragment }; }
@@ -1290,6 +1392,10 @@ export function createApi(configuration, initialization) {
 		DebugConfigurationProviderTriggerKind: Object.freeze({ Initial: 1, Dynamic: 2 }),
 		ExtensionMode: Object.freeze({ Production: 1, Development: 2, Test: 3 }),
 		ExtensionKind: Object.freeze({ UI: 1, Workspace: 2 }),
+		ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError, WorkspaceEdit,
+		FileType: Object.freeze({ Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 }),
+		SymbolKind: Object.freeze({ File: 0, Module: 1, Namespace: 2, Package: 3, Class: 4, Method: 5, Property: 6, Field: 7, Constructor: 8, Enum: 9, Interface: 10, Function: 11, Variable: 12, Constant: 13, String: 14, Number: 15, Boolean: 16, Array: 17, Object: 18, Key: 19, Null: 20, EnumMember: 21, Struct: 22, Event: 23, Operator: 24, TypeParameter: 25 }),
+		CodeActionKind: class CodeActionKind { constructor(value) { this.value = value; } },
 		Disposable, Position, Range, Location, Breakpoint, SourceBreakpoint, FunctionBreakpoint, DebugThread, DebugStackFrame, Uri, Diagnostic, SnippetString,
 		DiagnosticSeverity: Object.freeze({ Error: 0, Warning: 1, Information: 2, Hint: 3 }),
 		CompletionItemKind: Object.freeze(Object.fromEntries(completionNames.map((name, index) => [name, index]))),
@@ -1306,15 +1412,34 @@ export function createApi(configuration, initialization) {
 		commands: contract('commands', {
 			async executeCommand(command, ...args) {
 				if (typeof command !== 'string' || !command || command.includes('\0')) throw new TypeError('executeCommand requires a command ID');
+				if (command === 'vscode.openWith') {
+					const [resource, viewType, options] = args;
+					const editor = editorContexts.get(globalThis.__ashInvocation(false));
+					command = '_workbench.openWith';
+					args = [resource.toJSON(), viewType, [typeof options === 'number' ? options : options?.viewColumn ?? -1], editor?.groupId];
+				}
+				if (command === 'reopenActiveEditorWith' && args.length === 1) {
+					const editor = editorContexts.get(globalThis.__ashInvocation(false));
+					if (editor) args.push({ groupId: editor.groupId, editorIndex: editor.editorIndex });
+				}
 				const result = await request({ operation: 'executeCommand', command, arguments: args }, 'command');
 				return result.hasValue === false ? undefined : result.value;
 			},
 			registerCommand(command, callback, thisArg) {
 				if (typeof callback !== 'function' || !titles.has(command)) throw new TypeError('Command must be declared in package.json');
-				return ashCommands.registerCommand(command, titles.get(command), (_call, ...args) => invoke(() => callback.apply(thisArg, args)));
+				const contribution = configuration.commands.find(entry => entry.command === command);
+				const menus = Object.entries(configuration.manifest?.contributes?.menus ?? {}).flatMap(([menu, entries]) => entries.filter(entry => entry.command === command).map(({ command: _command, ...entry }) => ({ menu, ...entry })));
+				return ashRuntime.registerContribution({ kind: 'command', registrationId: command, command, title: titles.get(command), ...(contribution.icon ? { icon: contribution.icon.slice(2, -1) } : {}), ...(menus.length ? { menus } : {}) }, 'execute', (_call, payload) => invoke(() => {
+					const editor = payload.activeEditor;
+					editorContexts.set(globalThis.__ashInvocation(false), editor);
+					activeEditor = editor ? { document: { uri: Uri.from(editor.resource) }, viewColumn: undefined } : undefined;
+					return callback.apply(thisArg, payload.arguments);
+				}));
 			},
 		}),
 		window: contract('window', {
+			get activeTextEditor() { return activeEditor; },
+			registerCustomEditorProvider,
 			createStatusBarItem,
 			showInformationMessage: (text, ...items) => message('information', text, ...items),
 			showWarningMessage: (text, ...items) => message('warning', text, ...items),
@@ -1327,6 +1452,18 @@ export function createApi(configuration, initialization) {
 			},
 		}),
 		workspace: contract('workspace', {
+			fs: contract('workspace.fs', {
+				async readFile(uri) { return Uint8Array.from((await request({ operation: 'readResourceFile', uri: uri.toString() }, 'resourceFile')).bytes); },
+				async stat(uri) { const value = await request({ operation: 'statResource', uri: uri.toString() }, 'resourceStat'); return { type: value.fileType, size: value.size, mtime: value.mtime, ctime: 0 }; },
+				async readDirectory(uri) { return (await request({ operation: 'readResourceDirectory', uri: uri.toString() }, 'resourceDirectory')).entries; },
+			}),
+			async applyEdit(edit) {
+				const changes = await encodeWorkspaceEdit(edit);
+				if (changes.entries.some(entry => entry.kind !== 'textDocument')) return unsupported('workspace.applyEdit file operations');
+				const values = changes.entries.map(entry => ({ uri: entry.resource, version: documents.get(entry.resource)?.snapshot.version, edits: entry.edits.map(edit => ({ start: edit.range.start, end: edit.range.end, text: edit.text })) }));
+				return (await request({ operation: 'applyEdit', documents: values }, 'applied')).applied;
+			},
+			registerRemoteAuthorityResolver: (prefix, resolver) => ashWorkspace.registerRemoteAuthorityResolver(prefix, resolver, Uri),
 			onDidChangeConfiguration: (listener, thisArg, disposables) => listenWorkspace('configuration', listener, thisArg, disposables),
 			onDidChangeWorkspaceFolders: (listener, thisArg, disposables) => listenWorkspace('workspace', listener, thisArg, disposables),
 			get workspaceFolders() { return getWorkspaceFolders(); },
@@ -1340,6 +1477,7 @@ export function createApi(configuration, initialization) {
 			onDidChangeTextDocument: (listener, thisArg, disposables) => listenDocument('change', listener, thisArg, disposables),
 			onDidCloseTextDocument: (listener, thisArg, disposables) => listenDocument('close', listener, thisArg, disposables),
 			async openTextDocument(uri) {
+				if (typeof uri === 'string') uri = Uri.file(uri);
 				if (!(uri instanceof Uri)) return unsupported('workspace.openTextDocument overload');
 				const result = await request({ operation: 'readDocument', uri: uri.toString() }, 'document');
 				return document(result.document, true);
@@ -1347,6 +1485,16 @@ export function createApi(configuration, initialization) {
 		}),
 		languages: contract('languages', {
 			createDiagnosticCollection: diagnosticCollection,
+			registerDefinitionProvider: (selector, provider) => registerLanguageOperation(selector, 'definition', provider, 'provideDefinition'),
+			registerReferenceProvider: (selector, provider) => registerLanguageOperation(selector, 'references', provider, 'provideReferences'),
+			registerRenameProvider: (selector, provider) => registerLanguageOperation(selector, 'rename', provider, 'provideRenameEdits'),
+			registerDocumentSymbolProvider: (selector, provider) => registerLanguageOperation(selector, 'documentSymbols', provider, 'provideDocumentSymbols'),
+			registerFoldingRangeProvider: (selector, provider) => registerLanguageOperation(selector, 'foldingRanges', provider, 'provideFoldingRanges'),
+			registerDocumentLinkProvider: (selector, provider) => registerLanguageOperation(selector, 'documentLinks', provider, 'provideDocumentLinks'),
+			registerCodeActionsProvider: (selector, provider) => registerLanguageOperation(selector, 'codeAction', provider, 'provideCodeActions'),
+			registerSelectionRangeProvider: (selector, provider) => registerLanguageOperation(selector, 'selectionRanges', provider, 'provideSelectionRanges'),
+			registerWorkspaceSymbolProvider: provider => registerLanguageOperation(['*'], 'workspaceSymbols', provider, 'provideWorkspaceSymbols'),
+			registerDocumentHighlightProvider: (selector, provider) => registerLanguageOperation(selector, 'documentHighlights', provider, 'provideDocumentHighlights'),
 			registerCompletionItemProvider(selector, provider, ...triggerCharacters) {
 				ensureDocumentEvents();
 				const entries = Array.isArray(selector) ? selector : [selector];
@@ -1406,7 +1554,7 @@ export function createApi(configuration, initialization) {
 				debugBreakpoints.clear();
 				activeDebugSession = undefined;
 			}));
-			// Keep the SDK subscription array: host retirement disposes this exact owner.
+			// Keep the runtime subscription array: host retirement disposes this exact owner.
 			const publicContext = Object.freeze({
 				subscriptions,
 				extensionUri,

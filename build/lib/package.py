@@ -79,7 +79,12 @@ def build_package_directory(
     remote_runtime_release: Optional[Dict[str, str]] = None,
     symbols_dir: Optional[Path] = None,
     github_authentication_binary: Optional[Path] = None,
+    remote_ssh_extension_binary: Optional[Path] = None,
 ) -> None:
+    if remote_ssh_extension_binary is None:
+        raise RuntimeError(
+            "Remote SSH extension executable is required in product packages"
+        )
     if github_authentication_binary is None:
         raise RuntimeError(
             "GitHub authentication extension executable is required in product packages"
@@ -125,6 +130,7 @@ def build_package_directory(
             "codeModeHost": str(code_mode_host_binary),
             "jsExtensionHost": str(js_extension_host_binary),
             "githubAuthentication": str(github_authentication_binary),
+            "remoteSshExtension": str(remote_ssh_extension_binary),
             "voiceHost": str(voice_host_binary),
             "collaborationServer": str(collaboration_server_binary),
             "livekit": livekit["executable"],
@@ -362,7 +368,7 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     for source, destination in (
         ("crates/external-js-ext/src/node.mjs", "node.mjs"),
         ("crates/external-js-ext/src/vscode.js", "vscode.mjs"),
-        ("sdk/typescript/index.js", "sdk.mjs"),
+        ("crates/external-js-ext/src/host.mjs", "host.mjs"),
     ):
         source_path = source_root / source
         if source_path.is_symlink() or not source_path.is_file():
@@ -617,7 +623,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         raise RuntimeError(
             "Package build identity does not match its complete file manifest"
         )
-    for name in ("node.mjs", "vscode.mjs", "sdk.mjs"):
+    for name in ("node.mjs", "vscode.mjs", "host.mjs"):
         script = package / "ash-resources/extension-host" / name
         if script.is_symlink() or not script.is_file():
             raise RuntimeError(f"Missing product extension host resource: {script}")
@@ -720,6 +726,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "githubAuthentication": package
         / "bin"
         / ("ash-github-authentication" + spec.executable_suffix),
+        "remoteSshExtension": package
+        / "bin"
+        / ("ash-remote-ssh-extension" + spec.executable_suffix),
         "voiceHost": package / "bin" / ("ash-voice-host" + spec.executable_suffix),
         "collaborationServer": package
         / "bin"
@@ -790,6 +799,7 @@ def record_system_signing(
             "codeModeHost",
             "jsExtensionHost",
             "githubAuthentication",
+            "remoteSshExtension",
             "voiceHost",
             "collaborationServer",
             "livekit",

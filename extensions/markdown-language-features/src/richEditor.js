@@ -17,7 +17,7 @@ import '../media/richEditor.css';
 class MarkdownEditor extends Disposable {
 	constructor(initial) {
 		super();
-		this.api = acquireAshWebviewApi();
+		this.api = acquireVsCodeApi();
 		this.messages = initial.messages;
 		this.version = initial.version;
 		this.confirmed = initial.text;

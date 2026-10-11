@@ -1,0 +1,1 @@
+exports_files([".ash-plugin/plugin.json", "package.json"], visibility = ["//visibility:public"])

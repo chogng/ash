@@ -19,7 +19,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	for (const [from, to] of [['node.mjs', 'node.mjs'], ['vscode.js', 'vscode.mjs']]) {
 		await copyFile(new URL(from, import.meta.url), join(resources, to));
 	}
-	await copyFile(new URL('../../../sdk/typescript/index.js', import.meta.url), join(resources, 'sdk.mjs'));
+	await copyFile(new URL('host.mjs', import.meta.url), join(resources, 'host.mjs'));
 	await writeFile(join(extension, 'package.json'), JSON.stringify({ publisher: 'test', name: 'node', contributes: { debuggers: [{ type: 'test', label: 'Test' }], commands: [{ command: 'test.node', title: 'Node' }, { command: 'test.second', title: 'Second' }] }, ...fixture.manifest }));
 	for (const [name, contents] of Object.entries(fixture.files ?? {})) {
 		const path = join(extension, name);
@@ -91,6 +91,25 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 		invoke(registrationId, arguments_) { return request('invoke', { extensionId: 'test.node', registrationId, operation: 'execute', payload: { arguments: arguments_ }, deadlineUnixMillis: Date.now() + 30000 }); }
 	};
 }
+
+test('custom text editor asset roles follow HTML instead of URI conversion order', { timeout: 10000 }, async t => {
+	const h = await host(t, `const v = require('vscode');
+exports.activate = context => context.subscriptions.push(v.window.registerCustomEditorProvider('test.editor', {
+ resolveCustomTextEditor(document, panel) {
+  const style = panel.webview.asWebviewUri(v.Uri.parse('blob:style')).toString();
+  const script = panel.webview.asWebviewUri(v.Uri.parse('blob:script')).toString();
+  panel.webview.html = '<link rel="stylesheet" href="' + style + '"><p>editor</p><script src="' + script + '"></script>';
+ }
+}));`, 'extension.cjs', ['customTextEditor'], undefined, {
+		manifest: { contributes: { customEditors: [{ viewType: 'test.editor', displayName: 'Editor', selector: [{ filenamePattern: '*.md' }] }] } },
+	});
+	const result = await h.request('invoke', {
+		extensionId: 'test.node', registrationId: 'test.editor', operation: 'resolveCustomTextEditor',
+		payload: { document: { uri: 'untitled:/test.md', text: '# Test', languageId: 'markdown', version: 1 } }, deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.equal(result.status, 'success');
+	assert.deepEqual(result.body.body.payload, { html: '<p>editor</p>', resources: { style: 'blob:style', script: 'blob:script' } });
+});
 
 test('window environment is applied before module evaluation and inherited by Debug children', { timeout: 15000 }, async t => {
 	const source = `const v = require('vscode'); const cp = require('node:child_process');
@@ -200,9 +219,11 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
     comment: v.l10n.t({ message: 'Paused {0}', args: [false], comment: ['debug', ' state'] }),
     fallback: v.l10n.t('Missing {0} {1}', 'first'), inherited: v.l10n.t('toString'),
 })));`, 'extension.cjs', ['command'], undefined, {
-		language: 'zh-cn', manifest: { l10n: './l10n' }, files: { 'l10n/bundle.l10n.zh-cn.json': JSON.stringify({
-			'Target {0}': '目标 {0}', 'Ready {name}: {count}': '就绪 {name}：{count}', 'Paused {0}/debug state': '已暂停 {0}',
-		}) },
+		language: 'zh-cn', manifest: { l10n: './l10n' }, files: {
+			'l10n/bundle.l10n.zh-cn.json': JSON.stringify({
+				'Target {0}': '目标 {0}', 'Ready {name}: {count}': '就绪 {name}：{count}', 'Paused {0}/debug state': '已暂停 {0}',
+			})
+		},
 	});
 	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
 		language: 'zh-cn', evaluation: '目标 worker', uri: true, contents: '目标 {0}', named: '就绪 worker：0', comment: '已暂停 false', fallback: 'Missing first {1}', inherited: 'toString',
@@ -261,7 +282,8 @@ context.subscriptions.push(v.commands.registerCommand('test.second', () => 'othe
 	const registrationId = h.registrations.find(registration => registration.kind === 'debugConfigurationProvider').registrationId;
 	const pending = h.request('invoke', { extensionId: 'test.node', registrationId, operation: 'resolveDebugConfiguration', payload: { configuration: { type: 'test', request: 'launch' } }, deadlineUnixMillis: Date.now() + 30000 });
 	while (true) { if (t.signal.aborted) throw new Error('Test aborted'); try { await readFile(join(h.extension, 'waiting.txt')); break; } catch (error) { if (error.code !== 'ENOENT') throw error; await new Promise(resolve => setTimeout(resolve, 2)); } }
-	assert.equal((await h.request('cancel', { requestId: pending.requestId }).result).body.result, 'cancelled');
+	assert.equal((await h.request('cancel', { requestId: pending.requestId, reason: 'caller' }).result).status, 'failure');
+	assert.equal((await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result).body.result, 'cancelled');
 	assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'other');
 	assert.deepEqual((await pending.result).body.body.payload, { cancelled: true });
 });
@@ -275,7 +297,7 @@ context.subscriptions.push(v.commands.registerCommand('test.second', () => 'othe
 	const pending = h.invoke('test.node', []);
 	while (h.clientCalls.length < 1) { if (t.signal.aborted) throw new Error('Test aborted'); await new Promise(resolve => setTimeout(resolve, 2)); }
 	const call = h.clientCalls[0];
-	await h.request('cancel', { requestId: pending.requestId }).result;
+	await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
 	assert.equal((await pending.result).body.body.payload, 'cancelled');
 	h.send({ context: call.context, callId: call.callId, outcome: { Ok: { result: 'command', value: 'late', hasValue: true } } });
 	assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'other');

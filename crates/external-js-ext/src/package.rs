@@ -1,5 +1,3 @@
-use sha2::Digest;
-use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
@@ -9,64 +7,20 @@ const MAX_MODULES: usize = 256;
 const MAX_SOURCE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_MODULE_BYTES: usize = 4 * 1024 * 1024;
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(crate) enum ApiContract {
-    Ash,
-    Vscode,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(crate) enum PackageOrigin {
-    Installed,
-    Product,
-}
-
 /// Immutable package bytes captured before extension code runs. Resolution never reads host files.
 pub(crate) struct Package {
-    pub(crate) origin: PackageOrigin,
-    pub(crate) binding: Option<external_ext_protocol::PackageBinding>,
-    pub(crate) api: ApiContract,
     pub(crate) extension_id: String,
     pub(crate) entry: String,
     pub(crate) sources: BTreeMap<String, String>,
 }
 
 impl Package {
-    pub(crate) fn product(name: &str) -> Result<Self, String> {
-        if name != "remote-ssh" {
-            return Err("unknown product extension".into());
-        }
-        let manifest = include_str!("../../../extensions/remote-ssh/package.json");
-        let source = include_str!("../../../extensions/remote-ssh/src/extension.js");
-        let sdk = include_str!("../../../sdk/typescript/index.js");
-        let digest = format!(
-            "sha256:{:x}",
-            Sha256::digest(format!("{manifest}\0{source}\0{sdk}"))
-        );
-        Ok(Self {
-            origin: PackageOrigin::Product,
-            binding: Some(external_ext_protocol::PackageBinding {
-                package_id: "ash.remote-ssh@1.0.0".into(),
-                package_digest: digest,
-                entrypoint: "src/extension.js".into(),
-            }),
-            api: ApiContract::Ash,
-            extension_id: "ash.remote-ssh".into(),
-            entry: "src/extension.js".into(),
-            sources: BTreeMap::from([
-                ("src/extension.js".into(), source.into()),
-                ("@ash/extension".into(), sdk.into()),
-            ]),
-        })
-    }
-
     pub(crate) fn read_vscode(
         extension_id: String,
         root: PathBuf,
         entry: String,
     ) -> Result<Self, String> {
-        let mut package =
-            Self::read_package(extension_id, &root, entry.clone(), ApiContract::Vscode)?;
+        let mut package = Self::read_package(extension_id, &root, entry.clone())?;
         let manifest = package
             .sources
             .get("package.json")
@@ -99,7 +53,7 @@ impl Package {
         .map_err(|error| error.to_string())?;
         // Package files are function bodies/data, not ESM imports. The loader reads only
         // this captured map after confinement and shares one cache throughout the incarnation.
-        // Defer package evaluation until its window facts are bound and SDK activation has begun.
+        // Defer package evaluation until its window facts are bound and host activation has begun.
         let sources = serde_json::to_string(
             &serde_json::to_string(&package.sources).map_err(|error| error.to_string())?,
         )
@@ -110,14 +64,13 @@ impl Package {
         let separator = serde_json::to_string(&std::path::MAIN_SEPARATOR.to_string())
             .map_err(|error| error.to_string())?;
         let wrapper = format!(
-            "import {{ createApi }} from '@ash/vscode';\nimport {{ loadCommonJS }} from '@ash/commonjs';\nlet bridge, module;\nexport function activate(context, capabilities, initialization) {{ bridge = createApi({configuration}, JSON.parse(initialization)); module = loadCommonJS(JSON.parse({sources}), {root}, {separator}, {entry_name}, bridge.api); return bridge.activate(context, module.exports.activate, module.exports, JSON.parse(capabilities)); }}\nexport function deactivate() {{ bridge?.deactivate(); return module?.exports.deactivate?.(); }}\n"
+            "import {{ createApi }} from '@ash/vscode';\nimport {{ loadCommonJS }} from '@ash/commonjs';\nlet bridge, module;\nexport async function activate(context, capabilities, initialization) {{ bridge = createApi({configuration}, JSON.parse(initialization)); module = loadCommonJS(JSON.parse({sources}), {root}, {separator}, {entry_name}, bridge.api); return bridge.activate(context, module.exports.activate, module.exports, JSON.parse(capabilities)); }}\nexport function deactivate() {{ bridge?.deactivate(); return module?.exports.deactivate?.(); }}\n"
         );
         package.sources.clear();
         package.sources.insert(entry, wrapper);
-        package.sources.insert(
-            "@ash/extension".into(),
-            include_str!("../../../sdk/typescript/index.js").into(),
-        );
+        package
+            .sources
+            .insert("@ash/host".into(), include_str!("host.mjs").into());
         package
             .sources
             .insert("@ash/vscode".into(), include_str!("vscode.js").into());
@@ -128,41 +81,26 @@ impl Package {
     }
 
     pub(crate) fn read(extension_id: String, root: PathBuf, entry: String) -> Result<Self, String> {
-        Self::read_package(extension_id, &root, entry, ApiContract::Ash)
+        Self::read_vscode(extension_id, root, entry)
     }
 
-    fn read_package(
-        extension_id: String,
-        root: &Path,
-        entry: String,
-        api: ApiContract,
-    ) -> Result<Self, String> {
+    fn read_package(extension_id: String, root: &Path, entry: String) -> Result<Self, String> {
         if !root.is_absolute() || !valid_path(&entry) || extension_id.is_empty() {
             return Err("invalid extension package binding".into());
         }
         let mut sources = BTreeMap::new();
         let mut bytes = 0;
         let mut entries = 0;
-        collect(root, root, api, &mut sources, &mut bytes, &mut entries, 0)?;
+        collect(root, root, &mut sources, &mut bytes, &mut entries, 0)?;
         let extension = Path::new(&entry)
             .extension()
             .and_then(|value| value.to_str());
         if !sources.contains_key(&entry)
-            || !(matches!(extension, Some("js" | "mjs"))
-                || api == ApiContract::Vscode && extension == Some("cjs"))
+            || !(matches!(extension, Some("js" | "mjs")) || extension == Some("cjs"))
         {
             return Err("extension entry must be an existing JavaScript module".into());
         }
-        if api == ApiContract::Ash {
-            sources.insert(
-                "@ash/extension".into(),
-                include_str!("../../../sdk/typescript/index.js").into(),
-            );
-        }
         Ok(Self {
-            origin: PackageOrigin::Installed,
-            binding: None,
-            api,
             extension_id,
             entry,
             sources,
@@ -173,7 +111,6 @@ impl Package {
 fn collect(
     root: &Path,
     directory: &Path,
-    api: ApiContract,
     sources: &mut BTreeMap<String, String>,
     bytes: &mut usize,
     entries: &mut usize,
@@ -193,16 +130,15 @@ fn collect(
             return Err("extension module snapshot cannot contain symbolic links".into());
         }
         if kind.is_dir() {
-            collect(root, &entry.path(), api, sources, bytes, entries, depth + 1)?;
+            collect(root, &entry.path(), sources, bytes, entries, depth + 1)?;
         } else if kind.is_file()
             && (matches!(
                 entry.path().extension().and_then(|value| value.to_str()),
                 Some("js" | "mjs")
-            ) || api == ApiContract::Vscode
-                && matches!(
-                    entry.path().extension().and_then(|value| value.to_str()),
-                    Some("cjs" | "json")
-                ))
+            ) || matches!(
+                entry.path().extension().and_then(|value| value.to_str()),
+                Some("cjs" | "json")
+            ))
         {
             let metadata = entry.metadata().map_err(|error| error.to_string())?;
             if metadata.len() > MAX_MODULE_BYTES as u64 || sources.len() >= MAX_MODULES {
@@ -227,10 +163,10 @@ fn collect(
 }
 
 pub(crate) fn resolve(referrer: &str, specifier: &str) -> Result<String, String> {
-    if matches!(
-        specifier,
-        "@ash/extension" | "@ash/vscode" | "@ash/commonjs"
-    ) {
+    if referrer == "@ash/vscode" && specifier == "./host.mjs" {
+        return Ok("@ash/host".into());
+    }
+    if matches!(specifier, "@ash/vscode" | "@ash/commonjs") {
         return Ok(specifier.into());
     }
     if !specifier.starts_with("./") && !specifier.starts_with("../") {

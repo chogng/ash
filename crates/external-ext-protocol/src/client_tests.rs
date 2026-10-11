@@ -8,6 +8,39 @@ use serde_json::Value;
 use serde_json::json;
 
 #[test]
+fn resource_operations_round_trip_and_reject_invalid_uris_and_forged_owners() {
+    for operation in ["readResourceFile", "statResource", "readResourceDirectory"] {
+        let wire = json!({"operation": operation, "uri": "vfs://workspace/folder/file.md"});
+        let decoded: ExtensionClientOperation = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&decoded).unwrap(), wire);
+        ExtensionClientRequest {
+            context: RequestContext::new(1, 2, 3),
+            call_id: 1,
+            operation: decoded,
+        }
+        .validate(&ProtocolLimits::default())
+        .unwrap();
+        let mut forged = wire;
+        forged["extensionId"] = json!("another-owner");
+        assert!(serde_json::from_value::<ExtensionClientOperation>(forged).is_err());
+        for uri in [
+            String::new(),
+            "relative/file.md".into(),
+            "file:/bad\0path".into(),
+            format!("file:/{}", "a".repeat(8192)),
+        ] {
+            let request = ExtensionClientRequest {
+                context: RequestContext::new(1, 2, 3),
+                call_id: 1,
+                operation: serde_json::from_value(json!({"operation":operation,"uri":uri}))
+                    .unwrap(),
+            };
+            assert!(request.validate(&ProtocolLimits::default()).is_err());
+        }
+    }
+}
+
+#[test]
 fn command_results_distinguish_void_from_explicit_json_values_and_accept_older_clients() {
     for (value, has_value) in [
         (Value::Null, false),

@@ -6,6 +6,5 @@
   "description": "%description%",
   "engines": {
     "vscode": "*"
-  },
-  "main": "./src/extension.js"
+  }
 }

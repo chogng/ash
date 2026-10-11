@@ -339,12 +339,12 @@ function createWebviewDocument(channel: string, html: string, forwardKeyboardEve
       notify('ready');
       if (document.hasFocus()) notify('focus');
     }, { once: true });
-    Object.defineProperty(globalThis, "acquireAshWebviewApi", {
+    const acquireApi = {
       configurable: false,
       enumerable: false,
       value: () => {
         if (acquired) {
-          throw new Error("acquireAshWebviewApi may only be called once");
+          throw new Error("The webview API may only be acquired once");
         }
         acquired = true;
         return Object.freeze({
@@ -352,7 +352,9 @@ function createWebviewDocument(channel: string, html: string, forwardKeyboardEve
             globalThis.parent.postMessage({ channel, message }, "*")
         });
       }
-    });
+    };
+    Object.defineProperty(globalThis, "acquireVsCodeApi", acquireApi);
+    Object.defineProperty(globalThis, "acquireAshWebviewApi", acquireApi);
     ${forwardKeyboardEvents ? `for (const type of ['keydown', 'keyup']) {
       document.addEventListener(type, event => {
         if (event.isComposing) return;

@@ -24,7 +24,6 @@ use external_ext_protocol::ProtocolLimits;
 use external_ext_protocol::RequestContext;
 use serde_json::Value;
 
-use crate::package::ApiContract;
 use crate::package::Package;
 
 pub(crate) struct MemoryLimits {
@@ -44,7 +43,6 @@ struct ClientCall {
 }
 
 struct Bridge {
-    api: crate::package::ApiContract,
     writer: Writer,
     contexts: BTreeMap<u64, RequestContext>,
     active: ActiveRequests,
@@ -153,12 +151,8 @@ pub(crate) fn run(package: Package, confinement: Option<MemoryLimits>) -> Result
             .array_buffer_allocator(v8_runtime::bounded_array_buffer_allocator(memory.1))
             .heap_limits(0, memory.0),
     );
-    // Portable product modules are compiled into this executable and cannot load package files.
-    // Installed code always requires OS confinement; supported platforms confine product code too.
-    if confinement.is_some()
-        && (package.origin == crate::package::PackageOrigin::Installed
-            || cfg!(any(target_os = "macos", windows)))
-    {
+    // Installed package code executes only after the launcher establishes confinement.
+    if confinement.is_some() {
         crate::isolation::restrict_javascript_process()?;
     }
     let handle = isolate.thread_safe_handle();
@@ -219,7 +213,6 @@ pub(crate) fn run(package: Package, confinement: Option<MemoryLimits>) -> Result
         let scope = &mut v8::ContextScope::new(scope, context);
         fixed_buffer_context(scope)?;
         scope.set_slot(Bridge {
-            api: package.api,
             writer: writer.clone(),
             contexts: BTreeMap::new(),
             active,
@@ -265,8 +258,8 @@ fn run_engine(
     watchdog: &Watchdog,
 ) -> Result<(), String> {
     let global = scope.get_current_context().global(scope);
-    let key = v8::String::new(scope, "__ashRequest").ok_or("cannot allocate SDK bridge name")?;
-    let callback = v8::Function::new(scope, client_request).ok_or("cannot create SDK bridge")?;
+    let key = v8::String::new(scope, "__ashRequest").ok_or("cannot allocate host adapter name")?;
+    let callback = v8::Function::new(scope, client_request).ok_or("cannot create host adapter")?;
     global
         .define_own_property(
             scope,
@@ -274,7 +267,7 @@ fn run_engine(
             callback.into(),
             v8::PropertyAttribute::READ_ONLY | v8::PropertyAttribute::DONT_DELETE,
         )
-        .ok_or("cannot install SDK bridge")?;
+        .ok_or("cannot install host adapter")?;
     let key =
         v8::String::new(scope, "__ashInvocation").ok_or("cannot allocate invocation bridge")?;
     let callback =
@@ -325,7 +318,7 @@ fn run_engine(
         bridge.modules.insert(name.clone(), module);
     }
     let entry = local_module(scope, &package.entry).ok_or("missing entry module")?;
-    let sdk = local_module(scope, "@ash/extension").ok_or("missing SDK module")?;
+    let adapter = local_module(scope, "@ash/host").ok_or("missing host adapter module")?;
     let mut phase = Phase::New;
     let mut fence = None;
     let mut jobs: BTreeMap<u64, Job> = BTreeMap::new();
@@ -360,7 +353,7 @@ fn run_engine(
                 .values()
                 .any(|call| call.context.request_id == id && call.resolver.is_some())
             {
-                return Err("callback returned with unfinished SDK requests".into());
+                return Err("callback returned with unfinished client requests".into());
             }
             let promise = v8::Local::new(scope, &job.promise);
             let value = promise.result(scope);
@@ -430,19 +423,19 @@ fn run_engine(
             return Ok(());
         };
         match message {
-            // This SDK runtime issues invocation-scoped calls only; background
+            // This adapter runtime issues invocation-scoped calls only; background
             // replies have no pending authority and must fail closed.
             ExtensionHostStdinFrame::BackgroundClientResponse(_) => {
-                return Err("unexpected background SDK response".into());
+                return Err("unexpected background adapter response".into());
             }
             ExtensionHostStdinFrame::ClientResponse(response) => {
                 let bridge = scope.get_slot_mut::<Bridge>().expect("bridge exists");
                 let pending = bridge
                     .calls
                     .remove(&response.call_id)
-                    .ok_or("unknown or duplicate SDK response")?;
+                    .ok_or("unknown or duplicate adapter response")?;
                 if pending.context != response.context {
-                    return Err("SDK response belongs to a retired invocation".into());
+                    return Err("adapter response belongs to a retired invocation".into());
                 }
                 // Cancellation already rejected this promise. Retain only the authenticated call
                 // identity until its in-flight response arrives, so it cannot affect another job.
@@ -450,7 +443,7 @@ fn run_engine(
                     continue;
                 };
                 if !bridge.contexts.contains_key(&pending.context.request_id) {
-                    return Err("SDK response belongs to a retired invocation".into());
+                    return Err("adapter response belongs to a retired invocation".into());
                 }
                 let resolver = v8::Local::new(scope, resolver);
                 match response.outcome {
@@ -458,33 +451,35 @@ fn run_engine(
                         let text =
                             serde_json::to_string(&value).map_err(|error| error.to_string())?;
                         if text.len() > ProtocolLimits::default().maximum_payload_bytes {
-                            return Err("SDK response quota exceeded".into());
+                            return Err("adapter response quota exceeded".into());
                         }
-                        let value =
-                            v8::String::new(scope, &text).ok_or("cannot allocate SDK result")?;
+                        let value = v8::String::new(scope, &text)
+                            .ok_or("cannot allocate adapter result")?;
                         resolver
                             .resolve(scope, value.into())
-                            .ok_or("cannot resolve SDK result")?;
+                            .ok_or("cannot resolve adapter result")?;
                     }
                     Err(error) => {
                         let message = v8::String::new(scope, &error.message)
-                            .ok_or("cannot allocate SDK error")?;
+                            .ok_or("cannot allocate adapter error")?;
                         let exception = v8::Exception::error(scope, message);
                         let object = v8::Local::<v8::Object>::try_from(exception)
-                            .map_err(|_| "invalid SDK error object")?;
+                            .map_err(|_| "invalid adapter error object")?;
                         let key = v8::String::new(scope, "code")
-                            .ok_or("cannot allocate SDK error code")?;
+                            .ok_or("cannot allocate adapter error code")?;
                         let code =
                             serde_json::to_value(error.code).map_err(|error| error.to_string())?;
-                        let code =
-                            v8::String::new(scope, code.as_str().ok_or("invalid SDK error code")?)
-                                .ok_or("cannot allocate SDK error code")?;
+                        let code = v8::String::new(
+                            scope,
+                            code.as_str().ok_or("invalid adapter error code")?,
+                        )
+                        .ok_or("cannot allocate adapter error code")?;
                         object
                             .set(scope, key.into(), code.into())
-                            .ok_or("cannot set SDK error code")?;
+                            .ok_or("cannot set adapter error code")?;
                         resolver
                             .reject(scope, exception)
-                            .ok_or("cannot reject SDK request")?;
+                            .ok_or("cannot reject client request")?;
                     }
                 }
             }
@@ -542,28 +537,28 @@ fn run_engine(
                             || runtime.is_some()
                             || params.extension_id != package.extension_id
                             || params.package.entrypoint != package.entry
-                            || package.binding.as_ref().is_some_and(|binding| binding != &params.package)
                             || params.capabilities.contains(&external_ext_protocol::ExtensionCapability::ProductRemoteAuthorityResolver)
-                                != (package.origin == crate::package::PackageOrigin::Product)
                         {
                             return Err("invalid JavaScript package activation".into());
                         }
                         let deadline = now() + CONTROL_MILLIS;
                         watchdog.set(Some(deadline))?;
-                        sdk.instantiate_module(scope, resolve_module)
-                            .ok_or("SDK instantiation failed")?;
-                        evaluate_module(scope, sdk)?;
+                        adapter
+                            .instantiate_module(scope, resolve_module)
+                            .ok_or("adapter instantiation failed")?;
+                        evaluate_module(scope, adapter)?;
                         entry
                             .instantiate_module(scope, resolve_module)
                             .ok_or("extension imports are unsupported or leave their package")?;
                         evaluate_module(scope, entry)?;
                         scope.perform_microtask_checkpoint();
-                        let sdk_namespace = sdk.get_module_namespace();
-                        let sdk_namespace = v8::Local::<v8::Object>::try_from(sdk_namespace)
-                            .map_err(|_| "invalid SDK namespace")?;
-                        let runtime_object = property(scope, sdk_namespace, "__runtime")?;
+                        let adapter_namespace = adapter.get_module_namespace();
+                        let adapter_namespace =
+                            v8::Local::<v8::Object>::try_from(adapter_namespace)
+                                .map_err(|_| "invalid adapter namespace")?;
+                        let runtime_object = property(scope, adapter_namespace, "__runtime")?;
                         let runtime_object = v8::Local::<v8::Object>::try_from(runtime_object)
-                            .map_err(|_| "invalid SDK runtime")?;
+                            .map_err(|_| "invalid adapter runtime")?;
                         let id = v8::String::new(scope, &package.extension_id)
                             .ok_or("cannot allocate extension identity")?;
                         let context = call(scope, runtime_object, "beginActivation", &[id.into()])?;
@@ -571,25 +566,20 @@ fn run_engine(
                         let namespace =
                             v8::Local::<v8::Object>::try_from(entry.get_module_namespace())
                                 .map_err(|_| "invalid extension namespace")?;
-                        let result = match package.api {
-                            ApiContract::Ash => call(scope, namespace, "activate", &[context])?,
-                            ApiContract::Vscode => {
-                                let initialization = serde_json::to_string(&params.initialization)
-                                    .map_err(|error| error.to_string())?;
-                                let initialization = v8::String::new(scope, &initialization)
-                                    .ok_or("cannot allocate activation initialization")?;
-                                let capabilities = serde_json::to_string(&params.capabilities)
-                                    .map_err(|error| error.to_string())?;
-                                let capabilities = v8::String::new(scope, &capabilities)
-                                    .ok_or("cannot allocate activation capabilities")?;
-                                call(
-                                    scope,
-                                    namespace,
-                                    "activate",
-                                    &[context, capabilities.into(), initialization.into()],
-                                )?
-                            }
-                        };
+                        let initialization = serde_json::to_string(&params.initialization)
+                            .map_err(|error| error.to_string())?;
+                        let initialization = v8::String::new(scope, &initialization)
+                            .ok_or("cannot allocate activation initialization")?;
+                        let capabilities = serde_json::to_string(&params.capabilities)
+                            .map_err(|error| error.to_string())?;
+                        let capabilities = v8::String::new(scope, &capabilities)
+                            .ok_or("cannot allocate activation capabilities")?;
+                        let result = call(
+                            scope,
+                            namespace,
+                            "activate",
+                            &[context, capabilities.into(), initialization.into()],
+                        )?;
                         let promise = as_promise(scope, result)?;
                         jobs.insert(
                             request.context.request_id,
@@ -610,6 +600,18 @@ fn run_engine(
                                 "execute"
                                     | "hover"
                                     | "completion"
+                                    | "definition"
+                                    | "references"
+                                    | "rename"
+                                    | "documentSymbols"
+                                    | "foldingRanges"
+                                    | "documentLinks"
+                                    | "codeAction"
+                                    | "selectionRanges"
+                                    | "workspaceSymbols"
+                                    | "documentHighlights"
+                                    | "resolveCustomTextEditor"
+                                    | "workspaceEvent"
                                     | "documentEvent"
                                     | "taskEvent"
                                     | "debugEvent"
@@ -645,7 +647,7 @@ fn run_engine(
                             || jobs.contains_key(&request.context.request_id)
                             || request.context.request_id > 9_007_199_254_740_991
                         {
-                            return Err("invalid SDK invocation".into());
+                            return Err("invalid host invocation".into());
                         }
                         let context = request.context;
                         let bridge = scope.get_slot_mut::<Bridge>().expect("bridge exists");
@@ -725,7 +727,7 @@ fn run_engine(
                                 let error = v8::Exception::error(scope, message);
                                 resolver
                                     .reject(scope, error)
-                                    .ok_or("cannot reject cancelled SDK request")?;
+                                    .ok_or("cannot reject cancelled client request")?;
                             }
                             let runtime =
                                 v8::Local::new(scope, runtime.as_ref().ok_or("runtime missing")?);
@@ -747,7 +749,7 @@ fn run_engine(
                             let deactivate = property(scope, namespace, "deactivate")?;
                             let runtime =
                                 v8::Local::new(scope, runtime.as_ref().ok_or("runtime missing")?);
-                            // The SDK finally block disposes subscriptions even if deactivate rejects.
+                            // The adapter finally block disposes subscriptions even if deactivate rejects.
                             let result = call(scope, runtime, "deactivate", &[deactivate])?;
                             let promise = as_promise(scope, result)?;
                             scope.perform_microtask_checkpoint();
@@ -925,28 +927,25 @@ fn dispatch_client(
     let parent = args
         .get(0)
         .number_value(scope)
-        .ok_or("SDK request needs an invocation")?;
+        .ok_or("client request needs an invocation")?;
     if !parent.is_finite()
         || parent < 1.0
         || parent.fract() != 0.0
         || parent > 9_007_199_254_740_991.0
         || !args.get(1).is_string()
     {
-        return Err("invalid SDK request identity".into());
+        return Err("invalid client request identity".into());
     }
     if scope
-        .get_slot::<Bridge>()
-        .is_some_and(|bridge| bridge.api == crate::package::ApiContract::Vscode)
-        && scope
-            .get_continuation_preserved_embedder_data()
-            .number_value(scope)
-            != Some(parent)
+        .get_continuation_preserved_embedder_data()
+        .number_value(scope)
+        != Some(parent)
     {
         return Err("VS Code service call belongs to another invocation".into());
     }
     let text = args.get(1).to_rust_string_lossy(scope);
     if text.len() > ProtocolLimits::default().maximum_payload_bytes {
-        return Err("SDK request quota exceeded".into());
+        return Err("client request quota exceeded".into());
     }
     let operation: ExtensionClientOperation =
         serde_json::from_str(&text).map_err(|error| error.to_string())?;
@@ -968,29 +967,34 @@ fn dispatch_client(
             | ExtensionClientOperation::FetchTasks { .. }
             | ExtensionClientOperation::ExecuteTask { .. }
             | ExtensionClientOperation::TerminateTask { .. }
+            | ExtensionClientOperation::ReadResourceFile { .. }
+            | ExtensionClientOperation::StatResource { .. }
+            | ExtensionClientOperation::ReadResourceDirectory { .. }
             | ExtensionClientOperation::ReadWorkspaceFile { .. }
             | ExtensionClientOperation::ShowMessage { .. }
             | ExtensionClientOperation::ShowQuickPick { .. }
             | ExtensionClientOperation::SetDiagnostics { .. }
             | ExtensionClientOperation::SetStatusBarEntries { .. }
     ) {
-        return Err("operation is outside JavaScript SDK v1".into());
+        return Err("operation is outside JavaScript host contract v1".into());
     }
-    let resolver = v8::PromiseResolver::new(scope).ok_or("cannot allocate SDK promise")?;
+    let resolver = v8::PromiseResolver::new(scope).ok_or("cannot allocate host promise")?;
     let promise = resolver.get_promise(scope);
     let resolver = v8::Global::new(scope, resolver);
-    let bridge = scope.get_slot_mut::<Bridge>().ok_or("SDK bridge missing")?;
+    let bridge = scope
+        .get_slot_mut::<Bridge>()
+        .ok_or("host adapter missing")?;
     let context = *bridge
         .contexts
         .get(&(parent as u64))
-        .ok_or("SDK invocation is no longer active")?;
+        .ok_or("host invocation is no longer active")?;
     if bridge.calls.len() >= MAX_CLIENT_CALLS {
-        return Err("too many pending SDK requests".into());
+        return Err("too many pending client requests".into());
     }
     bridge.next_call = bridge
         .next_call
         .checked_add(1)
-        .ok_or("SDK call ID exhausted")?;
+        .ok_or("client call ID exhausted")?;
     let request = ExtensionClientRequest {
         context,
         call_id: bridge.next_call,

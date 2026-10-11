@@ -1,1 +1,1 @@
-export const label = 'Read through the Ash SDK';
+exports.label = 'Read through the VS Code API';

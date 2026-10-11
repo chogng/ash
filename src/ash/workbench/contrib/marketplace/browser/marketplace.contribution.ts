@@ -42,7 +42,7 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 				title: localize({ bundle: 'ash.marketplace', key: 'installLocalExtension' }, 'Install extension from workspace'),
 				message: localize({ bundle: 'ash.marketplace', key: 'localExtensionPath' }, 'Enter the extension package path relative to the selected workspace directory.'),
 				detail: localize({ bundle: 'ash.marketplace', key: 'localExtensionInstallNotice' }, 'The package must contain .ash-plugin/plugin.json. Installation copies the package into your profile; enablement and permissions are managed separately.'),
-				inputs: [{ placeholder: '.build/sdk/typescript' }],
+				inputs: [{ placeholder: 'examples/extensions/inspect' }],
 				primaryButton: localize({ bundle: 'ash.marketplace', key: 'install' }, 'Install'),
 			});
 			if (!input.confirmed) { return; }
@@ -94,7 +94,7 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 				message: `${selected.id} · ${selected.version}`,
 				detail: [
 					localize({ bundle: 'ash.marketplace', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', selected.permissions.length ? selected.permissions.map(describePermission).join('; ') : localize({ bundle: 'ash.marketplace', key: 'noPermissions' }, 'None')),
-					localize({ bundle: 'ash.marketplace', key: 'localExtensionDocumentNotice' }, 'VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Ash SDK extensions retain the confined V8 host. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
+					localize({ bundle: 'ash.marketplace', key: 'localExtensionDocumentNotice' }, 'VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
 					localize({ bundle: 'ash.marketplace', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.digest),
 				].join('\n\n'),
 				buttons,

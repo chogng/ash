@@ -60,12 +60,28 @@ export async function prepareBrowserExtensions(): Promise<void> {
 				plugins: [{
 					name: 'ash-extension-webview',
 					async resolveId(source, importer) {
+						if (source === 'vscode') return '\0ash-vscode';
+						if (source === '\0ash-vscode-bridge') return source;
+						if (source === resolve(packageRoot, '__ash_browser_entry__.js')) return '\0ash-browser-entry';
 						if (!source.endsWith('?webview')) return;
 						const resolved = await this.resolve(source.slice(0, -8), importer);
 						if (!resolved) throw new Error(`Cannot resolve extension webview: ${source}`);
 						return resolved.id + '?webview';
 					},
 					async load(id) {
+						const facade = JSON.stringify(resolve(root, 'crates/external-js-ext/src/vscode.js'));
+						if (id === '\0ash-vscode') {
+							const names = ['commands', 'workspace', 'window', 'languages', 'tasks', 'debug', 'env', 'l10n', 'Uri', 'Position', 'Range', 'Location', 'Hover', 'Disposable', 'EventEmitter', 'CancellationTokenSource', 'Diagnostic', 'DiagnosticSeverity', 'CompletionItem', 'CompletionList', 'CompletionItemKind', 'TextEdit', 'WorkspaceEdit', 'CodeActionKind', 'SymbolKind', 'FileType', 'Task', 'TaskGroup', 'TaskScope', 'ProcessExecution', 'ShellExecution', 'CustomExecution'];
+							return `import { bridge } from '\0ash-vscode-bridge'; const api = bridge.api; ${names.map(name => `export const ${name} = api.${name};`).join(' ')} export default api;`;
+						}
+						if (id === '\0ash-vscode-bridge') {
+							const messages = (path: string): unknown => packageResources[path] ? JSON.parse(Buffer.from(packageResources[path], 'base64').toString('utf8')) : {};
+							const localization = JSON.stringify({ en: messages('package.nls.json'), 'zh-CN': messages('package.nls.zh-CN.json') });
+							return `import { createApi } from ${facade}; const original = globalThis.__ashConfiguration; const bundles = ${localization}; const messages = { ...bundles.en, ...bundles[globalThis.__ashInitialization.language] }; function localize(value) { if (typeof value === 'string') return value.replace(/^%(.+)%$/, (text, key) => messages[key] ?? text); if (Array.isArray(value)) return value.map(localize); if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, localize(entry)])); return value; } const manifest = localize(original.manifest); export const bridge = createApi({ ...original, manifest, commands: manifest.contributes?.commands ?? [] }, globalThis.__ashInitialization);`;
+						}
+						if (id === '\0ash-browser-entry') {
+							return `import { __runtime } from ${JSON.stringify(resolve(root, 'crates/external-js-ext/src/host.mjs'))}; import { bridge } from '\0ash-vscode-bridge'; import * as extension from ${JSON.stringify(resolve(packageRoot, entry))}; export async function activate() { const context = __runtime.beginActivation(globalThis.__ashConfiguration.extensionId); await bridge.activate(context, extension.activate, extension, ['command', 'languageProvider', 'customTextEditor']); return JSON.parse(__runtime.sealActivation()); } export const invoke = (id, payload, requestId, operation) => __runtime.invoke(id, JSON.stringify(payload), requestId, operation).then(JSON.parse); export const cancel = id => __runtime.cancel(id); export const deactivate = () => __runtime.deactivate(() => { bridge.deactivate(); return extension.deactivate?.(); });`;
+						}
 						if (!id.endsWith('?webview')) return;
 						const webview = await build({
 							configFile: false, logLevel: 'error',
@@ -84,7 +100,7 @@ export async function prepareBrowserExtensions(): Promise<void> {
 				}],
 				// Browser language libraries operate on URI paths without a Node runtime.
 				resolve: { alias: { 'node:path': createRequire(import.meta.url).resolve('path-browserify'), 'path': createRequire(import.meta.url).resolve('path-browserify') } },
-				build: { write: false, minify: false, lib: { entry: resolve(packageRoot, entry), formats: ['es'], fileName: 'extension' } }
+				build: { write: false, minify: false, target: 'es2015', lib: { entry: resolve(packageRoot, '__ash_browser_entry__.js'), formats: ['es'], fileName: 'extension' } }
 			});
 			const outputs = Array.isArray(result) ? result.flatMap(output => output.output) : 'output' in result ? result.output : [];
 			const chunks = outputs.filter(output => output.type === 'chunk');

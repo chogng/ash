@@ -2,16 +2,14 @@ use super::Package;
 use super::resolve;
 
 #[test]
-fn resolves_only_sdk_and_package_relative_modules() {
+fn resolves_only_runtime_and_package_relative_modules() {
     assert_eq!(
         resolve("lib/main.js", "../helper.mjs").unwrap(),
         "helper.mjs"
     );
-    assert_eq!(
-        resolve("main.js", "@ash/extension").unwrap(),
-        "@ash/extension"
-    );
+    assert_eq!(resolve("@ash/vscode", "./host.mjs").unwrap(), "@ash/host");
     for path in [
+        "@ash/extension",
         "node:fs",
         "fs",
         "electron",
@@ -27,10 +25,15 @@ fn resolves_only_sdk_and_package_relative_modules() {
 fn captures_module_bytes_before_execution_and_rejects_missing_entry() {
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("main.js"), "export function activate() {}").unwrap();
+    std::fs::write(
+        root.path().join("package.json"),
+        r#"{"publisher":"test","name":"fixture"}"#,
+    )
+    .unwrap();
     let package = Package::read("example".into(), root.path().into(), "main.js".into()).unwrap();
     std::fs::write(root.path().join("main.js"), "changed").unwrap();
-    assert_eq!(package.sources["main.js"], "export function activate() {}");
-    assert!(package.sources.contains_key("@ash/extension"));
+    assert!(package.sources["main.js"].contains("export function activate() {}"));
+    assert!(package.sources.contains_key("@ash/host"));
     assert!(Package::read("example".into(), root.path().into(), "missing.js".into()).is_err());
     assert!(Package::read("example".into(), root.path().into(), "../main.js".into()).is_err());
 }

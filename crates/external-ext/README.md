@@ -2,9 +2,10 @@
 
 本 crate 位于 `crates/external-ext`，包名为 `ash-external-ext`，Rust 导入名为 `ash_external_ext`，共用 TS/JS 与 Rust 扩展的进程监管语义；语言执行与作者 SDK 分开，进程协议独立保留。重命名保留原有接口与执行行为，外部包校验与资源快照已归入 `packages`；内置编辑器资源由 TS 构建和加载。App Server 运行管理提取仍未实施。完整命名和来源边界见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。
 
+[统一后端扩展接口规范](../../docs/editor-extensions.md#统一后端扩展接口规范)固定 Host RPC 为 TS/JS 与 Rust 的唯一接入协议。JS 标准兼容层、Rust SDK 和 Workbench adapter 共用能力语义；TS/JS 作者只使用标准 API，公开 TS SDK 已退出。本 crate 拥有接入与监管，不定义语言 API 或 Provider 业务，也不为 Remote 增加私有调用入口。现有双向客户端/核心服务消息继续复用该协议，按 scope 和授权路由到真实 owner。
+
 > 本 README 记录当前可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复。
-> 作者使用 [`TS SDK`](../../sdk/typescript/README.md)，JS 由独立的
-> [`独立扩展宿主`](../external-js-ext/README.md)执行：Ash SDK 使用 V8，标准 VS Code 扩展使用真实 Node；本 crate 继续承担共用的进程监管。
+> JS 使用标准 VS Code API，由[独立 JS 宿主](../external-js-ext/README.md)适配到同一 Host RPC；本 crate 承担共用监管。
 > [`Rust 作者 SDK`](../../sdk/rust/README.md) 已被 GitHub 认证的独立程序复用；产品 Rust launcher 已接通，通用第三方 Rust 安装与隔离仍待完成。
 > 共享 wire 定义属于 `ash-external-ext-protocol`。跨 Marketplace/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
 > [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；统一远端 package 身份由
@@ -19,13 +20,13 @@
 每次请求取得当前授权 lease。App Server 绑定启动窗口，子进程只携带 incarnation/generation；窗口关闭、
 撤权、崩溃和 shutdown 取消请求并等待释放，再释放进程 lease。按扩展串行化激活，使激活阶段调用另一
 扩展的命令不会持有全局 fleet 锁。状态栏的注册校验和已确认快照更新仍由同一个 SupervisorState 拥有，
-回调和后台通道共用处理。新宿主的进程测试已覆盖 SDK 反向编辑器调用、Rust 文件读取、取消、超时和释放；
+回调和后台通道共用处理。新宿主的进程测试已覆盖 标准 API 反向编辑器调用、Rust 文件读取、取消、超时和释放；
 这些测试不能代替生产平台隔离验收。
 
 标准 Node 的 Host RPC 使用启动前分配、带随机绑定令牌的 loopback socket。私有 `process/node.rs`
 只负责该 incarnation 的有界握手，控制 socket 与读写线程仍由现有 ProcessHandle owner 管理；
 终止时先关闭 socket，再清理进程组并 join 读取线程。stdout/stderr 合并到已有有界诊断缓冲，
-Debug 子进程继承 stdout 或直接写 fd 1 不会进入协议解析器。SDK 与独立协议程序仍使用 stdio。
+Debug 子进程继承 stdout 或直接写 fd 1 不会进入协议解析器。V8 与独立协议程序仍使用 stdio。
 
 每个标准 Node incarnation 在加载 package 前通过已有 ClientHost 读取当前窗口 initialization，
 恢复时也重新读取。Workbench ConfigurationService 与 WorkspaceContextService 继续拥有事实；
@@ -199,7 +200,7 @@ App Server 或其他 composition root 必须：
 
 1. 从 source adapter 已规范化的 exact immutable package、digest、executable 与 live authority 构造
    `ExtensionActivationSpec`，并把 directory capability 加入同一 live gate；
-2. RPC 程序必须有 exact process permission；JS 入口必须通过 package validation，Ash SDK 交给产品 V8，标准 API 交给产品绑定的 Node executable/bootstrap；
+2. RPC 程序必须有 exact process permission；JS 入口必须通过 package validation，标准 API 由选定的 V8 或产品绑定的 Node executable/bootstrap 适配，旧 Ash TS SDK 入口被拒绝；
 3. 根据入口选择隔离策略：独立可执行扩展要求 `RequirePlatformEnforcement`，macOS 与 64 位 Windows JS 要求 `RequireJavaScriptEnforcement` 并使用 `ProductJavaScriptLauncher`；标准 VS Code 扩展要求 `AuthorizedNode` 与新的确切包执行授权；缺少符合所选策略的 launcher 或 Node 资源时将生产能力标记为不可用；
 4. 定期调用 `reconcile()`，把 snapshot 变化原子投影到 provider owners；
 5. 使用异步 invocation session 或后台 waiter 暴露调用，使 cancel request 不被一个阻塞 RPC 串行化；
@@ -241,7 +242,7 @@ crash recovery 已实现。
 
 当前限制：
 
-- Ash SDK 的 V8 launcher 支持 macOS 与 64 位 Windows；标准 Node 路径接入支持 Node 的产品平台，独立可执行扩展的生产平台 launcher 尚未开放；
+- 标准 JS 包的 V8 launcher 支持 macOS 与 64 位 Windows；标准 Node 路径接入支持 Node 的产品平台，独立可执行扩展的生产平台 launcher 尚未开放；
 - activation-event matching 和 lazy activation 属于上层 composition，监管器只接收 activation facts；
 - 空闲崩溃检测依赖上层 health loop；
 - v1 的 extension-originated event 目前只覆盖命名 Output channel；其他事件必须先明确领域 owner 与背压语义；

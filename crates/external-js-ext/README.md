@@ -1,25 +1,22 @@
 # Extension hosts
 
-The package and executable are named `ash-external-js-ext`, under `crates/external-js-ext`. Shared extension supervision belongs to `external-ext`; the wire contract remains a separate `external-ext-protocol` crate. Author SDKs live under root `sdk/typescript` and `sdk/rust`, while module loading, VS Code/Node compatibility and V8 execution remain product runtime responsibilities. The rename preserves the current Node and SDK V8 paths; runtime compatibility changes remain separate work. See [the agreed boundaries](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界).
+The package and executable are named `ash-external-js-ext`, under `crates/external-js-ext`. Shared extension supervision belongs to `external-ext`; the wire contract remains a separate `external-ext-protocol` crate. The Rust author SDK lives under root `sdk/rust`; JS authors use standard `vscode`, while module loading, VS Code/Node compatibility and V8 execution remain product runtime responsibilities. Node, V8 and browser Workers reuse the standard facade and private Host RPC adapter. See [the agreed boundaries](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界).
 
-The target architecture runs TS/JS packages through Electron on Desktop and independent Rust/V8 hosts in the shared backend; optional Rust capability providers remain independent Rust executables. The backend target has no standalone Node dependency. Runtime duties and the uniform VS Code/Node compatibility contract are defined in [the extension architecture](../../docs/editor-extensions.md#运行时职责与兼容契约). This crate currently implements real Node and narrow SDK V8 paths; their presence does not establish that the target migration is complete. A Rust process embedding V8 is still a JS host, not a Rust capability extension.
+The target architecture runs TS/JS packages through Electron on Desktop and independent Rust/V8 hosts in the shared backend; optional Rust capability providers remain independent Rust executables. The backend target has no standalone Node dependency. Runtime duties and the uniform VS Code/Node compatibility contract are defined in [the extension architecture](../../docs/editor-extensions.md#运行时职责与兼容契约). This crate currently implements real Node and limited V8 paths; their presence does not establish that the target migration is complete. A Rust process embedding V8 is still a JS host, not a Rust capability extension.
 
-`ash-external-js-ext` executes ES modules authored with [`@ash/extension`](../../sdk/typescript/README.md)
-in an independent Rust process. It reuses the existing extension supervisor and bounded Host RPC,
-so App Server remains free of the V8 dependency. Code Mode and this host share engine initialization
-through `ash-v8-runtime`; execution state and permissions remain separate.
+`ash-external-js-ext` executes captured standard CommonJS packages in an independent Rust/V8 process. The private `host.mjs` owns callback registration and lifecycle; `vscode.js` translates supported public APIs to the shared protocol. Neither is a second author SDK. App Server remains free of V8. Code Mode and this host share engine initialization through `ash-v8-runtime`, while execution state and permissions remain separate.
 
 Standard `api: vscode` extensions run in the product's real Node runtime. The existing
 App Server authority gate checks exact-package execution consent before its supervisor
 launches Node directly with the packaged `extension-host/node.mjs` entry point. Node owns
 CJS/ESM module loading, builtin modules, Buffer, filesystem, networking and child processes.
-The host substitutes only `vscode` and the product SDK, using public synchronous Node module
+The host substitutes only `vscode`, using public synchronous Node module
 hooks. Electron uses its frozen executable in Node mode; Web uses the packaged standalone Node.
 No ambient PATH lookup selects the runtime. The supervisor retains process-group cleanup,
 framed protocol quotas, cancellation, deadlines, recovery and authority revocation. This runtime
-has user-level IO and does not claim the SDK host's confinement or whole-process resource limits.
+has user-level IO and does not claim the V8 host's confinement or whole-process resource limits.
 Marketplace execution contract 5 requires fresh consent. Local Plugin authority retires only
-legacy VS Code grants and persists that migration; SDK and other Plugin grants survive.
+legacy VS Code grants and persists that migration; other Plugin grants survive. Retired `api: ash` entries are rejected.
 Developer environment inheritance excludes product authentication and inherited Electron controls.
 The environment is frozen when the launcher is created; existing processes retain their copy.
 An authenticated window can supply bounded `ExtensionHostStart.environment` overrides.
@@ -36,29 +33,28 @@ App Server; lifecycle frames carry the exact incarnation and activation generati
 select another connection. The existing supervisor services bounded concurrent calls while
 activation is pending, acquires a live authority lease per call, and cancels and joins them before
 releasing the process lease. A closed window retires its Node hosts and restores their activation
-plans for the next window. SDK calls keep their narrower invocation boundary.
+plans for the next window. V8 calls retain their invocation boundary.
 Extension exceptions and unhandled promises are recorded on captured stderr; malformed control
 frames still stop the host. Node Host RPC uses a fresh authenticated loopback socket owned by
 the existing process supervisor. Physical stdin/stdout remain ordinary Node streams, so raw
 fd writes and Debug children inheriting stdout cannot corrupt control frames. The listener closes
 after the exact child binding connects; startup is bounded, parent closure retires the host, and
-termination shuts down the socket before joining readers. SDK and executable hosts retain stdio.
+termination shuts down the socket before joining readers. V8 and executable hosts retain stdio.
 
 The product packages the V8 executable next to App Server. Plugin contributions explicitly select
 `runtime: javascript`; an existing `hostRpc` contribution runs its own protocol program.
 Installed extensions supply the admitted extension ID, absolute package root and relative JS entrypoint.
-The product's `--builtin remote-ssh` entry instead loads its module and SDK compiled into the executable;
-activation must match the release binding sent by App Server. It uses the same SDK and invocation
-lifecycle, but product authority requires no workspace grant and permits no workspace file reads.
-Installed packages cannot obtain this authority or register the reserved `ssh` prefix.
-Only package-relative ESM imports and the product-provided SDK are available. Node, Electron,
-filesystem, network, DOM and raw backend connections are absent from the JS context.
+The saved-connection SSH resolver runs as the independent `ash-remote-ssh-extension` Rust program,
+using the public Rust SDK and the same Host RPC. Product authority permits no workspace file reads;
+installed packages cannot obtain that authority or register the reserved `ssh` prefix.
+The V8 package loader exposes captured CommonJS modules and `vscode`. Node, Electron,
+filesystem, network, DOM and raw backend connections are absent from that JS context.
 
-Each invocation binds SDK calls to its exact request, activation generation and process incarnation.
-Rust only accepts the supported SDK operation subset. Editor snapshots and notifications go to the
+Each invocation binds client calls to its exact request, activation generation and process incarnation.
+Rust only accepts the supported protocol operations. Editor snapshots and notifications go to the
 initiating client; workspace reads are executed by App Server's authorized filesystem owner.
-Command, hover, completion and document-event callbacks share the same invocation-bound SDK services. Provider snapshots retain
-the editor's unsaved text; the SDK converts UTF-16 coordinates and the existing TS language bridge
+Command, hover, completion and document-event callbacks share the same invocation-bound client services. Provider snapshots retain
+the editor's unsaved text; the compatibility layer converts UTF-16 coordinates and the existing TS language bridge
 validates and displays results. Callbacks cannot retain invocation authority after they return.
 Invocation contexts expose a cancellation token and event. Caller cancellation revokes that invocation's
 service authority and rejects pending child calls, then permits its callback to release resources and
@@ -66,9 +62,8 @@ finish within the supervisor's bounded grace period. Other callbacks retain thei
 Uncooperative callbacks, deadlines and activation-authority revocation retire the isolate; recovery
 starts a fresh incarnation and never replays in-flight commands.
 
-Module compilation failures are caught before they can print V8 diagnostics to protocol stdout.
-The process reports the module name and compilation exception on stderr and exits; malformed
-source cannot masquerade as a Host protocol frame.
+CommonJS syntax and activation failures become structured activation errors. Package evaluation is
+inside the async activation wrapper, so rejected promises cannot write V8 diagnostics into protocol stdout.
 
 The host bounds protocol payloads, concurrent calls, package sources, V8 heap and execution time.
 On macOS, `ProductJavaScriptLauncher` selects the exact product executable and supplies separate
@@ -84,11 +79,7 @@ the child attests the launch restrictions, disables Win32k calls, lowers integri
 permanently releases startup authority. Package read grants and the AppContainer profile
 are owned by the process handle and removed after termination. The product install directory
 is not modified; no administrator privileges or account provisioning are required.
-Compiled product modules need no package read grants; their working directory is never
-traversed or granted access, so build and install artifacts do not delay host startup.
-Unsupported systems refuse installed-package execution. The immutable compiled product module
-can run there with the same V8 budgets and deadlines, without loading external sources. Supported
-systems also confine the product module. The trusted development launcher is for trusted tests.
+Unsupported systems refuse confined installed-package execution. The trusted development launcher is for trusted tests. Product Rust capability extensions use their separately authorized executable launcher and the same supervisor; they do not execute through V8.
 
 The default JS budgets are 64 MiB heap and 64 MiB external fixed-length backing stores. Tiny inline
 TypedArrays use the heap instead. The heap callback has a bounded 4 MiB termination allowance.
@@ -119,6 +110,14 @@ JSON results preserve explicit null and falsy values; a void result becomes unde
 Callback command requests are drained before callback retirement. Node activation and background
 requests use the same client CommandService under the activation's lifetime.
 Non-JSON command values and URI-rich results remain incomplete.
+
+The shared facade also translates definition, references, rename, symbols, folding, links,
+code actions, selection ranges and highlights. `WorkspaceEdit` applies through the client's
+existing document/undo owner. Read-only `workspace.fs.readFile`, `stat` and `readDirectory`
+use typed URI operations and the bound client's filesystem providers. The current custom text
+editor adapter supports HTML and one packaged script/style pair, document updates and retirement;
+it does not establish full WebviewPanel or arbitrary resource/API compatibility. The trusted offline
+Worker uses this same facade but remains owned by its window, outside backend supervision.
 
 Task providers expose `Task`, `TaskGroup`, `TaskScope`, `ProcessExecution`,
 `ShellExecution` and `CustomExecution`. Both ShellExecution overloads retain shell options;
@@ -209,11 +208,10 @@ For standard extensions, `*` starts when the first window supplies its initializ
 Other activation event types are not implemented. Manifest command titles are available in the
 command palette while waiting, but callbacks and providers appear only after the runtime handshake.
 Health polling never starts a waiting package. The activation request checks the exact package
-generation and current authority, and concurrent requests cannot start two incarnations. Local SDK
-and independent executable extensions retain their existing startup behavior.
+generation and current authority, and concurrent requests cannot start two incarnations. Local standard packages use their manifest activation plan; independent executables retain their configured startup behavior.
 
 Run `just check ash-external-js-ext`, `just test ash-external-js-ext` and
-`just rust-warnings ash-external-js-ext`. Process tests exercise the embedded SDK, package module
+`just rust-warnings ash-external-js-ext`. Process tests exercise the private protocol adapter, package module
 imports, editor versus disk content, hover capability admission and snapshot coordinates, errors,
 revoked authority, deadlines, cancellation and cleanup.
 
