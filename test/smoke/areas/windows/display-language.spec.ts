@@ -102,7 +102,7 @@ test('display language stays unchanged until restart and initializes Chinese com
 	page = workbench.page;
 	await expect(page.getByRole('button', { name: '搜索命令', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: '管理', exact: true })).toBeVisible();
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^源代码管理(?:,|$)/u }).click();
 	const scmWelcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: '欢迎', exact: true });
 	// A connected Web session opens the backend workspace; desktop and UI-only hosts can start empty.
 	if (target.kind === 'browser' && target.appServerMode === 'required') {
@@ -126,7 +126,7 @@ test('display language stays unchanged until restart and initializes Chinese com
 	await page.keyboard.press('F1');
 	const commands = page.locator('.ash-quick-pick');
 	await workbench.quickaccess.search('>创建分支');
-	await expect(commands.locator('.ash-quick-pick-row-label', { hasText: 'Git: 创建分支' })).toBeVisible();
+	await expect(commands.getByRole('option').filter({ hasText: 'git.branch' }).locator('.ash-quick-pick-row-label')).toHaveText('创建分支…');
 	await workbench.quickaccess.search('>Preferences: Change Keyboard Layout');
 	await expect(commands.locator('.ash-quick-pick-row-label', { hasText: '首选项：更改键盘布局' })).toBeVisible();
 	await commands.getByRole('combobox').press('Enter');
@@ -190,7 +190,7 @@ test('Chinese sidebar overflow localizes registered layout commands', async ({ w
 	await picker.getByRole('combobox').press('Enter');
 	({ workbench, application } = await restartWorkbench());
 	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^源代码管理(?:,|$)/u }).click();
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const openSidebarMenu = () => sidebar.locator('.ash-pane-composite-title-part-actions').getByRole('button', { name: '更多操作', exact: true }).click();
 	const sidebarMenu = await workbench.menus.inspect(application, openSidebarMenu);

@@ -1,3 +1,5 @@
+import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
+import { WebWorkerExtensionHost } from '../../workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { ITraceService } from '../../workbench/services/trace/common/traceService.js';
@@ -302,7 +304,7 @@ export abstract class Workbench extends Disposable {
 		const serviceContributionReady: Promise<void>[] = [];
 		if (options.browserViewService) { services.registerInstance(IBrowserViewService, options.browserViewService); }
 		services.registerInstance(IAssetService, options.api.assets);
-		services.registerInstance(IExtensionHostApi, options.api.extensionHost);
+		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, createBrowserExtensionApi(), options.api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);

@@ -72,7 +72,7 @@ export const SettingsNavigation = [
 						id: 'interaction',
 						label: 'Interaction',
 						description: 'Tune hover feedback and resize handles.',
-						settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled', 'output.smartScroll.enabled'],
+						settings: ['workbench.hover.*', 'workbench.sash.*', 'workbench.commandPalette.history', 'onboarding.enabled', 'output.smartScroll.enabled'],
 					},
 				],
 			},
@@ -138,7 +138,7 @@ export const SettingsNavigation = [
 					id: 'layout',
 					get label() { return localize('settings.workbench.layout.group.label', 'Workbench layout'); },
 					get description() { return localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'); },
-					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
+					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'chat.viewSessions.orientation', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
 				}],
 			},
 			{

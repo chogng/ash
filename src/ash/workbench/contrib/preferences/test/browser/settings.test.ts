@@ -156,6 +156,7 @@ const { WorkbenchLocalizationService } = await import('../../../../services/loca
 const { StartupEditorConfigurationKey } = await import('../../../welcomeGettingStarted/browser/startupPage.js');
 await import('../../../welcomeGettingStarted/browser/gettingStarted.contribution.js');
 await import('../../../../browser/workbench.contribution.js');
+await import('../../../quickaccess/browser/quickAccess.contribution.js');
 await import('../../../../electron-browser/desktop.contribution.js');
 await import('../../../externalUriOpener/common/externalUriOpener.contribution.js');
 
@@ -691,6 +692,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
 	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'general');
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
+	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'general');
 	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'browser');
 	assert.equal(defaults.get('workbench.externalUriOpeners').valueType, 'stringMap');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');

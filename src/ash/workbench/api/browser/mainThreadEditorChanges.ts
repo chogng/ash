@@ -2,7 +2,6 @@ import { localize } from '../../../nls.js';
 import { URI } from '../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import type { ICodeEditorService } from '../../../editor/browser/services/codeEditorService.js';
-import { DiffEditorWidget } from '../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { Range } from '../../../editor/common/core/range.js';
 import type { ITextFileService } from '../../services/textfile/common/textfiles.js';
 import type { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
@@ -34,7 +33,8 @@ export class MainThreadEditorChanges {
 			default: throw new TypeError('Unsupported editor change operation');
 		}
 	}
-	private captureDiffChange(value: JsonValue): JsonValue {
+	private async captureDiffChange(value: JsonValue): Promise<JsonValue> {
+		const { DiffEditorWidget } = await import('../../../editor/browser/widget/diffEditor/diffEditorWidget.js');
 		const context = record(value);
 		const originalUri = URI.parse(text(context.originalUri));
 		const modifiedUri = URI.parse(text(context.modifiedUri));
