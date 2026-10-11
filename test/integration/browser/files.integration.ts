@@ -30,7 +30,15 @@ import { ICommandService } from '../../../src/ash/platform/commands/common/comma
 import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
-import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { BulkEditTestServices, MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { BulkEditService } from '../../../src/ash/workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
+import { BrowserTextResourceStore } from '../../../src/ash/workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
+import { createTestTextFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
+import { Range } from '../../../src/ash/editor/common/core/range.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { isCancellationError } from '../../../src/ash/base/common/errors.js';
 
 const provider = await IndexedDBFileSystemProvider.create(indexedDB, Schemas.vscodeUserData);
 const files = new FileService();
@@ -99,6 +107,47 @@ function trackForegroundListeners(target: EventTarget, eventType: string): void 
 
 const textInput = { resource: URI.parse('review:/content.txt'), label: 'Provider text', languageId: 'plaintext' };
 const integration = {
+	async cancelBrowserReplacement(): Promise<{ settledBeforeRelease: boolean; cancelled: boolean; disk: string; }> {
+		const name = 'cancel-replacement.txt';
+		await integration.changeBrowserFile(name, 'original');
+		const handle = await browserFolder.getFileHandle(name);
+		const prototype: FileSystemFileHandle = Object.getPrototypeOf(handle);
+		const createWritable = prototype.createWritable;
+		const started = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		let intercept = true;
+		// Pause a real storage commit so cancellation lands while the provider still owns the stream.
+		prototype.createWritable = async function (options) {
+			const writer = await createWritable.call(this, options);
+			if (this.name === name && intercept) {
+				intercept = false;
+				const close = writer.close.bind(writer);
+				writer.close = async () => { await started.complete(); await release.p; await close(); };
+			}
+			return writer;
+		};
+		try {
+			using identity = new TestUriIdentityServices();
+			using service = createTestTextFileService(browserFiles);
+			using models = identity.createInstance(BrowserTextModelService, new BrowserTextResourceStore(service), {});
+			using fixture = new BulkEditTestServices([]);
+			using bulk = new BulkEditService(models, fixture.workingCopies, browserFiles, fixture.configuration, fixture.dialogs);
+			const controller = new AbortController();
+			let settled = false;
+			const replacing = bulk.apply({ entries: [{ kind: 'textDocument', resource: browserWatchRoot.joinPathSegment(name), edits: [{ range: new Range(1, 1, 1, 9), text: 'replacement' }] }] }, { token: controller.signal });
+			const result = replacing.then(() => { settled = true; return false; }, error => { settled = true; if (!isCancellationError(error)) throw error; return true; });
+			await started.p;
+			controller.abort();
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			const settledBeforeRelease = settled;
+			await release.complete();
+			const cancelled = await result;
+			return { settledBeforeRelease, cancelled, disk: await (await handle.getFile()).text() };
+		} finally {
+			await release.complete();
+			prototype.createWritable = createWritable;
+		}
+	},
 	async readBrowserStream(name: string, position: number, length: number): Promise<number[]> {
 		const content = await browserFiles.readFileStream(browserWatchRoot.joinPathSegment(name), { position, length });
 		try { return [...(await streamToBuffer(content.value)).buffer]; }

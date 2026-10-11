@@ -610,10 +610,31 @@ impl MultiAgentCoordinator {
 
     /// Propagates cancellation from one parent Thread to every live descendant delegation.
     pub fn cancel_descendants(&self, parent_thread_id: &ThreadId) -> Result<usize, CoreError> {
+        self.cancel_descendants_matching(parent_thread_id, |_| true)
+    }
+
+    /// Cancels only delegations owned by the interrupted Turn, including their descendants.
+    pub fn cancel_turn_descendants(
+        &self,
+        parent_thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Result<usize, CoreError> {
+        self.cancel_descendants_matching(parent_thread_id, |parent_turn_id| {
+            parent_turn_id == turn_id
+        })
+    }
+
+    fn cancel_descendants_matching(
+        &self,
+        parent_thread_id: &ThreadId,
+        matches: impl Fn(&TurnId) -> bool,
+    ) -> Result<usize, CoreError> {
         let parent = self.threads.read_thread(parent_thread_id)?;
         let pending = parent
             .delegations
-            .keys()
+            .iter()
+            .filter(|(_, delegation)| matches(&delegation.seed.parent_turn_id))
+            .map(|(delegation_id, _)| delegation_id)
             .filter(|delegation_id| {
                 !parent
                     .received_delegation_results

@@ -225,6 +225,19 @@ jobs:
             ".build/releases/ash-app-server-${{ matrix.target }}.update.json" \
             ".build/release-artifacts/${{ matrix.target }}/"
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        with:
+          python-version: "3.11"
+      - name: Install uv for Desktop packaging
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version-file: scripts/pyproject.toml
+      - name: Sync locked Python tools for Desktop packaging
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        run: python -B scripts/install_python_tools.py
+
       - name: Install Desktop packaging dependencies
         if: matrix.target == 'x86_64-pc-windows-msvc'
         shell: bash

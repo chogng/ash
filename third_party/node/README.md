@@ -11,3 +11,7 @@ them at `ash-resources/node/bin/node[.exe]` and `ash-resources/licenses/node/LIC
 Official Node.js archives do not provide musl builds. Canonical musl packages therefore require an
 explicit `--node-bin` produced by their release pipeline; the official same-architecture archive is
 still verified and used for the license. Runtime discovery never falls back to the host `PATH`.
+
+Changes under `third_party/node/` select the Frontend workflow. Its connected Web preparation
+runs `prepare:backend:web` with `--javascript-runtime packaged-node`, then smoke tests execute
+the resulting package. The tooling workflow continues to check the lock and packaging contracts.

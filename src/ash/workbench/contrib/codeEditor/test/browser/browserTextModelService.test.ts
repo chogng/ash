@@ -228,6 +228,44 @@ test('initial untitled content is dirty and discarding it leaves an empty docume
 	});
 });
 
+test('Save As acknowledges an untitled draft only after the destination write succeeds', async () => {
+	const textFiles = new TestTextFileService('unrelated file');
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
+	const signal = new AbortController().signal;
+	using reference = await models.acquire({ resource: URI.parse('untitled:/draft'), initialText: 'draft' }, signal);
+	const transitions: boolean[] = [];
+	using listener = reference.onDidChangeDirty(() => transitions.push(reference.isDirty));
+	await reference.saveAs(URI.file('/workspace/draft.txt'), signal);
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, saved: textFiles.savedTexts, transitions }, { text: 'draft', dirty: false, saved: ['draft'], transitions: [false] });
+});
+
+test('Save As retains unsaved edits made to the draft while its destination write is pending', async () => {
+	const textFiles = new TestTextFileService('unrelated file');
+	const started = deferred<void>();
+	const release = deferred<void>();
+	const save = textFiles.save.bind(textFiles);
+	textFiles.save = async request => { started.resolve(); await release.promise; return save(request); };
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
+	const signal = new AbortController().signal;
+	using reference = await models.acquire({ resource: URI.parse('untitled:/draft'), initialText: 'draft' }, signal);
+	const saving = reference.saveAs(URI.file('/workspace/draft.txt'), signal);
+	await started.promise;
+	reference.model.setValue('new draft');
+	release.resolve();
+	await saving;
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, saved: textFiles.savedTexts }, { text: 'new draft', dirty: true, saved: ['draft'] });
+});
+
+test('failed Save As keeps the untitled draft dirty', async () => {
+	const textFiles = new TestTextFileService('unrelated file');
+	textFiles.save = async () => { throw new Error('destination is unavailable'); };
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
+	const signal = new AbortController().signal;
+	using reference = await models.acquire({ resource: URI.parse('untitled:/draft'), initialText: 'draft' }, signal);
+	await assert.rejects(reference.saveAs(URI.file('/workspace/draft.txt'), signal), /destination is unavailable/);
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty }, { text: 'draft', dirty: true });
+});
+
 test("Stanza text model save tolerates its final reference closing before I/O completes", async () => {
 	const pending = deferred<void>();
 	const textFiles: ITextFileService = {

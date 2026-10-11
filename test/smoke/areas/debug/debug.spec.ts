@@ -341,6 +341,27 @@ interface DebugAdapterBoundary {
 	dispose(): void;
 }
 
+test('debug adapter exit retains every line from a 200 message output burst', async ({ workbench, testWorkspace }) => {
+	const script = adapter.replace("if (request.command === 'next') {", `if (request.command === 'continue') {
+    for (let index = 0; index < 200; index++) event('output', { category: 'console', output: 'ASH_DEBUG_TAIL_' + index + '\\n' });
+    process.stdout.end(() => process.exit(0));
+  }
+  if (request.command === 'next') {`);
+	await writeFile(join(testWorkspace.directory, 'debug-adapter.cjs'), script);
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	const pane = page.locator('[data-view-id="workbench.view.debug"]');
+	await pane.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	await expect(output).toContainText('ASH_DEBUG_READY');
+	await pane.getByRole('button', { name: 'Continue', exact: true }).click();
+	await expect(output).toContainText('ASH_DEBUG_TAIL_199');
+	const lines = (await output.textContent())!.match(/ASH_DEBUG_TAIL_\d+/gu);
+	expect(lines).toEqual(Array.from({ length: 200 }, (_, index) => `ASH_DEBUG_TAIL_${index}`));
+});
+
 test('debugging locates stopped source, edits nested variables by keyboard, refreshes watches, steps and stops', async ({ workbench, testWorkspace }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();

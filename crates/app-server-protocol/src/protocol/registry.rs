@@ -188,6 +188,8 @@ use external_ext_protocol::ExtensionClientOperation;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionClientResult;
 #[cfg(any(test, feature = "export"))]
+use external_ext_protocol::ExtensionCommandMenu;
+#[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionConfigurationTarget;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionDebugSessionOptions;
@@ -5500,6 +5502,7 @@ typescript_bindings! {
     external_ext_protocol::services::CoreServiceResponse,
     external_ext_protocol::services::CoreHttpMethod,
     ExtensionStatusBarEntry,
+    ExtensionCommandMenu,
     ExtensionStatusBarAlignment,
     ExtensionStatusBarCommand,
     ExtensionDiagnostic,

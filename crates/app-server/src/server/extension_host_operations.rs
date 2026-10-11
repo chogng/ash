@@ -499,9 +499,17 @@ fn registration_dto(
                 uri_pattern,
                 presentation_kind,
             },
-            RegistrationKind::Command { command, title } => {
-                ExtensionHostRegistrationKindDto::Command { command, title }
-            }
+            RegistrationKind::Command {
+                command,
+                title,
+                icon,
+                menus,
+            } => ExtensionHostRegistrationKindDto::Command {
+                command,
+                title,
+                icon,
+                menus,
+            },
             RegistrationKind::CustomTextEditor {
                 view_type,
                 display_name,

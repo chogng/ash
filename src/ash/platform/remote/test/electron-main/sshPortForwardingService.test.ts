@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
-import { EventEmitter } from "node:events";
-import type { ChildProcess } from "node:child_process";
+import { EventEmitter, once } from "node:events";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../base/common/errors.js";
@@ -9,6 +9,28 @@ import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/
 import type { IAnyWorkspaceIdentifier } from '../../../../platform/workspace/common/workspace.js';
 import { SshPortForwardingService, sshTunnelArguments } from "../../../../platform/remote/electron-main/sshPortForwardingService.js";
 import type { SshPortForwardChange } from "../../../../platform/remote/electron-main/sshPortForwardingService.js";
+
+test("SSH startup cleanup settles when a real subprocess has already closed by signal", async () => {
+	const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+	const spawned = once(child, 'spawn');
+	using service = new SshPortForwardingService({
+		getWorkspace: remoteWorkspace, sshExecutable: 'ssh', localEnvironment: {},
+		reserveLocalPort: async () => 41_234, spawnProcess: () => child,
+		probeLoopbackListener: async () => {
+			await spawned;
+			const closed = once(child, 'close');
+			child.kill('SIGTERM');
+			await closed;
+			return 'ready';
+		},
+	});
+	try {
+		await assert.rejects(service.open({ remotePort: 3_000 }), /exited before startup/);
+		assert.equal(child.exitCode, null);
+		assert.equal(child.signalCode, 'SIGTERM');
+		assert.deepEqual(await service.list(), []);
+	} finally { child.kill(); }
+});
 
 test("SSH tunnel coordinator fixes both ends of the forward to loopback", async () => {
 	let child = new FakeChildProcess();
@@ -132,6 +154,40 @@ test("closing a recovering SSH tunnel cancels backoff without launching another 
 
 	const tunnel = await service.open({ remotePort: 3_000 });
 	child.exit(17);
+	await waitingForRecovery;
+	await service.close(tunnel.id);
+
+	assert.deepEqual(await service.list(), []);
+	assert.deepEqual(changes.map(change => change.kind === "upsert" ? change.tunnel.state : change.kind), ["open", "recovering", "removed"]);
+});
+
+test("closing a signalled SSH tunnel settles after its close event", async () => {
+	const child = new FakeChildProcess();
+	const changes: SshPortForwardChange[] = [];
+	let waitCall = 0;
+	let recoveryWaitStarted!: () => void;
+	const waitingForRecovery = new Promise<void>(resolve => recoveryWaitStarted = resolve);
+	using service = new SshPortForwardingService({
+		getWorkspace: remoteWorkspace,
+		sshExecutable: "ssh",
+		localEnvironment: {},
+		reserveLocalPort: async () => 41_234,
+		spawnProcess: () => child as unknown as ChildProcess,
+		probeLoopbackListener: readyListener,
+		startupTimeoutMs: 50,
+		wait: (_milliseconds, signal) => {
+			waitCall += 1;
+			if (waitCall === 1) return Promise.resolve();
+			recoveryWaitStarted();
+			return new Promise(resolve => signal?.addEventListener("abort", () => resolve(), { once: true }));
+		},
+	});
+	service.onDidChange(change => changes.push(change));
+
+	const tunnel = await service.open({ remotePort: 3_000 });
+	child.exit(null, "SIGTERM");
+	assert.equal(child.exitCode, null);
+	assert.equal(child.signalCode, "SIGTERM");
 	await waitingForRecovery;
 	await service.close(tunnel.id);
 
@@ -440,13 +496,15 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 }
 
 class FakeChildProcess extends EventEmitter {
+	public signalCode: NodeJS.Signals | null = null;
 	constructor(public exitCode: number | null = null) {
 		super();
 	}
 
-	exit(code: number, signal: NodeJS.Signals | null = null): void {
-		if (this.exitCode !== null) return;
+	exit(code: number | null, signal: NodeJS.Signals | null = null): void {
+		if (this.exitCode !== null || this.signalCode !== null) return;
 		this.exitCode = code;
+		this.signalCode = signal;
 		this.emit("exit", code, signal);
 		this.emit("close", code, signal);
 	}

@@ -1,5 +1,12 @@
 import { chromium, expect, test } from '@playwright/test';
 
+test('cancelled replacement settles its browser disk write before rollback restores the file', async ({ page }) => {
+	await page.goto('/files.html');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+	await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('unavailable'));
+	expect(await page.evaluate(() => window.ashFilesIntegration.cancelBrowserReplacement())).toEqual({ settledBeforeRelease: false, cancelled: true, disk: 'original' });
+});
+
 test('picked-folder file streams preserve the requested byte range', async ({ page }) => {
 	await page.goto('/files.html');
 	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);

@@ -73,7 +73,8 @@ export class ReplaceService implements IReplaceService {
 				// Bulk edits already save closed files. Open working copies need the
 				// Search command's save step, and retain dirty text if that save fails.
 				if (reference.resource.scheme === Schemas.untitled || !affected.has(extUri.getComparisonKey(reference.resource)) || !this.workingCopies.get(reference.resource).length) { continue; }
-				try { await reference.save(options.signal); } catch (error) { saveErrors.push(error instanceof Error ? error.message : String(error)); }
+				// Persist the replacement transaction without creating additional undo steps.
+				try { await reference.save(options.signal, { skipSaveParticipants: true }); } catch (error) { saveErrors.push(error instanceof Error ? error.message : String(error)); }
 			}
 		}
 		if (!result.isApplied) { return { ...result, saveErrors }; }
@@ -85,7 +86,7 @@ export class ReplaceService implements IReplaceService {
 				for (const resource of result.resources) {
 					if (resource.scheme === Schemas.untitled || !this.workingCopies.get(resource).length) { continue; }
 					using reference = await this.models.acquire({ resource }, new AbortController().signal);
-					await reference.save(new AbortController().signal);
+					await reference.save(new AbortController().signal, { skipSaveParticipants: true });
 				}
 			},
 		};

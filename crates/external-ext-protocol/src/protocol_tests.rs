@@ -35,6 +35,58 @@ fn activation() -> ActivateParams {
 }
 
 #[test]
+fn command_registrations_round_trip_metadata_and_validate_its_limits() {
+    let request = ExtensionHostRequest {
+        context: RequestContext::new(1, 1, 1),
+        request: HostRequestKind::Activate(activation()),
+    };
+    let fixture = json!({"registrationId":"run","kind":"command","command":"acme.run","title":"Run","icon":"play","menus":[{"menu":"editor/title","when":"editorTextFocus","group":"navigation@1","alt":"acme.alternate"}]});
+    let registration: RegistrationDescriptor = serde_json::from_value(fixture.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&registration).unwrap(), fixture);
+    let response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![registration],
+        })),
+    };
+    response
+        .validate_for(&request, &ProtocolLimits::default())
+        .unwrap();
+    for (field, maximum) in [("menu", 128), ("when", 2048), ("group", 256), ("alt", 256)] {
+        let mut invalid = fixture.clone();
+        invalid["menus"][0][field] = json!("x".repeat(maximum + 1));
+        assert_command_registration_rejected(&request, invalid);
+    }
+    let mut invalid = fixture.clone();
+    invalid["icon"] = json!("x".repeat(129));
+    assert_command_registration_rejected(&request, invalid);
+    let mut invalid = fixture.clone();
+    invalid["menus"] = json!(vec![fixture["menus"][0].clone(); 65]);
+    assert_command_registration_rejected(&request, invalid);
+    let mut invalid = fixture;
+    invalid["menus"][0]["ambientAuthority"] = json!(true);
+    assert!(serde_json::from_value::<RegistrationDescriptor>(invalid).is_err());
+}
+
+fn assert_command_registration_rejected(
+    request: &ExtensionHostRequest,
+    fixture: serde_json::Value,
+) {
+    let registration: RegistrationDescriptor = serde_json::from_value(fixture).unwrap();
+    let response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![registration],
+        })),
+    };
+    assert!(
+        response
+            .validate_for(request, &ProtocolLimits::default())
+            .is_err()
+    );
+}
+
+#[test]
 fn custom_text_editors_require_capability_and_bounded_valid_selectors() {
     for (capability, selectors, priority, accepted) in [
         (
@@ -319,6 +371,8 @@ fn response_must_match_request_incarnation_and_generation() {
                 kind: RegistrationKind::Command {
                     command: "acme.review".into(),
                     title: "Review".into(),
+                    icon: None,
+                    menus: Vec::new(),
                 },
             }],
         })),

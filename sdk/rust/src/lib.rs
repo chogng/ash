@@ -130,6 +130,8 @@ impl Commands {
             kind: RegistrationKind::Command {
                 command: command.id,
                 title: command.title,
+                icon: None,
+                menus: Vec::new(),
             },
         };
         let handler: Handler = Arc::new(move |payload, token| {

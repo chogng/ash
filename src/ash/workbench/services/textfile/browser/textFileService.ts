@@ -64,15 +64,12 @@ export class TextFileService extends Disposable implements ITextFileService {
 		}
 		try {
 			const content = request.encoding === 'utf8bom' ? '\uFEFF' + request.text : request.text;
+			// Join the provider write before cancellation can release a transaction for rollback.
 			const saved = request.writeElevated
 				? await this.elevatedFiles.writeFileElevated(request.resource, VSBuffer.fromString(content), { create: true, overwrite: true, expectedRevision: request.expectedRevision }, signal)
 				: request.unlock
 					? await this.files.writeFileBytes(request.resource, VSBuffer.fromString(content).buffer, { create: false, overwrite: true, expectedRevision: request.expectedRevision, unlock: true }, signal)
-					: await raceCancellationError(this.files.writeFile({
-						resource: request.resource,
-						content,
-						...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision }),
-					}), signal, 'Text file save was cancelled');
+					: await this.files.writeFileBytes(request.resource, VSBuffer.fromString(content).buffer, { create: true, overwrite: true, expectedRevision: request.expectedRevision }, signal);
 			this.saved.fire({ resource: request.resource, content, revision: saved.revision });
 			return Object.freeze({ revision: saved.revision });
 		} catch (error) {

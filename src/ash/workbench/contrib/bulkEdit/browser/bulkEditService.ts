@@ -219,6 +219,8 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 					} else {
 						await new BulkFileEdits(operation, this.files, undo).apply();
 					}
+					// Writes may commit despite cancellation; rollback must use their settled revision.
+					throwIfCancelled(signal, "Workspace edit was cancelled");
 					progress?.report({ increment: 1 });
 				}
 			} catch (error) {

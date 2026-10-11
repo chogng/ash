@@ -19,6 +19,41 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CiWorkflowTests(unittest.TestCase):
+    def test_windows_desktop_release_prepares_the_locked_python_environment(
+        self,
+    ) -> None:
+        workflow = (ROOT / ".github/workflows/release-windows.yml").read_text()
+        steps = re.split(r"\n      - ", workflow)[1:]
+        setup = next(
+            index for index, step in enumerate(steps) if "actions/setup-python@" in step
+        )
+        uv = next(
+            index for index, step in enumerate(steps) if "astral-sh/setup-uv@" in step
+        )
+        sync = next(
+            index
+            for index, step in enumerate(steps)
+            if "scripts/install_python_tools.py" in step
+        )
+        install = next(
+            index
+            for index, step in enumerate(steps)
+            if "pnpm install --frozen-lockfile" in step
+        )
+        bundle = next(
+            index
+            for index, step in enumerate(steps)
+            if "pnpm package:win32:bundle" in step
+        )
+        self.assertLess(setup, uv)
+        self.assertLess(uv, sync)
+        self.assertLess(sync, install)
+        self.assertLess(install, bundle)
+        for index in (setup, uv, sync):
+            self.assertIn("if: matrix.target == 'x86_64-pc-windows-msvc'", steps[index])
+        self.assertIn('python-version: "3.11"', steps[setup])
+        self.assertIn("version-file: scripts/pyproject.toml", steps[uv])
+
     def setUp(self) -> None:
         self.policy = ci_workflows.load_policy(ci_workflows.POLICY)
 
@@ -50,6 +85,7 @@ class CiWorkflowTests(unittest.TestCase):
     def test_owned_sources_select_their_real_checks(self) -> None:
         cases = {
             "src/ash/editor/browser/view.ts": {"frontend"},
+            "third_party/node/runtime-lock.json": {"frontend", "tooling"},
             "sdk/rust/src/lib.rs": {"bazel", "frontend"},
             "examples/extensions/inspect/extension.cjs": {"bazel", "frontend"},
             "crates/tui/src/app.rs": {

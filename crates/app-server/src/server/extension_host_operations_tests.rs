@@ -49,6 +49,16 @@ fn channel_and_link_registrations_preserve_frontend_subscription_fields() {
 }
 
 #[test]
+fn command_registration_preserves_icon_and_menu_metadata_for_the_frontend() {
+    let fixture = serde_json::json!({"registrationId":"run","kind":"command","command":"acme.run","title":"Run","icon":"play","menus":[{"menu":"editor/title","when":"editorTextFocus","group":"navigation@1","alt":"acme.alternate"}]});
+    let registration: RegistrationDescriptor = serde_json::from_value(fixture.clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(registration_dto(registration)).unwrap(),
+        fixture
+    );
+}
+
+#[test]
 fn cancellation_reasons_are_projected_without_losing_authority_revocation() {
     assert_eq!(
         cancellation_reason(CancelReason::AuthorityRevoked),

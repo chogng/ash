@@ -205,9 +205,9 @@ export class SshPortForwardingService extends Disposable {
 		};
 		this.tunnels.set(record.tunnel.id, record);
 		this.bindChild(record, child);
-		if (child.exitCode !== null) {
+		if (child.exitCode !== null || child.signalCode !== null) {
 			this.tunnels.delete(record.tunnel.id);
-			throw new Error(`SSH tunnel exited before it became ready: ${child.exitCode}`);
+			throw new Error(`SSH tunnel exited before it became ready: ${child.exitCode ?? child.signalCode}`);
 		}
 		this.changes.fire({ kind: "upsert", tunnel: record.tunnel });
 		return record.tunnel;
@@ -408,7 +408,7 @@ async function probeLoopbackListener(localPort: number, signal?: AbortSignal): P
 }
 
 async function waitForStartup(child: ChildProcess, localPort: number, timeoutMs: number, probe: ProbeLoopbackListener, wait: (milliseconds: number, signal?: AbortSignal) => Promise<void>, now: () => number, signal?: AbortSignal): Promise<void> {
-	if (child.exitCode !== null) throw new Error(`SSH tunnel exited before startup: ${child.exitCode}`);
+	if (child.exitCode !== null || child.signalCode !== null) throw new Error(`SSH tunnel exited before startup: ${child.exitCode ?? child.signalCode}`);
 	let settled = false;
 	let failure: Error | undefined;
 	const startedAt = now();
@@ -449,12 +449,13 @@ async function waitForStartup(child: ChildProcess, localPort: number, timeoutMs:
 
 function throwIfStartupFailed(child: ChildProcess, failure: Error | undefined, signal?: AbortSignal): void {
 	if (failure) throw failure;
-	if (child.exitCode !== null) throw new Error(`SSH tunnel exited before startup: ${child.exitCode}`);
+	if (child.exitCode !== null || child.signalCode !== null) throw new Error(`SSH tunnel exited before startup: ${child.exitCode ?? child.signalCode}`);
 	if (signal) throwIfCancelled(signal, "SSH tunnel startup was cancelled");
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {
-	if (child.exitCode !== null) return;
+	// A signalled process keeps exitCode null, and its close event may already have fired.
+	if (child.exitCode !== null || child.signalCode !== null) return;
 	await new Promise<void>(resolve => {
 		const done = (): void => {
 			child.removeListener("exit", done);

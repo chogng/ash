@@ -2,7 +2,9 @@ import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/tes
 import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
 import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
-import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
+import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
+import { BulkEditTestServices } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
@@ -122,6 +124,48 @@ test("TextFileService maps conditional file-write conflicts to its editor-facing
 	const resource = URI.file("C:\\project\\main.ts");
 
 	await assert.rejects(service.save({ resource, text: "saved", expectedRevision: "stale" }, new AbortController().signal), TextFileSaveConflictError);
+});
+
+test('cancelled replacement waits for an in-flight provider write before restoring the original file', async () => {
+	const resource = URI.file('/workspace/main.ts');
+	const started = deferred<void>();
+	const release = deferred<void>();
+	let disk = 'workspace';
+	let revision = 'revision-1';
+	const writes: string[] = [];
+	const provider = new TestFileService(disk);
+	provider.writeFile = async (resource, bytes, options) => {
+		if (options.expectedRevision !== revision) throw new FileRevisionConflictError(resource);
+		if (writes.length === 0) {
+			started.resolve();
+			// This provider cannot interrupt a write already submitted to storage.
+			await release.promise;
+		}
+		disk = new TextDecoder().decode(bytes);
+		writes.push(disk);
+		revision = `revision-${writes.length + 1}`;
+		return { stat: await provider.stat(resource), revision };
+	};
+	using files = createTestFileService(provider);
+	using service = createTestTextFileService(files);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(service), {});
+	using fixture = new BulkEditTestServices([]);
+	using bulk = new BulkEditService(models, fixture.workingCopies, files, fixture.configuration, fixture.dialogs);
+	const controller = new AbortController();
+	const replacing = bulk.apply({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 10), text: 'replacement' }] }] }, { token: controller.signal });
+	const rejected = assert.rejects(replacing, isCancellationError);
+	let settled = false;
+	void replacing.then(() => { settled = true; }, () => { settled = true; });
+	await started.promise;
+	controller.abort();
+	try {
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual({ settled, disk, writes }, { settled: false, disk: 'workspace', writes: [] });
+	} finally {
+		release.resolve();
+	}
+	await rejected;
+	assert.deepEqual({ disk, writes, pending: models.hasPendingSaveRecovery() }, { disk: 'workspace', writes: ['replacement', 'workspace'], pending: false });
 });
 
 class TestFileService implements IFileSystemProvider {

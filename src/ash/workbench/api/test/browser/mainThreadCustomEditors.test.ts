@@ -174,3 +174,28 @@ test('Markdown workspace edits use dirty documents and localized validation resp
 	cancelled.abort();
 	await assert.rejects(invoke('references', request, cancelled.signal), error => error instanceof Error && error.name === 'AbortError');
 });
+
+
+test('Markdown reads unopened files for definitions, workspace references and rename edits', async () => {
+	const heading = { uri: 'file:///workspace/heading.md', text: '# Current heading', languageId: 'markdown', version: 1 };
+	const referring = { uri: 'file:///workspace/referring.md', text: '[go](./heading.md#current-heading)', languageId: 'markdown', version: 7 };
+	const reads: string[] = [];
+	const { invoke } = await loadMarkdown('en', [referring], {}, ['file:///workspace'], async request => {
+		if (request.operation === 'setDiagnostics') return { result: 'done' };
+		if (request.operation === 'statResource') return { result: 'resourceStat', fileType: request.uri === 'file:///workspace' ? 2 : 1, size: 0, mtime: 0 };
+		if (request.operation === 'readResourceDirectory') return { result: 'resourceDirectory', entries: [['heading.md', 1], ['referring.md', 1]] };
+		if (request.operation === 'readDocument' && request.uri === heading.uri) { reads.push(request.uri); return { result: 'document', document: heading }; }
+		throw new Error(`Unexpected Markdown request: ${JSON.stringify(request)}`);
+	});
+	const signal = new AbortController().signal;
+	const request = { resource: referring.uri, text: referring.text, version: referring.version, position: { lineIndex: 0, columnIndex: 23 } };
+	const definitions = await invoke('definition', request, signal) as { resource: string; }[];
+	assert.ok(definitions.some(value => value.resource === heading.uri));
+	const references = await invoke('references', { ...request, includeDeclaration: true }, signal) as { resource: string; }[];
+	assert.ok(references.some(value => value.resource === heading.uri));
+	assert.ok(references.some(value => value.resource === referring.uri));
+	const renamed = await invoke('rename', { ...request, kind: 'edit', newName: 'New heading' }, signal) as { entries: { resource: string; expectedText: string; }[]; };
+	assert.deepEqual(new Map(renamed.entries.map(value => [value.resource, value.expectedText])), new Map([[heading.uri, heading.text], [referring.uri, referring.text]]));
+	assert.ok(reads.length > 0);
+	assert.ok(reads.every(uri => uri === heading.uri));
+});

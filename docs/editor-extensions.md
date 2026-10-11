@@ -671,7 +671,7 @@ request ID、无效 Output 操作、超限 frame/Output 队列或未声明 capab
 
 | Registration kind          | Runtime v1 ceiling                                             | 产品接入状态                                                                                                                                         |
 | -------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Command                    | command ID、title 与 brokered invocation                       | 已接入；按 registration、incarnation 与 activation generation 调用                                                                                   |
+| Command                    | command ID、title、可选 icon/menus 与 brokered invocation       | 已接入；按 registration、incarnation 与 activation generation 调用，菜单解析与执行仍由客户端拥有                                                     |
 | Language Provider          | language IDs + operation set                                   | Runtime vocabulary 已实现；Frontend v1 已投影 completion、Parameter Hints、hover、formatting、Inlay Hints、Linked Editing；其余 operation 仍部分接入 |
 | Debug Adapter              | debugger type                                                  | 已接入异步 executable descriptor；只在显式启动时调用扩展，Rust 启动现有 DAP process；取消、重启和 stale fence 共用原运行时                           |
 | Task Provider              | task type                                                      | 已接入；发布用户可选择的 canonical Task，可选 env 经共享校验与变量解析后交给 PTY；不自动执行命令                                                     |

@@ -272,6 +272,11 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		using target = await this.acquire({ resource, initialText: text, ...(languageId === 'plaintext' ? {} : { languageId }) }, signal);
 		target.model.applyOperations([{ range: target.model.getFullModelRange(), text }]);
 		await target.save(signal);
+		if (!entry.disposed && entry.resource.scheme === Schemas.untitled && !target.isDirty) {
+			// Only the captured draft was saved. Edits made during the write remain dirty.
+			entry.savedText = text;
+			this.refreshDirty(entry);
+		}
 	}
 
 	private save(entry: TextModelEntry, signal: AbortSignal, options: ISaveOptions = {}): Promise<void> {

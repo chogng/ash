@@ -461,8 +461,10 @@ impl AgentRuntime for Runtime<'_> {
     ) -> Result<u64, CoreError> {
         let before = self.threads.read_thread(thread_id)?;
         let sequences = self.threads.list_session_threads(&before.session_id)?;
+        let turn_id = request.turn_id.clone();
         let interrupted = self.threads.interrupt_turn(thread_id, request)?;
-        self.agents.cancel_descendants(thread_id)?;
+        // Retries finish the original cancellation saga without touching a later Turn's children.
+        self.agents.cancel_turn_descendants(thread_id, &turn_id)?;
         for thread in sequences {
             self.publish(&thread.thread_id, thread.sequence)?;
         }

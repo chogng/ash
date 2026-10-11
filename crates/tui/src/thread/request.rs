@@ -135,18 +135,35 @@ where
     T: JsonRpcTransport,
 {
     let command_id = submission.command_id.clone();
-    let question = match submission.input.as_slice() {
-        [ChatInputItem::Text(text)] => text.trim().strip_prefix("/advisor ").map(str::trim).map(str::to_owned),
-        _ if submission.display_text.trim().starts_with("/advisor ") => return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into())),
+    let text = match submission.input.as_slice() {
+        [ChatInputItem::Text(text)] => Some(text.trim()),
         _ => None,
     };
-    let request = match question {
-        Some(question) => SessionRequest::ConsultAdvisor {
+    let command = text.and_then(|text| {
+        let (name, arguments) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
+        matches!(name, "/advisor" | "/compact").then_some((name, arguments.trim()))
+    });
+    // These commands use typed operations; attachments cannot be retained in a compaction prompt.
+    if text.is_none()
+        && submission.display_text.trim().split_whitespace().next() == Some("/compact")
+    {
+        return Err(ClientError::Protocol("Compaction retention instructions must be text; send attachments to the conversation before compacting.".into()));
+    }
+    if text.is_none() && submission.display_text.trim().starts_with("/advisor ") {
+        return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into()));
+    }
+    let request = match command {
+        Some(("/compact", arguments)) => SessionRequest::CompactContext {
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,
-            question,
+            retention_prompt: (!arguments.is_empty()).then(|| arguments.to_owned()),
         },
-        None => SessionRequest::StartTurn {
+        Some(("/advisor", question)) if !question.is_empty() => SessionRequest::ConsultAdvisor {
+            thread_id: scope.thread_id,
+            expected_sequence: scope.expected_sequence,
+            question: question.to_owned(),
+        },
+        _ => SessionRequest::StartTurn {
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,
             mode: submission.mode,

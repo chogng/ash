@@ -127,6 +127,35 @@ test('replacement retains an open dirty model on save failure and undo saves its
 	assert.deepEqual({ model: reference.model.getText(), disk: fixture.store.text(resource), dirty: reference.isDirty }, { model: 'needle', disk: 'needle', dirty: false });
 });
 
+test('replacement and undo skip save participants for open working copies', async () => {
+	using fixture = new BulkEditTestServices([[resource, 'needle']]);
+	using reference = await fixture.models.acquire({ resource }, options.signal);
+	using registration = fixture.workingCopies.register({
+		resource, backupKind: 'text',
+		get isDirty() { return reference.isDirty; },
+		get hasExternalChange() { return reference.hasExternalChange; },
+		onDidChangeDirty: reference.onDidChangeDirty, onDidChangeExternalChange: reference.onDidChangeExternalChange,
+		onDidChangeContent: Event.None,
+		backup: () => reference.model.getText(), restoreBackup: text => reference.model.setValue(text),
+		save: signal => reference.save(signal), revert: signal => reference.revert(signal),
+		saveAs: async () => { throw new Error('This test saves the existing file'); },
+		dispose() { }, [Symbol.dispose]() { },
+	});
+	let participantCalls = 0;
+	using participant = fixture.models.addSaveParticipant({ async participate(model) { participantCalls++; model.setValue(model.getText() + '\n'); } });
+	const matches = results('needle', [{ start: 0, end: 6 }]);
+	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(matches.files[0]!.matches, query, 'value', options);
+	assert.equal(applied.isApplied, true);
+	assert.deepEqual({ errors: applied.saveErrors, model: reference.model.getText(), disk: fixture.store.text(resource), dirty: reference.isDirty }, { errors: [], model: 'value', disk: 'value', dirty: false });
+	if (applied.isApplied) { await applied.undo(); }
+	assert.deepEqual({ model: reference.model.getText(), disk: fixture.store.text(resource), dirty: reference.isDirty }, { model: 'needle', disk: 'needle', dirty: false });
+	assert.equal(participantCalls, 0);
+	// Explicit user saves still run the configured cleanup.
+	await reference.save(options.signal);
+	assert.equal(participantCalls, 1);
+	assert.equal(fixture.store.text(resource), 'needle\n');
+});
+
 test('untitled replacement and undo keep the draft dirty without saving or requesting Save As', async () => {
 	const draft = URI.parse('untitled:/Untitled-1');
 	using fixture = new BulkEditTestServices([]);

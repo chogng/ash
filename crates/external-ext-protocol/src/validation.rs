@@ -165,9 +165,32 @@ pub(super) fn validate_registrations(
                 }
                 ExtensionCapability::LinkPresentationProvider
             }
-            RegistrationKind::Command { command, title } => {
+            RegistrationKind::Command {
+                command,
+                title,
+                icon,
+                menus,
+            } => {
                 validate_selector(command, "command")?;
                 validate_display_text(title, "command title")?;
+                if let Some(icon) = icon {
+                    validate_short_text(icon, 128, "command icon")?;
+                }
+                if menus.len() > 64 {
+                    return Err(ProtocolError::QuotaExceeded("command menus"));
+                }
+                for menu in menus {
+                    validate_short_text(&menu.menu, 128, "command menu ID")?;
+                    if let Some(when) = &menu.when {
+                        validate_short_text(when, 2048, "command menu condition")?;
+                    }
+                    if let Some(group) = &menu.group {
+                        validate_short_text(group, 256, "command menu group")?;
+                    }
+                    if let Some(alt) = &menu.alt {
+                        validate_short_text(alt, 256, "command menu alternate command")?;
+                    }
+                }
                 require_unique(&mut commands, command, "commands")?;
                 ExtensionCapability::Command
             }

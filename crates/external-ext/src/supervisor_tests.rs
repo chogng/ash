@@ -146,6 +146,8 @@ impl ExtensionHostProcess for TestProcess {
                         kind: RegistrationKind::Command {
                             command: "acme.review".into(),
                             title: "Review".into(),
+                            icon: None,
+                            menus: Vec::new(),
                         },
                     }],
                 }))

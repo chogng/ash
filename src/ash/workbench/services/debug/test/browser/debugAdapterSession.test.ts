@@ -317,6 +317,35 @@ test('unsupported adapters receive neither disassembly nor instruction stepping 
 	} finally { await session.disconnect(); }
 });
 
+for (const count of [128, 200, 256]) {
+	test(`DebugAdapterSession drains all ${count} buffered messages after process exit`, async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+		try {
+			processes.readPages.length = 0;
+			const lines = Array.from({ length: count }, (_, index) => `tail-${index}\n`);
+			for (const output of lines) processes.event('output', { output });
+			processes.exited = true;
+			await waitFor(() => session.state === 'terminated');
+			assert.equal(session.output, lines.join(''));
+			assert.deepEqual(processes.readPages, count === 200 ? [128, 72] : [...Array(count / 128).fill(128), 0]);
+		} finally { await session.disconnect(); }
+	});
+}
+
+test('DebugAdapterSession drains output after a terminated event before closing its transport', async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+	try {
+		processes.event('terminated');
+		const lines = Array.from({ length: 200 }, (_, index) => `tail-${index}\n`);
+		for (const output of lines) processes.event('output', { output });
+		await waitFor(() => session.state === 'terminated');
+		assert.equal(session.output, lines.join(''));
+		assert.equal(processes.closed, true);
+	} finally { await session.disconnect(); }
+});
+
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
 	private readonly messages: Array<{ readonly sequence: number; readonly message: unknown; }> = [];
@@ -324,6 +353,8 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	readonly sent: Array<Record<string, unknown>> = [];
 	started: unknown;
 	closed = false;
+	exited = false;
+	readonly readPages: number[] = [];
 	setVariableReply: Record<string, unknown> | undefined;
 	holdBreakpoints = false;
 	heldBreakpointResponse: Record<string, unknown> | undefined;
@@ -361,7 +392,8 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 
 	async read(_sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
 		const messages = this.messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages);
-		return { messages, nextSequence: this.nextMessageSequence, outputGap: false, stderr: "", exited: false, exitCode: null, protocolError: null };
+		this.readPages.push(messages.length);
+		return { messages, nextSequence: messages.at(-1)?.sequence !== undefined ? messages.at(-1)!.sequence + 1 : afterSequence, outputGap: false, stderr: "", exited: this.exited, exitCode: this.exited ? 0 : null, protocolError: null };
 	}
 
 	async close(): Promise<void> { this.closed = true; }

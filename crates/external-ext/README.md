@@ -117,6 +117,10 @@ ceiling 包含 completion、Parameter Hints、definition、hover、references、
 action、code lens、document symbols、folding、document links/colors、semantic tokens、Inlay Hints 与
 Linked Editing。
 
+命令注册可附带 `icon` 和 `menus`，Host RPC 与 App Server 保留这些展示元数据供客户端解析；
+省略字段的旧注册继续有效。`icon` 最多 128 字节，每个命令最多 64 个 menu placement；
+placement 的 `menu`、`when`、`group`、`alt` 分别最多 128、2048、256、256 字节，未知字段仍被拒绝。
+
 `ActivateParams.activation_events` 是上层已经解析的 activation facts，监管器不会自行观察编辑器事件，
 也不会据此决定何时启动。`capabilities` 则是强制 registration ceiling：进程不能通过 activation 响应
 注册 manifest 未声明的 provider kind。协议支持的 provider kind 不等于 App Server/Workbench 已有对应

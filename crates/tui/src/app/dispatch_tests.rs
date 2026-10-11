@@ -83,6 +83,77 @@ fn advisor_question_uses_consult_request_instead_of_worker_turn() {
 }
 
 #[test]
+fn compact_from_the_composer_creates_a_compaction_turn() {
+    let (mut client, state_root, _) = client_with_model_probe();
+    let conversation = ActiveConversation::start(&mut client, "compact".into()).unwrap();
+    let mut app = App::for_dir_with_slash_commands(
+        std::path::Path::new("."),
+        crate::thread::composer::SlashCommandCatalog::with_local_and_server(
+            crate::thread::composer::built_in_slash_command_definitions(),
+            ash_slash_commands::SlashCommandCatalog::default()
+                .commands()
+                .to_vec(),
+        )
+        .unwrap(),
+    );
+    app.insert_text("/compact Keep the file paths");
+    let Some(AppCommand::Thread(crate::thread::Command::SubmitTurn { submission })) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("compact should reach the shared submission boundary");
+    };
+    let command_id = submission.command_id.clone();
+    let started = submit_prompt(
+        &mut client,
+        ThreadRequestScope::new(
+            conversation.session_id(),
+            conversation.thread_id(),
+            conversation.thread_sequence(),
+        ),
+        submission,
+        ApprovalMode::Manual,
+    )
+    .unwrap();
+    let snapshot = read_thread(
+        &mut *client,
+        conversation.session_id(),
+        conversation.thread_id(),
+    )
+    .unwrap();
+    let turn = snapshot
+        .turns
+        .iter()
+        .find(|turn| turn.turn_id == started.turn_id)
+        .unwrap();
+    assert!(turn.instructions.is_none());
+    // Replay the typed operation: an ordinary StartTurn with this command ID would conflict.
+    let replay = client
+        .request_session(
+            ash_app_server_protocol::protocol::session::SessionRequestParams {
+                command_id,
+                session_id: conversation.session_id().clone(),
+                request:
+                    ash_app_server_protocol::protocol::session::SessionRequest::CompactContext {
+                        thread_id: conversation.thread_id().clone(),
+                        expected_sequence: conversation.thread_sequence(),
+                        retention_prompt: Some("Keep the file paths".into()),
+                    },
+            },
+        )
+        .unwrap();
+    assert!(
+        matches!(replay, ash_app_server_protocol::protocol::session::SessionRequestResult::Turn(result) if result.turn_id == started.turn_id)
+    );
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 20)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    crate::tui_assert_snapshot!(app = &app; "compact_submitted", terminal.backend().to_string());
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
 fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
     let (mut client, state_root, model) = client_with_model_probe();
     let mut conversation = ActiveConversation::start(&mut client, "original".into()).unwrap();

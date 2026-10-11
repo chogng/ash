@@ -172,3 +172,63 @@ fn audio_steering_preserves_the_uploaded_attachment_reference() {
         serde_json::json!([{"type":"audioAttachment","attachment":attachment}])
     );
 }
+
+#[test]
+fn compact_submission_uses_the_typed_operation_and_retention_prompt() {
+    use ash_app_server_protocol::protocol::session::SessionRequest;
+    use ash_app_server_protocol::protocol::session::SessionRequestParams;
+    use ash_app_server_protocol::protocol::turn::TurnStartResult;
+    for (text, retention) in [
+        ("/compact", None),
+        (" /compact  ", None),
+        (
+            "/compact keep decisions\nand paths",
+            Some("keep decisions\nand paths"),
+        ),
+        ("/compact\tkeep paths", Some("keep paths")),
+    ] {
+        let recorded = Arc::new(Mutex::new(None));
+        let response = SessionRequestResult::Turn(TurnStartResult {
+            turn_id: TurnId::new("compact-turn").unwrap(),
+            sequence: 8,
+        });
+        let mut client = AppServerClient::new(RecordingTransport {
+            request: Arc::clone(&recorded),
+            response: serde_json::json!({"jsonrpc":"2.0","id":1,"result":response}).to_string(),
+        });
+        let result = super::submit_prompt(
+            &mut client,
+            ThreadRequestScope::new(
+                &SessionId::new("session").unwrap(),
+                &ThreadId::new("thread").unwrap(),
+                7,
+            ),
+            ChatSubmission {
+                mode: Default::default(),
+                command_id: ash_protocol::CommandId::new("compact-command").unwrap(),
+                display_text: text.into(),
+                input: vec![ChatInputItem::Text(text.into())],
+            },
+            ash_protocol::ApprovalMode::Manual,
+        )
+        .unwrap();
+        assert_eq!(result.turn_id.as_str(), "compact-turn");
+        let request: serde_json::Value =
+            serde_json::from_str(recorded.lock().unwrap().as_ref().unwrap()).unwrap();
+        let params: SessionRequestParams =
+            serde_json::from_value(request["params"].clone()).unwrap();
+        assert_eq!(params.command_id.as_str(), "compact-command");
+        assert_eq!(params.session_id.as_str(), "session");
+        let SessionRequest::CompactContext {
+            thread_id,
+            expected_sequence,
+            retention_prompt,
+        } = params.request
+        else {
+            panic!("expected CompactContext");
+        };
+        assert_eq!(thread_id.as_str(), "thread");
+        assert_eq!(expected_sequence, 7);
+        assert_eq!(retention_prompt.as_deref(), retention);
+    }
+}

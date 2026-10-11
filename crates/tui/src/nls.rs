@@ -987,6 +987,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "输入为空时查看键盘快捷键",
         "Afficher les raccourcis lorsque la saisie est vide",
     ),
+    translation(
+        "Compaction retention instructions must be text; send attachments to the conversation before compacting.",
+        "圧縮時の保持指示はテキストで指定してください。添付ファイルは先に会話へ送信してください。",
+        "压缩时的保留指令必须是文字；请先把附件发送到会话中。",
+        "Les consignes de conservation doivent être du texte ; envoyez les pièces jointes avant de compacter.",
+    ),
     translation("Working", "処理中", "正在处理", "Traitement en cours"),
     translation(
         "Model or provider configuration is missing or invalid",

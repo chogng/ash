@@ -52,6 +52,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	private readonly pending = new Map<number, { readonly resolve: (response: DapResponse) => void; readonly reject: (error: Error) => void; readonly timeout: ReturnType<typeof setTimeout>; }>();
 	private transport: InlineDebugAdapter | undefined;
 	private adapterStarted = false;
+	private adapterTerminated = false;
 	private requestSequence = 1;
 	private readSequence = 0;
 	private polling = false;
@@ -591,9 +592,11 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 					this.trackReceivedMessage(entry.message);
 					this.acceptMessage(entry.message);
 				}
-				if (read.exited) {
+				// Exit describes the process, not whether this bounded page drained its output.
+				if ((read.exited || this.adapterTerminated) && read.messages.length === 128) { continue; }
+				if (read.exited || this.adapterTerminated) {
 					this.adapterExitCode = read.exitCode ?? undefined;
-					this._reason = `Debug adapter exited${read.exitCode === null ? "" : ` with code ${read.exitCode}`}`;
+					if (read.exited) this._reason = `Debug adapter exited${read.exitCode === null ? "" : ` with code ${read.exitCode}`}`;
 					this.setState("terminated");
 					break;
 				}
@@ -646,7 +649,8 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		}
 		if (eventValue.event === "continued") { this.setState("running"); return; }
 		if (eventValue.event === "terminated" || eventValue.event === "exited") {
-			this.setState("terminated");
+			// The polling owner closes the transport after draining buffered output pages.
+			this.adapterTerminated = true;
 			return;
 		}
 		if (eventValue.event === "breakpoint") {

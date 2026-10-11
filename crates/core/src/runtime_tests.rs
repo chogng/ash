@@ -421,3 +421,103 @@ fn failed_interaction_resume_keeps_the_answer_and_records_terminal_failure() {
             .unwrap()
     );
 }
+
+#[test]
+fn interrupt_replay_does_not_cancel_children_of_a_later_turn() {
+    let fixture = Fixture::new(Failure::None);
+    let runtime = fixture.runtime();
+    let first = runtime
+        .submit_turn(&fixture.thread_id, fixture.submit("first"))
+        .unwrap();
+    let spawn = |turn_id: &TurnId, delegation_id: &str| {
+        let parent = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+        let turn = parent
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == *turn_id)
+            .unwrap();
+        fixture
+            .agents
+            .spawn(crate::SpawnAgentRequest {
+                delegation_id: ash_protocol::DelegationId::new(delegation_id).unwrap(),
+                agent_id: None,
+                session_id: parent.session_id.clone(),
+                parent_thread_id: fixture.thread_id.clone(),
+                parent_turn_id: turn_id.clone(),
+                task: ash_protocol::DelegatedTask {
+                    title: "review".into(),
+                    instructions: "Review this Turn".into(),
+                },
+                role: None,
+                base_instructions: crate::test_turn_instructions(),
+                inheritance: ash_protocol::AgentContextMode::Fresh,
+                policy_ceiling: ash_protocol::DelegatedPolicyCeiling {
+                    policy_revision: turn.policy_revision.clone(),
+                },
+                capability_scope: ash_protocol::AgentCapabilityScope {
+                    tools: vec![],
+                    delegation_tools: vec![],
+                    skills: vec![],
+                },
+            })
+            .unwrap()
+    };
+    let first_child = spawn(&first.turn_id, "first-child");
+    let interrupt_sequence = fixture
+        .threads
+        .read_thread(&fixture.thread_id)
+        .unwrap()
+        .sequence;
+    let interrupt = || InterruptTurnRequest {
+        command_id: CommandId::new("interrupt-first").unwrap(),
+        expected_sequence: SequenceExpectation::Exact(interrupt_sequence),
+        turn_id: first.turn_id.clone(),
+    };
+    let interrupted = runtime
+        .interrupt_turn(&fixture.thread_id, interrupt())
+        .unwrap();
+    assert_eq!(
+        fixture
+            .threads
+            .read_thread(&first_child.child_thread_id)
+            .unwrap()
+            .turns[0]
+            .status,
+        TurnStatus::Interrupted
+    );
+    let mut next_request = fixture.submit("next");
+    next_request.command_id = CommandId::new("next").unwrap();
+    next_request.expected_sequence = SequenceExpectation::Exact(
+        fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .sequence,
+    );
+    let next = runtime
+        .submit_turn(&fixture.thread_id, next_request)
+        .unwrap();
+    let next_child = spawn(&next.turn_id, "next-child");
+    let before_parent = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    let before_child = fixture
+        .threads
+        .read_thread(&next_child.child_thread_id)
+        .unwrap();
+    fixture.updates.0.lock().unwrap().clear();
+    assert_eq!(
+        runtime
+            .interrupt_turn(&fixture.thread_id, interrupt())
+            .unwrap(),
+        interrupted
+    );
+    let after_child = fixture
+        .threads
+        .read_thread(&next_child.child_thread_id)
+        .unwrap();
+    assert_eq!(after_child.sequence, before_child.sequence);
+    assert_eq!(after_child.turns[0].status, before_child.turns[0].status);
+    let after_parent = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert_eq!(after_parent.sequence, before_parent.sequence);
+    assert!(!after_parent.delegations[&next_child.delegation_id].cancellation_requested);
+    assert!(fixture.updates.0.lock().unwrap().is_empty());
+}

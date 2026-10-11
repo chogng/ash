@@ -79,8 +79,8 @@ export async function registerLanguageFeatures(context) {
 		const openDocument = async (resource) => {
 			if (documents.has(resource.toString())) { return documents.get(resource.toString()); }
 			if (!markdownExtensions.test(resource.path)) { return undefined; }
-			const snapshot = open.find((document) => document.uri === resource.toString());
-			if (snapshot) { return remember(snapshot); }
+			const openSnapshot = open.find((document) => document.uri === resource.toString());
+			if (openSnapshot) { return remember(openSnapshot); }
 			if (!(await stat(resource))) { return undefined; }
 			return remember(
 				snapshot(await vscode.workspace.openTextDocument(vscode.Uri.parse(resource.toString()))),

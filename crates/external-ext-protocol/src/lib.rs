@@ -306,6 +306,25 @@ impl<'de> Deserialize<'de> for RegistrationDescriptor {
     }
 }
 
+/// Command placement metadata; the client owns menu resolution and invocation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionCommandMenu {
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 128)))]
+    pub menu: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 2048)))]
+    pub when: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 256)))]
+    pub group: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 256)))]
+    pub alt: Option<String>,
+}
+
 /// Narrow v1 contribution types that App Server brokers can project to domain owners.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(
@@ -348,6 +367,10 @@ pub enum RegistrationKind {
     Command {
         command: String,
         title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        icon: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        menus: Vec<ExtensionCommandMenu>,
     },
     /// Client owns the text model, webview and resource access; provider supplies content.
     CustomTextEditor {

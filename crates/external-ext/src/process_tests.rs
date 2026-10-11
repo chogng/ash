@@ -282,7 +282,10 @@ fn product_node_process_speaks_the_shared_protocol_and_uses_real_node() {
     let package = root.join("extension");
     std::fs::create_dir(&package).unwrap();
     std::fs::write(package.join("package.json"), json!({
-        "publisher": "test", "name": "node", "contributes": { "commands": [{"command": "test.node", "title": "Node"}] }
+        "publisher": "test", "name": "node", "contributes": {
+            "commands": [{"command": "test.node", "title": "Node", "icon": "$(play)"}],
+            "menus": {"editor/title": [{"command": "test.node", "when": "editorTextFocus", "group": "navigation@1", "alt": "test.alternate"}]}
+        }
     }).to_string()).unwrap();
     std::fs::write(package.join("extension.cjs"), r#"
 const v = require('vscode');
@@ -369,13 +372,16 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
         activation_events: vec!["*".into()],
         capabilities: vec![crate::ExtensionCapability::Command],
     }));
-    assert!(
-        matches!(
-            activated,
-            crate::HostResponseKind::Success(crate::HostSuccess::Activated(_))
-        ),
-        "{}",
-        process.stderr()
+    let crate::HostResponseKind::Success(crate::HostSuccess::Activated(activated)) = activated
+    else {
+        panic!("activation failed: {}", process.stderr());
+    };
+    assert_eq!(
+        serde_json::to_value(activated.registrations).unwrap(),
+        json!([{"registrationId":"vscode.workspace.events","kind":"workspaceEvents"}, {
+                "registrationId": "test.node", "kind": "command", "command": "test.node", "title": "Node", "icon": "play",
+                "menus": [{"menu": "editor/title", "when": "editorTextFocus", "group": "navigation@1", "alt": "test.alternate"}]
+        }])
     );
     let invoked = request(crate::HostRequestKind::Invoke(crate::InvokeParams {
         extension_id: "test.node".into(),

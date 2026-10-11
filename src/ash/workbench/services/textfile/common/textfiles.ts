@@ -8,6 +8,7 @@ export interface ITextFileService {
 	readonly onDidChangeFiles: Event<IFileChangeEvent>;
 	readonly onDidSave: Event<ITextFileSaveEvent>;
 	resolve(request: TextFileResolveRequest, signal: AbortSignal): Promise<ResolvedTextFileContent>;
+	/** Waits for provider settlement even after cancellation; a committed write returns its revision. */
 	save(request: TextFileSaveRequest, signal: AbortSignal): Promise<TextFileSaveResult>;
 }
 

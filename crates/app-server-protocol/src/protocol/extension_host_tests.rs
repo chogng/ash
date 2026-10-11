@@ -100,6 +100,20 @@ fn channel_and_link_registration_wire_shapes_round_trip_and_reject_extra_fields(
 }
 
 #[test]
+fn command_registration_preserves_optional_icon_and_menu_metadata() {
+    for fixture in [
+        json!({"registrationId":"run","kind":"command","command":"acme.run","title":"Run"}),
+        json!({"registrationId":"run","kind":"command","command":"acme.run","title":"Run","icon":"play","menus":[{"menu":"editor/title","when":"editorTextFocus","group":"navigation@1","alt":"acme.alternate"}]}),
+    ] {
+        let descriptor: ExtensionHostRegistrationDescriptorDto =
+            serde_json::from_value(fixture.clone()).unwrap();
+        assert_eq!(serde_json::to_value(descriptor).unwrap(), fixture);
+    }
+    let invalid = json!({"registrationId":"run","kind":"command","command":"acme.run","title":"Run","menus":[{"menu":"editor/title","ambientAuthority":true}]});
+    assert!(serde_json::from_value::<ExtensionHostRegistrationDescriptorDto>(invalid).is_err());
+}
+
+#[test]
 fn generated_typescript_uses_camel_case_registration_fields() {
     let typescript = crate::typescript_files()
         .into_iter()

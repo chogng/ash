@@ -592,6 +592,57 @@ test('Search replaces across lines on disk and undo restores the searched conten
 	expect((await readFile(path, 'utf8')).replace(/\r\n/g, '\n')).toBe('中文😀 second first end\n');
 });
 
+test('Search replacement and undo preserve an open file with save cleanup enabled', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required' && target.kind !== 'browser', 'Uses workspace files or the browser filesystem.');
+	const original = 'ash_save_cleanup_token  ';
+	const path = join(testWorkspace.directory, 'cleanup.txt');
+	const folderName = `cleanup-${Date.now()}`;
+	if (target.appServerMode === 'required') {
+		await writeFile(path, original);
+	} else {
+		await workbench.page.evaluate(async ({ folderName, original }) => {
+			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(folderName, { create: true });
+			const writer = await (await folder.getFileHandle('cleanup.txt', { create: true })).createWritable();
+			await writer.write(original); await writer.close();
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		}, { folderName, original });
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+	}
+	const readContents = () => target.appServerMode === 'required' ? readFile(path, 'utf8') : workbench.page.evaluate(async folderName => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(folderName);
+		return (await (await folder.getFileHandle('cleanup.txt')).getFile()).text();
+	}, folderName);
+	await expect(workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'cleanup.txt', exact: true })).toBeVisible();
+	await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'cleanup.txt', exact: true }).dblclick();
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorContents(text => text === original);
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+A');
+	await editor.input.evaluate(element => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', JSON.stringify({ 'files.insertFinalNewline': true, 'files.trimTrailingWhitespace': true }));
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	});
+	await editor.input.press('ControlOrMeta+S');
+	await expect(workbench.page.getByRole('tab', { name: 'User Settings (JSON)', exact: true }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	await workbench.page.getByRole('tab', { name: 'cleanup.txt', exact: true }).click();
+	await workbench.search.open();
+	await workbench.search.search('ash_save_cleanup_token');
+	await expect(workbench.search.status).toHaveText('1 results');
+	await workbench.search.element.getByRole('textbox', { name: 'Replace', exact: true }).fill('updated');
+	await workbench.dialogs.confirm(application, 'Confirm', 'Replace All', () => workbench.search.element.getByRole('button', { name: 'Replace All', exact: true }).click());
+	await expect(workbench.search.status).toHaveText('No results found.');
+	expect(await readContents()).toBe('updated  ');
+	const toolbar = workbench.page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['Undo replacement']);
+	await expect(workbench.search.status).toHaveText('1 results');
+	expect(await readContents()).toBe(original);
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(readContents).toBe('ash_save_cleanup_token\n');
+});
+
 test('Search undoes replacement across 21 unopened files', async ({ target, application, workbench, testWorkspace }) => {
 	test.skip(target.appServerMode !== 'required' && target.kind !== 'browser', 'Uses workspace files or the browser filesystem.');
 	const paths = Array.from({ length: 21 }, (_, index) => join(testWorkspace.directory, `replace-${index}.txt`));
