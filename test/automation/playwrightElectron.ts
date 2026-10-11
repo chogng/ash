@@ -7,6 +7,7 @@ import { _electron, type ElectronApplication, type Request } from "@playwright/t
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { WorkbenchDiagnostics } from './playwrightDriver.js';
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
+import { registerSmokeResource } from './smokeProcess.js';
 
 export interface ElectronApplicationLaunchResult {
 	readonly application: ElectronApplication;
@@ -28,6 +29,10 @@ export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window
 export async function launchElectronApplication(options: ElectronLaunchOptions): Promise<ElectronApplicationLaunchResult> {
 	const configuration = resolveElectronConfiguration(options);
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
+	const resource = await registerSmokeResource(options.appServerMode === 'required' && options.profileDirectory === undefined ? () => ({
+		executable: appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath }),
+		profile: resolve(options.userDataDirectory, 'profile'),
+	}) : undefined);
 	const application = await _electron.launch({
 		args: [...configuration.args],
 		cwd: configuration.cwd,
@@ -39,6 +44,7 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 	const diagnostics = new WorkbenchDiagnostics(application.context());
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
 	const electronProcess = application.process();
+	await resource.process(electronProcess);
 	let closing: Promise<void> | undefined;
 	const shutdown = (kind: 'quit' | 'destroy'): Promise<void> => closing ??= (async () => {
 		const exited = electronProcess.exitCode !== null || electronProcess.signalCode !== null
@@ -84,6 +90,7 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 			finally { clearTimeout(shutdownTimer); }
 		}
 		if (termination) throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
+		await resource.dispose();
 	})();
 	return { application, diagnostics, quit: () => shutdown('quit'), close: () => shutdown('destroy') };
 }

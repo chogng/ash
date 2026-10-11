@@ -11,31 +11,31 @@ Smoke tests live in `test/smoke/` and drive a full Ash instance (Electron or web
 
 Run from the repository root:
 
-- `pnpm run smoketest` — compiles the smoke tests first (`test/smoke`), then runs them.
-- `pnpm run smoketest-no-compile` — runs the already-compiled smoke tests. CI uses this after an explicit compile step.
+- `pnpm run smoketest` — prepares the backend, builds Desktop, typechecks the automation, then runs the Electron App Server project.
+- `pnpm run smoketest-no-compile` — runs that project against existing preparation. CI uses this after an explicit preparation step.
 
-Both forward extra arguments after `--` to the runner (`test/smoke/test/index.js`).
+The smoke commands use `test/smoke/run.ts` and Playwright. Pass file filters and options directly after the script name, without `--`. The runner accepts one leading npm-style separator for compatibility, but rejects separators between Playwright arguments: Playwright excludes everything after `--` from test selection.
 
 For a specific target:
 
-| Target | Prepare and run | Run after preparation |
-| --- | --- | --- |
-| Electron UI | `pnpm run test:smoke:ui` | `pnpm run test:smoke:ui:no-compile` |
-| Electron with App Server | `pnpm run smoketest` | `pnpm run smoketest-no-compile` |
-| Browser UI | `pnpm run test:smoke:browser` | `pnpm run test:smoke:browser:no-compile` |
-| Browser with App Server | `pnpm run test:smoke:browser:full` | `pnpm run test:smoke:browser:full:no-compile` |
+| Target                   | Prepare and run                    | Run after preparation                         |
+| ------------------------ | ---------------------------------- | --------------------------------------------- |
+| Electron UI              | `pnpm run test:smoke:ui`           | `pnpm run test:smoke:ui:no-compile`           |
+| Electron with App Server | `pnpm run smoketest`               | `pnpm run smoketest-no-compile`               |
+| Browser UI               | `pnpm run test:smoke:browser`      | `pnpm run test:smoke:browser:no-compile`      |
+| Browser with App Server  | `pnpm run test:smoke:browser:full` | `pnpm run test:smoke:browser:full:no-compile` |
 
-The regular commands run their matching `pretest:smoke:*` preparation first. The `no-compile` commands require that preparation to have completed against the current source. CI runs preparation and execution as separate steps so a temporary repeat loop can rerun tests without rebuilding on every iteration. Extra arguments after the script name go to Playwright; no `--` separator is needed.
+The regular commands run their matching `pretest:smoke:*` preparation first. The `no-compile` commands require that preparation to have completed against the current source. Reuse valid preparation instead of rebuilding for another targeted run. CI runs preparation and execution separately.
 
 ## Common options
 
-| Option | Description |
-| --- | --- |
-| `test/smoke/areas/<area>/<file>.spec.ts` | Select one spec file. |
-| `--grep "<pattern>"` | Filter Playwright test titles. |
-| `--list` | Show selected tests without running them. |
-| `--repeat-each=N` | Repeat every selected test N times in one run. |
-| `--max-failures=1` | Stop after the first failed test. |
+| Option                                   | Description                                    |
+| ---------------------------------------- | ---------------------------------------------- |
+| `test/smoke/areas/<area>/<file>.spec.ts` | Select one spec file.                          |
+| `--grep "<pattern>"`                     | Filter Playwright test titles.                 |
+| `--list`                                 | Show selected tests without running them.      |
+| `--repeat-each=N`                        | Repeat every selected test N times in one run. |
+| `--max-failures=1`                       | Stop after the first failed test.              |
 
 ```bash
 # Prepare and run the Browser UI suite
@@ -48,7 +48,17 @@ pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/home.spec.ts --list
 pnpm run smoketest --grep "<test title>"
 ```
 
-A grep pattern can select more than one test. Check the selected list when the title is not unique. The runner exits nonzero if a selected test fails.
+A grep pattern can select more than one test. Check the selected list when the title is not unique. Before launching product processes, the runner collects tests and prints the selected count. Invalid options, empty grep patterns, misplaced separators, and zero matches fail; they must never trigger a fallback to the full suite. An unfiltered command intentionally selects the entire owning project. The runner exits nonzero if a selected test fails.
+
+Use `--debug` for interactive debugging. The runner rejects Playwright's `--ui` mode because it bypasses the collection-only preflight.
+
+## Stopping a run
+
+Send Ctrl-C / SIGINT or SIGTERM to the actual runner command. It stops scheduling and allows up to 45 seconds for Playwright teardown; interrupt again to skip that wait. It force-terminates surviving workers and product process trees, confirms their exit, then stops registered test-owned App Server profiles so clients cannot restart them. Electron processes and managed daemons use separate process groups, so killing only a wrapper or one parent PID is insufficient. Never stop unrelated Ash instances by executable name.
+
+Ending an agent turn or terminating a JavaScript orchestration cell does not prove the external command stopped. Retain the command's execution/session handle, stop the actual command, wait for its exit, and check for surviving test processes before reporting it stopped.
+
+Runner regression checks: `pnpm run test:smoke:runner` exercises argument selection and cancellation through real subprocesses without running the full smoke suite. After Desktop/Web/backend preparation, `pnpm run test:smoke:runner:product` checks cancellation of real Electron and connected Web instances and their managed backends. Signal-driven subprocess checks require POSIX; they explicitly skip on Windows, where the runner uses `taskkill /T /F` for process-tree cleanup.
 
 ## Temporarily loop a test to reproduce a CI failure
 

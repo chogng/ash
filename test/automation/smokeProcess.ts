@@ -1,0 +1,192 @@
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
+
+const execute = promisify(execFile);
+
+interface ProcessIdentity {
+	readonly pid: number;
+	readonly parent: number;
+	readonly group?: number;
+	readonly started: string;
+}
+
+interface SmokeResource {
+	process?: ProcessIdentity;
+	daemon?: { readonly executable: string; readonly profile: string; };
+}
+
+/** Registers resources that can outlive a Playwright worker, before they start. */
+export async function registerSmokeResource(daemon?: SmokeResource['daemon'] | (() => NonNullable<SmokeResource['daemon']>)): Promise<{ process(child: ChildProcess): Promise<void>; dispose(): Promise<void>; }> {
+	const directory = process.env.ASH_SMOKE_RUN_DIRECTORY;
+	const path = directory ? join(directory, `resource-${randomUUID()}.json`) : undefined;
+	// Other launcher consumers can prepare their package during launch. Resolve
+	// the pre-launch executable only for a prepared smoke run that owns cleanup.
+	const resource: SmokeResource = { daemon: directory ? typeof daemon === 'function' ? daemon() : daemon : undefined };
+	const save = async (): Promise<void> => {
+		if (!path) return;
+		// Cancellation may read the registry while a worker registers its process.
+		await writeFile(`${path}.tmp`, JSON.stringify(resource));
+		await rename(`${path}.tmp`, path);
+	};
+	await save();
+	return {
+		process: async child => {
+			if (!path || !child.pid) return;
+			resource.process = (await processes()).get(child.pid);
+			await save();
+		},
+		dispose: async () => { if (path) await rm(path, { force: true }); },
+	};
+}
+
+/** Owns sequential runner commands and cancellation, including detached product resources. */
+export class SmokeTestRun {
+	private child: ChildProcess | undefined;
+	private exited: Promise<void> | undefined;
+	private closing: Promise<void> | undefined;
+	private finishGrace: (() => void) | undefined;
+	private readonly owned = new Map<number, ProcessIdentity>();
+	public stopped = false;
+
+	private readonly cwd: string;
+	private readonly directory: string;
+	constructor(cwd: string, directory: string) { this.cwd = cwd; this.directory = directory; }
+
+	public async command(command: string, args: readonly string[], env: NodeJS.ProcessEnv, capture = false): Promise<{ code: number; output: string; }> {
+		if (this.stopped) throw new Error('Smoke test run was stopped; refusing to start another command.');
+		const child = spawn(command, args, { cwd: this.cwd, env, stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit', detached: process.platform !== 'win32', windowsHide: true });
+		this.child = child;
+		let output = '';
+		child.stdout?.on('data', (data: Buffer) => { output += data.toString(); });
+		const result = new Promise<{ code: number; output: string; }>((resolveExit, reject) => {
+			child.once('error', reject);
+			child.once(capture ? 'close' : 'exit', (code, signal) => resolveExit({ code: signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1, output }));
+		});
+		this.exited = result.then(() => undefined, () => undefined);
+		try { return await result; }
+		finally { if (this.child === child) this.child = undefined; }
+	}
+
+	public stop(signal: NodeJS.Signals): Promise<void> {
+		if (this.closing) { this.finishGrace?.(); return this.closing; }
+		this.stopped = true;
+		const child = this.child;
+		const exited = this.exited;
+		const interruptedAgain = new Promise<void>(resolveGrace => { this.finishGrace = resolveGrace; });
+		return this.closing = (async () => {
+			const errors: unknown[] = [];
+			try { await this.rememberTree(child?.pid); } catch (error) { errors.push(error); }
+			// Playwright first stops scheduling and runs fixture teardown. Electron
+			// and managed daemons have separate process groups, so a group signal alone
+			// cannot clean the run. Retain their identities before the worker exits.
+			if (child?.exitCode === null && child.signalCode === null) child.kill(signal);
+			let timeout: ReturnType<typeof setTimeout> | undefined;
+			try {
+				timeout = setTimeout(() => this.finishGrace?.(), 45_000);
+				await Promise.race([exited, interruptedAgain]);
+			} finally { clearTimeout(timeout); this.finishGrace = undefined; }
+			try { await this.rememberTree(child?.pid); } catch (error) { errors.push(error); }
+			try { await this.cleanup(); } catch (error) { errors.push(error); }
+			if (errors.length) throw new AggregateError(errors, 'Smoke test cancellation failed');
+		})();
+	}
+
+	public close(): Promise<void> {
+		return this.closing ??= this.cleanup();
+	}
+
+	private async resources(): Promise<SmokeResource[]> {
+		const names = (await readdir(this.directory)).filter(name => name.startsWith('resource-') && name.endsWith('.json'));
+		const resources: SmokeResource[] = [];
+		for (const name of names) {
+			try { resources.push(JSON.parse(await readFile(join(this.directory, name), 'utf8'))); }
+			catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+		}
+		return resources;
+	}
+
+	private async rememberTree(root?: number): Promise<void> {
+		const current = await processes();
+		const roots = new Set<number>();
+		if (root && current.has(root)) roots.add(root);
+		for (const resource of await this.resources()) {
+			if (resource.process && current.get(resource.process.pid)?.started === resource.process.started) roots.add(resource.process.pid);
+		}
+		for (const identity of this.owned.values()) {
+			if (current.get(identity.pid)?.started === identity.started) roots.add(identity.pid);
+		}
+		let changed = true;
+		while (changed) {
+			changed = false;
+			const groups = new Set([...this.owned.values(), ...[...roots].map(pid => current.get(pid)!)].filter(identity => identity.group === identity.pid).map(identity => identity.pid));
+			for (const identity of current.values()) {
+				if (!roots.has(identity.pid) && (roots.has(identity.parent) || (identity.group !== undefined && groups.has(identity.group)))) { roots.add(identity.pid); changed = true; }
+			}
+		}
+		for (const pid of roots) this.owned.set(pid, current.get(pid)!);
+	}
+
+	private async cleanup(): Promise<void> {
+		const errors: unknown[] = [];
+		try { await this.rememberTree(); } catch (error) { errors.push(error); }
+		const resources = await this.resources();
+		const current = await processes();
+		if (process.platform !== 'win32') {
+			// Kill owned groups as well as the snapshot's PIDs: a renderer can fork
+			// another helper between enumeration and delivery of the signal.
+			for (const root of this.owned.values()) {
+				if (root.group !== root.pid) continue;
+				const memberAlive = [...this.owned.values()].some(member => member.group === root.pid && current.get(member.pid)?.started === member.started);
+				if (!memberAlive) continue;
+				try { process.kill(-root.pid, 'SIGKILL'); }
+				catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') errors.push(error); }
+			}
+		}
+		for (const identity of [...this.owned.values()].reverse()) {
+			if (current.get(identity.pid)?.started !== identity.started) continue;
+			try {
+				if (process.platform === 'win32') await execute('taskkill', ['/PID', String(identity.pid), '/T', '/F'], { windowsHide: true, timeout: 5_000 });
+				else process.kill(identity.pid, 'SIGKILL');
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== 'ESRCH' && (await processes()).get(identity.pid)?.started === identity.started) errors.push(error);
+			}
+		}
+		// Confirm exit rather than equating delivery of a signal with termination.
+		const deadline = Date.now() + 5_000;
+		while (true) {
+			const remaining = await processes();
+			const alive = [...this.owned.values()].filter(identity => remaining.get(identity.pid)?.started === identity.started);
+			if (!alive.length) break;
+			if (Date.now() >= deadline) { errors.push(new Error(`Smoke processes did not exit: ${alive.map(identity => identity.pid).join(', ')}`)); break; }
+			await new Promise<void>(resolveDelay => setTimeout(resolveDelay, 50));
+		}
+		// End workers and renderers before stopping daemons, so clients cannot
+		// reconnect and start a new backend generation during cancellation.
+		// The daemon's stop contract validates its persisted process generation and
+		// terminates its extension hosts. Never kill a daemon by executable name.
+		const stops = await Promise.allSettled(resources.filter(resource => resource.daemon).map(async resource => {
+			await execute(resource.daemon!.executable, ['stop'], { env: { ...process.env, ASH_HOME: resource.daemon!.profile }, windowsHide: true, timeout: 30_000 });
+		}));
+		for (const result of stops) if (result.status === 'rejected') errors.push(result.reason);
+		if (errors.length) throw new AggregateError(errors, 'Smoke test resource cleanup failed');
+	}
+}
+
+async function processes(): Promise<Map<number, ProcessIdentity>> {
+	if (process.platform === 'win32') {
+		const { stdout } = await execute('powershell.exe', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | Where-Object { $_.CreationDate } | Select-Object ProcessId,ParentProcessId,@{n="Started";e={$_.CreationDate.ToUniversalTime().Ticks.ToString()}} | ConvertTo-Json -Compress'], { windowsHide: true, timeout: 5_000, maxBuffer: 8 * 1024 * 1024 });
+		const entries = JSON.parse(stdout) as { ProcessId: number; ParentProcessId: number; Started: string; }[];
+		return new Map(entries.map(entry => [entry.ProcessId, { pid: entry.ProcessId, parent: entry.ParentProcessId, started: entry.Started }]));
+	}
+	const { stdout } = await execute('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], { timeout: 5_000, maxBuffer: 8 * 1024 * 1024 });
+	const entries = new Map<number, ProcessIdentity>();
+	for (const line of stdout.split('\n')) {
+		const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/u);
+		// Zombies have already exited; their parent owns reaping them.
+		if (match && !match[4].startsWith('Z')) entries.set(Number(match[1]), { pid: Number(match[1]), parent: Number(match[2]), group: Number(match[3]), started: match[5].trim() });
+	}
+	return entries;
+}
