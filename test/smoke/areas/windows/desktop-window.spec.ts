@@ -10,8 +10,7 @@ const focusTest = test.extend({ electronWindowMode: 'active' });
 test.use({ openWorkspace: false });
 
 for (const entry of ['welcome', 'explorer'] as const) {
-	test(`desktop ${entry} folder entry opens the Windows folder chooser`, async ({ application, target, workbench }) => {
-		test.skip(process.platform !== 'win32' || target.kind !== 'electron', 'Requires the Windows Code desktop');
+	test(`desktop ${entry} folder entry opens the Windows folder chooser`, { tag: ['@electron-ui', '@electron-app-server', '@win32'] }, async ({ application, target, workbench }) => {
 		if (!('windows' in application)) throw new Error('Expected Electron');
 		const page = workbench.page;
 		if (entry === 'explorer') {
@@ -28,8 +27,7 @@ for (const entry of ['welcome', 'explorer'] as const) {
 }
 
 for (const entry of ['welcome', 'explorer', 'recent'] as const) {
-	test(`desktop ${entry} folder entry loads the workspace and file contents`, async ({ application, target, testWorkspace, workbench }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the Code desktop and App Server');
+	test(`desktop ${entry} folder entry loads the workspace and file contents`, { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 		if (!('windows' in application)) throw new Error('Expected Electron');
 		const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
 		await application.evaluate(({ dialog }, folder) => {
@@ -63,8 +61,7 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 	});
 }
 
-test('desktop window commands update and persist zoom', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'This scenario requires the Code desktop');
+test('desktop window commands update and persist zoom', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;
 	const window = await application.browserWindow(page);
@@ -89,8 +86,7 @@ test('desktop window commands update and persist zoom', async ({ application, ta
 });
 
 // The current-window marker comes from the OS-focused window in the window list.
-focusTest('desktop window switcher marks the focused window as current', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'This scenario requires the Code desktop');
+focusTest('desktop window switcher marks the focused window as current', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const page = workbench.page;
 	await application.evaluate(({ app, BrowserWindow }) => {
@@ -122,8 +118,7 @@ test('keyboard layout stays in commands while the status bar is quiet', async ({
 	await expect(output.locator('.view-line').filter({ hasText: 'Keyboard shortcuts troubleshooting disabled.' })).toBeVisible();
 });
 
-test('opening a folder names the target and explains the permission choice in the selected language', async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('opening a folder names the target and explains the permission choice in the selected language', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');

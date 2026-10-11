@@ -2,8 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('Quick Open resolves absolute paths and paths relative to the OS home', async ({ workbench, testWorkspace, webAppServer, application, target: platform }) => {
-	test.skip(platform.appServerMode !== 'required', 'Requires initialized target OS and user home.');
+test('Quick Open resolves absolute paths and paths relative to the OS home', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, webAppServer, application, target: platform }) => {
 	const target = join(testWorkspace.directory, 'home-path.md');
 	await writeFile(target, 'home_path_token\n');
 	const home = platform.kind === 'browser' ? webAppServer!.profileDirectory : await (application as import('@playwright/test').ElectronApplication).evaluate(() => process.platform === 'win32' ? process.env.USERPROFILE! : process.env.HOME!);

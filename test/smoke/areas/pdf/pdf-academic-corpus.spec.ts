@@ -20,11 +20,7 @@ const test = base.extend<{ readonly testWorkspace: TestWorkspace; }>({
 
 test.setTimeout(420_000);
 
-test("Code renders and annotates the open-access academic PDF corpus", async ({ target, testWorkspace, workbench }) => {
-	test.skip(
-		target.kind !== "electron" || target.appServerMode !== "required",
-		"This scenario requires the Code Electron App Server product",
-	);
+test("Code renders and annotates the open-access academic PDF corpus", { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const explorer = workbench.page.locator(".ash-explorer");
 	const group = workbench.editors.groupAt(0);
 	for (const document of academicPdfCorpus) {

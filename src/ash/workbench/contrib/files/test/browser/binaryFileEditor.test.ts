@@ -63,6 +63,16 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	await waitFor(() => opened !== undefined);
 	assert.deepEqual(opened, { resource, encoding: 'gbk' });
 	assert.equal(openOptions?.preferredEditorId, CODE_EDITOR_ID);
+	opened = undefined;
+	const historical = URI.parse('git-commit:/repo/revision/image.bin');
+	await pane.setInput({ resource: historical, initialBytes: new Uint8Array([0x48, 0x00, 0xff]) }, new AbortController().signal);
+	assert.match(dom.window.document.querySelector('.ash-binary-editor-content')!.textContent!, /48 00 ff/);
+	assert.equal(dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-with-encoding')!.hidden, true);
+	dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-as-text')!.click();
+	await waitFor(() => opened !== undefined);
+	assert.equal((opened as IResourceEditorInput | undefined)?.resource.toString(), historical.toString());
+	assert.equal((opened as IResourceEditorInput | undefined)?.readOnly, true);
+	assert.equal((opened as IResourceEditorInput | undefined)?.initialText, 'H\u0000�');
 	pane.dispose();
 	dom.window.close();
 });

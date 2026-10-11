@@ -63,6 +63,45 @@ test('failure second', async () => { await appendFile(process.env.ASH_RUNNER_MAR
 	assert.equal(await readFile(fixture.marker, 'utf8'), 'selected\n');
 });
 
+test('target selection excludes unsupported scenarios before expensive fixtures, including custom configs', async t => {
+	const fixture = await createFixture(`
+import { test as base } from ${JSON.stringify(join(repository, 'test/automation/test.ts'))};
+import { appendFile } from 'node:fs/promises';
+const test = base.extend({ runningApplication: async ({}, use) => {
+  await appendFile(process.env.ASH_RUNNER_MARKER, 'launched\\n');
+  await use({ driver: { workbench: {} } });
+} });
+test('supported', { tag: '@electron-ui' }, async ({ workbench }) => {
+  await appendFile(process.env.ASH_RUNNER_MARKER, 'supported\\n');
+});
+test('backend only', { tag: '@electron-app-server' }, async ({ workbench }) => {
+  throw new Error('Unsupported scenario ran');
+});
+test('other OS', { tag: ${JSON.stringify(process.platform === 'darwin' ? '@win32' : '@darwin')} }, async ({ workbench }) => {
+  throw new Error('Unsupported platform ran');
+});
+`);
+	t.after(() => rm(fixture.directory, { recursive: true, force: true }));
+	await writeFile(join(fixture.directory, 'playwright.config.ts'), `
+import { testTargetExclusions } from ${JSON.stringify(join(repository, 'test/automation/testTarget.ts'))};
+export default { testDir: '.', testMatch: '*.spec.ts', outputDir: ${JSON.stringify(join(fixture.directory, 'results'))}, workers: 1, reporter: 'list', projects: [
+  { name: 'electron-ui', grepInvert: testTargetExclusions('electron-ui', process.platform) }
+] };
+`);
+	const selection = await invoke(fixture, ['--list']);
+	assert.equal(selection.code, 0, selection.output);
+	assert.match(selection.output, /Total: 1 test in 1 file/u);
+	await assert.rejects(readFile(fixture.marker), { code: 'ENOENT' });
+	// A custom config may omit collection filtering; applicability still precedes setup.
+	const configurationPath = join(fixture.directory, 'playwright.config.ts');
+	await writeFile(configurationPath, (await readFile(configurationPath, 'utf8')).replace("grepInvert: testTargetExclusions('electron-ui', process.platform)", ''));
+	const guarded = await invoke(fixture, ['--grep', 'supported|backend only|other OS']);
+	assert.equal(guarded.code, 0, guarded.output);
+	assert.match(guarded.output, /2 skipped/u);
+	assert.match(guarded.output, /1 passed/u);
+	assert.equal(await readFile(fixture.marker, 'utf8'), 'launched\nsupported\n');
+});
+
 for (const [signal, exitCode] of [['SIGINT', 130], ['SIGTERM', 143]] as const) {
 	test(`${signal} stops the runner and detached resource descendants without stopping unrelated processes`, { skip: process.platform === 'win32', timeout: 75_000 }, async t => {
 		const fixture = await createFixture(`

@@ -32,8 +32,7 @@ test('Output channels open from the product command palette', async ({ workbench
 	await expect(output.locator('.view-lines')).not.toContainText('Workbench restored');
 });
 
-test('Output task file links open the editor at their line and column from the keyboard', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires workspace task execution.');
+test('Output task file links open the editor at their line and column from the keyboard', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const taskLabel = 'Check src/link-target.ts:12:7 now';
 	await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
 	await mkdir(join(testWorkspace.directory, '.vscode'), { recursive: true });
@@ -179,8 +178,7 @@ test('editor Open Link and Output help are localized after a display-language re
 test.describe('SCM external opening', () => {
 	test.use({ gitRepository: true });
 
-	test('Git commit links reach the system browser without creating an application window', async ({ application, target, testWorkspace, workbench }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the desktop Git workspace.');
+	test('Git commit links reach the system browser without creating an application window', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 		const run = promisify(execFile);
 		const cwd = testWorkspace.directory;
 		await run('git', ['remote', 'add', 'origin', 'https://github.com/ash-test/history.git'], { cwd });
@@ -266,8 +264,7 @@ test('release notes external links use the product opener from the keyboard', as
 	}
 });
 
-test('desktop link window requests use the system and product pages cannot navigate away', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Desktop window interception is owned by Main.');
+test('desktop link window requests use the system and product pages cannot navigate away', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const electron = application as ElectronApplication;
 	await captureExternalOpening(electron);
 	try {

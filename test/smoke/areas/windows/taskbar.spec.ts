@@ -27,11 +27,8 @@ interface TaskbarProbe {
 }
 
 test.use({ openWorkspace: false });
-test.beforeEach(({ }, testInfo) => {
-	test.skip(process.platform !== 'win32' || testInfo.project.name !== 'electron-ui', 'Windows taskbar integration requires the Windows Electron UI project.');
-});
 
-test('taskbar shortcuts use Ash identity, follow display language after restart and launch real windows', async ({ application, workbench, restartWorkbench }) => {
+test('taskbar shortcuts use Ash identity, follow display language after restart and launch real windows', { tag: ['@electron-ui', '@win32'] }, async ({ application, workbench, restartWorkbench }) => {
 	test.setTimeout(90_000);
 	let electron = application as ElectronApplication;
 	const installProbe = (): Promise<void> => electron.evaluate(({ app, BrowserWindow }) => {
@@ -128,7 +125,7 @@ test('taskbar shortcuts use Ash identity, follow display language after restart 
 	}
 });
 
-test('taskbar projects share Welcome history and respect items removed in Windows', async ({ application, workbench }, testInfo) => {
+test('taskbar projects share Welcome history and respect items removed in Windows', { tag: ['@electron-ui', '@win32'] }, async ({ application, workbench }, testInfo) => {
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ app }) => {
 		const originalList = app.setJumpList;
@@ -171,7 +168,7 @@ test('taskbar projects share Welcome history and respect items removed in Window
 	}
 });
 
-test('Desktop imports existing Welcome projects once into the shared history', async ({ application, workbench }, testInfo) => {
+test('Desktop imports existing Welcome projects once into the shared history', { tag: ['@electron-ui', '@win32'] }, async ({ application, workbench }, testInfo) => {
 	const folder = testInfo.outputPath('old folder');
 	const workspace = testInfo.outputPath('old.code-workspace');
 	const identity = { scope: StorageScope.PROFILE, id: 'default' };
@@ -195,7 +192,7 @@ test('Desktop imports existing Welcome projects once into the shared history', a
 	await expect(workbench.page.locator('.ash-getting-started-recent-name')).toHaveCount(0);
 });
 
-test('the Agents task starts the app directly in its Agents window', async ({ }, testInfo) => {
+test('the Agents task starts the app directly in its Agents window', { tag: ['@electron-ui', '@win32'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('taskbar profile with spaces');
 	await mkdir(userDataDirectory, { recursive: true });
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory, extraArgs: ['--agents-window'] });

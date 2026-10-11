@@ -329,8 +329,7 @@ test('editor label format setting persists and keeps untitled tabs free of direc
 test.describe('File tab label format', () => {
 	test.use({ openWorkspace: true });
 
-	test('editor tabs keep complete filenames and scroll instead of shrinking', async ({ target, testWorkspace, workbench }) => {
-		test.skip(target.kind === 'electron' && target.appServerMode === 'disabled', 'Desktop file access requires App Server');
+	test('editor tabs keep complete filenames and scroll instead of shrinking', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const names = ['browser-foundation.md', '浏览器基础与依赖方向说明.md', ...Array.from({ length: 5 }, (_, index) => `browser-foundation-layout-and-editor-tab-width-regression-${index}.md`)];
 		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
@@ -434,8 +433,7 @@ test.describe('File tab label format', () => {
 		}
 	});
 
-	test('file tabs only add distinguishing paths and preserve them across pinned rows and settings changes', async ({ target, testWorkspace, workbench }) => {
-		test.skip(target.kind === 'electron' && target.appServerMode === 'disabled', 'Desktop file access requires App Server');
+	test('file tabs only add distinguishing paths and preserve them across pinned rows and settings changes', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 		const page = workbench.page;
 		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 			await page.evaluate(async () => {
@@ -711,8 +709,7 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 	await expect(page.getByRole('tab', { name: untitledName! })).toHaveCount(0);
 });
 
-test('editor tab menu targets the clicked tab and opens from the keyboard', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS displays this menu through Electron');
+test('editor tab menu targets the clicked tab and opens from the keyboard', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const createUntitled = async (): Promise<void> => {
@@ -783,8 +780,7 @@ test('editor tab menu targets the clicked tab and opens from the keyboard', asyn
 	await expect(remaining).toHaveCount(1);
 });
 
-test('macOS Electron editor tab menu targets mouse and keyboard actions', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires the macOS Code desktop product');
+test('macOS Electron editor tab menu targets mouse and keyboard actions', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
 	await page.keyboard.press('ControlOrMeta+N');

@@ -88,8 +88,7 @@ for (const scenario of [
 	{ title: 'Persisted root and child models survive profile reopen without taking the default or another window selection', subscription: false },
 	{ title: 'Rust subscription notifications update open Code and Cowork model pickers within the same account', subscription: true },
 ]) {
-	test(scenario.title, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the real durable Session catalog.');
+	test(scenario.title, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.skip(scenario.subscription && process.env.ASH_SMOKE_SUBSCRIPTION_CATALOG_FIXTURE !== '1', 'Opt in to the isolated, version-checked Codex catalog source.');
 		test.setTimeout(scenario.subscription ? 900_000 : 150_000);
 		const provider = 'custom-session-model-fixture';

@@ -5,8 +5,8 @@ import { expect, test as base } from '../../../automation/test.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
-interface ModelFixture { readonly url: string; readonly requests: string[]; readonly held: ServerResponse[] }
-const test = base.extend<{ symphonyModel: ModelFixture }>({
+interface ModelFixture { readonly url: string; readonly requests: string[]; readonly held: ServerResponse[]; }
+const test = base.extend<{ symphonyModel: ModelFixture; }>({
 	symphonyModel: async ({ }, use) => {
 		const requests: string[] = [];
 		const held: ServerResponse[] = [];
@@ -32,8 +32,7 @@ const test = base.extend<{ symphonyModel: ModelFixture }>({
 	},
 });
 
-test('built-in Symphony concurrently runs tasks, pauses, resumes and preserves cumulative conversation totals', async ({ target, application, workbench, testWorkspace, symphonyModel, webAppServer }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the product App Server');
+test('built-in Symphony concurrently runs tasks, pauses, resumes and preserves cumulative conversation totals', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace, symphonyModel, webAppServer }) => {
 	if (webAppServer) {
 		const host = await test.step('Connect fixture directory permission host', () => connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true }));
 		try {
@@ -146,8 +145,7 @@ test('Symphony keyboard help and controls use Chinese in the Agents Window', asy
 	await page.keyboard.press('Escape'); await expect(approval).toBeFocused();
 });
 
-test('Execution and permissions settings persist defaults, govern ordinary chats and Symphony, and edit host directory grants', async ({ target, application, workbench, testWorkspace, webAppServer }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the product App Server');
+test('Execution and permissions settings persist defaults, govern ordinary chats and Symphony, and edit host directory grants', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace, webAppServer }) => {
 	const host = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true });
 	try {
 		// Browser transport does not acquire directory permission authority.

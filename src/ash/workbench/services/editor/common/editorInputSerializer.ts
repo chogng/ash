@@ -1,3 +1,4 @@
+import { VSBuffer, encodeBase64, decodeBase64 } from '../../../../base/common/buffer.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -84,6 +85,7 @@ function serializeBaseEditorInput(input: IResourceEditorInput): unknown {
 		...(input.readOnly === undefined ? {} : { readOnly: input.readOnly }),
 		...(input.showBreadcrumbs === undefined ? {} : { showBreadcrumbs: input.showBreadcrumbs }),
 		...(input.initialText === undefined ? {} : { initialText: input.initialText }),
+		...(input.initialBytes === undefined ? {} : { initialBytes: encodeBase64(VSBuffer.wrap(new Uint8Array(input.initialBytes))) }),
 	});
 }
 
@@ -96,6 +98,11 @@ function deserializeBaseEditorInput(value: unknown): IResourceEditorInput {
 	const readOnly = optionalBoolean(record.readOnly, 'serialized editor read-only state');
 	const showBreadcrumbs = optionalBoolean(record.showBreadcrumbs, 'serialized editor breadcrumbs');
 	const initialText = optionalString(record.initialText, 'serialized editor initial text');
+	const encodedBytes = optionalString(record.initialBytes, 'serialized editor initial bytes');
+	if (encodedBytes !== undefined && (encodedBytes.length > 180 * 1024 * 1024 || encodedBytes.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(encodedBytes))) {
+		throw new TypeError('Serialized editor initial bytes must be bounded base64');
+	}
+	const initialBytes = encodedBytes === undefined ? undefined : decodeBase64(encodedBytes).buffer;
 	const icon = deserializeIcon(record.icon);
 	return Object.freeze({
 		resource: URI.parse(resource),
@@ -106,6 +113,7 @@ function deserializeBaseEditorInput(value: unknown): IResourceEditorInput {
 		...(readOnly === undefined ? {} : { readOnly }),
 		...(showBreadcrumbs === undefined ? {} : { showBreadcrumbs }),
 		...(initialText === undefined ? {} : { initialText }),
+		...(initialBytes === undefined ? {} : { initialBytes }),
 	});
 }
 

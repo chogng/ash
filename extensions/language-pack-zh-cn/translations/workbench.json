@@ -1465,7 +1465,7 @@
     "diffView.inline": "行内",
     "diffView.sideBySide": "并排",
     "diffView.automatic": "自动",
-    "diff.showWhitespace": "显示空白差异",
+    "diff.showWhitespace": "显示行首/行尾空白差异",
     "diff.swapSides": "交换两侧",
     "configurationEventsOverflow": "扩展配置事件队列超过了 64 个待处理事件。",
     "workspaceEventsOverflow": "扩展工作区事件队列超过了 64 个待处理事件。",

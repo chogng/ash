@@ -2,8 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('Markdown customization updates rendered styles and the token scope report', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code product grammar resources');
+test('Markdown customization updates rendered styles and the token scope report', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	await writeFile(join(testWorkspace.directory, 'inspect.md'), '# Heading\n');
 	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });

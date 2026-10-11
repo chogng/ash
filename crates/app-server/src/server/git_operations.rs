@@ -344,6 +344,14 @@ impl AppServer {
         if params.limit == 0 || params.limit > MAX_GIT_GRAPH_PAGE_SIZE {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
+        if let Some(revisions) = &params.revisions {
+            if revisions.len() > 1000 {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            for revision in revisions {
+                validate_object_id(revision)?;
+            }
+        }
         let limit = NonZeroUsize::new(params.limit).expect("validated graph page size");
         result(
             &self
@@ -353,6 +361,7 @@ impl AppServer {
                     connection_id,
                     limit,
                     params.cursor.as_deref(),
+                    params.revisions.as_deref(),
                 )
                 .map_err(git_error)?,
         )

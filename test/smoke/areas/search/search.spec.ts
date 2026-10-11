@@ -3,14 +3,13 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
 test.beforeEach(async ({ target, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires workspace content search.');
 	await mkdir(join(testWorkspace.directory, 'src'));
 	await writeFile(join(testWorkspace.directory, 'src', 'alpha.ts'), 'ash_search_token\nASH_SEARCH_TOKEN\nash_search_token:42\n');
 	await writeFile(join(testWorkspace.directory, 'src', 'beta.js'), 'ash_search_token\n');
 	await writeFile(join(testWorkspace.directory, 'notes.md'), 'ash_search_token\n');
 });
 
-test('workspace search applies include and exclude filters and clears previous results', async ({ workbench }) => {
+test('workspace search applies include and exclude filters and clears previous results', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const search = workbench.search;
 	await search.open();
 	await search.search('ash_search_token');
@@ -31,7 +30,7 @@ test('workspace search applies include and exclude filters and clears previous r
 	await expect(search.files).toHaveCount(0);
 });
 
-test('workspace search applies case and regular expression options to real files', async ({ workbench }) => {
+test('workspace search applies case and regular expression options to real files', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const search = workbench.search;
 	await search.open();
 	await search.element.getByRole('button', { name: 'Match Case', exact: true }).click();
@@ -44,7 +43,7 @@ test('workspace search applies case and regular expression options to real files
 	await expect(search.element.locator('.ash-search-match')).toContainText('ash_search_token:42');
 });
 
-test('workspace file picker ranks fuzzy names before truncation and preserves explicit globs', async ({ workbench, testWorkspace }) => {
+test('workspace file picker ranks fuzzy names before truncation and preserves explicit globs', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	await mkdir(join(testWorkspace.directory, 'fixtures'));
 	await Promise.all(Array.from({ length: 1050 }, (_, index) => writeFile(join(testWorkspace.directory, 'fixtures', `f_i_l_e_p_i_c_k_e_r_${index}.txt`), 'spread subsequence')));
 	await mkdir(join(testWorkspace.directory, 'fixtures', 'zz'));
@@ -65,7 +64,7 @@ test('workspace file picker ranks fuzzy names before truncation and preserves ex
 	await workbench.quickaccess.close();
 });
 
-test('workspace search uses unsaved editor text and removes stale disk hits without saving the file', async ({ workbench, testWorkspace }) => {
+test('workspace search uses unsaved editor text and removes stale disk hits without saving the file', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const path = join(testWorkspace.directory, 'src', 'alpha.ts');
 	const disk = await readFile(path, 'utf8');
 	await workbench.quickaccess.open('alpha.ts');
@@ -86,7 +85,7 @@ test('workspace search uses unsaved editor text and removes stale disk hits with
 });
 
 
-test('Quick Open ranks fuzzy paths beyond the first page and supports multiple query words', async ({ workbench, testWorkspace }) => {
+test('Quick Open ranks fuzzy paths beyond the first page and supports multiple query words', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	for (let index = 0; index < 110; index++) {
 		await writeFile(join(testWorkspace.directory, `a_s_e_a_r_c_h_s_e_r_v_i_c_e_${index}.ts`), 'candidate');
 	}
@@ -100,7 +99,7 @@ test('Quick Open ranks fuzzy paths beyond the first page and supports multiple q
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'best_fuzzy_candidate');
 });
 
-test('workspace search opens untitled matches without saving the draft', async ({ workbench }) => {
+test('workspace search opens untitled matches without saving the draft', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const editor = workbench.editors.groupAt(0).editor;
 	await editor.waitForEditorFocus();

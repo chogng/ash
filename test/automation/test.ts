@@ -6,7 +6,7 @@ import { launchBrowser } from "./playwrightBrowser.js";
 import { launchElectron } from "./playwrightElectron.js";
 import { launchWeb, type WebLaunchResult, type GitHubBrowserTestConfiguration } from './playwrightWeb.js';
 import type { PlaywrightApplication, PlaywrightDriver, WorkbenchDiagnostics } from "./playwrightDriver.js";
-import { playwrightTargetForProject, type PlaywrightTarget } from "./testTarget.js";
+import { playwrightTargetForProject, supportsTestTarget, type PlaywrightTarget } from "./testTarget.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "./testWorkspace.js";
 import type { Workbench } from "./workbench.js";
 import type { ElectronWindowMode } from './electron.js';
@@ -21,6 +21,7 @@ interface RunningApplication {
 }
 
 interface PlaywrightFixtures {
+	readonly testTargetSupport: void;
 	readonly electronWindowMode: ElectronWindowMode | undefined;
 	readonly webAppServer: WebLaunchResult | undefined;
 	readonly runningApplication: RunningApplication;
@@ -51,6 +52,10 @@ export interface BackendFixture {
 }
 
 export const test = base.extend<PlaywrightFixtures>({
+	testTargetSupport: [async ({ target }, use, testInfo) => {
+		testInfo.skip(!supportsTestTarget(testInfo.tags, target, process.platform), 'Scenario does not apply to this host, backend or platform.');
+		await use();
+	}, { auto: true }],
 	electronWindowMode: [undefined, { option: true }],
 	includeLargeTestFile: [false, { option: true }],
 	gitRepository: [false, { option: true }],

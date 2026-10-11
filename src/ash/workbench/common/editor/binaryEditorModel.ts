@@ -9,6 +9,7 @@ export class BinaryEditorModel extends EditorModel {
 	constructor(
 		readonly resource: URI,
 		private readonly name: string,
+		private readonly initialSize: number | undefined,
 		@IFileService private readonly files: IFileService,
 	) {
 		super();
@@ -23,12 +24,12 @@ export class BinaryEditorModel extends EditorModel {
 	}
 
 	override async resolve(): Promise<void> {
-		const stat = await this.files.stat(this.resource);
+		const size = this.initialSize ?? (await this.files.stat(this.resource)).sizeBytes;
 		// A cancelled open disposes the model while the file request can still finish.
 		if (this.isDisposed()) {
 			return;
 		}
-		this.size = stat.sizeBytes;
+		this.size = size;
 		await super.resolve();
 	}
 }

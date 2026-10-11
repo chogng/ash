@@ -1,6 +1,7 @@
+import { localize } from '../../../../nls.js';
 import { svg as createSvgElement } from "../../../../base/browser/dom.js";
 import { findLastIdx } from "../../../../base/common/arraysFind.js";
-import type { ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryItemViewModel } from '../common/history.js';
+import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, type ISCMHistoryItem, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel } from '../common/history.js';
 
 const LaneHeight = 22;
 const LaneWidth = 11;
@@ -18,23 +19,52 @@ interface GraphRow {
 	readonly outputSwimlanes: readonly Lane[];
 }
 
-type GraphNodeKind = "commit" | "head" | "merge";
+type GraphNodeKind = "commit" | "head" | "merge" | "incoming-changes" | "outgoing-changes";
 
 export const SWIMLANE_HEIGHT = LaneHeight;
 export const SWIMLANE_WIDTH = LaneWidth;
 
 /** Projects ordered SCM history into stable, color-carrying swimlanes. */
-export function toISCMHistoryItemViewModelArray(historyItems: readonly ISCMHistoryItem[], colorMap = new Map<string, number>(), currentHistoryItemRef?: ISCMHistoryItemRef): ISCMHistoryItemViewModel[] {
-	const rows = createRows(historyItems, colorMap);
+export function toISCMHistoryItemViewModelArray(historyItems: readonly ISCMHistoryItem[], colorMap = new Map<string, number>(), currentHistoryItemRef?: ISCMHistoryItemRef, comparison?: { readonly remote: ISCMHistoryItemRef; readonly base: string; readonly incoming: boolean; readonly outgoing: boolean; }): ISCMHistoryItemViewModel[] {
+	let items = [...historyItems];
+	const parentOverrides = new Map<string, readonly string[]>();
+	const local = currentHistoryItemRef?.revision;
+	const remote = comparison?.remote.revision;
+	const base = comparison?.base;
+	if (comparison && local && remote && base && local !== remote) {
+		if (comparison.incoming && remote !== base) {
+			const baseIndex = items.findIndex(item => item.id === base);
+			if (baseIndex >= 0 && items.some(item => item.id === remote)) {
+				const reachable = new Set<string>();
+				const byId = new Map(items.map(item => [item.id, item]));
+				const pending = [remote];
+				while (pending.length > 0) {
+					const id = pending.pop()!;
+					if (id === base || reachable.has(id)) { continue; }
+					reachable.add(id);
+					pending.push(...(byId.get(id)?.parentIds ?? []));
+				}
+				for (const item of items) {
+					if (reachable.has(item.id)) { parentOverrides.set(item.id, item.parentIds.map(id => id === base ? SCMIncomingHistoryItemId : id)); }
+				}
+				items.splice(baseIndex, 0, { id: SCMIncomingHistoryItemId, subject: localize('scm.history.incoming', 'Incoming Changes'), message: '', parentIds: [base], comparison: { revision: remote, baseRevision: base } });
+			}
+		}
+		if (comparison.outgoing && local !== base) {
+			const localIndex = items.findIndex(item => item.id === local);
+			if (localIndex >= 0) { items.splice(localIndex, 0, { id: SCMOutgoingHistoryItemId, subject: localize('scm.history.outgoing', 'Outgoing Changes'), message: '', parentIds: [local], comparison: { revision: local, baseRevision: base } }); }
+		}
+	}
+	const rows = createRows(items, colorMap, parentOverrides);
 	return rows.map(row => ({
 		historyItem: row.historyItem,
 		inputSwimlanes: row.inputSwimlanes.map(lane => ({ id: lane.id, color: lane.colorIndex })),
 		outputSwimlanes: row.outputSwimlanes.map(lane => ({ id: lane.id, color: lane.colorIndex })),
-		kind: row.historyItem.id === currentHistoryItemRef?.revision ? 'HEAD' : 'node',
+		kind: row.historyItem.id === SCMIncomingHistoryItemId ? 'incoming-changes' : row.historyItem.id === SCMOutgoingHistoryItemId ? 'outgoing-changes' : row.historyItem.id === currentHistoryItemRef?.revision ? 'HEAD' : 'node',
 	}));
 }
 
-function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: ReadonlyMap<string, number>): GraphRow[] {
+function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: ReadonlyMap<string, number>, parentOverrides: ReadonlyMap<string, readonly string[]>): GraphRow[] {
 	const rows: GraphRow[] = [];
 	const historyById = new Map(historyItems.map(item => [item.id, item]));
 	let lanes: readonly Lane[] = [];
@@ -53,14 +83,15 @@ function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: Readonly
 	};
 
 	for (const historyItem of historyItems) {
+		const parentIds = parentOverrides.get(historyItem.id) ?? historyItem.parentIds;
 		const inputSwimlanes = lanes.map((lane) => ({ ...lane }));
 		const outputSwimlanes: Lane[] = [];
 		let firstParentAdded = false;
 
 		for (const lane of inputSwimlanes) {
 			if (lane.id === historyItem.id) {
-				if (!firstParentAdded && historyItem.parentIds.length > 0) {
-					outputSwimlanes.push({ id: historyItem.parentIds[0], colorIndex: referenceColor(historyItem) ?? lane.colorIndex });
+				if (!firstParentAdded && parentIds.length > 0) {
+					outputSwimlanes.push({ id: parentIds[0], colorIndex: referenceColor(historyItem) ?? lane.colorIndex });
 					firstParentAdded = true;
 				}
 				continue;
@@ -68,10 +99,10 @@ function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: Readonly
 			outputSwimlanes.push({ ...lane });
 		}
 
-		for (let index = firstParentAdded ? 1 : 0; index < historyItem.parentIds.length; index += 1) {
-			const parent = historyById.get(historyItem.parentIds[index]);
+		for (let index = firstParentAdded ? 1 : 0; index < parentIds.length; index += 1) {
+			const parent = historyById.get(parentIds[index]);
 			const colorIndex = index === 0 ? referenceColor(historyItem) : parent ? referenceColor(parent) : undefined;
-			outputSwimlanes.push({ id: historyItem.parentIds[index], colorIndex: colorIndex ?? allocateColor() });
+			outputSwimlanes.push({ id: parentIds[index], colorIndex: colorIndex ?? allocateColor() });
 		}
 		rows.push({ historyItem, inputSwimlanes, outputSwimlanes });
 		lanes = outputSwimlanes;
@@ -82,7 +113,7 @@ function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: Readonly
 /** Renders one SCM history swimlane row with a stable color for each branch lane. */
 export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemViewModel, expandedHeight = LaneHeight, document: Document = globalThis.document): SVGSVGElement {
 	const row = historyItemViewModel;
-	const kind: GraphNodeKind = row.kind === 'HEAD' ? 'head' : row.historyItem.parentIds.length > 1 ? 'merge' : 'commit';
+	const kind: GraphNodeKind = row.kind === 'incoming-changes' || row.kind === 'outgoing-changes' ? row.kind : row.kind === 'HEAD' ? 'head' : row.historyItem.parentIds.length > 1 ? 'merge' : 'commit';
 	const svg = createSvgElement(document, "svg");
 	svg.classList.add("ash-scm-graph-graph", kind);
 	svg.setAttribute("aria-hidden", "true");
@@ -113,7 +144,8 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 
 	for (let index = 1; index < row.historyItem.parentIds.length; index += 1) {
 		// Repeated parent IDs keep separate branch lanes until that commit is reached.
-		const parentOutputIndex = findLastIdx(row.outputSwimlanes, lane => lane.id === row.historyItem.parentIds[index]);
+		let parentOutputIndex = findLastIdx(row.outputSwimlanes, lane => lane.id === row.historyItem.parentIds[index]);
+		if (parentOutputIndex < 0) { parentOutputIndex = findLastIdx(row.outputSwimlanes, lane => lane.id === SCMIncomingHistoryItemId); }
 		if (parentOutputIndex === -1) continue;
 		const parentColorIndex = row.outputSwimlanes[parentOutputIndex].color;
 		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * (parentOutputIndex + 1)} ${LaneHeight}`, parentColorIndex);
@@ -143,6 +175,14 @@ function appendPath(svg: SVGSVGElement, data: string, colorIndex: number): void 
 }
 
 function appendNode(svg: SVGSVGElement, index: number, kind: GraphNodeKind, colorIndex: number): void {
+	if (kind === 'incoming-changes' || kind === 'outgoing-changes') {
+		appendCircle(svg, index, 7, 'outer', colorIndex);
+		const x = LaneWidth * (index + 1);
+		const y = LaneHeight / 2;
+		const direction = kind === 'incoming-changes' ? 1 : -1;
+		appendPath(svg, `M ${x} ${y - direction * 4} V ${y + direction * 4} M ${x - 3} ${y + direction} L ${x} ${y + direction * 4} L ${x + 3} ${y + direction}`, colorIndex);
+		return;
+	}
 	if (kind === "head") {
 		appendCircle(svg, index, 7, "outer", colorIndex);
 		appendCircle(svg, index, 2, "inner", colorIndex);

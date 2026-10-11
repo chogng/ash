@@ -67,8 +67,7 @@ test('GitHub settings share the Preferences renderer in Workbench and Sessions a
 	await sessionsPage.keyboard.press('Escape'); await expect(sessionsRefresh).toBeFocused();
 });
 
-test('Session Issue associations persist through reopen and expose keyboard actions and accessible state', async ({ workbench, target, application, webAppServer, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the real profile App Server.');
+test('Session Issue associations persist through reopen and expose keyboard actions and accessible state', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, target, application, webAppServer, testWorkspace }) => {
 	// Keep the fixture transport alive while the product's Web page navigates and reloads.
 	const source = webAppServer ? await workbench.page.context().newPage() : workbench.page;
 	if (webAppServer) { await source.goto(workbench.page.url(), { waitUntil: 'domcontentloaded' }); }

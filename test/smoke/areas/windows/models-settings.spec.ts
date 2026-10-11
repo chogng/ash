@@ -4,8 +4,7 @@ import { expect, test } from '../../../automation/test.js';
 const defaultVisibleModelNames = ['GPT-6.1 Sol', 'Claude Sonnet 5.5', 'Grok 4.7', 'Gemini 3.8 Flash', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3', 'Muse Spark 1.3'];
 const defaultEnabledModelNames = ['GPT-6.1 Sol', 'GPT-6 Luna', 'GPT-6 Astra', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'Grok 4.7'];
 
-test('Models Settings saves enabled choices, preserves keyboard focus and restores Chinese help', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the product model catalog.');
+test('Models Settings saves enabled choices, preserves keyboard focus and restores Chinese help', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -99,8 +98,7 @@ test('Models Settings offers provider creation with compact fields and keyboard 
 	await expect(model).toBeFocused();
 });
 
-test('Models Settings saves custom model IDs and keys and tests the configured endpoint', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses App Server and its isolated configuration.');
+test('Models Settings saves custom model IDs and keys and tests the configured endpoint', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const requests: { path: string; model?: string; key: string | undefined; }[] = [];
 	let rejectDiscovery = false;
 	const server = createServer(async (request, response) => {
@@ -281,8 +279,7 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 });
 
 
-test('Model descriptions retain provider copy after restarting in Chinese', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the product model catalog.');
+test('Model descriptions retain provider copy after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	const openModelCard = async (chinese: boolean): Promise<void> => {
 		const page = workbench.page;
 		if (!await page.locator('.ash-chat-view-pane').isVisible()) {

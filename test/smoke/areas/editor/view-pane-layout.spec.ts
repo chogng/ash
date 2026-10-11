@@ -234,11 +234,8 @@ test('view commands reveal retained containers and focus the requested view', as
 
 test.describe('SCM pane layout with a provider', () => {
 	test.use({ openWorkspace: true, gitRepository: true });
-	test.beforeEach(({ target }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires a provider from the real Git extension.');
-	});
 
-	test('multiple view panes resize independently and restore their layout after reload', async ({ workbench, reloadWorkbench }) => {
+	test('multiple view panes resize independently and restore their layout after reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, reloadWorkbench }) => {
 		let page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		let container = page.locator('[data-view-container-id="ash.git"]');
@@ -322,7 +319,7 @@ test.describe('SCM pane layout with a provider', () => {
 		await expect.poll(() => height(graph)).toBeCloseTo(resizedHeight, 0);
 	});
 
-	test('SCM panes retain usable bodies when resized and scroll when the window is too short', async ({ driver, workbench }) => {
+	test('SCM panes retain usable bodies when resized and scroll when the window is too short', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ driver, workbench }) => {
 		const page = workbench.page;
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -508,8 +505,7 @@ test('sidebar overflow registers view visibility and layout commands', async ({ 
 
 test.describe('Git sidebar visibility menus', () => {
 	test.use({ openWorkspace: true, gitRepository: true });
-	test('Git sidebar overflow toggles panes and protects the last visible view', async ({ target, workbench, application }) => {
-		test.skip(target.appServerMode !== 'required', 'Git panes require the connected App Server');
+	test('Git sidebar overflow toggles panes and protects the last visible view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const sidebar = page.locator('[data-part="sidebar"]');

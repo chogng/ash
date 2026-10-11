@@ -12,8 +12,7 @@ const execute = promisify(execFile);
 test.describe('Git-backed ordinary Output', () => {
 	test.use({ gitRepository: true });
 
-	test('Git Output filters real repository status and preserves raw editor text through clearing', async ({ target, testWorkspace, workbench }, testInfo) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the real Git backend and its isolated test profile.');
+	test('Git Output filters real repository status and preserves raw editor text through clearing', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const changes = page.locator('[data-view-id="ash.gitView"]');
@@ -77,8 +76,7 @@ test.describe('Git-backed ordinary Output', () => {
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`Output saved query restoration exits on explicit input and protects newer stored versions across reloads (${locale})`, async ({ target, workbench, reloadWorkbench, restartWorkbench }, testInfo) => {
-		test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Covers the connected Web client workspace storage.');
+	test(`Output saved query restoration exits on explicit input and protects newer stored versions across reloads (${locale})`, { tag: ['@browser-app-server'] }, async ({ target, workbench, reloadWorkbench, restartWorkbench }, testInfo) => {
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
@@ -183,8 +181,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 	test.use({ gitRepository: true });
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`Output smart scrolling preserves reading position and live configuration (${locale})`, async ({ target, application, testWorkspace, workbench, restartWorkbench }, testInfo) => {
-			test.skip(target.appServerMode !== 'required', 'Requires the real Git backend and its isolated test profile.');
+		test(`Output smart scrolling preserves reading position and live configuration (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, testWorkspace, workbench, restartWorkbench }, testInfo) => {
 			test.setTimeout(90_000);
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
@@ -331,8 +328,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`Output category choices isolate real Window and Extension Host logs and migrate legacy choices (${locale})`, async ({ target, application, workbench, reloadWorkbench, restartWorkbench }, testInfo) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the real Extension Host fleet response and its isolated product profile.');
+	test(`Output category choices isolate real Window and Extension Host logs and migrate legacy choices (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, reloadWorkbench, restartWorkbench }, testInfo) => {
 		// Locale restart and three persisted-state reloads each use the real backend.
 		test.setTimeout(90_000);
 		if (locale === 'zh-CN') {

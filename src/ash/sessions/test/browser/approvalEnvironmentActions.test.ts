@@ -1,3 +1,4 @@
+import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -36,6 +37,9 @@ test('permission command uses stable IDs and keeps bypass confirmation on the re
 });
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
+	canSelectMany = false;
+	selectedItems: readonly T[] = [];
+	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	private readonly accepted = this._register(new Emitter<T>());
 	private readonly hidden = this._register(new Emitter<void>());
 	readonly onDidAccept = this.accepted.event;

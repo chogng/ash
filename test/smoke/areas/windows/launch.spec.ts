@@ -17,8 +17,7 @@ const focusTest = test.extend({
 	}
 });
 
-for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands the current directory to the real desktop window through ${launchKind === 'bundle' ? 'a bundle' : 'an executable'}`, async ({ application, target, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled' || process.platform === 'win32', 'This scenario uses a Unix development launcher without a backend.');
+for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands the current directory to the real desktop window through ${launchKind === 'bundle' ? 'a bundle' : 'an executable'}`, { tag: ['@electron-ui', '@darwin', '@linux'] }, async ({ application, target, testWorkspace }) => {
 	test.skip(launchKind === 'bundle' && process.platform !== 'darwin', 'Application bundles use macOS LaunchServices.');
 	const cli = process.env.ASH_CLI_EXECUTABLE;
 	test.skip(!cli, 'Set ASH_CLI_EXECUTABLE to the built ash CLI.');
@@ -48,8 +47,7 @@ for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands 
 	}).toContain(pathToFileURL(await realpath(folder)).href);
 });
 
-test('the first process opens its requested file after restoring the Workbench and positions its caret', async ({ target, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Disk files require the Electron App Server.');
+test('the first process opens its requested file after restoring the Workbench and positions its caret', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-launch-'));
 	try {
 		const file = join(testWorkspace.directory, 'startup file.txt');
@@ -79,8 +77,7 @@ test.extend({
 	electronWindowMode: async ({ target }, use) => {
 		await use(target.appServerMode === 'required' ? 'active' : undefined);
 	}
-})('desktop launch opens files, positions the caret and distinguishes new and reused windows', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Disk files require the Electron App Server.');
+})('desktop launch opens files, positions the caret and distinguishes new and reused windows', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	if (!('windows' in application)) {
 		return;
 	}
@@ -151,8 +148,7 @@ test.extend({
 	}
 });
 
-test('a real second process waits until all requested files close while the first window stays usable', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Disk files require the Electron App Server.');
+test('a real second process waits until all requested files close while the first window stays usable', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	if (!('windows' in application)) {
 		return;
 	}
@@ -190,8 +186,7 @@ test('a real second process waits until all requested files close while the firs
 	}
 });
 
-focusTest('UI-only launches create a requested window and focus it on the next launch', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'This scenario checks window policy without a backend.');
+focusTest('UI-only launches create a requested window and focus it on the next launch', { tag: ['@electron-ui'] }, async ({ application, target, testWorkspace, workbench }) => {
 	if (!('windows' in application)) {
 		return;
 	}
@@ -212,8 +207,7 @@ focusTest('UI-only launches create a requested window and focus it on the next l
 });
 
 
-test('product URL callbacks create a requested window and leave unhandled callbacks out of editors', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'This scenario verifies the desktop URL relay without a backend.');
+test('product URL callbacks create a requested window and leave unhandled callbacks out of editors', { tag: ['@electron-ui'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) {
 		return;
 	}

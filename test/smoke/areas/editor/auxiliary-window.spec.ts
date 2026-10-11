@@ -63,8 +63,7 @@ test('detached editor window inherits workbench theme and accessibility state', 
 	}
 });
 
-focusTest('detached editor windows participate in desktop window switching and close-other-windows', async ({ workbench, target, application }) => {
-	test.skip(target.kind !== 'electron', 'Requires desktop window operations.');
+focusTest('detached editor windows participate in desktop window switching and close-other-windows', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, target, application }) => {
 	if (!('windows' in application)) {
 		throw new Error('Expected an Electron application');
 	}

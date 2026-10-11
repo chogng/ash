@@ -3,8 +3,7 @@ import { join } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
-test('Content search Settings supports search, keyboard help and Chinese labels while disconnected', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode === 'required', 'Exercises disconnected Workbench Settings.');
+test('Content search Settings supports search, keyboard help and Chinese labels while disconnected', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.locator('.ash-settings-editor');
@@ -44,8 +43,7 @@ test('Content search Settings supports search, keyboard help and Chinese labels 
 	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/Agent、编辑器和 Codebase 的内容搜索共用所选引擎/);
 });
 
-test('Content search Settings saves the backend engine and restores it after reload', async ({ target, workbench, application }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the real backend and isolated user configuration.');
+test('Content search Settings saves the backend engine and restores it after reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectGroup('features');

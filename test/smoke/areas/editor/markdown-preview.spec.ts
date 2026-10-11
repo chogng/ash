@@ -3,8 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { expect, test } from '../../../automation/test.js';
 
-test('Markdown preview loads an image relative to a workspace document', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Workspace files require the connected App Server.');
+test('Markdown preview loads an image relative to a workspace document', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const documents = join(testWorkspace.directory, 'preview-docs');
 	const assets = join(testWorkspace.directory, 'preview-assets');
 	await mkdir(documents);
@@ -276,8 +275,7 @@ test('Markdown rich editor shares text and history with the source editor', asyn
 	await group.editor.waitForEditorContents(text => text.includes('Added in rich editor') && text.includes('[keep]: ./other.md'));
 });
 
-test('Markdown rich editor saves files and refreshes from an open source tab', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'File persistence requires the connected App Server.');
+test('Markdown rich editor saves files and refreshes from an open source tab', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const path = join(testWorkspace.directory, 'rich-saved.md');
 	const original = '---\ntitle: Keep front matter\n---\n\n# Rich saved\n\n[keep]: ./other.md\n\n```js\nconst tag = "</script>";\n```\n\nBody';
 	await writeFile(path, original);
@@ -415,8 +413,7 @@ test('Markdown language providers navigate headings, rename links and show diagn
 	await expect(page.getByText(/No header found: 'missing'/u).first()).toBeVisible();
 });
 
-test('Markdown link rename moves the target file and updates its references together', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'File renaming requires the connected App Server.');
+test('Markdown link rename moves the target file and updates its references together', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const original = join(testWorkspace.directory, 'rename-target.md');
 	const renamed = join(testWorkspace.directory, 'renamed-target.md');
 	const referring = join(testWorkspace.directory, 'rename-link.md');

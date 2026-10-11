@@ -12,8 +12,7 @@ test.beforeEach(async ({ workbench }) => {
 });
 
 for (const window of ['Code', 'Agents']) {
-	test(`Skills command opens a readonly SKILL.md snapshot from the shared backend in ${window}`, async ({ target, workbench }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the shared App Server Skill catalog.');
+	test(`Skills command opens a readonly SKILL.md snapshot from the shared backend in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
 		await new QuickAccess(page).select('skill-creator');
@@ -59,8 +58,7 @@ test('Skills configuration command opens Customize in the Agents window', async 
 	await expect(settings.locator('.ash-skills').getByLabel('Skills', { exact: true })).toBeVisible();
 });
 
-test('Skill enablement updates Chat completion and survives a window reload', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the shared App Server Skill catalog.');
+test('Skill enablement updates Chat completion and survives a window reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.chat.configure.skills');
 	await new QuickAccess(page).select('Manage skill enablement…');
@@ -123,8 +121,7 @@ test('Extensions view tab uses the extensions icon', async ({ workbench }) => {
 	await expect(search).toBeFocused();
 });
 
-test('Local standard extension installs, runs only after grant, survives restart and retires on revoke', async ({ target, testWorkspace, application, workbench, reloadWorkbench }) => {
-	test.skip(process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Product JS confinement currently supports macOS Electron with App Server');
+test('Local standard extension installs, runs only after grant, survives restart and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, testWorkspace, application, workbench, reloadWorkbench }) => {
 	test.setTimeout(90_000);
 	const root = join(testWorkspace.directory, 'standard-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -409,8 +406,7 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 });
 
 
-test('Extensions sources persist and share the same authority between Code and Agents', async ({ target, workbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the profile-owned Extensions source authority.');
+test('Extensions sources persist and share the same authority between Code and Agents', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, reloadWorkbench }) => {
 	let page = workbench.page;
 	await new QuickAccess(page).runCommand('ash.extensions.manageSources');
 	const picker = page.getByRole('dialog', { name: 'Manage extension sources', exact: true });

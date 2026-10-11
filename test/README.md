@@ -47,7 +47,11 @@ Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 B
 
 真实 App Server 场景运行文件保存、BOM/CRLF、外部修改后的撤销，以及手动保存、未保存、延迟自动保存、切换编辑器自动保存后的重启恢复；Browser 还验证未保存内容在页面重载后的恢复。终端覆盖输入、工作区目录、面板关闭再打开、多实例输出隔离和 shell 退出后的重新启动。Search 验证大小写、正则、包含与排除条件及清除结果；Tasks 验证发现、执行、重跑、取消和实际输出；Settings 验证即时生效、重启保存和恢复默认。CI 配置覆盖 Linux Browser、macOS Electron 和 Windows Electron；终端进程在窗口重启后的恢复尚未实现，不属于当前覆盖。
 
-Electron 自动化窗口遵循 VS Code Electron 单元测试的显示方式：本地普通测试隐藏窗口，CI 使用 `showInactive()`，`--debug` 显示并激活窗口。普通模式禁止系统窗口焦点，但 Playwright 仍可输入和验证页面内焦点；这项策略也覆盖新窗口和重新启动。确实依赖系统焦点、全屏或真实系统菜单输入的用例使用 `test.extend({ electronWindowMode: 'active' })`；直接调用启动器时传入 `windowMode: 'active'`。active 必须限定到需要它的用例和平台，注明依赖原因，不在整个文件启用；混合场景应拆开普通操作与系统焦点验证。读取窗口状态使用 `application.browserWindow(page)`，不为取得窗口对象而依赖 `BrowserWindow.getFocusedWindow()`。限制由测试启动器的预加载脚本安装，正常应用启动保持原行为。
+Electron 自动化普通测试在本地和 CI 都隐藏窗口，`--debug` 显示并激活窗口。普通模式禁止系统窗口焦点，但 Playwright 仍可输入和验证页面内焦点；这项策略也覆盖新窗口和重新启动。确实依赖系统焦点、全屏或真实系统菜单输入的用例使用 `test.extend({ electronWindowMode: 'active' })`；直接调用启动器时传入 `windowMode: 'active'`。active 必须限定到需要它的用例和平台，注明依赖原因，不在整个文件启用；混合场景应拆开普通操作与系统焦点验证。读取窗口状态使用 `application.browserWindow(page)`，不为取得窗口对象而依赖 `BrowserWindow.getFocusedWindow()`。限制由测试启动器的预加载脚本安装，正常应用启动保持原行为。
+
+测试声明通过 Playwright `tag` 指定适用目标：`@browser-ui`、`@browser-app-server`、`@electron-ui`、`@electron-app-server`，同一维度的标签表示可选目标；没有目标标签时覆盖所有目标。`@darwin`、`@linux`、`@win32` 限定操作系统，与目标标签同时生效。项目在采集阶段过滤不适用用例，自动 fixture 在工作区和应用启动前检查自定义配置。仅可从实际运行获知的条件继续使用正文 `test.skip`。
+
+组件布局和输入在 `test/integration/browser` 验证；Sessions Activity Bar、设置、画布、标题栏与 SCM history hover 使用隔离的浏览器页面，保留主题、辅助功能和非默认语言覆盖。Smoke 保留真实启动、跨窗口 IPC、宿主剪贴板、编辑器内容、配置持久化和重启链路。Academic workbench 与 document editing 已包含在常规 Electron 项目，CI 不额外重复运行。
 
 ## 发布成品检查
 

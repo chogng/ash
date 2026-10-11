@@ -9,8 +9,7 @@ declare global {
 	}
 }
 
-test('Image preview opens workspace images, zooms, exposes metadata and releases resources', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+test('Image preview opens workspace images, zooms, exposes metadata and releases resources', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const images = await page.evaluate(() => {
 		const canvas = document.createElement('canvas');
@@ -94,8 +93,7 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 	await expect(workbench.editors.groupAt(0).content.getByRole('alert')).toContainText('Choose a PNG, JPEG or WebP image.');
 });
 
-test('Image preview retries a first read failure, recovers corrupted content and ignores a late read', async ({ target, testWorkspace, workbench }, testInfo) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+test('Image preview retries a first read failure, recovers corrupted content and ignores a late read', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
 	test.setTimeout(90_000);
 	const page = workbench.page;
 	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);

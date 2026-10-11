@@ -20,11 +20,10 @@ async function openHistoryGraph(page: Page): Promise<Locator> {
 
 test.use({ gitRepository: false });
 test.beforeEach(async ({ target, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the connected Rust Git backend.');
 	await rm(join(testWorkspace.directory, '.git'), { recursive: true, force: true });
 });
 
-test('External Git init and ref changes update status and history without a manual refresh', async ({ testWorkspace, workbench }) => {
+test('External Git init and ref changes update status and history without a manual refresh', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const page = workbench.page;
 	const branch = page.locator('[data-statusbar-item-id="ash.status.git.branch"]');
@@ -51,7 +50,7 @@ test('External Git init and ref changes update status and history without a manu
 	await expect(branch).toHaveCount(0);
 });
 
-test('Deep tool worktrees keep Repositories hidden until a workspace child repository appears', async ({ testWorkspace, workbench }) => {
+test('Deep tool worktrees keep Repositories hidden until a workspace child repository appears', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const page = workbench.page;
 	await run('git', ['init', '-b', 'main'], { cwd });
@@ -75,7 +74,7 @@ test('Deep tool worktrees keep Repositories hidden until a workspace child repos
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('main');
 });
 
-test('External nested repository creation and deletion update Repositories, Changes, Graph and status', async ({ testWorkspace, workbench }) => {
+test('External nested repository creation and deletion update Repositories, Changes, Graph and status', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -128,7 +127,7 @@ test('External nested repository creation and deletion update Repositories, Chan
 	await expect(page.locator('.ash-scm').getByRole('button', { name: 'Open Changes for nested-change.ts', exact: true })).toHaveCount(0);
 });
 
-test('External Git refs refresh two Workbench windows sharing the backend', async ({ application, target, testWorkspace, workbench }) => {
+test('External Git refs refresh two Workbench windows sharing the backend', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	await run('git', ['init', '-b', 'main'], { cwd });
 	await run('git', ['add', '.'], { cwd });

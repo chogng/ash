@@ -2,8 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 
 for (const windowKind of ['Editor', 'Agents'] as const) {
-	test(`the ${windowKind} Desktop window opens real process metrics and restores keyboard focus`, async ({ workbench, target }) => {
-		test.skip(target.kind !== 'electron', 'Local process collection requires the Desktop host');
+	test(`the ${windowKind} Desktop window opens real process metrics and restores keyboard focus`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, target }) => {
 		const driver = windowKind === 'Agents' ? new Workbench(await workbench.openAgentsWindow(target.kind)) : workbench;
 		const page = driver.page;
 		await driver.quickaccess.runCommand('workbench.action.openProcessExplorer');

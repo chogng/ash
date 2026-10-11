@@ -1,3 +1,4 @@
+import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -151,6 +152,9 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements IQuickPick<TItem> {
+	canSelectMany = false;
+	selectedItems: readonly TItem[] = [];
+	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
 	private readonly accepted = this._register(new Emitter<TItem>());
 	private readonly changed = this._register(new Emitter<string>());

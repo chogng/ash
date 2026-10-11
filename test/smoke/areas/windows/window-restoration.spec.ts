@@ -7,12 +7,9 @@ import { launchElectronApplication, type ElectronApplicationLaunchResult } from 
 import { Workbench } from '../../../automation/workbench.js';
 import type { ElectronLaunchOptions } from '../../../automation/electron.js';
 
-test.beforeEach(({ }, testInfo) => {
-	test.skip(testInfo.project.name !== 'electron-ui', 'Window restoration is a Desktop process lifecycle scenario.');
-});
 
 for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
-	test(`Desktop retains logical Workbench and Agents geometry at ${scaleFactor * 100}% display scaling`, async ({ }, testInfo) => {
+	test(`Desktop retains logical Workbench and Agents geometry at ${scaleFactor * 100}% display scaling`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		test.setTimeout(90_000);
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
@@ -121,7 +118,7 @@ for (const scenario of [
 	{ resolution: '1920 × 1080', scaleFactor: 1.5, width: 1280, height: 720, expected: { width: 1200, height: 680 } },
 	{ resolution: '3840 × 2160', scaleFactor: 2, width: 1920, height: 1080, expected: { width: 1200, height: 800 } },
 ]) {
-	test(`Desktop new windows fit simulated ${scenario.resolution} at ${scenario.scaleFactor * 100}% scaling`, async ({ }, testInfo) => {
+	test(`Desktop new windows fit simulated ${scenario.resolution} at ${scenario.scaleFactor * 100}% scaling`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
 		// The screen adapter supplies DIP rectangles; physical frame rounding is
@@ -186,7 +183,7 @@ for (const scenario of [
 	});
 }
 
-test('Desktop places a new Agents window on the active display of a simulated mixed-DPI desktop', async ({ }, testInfo) => {
+test('Desktop places a new Agents window on the active display of a simulated mixed-DPI desktop', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
 	const session = await launch(userDataDirectory);
@@ -245,7 +242,7 @@ test('Desktop places a new Agents window on the active display of a simulated mi
 });
 
 for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
-	test(`Desktop new windows share the 1200 by 800 default after resizing the active window at ${scaleFactor * 100}% display scaling`, async ({ }, testInfo) => {
+	test(`Desktop new windows share the 1200 by 800 default after resizing the active window at ${scaleFactor * 100}% display scaling`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
 		const session = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
@@ -307,7 +304,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 	});
 }
 
-test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({ }, testInfo) => {
+test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
 	// A focused OS window is needed to detect whether display changes steal focus.
@@ -369,7 +366,7 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 });
 
 for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) {
-	test(`Desktop shares the ${policy} dimension setting across Workbench and Agents windows`, async ({ }, testInfo) => {
+	test(`Desktop shares the ${policy} dimension setting across Workbench and Agents windows`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.newWindowDimensions': policy }));
@@ -434,7 +431,7 @@ for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) 
 }
 
 for (const restoreFullscreen of [false, true]) {
-	test(`Desktop restores saved fullscreen for both window kinds only when enabled (${restoreFullscreen})`, async ({ }, testInfo) => {
+	test(`Desktop restores saved fullscreen for both window kinds only when enabled (${restoreFullscreen})`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.restoreFullscreen': restoreFullscreen }));
@@ -460,7 +457,7 @@ for (const restoreFullscreen of [false, true]) {
 	});
 }
 
-test('Desktop window sizing settings expose Chinese labels and keyboard selection', async ({ }, testInfo) => {
+test('Desktop window sizing settings expose Chinese labels and keyboard selection', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.locale":"zh-CN"}');
@@ -486,7 +483,7 @@ test('Desktop window sizing settings expose Chinese labels and keyboard selectio
 	} finally { await session.close(); }
 });
 
-test('Desktop restores open Workbench and Agents windows and honors startup intent', async ({ }, testInfo) => {
+test('Desktop restores open Workbench and Agents windows and honors startup intent', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	const folder = testInfo.outputPath('folder');
@@ -594,7 +591,7 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 	}
 });
 
-test('Workbench restores editor tabs unless editor restoration is disabled', async ({ }, testInfo) => {
+test('Workbench restores editor tabs unless editor restoration is disabled', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	test.setTimeout(90_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	const folder = testInfo.outputPath('folder');
@@ -652,7 +649,7 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 	}
 });
 
-test('Workbench reopens detached editor windows with their tabs', async ({ }, testInfo) => {
+test('Workbench reopens detached editor windows with their tabs', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	test.setTimeout(90_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
@@ -691,7 +688,7 @@ test('Workbench reopens detached editor windows with their tabs', async ({ }, te
 	}
 });
 
-test('updated version restores all windows once despite a none preference', async ({ }, testInfo) => {
+test('updated version restores all windows once despite a none preference', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	test.setTimeout(90_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });

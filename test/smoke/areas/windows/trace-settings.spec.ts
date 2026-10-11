@@ -1,8 +1,7 @@
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('Execution trace Settings supports disconnected help, search and Chinese labels', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode === 'required', 'Exercises the disconnected settings state.');
+test('Execution trace Settings supports disconnected help, search and Chinese labels', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectGroup('agents');
@@ -38,8 +37,7 @@ test('Execution trace Settings supports disconnected help, search and Chinese la
 	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/重启所属 App Server 后生效/);
 });
 
-test('Execution trace Settings persists backend intent and shares it with Agents Settings', async ({ target, workbench, testWorkspace, application }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the real backend and isolated profile.');
+test('Execution trace Settings persists backend intent and shares it with Agents Settings', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace, application }) => {
 	let page = workbench.page;
 	// Use the same account menu in Electron and Web, including macOS.
 	if (target.kind === 'electron') {

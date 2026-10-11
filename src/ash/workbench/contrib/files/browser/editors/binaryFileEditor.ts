@@ -20,6 +20,8 @@ const MAX_TEXT_PREVIEW_BYTES = 64 * 1024;
 /** Binary file viewer with a deliberate, read-only text preview action. */
 export class BinaryFileEditor extends BaseBinaryResourceEditor {
 	private resource: URI | undefined;
+	private initialBytes: Uint8Array | undefined;
+	private encodingButton: HTMLButtonElement | undefined;
 	private readonly encodingPicker = this._register(new MutableDisposable<DisposableStore>());
 
 	constructor(
@@ -44,6 +46,7 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		this.container?.prepend(button);
 		this._register(addDisposableListener(button, 'click', () => { void this.openAsText(); }));
 		const encodingButton = h(parent.ownerDocument, 'button');
+		this.encodingButton = encodingButton;
 		encodingButton.type = 'button';
 		encodingButton.className = 'ash-button ash-button-secondary ash-binary-open-with-encoding';
 		encodingButton.textContent = localize('files.openWithEncoding', 'Open with Encoding');
@@ -51,15 +54,18 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		this._register(addDisposableListener(encodingButton, 'click', () => { void this.openWithEncoding(); }));
 	}
 
-	override async setInput(input: { readonly resource: URI; }, signal: AbortSignal): Promise<void> {
+	override async setInput(input: { readonly resource: URI; readonly initialBytes?: Uint8Array; }, signal: AbortSignal): Promise<void> {
 		await super.setInput(input, signal);
 		this.resource = input.resource;
+		this.initialBytes = input.initialBytes;
+		if (this.encodingButton) { this.encodingButton.hidden = input.initialBytes !== undefined; }
 	}
 
 	override clearInput(): void {
 		super.clearInput();
 		this.encodingPicker.clear();
 		this.resource = undefined;
+		this.initialBytes = undefined;
 	}
 
 	private async openWithEncoding(): Promise<void> {
@@ -92,7 +98,7 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		const resource = this.resource;
 		if (!resource) return;
 		try {
-			const content = await this.files.readFileBytes(resource);
+			const content = this.initialBytes ? { bytes: this.initialBytes } : await this.files.readFileBytes(resource);
 			const text = new TextDecoder('utf-8').decode(content.bytes.subarray(0, MAX_TEXT_PREVIEW_BYTES));
 			await this.editors.openEditor(
 				{ resource, languageId: 'plaintext', contentType: 'text/plain', initialText: text, readOnly: true },

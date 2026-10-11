@@ -26,3 +26,24 @@ export function playwrightTargetForProject(projectName: string): PlaywrightTarge
 			throw new Error(`Unsupported Playwright project: ${projectName}`);
 	}
 }
+
+const targetTags = ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'];
+const platformTags = ['@darwin', '@linux', '@win32'];
+
+export function supportsTestTarget(tags: readonly string[], target: PlaywrightTarget, platform: string): boolean {
+	const targetTag = `@${target.kind}-${target.appServerMode === 'required' ? 'app-server' : 'ui'}`;
+	return !tags.includes('@unsupported')
+		&& (!tags.some(tag => targetTags.includes(tag)) || tags.includes(targetTag))
+		&& (!tags.some(tag => platformTags.includes(tag)) || tags.includes(`@${platform}`));
+}
+
+/** Collect only applicable scenarios; the fixture also guards custom configs. */
+export function testTargetExclusions(projectName: string, platform: string): RegExp[] {
+	const target = playwrightTargetForProject(projectName);
+	const tag = `@${target.kind}-${target.appServerMode === 'required' ? 'app-server' : 'ui'}`;
+	return [
+		/@unsupported(?:\s|$)/u,
+		new RegExp(`^(?!.*${tag}(?:\\s|$)).*(?:${targetTags.join('|')})(?:\\s|$)`, 'u'),
+		new RegExp(`^(?!.*@${platform}(?:\\s|$)).*(?:${platformTags.join('|')})(?:\\s|$)`, 'u'),
+	];
+}

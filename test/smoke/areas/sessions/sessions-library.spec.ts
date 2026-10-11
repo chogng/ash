@@ -63,8 +63,7 @@ test('Sessions Library coordinates independent container Views and a retained br
 	}
 });
 
-test('Sessions Library imports real images and preserves favorites and collections after reload', async ({ application, target, workbench }) => {
-	test.skip(target.appServerMode !== 'required');
+test('Sessions Library imports real images and preserves favorites and collections after reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	let page = workbench.page;
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
 	else {

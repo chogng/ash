@@ -62,14 +62,14 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 		const summary = this.requireSummary();
 		const content = this.requireContent();
 		throwIfCancelled(signal, "Binary editor loading was cancelled");
-		const model = this.instantiationService.createInstance(BinaryEditorModel, input.resource, input.label ?? basename(input.resource));
+		const model = this.instantiationService.createInstance(BinaryEditorModel, input.resource, input.label ?? basename(input.resource), input.initialBytes?.length);
 		try {
 			await raceCancellationError(model.resolve(), signal, "Binary editor loading was cancelled");
 			const size = model.getSize();
 			if (size !== undefined && size > MAX_BINARY_EDITOR_BYTES) {
 				throw new Error(localize('binaryEditor.tooLarge', 'Binary file is too large to preview ({0})', formatByteCount(size)));
 			}
-			const resolved = await raceCancellationError(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
+			const resolved = input.initialBytes ? { bytes: input.initialBytes } : await raceCancellationError(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
 			throwIfCancelled(signal, "Binary editor loading was cancelled");
 			const visible = resolved.bytes.subarray(0, MAX_RENDERED_BYTES);
 			this.model.value = model;
@@ -122,7 +122,7 @@ export function binaryEditorDescriptor(): IEditorPaneDescriptor {
 		id: BINARY_EDITOR_ID,
 		name: "Binary Editor",
 		canOpen: input => {
-			if (input.resource.scheme !== "file" && !isRemoteResource(input.resource)) return EditorPaneMatch.None;
+			if (input.initialBytes === undefined && input.resource.scheme !== "file" && !isRemoteResource(input.resource)) return EditorPaneMatch.None;
 			return input.contentType?.toLowerCase().startsWith("application/octet-stream") ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
 		},
 		create: options => {

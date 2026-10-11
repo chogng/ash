@@ -19,6 +19,10 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	public readonly onDidChangeHistoryItemRefs = this.refsChanged.event;
 	private readonly historyRefChanged = this._register(new Emitter<ISCMHistoryItemRef | undefined>());
 	private currentHistoryRef: ISCMHistoryItemRef | undefined;
+	private currentRemoteRef: ISCMHistoryItemRef | undefined;
+	private readonly remoteRefChanged = this._register(new Emitter<ISCMHistoryItemRef | undefined>());
+	public readonly historyItemRemoteRef = observableFromEvent(this, this.remoteRefChanged.event, () => this.currentRemoteRef);
+	private historyRoots: readonly string[] | undefined;
 	public readonly historyItemRef = observableFromEvent(this, this.historyRefChanged.event, () => this.currentHistoryRef);
 	private readonly commits: GitCommitSummary[] = [];
 	private readonly references = new Map<string, ISCMHistoryItemRef[]>();
@@ -55,13 +59,18 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	}
 
 	public async provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[]> {
+		const roots = options.historyItemRefs === undefined ? undefined : [...new Set(options.historyItemRefs)].sort();
+		if (JSON.stringify(roots) !== JSON.stringify(this.historyRoots)) {
+			this.reset(false);
+			this.historyRoots = roots;
+		}
 		const generation = this.generation;
 		const skip = options.skip ?? 0;
 		const limit = options.limit ?? PageSize;
 		if (!Number.isSafeInteger(skip) || skip < 0 || !Number.isSafeInteger(limit) || limit < 1) {
 			throw new RangeError('SCM history skip and limit must be positive integers');
 		}
-		await this.loadUntil(skip + limit);
+		await this.loadUntil(skip + limit, generation);
 		let status: GitStatus;
 		try {
 			status = await this.gitService.status(this.repositoryId);
@@ -75,7 +84,28 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 				this.setHistoryItemRef(currentRef(status.head));
 			}
 		}
-		return this.commits.slice(skip, skip + limit).map(commit => this.historyItem(commit));
+		return (generation === this.generation ? this.commits.slice(skip, skip + limit) : []).map(commit => this.historyItem(commit));
+	}
+
+	public async provideHistoryItemRefs(historyItemRefs?: readonly string[]): Promise<readonly ISCMHistoryItemRef[]> {
+		const generation = this.generation;
+		const snapshot = await this.gitService.historyRefs(this.repositoryId);
+		if (this.isDisposed || generation !== this.generation) { return []; }
+		this.branches = snapshot.branches;
+		this.remotes = snapshot.remotes;
+		this.acceptReferences(snapshot.references);
+		this.setHistoryItemRef(currentRef(snapshot.status.head));
+		const refs = [...this.references.values()].flat();
+		return historyItemRefs ? refs.filter(ref => historyItemRefs.includes(ref.id)) : refs;
+	}
+
+	public async resolveHistoryItemRefsCommonAncestor(historyItemRefs: readonly string[]): Promise<string | undefined> {
+		let ancestor = historyItemRefs[0];
+		if (!ancestor) { return undefined; }
+		for (const revision of historyItemRefs.slice(1)) {
+			ancestor = (await this.gitService.compareChanges(ancestor, revision, 'mergeBase', this.repositoryId)).baseObjectId;
+		}
+		return ancestor;
 	}
 
 	private historyItem(commit: GitCommitSummary): ISCMHistoryItem {
@@ -149,13 +179,12 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		return formatFileChange(historyItemId, change.path, change.originalPath, change.status, file.original, file.modified);
 	}
 
-	private async loadUntil(count: number): Promise<void> {
-		while (this.commits.length < count && this.hasMore) {
+	private async loadUntil(count: number, generation: number): Promise<void> {
+		while (!this.isDisposed && generation === this.generation && this.commits.length < count && this.hasMore) {
 			if (this.loading) {
 				await this.loading;
 				continue;
 			}
-			const generation = this.generation;
 			const loading = this.loadPage(generation);
 			this.loading = loading;
 			try {
@@ -170,12 +199,12 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		let page: GraphPage;
 		try {
 			if (!this.nextCursor) {
-				const [graph, branches] = await Promise.all([this.gitService.graph({ limit: PageSize }, this.repositoryId), this.gitService.branches(this.repositoryId)]);
+				const [graph, branches] = await Promise.all([this.gitService.graph({ limit: PageSize, revisions: this.historyRoots }, this.repositoryId), this.gitService.branches(this.repositoryId)]);
 				page = graph;
 				if (this.isDisposed || generation !== this.generation) { return; }
 				if (graph.historyRevision >= this.referencesRevision || this.graphRevision === undefined) { this.branches = branches; }
 			} else {
-				page = await this.gitService.graph({ limit: PageSize, cursor: this.nextCursor }, this.repositoryId);
+				page = await this.gitService.graph({ limit: PageSize, cursor: this.nextCursor, revisions: this.historyRoots }, this.repositoryId);
 			}
 		} catch (error) {
 			throw historyError(error);
@@ -285,6 +314,11 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	}
 
 	private setHistoryItemRef(ref: ISCMHistoryItemRef | undefined): void {
+		const remote = [...this.references.values()].flat().find(item => item.category === 'remoteBranch' && item.name === ref?.upstream);
+		if (remote?.id !== this.currentRemoteRef?.id || remote?.revision !== this.currentRemoteRef?.revision) {
+			this.currentRemoteRef = remote;
+			this.remoteRefChanged.fire(remote);
+		}
 		const previous = this.currentHistoryRef;
 		if (ref?.id === previous?.id && ref?.name === previous?.name && ref?.revision === previous?.revision && ref?.category === previous?.category && ref?.upstream === previous?.upstream) return;
 		this.currentHistoryRef = ref;

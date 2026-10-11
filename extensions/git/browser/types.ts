@@ -142,7 +142,7 @@ export interface GitCommitChanges {
 
 export type GitCommitFileContent =
 	| { readonly kind: "missing"; }
-	| { readonly kind: "binary"; }
+	| { readonly kind: "binary"; readonly bytes?: Uint8Array; }
 	| { readonly kind: "text"; readonly text: string; };
 
 export interface GitCommitFile {
@@ -172,6 +172,7 @@ export type GitConflictResolution = { readonly kind: 'edited'; readonly text: st
 export interface GraphQuery {
 	readonly limit: number;
 	readonly cursor?: string;
+	readonly revisions?: readonly string[];
 }
 
 export interface GitCommitResult {

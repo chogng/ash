@@ -3,8 +3,7 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 
-test('file name validation keeps keyboard focus and preserves the created and renamed basename', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Creating disk files requires the App Server.');
+test('file name validation keeps keyboard focus and preserves the created and renamed basename', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const browserFiles = target.kind === 'browser' && target.appServerMode === 'disabled';
 	let folderName: string | undefined;
@@ -51,8 +50,7 @@ test('file name validation keeps keyboard focus and preserves the created and re
 	}
 });
 
-test('server folder selection preserves a POSIX backslash through workspace authorization', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required' || process.platform === 'win32', 'Requires a browser connected to a POSIX App Server.');
+test('server folder selection preserves a POSIX backslash through workspace authorization', { tag: ['@browser-app-server', '@darwin', '@linux'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const root = await page.evaluate(() => {
 		const workspace = globalThis.ashWebWorkbenchHost!.workspace!;

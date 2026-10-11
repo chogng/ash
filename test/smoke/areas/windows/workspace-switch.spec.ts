@@ -22,9 +22,8 @@ function pasteInWindowsExplorer(directory: string): void {
 	], { env: { ...process.env, ASH_TEST_PASTE_DIRECTORY: directory } });
 }
 
-test('repeated folder opens wait for the permission choice past 30 seconds', async ({ target, testWorkspace, workbench }) => {
+test('repeated folder opens wait for the permission choice past 30 seconds', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	test.setTimeout(75_000);
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
 	const nextFolder = join(testWorkspace.directory, 'next-folder');
 	await mkdir(nextFolder);
 	const page = workbench.page;
@@ -57,8 +56,7 @@ test('repeated folder opens wait for the permission choice past 30 seconds', asy
 	}).toBe(nextFolder);
 });
 
-test('opening a folder displays its files in Explorer', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('opening a folder displays its files in Explorer', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const nextFolder = join(testWorkspace.directory, 'visible-folder');
 	await mkdir(nextFolder);
 	await writeFile(join(nextFolder, 'visible.txt'), 'visible');
@@ -107,8 +105,7 @@ test('opening a folder displays its files in Explorer', async ({ target, testWor
 	expect(await fileRow?.evaluate(row => row.isConnected)).toBe(true);
 });
 
-test('Explorer file context menu includes file actions for the clicked row', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('Explorer file context menu includes file actions for the clicked row', { tag: ['@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	const items = await workbench.menus.inspect(application, () => file.click({ button: 'right' }));
 	const labels = items.map(item => item.label);
@@ -118,8 +115,7 @@ test('Explorer file context menu includes file actions for the clicked row', asy
 	expect(labels).not.toContain('Download File...');
 });
 
-test('Explorer shortcuts copy and move binary files into folders', async ({ target, testWorkspace, workbench, application }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('Explorer shortcuts copy and move binary files into folders', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench, application }) => {
 	const directory = testWorkspace.directory;
 	await mkdir(join(directory, 'paste-target'));
 	await mkdir(join(directory, 'move-target'));
@@ -226,9 +222,8 @@ test.describe('System clipboard', () => {
 		await mkdir(join(testWorkspace.directory, 'system-paste-target'));
 	});
 
-	test('Explorer pastes files from the macOS and Linux system clipboard', async ({ target, testWorkspace, workbench, application }) => {
+	test('Explorer pastes files from the macOS and Linux system clipboard', { tag: ['@electron-app-server', '@darwin', '@linux'] }, async ({ target, testWorkspace, workbench, application }) => {
 		test.setTimeout(75_000);
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.platform === 'win32', 'This scenario requires the macOS or Linux Code desktop and App Server');
 		const externalDirectory = await mkdtemp(join(tmpdir(), 'ash-explorer-system-'));
 		try {
 			const destination = join(testWorkspace.directory, 'system-paste-target');
@@ -276,16 +271,14 @@ test.describe('System clipboard', () => {
 	});
 });
 
-test('Explorer opens the focused file context menu from the keyboard', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('Explorer opens the focused file context menu from the keyboard', { tag: ['@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await file.click();
 	const items = await workbench.menus.inspect(application, () => workbench.page.keyboard.press('Shift+F10'));
 	expect(items).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Rename', enabled: true })]));
 });
 
-test('Explorer file shortcuts target the selected file', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('Explorer file shortcuts target the selected file', { tag: ['@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).click();
 	const confirmation = await workbench.dialogs.confirm(application, 'Confirm', 'Cancel', () => page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+Backspace' : 'Shift+Delete'));
@@ -297,8 +290,7 @@ test('Explorer file shortcuts target the selected file', async ({ target, applic
 	await input.press('Escape');
 });
 
-test('Explorer creates a child folder from a folder context menu', async ({ target, application, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('Explorer creates a child folder from a folder context menu', { tag: ['@electron-app-server'] }, async ({ target, application, testWorkspace, workbench }) => {
 	const parent = join(testWorkspace.directory, 'menu-parent');
 	await mkdir(parent);
 	const folder = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'menu-parent' });
@@ -313,8 +305,7 @@ test('Explorer creates a child folder from a folder context menu', async ({ targ
 	await expect(workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'created-from-menu' })).toHaveCount(1);
 });
 
-test('Explorer expands and collapses a refreshed folder without replacing sibling rows', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('Explorer expands and collapses a refreshed folder without replacing sibling rows', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const explorer = page.locator('.ash-explorer');
 	const sibling = explorer.locator('.ash-tree-row').filter({ hasText: 'main.ts' });
@@ -341,8 +332,7 @@ test('Explorer expands and collapses a refreshed folder without replacing siblin
 	expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
 });
 
-test('Explorer uses the desktop clipboard and imports binary files from a paste event', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code desktop and App Server');
+test('Explorer uses the desktop clipboard and imports binary files from a paste event', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const destination = join(testWorkspace.directory, 'paste-target');
 	await mkdir(destination);
 	const page = workbench.page;

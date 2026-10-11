@@ -63,6 +63,9 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	items: readonly (TItem | IQuickPickSeparator)[];
 	/** Disable search sorting when the provider owns item order and grouping. */
 	sortByLabel: boolean;
+	canSelectMany: boolean;
+	selectedItems: readonly TItem[];
+	readonly onDidChangeSelection: Event<readonly TItem[]>;
 	busy?: boolean;
 	canAcceptInBackground?: boolean;
 	readonly keyMods?: IKeyMods;

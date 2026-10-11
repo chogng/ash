@@ -125,6 +125,10 @@ impl GitGraphCursor {
     }
 
     async fn next_commit(&mut self) -> GitResult<Option<GitCommitSummary>> {
+        if self.stream.is_none() {
+            self.done = true;
+            return Ok(None);
+        }
         let Some(object_id) = self
             .stream
             .as_mut()
@@ -221,26 +225,60 @@ impl GitClient {
 
     /// Starts one repository graph traversal with refs and remotes captured once.
     pub async fn start_graph(&self, repository: &GitRepository) -> GitResult<GitGraphCursor> {
+        self.start_graph_for_refs(repository, None).await
+    }
+
+    /// Traverses only the union reachable from the supplied immutable commit IDs.
+    /// Omission retains the public repository graph; an empty selection has no commits.
+    pub async fn start_graph_for_refs(
+        &self,
+        repository: &GitRepository,
+        revisions: Option<&[String]>,
+    ) -> GitResult<GitGraphCursor> {
+        if let Some(revisions) = revisions {
+            if revisions.len() > 1000 {
+                return Err(GitError::InvalidConfiguration {
+                    field: "graph revisions",
+                    requirement: "must contain at most 1000 roots",
+                });
+            }
+            for revision in revisions {
+                crate::objects::validate_object_id(revision, "graph revision")?;
+            }
+        }
         let references = self.references(repository).await?;
         let remotes = self.remotes(repository).await?;
+        if revisions.is_some_and(|revisions| revisions.is_empty()) {
+            return Ok(GitGraphCursor {
+                stream: None,
+                references,
+                remotes,
+                pending: None,
+                done: false,
+            });
+        }
         // --all includes detached HEAD and accepts unborn repositories. Exclude its refs before
         // adding public namespaces so stash/private snapshots and other worktree HEADs stay out.
         // Git clears --exclude at the next ref selector, so this order is part of the contract.
-        let stream = self.start_query_stream(
-            repository.worktree_root(),
-            [
-                OsString::from("log"),
-                OsString::from("--single-worktree"),
-                OsString::from("--exclude=refs/*"),
-                OsString::from("--all"),
-                OsString::from("--branches"),
-                OsString::from("--remotes"),
-                OsString::from("--tags"),
-                OsString::from("--topo-order"),
-                OsString::from("-z"),
-                OsString::from("--format=%H%x00%P%x00%ct%x00%s"),
-            ],
-        )?;
+        let mut arguments = vec![OsString::from("log"), OsString::from("--single-worktree")];
+        if let Some(revisions) = revisions {
+            arguments.extend(revisions.iter().map(OsString::from));
+        } else {
+            arguments.extend(
+                [
+                    "--exclude=refs/*",
+                    "--all",
+                    "--branches",
+                    "--remotes",
+                    "--tags",
+                ]
+                .map(OsString::from),
+            );
+        }
+        arguments.extend(
+            ["--topo-order", "-z", "--format=%H%x00%P%x00%ct%x00%s", "--"].map(OsString::from),
+        );
+        let stream = self.start_query_stream(repository.worktree_root(), arguments)?;
         Ok(GitGraphCursor {
             stream: Some(stream),
             references,

@@ -58,8 +58,7 @@ test('Empty chat keeps its input near the pane edges', async ({ workbench }) => 
 	});
 });
 
-test('Agent mode picker compacts when the model needs room', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Agent mode picker compacts when the model needs room', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -100,8 +99,7 @@ test('Agent mode picker compacts when the model needs room', async ({ target, wo
 	}
 });
 
-test('Chat can switch from Plan back to Agent without selecting a different Agent', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat can switch from Plan back to Agent without selecting a different Agent', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -126,8 +124,7 @@ test('Chat can switch from Plan back to Agent without selecting a different Agen
 	await expect(picker).toBeFocused();
 });
 
-test('Chat mode picker exposes all five modes with one checked selection', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat mode picker exposes all five modes with one checked selection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -203,8 +200,7 @@ test('Chat mode choices use the shared action widget and floating elevation acro
 	}
 });
 
-test('Model picker uses free toolbar space before truncating its label', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Model picker uses free toolbar space before truncating its label', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -278,8 +274,7 @@ test('Chat input omits the unused find control and keeps the prompt evenly inset
 	expect(editorChrome.editorBackground).toBe(editorChrome.inputBackground);
 });
 
-test('Chat input places the microphone beside voice or send at the right edge', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat input places the microphone beside voice or send at the right edge', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -341,8 +336,7 @@ test('Chat input places the microphone beside voice or send at the right edge', 
 	expect(commandRightInset).toBeLessThanOrEqual(2);
 });
 
-test('Desktop Chat guides a missing local model to Dictation settings without opening the microphone', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the connected desktop');
+test('Desktop Chat guides a missing local model to Dictation settings without opening the microphone', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const original = await page.evaluate(async () => {
 		return (await globalThis.ashTestMainProcess.call('configuration', 'read') as { document: { source: string; }; }).document.source;
@@ -410,8 +404,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 	}
 });
 
-test('Chat input resizes with wrapped text and retains keyboard focus', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat input resizes with wrapped text and retains keyboard focus', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -439,8 +432,7 @@ test('Chat input resizes with wrapped text and retains keyboard focus', async ({
 	await expect(input).toBeFocused();
 });
 
-test('Chat input explicitly opens slash suggestions from the keyboard', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat input explicitly opens slash suggestions from the keyboard', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -458,8 +450,7 @@ test('Chat input explicitly opens slash suggestions from the keyboard', async ({
 	await expect(input).toBeFocused();
 });
 
-test('Chat input returns to the empty message state when a slash command is deleted', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat input returns to the empty message state when a slash command is deleted', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -477,8 +468,7 @@ test('Chat input returns to the empty message state when a slash command is dele
 	await expect(input).toBeFocused();
 });
 
-test('Chat input suggests and completes a command with a missing character', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat input suggests and completes a command with a missing character', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -500,8 +490,7 @@ test('Chat input suggests and completes a command with a missing character', asy
 	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/config');
 });
 
-test('Chat input matches slash command descriptions without selecting a command', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat input matches slash command descriptions without selecting a command', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();

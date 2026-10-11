@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { testTargetExclusions } from './test/automation/testTarget.js';
 
 const browserServerMode = process.env.ASH_PLAYWRIGHT_SERVER;
 const browserUi = browserServerMode === "disconnected" || browserServerMode === "development";
@@ -25,6 +26,7 @@ export default defineConfig({
 			{ name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
 		].map(project => ({
 			...project,
+			grepInvert: testTargetExclusions(project.name, process.platform),
 			// Publisher downloads have their own opt-in corpus project. Ordinary
 			// smoke runs use the PDF fixture created by the shared workspace.
 			testIgnore: project.name === 'electron-pdf-corpus-app-server'
@@ -39,7 +41,8 @@ export default defineConfig({
 			command: browserServerMode === "development"
 				? `pnpm run dev:web --port ${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}`
 				: `node build/desktop/launch/web.ts .build/desktop/web/ash ${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}`,
-			env: { ASH_WEB_APP_SERVER: '0' },
+			// Playwright owns shutdown; the standalone launcher's detached child would outlive it.
+			env: { ASH_WEB_APP_SERVER: '0', ASH_WEB_LAUNCH_WORKER: '1' },
 			url: `http://127.0.0.1:${process.env.ASH_SMOKE_BROWSER_PORT ?? 5173}/`,
 			reuseExistingServer: false,
 			timeout: 120_000,

@@ -28,8 +28,7 @@ test('developer trace viewer validates connection settings and restores focus af
 	await expect(viewer).toHaveCount(0);
 });
 
-test('developer trace viewer connects to App Server, filters, exports and releases its connection', async ({ target, application, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Live capture requires the built product package.');
+test('developer trace viewer connects to App Server, filters, exports and releases its connection', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const profile = await mkdtemp(join(tmpdir(), 'ash-trace-'));
 	const token = randomBytes(32).toString('hex');
 	const root = resolve(import.meta.dirname, '../../../..');

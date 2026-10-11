@@ -202,8 +202,7 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 	}
 });
 
-test('Execution Trace opens current saved history and follows real new Turns and child Threads', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses real persistent history from the product App Server.');
+test('Execution Trace opens current saved history and follows real new Turns and child Threads', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	test.setTimeout(120_000);
 	const page = await workbench.openAgentsWindow(target.kind);
 	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);

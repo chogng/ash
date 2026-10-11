@@ -7,11 +7,8 @@ import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 test.use({ gitRepository: true });
-test.beforeEach(async ({ target }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
-});
 
-test('Changes title commit submenu commits staged content and discard preserves untracked files and cancellation', async ({ application, workbench, testWorkspace }) => {
+test('Changes title commit submenu commits staged content and discard preserves untracked files and cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const cwd = testWorkspace.directory;
 	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 	const page = workbench.page;
@@ -42,7 +39,7 @@ test('Changes title commit submenu commits staged content and discard preserves 
 	expect(await git('status', '--porcelain')).toBe('?? keep-untracked.txt');
 });
 
-test('Changes title stash menu includes untracked files, applies without dropping and deletes through confirmation', async ({ application, workbench, testWorkspace }) => {
+test('Changes title stash menu includes untracked files, applies without dropping and deletes through confirmation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const cwd = testWorkspace.directory;
 	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 	const page = workbench.page;
@@ -69,7 +66,7 @@ test('Changes title stash menu includes untracked files, applies without droppin
 	expect(await readFile(untracked, 'utf8')).toBe('stash this file\n');
 });
 
-test('Changes title cherry-pick menu copies the selected commit onto the current branch', async ({ application, workbench, testWorkspace }) => {
+test('Changes title cherry-pick menu copies the selected commit onto the current branch', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const cwd = testWorkspace.directory;
 	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 	const base = await git('rev-parse', 'HEAD');
@@ -88,7 +85,7 @@ test('Changes title cherry-pick menu copies the selected commit onto the current
 	expect(await readFile(join(cwd, 'cherry.txt'), 'utf8')).toBe('selected change\n');
 });
 
-test('Changes title remote menus fetch, pull, push and delete an actual remote branch', async ({ application, workbench, testWorkspace }) => {
+test('Changes title remote menus fetch, pull, push and delete an actual remote branch', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const cwd = testWorkspace.directory;
 	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 	// Local remotes live under .git so they stay inside the authorized workspace
@@ -136,7 +133,7 @@ test('Changes title remote menus fetch, pull, push and delete an actual remote b
 	expect(await git('branch', '--list', 'main')).toBe('* main');
 });
 
-test('Changes title clone menu creates a real desktop checkout and is disabled in the browser', async ({ application, target, workbench, testWorkspace }) => {
+test('Changes title clone menu creates a real desktop checkout and is disabled in the browser', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
 	await workbench.git.open();
 	const toolbar = workbench.page.getByRole('toolbar', { name: 'Source control actions', exact: true });
 	const menu = await workbench.menus.inspect(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click());

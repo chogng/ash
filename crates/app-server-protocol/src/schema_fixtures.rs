@@ -708,7 +708,12 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
         1
     );
     assert!(definitions.contains_key("GitStatusResult"));
-    assert!(definitions["GitStatusResult"]["required"].as_array().unwrap().contains(&serde_json::json!("historyRevision")));
+    assert!(
+        definitions["GitStatusResult"]["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("historyRevision"))
+    );
     assert!(definitions.contains_key("GitPathsParams"));
     assert!(definitions.contains_key("GitCommitParams"));
     assert_eq!(
@@ -1138,4 +1143,26 @@ fn changes_require_snapshot_identity_and_preserve_typed_commit_outcomes() {
         let result: TextDocumentApplyResult = serde_json::from_value(outcome.clone()).unwrap();
         assert_eq!(serde_json::to_value(result).unwrap(), outcome);
     }
+}
+
+#[test]
+fn git_history_filters_and_binary_payloads_keep_legacy_requests_readable() {
+    use crate::protocol::git::GitCommitFileContentDto;
+    use crate::protocol::git::GitGraphParams;
+    let legacy: GitGraphParams = serde_json::from_value(serde_json::json!({"limit": 50})).unwrap();
+    assert!(legacy.revisions.is_none());
+    let selected: GitGraphParams =
+        serde_json::from_value(serde_json::json!({"limit": 1, "revisions": ["a".repeat(40)]}))
+            .unwrap();
+    assert_eq!(selected.revisions.unwrap(), vec!["a".repeat(40)]);
+    let legacy: GitCommitFileContentDto =
+        serde_json::from_value(serde_json::json!({"kind": "binary"})).unwrap();
+    assert_eq!(legacy, GitCommitFileContentDto::Binary { data: None });
+    let bytes = GitCommitFileContentDto::Binary {
+        data: Some("AAH/".into()),
+    };
+    assert_eq!(
+        serde_json::to_value(bytes).unwrap(),
+        serde_json::json!({"kind": "binary", "data": "AAH/"})
+    );
 }

@@ -9,9 +9,6 @@ import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/ele
 import type { Page } from '@playwright/test';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 
-test.beforeEach(({ target }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Shared backup recovery requires the Electron App Server product.');
-});
 
 function records(directory: string): readonly { resource: string; content: string; }[] {
 	const database = new DatabaseSync(join(directory, 'profile', 'state.sqlite3'), { readOnly: true });
@@ -44,7 +41,7 @@ async function recoveredWindow(desktop: ElectronLaunchResult, text: string): Pro
 	throw new Error('Recovered editor window disappeared');
 }
 
-test('Desktop restores an unsaved file from shared storage despite window restore none and clears it after saving', async ({ testWorkspace }) => {
+test('Desktop restores an unsaved file from shared storage despite window restore none and clears it after saving', { tag: ['@electron-app-server'] }, async ({ testWorkspace }) => {
 	test.setTimeout(120_000);
 	const directory = await profile();
 	let desktop: ElectronLaunchResult | undefined;
@@ -112,7 +109,7 @@ test('Desktop migrates an IndexedDB draft only after shared storage acknowledges
 	} finally { try { await desktop?.close(); } finally { await rm(directory, { recursive: true, force: true }); } }
 });
 
-test('Desktop retains conflicting legacy content until an explicit save prevents its resurrection', async ({ testWorkspace }) => {
+test('Desktop retains conflicting legacy content until an explicit save prevents its resurrection', { tag: ['@electron-app-server'] }, async ({ testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = await profile();
 	let desktop: ElectronLaunchResult | undefined;

@@ -1,7 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Memories can be created, edited, authorized and deleted through the product backend', async ({ target, workbench, application }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Memory management requires the desktop product host.');
+test('Memories can be created, edited, authorized and deleted through the product backend', { tag: ['@electron-app-server'] }, async ({ target, workbench, application }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Open memories');
@@ -47,8 +46,7 @@ test('Memories can be created, edited, authorized and deleted through the produc
 });
 
 
-test('Browser Memories keeps authorization and saving disabled when the backend requires a desktop host', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the authenticated Web backend.');
+test('Browser Memories keeps authorization and saving disabled when the backend requires a desktop host', { tag: ['@browser-app-server'] }, async ({ target, workbench }) => {
 	await workbench.quickaccess.runCommand('ash.memories.open');
 	const view = workbench.page.locator('.ash-memories');
 	await expect(view.getByRole('status')).toHaveText('PermissionRequired');

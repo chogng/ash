@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 
 /// The host and bundled provider must agree on required graph revision stamps.
-pub const GIT_PROVIDER_VERSION: u16 = 2;
+pub const GIT_PROVIDER_VERSION: u16 = 3;
 
 pub const GIT_PROVIDER_CHANNEL: &str = "git.repository";
 pub const GIT_PROVIDER_ID: &str = "ash.git";
@@ -113,6 +113,7 @@ pub enum GitProviderRequest {
         connection_id: u64,
         limit: std::num::NonZeroUsize,
         cursor: Option<String>,
+        revisions: Option<Vec<String>>,
     },
     TextDiff {
         repository_id: Option<String>,

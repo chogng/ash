@@ -44,8 +44,7 @@ function countCatalogSubscriptions(): void {
 	};
 }
 
-test('Rust publication reconnects Workbench and Agents once while keeping both windows open', async ({ target, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the development Desktop backend');
+test('Rust publication reconnects Workbench and Agents once while keeping both windows open', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
 	test.setTimeout(120_000);
 	const source = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktopDirectory));
 	if (!source) throw new Error('Prepare the development backend before this scenario');
@@ -122,8 +121,7 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 	}
 });
 
-test('publication between runtime selection and Windows process startup preserves the selected build', async ({ target }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the development Desktop backend');
+test('publication between runtime selection and Windows process startup preserves the selected build', { tag: ['@electron-app-server'] }, async ({ target }) => {
 	test.setTimeout(120_000);
 	const source = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktopDirectory));
 	if (!source) throw new Error('Prepare the development backend before this scenario');
@@ -162,8 +160,7 @@ test('publication between runtime selection and Windows process startup preserve
 	}
 });
 
-test('the Agents development entry opens one connected Agents window directly', async ({ target }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the development Desktop backend');
+test('the Agents development entry opens one connected Agents window directly', { tag: ['@electron-app-server'] }, async ({ target }) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
 	const configuration = resolveElectronConfiguration({ appServerMode: 'required', userDataDirectory: directory });
 	const application = await _electron.launch({ args: [...configuration.args], cwd: configuration.cwd, executablePath: configuration.executablePath, env: { ...configuration.env, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_DEV_AGENTS_WINDOW: '1' } });

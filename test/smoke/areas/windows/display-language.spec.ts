@@ -16,8 +16,7 @@ test.describe('signed language pack installation', () => {
 		},
 	});
 
-	test('Chinese language pack downloads over HTTPS, really installs, independently updates and restores the preinstalled version on uninstall', async ({ target, backendFixture, application, workbench, restartWorkbench, reloadWorkbench }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the real Desktop extension package manager.');
+	test('Chinese language pack downloads over HTTPS, really installs, independently updates and restores the preinstalled version on uninstall', { tag: ['@electron-app-server'] }, async ({ target, backendFixture, application, workbench, restartWorkbench, reloadWorkbench }) => {
 		test.setTimeout(90_000);
 		const registry = backendFixture as LanguagePackRegistry;
 		if ('windows' in application) { expect(await application.evaluate(() => process.env.ASH_PRODUCT_SERVICES_PATH)).toBe(registry.productServicesPath); }
@@ -277,8 +276,7 @@ test('display language stays unchanged until restart and initializes Chinese com
 	await expect(workbench.page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
 });
 
-test('cached updated language pack translates startup and retired providers restore bundled Chinese', async ({ target, workbench, restartWorkbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires authoritative installed-package reconciliation.');
+test('cached updated language pack translates startup and retired providers restore bundled Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench, reloadWorkbench }) => {
 	const catalog = JSON.parse(await readFile(resolve('.build/desktop/localization/extensions/ash.language-pack-zh-cn/localization/package.json'), 'utf8'));
 	catalog.bundles['ash.regions'].searchCommands = '新版搜索命令';
 	catalog.extensionTranslations['ash.git'].package['git.menu.createBranch'] = '新版创建分支…';

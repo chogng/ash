@@ -10,11 +10,8 @@ const run = promisify(execFile);
 
 test.use({ gitRepository: true });
 
-test.beforeEach(async ({ target }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
-});
 
-test('Changes title worktree menu creates a detached checkout and protects local changes before deletion', async ({ application, testWorkspace, workbench }) => {
+test('Changes title worktree menu creates a detached checkout and protects local changes before deletion', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const page = workbench.page;
 	let checkout: string | undefined;
@@ -52,7 +49,7 @@ test('Changes title worktree menu creates a detached checkout and protects local
 });
 
 
-test('Changes title open worktree menu switches to the resolved workspace on both hosts', async ({ application, target, testWorkspace, workbench }) => {
+test('Changes title open worktree menu switches to the resolved workspace on both hosts', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const directory = target.kind === 'electron' ? await mkdtemp(join(tmpdir(), 'ash-git-open-')) : join(cwd, '.git', 'title-open-worktree');
 	if (target.kind === 'browser') await mkdir(directory);

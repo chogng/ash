@@ -473,13 +473,22 @@ const harness = {
 	},
 	resizeTitleComparison(width: number): void { titleEditor!.layout({ width, height: 300 }); },
 	focusedHistoryView(): string | undefined { return focusedHistoryView; },
-	readTitleComparison(): { mode: string | undefined; original: string | undefined; ignoreWhitespace: boolean | undefined; changes: number | undefined; } {
+	setTitleComparisonText(originalText: string, modifiedText: string): void {
+		const pane = titleEditor!.activePane;
+		if (!(pane instanceof TextDiffEditor)) throw new Error('Expected a text diff editor');
+		const control = pane.getControl()!;
+		control.originalEditor.getModel()!.setValue(originalText);
+		control.modifiedEditor.getModel()!.setValue(modifiedText);
+	},
+	readTitleComparison(): { mode: string | undefined; original: string | undefined; modified: string | undefined; ignoreWhitespace: boolean | undefined; renderWhitespace: string | undefined; changes: number | undefined; } {
 		const pane = titleEditor?.activePane;
 		const control = pane instanceof TextDiffEditor ? pane.getControl() : undefined;
 		return {
 			mode: control?.viewMode,
 			original: control?.originalEditor.getModel()?.getText(),
+			modified: control?.modifiedEditor.getModel()?.getText(),
 			ignoreWhitespace: titleConfiguration?.getValue<boolean>('diffEditor.ignoreTrimWhitespace'),
+			renderWhitespace: titleConfiguration?.getValue<string>('editor.renderWhitespace'),
 			changes: control?.diff?.hunks.length,
 		};
 	},

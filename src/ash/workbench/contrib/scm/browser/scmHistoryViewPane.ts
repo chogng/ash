@@ -18,6 +18,9 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Action2, IMenuService, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
@@ -28,12 +31,12 @@ import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../.
 import { IHoverService, type IManagedHover } from "../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, type ResourceLabels } from "../../../browser/labels.js";
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { SCMHistoryUnavailableError, type ISCMHistoryItemDetails, type ISCMHistoryItemComparison, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
+import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, SCMHistoryUnavailableError, type ISCMHistoryItemDetails, type ISCMHistoryItemComparison, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
 import { ISCMViewService } from '../common/scm.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
-import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
+import { createBinaryDiffEditorInput, createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { SWIMLANE_HEIGHT, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from './scmHistory.js';
 import { SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../common/scm.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -55,10 +58,12 @@ registerAction2(class extends Action2 {
 		const provider = repository.provider.historyProvider;
 		if (!provider) { return; }
 		const historyItem = historyItemViewModel.historyItem;
-		const changes = await provider.provideHistoryItemChanges(historyItem.id, comparison?.baseId ?? historyItem.parentIds[0]);
+		const revision = historyItem.comparison?.revision ?? historyItem.id;
+		const baseRevision = comparison?.baseId ?? historyItem.comparison?.baseRevision ?? historyItem.parentIds[0];
+		const changes = await provider.provideHistoryItemChanges(revision, baseRevision);
 		const items: MultiDiffEditorInputItem[] = [];
 		for (const change of changes ?? []) {
-			const file = await provider.resolveHistoryItemChangeContents(historyItem.id, change);
+			const file = await provider.resolveHistoryItemChangeContents(revision, change);
 			// Missing sides represent additions and deletions; their revision URIs keep empty models distinct.
 			items.push({
 				binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
@@ -71,8 +76,8 @@ registerAction2(class extends Action2 {
 			if (changes?.length === 0) { accessor.get(INotificationService).info(localize('scm.history.noChanges', 'There are no changes between these versions.')); }
 			return;
 		}
-		const resource = URI.from({ scheme: 'ash-multi-diff', path: `/scm-history/${repository.id}/${comparison?.baseId ?? 'parent'}/${historyItem.id}` });
-		const title = comparison?.label ?? `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`;
+		const resource = URI.from({ scheme: 'ash-multi-diff', path: `/scm-history/${repository.id}/${baseRevision ?? 'parent'}/${revision}` });
+		const title = comparison?.label ?? (historyItem.comparison ? historyItem.subject : `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`);
 		await accessor.get(IEditorService).openEditor(createMultiDiffEditorInput(resource, items, title, { kind: 'snapshot', repositoryId: repository.id, label: historyItem.displayId ?? historyItem.id }), { pinned: true });
 	}
 });
@@ -95,17 +100,56 @@ registerAction2(class extends Action2 {
 		const provider = repository.provider.historyProvider;
 		if (!provider) { return; }
 		const historyItem = historyItemViewModel.historyItem;
-		const file = await provider.resolveHistoryItemChangeContents(historyItem.id, historyItemChange);
-		if (file.modified.kind !== 'text') { return; }
+		const file = await provider.resolveHistoryItemChangeContents(historyItem.comparison?.revision ?? historyItem.id, historyItemChange);
+		if (file.modified.kind === 'missing') { return; }
+		if (file.modified.kind === 'binary' && !file.modified.bytes) {
+			accessor.get(INotificationService).info(localize('scm.history.binaryUnavailable', 'The history provider did not supply binary file contents.'));
+			return;
+		}
 		const name = historyItemChange.path.split('/').at(-1) ?? historyItemChange.path;
 		await accessor.get(IEditorService).openEditor({
 			resource: historyItemChange.modifiedUri ?? historyItemChange.uri,
-			label: `${name} (${historyItem.displayId ?? historyItem.id})`,
+			label: `${name} (${historyItem.displayId ?? historyItem.comparison?.revision.slice(0, 7) ?? historyItem.id})`,
 			readOnly: true,
-			initialText: file.modified.text,
+			...(file.modified.kind === 'text' ? { initialText: file.modified.text } : { initialBytes: file.modified.bytes, contentType: 'application/octet-stream' }),
 		});
 	}
 });
+
+type HistoryItemRefsFilter = 'auto' | 'all' | readonly string[];
+const HistoryViewMode = new RawContextKey<'list' | 'tree'>('scmHistoryViewMode', 'list');
+const HistoryRefsAvailable = new RawContextKey<boolean>('scmHistoryRefsAvailable', false);
+
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.graph.selectHistoryItemRefs',
+			title: localize2('scm.history.filter', 'Filter History References'),
+			icon: Lxicon.filter,
+			precondition: HistoryRefsAvailable.isEqualTo(true),
+			menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 1 },
+		});
+	}
+	public override async run(_accessor: ServicesAccessor, target: unknown): Promise<void> {
+		if (target instanceof SCMHistoryViewPane) { await target.selectHistoryItemRefs(); }
+	}
+});
+for (const mode of ['list', 'tree'] as const) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: `workbench.scm.action.graph.viewAs${mode === 'list' ? 'List' : 'Tree'}`,
+				title: mode === 'list' ? localize2('scm.history.viewAsList', 'View as List') : localize2('scm.history.viewAsTree', 'View as Tree'),
+				icon: mode === 'list' ? Lxicon.listUnordered : Lxicon.folders,
+				menu: { id: MenuId.SCMHistoryTitle, group: 'view', order: mode === 'list' ? 1 : 2 },
+				toggled: HistoryViewMode.isEqualTo(mode),
+			});
+		}
+		public override run(_accessor: ServicesAccessor, target: unknown): void {
+			if (target instanceof SCMHistoryViewPane) { target.setViewMode(mode); }
+		}
+	});
+}
 
 const CurrentHistoryItemAvailable = new RawContextKey<boolean>('scmHistoryCurrentItemAvailable', false);
 
@@ -154,6 +198,7 @@ class HistoryItemRow extends Disposable {
 	public scope: IScopedContextKeyService | undefined;
 	public target: SCMHistoryItemViewModelTreeElement | undefined;
 	public expanded: ExpandedCommit | undefined;
+	public changesDirty = false;
 	public changesElement: HTMLUListElement | undefined;
 	public hover: IManagedHover | undefined;
 
@@ -179,6 +224,14 @@ export class SCMHistoryViewPane extends ViewPane {
 	private readonly more = this._register(new DisposableStore());
 	private readonly providerListener = this._register(new MutableDisposable());
 	private provider: ISCMHistoryProvider | undefined;
+	private viewMode: 'list' | 'tree' = 'list';
+	private readonly viewModeContext: IContextKey<'list' | 'tree'>;
+	private readonly refsAvailableContext: IContextKey<boolean>;
+	private readonly filters = new Map<string, HistoryItemRefsFilter>();
+	private historyItemRefs: readonly string[] | undefined;
+	private comparison: { readonly remote: ISCMHistoryItemRef; readonly base: string; readonly incoming: boolean; readonly outgoing: boolean; } | undefined;
+	private readonly filterPicker = this._register(new MutableDisposable<DisposableStore>());
+	private readonly collapsedFolders = new Map<string, Set<string>>();
 	private page: HistoryPage | undefined;
 	private head: ISCMHistoryItemRef | undefined;
 	private generation = 0;
@@ -196,11 +249,26 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService, @IConfigurationService private readonly configurationService: IConfigurationService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickInputService private readonly quickInputService: IQuickInputService, @IStorageService private readonly storageService: IStorageService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
 		this.graphLabel = options.title;
+		this.viewMode = storageService.get('scm.graphView.viewMode', StorageScope.WORKSPACE) === 'tree' ? 'tree' : 'list';
+		this.viewModeContext = HistoryViewMode.bindTo(contextKeyService);
+		this.viewModeContext.set(this.viewMode);
+		this.refsAvailableContext = HistoryRefsAvailable.bindTo(contextKeyService);
+		this._register(toDisposable(() => { this.viewModeContext.reset(); this.refsAvailableContext.reset(); }));
+		try {
+			const saved: unknown = JSON.parse(storageService.get('scm.graphView.referencesFilter', StorageScope.WORKSPACE) ?? '[]');
+			if (Array.isArray(saved)) {
+				for (const entry of saved) {
+					if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') { continue; }
+					const filter: unknown = entry[1];
+					if (filter === 'all' || filter === 'auto' || Array.isArray(filter) && filter.length <= 1000 && filter.every(id => typeof id === 'string' && id.length <= 1024)) { this.filters.set(entry[0], filter as HistoryItemRefsFilter); }
+				}
+			}
+		} catch { /* Invalid saved UI state is reconstructed from the repository. */ }
 		this.contentElement.classList.add("ash-scm-secondary-pane");
 		this.graphElement = h(container.ownerDocument, "div");
 		this.graphElement.className = "ash-scm-graph";
@@ -226,10 +294,76 @@ export class SCMHistoryViewPane extends ViewPane {
 		toolbar.element.classList.add("ash-scm-remote-actions");
 		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
 		this._register(configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration('scm.graph.pageSize')) { void this.refresh(); }
+			if (event.affectsConfiguration('scm.graph.pageSize') || event.affectsConfiguration('scm.graph.showIncomingChanges') || event.affectsConfiguration('scm.graph.showOutgoingChanges')) { void this.refresh(); }
 			else if (event.affectsConfiguration('scm.graph.pageOnScroll')) { this.loadMoreIfVisible(); }
 		}));
 		void this.refresh();
+	}
+
+	public setViewMode(mode: 'list' | 'tree'): void {
+		if (this.viewMode === mode) { return; }
+		this.viewMode = mode;
+		this.viewModeContext.set(mode);
+		this.storageService.store('scm.graphView.viewMode', mode, StorageScope.WORKSPACE, StorageTarget.USER);
+		for (const [, row] of this.rowResources) { row.changesDirty = true; }
+		if (this.page) { this.renderGraph(this.page); }
+	}
+
+	private get filterKey(): string {
+		const repository = this.scmViewService.activeRepository;
+		return repository?.provider.rootUri?.toString() ?? repository?.id ?? '';
+	}
+
+	public async selectHistoryItemRefs(): Promise<void> {
+		const provider = this.provider;
+		const key = this.filterKey;
+		if (!provider?.provideHistoryItemRefs) { return; }
+		const resources = new DisposableStore();
+		this.filterPicker.value = resources;
+		type Pick = IQuickPickItem & { readonly reference: ISCMHistoryItemRef | 'auto' | 'all'; };
+		const picker = resources.add(this.quickInputService.createQuickPick<Pick>());
+		picker.canSelectMany = true;
+		picker.sortByLabel = false;
+		picker.placeholder = picker.ariaLabel = localize('scm.history.selectRefs', 'Select history references; use Ctrl+Space to toggle, then Enter to apply.');
+		picker.busy = true;
+		resources.add(picker.onDidHide(() => { if (this.filterPicker.value === resources) { this.filterPicker.clear(); } }));
+		picker.show();
+		try {
+			const references = await provider.provideHistoryItemRefs();
+			if (this.isDisposed || this.provider !== provider || key !== this.filterKey || this.filterPicker.value !== resources) { return; }
+			const current = this.filters.get(key) ?? 'auto';
+			const items: Pick[] = [
+				{ label: localize('scm.history.autoRefs', 'Auto (current branch and upstream)'), reference: 'auto' },
+				{ label: localize('scm.history.allRefs', 'All References'), reference: 'all' },
+				...references.map(reference => ({ label: reference.name, description: reference.category === 'localBranch' ? localize('scm.history.localBranch', 'Branch') : reference.category === 'remoteBranch' ? localize('scm.history.remoteBranch', 'Remote Branch') : reference.category === 'tag' ? localize('scm.history.tag', 'Tag') : undefined, reference })),
+			];
+			picker.items = items;
+			picker.selectedItems = items.filter(item => typeof item.reference === 'string' ? current === item.reference : Array.isArray(current) && current.includes(item.reference.id));
+			let selection = picker.selectedItems;
+			resources.add(picker.onDidChangeSelection(selected => {
+				if (selected.length === selection.length && selected.every((item, index) => item === selection[index])) { return; }
+				const added = selected.find(item => !selection.includes(item));
+				selection = added && typeof added.reference === 'string' ? [added] : selected.filter(item => typeof item.reference !== 'string');
+				if (selection.length !== selected.length || selection.some((item, index) => item !== selected[index])) { picker.selectedItems = selection; }
+			}));
+			picker.busy = false;
+			await new Promise<void>(resolve => {
+				resources.add(toDisposable(() => resolve()));
+				resources.add(picker.onDidHide(() => resolve()));
+				resources.add(picker.onDidAccept(() => {
+					if (selection.length === 0) { return; }
+					const first = selection[0].reference;
+					this.filters.set(key, typeof first === 'string' ? first : selection.map(item => (item.reference as ISCMHistoryItemRef).id));
+					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
+					this.page = undefined;
+					this.expanded.clear();
+					picker.hide();
+					void this.refresh();
+				}));
+			});
+		} finally {
+			if (this.filterPicker.value === resources) { this.filterPicker.clear(); }
+		}
 	}
 
 	public async runTitleOperation(operation?: () => Promise<unknown>): Promise<void> {
@@ -254,6 +388,12 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	public async revealCurrentHistoryItem(): Promise<void> {
+		if (this.head?.revision && this.historyItemRefs && !this.historyItemRefs.includes(this.head.revision)) {
+			this.filters.delete(this.filterKey);
+			this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
+			this.page = undefined;
+			await this.refresh();
+		}
 		const revision = this.head?.revision;
 		const generation = this.generation;
 		if (!revision) { return; }
@@ -274,6 +414,9 @@ export class SCMHistoryViewPane extends ViewPane {
 	private clearGraph(): void {
 		this.page = undefined;
 		this.head = undefined;
+		this.comparison = undefined;
+		this.historyItemRefs = undefined;
+		this.collapsedFolders.clear();
 		this.currentItemContext.set(false);
 		this.loading = false;
 		this.moreError = undefined;
@@ -291,10 +434,12 @@ export class SCMHistoryViewPane extends ViewPane {
 		const generation = ++this.generation;
 		const repository = this.scmViewService.activeRepository;
 		this.providerIdContext.set(repository?.provider.providerId ?? '');
+		this.refsAvailableContext.set(typeof repository?.provider.historyProvider?.provideHistoryItemRefs === 'function');
 		const provider = repository?.provider.historyProvider;
 		if (repository?.id !== this.graphRepositoryId || provider !== this.provider) {
 			this.titleOperation = undefined;
 			this.busyContext.set(false);
+			this.filterPicker.clear();
 			this.clearGraph();
 			this.provider = provider;
 			const listeners = new DisposableStore();
@@ -307,6 +452,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				}));
 				if (provider.onDidChangeHistoryItemRefs) {
 					listeners.add(provider.onDidChangeHistoryItemRefs(items => {
+						if ((this.filters.get(this.filterKey) ?? 'auto') !== 'all' && provider.provideHistoryItemRefs) { void this.refresh(); return; }
 						if (!this.page) { return; }
 						const byId = new Map(items.map(item => [item.id, item]));
 						this.page = { ...this.page, items: this.page.items.map(item => byId.get(item.id) ?? item) };
@@ -332,10 +478,43 @@ export class SCMHistoryViewPane extends ViewPane {
 			return;
 		}
 		try {
+			const previousComparison = this.comparison;
+			const previousHead = this.head?.revision;
+			if (provider.provideHistoryItemRefs) {
+				const refs = await provider.provideHistoryItemRefs();
+				if (this.isDisposed || generation !== this.generation) { return; }
+				this.head = provider.historyItemRef.get();
+				const remote = provider.historyItemRemoteRef?.get();
+				let filter = this.filters.get(this.filterKey) ?? 'auto';
+				let selected = Array.isArray(filter) ? refs.filter(ref => filter.includes(ref.id)) : [];
+				if (Array.isArray(filter) && selected.length === 0) {
+					filter = 'auto';
+					this.filters.delete(this.filterKey);
+					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
+				}
+				if (filter === 'auto') { selected = [this.head, remote].filter((ref): ref is ISCMHistoryItemRef => !!ref); }
+				this.historyItemRefs = filter === 'all' ? undefined : selected.flatMap(ref => ref.revision ? [ref.revision] : []);
+				this.comparison = undefined;
+				if (this.head?.revision && remote?.revision && remote.revision !== this.head.revision && provider.resolveHistoryItemRefsCommonAncestor) {
+					const base = await provider.resolveHistoryItemRefsCommonAncestor([this.head.revision, remote.revision]);
+					if (this.isDisposed || generation !== this.generation) { return; }
+					if (base) {
+						this.comparison = {
+							remote, base,
+							incoming: this.configurationService.getValue<boolean>('scm.graph.showIncomingChanges') && (filter === 'all' || selected.some(ref => ref.id === remote.id)),
+							outgoing: this.configurationService.getValue<boolean>('scm.graph.showOutgoingChanges') && (filter === 'all' || selected.some(ref => ref.id === this.head?.id)),
+						};
+					}
+				}
+			}
+			if (previousHead !== this.head?.revision || previousComparison?.remote.revision !== this.comparison?.remote.revision || previousComparison?.base !== this.comparison?.base) {
+				this.expanded.delete(SCMIncomingHistoryItemId);
+				this.expanded.delete(SCMOutgoingHistoryItemId);
+			}
 			// One bounded look-ahead page retains the loaded tail when new commits arrive.
 			const pageSize = this.configurationService.getValue<number>('scm.graph.pageSize');
 			const limit = previousPage ? Math.max(pageSize, previousPage.items.length) + pageSize : pageSize;
-			const loaded = await provider.provideHistoryItems({ skip: 0, limit: limit + 1 });
+			const loaded = await provider.provideHistoryItems({ skip: 0, limit: limit + 1, historyItemRefs: this.historyItemRefs });
 			if (this.isDisposed || generation !== this.generation) return;
 			const items = loaded ?? [];
 			const previousTail = previousPage?.items.at(-1)?.id;
@@ -383,11 +562,11 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 		const focused = this.graphElement.ownerDocument.activeElement as HTMLElement | null;
 		const restoreFocus = focused && this.graphElement.contains(focused) ? focused : undefined;
-		const retained = new Set(page.items.map(item => item.id));
+		const retained = new Set([...page.items.map(item => item.id), SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId]);
 		for (const id of this.expanded.keys()) {
 			if (!retained.has(id)) this.expanded.delete(id);
 		}
-		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head);
+		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head, this.comparison);
 		this.currentItemContext.set(this.head?.revision !== undefined);
 		this.statusElement.hidden = page.items.length > 0;
 		this.statusElement.textContent = localize('scm.history.empty', 'No commits yet.');
@@ -423,7 +602,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.list = list;
 			resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
 			list.domNode.classList.add('ash-scm-graph-viewport');
-			list.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to move between commits, Home and End to move to the first and last loaded commits, and Page Up and Page Down to move by a page. Use Right Arrow to expand files and Left Arrow to collapse them. Press Enter or Space on a history item to toggle its files. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that item. Press Enter on a reference badge for provider actions. Press Alt+Down Arrow to focus history details and use its actions; Escape returns to the history item.'));
+			list.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to move between commits, Home and End to move to the first and last loaded commits, and Page Up and Page Down to move by a page. Use Right Arrow to expand files and Left Arrow to collapse them. Press Enter or Space on a history item to toggle its files. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that item. Press Enter on a reference badge for provider actions. Press Alt+Down Arrow to focus history details and use its actions; Escape returns to the history item. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. In tree mode, use Enter or the Left and Right Arrow keys on a folder to collapse or expand it. Incoming and Outgoing Changes compare the corresponding branch with its merge base. Binary changes open a read-only hexadecimal comparison.'));
 			resources.add(list.onDidRenderRows(() => {
 				for (const [, row] of this.rowResources) {
 					if (!row.hover?.visible) continue;
@@ -467,6 +646,8 @@ export class SCMHistoryViewPane extends ViewPane {
 
 
 	private updateCommitHeight(historyItem: ISCMHistoryItem): void {
+		const row = this.rowResources.get(historyItem.id);
+		if (row) { row.changesDirty = true; }
 		const index = this.rows.findIndex(model => model.historyItem.id === historyItem.id);
 		this.list?.updateElementHeight(index, this.rowHeight(historyItem));
 		this.list?.rerender(index);
@@ -475,7 +656,23 @@ export class SCMHistoryViewPane extends ViewPane {
 	private rowHeight(historyItem: ISCMHistoryItem): number {
 		const expanded = this.expanded.get(historyItem.id);
 		if (!expanded) return SWIMLANE_HEIGHT;
-		const childRows = expanded.state === "ready" ? Math.max(1, expanded.result.length) : 1;
+		let childRows = expanded.state === 'ready' ? Math.max(1, expanded.result.length) : 1;
+		if (this.viewMode === 'tree' && expanded.state === 'ready' && expanded.result.length > 0) {
+			const folders = this.collapsedFolders.get(historyItem.id);
+			const directories = new Set<string>();
+			let visibleFiles = 0;
+			for (const change of expanded.result) {
+				const parts = change.path.split('/');
+				let visible = true;
+				for (let depth = 1; depth < parts.length; depth++) {
+					const path = parts.slice(0, depth).join('/');
+					if (visible) { directories.add(path); }
+					if (folders?.has(path)) { visible = false; }
+				}
+				if (visible) { visibleFiles++; }
+			}
+			childRows = directories.size + visibleFiles;
+		}
 		return SWIMLANE_HEIGHT * (childRows + 1);
 	}
 
@@ -520,7 +717,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		try {
 			// Load one page per request so startup and scrolling do not drain the repository history.
 			const pageSize = this.configurationService.getValue<number>('scm.graph.pageSize');
-			const next = await provider.provideHistoryItems({ skip: page.items.length, limit: pageSize + 1 });
+			const next = await provider.provideHistoryItems({ skip: page.items.length, limit: pageSize + 1, historyItemRefs: this.historyItemRefs });
 			if (this.isDisposed || generation !== this.generation) return;
 			const items = next ?? [];
 			this.page = { items: [...page.items, ...items.slice(0, pageSize)], hasMore: items.length > pageSize };
@@ -565,7 +762,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const scope = resources.add(this.contextKeyService.createScoped(item));
 		rendered.scope = scope;
 		rendered.target = menuTarget;
-		scope.setContext('scmHistoryProviderId', repository?.provider.providerId ?? '');
+		scope.setContext('scmHistoryProviderId', historyItem.comparison ? '' : repository?.provider.providerId ?? '');
 		scope.setContext('scmHistoryItemHasRemote', (historyItem.remoteLinks?.length ?? 0) > 0);
 		scope.setContext('scmHistoryItemRemoteAuthority', historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '');
 		scope.setContext('scmHistoryItemHasBranch', historyItem.references?.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch') ?? false);
@@ -631,7 +828,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			item.append(rendered.changesElement);
 		}
 		resources.add(addDisposableListener(item, "click", (event) => {
-			if ((event.target as Element).closest(".ash-scm-graph-change, .ash-scm-graph-actions, .ash-scm-graph-label")) return;
+			if ((event.target as Element).closest(".ash-scm-graph-change, .ash-scm-graph-folder, .ash-scm-graph-actions, .ash-scm-graph-label")) return;
 			void this.toggleCommit(historyItem);
 		}));
 		resources.add(addDisposableListener(item, 'focus', () => {
@@ -699,7 +896,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private updateCommitRow(row: HistoryItemRow, model: ISCMHistoryItemViewModel): void {
 		const previous = row.historyItemViewModel;
 		const expanded = this.expanded.get(model.historyItem.id);
-		const expansionChanged = row.expanded !== expanded;
+		const expansionChanged = row.changesDirty || row.expanded !== expanded;
 		const sameLane = (left: ISCMHistoryItemViewModel['inputSwimlanes'][number], right: ISCMHistoryItemViewModel['inputSwimlanes'][number]): boolean => left.id === right.id && left.color === right.color;
 		if (expansionChanged || previous.kind !== model.kind || !equals(previous.inputSwimlanes, model.inputSwimlanes, sameLane) || !equals(previous.outputSwimlanes, model.outputSwimlanes, sameLane)) {
 			const graph = renderSCMHistoryItemGraph(model, this.rowHeight(model.historyItem), this.graphElement.ownerDocument);
@@ -742,6 +939,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		row.changesElement?.remove();
 		row.changesElement = undefined;
 		row.expanded = expanded;
+		row.changesDirty = false;
 		row.element.setAttribute('aria-expanded', String(expanded !== undefined));
 		if (expanded) {
 			row.changesElement = this.renderCommitChanges(model, expanded, row.changes);
@@ -853,16 +1051,59 @@ export class SCMHistoryViewPane extends ViewPane {
 			list.append(state);
 			return list;
 		}
+		list.setAttribute('role', 'group');
+		const directories = new Map<string, HTMLUListElement>();
 		for (const change of expanded.result) {
+			let parent = list;
+			const parts = change.path.split('/');
+			if (this.viewMode === 'tree') {
+				for (let depth = 1; depth < parts.length; depth++) {
+					const path = parts.slice(0, depth).join('/');
+					let children = directories.get(path);
+					if (!children) {
+						const directory = h(document, 'li');
+						directory.className = 'ash-scm-graph-directory';
+						const folders = this.collapsedFolders.get(historyItem.id) ?? new Set<string>();
+						this.collapsedFolders.set(historyItem.id, folders);
+						const folder = resources.add(new Button(directory, { label: parts[depth - 1], icon: folders.has(path) ? Lxicon.chevronRight : Lxicon.chevronDown, ariaLabel: localize('scm.history.folder', 'Folder {0}', path) }));
+						folder.domNode.classList.add('ash-scm-graph-folder');
+						folder.domNode.dataset.historyFolder = path;
+						folder.domNode.style.setProperty('--scm-graph-change-depth', String(depth - 1));
+						folder.domNode.setAttribute('aria-expanded', String(!folders.has(path)));
+						folder.domNode.classList.toggle('expanded', !folders.has(path));
+						children = h(document, 'ul');
+						children.className = 'ash-scm-graph-folder-children';
+						children.setAttribute('role', 'group');
+						children.hidden = folders.has(path);
+						const toggle = (): void => {
+							if (folders.has(path)) { folders.delete(path); } else { folders.add(path); }
+							this.updateCommitHeight(historyItem);
+							Array.from(this.rowResources.get(historyItem.id)?.element.querySelectorAll<HTMLButtonElement>('.ash-scm-graph-folder') ?? []).find(button => button.dataset.historyFolder === path)?.focus();
+						};
+						resources.add(folder.onDidClick(event => { event.stopPropagation(); toggle(); }));
+						resources.add(addDisposableListener(folder.domNode, 'keydown', event => {
+							if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+								event.preventDefault(); event.stopPropagation();
+								if (folders.has(path) === (event.key === 'ArrowRight')) { toggle(); }
+							}
+						}));
+						directory.append(children);
+						parent.append(directory);
+						directories.set(path, children);
+					}
+					parent = children;
+				}
+			}
 			const row = h(document, "li");
 			const button = h(document, "button");
 			button.className = "ash-scm-graph-change";
+			button.style.setProperty('--scm-graph-change-depth', String(this.viewMode === 'tree' ? parts.length - 1 : 0));
 			button.type = "button";
-			button.title = localize('scm.history.openChange', 'Open {0} from {1}', change.path, historyItem.displayId ?? historyItem.id);
+			button.title = localize('scm.history.openChange', 'Open {0} from {1}', change.path, historyItem.displayId ?? historyItem.subject);
 			const name = change.path.split("/").at(-1) ?? change.path;
 			const parentPath = change.path.includes("/") ? change.path.slice(0, change.path.lastIndexOf("/")) : "";
 			const fileLabel = resources.add(this.resourceLabels.create(button));
-			fileLabel.setResource({ resource: change.uri, name, description: parentPath || undefined }, {
+			fileLabel.setResource({ resource: change.uri, name, description: this.viewMode === 'list' ? parentPath || undefined : undefined }, {
 				reserveIconSpace: true,
 				title: change.path,
 				extraClasses: ["ash-scm-graph-change-label"],
@@ -913,7 +1154,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				}
 			}));
 			row.append(button);
-			list.append(row);
+			parent.append(row);
 		}
 		return list;
 	}
@@ -929,7 +1170,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.expanded.set(historyItem.id, pending);
 		this.updateCommitHeight(historyItem);
 		try {
-			const result = await provider.provideHistoryItemChanges(historyItem.id, historyItem.parentIds[0]);
+			const result = await provider.provideHistoryItemChanges(historyItem.comparison?.revision ?? historyItem.id, historyItem.comparison?.baseRevision ?? historyItem.parentIds[0]);
 			if (this.isDisposed || provider !== this.provider || this.expanded.get(historyItem.id) !== pending) return;
 			this.expanded.set(historyItem.id, { state: "ready", result: result ?? [] });
 		} catch (error) {
@@ -942,7 +1183,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private async openCommitChange(historyItem: ISCMHistoryItem, change: ISCMHistoryItemChange, options: IOpenEditorOptions): Promise<void> {
 		const provider = this.provider;
 		if (!provider) return;
-		const file = await provider.resolveHistoryItemChangeContents(historyItem.id, change);
+		const file = await provider.resolveHistoryItemChangeContents(historyItem.comparison?.revision ?? historyItem.id, change);
 		const name = change.path.split("/").at(-1) ?? change.path;
 		const original = file.original.kind === "text" ? {
 			resource: change.originalUri ?? change.uri,
@@ -952,11 +1193,21 @@ export class SCMHistoryViewPane extends ViewPane {
 		} : undefined;
 		const modified = file.modified.kind === "text" ? {
 			resource: change.modifiedUri ?? change.uri,
-			label: `${name} (${historyItem.displayId ?? historyItem.id})`,
+			label: `${name} (${historyItem.displayId ?? historyItem.comparison?.revision.slice(0, 7) ?? historyItem.id})`,
 			readOnly: true,
 			initialText: file.modified.text,
 		} : undefined;
 		const group = options.openToSide ? 'sideGroup' : 'activeGroup';
+		if (file.original.kind === 'binary' || file.modified.kind === 'binary') {
+			const before = file.original.kind === 'binary' ? file.original.bytes : file.original.kind === 'text' ? new TextEncoder().encode(file.original.text) : new Uint8Array();
+			const after = file.modified.kind === 'binary' ? file.modified.bytes : file.modified.kind === 'text' ? new TextEncoder().encode(file.modified.text) : new Uint8Array();
+			if (!before || !after) { return; }
+			await this.editorService.openEditor(createBinaryDiffEditorInput(
+				{ resource: change.originalUri ?? change.uri, label: `${name} (${file.parentId?.slice(0, 7) ?? 'empty'})`, readOnly: true, initialBytes: before },
+				{ resource: change.modifiedUri ?? change.uri, label: `${name} (${historyItem.displayId ?? historyItem.subject})`, readOnly: true, initialBytes: after },
+			), options.editorOptions, group);
+			return;
+		}
 		if (original && modified) {
 			await this.editorService.openEditor(createDiffEditorInput(original, modified, `${original.label} ↔ ${modified.label}`), options.editorOptions, group);
 		} else if (modified) {
@@ -973,6 +1224,23 @@ export class SCMHistoryViewPane extends ViewPane {
 		hover.className = "ash-scm-graph-hover";
 		const hoverScope = resources.add(scope.createScoped(hover));
 		hoverScope.setContext('scmHistoryDetailsFocused', true);
+		if (historyItem.comparison) {
+			const subject = h(document, 'div');
+			subject.className = 'ash-scm-graph-hover-subject';
+			subject.textContent = historyItem.subject;
+			const range = h(document, 'div');
+			range.textContent = localize('scm.history.comparisonRange', 'Changes from {0} to {1}', historyItem.comparison.baseRevision.slice(0, 7), historyItem.comparison.revision.slice(0, 7));
+			const actions = h(document, 'div');
+			const toolbar = resources.add(new WorkbenchToolBar(actions, this.contextMenuService, {
+				ariaLabel: historyItem.subject,
+				actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, tooltip: '' }),
+			}));
+			const openChanges = this.menuService.getMenuActions(MenuId.SCMHistoryItemContext, { arg: target }, scope)
+				.flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.viewChanges')!;
+			toolbar.setActions([openChanges]);
+			hover.append(subject, range, actions);
+			return { domNode: hover, toolbar };
+		}
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ScmHistoryDetails);
 		if (hint) hover.setAttribute('aria-description', hint);
 		const details = h(document, 'div');

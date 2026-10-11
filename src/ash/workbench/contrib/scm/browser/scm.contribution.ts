@@ -133,6 +133,20 @@ configurationRegistry.registerConfiguration<boolean>({
 	},
 });
 
+for (const setting of [
+	{ key: 'scm.graph.showIncomingChanges', get title() { return localize('scm.history.showIncomingTitle', 'Source Control › Graph: Show Incoming Changes'); }, get description() { return localize('scm.history.showIncomingDescription', 'Show the incoming changes summary for the upstream branch.'); } },
+	{ key: 'scm.graph.showOutgoingChanges', get title() { return localize('scm.history.showOutgoingTitle', 'Source Control › Graph: Show Outgoing Changes'); }, get description() { return localize('scm.history.showOutgoingDescription', 'Show the outgoing changes summary for the current branch.'); } },
+]) {
+	configurationRegistry.registerConfiguration<boolean>({
+		key: setting.key, defaultValue: true, scope: ConfigurationScope.WINDOW, schema: { type: 'boolean' },
+		parse: value => {
+			if (typeof value !== 'boolean') { throw new TypeError(localize('scm.history.changesSettingInvalid', 'History changes visibility must be a boolean.')); }
+			return value;
+		},
+		setting: { valueType: 'boolean', get title() { return setting.title; }, get description() { return setting.description; } },
+	});
+}
+
 ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
 	content: localize('scm.welcome.noProviders', 'No source control providers registered.'),
 	when: 'default',

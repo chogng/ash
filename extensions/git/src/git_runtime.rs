@@ -55,6 +55,7 @@ use ash_git::GitRepository;
 use ash_git::GitRepositoryChange;
 use ash_git::GitRepositorySnapshot;
 use ash_protocol::StreamInstanceId;
+use base64::Engine;
 use ignore::WalkBuilder;
 use sha2::Digest;
 use sha2::Sha256;
@@ -124,6 +125,7 @@ struct GitRuntimeState {
 struct GraphSession {
     token: String,
     cursor: GitGraphCursor,
+    revisions: Option<Vec<String>>,
 }
 
 #[derive(Clone, Copy)]
@@ -495,9 +497,10 @@ impl GitRuntime {
         connection_id: u64,
         limit: std::num::NonZeroUsize,
         cursor: Option<&str>,
+        revisions: Option<&[String]>,
     ) -> Result<GitGraphResult, GitRuntimeError> {
         self.repository(repository_id)?
-            .graph(connection_id, limit, cursor)
+            .graph(connection_id, limit, cursor, revisions)
     }
 
     #[cfg(test)]
@@ -507,7 +510,7 @@ impl GitRuntime {
         limit: std::num::NonZeroUsize,
         cursor: Option<&str>,
     ) -> Result<GitGraphResult, GitRuntimeError> {
-        self.graph_for(None, connection_id, limit, cursor)
+        self.graph_for(None, connection_id, limit, cursor, None)
     }
 
     pub(super) fn text_diff_for(
@@ -965,6 +968,7 @@ impl GitRepositoryRuntime {
         connection_id: u64,
         limit: std::num::NonZeroUsize,
         cursor: Option<&str>,
+        revisions: Option<&[String]>,
     ) -> Result<GitGraphResult, GitRuntimeError> {
         let _operation = lock_current_operation(&self.operation)
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
@@ -985,7 +989,7 @@ impl GitRepositoryRuntime {
                 sessions.remove(&connection_id);
                 let mut graph_cursor = self
                     .service
-                    .open_graph()
+                    .open_graph(revisions)
                     .map_err(GitRuntimeError::Service)?;
                 let graph = self
                     .service
@@ -998,6 +1002,7 @@ impl GitRepositoryRuntime {
                         GraphSession {
                             token: token.clone(),
                             cursor: graph_cursor,
+                            revisions: revisions.map(<[String]>::to_vec),
                         },
                     );
                     (graph, Some(token))
@@ -1008,7 +1013,9 @@ impl GitRepositoryRuntime {
             Some(cursor) => {
                 let session = sessions
                     .get_mut(&connection_id)
-                    .filter(|session| session.token == cursor)
+                    .filter(|session| {
+                        session.token == cursor && session.revisions.as_deref() == revisions
+                    })
                     .ok_or(GitRuntimeError::InvalidGraphCursor)?;
                 let graph = self
                     .service
@@ -2224,10 +2231,14 @@ fn change_status(status: GitChangeStatus) -> GitChangeStatusDto {
 fn commit_file_content(content: Option<&[u8]>) -> GitCommitFileContentDto {
     match content {
         None => GitCommitFileContentDto::Missing,
-        Some(content) if content.contains(&0) => GitCommitFileContentDto::Binary,
+        Some(content) if content.contains(&0) => GitCommitFileContentDto::Binary {
+            data: Some(base64::engine::general_purpose::STANDARD.encode(content)),
+        },
         Some(content) => match std::str::from_utf8(content) {
             Ok(text) => GitCommitFileContentDto::Text { text: text.into() },
-            Err(_) => GitCommitFileContentDto::Binary,
+            Err(_) => GitCommitFileContentDto::Binary {
+                data: Some(base64::engine::general_purpose::STANDARD.encode(content)),
+            },
         },
     }
 }

@@ -338,6 +338,7 @@ impl GitRuntime {
         connection_id: u64,
         limit: std::num::NonZeroUsize,
         cursor: Option<&str>,
+        revisions: Option<&[String]>,
     ) -> Result<GitGraphResult, GitRuntimeError> {
         match self.call(
             GitProviderRequest::Graph {
@@ -345,6 +346,7 @@ impl GitRuntime {
                 connection_id,
                 limit,
                 cursor: cursor.map(str::to_owned),
+                revisions: revisions.map(<[String]>::to_vec),
             },
             None,
         )? {

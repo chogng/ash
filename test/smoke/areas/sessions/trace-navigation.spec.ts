@@ -127,8 +127,7 @@ test('Sessions Trace is an independent retained page and restores its offline en
 	await expect(viewer.locator('.ash-agent-trace-empty')).toContainText('Open a saved conversation');
 });
 
-test('Trace navigation preserves reviewed Session while the conversation command locates current Thread and Turn', async ({ application, target, workbench, testWorkspace }, testInfo) => {
-	test.skip(target.appServerMode !== 'required');
+test('Trace navigation preserves reviewed Session while the conversation command locates current Thread and Turn', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
 	const workbenchUrl = workbench.page.url();
 	let themePage: Page | undefined;
 	let page = await workbench.openAgentsWindow(target.kind);

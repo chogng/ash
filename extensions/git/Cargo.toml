@@ -13,6 +13,7 @@ name = "ash-git-extension"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
 ash-app-server-protocol.workspace = true
 ash-async-utils.workspace = true

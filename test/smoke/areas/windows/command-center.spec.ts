@@ -3,8 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test('desktop privileges reach the window title through the Main process', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'This scenario requires the desktop Code product');
+test('desktop privileges reach the window title through the Main process', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	const isAdmin = await page.evaluate(async () => {
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
@@ -347,16 +346,14 @@ test('Manage Accounts command opens the account picker when the account service 
 	}
 });
 
-test('desktop GitHub connection error uses a window dialog', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+test('desktop GitHub connection error uses a window dialog', { tag: ['@electron-ui'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	const message = await workbench.dialogs.expectMessage(application, 'Connect GitHub', () => workbench.menus.select(application, () => page.getByRole('button', { name: 'Accounts' }).click(), ['Connect GitHub']));
 	expect(message.message).toBe('Could not connect GitHub. Try again.');
 	await expect(page.locator('.ash-notification')).toHaveCount(0);
 });
 
-test('desktop GitHub authorization opens a browser URL and can be cancelled without a code dialog', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required');
+test('desktop GitHub authorization opens a browser URL and can be cancelled without a code dialog', { tag: ['@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ shell }) => {
 		const original = shell.openExternal.bind(shell);
@@ -383,8 +380,7 @@ test('desktop GitHub authorization opens a browser URL and can be cancelled with
 	}
 });
 
-test('primary sidebar toggle sits immediately after the application menu', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('primary sidebar toggle sits immediately after the application menu', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const actionId = 'workbench.action.toggleSideBar';
 	const toggle = page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"] button`);
@@ -737,8 +733,7 @@ test('action menus open without selecting a row and keep pointer and keyboard na
 	await workbench.quickaccess.close();
 });
 
-test('Accounts and Manage menus open beside the activity bar and below the title bar', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'browser', 'This scenario requires the web Code workbench');
+test('Accounts and Manage menus open beside the activity bar and below the title bar', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const accounts = activitybar.getByRole('button', { name: 'Accounts' });
@@ -779,8 +774,7 @@ test('Accounts and Manage menus open beside the activity bar and below the title
 	expect(restoredMenu!.x + restoredMenu!.width).toBeLessThanOrEqual(restoredButton!.x + 1);
 });
 
-test('macOS custom right activity bar menus open beside their buttons', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron Code');
+test('macOS custom right activity bar menus open beside their buttons', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Search commands' }).click();
 	await page.getByRole('dialog', { name: 'Search files by name' }).getByRole('combobox').fill('>Ash Settings');
@@ -812,8 +806,7 @@ test('macOS custom right activity bar menus open beside their buttons', async ({
 	}
 });
 
-test('macOS context menu converts pointer and activity bar anchors at the current window zoom', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron');
+test('macOS context menu converts pointer and activity bar anchors at the current window zoom', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, application, workbench }) => {
 	const electron = application as ElectronApplication;
 	const windowId = await (await electron.browserWindow(workbench.page)).evaluate(window => window.id);
 	await electron.evaluate(({ BrowserWindow, Menu }, windowId) => {
@@ -864,8 +857,7 @@ test('macOS context menu converts pointer and activity bar anchors at the curren
 	}
 });
 
-test('a late macOS menu close callback leaves the next menu open', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron');
+test('a late macOS menu close callback leaves the next menu open', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, application, workbench }) => {
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ Menu }) => {
 		const originalPopup = Menu.prototype.popup;
@@ -1168,8 +1160,7 @@ test('command center opens without a first-run guide', async ({ workbench }) => 
 	await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
 });
 
-test('macOS sidebar toggle starts at the window control safe area', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin');
+test('macOS sidebar toggle starts at the window control safe area', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, workbench }) => {
 	const titlebar = workbench.page.locator('.ash-electron-titlebar');
 	const toggle = titlebar.locator('[data-action-id="workbench.action.toggleSideBar"] button');
 	await expect(toggle).toBeVisible();
@@ -1428,8 +1419,7 @@ test('titlebar toolbar icons fit inside their buttons', async ({ workbench }) =>
 	}
 });
 
-test('Quick Access has no backdrop and lets workbench controls receive clicks', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('Quick Access has no backdrop and lets workbench controls receive clicks', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('F1');
 	const host = page.locator('.ash-quick-input-host');

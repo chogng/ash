@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import { rendererOutput } from '../../../build/desktop/vite/rendererOutput.js';
 
 export default defineConfig({
+	define: { __ASH_WEB_APP_SERVER__: 'false' },
 	root: resolve(import.meta.dirname),
 	server: { host: "127.0.0.1", port: 5185, strictPort: true },
 	build: {
@@ -11,6 +12,8 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				sessions: resolve(import.meta.dirname, 'sessions.html'),
+				scmHistory: resolve(import.meta.dirname, 'scmHistory.html'),
 				notifications: resolve(import.meta.dirname, 'notifications.html'),
 				quickAccess: resolve(import.meta.dirname, 'quickAccess.html'),
 				appTools: resolve(import.meta.dirname, "appTools.html"),

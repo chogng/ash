@@ -19,8 +19,7 @@ test.describe('Git extension enablement in the full product', () => {
 
 	for (const reloadMode of ['restart', 'renderer reload'] as const) {
 		const title = reloadMode === 'restart' ? 'disabled Git preserves independent SCM, editable diff, undo and saving through enablement and reload' : 'disabled Git preserves independent SCM, editable diff, undo and saving through enablement and renderer reload';
-		test(title, async ({ target, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
-			test.skip(target.appServerMode !== 'required', 'Requires the real Git backend.');
+		test(title, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
 			test.skip(!process.env.ASH_WEB_EXTENSION_PATHS?.includes('scm-extension'), 'Requires the independent SCM extension fixture.');
 			const reload = async (): Promise<void> => {
 				if (reloadMode === 'restart') {

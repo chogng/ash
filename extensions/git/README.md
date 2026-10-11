@@ -47,3 +47,14 @@ third-party OS confinement are separate runtime capabilities; the Ash SCM regist
 Validation: `just test ash-git-extension` runs the migrated domain suite and launches the real
 executable through the product adapter for reads, writes, watcher events, cancellation,
 crash recovery, stale cursors, read-only grants and revocation.
+
+History graph requests can select an immutable union of commit revisions. The selection is part
+of the connection-owned cursor identity: changing it starts a new traversal, and continuation
+requests must repeat it. Omission retains all public references; an empty selection is empty.
+The browser history provider resolves branch and tag IDs before querying and resets its retained
+pages when their selected revisions change. Closing the connection releases its Git log process.
+
+Committed binary file content includes bounded base64 bytes alongside its binary kind. The
+browser adapter decodes them into domain byte arrays; history editors retain these immutable
+versions independently of the working tree. The bundled provider contract is version 3. Older
+window-facing requests without graph revisions and binary markers without data still decode.

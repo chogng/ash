@@ -152,8 +152,7 @@ test('editor breadcrumbs use the base widget for keyboard focus and activation',
 	await expect(breadcrumbs).toBeHidden();
 });
 
-test('browser editor breadcrumbs start at the opened workspace and navigate its directories', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the browser filesystem');
+test('browser editor breadcrumbs start at the opened workspace and navigate its directories', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const storage = await navigator.storage.getDirectory();

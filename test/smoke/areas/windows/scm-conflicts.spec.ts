@@ -7,8 +7,7 @@ const run = promisify(execFile);
 
 test.use({ gitRepository: true, gitMergeConflict: true });
 
-test('SCM opens a three-way merge editor and stages the saved manual resolution', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM opens a three-way merge editor and stages the saved manual resolution', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const open = page.getByRole('button', { name: 'Open merge conflict in main.ts' });
@@ -57,8 +56,7 @@ test('SCM opens a three-way merge editor and stages the saved manual resolution'
 	expect((await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const resolved = true;\n');
 });
 
-test('SCM accepts an incoming conflict block and completes the merge', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM accepts an incoming conflict block and completes the merge', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
@@ -80,8 +78,7 @@ test('SCM accepts an incoming conflict block and completes the merge', async ({ 
 	expect((await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const value = 2;\n');
 });
 
-test('SCM can choose the incoming-first combination and then use the common ancestor', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM can choose the incoming-first combination and then use the common ancestor', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
@@ -95,8 +92,7 @@ test('SCM can choose the incoming-first combination and then use the common ance
 	await expect(page.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
 });
 
-test('SCM keeps an explicitly handled base result when the merge editor reopens', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM keeps an explicitly handled base result when the merge editor reopens', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	await writeFile(testWorkspace.file, 'const value = 1;\n');
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -120,8 +116,7 @@ test('SCM keeps an explicitly handled base result when the merge editor reopens'
 	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
 });
 
-test('SCM requires review of an existing manual result and preserves the decision', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM requires review of an existing manual result and preserves the decision', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	await writeFile(testWorkspace.file, 'const reviewed = true;\n');
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -144,8 +139,7 @@ test('SCM requires review of an existing manual result and preserves the decisio
 	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
 });
 
-test('SCM preserves a manually edited result after saving and reopening', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM preserves a manually edited result after saving and reopening', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
@@ -166,8 +160,7 @@ test('SCM preserves a manually edited result after saving and reopening', async 
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
 });
 
-test('SCM merge editors synchronize scrolling across the three sources and result', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM merge editors synchronize scrolling across the three sources and result', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	await run('git', ['merge', '--abort'], { cwd });
 	await run('git', ['reset', '--hard', 'HEAD~1'], { cwd });
@@ -293,8 +286,7 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 2 conflicts resolved');
 });
 
-test('SCM resolves a non-text result by choosing the whole current file', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM resolves a non-text result by choosing the whole current file', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	await writeFile(testWorkspace.file, Buffer.from([0, 1, 2, 3]));
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -307,8 +299,7 @@ test('SCM resolves a non-text result by choosing the whole current file', async 
 	expect((await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const value = 3;\n');
 });
 
-test('SCM can keep a deleted side of a modify/delete conflict', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('SCM can keep a deleted side of a modify/delete conflict', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	await run('git', ['merge', '--abort'], { cwd: testWorkspace.directory });
 	await run('git', ['switch', 'topic'], { cwd: testWorkspace.directory });
 	await run('git', ['rm', 'main.ts'], { cwd: testWorkspace.directory });

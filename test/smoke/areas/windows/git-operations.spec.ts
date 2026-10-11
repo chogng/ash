@@ -9,11 +9,8 @@ const run = promisify(execFile);
 
 test.describe('Git repository operations', () => {
 	test.use({ gitRepository: true });
-	test.beforeEach(async ({ target }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the Rust Git backend.');
-	});
 
-	test('Go to File reveals the staged file when returning to Explorer', async ({ testWorkspace, workbench }) => {
+	test('Go to File reveals the staged file when returning to Explorer', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const path = 'z-source/inner/target.ts';
 		await mkdir(join(cwd, 'z-source', 'inner'), { recursive: true });
@@ -47,7 +44,7 @@ test.describe('Git repository operations', () => {
 		await expect(selected).toBeInViewport();
 	});
 
-	test('Changes title menus rename branches, manage tags and remotes, stash, amend and undo', async ({ application, testWorkspace, workbench }) => {
+	test('Changes title menus rename branches, manage tags and remotes, stash, amend and undo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
@@ -114,7 +111,7 @@ test.describe('Git repository operations', () => {
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 7;\n');
 	});
 
-	test('SCM commit scopes preserve partial staging, cancel without mutation and require untracked opt-in', async ({ application, testWorkspace, workbench }) => {
+	test('SCM commit scopes preserve partial staging, cancel without mutation and require untracked opt-in', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
@@ -164,7 +161,7 @@ test.describe('Git repository operations', () => {
 		expect(await git('ls-files', 'secret.ignored')).toBe('');
 	});
 
-	test('SCM failed creation preserves the draft and actual index until an explicit retry', async ({ application, testWorkspace, workbench }) => {
+	test('SCM failed creation preserves the draft and actual index until an explicit retry', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 		const head = await git('rev-parse', 'HEAD');
@@ -199,7 +196,7 @@ test.describe('Git repository operations', () => {
 		expect(await git('diff', '--cached', '--name-only')).toBe('');
 	});
 
-	test('SCM empty amendment loads the complete message and undo preserves an existing draft', async ({ application, testWorkspace, workbench }) => {
+	test('SCM empty amendment loads the complete message and undo preserves an existing draft', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
@@ -238,7 +235,7 @@ test.describe('Git repository operations', () => {
 		await expect(page.locator('.ash-scm-status')).toHaveText('Last commit undone. Your current Source Control draft was kept.');
 	});
 
-	test('Git partial staging changes only the chosen block and selected editor line', async ({ testWorkspace, workbench }) => {
+	test('Git partial staging changes only the chosen block and selected editor line', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		const original = Array.from({ length: 20 }, (_, index) => `line ${index + 1}`).join('\n') + '\n';
@@ -272,7 +269,7 @@ test.describe('Git repository operations', () => {
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe(changed);
 	});
 
-	test('Changes title menu starts a merge, publishes conflicts and continues after resolution', async ({ application, testWorkspace, workbench }) => {
+	test('Changes title menu starts a merge, publishes conflicts and continues after resolution', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		await run('git', ['switch', '-c', 'ui-merge'], { cwd });
@@ -309,8 +306,7 @@ test.describe('Git repository operations', () => {
 test.describe('SCM commit authorization', () => {
 	test.use({ gitRepository: true, openWorkspace: false });
 
-	test('SCM child-folder authorization rejects every commit scope before changing the shared index', async ({ application, target, testWorkspace, workbench }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires repository authorization in the Rust backend.');
+	test('SCM child-folder authorization rejects every commit scope before changing the shared index', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const child = join(cwd, 'commit-child');
 		const inside = join(child, 'inside.ts');
@@ -363,8 +359,7 @@ test.describe('SCM commit authorization', () => {
 		}
 	});
 
-	test('SCM read-only folder authorization rejects commit before staging', async ({ application, target, testWorkspace, workbench }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'The Desktop permission dialog supports opening a folder read only.');
+	test('SCM read-only folder authorization rejects commit before staging', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 		if (!('windows' in application)) return;
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
@@ -395,8 +390,7 @@ test.describe('SCM commit authorization', () => {
 	});
 });
 
-test('Git initialization creates the authorized workspace repository and stages before the first commit', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Rust Git backend.');
+test('Git initialization creates the authorized workspace repository and stages before the first commit', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('git.init');
 	await page.locator('.ash-quick-pick').getByRole('option').first().click();

@@ -84,8 +84,7 @@ test.describe('SCM welcome', () => {
 	});
 });
 
-test('SCM welcome initializes a repository through the backend and returns to Changes', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Repository initialization requires a connected backend.');
+test('SCM welcome initializes a repository through the backend and returns to Changes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const changes = page.locator('[data-view-id="ash.gitView"]');
@@ -106,11 +105,8 @@ test('SCM welcome initializes a repository through the backend and returns to Ch
 
 test.describe('SCM commit input', () => {
 	test.use({ gitRepository: true });
-	test.beforeEach(async ({ target }) => {
-		test.skip(target.appServerMode !== 'required', 'Commit editing requires a connected repository.');
-	});
 
-	test('SCM commit form separates resource groups and removes the line when the repository becomes clean', async ({ testWorkspace, workbench }, testInfo) => {
+	test('SCM commit form separates resource groups and removes the line when the repository becomes clean', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }, testInfo) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const form = page.locator('.ash-scm-commit-form');
@@ -131,7 +127,7 @@ test.describe('SCM commit input', () => {
 		await testInfo.attach('clean-source-control', { body: await page.locator('.ash-scm-viewlet').screenshot(), contentType: 'image/png' });
 	});
 
-	test('SCM commit input grows, wraps, shrinks and supports undo and redo', async ({ workbench }) => {
+	test('SCM commit input grows, wraps, shrinks and supports undo and redo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const input = page.locator('.ash-scm-input');
@@ -163,7 +159,7 @@ test.describe('SCM commit input', () => {
 		await expect(placeholder).toBeVisible();
 	});
 
-	test('SCM commit input restores focus from help and lets Tab reach Commit', async ({ testWorkspace, workbench }) => {
+	test('SCM commit input restores focus from help and lets Tab reach Commit', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
 		const page = workbench.page;
@@ -186,7 +182,7 @@ test.describe('SCM commit input', () => {
 		await expect(editor).toBeFocused();
 	});
 
-	test('SCM commit input localizes scope and draft help after restarting in Chinese', async ({ testWorkspace, workbench, restartWorkbench }) => {
+	test('SCM commit input localizes scope and draft help after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }) => {
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
@@ -228,7 +224,7 @@ test.describe('SCM commit input', () => {
 		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
 	});
 
-	test('SCM commit input uses input colors and visible focus in all four themes', async ({ workbench }) => {
+	test('SCM commit input uses input colors and visible focus in all four themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const input = page.locator('.ash-scm-input');
@@ -253,7 +249,7 @@ test.describe('SCM commit input', () => {
 		}
 	});
 
-	test('SCM commits the edited message with Ctrl+Enter and clears the draft', async ({ testWorkspace, workbench }) => {
+	test('SCM commits the edited message with Ctrl+Enter and clears the draft', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
 		const page = workbench.page;
@@ -272,7 +268,7 @@ test.describe('SCM commit input', () => {
 		await expect(editor).toBeFocused();
 	});
 
-	test('SCM keeps separate commit drafts when switching repositories', async ({ testWorkspace, workbench }) => {
+	test('SCM keeps separate commit drafts when switching repositories', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const nested = join(testWorkspace.directory, 'nested');
 		await mkdir(nested);
 		await run('git', ['init', '-b', 'topic'], { cwd: nested });

@@ -458,7 +458,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await sideBySide.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().mode)).toBe('sideBySide');
 		await more.press('Enter');
-		const whitespace = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Whitespace Differences', '显示空白差异'), exact: true });
+		const whitespace = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Leading/Trailing Whitespace Differences', '显示行首/行尾空白差异'), exact: true });
 		await expect(whitespace).toHaveAttribute('aria-checked', 'false');
 		await whitespace.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().ignoreWhitespace)).toBe(false);
@@ -467,6 +467,39 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.getByRole('menuitem', { name: localized(locale, 'Swap Sides', '交换两侧'), exact: true }).press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().original)).toBe('after\nshared');
 		await more.press('Enter');
+		await page.keyboard.press('Escape');
+		await expect(more).toBeFocused();
+	});
+
+	test(`diff whitespace toggle recomputes leading and trailing changes without editing text (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison());
+		const more = page.locator('#title-comparison [data-action-id="ash.toolbar.moreActions"] button');
+		const whitespace = page.getByRole('menuitemcheckbox', { name: localized(locale, 'Show Leading/Trailing Whitespace Differences', '显示行首/行尾空白差异'), exact: true });
+		const original = '  const a = 1;\nshared\nconst b = 2; \nshared again\n\tconst c = 3;\nlast shared\nconst d = 4;\t';
+		const modified = '    const a = 1;\nshared\nconst b = 2;\nshared again\nconst c = 3;\nlast shared\nconst d = 4;';
+		await page.evaluate(([left, right]) => window.ashDiffIntegration.setTitleComparisonText(left, right), [original, modified]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().changes)).toBe(0);
+		const readText = () => page.evaluate(() => {
+			const state = window.ashDiffIntegration.readTitleComparison();
+			return { original: state.original, modified: state.modified, renderWhitespace: state.renderWhitespace };
+		});
+		const textBefore = await readText();
+		expect(textBefore).toEqual({ original, modified, renderWhitespace: 'selection' });
+		const persistenceBefore = await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence());
+		for (const [checkedBefore, changes] of [[false, 4], [true, 0]] as const) {
+			await more.focus();
+			await more.press('Enter');
+			await expect(whitespace).toHaveAttribute('aria-checked', String(checkedBefore));
+			await whitespace.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().changes)).toBe(changes);
+			expect(await readText()).toEqual(textBefore);
+			expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toEqual(persistenceBefore);
+		}
+		await page.evaluate(() => window.ashDiffIntegration.setTitleComparisonText('const a = 1;', 'const  a = 1;'));
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().changes)).toBe(1);
+		await more.press('Enter');
+		await expect(whitespace).toHaveAttribute('aria-checked', 'false');
 		await page.keyboard.press('Escape');
 		await expect(more).toBeFocused();
 	});

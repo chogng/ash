@@ -87,8 +87,7 @@ for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
 	});
 }
 
-test('notification Copy Text reports the real browser clipboard permission rejection once', async ({ target, application, workbench }, testInfo) => {
-	test.skip(target.kind !== 'browser', 'Chromium owns the real browser clipboard permission boundary.');
+test('notification Copy Text reports the real browser clipboard permission rejection once', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, application, workbench }, testInfo) => {
 	const page = workbench.page;
 	await notificationClipboard(application, page);
 	const session = await page.context().newCDPSession(page);
@@ -271,8 +270,7 @@ async function notificationPopupProbe(application: PlaywrightApplication): Promi
 	};
 }
 
-macFocusTest('notification Copy Text selected in a genuine Electron popup writes after its OS callback', async ({ target, application, workbench }, testInfo) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.platform !== 'darwin', 'Uses macOS input targeted at the owned Electron process.');
+macFocusTest('notification Copy Text selected in a genuine Electron popup writes after its OS callback', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, application, workbench }, testInfo) => {
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	test.skip(!await workbench.menus.isSystemMenu(application), 'Requires the system menu configuration.');
 	const page = workbench.page;
@@ -308,8 +306,7 @@ macFocusTest('notification Copy Text selected in a genuine Electron popup writes
 });
 
 for (const waitForShow of [false, true]) {
-	focusTest(`notification backend completion cancels a genuine Electron popup and releases the next presentation${waitForShow ? ' after its OS show event' : ''}`, async ({ target, application, workbench }, testInfo) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the real desktop host and backend.');
+	focusTest(`notification backend completion cancels a genuine Electron popup and releases the next presentation${waitForShow ? ' after its OS show event' : ''}`, { tag: ['@electron-app-server'] }, async ({ target, application, workbench }, testInfo) => {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
 		test.skip(!await workbench.menus.isSystemMenu(application), 'Requires the system menu configuration.');
 		const page = workbench.page;
@@ -356,8 +353,7 @@ for (const waitForShow of [false, true]) {
 	});
 }
 
-test('notification copy menu cancellation preserves a genuine DialogService modal focus', async ({ target, application, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the production extension installation input dialog.');
+test('notification copy menu cancellation preserves a genuine DialogService modal focus', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	await useCustomNotificationMenu(application, workbench);
 	expect(await workbench.menus.isSystemMenu(application)).toBe(false);
@@ -384,8 +380,7 @@ test('notification copy menu cancellation preserves a genuine DialogService moda
 	await expect(dialog).toBeHidden();
 });
 
-test('Sessions startup notification copies through its window clipboard after real keybindings read failure', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Uses the isolated desktop profile and independent Sessions window.');
+test('Sessions startup notification copies through its window clipboard after real keybindings read failure', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const paths = await application.evaluate(({ app }) => ({ profile: process.env.ASH_HOME, userData: app.getPath('userData') }));
 	assert.ok(paths.profile);

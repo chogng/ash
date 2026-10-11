@@ -9,8 +9,7 @@ const run = promisify(execFile);
 
 test.use({ gitRepository: true });
 
-test('Git branch picker explains occupancy and switches after the other worktree is removed', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+test('Git branch picker explains occupancy and switches after the other worktree is removed', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const linked = await mkdtemp(join(tmpdir(), 'ash-branch-worktree-'));
 	try {
@@ -41,8 +40,7 @@ test('Git branch picker explains occupancy and switches after the other worktree
 	}
 });
 
-test('Git branch menu switches branches and the status bar opens the branch picker', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+test('Git branch menu switches branches and the status bar opens the branch picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 
 	const cwd = testWorkspace.directory;
 	await run('git', ['branch', 'topic'], { cwd });
@@ -63,8 +61,7 @@ test('Git branch menu switches branches and the status bar opens the branch pick
 	await expect.poll(async () => (await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
 });
 
-test('Git branch menu preserves local edits when Git rejects the switch', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+test('Git branch menu preserves local edits when Git rejects the switch', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	await run('git', ['switch', '-c', 'topic'], { cwd });
 	await writeFile(testWorkspace.file, 'const value = 2;\n');
@@ -84,11 +81,8 @@ test('Git branch menu preserves local edits when Git rejects the switch', async 
 });
 
 test.describe('Git branch lifecycle', () => {
-	test.beforeEach(async ({ target }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
-	});
 
-	test('Changes title branch menu creates at HEAD, updates history references and deletes through confirmation', async ({ application, testWorkspace, workbench }) => {
+	test('Changes title branch menu creates at HEAD, updates history references and deletes through confirmation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -114,8 +108,7 @@ test.describe('Git branch lifecycle', () => {
 });
 
 
-test('Git commands report an unavailable repository without opening an input when disconnected', async ({ target, workbench }) => {
-	test.skip(target.appServerMode === 'required', 'Checks disconnected Workbench hosts.');
+test('Git commands report an unavailable repository without opening an input when disconnected', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	for (const [command, message] of [
 		['git.stash', 'Git operation failed:'],

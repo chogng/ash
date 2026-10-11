@@ -54,11 +54,10 @@ async function bindResourceGroupNavigation(workbench: Workbench): Promise<void> 
 test.describe('SCM editor groups', () => {
 	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target, testWorkspace }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 	});
 
-	test('SCM Changes reserves a file viewport when Graph expands and the commit draft grows', async ({ workbench }) => {
+	test('SCM Changes reserves a file viewport when Graph expands and the commit draft grows', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const changes = page.locator('[data-view-id="ash.gitView"]');
@@ -99,7 +98,7 @@ test.describe('SCM editor groups', () => {
 		await expect(changes.locator('.view-lines')).toContainText('Draft line 7');
 	});
 
-	test('SCM resource group navigation uses saved bindings, reveals groups and preserves collapse in tree and list views', async ({ application, testWorkspace, workbench }) => {
+	test('SCM resource group navigation uses saved bindings, reveals groups and preserves collapse in tree and list views', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		await mkdir(join(testWorkspace.directory, 'bulk'));
 		const bulkFiles = Array.from({ length: 40 }, (_, index) => `bulk/${index}.ts`);
@@ -157,7 +156,7 @@ test.describe('SCM editor groups', () => {
 		expect(await groupRepositoryState(testWorkspace.directory, files)).toEqual(before);
 	});
 
-	test('SCM resource group navigation handles a single collapsed group and an empty repository', async ({ testWorkspace, workbench }) => {
+	test('SCM resource group navigation handles a single collapsed group and an empty repository', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		await bindResourceGroupNavigation(workbench);
 		const page = workbench.page;
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
@@ -187,7 +186,7 @@ test.describe('SCM editor groups', () => {
 		expect(await groupRepositoryState(testWorkspace.directory, ['main.ts'])).toEqual(empty);
 	});
 
-	test('SCM group Collapse All folds only the target group recursively and survives Git refresh', async ({ application, testWorkspace, workbench }) => {
+	test('SCM group Collapse All folds only the target group recursively and survives Git refresh', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -225,7 +224,7 @@ test.describe('SCM editor groups', () => {
 		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
 	});
 
-	test('SCM group Collapse All supports keyboard dismissal and stays out of list mode', async ({ application, testWorkspace, workbench }) => {
+	test('SCM group Collapse All supports keyboard dismissal and stays out of list mode', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		const page = workbench.page;
 		// Escape and DOM focus need the browser menu; the other cases retain the desktop's default menu.
@@ -280,7 +279,7 @@ test.describe('SCM editor groups', () => {
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
 
-	test('SCM group Collapse All localizes after restarting in Chinese', async ({ application, testWorkspace, workbench, restartWorkbench }) => {
+	test('SCM group Collapse All localizes after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench, restartWorkbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 		const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
@@ -302,7 +301,7 @@ test.describe('SCM editor groups', () => {
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
 
-	test('SCM directories fold with the keyboard and retain state across Git refreshes', async ({ testWorkspace, workbench }) => {
+	test('SCM directories fold with the keyboard and retain state across Git refreshes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		await mkdir(join(testWorkspace.directory, 'src/nested'), { recursive: true });
 		await writeFile(join(testWorkspace.directory, 'src/first.ts'), 'export const first = 1;\n');
 		await writeFile(join(testWorkspace.directory, 'src/nested/second.ts'), 'export const second = 2;\n');
@@ -336,7 +335,7 @@ test.describe('SCM editor groups', () => {
 		await expect(tree).toBeFocused();
 	});
 
-	test('Git Quick Diff opens its baseline and updates decorations for unsaved edits', async ({ testWorkspace, workbench }) => {
+	test('Git Quick Diff opens its baseline and updates decorations for unsaved edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		await workbench.openExplorer();
 		await page.locator('.ash-explorer').getByRole('treeitem', { name: /^main\.ts(?:,|$)/u }).dblclick();
@@ -375,7 +374,7 @@ test.describe('SCM editor groups', () => {
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 2;\n');
 	});
 
-	test('SCM compares edits inside a moved block and exits through the keyboard in a read-only view', async ({ testWorkspace, workbench }) => {
+	test('SCM compares edits inside a moved block and exits through the keyboard in a read-only view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
 		const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];
 		const stay = Array.from({ length: 6 }, (_, index) => `stay ${index}`);
@@ -417,7 +416,7 @@ test.describe('SCM editor groups', () => {
 		await expect(diff.locator('.original .stanza-diff-line-removed')).toHaveCount(4);
 	});
 
-	test('SCM filenames keep full row width under overlay actions when the sidebar resizes', async ({ testWorkspace, workbench }) => {
+	test('SCM filenames keep full row width under overlay actions when the sidebar resizes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const directory = 'src/ash/workbench/contrib/scm/browser';
 		const path = `${directory}/details.ts`;
@@ -477,7 +476,7 @@ test.describe('SCM editor groups', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`SCM inline Open File opens the editable working file from staged changes in ${locale}`, async ({ testWorkspace, workbench, restartWorkbench }) => {
+		test(`SCM inline Open File opens the editable working file from staged changes in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }) => {
 			await run('git', ['add', '--', 'main.ts'], { cwd: testWorkspace.directory });
 			await writeFile(testWorkspace.file, 'const value = 3;\n');
 			if (locale === 'zh-CN') {
@@ -524,7 +523,7 @@ test.describe('SCM editor groups', () => {
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`SCM diff title actions navigate changes and reuse file preview tabs in ${locale}`, async ({ testWorkspace, workbench, restartWorkbench }) => {
+		test(`SCM diff title actions navigate changes and reuse file preview tabs in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }) => {
 			const original = Array.from({ length: 24 }, (_, index) => `const line${index + 1} = ${index + 1};`);
 			await writeFile(testWorkspace.file, `${original.join('\n')}\n`);
 			await run('git', ['add', '--', 'main.ts'], { cwd: testWorkspace.directory });
@@ -607,7 +606,7 @@ test.describe('SCM editor groups', () => {
 		});
 	}
 
-	test('SCM Open File reveals an existing file in another editor group', async ({ testWorkspace, workbench }) => {
+	test('SCM Open File reveals an existing file in another editor group', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		await writeFile(join(testWorkspace.directory, 'other.ts'), 'export const other = 1;\n');
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -640,7 +639,7 @@ test.describe('SCM editor groups', () => {
 		expect(await first.tabs.count() + await second.tabs.count()).toBe(count);
 	});
 
-	test('SCM and Files share tree indentation and update arrow spacing with file icons', async ({ application, target, testWorkspace, workbench }) => {
+	test('SCM and Files share tree indentation and update arrow spacing with file icons', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 		const page = workbench.page;
 		await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
 		await writeFile(join(testWorkspace.directory, 'src/details.ts'), 'export const details = 1;\n');
@@ -706,7 +705,7 @@ test.describe('SCM editor groups', () => {
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'details.ts' })).toHaveCount(1);
 	});
 
-	test('Git badges and file decorations update together across Explorer, tabs, Open Editors and SCM', async ({ testWorkspace, workbench }) => {
+	test('Git badges and file decorations update together across Explorer, tabs, Open Editors and SCM', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const gitTab = page.locator('.ash-composite-bar-item[data-action-id="ash.git"]');
 		const activity = gitTab.locator('.ash-count-badge');
@@ -736,7 +735,7 @@ test.describe('SCM editor groups', () => {
 		await expect(explorerLabel).not.toHaveAttribute('aria-label', /Modified/u);
 	});
 
-	test('SCM side previews retain focus and reuse the side group for keyboard opens', async ({ testWorkspace, workbench }) => {
+	test('SCM side previews retain focus and reuse the side group for keyboard opens', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		await workbench.openExplorer();
 		await page.locator('.ash-explorer').getByRole('treeitem', { name: /^main\.ts(?:,|$)/u }).dblclick();
@@ -769,7 +768,7 @@ test.describe('SCM editor groups', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`SCM Multi Diff shares diff title actions and unchanged-region settings in ${locale}`, async ({ testWorkspace, workbench, restartWorkbench, reloadWorkbench }) => {
+		test(`SCM Multi Diff shares diff title actions and unchanged-region settings in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench, reloadWorkbench }) => {
 			const otherFile = join(testWorkspace.directory, 'other.ts');
 			const original = Array.from({ length: 40 }, (_, index) => `const line${index + 1} = ${index + 1};`);
 			await writeFile(testWorkspace.file, `${original.join('\n')}\n`);
@@ -847,7 +846,7 @@ test.describe('SCM editor groups', () => {
 		});
 	}
 
-	test('SCM diff synchronizes both sides and keeps its scroll when leaving inline view', async ({ testWorkspace, workbench, reloadWorkbench, runningApplication }) => {
+	test('SCM diff synchronizes both sides and keeps its scroll when leaving inline view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, reloadWorkbench, runningApplication }) => {
 		const lines = Array.from({ length: 120 }, (_, index) => `const line${index + 1} = ${index + 1};`);
 		await writeFile(testWorkspace.file, `${lines.slice(0, 8).join('\n')}\n`);
 		await run('git', ['add', '--', 'main.ts'], { cwd: testWorkspace.directory });
@@ -876,7 +875,7 @@ test.describe('SCM editor groups', () => {
 	});
 
 	for (const multiDiff of [false, true]) {
-		test(`SCM ${multiDiff ? 'multi diff' : 'diff'} initially reveals the first change and keeps its position across tab switches`, async ({ testWorkspace, workbench, reloadWorkbench, runningApplication }) => {
+		test(`SCM ${multiDiff ? 'multi diff' : 'diff'} initially reveals the first change and keeps its position across tab switches`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, reloadWorkbench, runningApplication }) => {
 			const original = Array.from({ length: 120 }, (_, index) => `const line${index + 1} = ${index + 1};`);
 			await writeFile(testWorkspace.file, `${original.join('\n')}\n`);
 			await run('git', ['add', '--', 'main.ts'], { cwd: testWorkspace.directory });
@@ -916,7 +915,7 @@ test.describe('SCM editor groups', () => {
 		});
 	}
 
-	test('SCM Multi Diff splits keep collapse state and closing independent', async ({ workbench }) => {
+	test('SCM Multi Diff splits keep collapse state and closing independent', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
@@ -934,7 +933,7 @@ test.describe('SCM editor groups', () => {
 		await expect(original.content.locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'true');
 	});
 
-	test('SCM TypeScript test diffs retain file icons and syntax colors', async ({ testWorkspace, workbench }) => {
+	test('SCM TypeScript test diffs retain file icons and syntax colors', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const filename = 'example.test.ts';
 		const file = join(testWorkspace.directory, filename);
@@ -992,8 +991,7 @@ test.describe('SCM editor groups', () => {
 test.describe('SCM merge editor groups', () => {
 	test.use({ gitRepository: true, gitMergeConflict: true });
 
-	test('SCM opens a merge editor to the side and preserves the original file', async ({ target, workbench }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop merge-conflict workspace.');
+	test('SCM opens a merge editor to the side and preserves the original file', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = workbench.page;
 		await workbench.openExplorer();
 		await page.locator('.ash-explorer').getByRole('treeitem', { name: /^main\.ts(?:,|$)/u }).dblclick();
@@ -1019,8 +1017,7 @@ test.describe('SCM merge editor groups', () => {
 
 test.describe('SCM resource group navigation with conflicts', () => {
 	test.use({ gitRepository: true, gitMergeConflict: true });
-	test('SCM resource group navigation cycles all three real Git groups and localizes help after restart', async ({ target, testWorkspace, workbench, restartWorkbench }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires real Git conflict, index and worktree groups.');
+	test('SCM resource group navigation cycles all three real Git groups and localizes help after restart', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, restartWorkbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		await bindResourceGroupNavigation(workbench);
 		await workbench.quickaccess.runCommand('workbench.action.configureLocale');

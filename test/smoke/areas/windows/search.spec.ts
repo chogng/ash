@@ -14,8 +14,7 @@ interface SearchLifecycleBoundary {
 	dispose(): void;
 }
 
-test('Search line numbers default off and user settings update retained real backend results', async ({ target, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses actual workspace content searches and user configuration.');
+test('Search line numbers default off and user settings update retained real backend results', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace }) => {
 	const content = 'ash_line_setting_token first\nash_line_setting_token second\n';
 	const path = join(testWorkspace.directory, 'line-setting.txt');
 	await writeFile(path, content);
@@ -45,8 +44,7 @@ test('Search line numbers default off and user settings update retained real bac
 	expect(await readFile(path, 'utf8')).toBe(content);
 });
 
-test('Search lifecycle cancels creation and partial results, refreshes a running job and clears before searching again', async ({ target, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses actual backend jobs, files and protocol responses.');
+test('Search lifecycle cancels creation and partial results, refreshes a running job and clears before searching again', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace }) => {
 	const path = join(testWorkspace.directory, 'src/lifecycle.txt');
 	const token = 'ash_lifecycle_token';
 	await mkdir(dirname(path), { recursive: true });
@@ -185,8 +183,7 @@ test('Search lifecycle cancels creation and partial results, refreshes a running
 	}
 });
 
-test('Search Dismiss removes retained matches, files and folders without changing disk contents', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses actual workspace content searches.');
+test('Search Dismiss removes retained matches, files and folders without changing disk contents', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const contents = [
 		['main.ts', 'ash_dismiss_token first\nash_dismiss_token second\n'],
 		['src/source.ts', 'ash_dismiss_token source\n'],
@@ -239,8 +236,7 @@ test('Search Dismiss removes retained matches, files and folders without changin
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
 
-test('Search Dismiss restores match focus across collapsed branches through the actual result tree', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses actual workspace content searches.');
+test('Search Dismiss restores match focus across collapsed branches through the actual result tree', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const contents = [
 		['a/a.ts', 'ash_focus_token first\nash_focus_token second\n'],
 		['b/nested/b.ts', 'ash_focus_token next\nash_focus_token last\n'],
@@ -284,8 +280,7 @@ test('Search Dismiss restores match focus across collapsed branches through the 
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
 
-test('Search submits case, regex and file filters to workspace search', async ({ target, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the real workspace search service.');
+test('Search submits case, regex and file filters to workspace search', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace }) => {
 	await workbench.search.open();
 	const search = workbench.search.element;
 	const mainFileLabel = 'main.ts';
@@ -305,8 +300,7 @@ test('Search submits case, regex and file filters to workspace search', async ({
 	await expect(workbench.search.status).toHaveText('No results found.');
 });
 
-test('Search selects exact matches, opens beside the editor and supports result controls', async ({ target, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the real workspace search service and editors.');
+test('Search selects exact matches, opens beside the editor and supports result controls', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'main.ts'), 'const text = "中文😀 needle needle";\n');
 	await workbench.search.open();
 	await workbench.search.search('needle');
@@ -373,8 +367,7 @@ test('Search offers tree view, sorting and accessible help through actual workbe
 	await expect(workbench.search.element.locator('.ash-search-match')).toHaveCount(5);
 });
 
-test('Search title and input geometry remain usable while resizing the actual Sidebar', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the actual Workbench search service.');
+test('Search title and input geometry remain usable while resizing the actual Sidebar', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	await workbench.search.open();
 	const page = workbench.page;
 	const sidebar = page.locator('[data-part="sidebar"]');
@@ -547,8 +540,7 @@ test('Search Editor opens from its command and provides keyboard help', async ({
 	await expect(query).toBeFocused();
 });
 
-test('Search replaces across lines on disk and undo restores the searched contents', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses real workspace files and search engines.');
+test('Search replaces across lines on disk and undo restores the searched contents', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const path = join(testWorkspace.directory, 'main.ts');
 	await writeFile(path, '中文😀 first\r\nsecond end\r\n');
 	if (target.kind === 'electron') {
@@ -592,8 +584,7 @@ test('Search replaces across lines on disk and undo restores the searched conten
 	expect((await readFile(path, 'utf8')).replace(/\r\n/g, '\n')).toBe('中文😀 second first end\n');
 });
 
-test('Search replacement and undo preserve an open file with save cleanup enabled', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required' && target.kind !== 'browser', 'Uses workspace files or the browser filesystem.');
+test('Search replacement and undo preserve an open file with save cleanup enabled', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const original = 'ash_save_cleanup_token  ';
 	const path = join(testWorkspace.directory, 'cleanup.txt');
 	const folderName = `cleanup-${Date.now()}`;
@@ -643,8 +634,7 @@ test('Search replacement and undo preserve an open file with save cleanup enable
 	await expect.poll(readContents).toBe('ash_save_cleanup_token\n');
 });
 
-test('Search undoes replacement across 21 unopened files', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required' && target.kind !== 'browser', 'Uses workspace files or the browser filesystem.');
+test('Search undoes replacement across 21 unopened files', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const paths = Array.from({ length: 21 }, (_, index) => join(testWorkspace.directory, `replace-${index}.txt`));
 	const original = 'ash_closed_file_undo_token\r\n';
 	const folderName = `replace-${Date.now()}`;
@@ -688,8 +678,7 @@ test('Search undoes replacement across 21 unopened files', async ({ target, appl
 
 test.describe('Search with a granted browser folder', () => {
 	test.use({ openWorkspace: false });
-	test('preview, undo, Search Editor source navigation and saved searches use the real browser filesystem', async ({ target, workbench }) => {
-		test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');
+	test('preview, undo, Search Editor source navigation and saved searches use the real browser filesystem', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 		const page = workbench.page;
 		await page.evaluate(async () => {
 			const root = await navigator.storage.getDirectory();
@@ -819,8 +808,7 @@ test('Search translates query options and file filters into Chinese', async ({ t
 	await expect(editorQuery).toBeFocused();
 });
 
-test('Search Copy All leaves the host clipboard intact when its view container is inactive', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses actual workspace searches, keybindings and the host clipboard.');
+test('Search Copy All leaves the host clipboard intact when its view container is inactive', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'main.ts'), 'ash_active_copy_token\n');
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -868,8 +856,7 @@ test('Search Copy All leaves the host clipboard intact when its view container i
 	await expect.poll(readCopied).toBe(expected);
 });
 
-test('Search Copy All copies current retained results through the host clipboard', async ({ target, workbench, testWorkspace, application }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses actual workspace searches and the host clipboard.');
+test('Search Copy All copies current retained results through the host clipboard', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace, application }) => {
 	const contents = [
 		['src/file10.ts', 'ash_copy_token ten\n'],
 		['src/file2.ts', 'ash_copy_token first\nash_copy_token second\n'],
@@ -920,8 +907,7 @@ test('Search Copy All copies current retained results through the host clipboard
 	expect(await readFile(join(testWorkspace.directory, 'root.ts'), 'utf8')).toBe('ash_copy_token root\nash_copy_token latest\n');
 });
 
-test('Search Copy uses result selection, explicit context rows and collapsed folders through the host clipboard', async ({ target, workbench, testWorkspace, application }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses actual workspace searches and the host clipboard.');
+test('Search Copy uses result selection, explicit context rows and collapsed folders through the host clipboard', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace, application }) => {
 	const contents = [['src/file2.ts', '中文😀 ash_copy_selected_token one\nash_copy_selected_token two\n'], ['src/file10.ts', 'ash_copy_selected_token ten\n'], ['root.ts', 'ash_copy_selected_token root\n']] as const;
 	await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
 	for (const [path, content] of contents) { await writeFile(join(testWorkspace.directory, path), content); }
@@ -968,8 +954,7 @@ test('Search Copy uses result selection, explicit context rows and collapsed fol
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
 
-test('Search Copy menus release old row callbacks and follow focus contracts in Electron', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Exercises Electron Browser menus with an actual workspace search.');
+test('Search Copy menus release old row callbacks and follow focus contracts in Electron', { tag: ['@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const page = workbench.page;
 	await writeFile(join(testWorkspace.directory, 'main.ts'), 'ash_copy_focus_token original\n');
 	await writeFile(join(testWorkspace.directory, 'other.ts'), 'ash_copy_focus_token other\n');
@@ -1037,8 +1022,7 @@ test('Search Copy menus release old row callbacks and follow focus contracts in 
 	expect(await readFile(join(testWorkspace.directory, 'main.ts'), 'utf8')).toBe('ash_copy_focus_token fresh\n');
 });
 
-test('Search Copy Path copies file and folder paths through real search and the host clipboard', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses an actual workspace search backend.');
+test('Search Copy Path copies file and folder paths through real search and the host clipboard', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const page = workbench.page;
 	const contents = [['src/main.ts', 'ash_copy_path_token main\n'], ['src/other.ts', 'ash_copy_path_token other\n']] as const;
 	for (const [path, content] of contents) {
@@ -1081,8 +1065,7 @@ test('Search Copy Path copies file and folder paths through real search and the 
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
 
-test('Search first backend results show Collapse and refresh restores expanded default results', async ({ target, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the first result batch from an actual workspace search.');
+test('Search first backend results show Collapse and refresh restores expanded default results', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, testWorkspace }) => {
 	for (const name of ['first.txt', 'second.txt']) {
 		await writeFile(join(testWorkspace.directory, name), 'ash_first_batch_token\n');
 	}
@@ -1106,8 +1089,7 @@ test('Search first backend results show Collapse and refresh restores expanded d
 	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
 });
 
-test('Search Expand All exposes its command only for fully collapsed results and expands the actual backend tree', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses an actual workspace search backend.');
+test('Search Expand All exposes its command only for fully collapsed results and expands the actual backend tree', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const contents = [['a/main.ts', 'ash_expand_all_token main\n'], ['b/nested/other.ts', 'ash_expand_all_token other\n']] as const;
 	for (const [path, content] of contents) {
 		await mkdir(dirname(join(testWorkspace.directory, path)), { recursive: true });

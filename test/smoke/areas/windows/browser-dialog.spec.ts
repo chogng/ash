@@ -7,8 +7,7 @@ import { Workbench } from '../../../automation/workbench.js';
 
 test.use({ openWorkspace: false });
 
-test('desktop Workbench and Agents install the complete Host contract and target developer tools at their own window', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+test('desktop Workbench and Agents install the complete Host contract and target developer tools at their own window', { tag: ['@electron-ui'] }, async ({ target, application, workbench }) => {
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const agentsPage = await workbench.openAgentsWindow('electron');
 	const routes = nativeHostIpcRoutes({} as INativeHostMainService).map(route => {
@@ -38,8 +37,7 @@ test('desktop Workbench and Agents install the complete Host contract and target
 	}
 });
 
-test('browser keeps its save confirmation in the workbench', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser', 'This scenario requires the Code browser');
+test('browser keeps its save confirmation in the workbench', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
@@ -55,8 +53,7 @@ test('browser keeps its save confirmation in the workbench', async ({ target, wo
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(0);
 });
 
-test('desktop dirty editor sends its choices through the owning window dialog', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+test('desktop dirty editor sends its choices through the owning window dialog', { tag: ['@electron-ui'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
@@ -67,8 +64,7 @@ test('desktop dirty editor sends its choices through the owning window dialog', 
 	await expect(input).toHaveCount(0);
 });
 
-test('desktop file dialog bridge preserves shared options and complete results in its owning window', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+test('desktop file dialog bridge preserves shared options and complete results in its owning window', { tag: ['@electron-ui'] }, async ({ target, application, workbench, testWorkspace }) => {
 	if (!('windows' in application)) return;
 	const originals = await application.evaluateHandle(({ dialog }) => ({ open: dialog.showOpenDialog, save: dialog.showSaveDialog }));
 	try {
@@ -100,8 +96,7 @@ test('desktop file dialog bridge preserves shared options and complete results i
 	}
 });
 
-test('browser Save As writes an untitled editor to the selected folder', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+test('browser Save As writes an untitled editor to the selected folder', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -171,8 +166,7 @@ async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolea
 	}, content);
 }
 
-test('browser Open File selects multiple files from the current workspace', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+test('browser Open File selects multiple files from the current workspace', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();

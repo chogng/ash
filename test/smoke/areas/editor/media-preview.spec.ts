@@ -7,8 +7,7 @@ declare global {
 	interface Window { readonly mediaPreviewRevokedURLs: Set<string>; }
 }
 
-test('Built-in audio and video previews play, pause on switching and release resources', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+test('Built-in audio and video previews play, pause on switching and release resources', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	// Two seconds of PCM silence and a small VP9 clip exercise actual decoders.
 	const wave = Buffer.alloc(44 + 8000 * 2 * 2);
@@ -74,8 +73,7 @@ test('Built-in audio and video previews play, pause on switching and release res
 	await expect(group.content.getByRole('alert')).toContainText('This media file could not be played.');
 });
 
-test('Audio and video retry first reads and damaged video recovers with the current player', async ({ target, testWorkspace, workbench }, testInfo) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+test('Audio and video retry first reads and damaged video recovers with the current player', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
 	test.setTimeout(90_000);
 	const page = workbench.page;
 	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);
@@ -154,8 +152,7 @@ test('Audio and video retry first reads and damaged video recovers with the curr
 	} finally { await fixture.dispose(); }
 });
 
-test('Closing an audio preview during a refresh releases late data without a new URL', async ({ target, testWorkspace, workbench }, testInfo) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+test('Closing an audio preview during a refresh releases late data without a new URL', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
 	const page = workbench.page;
 	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);
 	try {

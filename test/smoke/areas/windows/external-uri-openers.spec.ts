@@ -99,8 +99,7 @@ test('External URL opener rules accept unregistered IDs and persist after reopen
 	await restarted.editors.groupAt(0).editor.waitForEditorContents(source => JSON.stringify(JSON.parse(source)['workbench.externalUriOpeners']) === JSON.stringify(rules));
 });
 
-test('URL opener settings suggest built-in IDs and their names', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the product JSON language declarations.');
+test('URL opener settings suggest built-in IDs and their names', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const group = workbench.editors.groupAt(0);
 	await group.editor.input.press('ControlOrMeta+A');
@@ -121,8 +120,7 @@ test('URL opener settings suggest built-in IDs and their names', async ({ target
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
 });
 
-test('URL rules open editor links in the Ash browser and default links in the system browser', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Requires the desktop browser provider.');
+test('URL rules open editor links in the Ash browser and default links in the system browser', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const server = createServer((_request, response) => {
 		response.setHeader('Content-Type', 'text/html');
 		response.end('<title>Configured URL page</title><h1>Opened through URL rules</h1>');
@@ -196,8 +194,7 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 	}
 });
 
-test('terminal URL rules support mouse, keyboard selection and Chinese command text', async ({ application, target, workbench, restartWorkbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a running desktop terminal.');
+test('terminal URL rules support mouse, keyboard selection and Chinese command text', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, restartWorkbench }) => {
 	const server = createServer((_request, response) => { response.end('<title>Terminal URL page</title>'); });
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	const address = server.address();

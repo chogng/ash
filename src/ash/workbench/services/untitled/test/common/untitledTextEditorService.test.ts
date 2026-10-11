@@ -1,3 +1,4 @@
+import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import type { ITextResourceStore } from '../../../textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from "node:assert/strict";
@@ -318,6 +319,9 @@ class TestQuickInputService implements IQuickInputServiceContract {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
+	canSelectMany = false;
+	selectedItems: readonly TItem[] = [];
+	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	private readonly acceptEmitter = new Emitter<TItem>();
 	private readonly valueEmitter = new Emitter<string>();
 	private readonly hideEmitter = new Emitter<void>();

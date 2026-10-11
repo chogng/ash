@@ -3,7 +3,6 @@ import { basename, join, sep } from 'node:path';
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 
 test.beforeEach(async ({ target, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires workspace tasks and terminal execution.');
 	await mkdir(join(testWorkspace.directory, '.vscode'));
 	await writeFile(join(testWorkspace.directory, '.vscode', 'tasks.json'), JSON.stringify({
 		version: '2.0.0', tasks: [
@@ -18,7 +17,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'smoke-watch.cjs'), "console.log('ASH_TASK_WATCH_READY'); setInterval(() => {}, 1000);\n");
 });
 
-test('task discovery does not execute commands and explicit run and rerun use the workspace terminal', async ({ workbench, testWorkspace }) => {
+test('task discovery does not execute commands and explicit run and rerun use the workspace terminal', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await expect(workbench.quickaccess.items.filter({ hasText: 'Smoke build' })).toBeVisible();
 	expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('0');
@@ -32,7 +31,7 @@ test('task discovery does not execute commands and explicit run and rerun use th
 	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke build — succeeded (0)');
 });
 
-test('terminating a running workspace task stops its terminal and records cancellation', async ({ workbench }) => {
+test('terminating a running workspace task stops its terminal and records cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await workbench.quickaccess.select('Smoke watch');
 	await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_WATCH_READY');
@@ -41,7 +40,7 @@ test('terminating a running workspace task stops its terminal and records cancel
 	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke watch — canceled');
 });
 
-test('command-only tasks own their shell process and retain output and exit without terminal input echo', async ({ application, workbench, testWorkspace }) => {
+test('command-only tasks own their shell process and retain output and exit without terminal input echo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const log = join(directory, 'command-only.jsonl');
 	await writeFile(log, '');
@@ -72,7 +71,7 @@ test('command-only tasks own their shell process and retain output and exit with
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`task command echo defaults on, changes on reuse and stays out of problem matchers (${locale})`, async ({ application, workbench, testWorkspace, restartWorkbench }) => {
+	test(`task command echo defaults on, changes on reuse and stays out of problem matchers (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace, restartWorkbench }) => {
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
@@ -122,7 +121,7 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-test('search problem matchers resolve nested literal filenames and exclude directories before dependent tasks complete', async ({ workbench, testWorkspace }) => {
+test('search problem matchers resolve nested literal filenames and exclude directories before dependent tasks complete', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const included = join(directory, 'matcher-search[work]', 'nested');
 	const excluded = join(directory, 'matcher-search[work]', 'ignored');
@@ -150,7 +149,7 @@ test('search problem matchers resolve nested literal filenames and exclude direc
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents.includes('SEARCH_MATCHER_FOUND') && !contents.includes('SEARCH_MATCHER_EXCLUDED'));
 });
 
-test('core compiler and lint matchers publish real task output and preserve shared diagnostic owners', async ({ workbench, testWorkspace }) => {
+test('core compiler and lint matchers publish real task output and preserve shared diagnostic owners', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const lines = [
 		`${directory}/main.cs(2,3): category warning CS7: BUILTIN_MICROSOFT`,
@@ -192,7 +191,7 @@ test('core compiler and lint matchers publish real task output and preserve shar
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents.includes('BUILTIN_SOURCE_TARGET'));
 });
 
-test('problem search rejects an unauthorized directory before execution in Chinese', async ({ workbench, testWorkspace, restartWorkbench }) => {
+test('problem search rejects an unauthorized directory before execution in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
@@ -212,7 +211,7 @@ test('problem search rejects an unauthorized directory before execution in Chine
 	await expect(workbench.page.locator('.ash-terminal-tab')).toHaveCount(0);
 });
 
-test('captured severity aliases and configured compiler fallback reach Problems', async ({ workbench, testWorkspace }) => {
+test('captured severity aliases and configured compiler fallback reach Problems', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const lines = [join(directory, 'severity.ts') + '(2,3): category fatal   error C7: SEVERITY_FATAL', 'severity.ts|2|WARN SEVERITY_WARN', 'severity.ts|2|Hint SEVERITY_HINT', 'severity.ts|2|E SEVERITY_ERROR', 'severity.ts|2|i SEVERITY_FALLBACK'];
 	await writeFile(join(directory, 'severity.cjs'), `console.log(${JSON.stringify(lines.join('\n'))});`);
@@ -227,7 +226,7 @@ test('captured severity aliases and configured compiler fallback reach Problems'
 	}
 });
 
-test('compiler zero and backward coordinates reach Problems and navigate to normalized positions', async ({ workbench, testWorkspace }) => {
+test('compiler zero and backward coordinates reach Problems and navigate to normalized positions', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	await writeFile(join(directory, 'coordinates.ts'), 'COORDINATE_SOURCE_TARGET\n\nlet third = true;\n');
 	await writeFile(join(directory, 'coordinates.cjs'), `console.log(${JSON.stringify(join(directory, 'coordinates.ts') + '(0,0): error Z0: ZERO_COORDINATE')}); console.log(${JSON.stringify(join(directory, 'coordinates.ts') + '(3,4,1,0): warning B0: BACKWARD_COORDINATE')}); console.log(${JSON.stringify(join(directory, 'coordinates.ts') + ': warning : ABSENT_COORDINATE')});`);
@@ -247,7 +246,7 @@ test('compiler zero and backward coordinates reach Problems and navigate to norm
 	await expect(page.getByRole('button', { name: 'Ln 3, Col 4', exact: true })).toBeVisible();
 });
 
-test('task pattern defaults and multiline line-only diagnostics reach Problems', async ({ application, workbench, testWorkspace }) => {
+test('task pattern defaults and multiline line-only diagnostics reach Problems', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	await writeFile(join(directory, 'pattern-defaults.cjs'), "console.log('single.ts:2:3 error'); console.log('FILE multiline.ts'); console.log('4 warning LINE_ONLY_DIAGNOSTIC'); console.log('5 error SECOND_LINE_DIAGNOSTIC');");
 	await writeFile(join(directory, 'single.ts'), '\nlet single = true;\n');
@@ -277,7 +276,7 @@ test('task pattern defaults and multiline line-only diagnostics reach Problems',
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`task reuse notice preserves shortcuts, updates on reuse and closes only after exit (${locale})`, async ({ application, workbench, testWorkspace, restartWorkbench }) => {
+	test(`task reuse notice preserves shortcuts, updates on reuse and closes only after exit (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace, restartWorkbench }) => {
 		const directory = testWorkspace.directory;
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
@@ -343,7 +342,7 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`new task terminals display the close notice even when reuse notices are disabled (${locale})`, async ({ workbench, testWorkspace, restartWorkbench }) => {
+	test(`new task terminals display the close notice even when reuse notices are disabled (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench }) => {
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
@@ -365,7 +364,7 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const panel of [undefined, 'shared', 'dedicated', 'new'] as const) {
-	test(`configured ${panel ?? 'default'} task terminals replace processes and preserve the selected screen policy`, async ({ workbench, testWorkspace }) => {
+	test(`configured ${panel ?? 'default'} task terminals replace processes and preserve the selected screen policy`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 		const effectivePanel = panel ?? 'shared';
 		const directory = testWorkspace.directory;
 		const log = join(directory, 'panel-processes.jsonl');
@@ -410,7 +409,7 @@ for (const panel of [undefined, 'shared', 'dedicated', 'new'] as const) {
 	});
 }
 
-test('invalid task presentation is rejected before execution in the selected display language', async ({ workbench, testWorkspace, restartWorkbench }) => {
+test('invalid task presentation is rejected before execution in the selected display language', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
@@ -422,7 +421,7 @@ test('invalid task presentation is rejected before execution in the selected dis
 	expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('0');
 });
 
-test('task presentation preserves editor focus, reveals errors and closes only the completed task terminal', async ({ workbench, testWorkspace }) => {
+test('task presentation preserves editor focus, reveals errors and closes only the completed task terminal', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const log = join(directory, 'task-presentation.jsonl');
 	await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'task-presentation', version: '1.0.0' }));
@@ -500,7 +499,7 @@ test('task presentation preserves editor focus, reveals errors and closes only t
 	await expect(editor.input).toBeFocused();
 });
 
-test('task problem reveal policies prioritize diagnostics and wait for foreground completion or a background matcher', async ({ workbench, testWorkspace }) => {
+test('task problem reveal policies prioritize diagnostics and wait for foreground completion or a background matcher', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const log = join(directory, 'problem-reveal.jsonl');
 	await writeFile(log, '');
@@ -604,7 +603,7 @@ if (['Always', 'Warning', 'Background'].includes(name)) {
 	}
 });
 
-test('workspace task progress signals play the bundled sound, reload policy, and stop on cancellation', async ({ workbench }) => {
+test('workspace task progress signals play the bundled sound, reload policy, and stop on cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	test.setTimeout(90_000);
 	const page = workbench.page;
 	const audioState = { attempts: 0, played: 0, announcements: 0, audio: undefined as HTMLMediaElement | undefined };
@@ -693,7 +692,7 @@ test('workspace task progress signals play the bundled sound, reload policy, and
 });
 
 
-test('task outcome signals play once for success or failure without duplicating terminal results', async ({ workbench, testWorkspace }) => {
+test('task outcome signals play once for success or failure without duplicating terminal results', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	test.setTimeout(60_000);
 	await writeFile(join(testWorkspace.directory, 'smoke-fail.cjs'), 'process.exit(7);\n');
 	await writeFile(join(testWorkspace.directory, '.vscode', 'tasks.json'), JSON.stringify({
@@ -745,7 +744,7 @@ test('task outcome signals play once for success or failure without duplicating 
 	}
 });
 
-test('task platform overrides resolve the execution host command, cwd and merged environment', async ({ workbench, testWorkspace }) => {
+test('task platform overrides resolve the execution host command, cwd and merged environment', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const key = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
 	await mkdir(join(directory, 'platform-work'), { recursive: true });
@@ -765,7 +764,7 @@ test('task platform overrides resolve the execution host command, cwd and merged
 	await expect.poll(async () => { try { return JSON.parse(await readFile(join(directory, 'platform-result.json'), 'utf8')); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; } }).toEqual({ cwd: join(directory, 'platform-work'), args: ['', 'ash', '$HOME'], inherited: 'document', selected: 'ash', removed: true });
 });
 
-test('installed declarative extension matchers parse task diagnostics and retire when disabled', async ({ application, workbench, testWorkspace }) => {
+test('installed declarative extension matchers parse task diagnostics and retire when disabled', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'matcher-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -819,7 +818,7 @@ test('installed declarative extension matchers parse task diagnostics and retire
 
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`unsupported task configuration shows a clear error without starting a process and can be corrected (${locale})`, async ({ workbench, testWorkspace, restartWorkbench }) => {
+	test(`unsupported task configuration shows a clear error without starting a process and can be corrected (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench }) => {
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
@@ -891,7 +890,7 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const reevaluate of [true, false]) {
-	test(`configured task inputs cancel before execution and reevaluate ${reevaluate} on rerun`, async ({ workbench, testWorkspace }) => {
+	test(`configured task inputs cancel before execution and reevaluate ${reevaluate} on rerun`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 		const page = workbench.page;
 		const directory = testWorkspace.directory;
 		await writeFile(join(directory, 'smoke-input-task.cjs'), "require('node:fs').writeFileSync('task-inputs.json', JSON.stringify(process.argv.slice(2))); require('./smoke-task.cjs');\n");
@@ -956,13 +955,13 @@ for (const reevaluate of [true, false]) {
 }
 
 
-test('task command resolves environment values from the execution host', async ({ workbench, testWorkspace }) => {
+test('task command resolves environment values from the execution host', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await workbench.quickaccess.select('Smoke environment');
 	await expect.poll(async () => JSON.parse(await readFile(join(testWorkspace.directory, 'task-environment.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return 'null'; throw error; }))).toEqual({ args: ['ash', ''], value: 'task value', folder: testWorkspace.directory, keyed: 'resolved key', removed: true });
 });
 
-test('task execution resolves host paths and current settings through the shared variable owner', async ({ application, workbench, testWorkspace, webAppServer }) => {
+test('task execution resolves host paths and current settings through the shared variable owner', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace, webAppServer }) => {
 	const directory = testWorkspace.directory;
 	const home = webAppServer?.profileDirectory ?? ('windows' in application ? await application.evaluate(() => process.env.HOME!) : undefined);
 	expect(home).toBeTruthy();
@@ -979,7 +978,7 @@ test('task execution resolves host paths and current settings through the shared
 	await expect.poll(async () => { try { return JSON.parse(await readFile(join(directory, 'variable-result.json'), 'utf8')); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; } }).toEqual({ args: [directory, '18', home, sep, sep], cwd: directory });
 });
 
-test('Tasks resolve active file and selection variables before process execution without expanding selected text', async ({ workbench, testWorkspace }) => {
+test('Tasks resolve active file and selection variables before process execution without expanding selected text', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const selected = 'chosen $HOME ${env:SHOULD_STAY_LITERAL}';
 	await mkdir(join(directory, 'variable-source'));
@@ -1003,8 +1002,7 @@ test('Tasks resolve active file and selection variables before process execution
 	]);
 });
 
-test('shell tasks quote resolved arguments and honor explicit shell selection without changing raw command lines', async ({ workbench, testWorkspace }) => {
-	test.skip(process.platform === 'win32', 'Exercises POSIX quoting and an explicit /bin/sh executable.');
+test('shell tasks quote resolved arguments and honor explicit shell selection without changing raw command lines', { tag: ['@browser-app-server', '@electron-app-server', '@darwin', '@linux'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const script = join(directory, 'shell task.cjs');
 	await writeFile(script, "require('node:fs').writeFileSync(process.argv[2], JSON.stringify({args: process.argv.slice(3), mode: process.env.ASH_SHELL_MODE, cwd: process.cwd()}));\n");
@@ -1039,7 +1037,7 @@ test('shell tasks quote resolved arguments and honor explicit shell selection wi
 	await expect.poll(() => readFile(join(directory, 'raw-shell.txt'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; })).toBe('raw');
 });
 
-test('process task dependencies wait for background diagnostics and preserve cwd and literal argv', async ({ workbench, testWorkspace }) => {
+test('process task dependencies wait for background diagnostics and preserve cwd and literal argv', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	await mkdir(join(directory, 'child'));
 	await writeFile(join(directory, 'compile-watch.cjs'), "const fs = require('node:fs'); const path = require('node:path'); const root = process.argv[2]; fs.writeFileSync(path.join(root, 'compiler-pid.txt'), String(process.pid)); console.log('BUILD'); console.log('ASH_COMPILER_WAITING'); const timer = setInterval(() => { if (fs.existsSync(path.join(root, 'release-compiler'))) { clearInterval(timer); console.log('file.ts(2,3): warning TS1000: Smoke compiler warning'); console.log('READY'); setInterval(() => {}, 1000); } }, 40);\n");
@@ -1065,8 +1063,7 @@ test('process task dependencies wait for background diagnostics and preserve cwd
 	await expect.poll(() => { try { process.kill(pid, 0); return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false; throw error; } }).toBe(false);
 });
 
-test('first task discovery activates an installed dormant provider and disable retires its process tasks', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('first task discovery activates an installed dormant provider and disable retires its process tasks', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'task-extension');
@@ -1145,8 +1142,7 @@ exports.activate = function(context) {
 	await manage('Uninstall');
 });
 
-test('a standard command-only extension starts the built-in build Task and receives a void result', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('a standard command-only extension starts the built-in build Task and receives a void result', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'command-task-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1183,8 +1179,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 	await manage('Uninstall');
 });
 
-test('standard Task command variables receive variable arrays once per process and shell run and cancel before execution', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('standard Task command variables receive variable arrays once per process and shell run and cancel before execution', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'task-variable-map-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1239,8 +1234,7 @@ exports.activate = context => context.subscriptions.push(
 	await manage('Uninstall');
 });
 
-test('a standard CommonJS extension preserves configured problem reveal after repeated fetched Task edits', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('a standard CommonJS extension preserves configured problem reveal after repeated fetched Task edits', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'fetched-task-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1314,8 +1308,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 });
 
 
-test('a standard extension edits and copies fetched CustomExecution while releasing the original provider PTY', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('a standard extension edits and copies fetched CustomExecution while releasing the original provider PTY', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'fetched-custom-extension');
@@ -1395,8 +1388,7 @@ exports.activate = context => {
 	await manage('Uninstall');
 });
 
-test('installed task observer receives ordered process events after termination releases the process', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('installed task observer receives ordered process events after termination releases the process', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'task-events-extension');
@@ -1451,7 +1443,7 @@ exports.activate = function(context) {
 });
 
 
-test('configured task instance limits allow two processes, join at capacity and reuse a released slot', async ({ workbench, testWorkspace }) => {
+test('configured task instance limits allow two processes, join at capacity and reuse a released slot', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	await writeFile(join(directory, 'limited-task.cjs'), "const fs = require('node:fs'); const count = Number(fs.readFileSync('task-runs.txt', 'utf8')) + 1; fs.writeFileSync('task-runs.txt', String(count)); fs.writeFileSync('limited-pid-' + count, String(process.pid)); console.log('LIMITED_TASK_READY_' + count); setInterval(() => {}, 1000);\n");
 	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Limited task', type: 'process', command: process.execPath, args: ['${workspaceFolder}/limited-task.cjs'], runOptions: { instanceLimit: 2, instancePolicy: 'silent' } }] }));
@@ -1481,7 +1473,7 @@ test('configured task instance limits allow two processes, join at capacity and 
 	}
 });
 
-test('configured task capacity policies replace the selected process, cancel the picker and warn without spawning', async ({ workbench, testWorkspace }) => {
+test('configured task capacity policies replace the selected process, cancel the picker and warn without spawning', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const page = workbench.page;
 	const directory = testWorkspace.directory;
 	await writeFile(join(directory, 'policy-task.cjs'), "const fs = require('node:fs'); const prefix = process.argv[2]; const file = prefix + '-runs'; const count = Number(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : 0) + 1; fs.writeFileSync(prefix + '-pid-' + count, String(process.pid)); fs.writeFileSync(file, String(count)); console.log('POLICY_READY_' + count); setInterval(() => {}, 1000);\n");
@@ -1536,7 +1528,7 @@ test('configured task capacity policies replace the selected process, cancel the
 });
 
 
-test('superseding an extension task query delivers cancellation and retains the active provider', async ({ workbench, application, testWorkspace }) => {
+test('superseding an extension task query delivers cancellation and retains the active provider', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, application, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'cancellation-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1602,7 +1594,7 @@ exports.activate = function(context) {
 	await manage('Uninstall');
 });
 
-test('configured default globs select the active file before boolean defaults and retain unmatched fallback', async ({ workbench, testWorkspace }) => {
+test('configured default globs select the active file before boolean defaults and retain unmatched fallback', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const log = join(directory, 'task-default-globs.jsonl');
 	await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'task-default-globs', version: '1.0.0' }));
@@ -1659,7 +1651,7 @@ test('configured default globs select the active file before boolean defaults an
 	expect(await executed()).toEqual(expected);
 });
 
-test('standard build and test commands run unique defaults and keep ambiguous selection within the requested group', async ({ workbench, testWorkspace, restartWorkbench }) => {
+test('standard build and test commands run unique defaults and keep ambiguous selection within the requested group', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench }) => {
 	const directory = testWorkspace.directory;
 	const log = join(directory, 'task-groups.jsonl');
 	await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'task-group-commands', version: '1.0.0' }));

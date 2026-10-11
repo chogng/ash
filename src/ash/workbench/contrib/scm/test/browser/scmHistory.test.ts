@@ -45,3 +45,22 @@ suite('SCM history graph', () => {
 		}
 	});
 });
+
+test('summary nodes compare captured branch revisions without changing commit parents', () => {
+	const history = [
+		{ id: 'local', parentIds: ['base'], subject: 'local', message: 'local' },
+		{ id: 'remote', parentIds: ['base'], subject: 'remote', message: 'remote' },
+		{ id: 'base', parentIds: [], subject: 'base', message: 'base' },
+	];
+	const rows = toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
+		remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming: true, outgoing: true,
+	});
+	assert.deepEqual(rows.map(row => row.kind), ['outgoing-changes', 'HEAD', 'node', 'incoming-changes', 'node']);
+	assert.deepEqual(rows[0].historyItem.comparison, { revision: 'local', baseRevision: 'base' });
+	assert.deepEqual(rows[3].historyItem.comparison, { revision: 'remote', baseRevision: 'base' });
+	assert.deepEqual(rows[2].historyItem.parentIds, ['base']);
+	assert.deepEqual(history[1].parentIds, ['base']);
+	assert.equal(toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
+		remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming: false, outgoing: false,
+	}).length, history.length);
+});

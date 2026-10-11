@@ -32,8 +32,7 @@ function observeDetails(): void {
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`Background branch management preserves drafts and survives stop, failure and reopen in ${locale}`, async ({ application, target, webAppServer, workbench, restartWorkbench, testWorkspace }, testInfo) => {
-		test.skip(target.appServerMode !== 'required', 'Requires real durable Session management.');
+	test(`Background branch management preserves drafts and survives stop, failure and reopen in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, restartWorkbench, testWorkspace }, testInfo) => {
 		test.setTimeout(240_000);
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');

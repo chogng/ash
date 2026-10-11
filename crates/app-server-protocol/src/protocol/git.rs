@@ -317,6 +317,11 @@ pub struct GitGraphParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub cursor: Option<String>,
+    /// Immutable roots selected by the consumer. Omission traverses all public references.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(max = 1000))]
+    pub revisions: Option<Vec<String>>,
 }
 
 /// One bounded commit graph page and its continuation cursor.
@@ -465,8 +470,15 @@ pub struct GitCommitFileParams {
 #[ts(rename_all = "camelCase")]
 pub enum GitCommitFileContentDto {
     Missing,
-    Binary,
-    Text { text: String },
+    Binary {
+        /// Base64 bytes; older peers may provide only a binary marker.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        data: Option<String>,
+    },
+    Text {
+        text: String,
+    },
 }
 
 /// Before/after editor content for one committed file.

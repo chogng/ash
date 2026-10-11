@@ -117,5 +117,5 @@ EditorInputSerializers.registerStatic({
 function canReadBinary(value: unknown): value is IResourceEditorInput {
 	if (typeof value !== "object" || value === null || !("resource" in value)) return false;
 	const resource = (value as IResourceEditorInput).resource;
-	return resource instanceof URI && (resource.scheme === Schemas.file || isRemoteResource(resource));
+	return resource instanceof URI && (resource.scheme === Schemas.file || isRemoteResource(resource) || (value as IResourceEditorInput).initialBytes instanceof Uint8Array);
 }

@@ -4,8 +4,7 @@ import { join } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
-test('Network Settings supports search, keyboard help and Chinese labels while disconnected', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode === 'required', 'Exercises disconnected Workbench Settings.');
+test('Network Settings supports search, keyboard help and Chinese labels while disconnected', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.locator('.ash-settings-editor');
@@ -42,8 +41,7 @@ test('Network Settings supports search, keyboard help and Chinese labels while d
 	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/HTTP\/1.1 将后续应用 HTTP 请求限制为 HTTP\/1.1/);
 });
 
-test('Network Settings persists HTTP mode, copies configured domains and reports real HTTP reachability', async ({ target, workbench, application }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the real backend transport and isolated provider configuration.');
+test('Network Settings persists HTTP mode, copies configured domains and reports real HTTP reachability', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application }) => {
 	const requests: { url: string; authorization: string | undefined; version: string; }[] = [];
 	const server = createServer((request, response) => {
 		requests.push({ url: request.url!, authorization: request.headers.authorization, version: request.httpVersion });

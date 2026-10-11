@@ -88,6 +88,7 @@ fn executable_keeps_history_pages_across_file_and_index_changes_and_observes_ref
                     connection_id: 1,
                     limit: std::num::NonZeroUsize::new(1).unwrap(),
                     cursor,
+                    revisions: None,
                 },
                 None,
             )
@@ -133,6 +134,7 @@ fn executable_keeps_history_pages_across_file_and_index_changes_and_observes_ref
                 connection_id: 1,
                 limit: std::num::NonZeroUsize::new(1).unwrap(),
                 cursor: old_cursor,
+                revisions: None,
             },
             None,
         )
@@ -289,6 +291,7 @@ fn executable_preserves_git_contracts_cancellation_recovery_and_revocation() {
                 connection_id: 1,
                 limit: std::num::NonZeroUsize::new(1).unwrap(),
                 cursor: None,
+                revisions: None,
             },
             None,
         )
@@ -330,6 +333,7 @@ fn executable_preserves_git_contracts_cancellation_recovery_and_revocation() {
                 connection_id: 1,
                 limit: std::num::NonZeroUsize::new(1).unwrap(),
                 cursor: graph.next_cursor,
+                revisions: None,
             },
             None
         ),

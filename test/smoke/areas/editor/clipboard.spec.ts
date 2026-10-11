@@ -98,8 +98,7 @@ test('command Paste As preserves rich clipboard choices and undo in the owning W
 	}
 });
 
-test('browser clipboard permission recovery preserves cancelled pastes and permits a new paste', async ({ workbench, target }) => {
-	test.skip(target.kind !== 'browser', 'Browser permission recovery');
+test('browser clipboard permission recovery preserves cancelled pastes and permits a new paste', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench, target }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -132,8 +131,7 @@ test('browser clipboard permission recovery preserves cancelled pastes and permi
 	}
 });
 
-test('global Find clipboard seeds a new editor and preserves copied text', async ({ workbench, target, application }) => {
-	test.skip(target.kind === 'electron' && process.platform !== 'darwin', 'System find pasteboard is macOS only');
+test('global Find clipboard seeds a new editor and preserves copied text', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] : ['@browser-ui', '@browser-app-server'] }, async ({ workbench, target, application }) => {
 	const page = workbench.page;
 	if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 	const readText = (): Promise<string> => target.kind === 'electron'
@@ -207,8 +205,7 @@ test('global Find clipboard seeds a new editor and preserves copied text', async
 });
 
 
-test('desktop Paste command inserts clipboard text into a focused Find textbox', async ({ workbench, target, application }) => {
-	test.skip(target.kind !== 'electron', 'Requires the desktop paste event port');
+test('desktop Paste command inserts clipboard text into a focused Find textbox', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, target, application }) => {
 	const desktop = application as ElectronApplication;
 	const previous = await desktop.evaluate(({ clipboard }) => clipboard.readText());
 	try {
@@ -225,8 +222,7 @@ test('desktop Paste command inserts clipboard text into a focused Find textbox',
 	}
 });
 
-test('desktop clipboard routes reject unknown types and renderer-selected paste targets', async ({ workbench, target }) => {
-	test.skip(target.kind !== 'electron', 'Requires desktop IPC');
+test('desktop clipboard routes reject unknown types and renderer-selected paste targets', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, target }) => {
 	const errors = await workbench.page.evaluate(async () => {
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		const requests: [string, unknown][] = [
@@ -248,8 +244,7 @@ test('desktop clipboard routes reject unknown types and renderer-selected paste 
 	expect(errors[4]).toContain('The paste target window is unavailable');
 });
 
-test('Linux selection clipboard follows editor selections and supports command and middle-click paste', async ({ workbench, target, application }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'linux', 'Requires the Linux system selection clipboard');
+test('Linux selection clipboard follows editor selections and supports command and middle-click paste', { tag: ['@electron-ui', '@electron-app-server', '@linux'] }, async ({ workbench, target, application }) => {
 	const desktop = application as ElectronApplication;
 	const previous = await desktop.evaluate(async ({ clipboard }) => ({ text: await clipboard.readText(), selection: await clipboard.selection.readText() }));
 	try {
@@ -297,8 +292,7 @@ test('Linux selection clipboard follows editor selections and supports command a
 	}
 });
 
-test('desktop Paste As consumes the trusted rich paste event and returns focus after choosing HTML', async ({ workbench, target, application }) => {
-	test.skip(target.kind !== 'electron', 'Requires rich system paste events');
+test('desktop Paste As consumes the trusted rich paste event and returns focus after choosing HTML', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, target, application }) => {
 	const desktop = application as ElectronApplication;
 	const previous = await desktop.evaluate(({ clipboard }) => clipboard.readText());
 	try {
@@ -321,8 +315,7 @@ test('desktop Paste As consumes the trusted rich paste event and returns focus a
 	}
 });
 
-test('browser paste shortcut delivers trusted HTML and preserves undo and focus', async ({ workbench, target }) => {
-	test.skip(target.kind !== 'browser', 'Browser clipboard shortcut');
+test('browser paste shortcut delivers trusted HTML and preserves undo and focus', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench, target }) => {
 	const page = workbench.page;
 	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 	const previous = await page.evaluate(() => navigator.clipboard.readText());
@@ -350,8 +343,7 @@ test('browser paste shortcut delivers trusted HTML and preserves undo and focus'
 	}
 });
 
-test('desktop editor Paste reaches its registered auxiliary window and releases the target when closed', async ({ workbench, target, application }) => {
-	test.skip(target.kind !== 'electron', 'Requires auxiliary desktop IPC');
+test('desktop editor Paste reaches its registered auxiliary window and releases the target when closed', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, target, application }) => {
 	const desktop = application as ElectronApplication;
 	const page = workbench.page;
 	const previous = await desktop.evaluate(({ clipboard }) => clipboard.readText());

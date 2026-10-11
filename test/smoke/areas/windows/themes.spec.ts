@@ -2,8 +2,7 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('Seti extension fonts render in Explorer and editor tabs and can be switched off', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires extension resources from App Server');
+test('Seti extension fonts render in Explorer and editor tabs and can be switched off', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) { return; }
 	const home = await application.evaluate(() => process.env.ASH_HOME!);
 	await cp('extensions/theme-seti', join(home, 'extensions', 'theme-seti'), { recursive: true });
@@ -79,8 +78,7 @@ test('Workbench follows system color changes without reopening the window', asyn
 	}
 });
 
-test('Explorer keeps selection distinct from hover and reflects keyboard focus', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires an App Server workspace');
+test('Explorer keeps selection distinct from hover and reflects keyboard focus', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	const explorer = page.locator('.ash-explorer');
 	const tree = explorer.getByRole('tree');
@@ -181,8 +179,7 @@ test.describe('Workbench shell colors', () => {
 	});
 });
 
-test('Settings modal dims and restores Electron window controls', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Requires Electron window controls');
+test('Settings modal dims and restores Electron window controls', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) return;
 	const hasOverlay = await application.evaluate(({ BrowserWindow }) => {
 		if (process.platform === 'darwin') return false;
@@ -211,8 +208,7 @@ test('Settings modal dims and restores Electron window controls', async ({ appli
 	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string; }[]; }).modalControlColors.at(-1))).toEqual({ color: '#ffffff', symbolColor: '#424242' });
 });
 
-test('Desktop migrates a user theme through the file provider and applies its colors', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Requires the desktop profile file provider');
+test('Desktop migrates a user theme through the file provider and applies its colors', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) return;
 	const hasOverlay = await application.evaluate(({ BrowserWindow }) => {
 		const state = globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string; }[]; };

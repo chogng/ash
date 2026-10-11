@@ -3,8 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
-test('Sessions Reopen Closed Editor reads its real file through the session provider', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires Sessions with the real App Server session directory.');
+test('Sessions Reopen Closed Editor reads its real file through the session provider', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 	const editors = page.locator('[data-part="editor"]');

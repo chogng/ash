@@ -6,8 +6,7 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 
 test.use({ openWorkspace: false });
 
-test('Calls reject unsupported server connections and keep the microphone off', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Calls require an authorized product backend.');
+test('Calls reject unsupported server connections and keep the microphone off', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Open Calls');
@@ -33,8 +32,7 @@ test('Calls reject unsupported server connections and keep the microphone off', 
 	await expect(view.getByRole('button', { name: 'Unmute microphone', exact: true })).toBeDisabled();
 });
 
-test.extend({ electronWindowMode: 'inactive' })('Windows calls share a selected window, receive video, and clear it after stopping', async ({ target, workbench, application }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.platform !== 'win32', 'Requires Windows capture and two connected Electron windows.');
+test.extend({ electronWindowMode: 'inactive' })('Windows calls share a selected window, receive video, and clear it after stopping', { tag: ['@electron-app-server', '@win32'] }, async ({ target, workbench, application }) => {
 	if (!('windows' in application)) { return; }
 	test.setTimeout(120_000);
 	const page = workbench.page;
@@ -91,8 +89,7 @@ test.extend({ electronWindowMode: 'inactive' })('Windows calls share a selected 
 	}
 });
 
-test('Calls remain unavailable when the host has no call backend', async ({ target, workbench }) => {
-	test.skip(target.appServerMode === 'required', 'This scenario covers the UI without an App Server.');
+test('Calls remain unavailable when the host has no call backend', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Open Calls');

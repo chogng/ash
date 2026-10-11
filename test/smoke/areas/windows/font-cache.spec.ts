@@ -51,8 +51,7 @@ for (const invalid of ['{', '{"fonts":[]}']) {
 }
 
 
-test('Browser migrates retired storage before restoring font metrics', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'browser', 'Browser namespace migration uses localStorage.');
+test('Browser migrates retired storage before restoring font metrics', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const identity = { scope: StorageScope.APPLICATION, id: 'application' };
@@ -77,8 +76,7 @@ test('Browser migrates retired storage before restoring font metrics', async ({ 
 	expect((await readStorageEntries(application, page, identity)).editorFontInfo).toEqual({ value, target: 'machine' });
 });
 
-test('Desktop migrates retired storage and preserves Workbench fonts and Sessions layout through immediate exit and restart', async ({ target }, testInfo) => {
-	test.skip(target.kind !== 'electron', 'Desktop migration is owned by the Main process.');
+test('Desktop migrates retired storage and preserves Workbench fonts and Sessions layout through immediate exit and restart', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target }, testInfo) => {
 	test.setTimeout(120_000);
 	const userDataDirectory = testInfo.outputPath('storage-profile');
 	await mkdir(userDataDirectory, { recursive: true });

@@ -195,8 +195,7 @@ async function recordBackupTraffic(page: Page) {
 }
 
 for (const outcome of ['resolve', 'abort'] as const) {
-	test(`Keyboard Shortcuts recorder pending profile write ${outcome} after closing its tab leaves the next editor focused`, async ({ target, workbench }) => {
-		test.skip(target.kind !== 'browser', 'Exercises the real IndexedDB profile transaction; filesystem lifecycle cases use the unit owner fixture.');
+	test(`Keyboard Shortcuts recorder pending profile write ${outcome} after closing its tab leaves the next editor focused`, { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, workbench }) => {
 		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 		const group = workbench.editors.groupAt(0);
 		const source = '// keep pending recorder comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"}]';
@@ -246,8 +245,7 @@ for (const outcome of ['resolve', 'abort'] as const) {
 }
 
 for (const outcome of ['resolve', 'reject'] as const) {
-	test(`Keyboard Shortcuts recorder pending disk publication ${outcome} after closing its tab leaves the next editor focused`, async ({ target, application, workbench }, testInfo) => {
-		test.skip(target.kind !== 'electron', 'Exercises Main atomic file publication in an isolated Desktop profile.');
+	test(`Keyboard Shortcuts recorder pending disk publication ${outcome} after closing its tab leaves the next editor focused`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }, testInfo) => {
 		if (!('windows' in application)) throw new Error('Requires Electron');
 		const profile = await application.evaluate(() => process.env.ASH_HOME);
 		if (!profile) throw new Error('Test profile unavailable');
@@ -305,8 +303,7 @@ for (const outcome of ['resolve', 'reject'] as const) {
 }
 
 for (const waitForRemoval of [false, true]) {
-	test(`Keybindings JSON repeated saves retain the latest file text after reload without opening the recorder ${waitForRemoval ? 'after backup removal' : 'immediately'}`, async ({ target, workbench, reloadWorkbench }, testInfo) => {
-		test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Read-only backup traffic diagnosis uses the real Web backend.');
+	test(`Keybindings JSON repeated saves retain the latest file text after reload without opening the recorder ${waitForRemoval ? 'after backup removal' : 'immediately'}`, { tag: ['@browser-app-server'] }, async ({ target, workbench, reloadWorkbench }, testInfo) => {
 		const traffic = await recordBackupTraffic(workbench.page);
 		const stages: { stage: string; at: number; rendered: string; file: string; state: string | null; backups: BrowserBackupRecord[]; }[] = [];
 		let group = workbench.editors.groupAt(0);
@@ -350,8 +347,7 @@ for (const waitForRemoval of [false, true]) {
 	});
 }
 
-test('Keyboard Shortcuts shares one input across split panes and restores it after the final close', async ({ target, workbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the real profile file and editor restoration');
+test('Keyboard Shortcuts shares one input across split panes and restores it after the final close', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, reloadWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const firstGroup = workbench.editors.groupAt(0);
 	const source = '// keep shared input comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"},{"key":"ctrl+alt+z","command":"workbench.action.openKeyboardShortcuts"},]\n';
@@ -667,8 +663,7 @@ test('Keybindings JSON saves the profile file, applies shortcuts after reload an
 	await group.editor.waitForEditorContents(content => content === source);
 });
 
-test('runCommands offers command names and nested batch arguments in Keybindings JSON', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires product JSON language declarations');
+test('runCommands offers command names and nested batch arguments in Keybindings JSON', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
 	const commandNames = '[{"key":"ctrl+alt+y","command":"runCommands","args":{"commands":["run"]}}]';
@@ -686,8 +681,7 @@ test('runCommands offers command names and nested batch arguments in Keybindings
 	}
 });
 
-test('Keybindings JSON completes paste command arguments and ordered provider preferences', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires product JSON language declarations');
+test('Keybindings JSON completes paste command arguments and ordered provider preferences', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
 	const options = group.content.locator('.stanza-editor-completion-option');
@@ -708,8 +702,7 @@ test('Keybindings JSON completes paste command arguments and ordered provider pr
 	}
 });
 
-test('Keybindings external changes reload clean models and preserve dirty text on save conflict', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Uses an external profile-file writer');
+test('Keybindings external changes reload clean models and preserve dirty text on save conflict', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	if (!('windows' in application)) throw new Error('Requires Electron');
 	const profile = await application.evaluate(() => process.env.ASH_HOME);
 	if (!profile) throw new Error('Test profile unavailable');

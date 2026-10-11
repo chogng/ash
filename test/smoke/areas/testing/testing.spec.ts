@@ -6,11 +6,10 @@ const source = `fn main() {}\n#[cfg(test)]\nmod checks {\n    #[test] fn passes(
 
 test.describe('built-in Rust testing', () => {
 	test.beforeEach(async ({ target, testWorkspace }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the Rust testing backend and Code workbench.');
 		await writeFile(testWorkspace.rustFile, source);
 	});
 
-	test('Rust testing discovers cases, saves edits, runs exact cases and cancels execution', async ({ workbench, testWorkspace }) => {
+	test('Rust testing discovers cases, saves edits, runs exact cases and cancels execution', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 		test.setTimeout(120_000);
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('workbench.action.testing.refresh');
@@ -46,7 +45,7 @@ test.describe('built-in Rust testing', () => {
 		await expect(tree).toContainText('Cancelled');
 		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
 	});
-	test('Rust test debugging hits a real breakpoint and macro and documentation tests execute', async ({ workbench, testWorkspace }) => {
+	test('Rust test debugging hits a real breakpoint and macro and documentation tests execute', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 		test.setTimeout(120_000);
 		await writeFile(testWorkspace.rustFile, source + '\nmacro_rules! generated { () => { #[test] fn generated_case() { assert_eq!(3, 3); } } }\n#[cfg(test)] generated!();\n');
 		const manifest = join(testWorkspace.directory, 'Cargo.toml');
@@ -102,10 +101,7 @@ test.describe('built-in Rust testing', () => {
 
 test.describe('testing without a backend', () => {
 	test.use({ openWorkspace: false });
-	test.beforeEach(({ target }) => {
-		test.skip(target.appServerMode !== 'disabled', 'Checks UI-only workbench availability.');
-	});
-	test('Testing opens with accessible controls and disables execution without discovered cases', async ({ workbench }) => {
+	test('Testing opens with accessible controls and disables execution without discovered cases', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();
 		const pane = page.locator('[data-view-id="ash.testing.view"]');

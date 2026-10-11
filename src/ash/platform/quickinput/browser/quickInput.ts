@@ -68,6 +68,11 @@ export class QuickPick<TItem extends IQuickPickItem>
 	readonly onDidHide: Event<void> = this._onDidHide.event;
 	readonly onDidBlur: Event<void> = this._onDidBlur.event;
 	readonly onDidTriggerItemButton = this._onDidTriggerItemButton.event;
+	public get canSelectMany(): boolean { return this.list.canSelectMany; }
+	public set canSelectMany(value: boolean) { this.list.canSelectMany = value; }
+	public get selectedItems(): readonly TItem[] { return this.list.selectedItems; }
+	public set selectedItems(items: readonly TItem[]) { this.list.selectedItems = items; }
+	public get onDidChangeSelection(): Event<readonly TItem[]> { return this.list.onDidChangeSelection; }
 
 	constructor(private readonly host: HTMLElement, options: BrowserQuickInputHostOptions) {
 		super();
@@ -232,6 +237,11 @@ export class QuickPick<TItem extends IQuickPickItem>
 	}
 
 	private handleKeyDown(event: KeyboardEvent): void {
+		if (this.canSelectMany && event.key === ' ' && event.ctrlKey) {
+			stopEvent(event);
+			this.list.toggleActive();
+			return;
+		}
 		switch (event.key) {
 			case "ArrowDown":
 				stopEvent(event);

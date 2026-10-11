@@ -323,8 +323,7 @@ test('Desktop Voice imports after Settings closes and shares model deletion with
 	await expect(controls.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
 });
 
-test('Workbench exposes current Tools and Sandbox capabilities', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires Code with App Server');
+test('Workbench exposes current Tools and Sandbox capabilities', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -344,8 +343,7 @@ test('Workbench exposes current Tools and Sandbox capabilities', async ({ target
 	await expect(settings.getByText('Could not load agent capabilities.')).toHaveCount(0);
 });
 
-test('Workbench Models switches control the model picker', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires Code with App Server');
+test('Workbench Models switches control the model picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -394,8 +392,7 @@ test('Workbench Models switches control the model picker', async ({ target, work
 	}
 });
 
-test('Workbench and Sessions Models share model visibility', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires Electron Code with App Server');
+test('Workbench and Sessions Models share model visibility', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;
 	if (process.platform === 'darwin') {
@@ -439,8 +436,7 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	await expect(sessionSwitch).not.toHaveAttribute('aria-busy', 'true');
 });
 
-test('Browser Workbench and Sessions persist model visibility across page navigation', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires browser Code with App Server');
+test('Browser Workbench and Sessions persist model visibility across page navigation', { tag: ['@browser-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -635,8 +631,7 @@ test('File opening settings save through their controls and survive reloading th
 	await expect(threshold).toHaveValue('16');
 });
 
-test('editor settings apply immediately, persist after reload and reset to their default', async ({ application, target, workbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a workspace text editor.');
+test('editor settings apply immediately, persist after reload and reset to their default', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench, reloadWorkbench }) => {
 	let page = workbench.page;
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 	let numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
@@ -931,8 +926,7 @@ test.describe('Manage menu', () => {
 		await expect(page.locator('[data-configuration-key="explorer.fileNesting.patterns"] .ash-string-map-row input').first()).toHaveCSS('height', '24px');
 	});
 
-	test('Manage menu starts a desktop update check', async ({ application, target, workbench }) => {
-		test.skip(target.kind !== 'electron', 'The web host does not install desktop updates');
+	test('Manage menu starts a desktop update check', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 		const page = workbench.page;
 		await workbench.menus.select(application, () => page.getByRole('button', { name: 'Manage' }).click(), ['Check for Updates...']);
 		await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./)).toBeVisible({ timeout: 45_000 });

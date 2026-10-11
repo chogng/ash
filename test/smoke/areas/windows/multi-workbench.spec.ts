@@ -19,8 +19,7 @@ test.afterAll(async () => {
 	for (const workspace of workspacesToDispose) await disposeTestWorkspace(workspace);
 });
 
-focusTest("a second instance opens an independent Workbench and reuses an existing Workspace window", async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== "electron", "This scenario verifies the Electron Workbench window registry.");
+focusTest("a second instance opens an independent Workbench and reuses an existing Workspace window", { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	if (target.kind !== "electron" || !("windows" in application)) return;
 
 	const secondWorkspace = await createTestWorkspace();
@@ -97,8 +96,7 @@ focusTest("a second instance opens an independent Workbench and reuses an existi
 	}
 });
 
-focusTest('Open in Agents reuses one window across Workbench workspaces', async ({ application, target, workbench, testWorkspace }) => {
-	test.skip(target.kind !== 'electron', 'Requires Code Electron');
+focusTest('Open in Agents reuses one window across Workbench workspaces', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 
 	const secondWorkspace = await createTestWorkspace();
@@ -148,8 +146,7 @@ focusTest('Open in Agents reuses one window across Workbench workspaces', async 
 	}
 });
 
-test('dirty editor content survives an immediate Electron window close', async ({ application, target }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario requires the Code Electron Workbench and App Server');
+test('dirty editor content survives an immediate Electron window close', { tag: ['@electron-app-server'] }, async ({ application, target }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const workspace = await createTestWorkspace();
 	workspacesToDispose.push(workspace);

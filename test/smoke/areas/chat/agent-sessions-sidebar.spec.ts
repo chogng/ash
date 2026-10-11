@@ -1,8 +1,7 @@
 import { expect, test } from "../../../automation/test.js";
 import type { Page } from '@playwright/test';
 
-test('Agent Sessions list shares Chat space and closes with Escape in Web and Electron', async ({ driver, target, workbench }, testInfo) => {
-	test.skip(target.appServerMode !== "disabled", "The disconnected Code Workbench provides a deterministic Chat shell.");
+test('Agent Sessions list shares Chat space and closes with Escape in Web and Electron', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, target, workbench }, testInfo) => {
 	const page = workbench.page;
 	if (!await page.locator(".ash-chat-view-pane").isVisible()) {
 		await page.getByRole("button", { name: "Show Secondary Side Bar", exact: true }).click();
@@ -85,8 +84,7 @@ test('Agent Sessions list shares Chat space and closes with Escape in Web and El
 	await expect(toggle).toBeFocused();
 });
 
-test('Chat More Actions remembers Sessions layout and narrow list selection returns to Chat', async ({ driver, target, workbench, reloadWorkbench }, testInfo) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat More Actions remembers Sessions layout and narrow list selection returns to Chat', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, target, workbench, reloadWorkbench }, testInfo) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -133,8 +131,7 @@ test('Chat More Actions remembers Sessions layout and narrow list selection retu
 	await expect(restoredPage.locator('.ash-chat-pane-host')).toBeVisible();
 });
 
-test('Sessions layout menu uses the Chinese display language', async ({ target, workbench, restartWorkbench }, testInfo) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Sessions layout menu uses the Chinese display language', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }, testInfo) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
@@ -161,8 +158,7 @@ test('Sessions layout menu uses the Chinese display language', async ({ target, 
 	await expect(separator).toHaveAttribute('aria-valuetext', '320 像素');
 });
 
-test('Side by side Sessions width supports dragging, keyboard resizing, reset and reload', async ({ driver, target, workbench, reloadWorkbench }, testInfo) => {
-	test.skip(target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Side by side Sessions width supports dragging, keyboard resizing, reset and reload', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, target, workbench, reloadWorkbench }, testInfo) => {
 	let page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();

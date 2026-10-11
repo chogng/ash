@@ -14,7 +14,7 @@ export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly rowId: string | undefined;
 }
 
-/** Searchable single-selection list shared by browser Quick Inputs. */
+/** Searchable list shared by browser Quick Inputs. */
 export class QuickInputList<TItem extends IQuickPickItem>
 	extends Disposable {
 	readonly element: HTMLDivElement;
@@ -31,6 +31,32 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private maxHeight = Number.POSITIVE_INFINITY;
 	private query = "";
 	private _sortByLabel = true;
+	private multiple = false;
+	// Checked references survive filtering; List selection contains only visible rows.
+	private readonly checked = new Set<TItem>();
+	private readonly selectionEmitter = this._register(new Emitter<readonly TItem[]>());
+	public readonly onDidChangeSelection = this.selectionEmitter.event;
+
+	public get canSelectMany(): boolean { return this.multiple; }
+	public set canSelectMany(value: boolean) {
+		this.multiple = value;
+		this.list.element.setAttribute('aria-multiselectable', String(value));
+		this.render();
+	}
+	public get selectedItems(): readonly TItem[] { return [...this.checked]; }
+	public set selectedItems(items: readonly TItem[]) {
+		this.checked.clear();
+		for (const item of items) { this.checked.add(item); }
+		this.render();
+		this.selectionEmitter.fire(this.selectedItems);
+	}
+	public toggleActive(): void { if (this.activeItem) { this.toggleSelection(this.activeItem); } }
+	private toggleSelection(item: TItem): void {
+		if (this.checked.has(item)) { this.checked.delete(item); }
+		else { this.checked.add(item); }
+		this.render();
+		this.selectionEmitter.fire(this.selectedItems);
+	}
 
 	readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
 	readonly onDidChangeActive:
@@ -65,6 +91,10 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 		this._register(this.list.onDidAccept(({ item, browserEvent }) => {
 			this.keyMods = { ctrlCmd: !!(browserEvent?.ctrlKey || browserEvent?.metaKey), alt: !!browserEvent?.altKey, shift: !!browserEvent?.shiftKey };
+			if (this.multiple && browserEvent?.type === 'click') {
+				this.toggleSelection(item);
+				return;
+			}
 			this._onDidAccept.fire(item);
 		}));
 		this._register(this.list.onDidChangeActive(({ item, rowId }) => {
@@ -82,7 +112,11 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 	set items(items: readonly (TItem | IQuickPickSeparator)[]) {
 		this._items = [...items];
+		const previous = this.selectedItems;
+		for (const item of previous) { if (!items.includes(item)) { this.checked.delete(item); } }
+		for (const item of items) { if (!('type' in item) && item.picked) { this.checked.add(item); } }
 		this.render();
+		if (previous.length !== this.checked.size || previous.some(item => !this.checked.has(item))) { this.selectionEmitter.fire(this.selectedItems); }
 	}
 
 	get visibleItems(): readonly TItem[] {
@@ -175,7 +209,11 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			const matches = new Set(this._visibleItems);
 			this._visibleItems = candidates.filter(item => matches.has(item));
 		}
+		const active = this.list.activeItem;
 		this.list.items = this._visibleItems;
+		const activeIndex = active ? this._visibleItems.indexOf(active) : -1;
+		if (activeIndex >= 0) { this.list.setActiveIndex(activeIndex); }
+		if (this.multiple) { this.list.setSelection(this._visibleItems.flatMap((item, index) => this.checked.has(item) ? [index] : [])); }
 		const empty = this._visibleItems.length === 0;
 		this.list.domNode.hidden = empty;
 		this.empty.hidden = !empty;
@@ -223,8 +261,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			ownerDocument,
 		);
 		content.append(text);
-		if (item.picked !== undefined) {
-			content.classList.toggle('picked', item.picked);
+		if (this.multiple || item.picked !== undefined) {
+			content.classList.toggle('picked', this.multiple ? this.checked.has(item) : !!item.picked);
 			const check = h(ownerDocument, 'span');
 			check.className = 'ash-quick-pick-row-check';
 			check.setAttribute('aria-hidden', 'true');

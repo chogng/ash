@@ -12,8 +12,7 @@ import { Editor } from '../../../automation/editor.js';
 
 const repository = resolve(import.meta.dirname, '../../../..');
 
-test('Sessions UI development opens directly and restores a draft after reload', async ({ target }, testInfo) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the Browser UI project');
+test('Sessions UI development opens directly and restores a draft after reload', { tag: ['@browser-ui'] }, async ({ target }, testInfo) => {
 	test.setTimeout(60_000);
 	const browser = await chromium.launch();
 	const failures: string[] = [];
@@ -43,8 +42,7 @@ test('Sessions UI development opens directly and restores a draft after reload',
 });
 
 for (const [mode, entry] of [['production', 'workbench'], ['development', 'workbench'], ['development', 'sessions']] as const) {
-	test(`Web ${entry} ${mode} reconnects after backend restart without reloading and revokes closed launches`, async ({ target, testWorkspace }) => {
-		test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires built Web and App Server artifacts');
+	test(`Web ${entry} ${mode} reconnects after backend restart without reloading and revokes closed launches`, { tag: ['@browser-app-server'] }, async ({ target, testWorkspace }) => {
 		test.setTimeout(90_000);
 		const profile = await mkdtemp(join(tmpdir(), 'ash-web-lifecycle-'));
 		const port = await freePort();
@@ -156,8 +154,7 @@ for (const [mode, entry] of [['production', 'workbench'], ['development', 'workb
 	});
 }
 
-test('Web backend selection restores a Sessions connection and preserves its draft', async ({ target, testWorkspace }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires a real Web App Server');
+test('Web backend selection restores a Sessions connection and preserves its draft', { tag: ['@browser-app-server'] }, async ({ target, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const profile = await mkdtemp(join(tmpdir(), 'ash-web-select-'));
 	const env = { ...process.env, ASH_WEB_APP_SERVER_PROFILE: profile, ASH_HOME: profile, ASH_WORKSPACE_ROOT: testWorkspace.directory };

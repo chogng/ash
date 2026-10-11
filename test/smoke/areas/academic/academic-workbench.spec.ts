@@ -5,8 +5,7 @@ test('Academic is a document contribution in the Code Workbench', async ({ workb
 	await expect(workbench.page.locator("[data-action-id='ash.academic.open-sessions']")).toHaveCount(0);
 });
 
-test('browser opens and saves Academic beside code without changing Workbench', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario uses browser workspace files');
+test('browser opens and saves Academic beside code without changing Workbench', { tag: ['@browser-ui'] }, async ({ target, testWorkspace, workbench }) => {
 	const paper = await readFile(testWorkspace.academicFile, 'utf8');
 	const page = workbench.page;
 	await page.evaluate(async ({ paper }) => {
@@ -39,8 +38,7 @@ test('browser opens and saves Academic beside code without changing Workbench', 
 });
 
 for (const retiredMode of ['academic', 'unregistered']) {
-	test(`browser opens the fixed Workbench and Sessions from a ${retiredMode} mode link`, async ({ target, workbench }) => {
-		test.skip(target.kind !== 'browser', 'This scenario enters through a browser URL.');
+	test(`browser opens the fixed Workbench and Sessions from a ${retiredMode} mode link`, { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, workbench }) => {
 		const url = new URL(workbench.page.url());
 		url.searchParams.set('ash-workbench-mode', retiredMode);
 		await workbench.page.goto(url.href);

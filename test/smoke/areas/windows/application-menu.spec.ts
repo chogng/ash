@@ -59,8 +59,7 @@ test('File menu keeps close commands visible and closes single and all editors',
 test.describe('File menu closes the workspace', () => {
 	test.use({ openWorkspace: true });
 
-	test('Close Folder returns the current window to an empty workspace', async ({ target, application, workbench }) => {
-		test.skip(target.kind === 'browser' && target.appServerMode !== 'disabled', 'The server browser requires an authorized folder');
+	test('Close Folder returns the current window to an empty workspace', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 		const page = workbench.page;
 		const originalRenderer = await page.evaluate(() => performance.timeOrigin);
 		const originalWindow = target.kind === 'electron' ? await (application as ElectronApplication).evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.id) : undefined;
@@ -110,8 +109,7 @@ test.describe('File menu closes the workspace', () => {
 		}
 	});
 
-	test('Close Folder saves the draft before loading the empty workspace', async ({ target, application, testWorkspace, workbench }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario saves through the desktop App Server');
+	test('Close Folder saves the draft before loading the empty workspace', { tag: ['@electron-app-server'] }, async ({ target, application, testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const destination = join(await realpath(testWorkspace.directory), 'saved-before-close.txt');
 		const electron = application as ElectronApplication;
@@ -144,8 +142,7 @@ test.describe('File menu closes the workspace', () => {
 	});
 });
 
-test('macOS system menu receives workbench commands', async ({ target, application }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires the macOS Code desktop product');
+test('macOS system menu receives workbench commands', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, application }) => {
 	const electron = application as ElectronApplication;
 
 	await expect.poll(() => electron.evaluate(({ Menu }) => {
@@ -154,8 +151,7 @@ test('macOS system menu receives workbench commands', async ({ target, applicati
 	})).toContain('New Untitled Text Editor');
 });
 
-test('macOS keeps the sidebar action and omits the duplicate application menu', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires the macOS Code desktop product');
+test('macOS keeps the sidebar action and omits the duplicate application menu', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, workbench }) => {
 	const toolbar = workbench.page.getByRole('toolbar', { name: 'Title bar left actions' });
 	await expect(toolbar.getByRole('button', { name: 'Application menu' })).toHaveCount(0);
 	const sidebarToggle = toolbar.locator('[data-action-id="workbench.action.toggleSideBar"] button');
@@ -167,8 +163,7 @@ test('macOS keeps the sidebar action and omits the duplicate application menu', 
 	await expect(sidebar).toBeVisible({ visible: !wasVisible });
 });
 
-test('application menu trigger uses the titlebar action size', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('application menu trigger uses the titlebar action size', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
 	await expect(trigger).toHaveCount(1);
@@ -190,8 +185,7 @@ test('application menu trigger uses the titlebar action size', async ({ target, 
 	await expect(trigger).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 
-test('macOS menu style switches context menus without a titlebar menu button', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires the macOS Code desktop');
+test('macOS menu style switches context menus without a titlebar menu button', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await page.locator('[data-settings-group-id="workbench"]').click();
@@ -236,8 +230,7 @@ test('macOS menu style switches context menus without a titlebar menu button', a
 	}
 });
 
-test('application menu switches its root submenus on pointer entry', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('application menu switches its root submenus on pointer entry', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
 	await trigger.click();
@@ -262,8 +255,7 @@ test('application menu switches its root submenus on pointer entry', async ({ ta
 	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
 });
 
-test('application menu keeps submenu arrows inside their menu rows', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('application menu keeps submenu arrows inside their menu rows', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	const mainMenu = page.getByRole('menu').first();
@@ -278,8 +270,7 @@ test('application menu keeps submenu arrows inside their menu rows', async ({ ta
 	expect(itemBounds!.x + itemBounds!.width - arrowBounds!.x - arrowBounds!.width).toBeGreaterThanOrEqual(8);
 });
 
-test('application menu aligns command labels with and without icons', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('application menu aligns command labels with and without icons', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	const fileItem = page.getByRole('menu').first().getByRole('menuitem', { name: 'File' });
@@ -295,8 +286,7 @@ test('application menu aligns command labels with and without icons', async ({ t
 	expect(Math.abs(iconBounds!.x - plainBounds!.x)).toBeLessThanOrEqual(1);
 });
 
-test('application menu shows clean labels and readable shortcuts', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('application menu shows clean labels and readable shortcuts', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	const mainMenu = page.getByRole('menu').first();
@@ -328,8 +318,7 @@ test('application menu shows clean labels and readable shortcuts', async ({ targ
 	await expect(editMenu.getByRole('menuitem', { name: 'Redo' }).locator('.ash-button-label')).toHaveText('Redo');
 });
 
-test('checked View menu icons stay inside the leading slot', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('checked View menu icons stay inside the leading slot', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const sidebarToggle = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	if (await sidebarToggle.getAttribute('aria-label') === 'Show Primary Side Bar') await sidebarToggle.click();
@@ -361,8 +350,7 @@ test('checked View menu icons stay inside the leading slot', async ({ target, wo
 	}
 });
 
-test('application menu opens real commands and updates Go when an editor opens', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
+test('application menu opens real commands and updates Go when an editor opens', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const trigger = page.getByRole('button', { name: 'Application menu' });
 	const hoverMenuItem = async (item: Locator) => {

@@ -247,3 +247,60 @@ async fn graph_roots_compare_ancestry_across_non_monotonic_commit_dates() {
             .unwrap()
     );
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn filtered_graph_pages_only_the_selected_reachable_union() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "base\n");
+    repository.commit_all("base");
+    let base = repository.git(&["rev-parse", "HEAD"]);
+    repository.git(&["switch", "-c", "topic"]);
+    repository.write("tracked.txt", "topic\n");
+    repository.commit_all("topic");
+    let topic = repository.git(&["rev-parse", "HEAD"]);
+    repository.git(&["switch", "main"]);
+    repository.write("tracked.txt", "main\n");
+    repository.commit_all("unselected main");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let roots = vec![topic.clone(), base.clone()];
+    let mut cursor = client
+        .start_graph_for_refs(&opened, Some(&roots))
+        .await
+        .unwrap();
+    let limit = NonZeroUsize::new(1).unwrap();
+    let first = cursor.page(limit).await.unwrap();
+    assert_eq!(first.commits()[0].object_id(), topic);
+    assert!(first.has_more());
+    let last = cursor.page(limit).await.unwrap();
+    assert_eq!(last.commits()[0].object_id(), base);
+    assert!(!last.has_more());
+    assert!(
+        first
+            .references()
+            .iter()
+            .any(|reference| reference.name() == "main")
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn filtered_graph_distinguishes_empty_selection_and_rejects_revision_options() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "base\n");
+    repository.commit_all("base");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let mut cursor = client
+        .start_graph_for_refs(&opened, Some(&[]))
+        .await
+        .unwrap();
+    let graph = cursor.page(NonZeroUsize::new(1).unwrap()).await.unwrap();
+    assert!(graph.commits().is_empty());
+    assert!(!graph.has_more());
+    assert!(
+        client
+            .start_graph_for_refs(&opened, Some(&["--all".into()]))
+            .await
+            .is_err()
+    );
+}

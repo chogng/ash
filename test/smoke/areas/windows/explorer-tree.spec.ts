@@ -18,8 +18,7 @@ test.describe('Git ignore decorations', () => {
 		await writeFile(join(root, '.gitignore'), 'ignored.log\nignored-dir/\n*.tmp\n!keep.tmp\nmain.ts\n');
 	});
 
-	test('Explorer grays ignored files and expanded directories and updates after ignore rules change', async ({ target, testWorkspace, workbench }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the Git backend');
+	test('Explorer grays ignored files and expanded directories and updates after ignore rules change', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
@@ -120,8 +119,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'tree-other', 'other.txt'), 'other');
 });
 
-test('Explorer scrollbar stays at the pane edge while rows remain inset', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
+test('Explorer scrollbar stays at the pane edge while rows remain inset', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const names = Array.from({ length: 100 }, (_, index) => `scroll-${String(index).padStart(3, '0')}.txt`);
 	if (target.appServerMode === 'required') {
 		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
@@ -207,8 +205,7 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', async 
 	await settings.locator('.ash-modal-editor-close').click();
 });
 
-test('Explorer smooth scrolling accumulates wheel input, keeps touchpad input immediate and honors reduced motion', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
+test('Explorer smooth scrolling accumulates wheel input, keeps touchpad input immediate and honors reduced motion', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const names = Array.from({ length: 100 }, (_, index) => `smooth-${String(index).padStart(3, '0')}.txt`);
 	if (target.appServerMode === 'required') await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
 	const page = workbench.page;
@@ -296,8 +293,7 @@ test('Explorer smooth scrolling accumulates wheel input, keeps touchpad input im
 	await expect(tree.getByRole('treeitem', { name: names[0], exact: true })).toBeVisible();
 });
 
-test('Explorer keeps logical row focus when scrolling removes the focused row from the DOM', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
+test('Explorer keeps logical row focus when scrolling removes the focused row from the DOM', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const names = Array.from({ length: 100 }, (_, index) => `focus-${String(index).padStart(3, '0')}.txt`);
 	if (target.appServerMode === 'required') {
 		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
@@ -345,8 +341,7 @@ test('Explorer keeps logical row focus when scrolling removes the focused row fr
 	}
 });
 
-test('Explorer tree guides align with ancestor arrows and settings update without replacing rows', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
+test('Explorer tree guides align with ancestor arrows and settings update without replacing rows', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const hasFileIcons = target.appServerMode === 'required';
 	if (target.kind === 'electron' && 'windows' in application) {
@@ -483,8 +478,7 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 
 });
 
-test('Tree settings controls persist their values across a window reload', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Settings reload is covered by the standalone UI projects');
+test('Tree settings controls persist their values across a window reload', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	await page.locator('[data-settings-group-id="workbench"]').click();
@@ -513,8 +507,7 @@ test('Tree settings controls persist their values across a window reload', async
 	await expect(mode).toHaveText('Always');
 });
 
-test('List smooth scrolling settings persist and display their Chinese translation', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'Settings reload is covered by the standalone UI projects');
+test('List smooth scrolling settings persist and display their Chinese translation', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	const openSetting = async (dialogName: string, title: string) => {
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
@@ -546,8 +539,7 @@ test('List smooth scrolling settings persist and display their Chinese translati
 	await expect(setting.settings.locator('[data-settings-item-id="workbench.list.smoothScrolling"]')).toContainText('控制列表和树形列表是否使用短动画滚动。');
 });
 
-test('Explorer compact folders, unloaded search, drag moves and reload state use the real workbench', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Uses browser-owned test directories');
+test('Explorer compact folders, unloaded search, drag moves and reload state use the real workbench', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await setExplorerSettings(workbench, {
 		'explorer.autoReveal': false,
@@ -621,8 +613,7 @@ test('Explorer compact folders, unloaded search, drag moves and reload state use
 });
 
 
-test('Explorer focusNoScroll preserves the viewport while explicit reveal and reload restore selection', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Uses browser-owned test directories');
+test('Explorer focusNoScroll preserves the viewport while explicit reveal and reload restore selection', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await setExplorerSettings(workbench, { 'explorer.autoReveal': 'focusNoScroll', 'explorer.compactFolders': false });
 	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });

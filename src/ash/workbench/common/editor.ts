@@ -92,6 +92,8 @@ export interface IResourceEditorInput {
 	/** Whether the resource path is meaningful to show as breadcrumbs. */
 	readonly showBreadcrumbs?: boolean;
 	readonly initialText?: string;
+	/** Immutable bytes for a read-only version whose resource has no filesystem provider. */
+	readonly initialBytes?: Uint8Array;
 	readonly encoding?: string;
 }
 

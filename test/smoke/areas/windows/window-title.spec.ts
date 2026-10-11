@@ -77,8 +77,7 @@ test('detached editor titles follow their own window when focus and dirty state 
 	}
 });
 
-test('saving a workspace file clears the window title dirty marker', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'This scenario requires the Code App Server product');
+test('saving a workspace file clears the window title dirty marker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const workspaceTitle = await page.title();
 	const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });

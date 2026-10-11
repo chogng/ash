@@ -7,8 +7,7 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 // The test stops before token exchange; the reserved broker domain is never contacted.
 test.use({ githubAccount: { clientId: 'AshSmokeGitHub', brokerBaseUrl: 'https://github-broker.example/' } });
 
-test('GitHub Rust extension shares a profile across directories and releases a disconnected login owner', async ({ workbench, target, application, webAppServer, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the real profile App Server.');
+test('GitHub Rust extension shares a profile across directories and releases a disconnected login owner', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, target, application, webAppServer, testWorkspace }) => {
 	const otherDirectory = join(testWorkspace.directory, 'other-github-window');
 	await mkdir(otherDirectory);
 	const source = webAppServer ? await workbench.page.context().newPage() : workbench.page;
@@ -41,7 +40,7 @@ test('GitHub Rust extension shares a profile across directories and releases a d
 				pending = next.loginId;
 				return next.type;
 			} catch (error) {
-				if ((error as { errorName?: string }).errorName === 'AccountLoginConflict') { return 'waitingForDisconnect'; }
+				if ((error as { errorName?: string; }).errorName === 'AccountLoginConflict') { return 'waitingForDisconnect'; }
 				throw error;
 			}
 		}).toBe('browser');

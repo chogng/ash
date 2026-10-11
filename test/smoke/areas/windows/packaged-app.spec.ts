@@ -7,9 +7,8 @@ import { launchElectronApplication } from '../../../automation/playwrightElectro
 import { Workbench } from '../../../automation/workbench.js';
 import { exercisePackagedWorkbench } from '../../../automation/packagedWorkbench.js';
 
-test('Windows package saves files, executes a terminal command and restarts with its bundled backend', async ({ }, testInfo) => {
+test('Windows package saves files, executes a terminal command and restarts with its bundled backend', { tag: ['@win32'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
-	test.skip(process.platform !== 'win32', 'The Windows package requires a Windows host.');
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
 	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a built Ash-win32-x64 directory.');
 	const bundlePath = resolve(bundle!);
@@ -32,8 +31,7 @@ test('Windows package saves files, executes a terminal command and restarts with
 	}
 });
 
-test('macOS package launches, opens a window tab, and installs its shell command', async ({ }, testInfo) => {
-	test.skip(process.platform !== 'darwin', 'The macOS package requires a macOS host.');
+test('macOS package launches, opens a window tab, and installs its shell command', { tag: ['@darwin'] }, async ({ }, testInfo) => {
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
 	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a built Ash.app directory.');
 	const bundlePath = resolve(bundle!);

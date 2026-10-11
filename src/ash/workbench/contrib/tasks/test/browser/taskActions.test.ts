@@ -1,3 +1,4 @@
+import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import '../../browser/taskActions.js';
@@ -16,6 +17,9 @@ import { RUN_TASK_COMMAND_ID } from '../../common/tasks.js';
 interface TaskItem extends IQuickPickItem { readonly task: IWorkspaceTask; }
 
 class Picker extends Disposable implements IQuickPick<TaskItem> {
+	canSelectMany = false;
+	selectedItems: readonly TaskItem[] = [];
+	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
 	readonly accepted = this._register(new Emitter<TaskItem>());
 	readonly hidden = this._register(new Emitter<void>());

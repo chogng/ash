@@ -47,9 +47,6 @@ void app.whenReady().then(async () => {
 	return entry;
 }
 
-test.beforeEach(({ }, testInfo) => {
-	test.skip(testInfo.project.name !== 'electron-ui', 'Bootstrap scenarios exercise the Electron host without a backend.');
-});
 
 for (const scenario of [
 	{ name: 'missing settings', settings: undefined },
@@ -57,7 +54,7 @@ for (const scenario of [
 	{ name: 'unregistered mode', settings: '{"workbench.mode":"unknown"}' },
 	{ name: 'obsolete settings wrapper', settings: '{"version":1,"values":{"workbench.mode":"academic"}}' },
 ]) {
-	test(`Desktop startup opens the fixed Workbench with ${scenario.name}`, async ({ }, testInfo) => {
+	test(`Desktop startup opens the fixed Workbench with ${scenario.name}`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		const profile = join(userDataDirectory, 'profile');
 		await mkdir(profile, { recursive: true });
@@ -82,7 +79,7 @@ for (const scenario of [
 }
 
 for (const hasWorkbench of [false, true]) {
-	test(`packaged startup rejects an incomplete renderer with Workbench ${hasWorkbench ? 'present' : 'missing'}`, async ({ }, testInfo) => {
+	test(`packaged startup rejects an incomplete renderer with Workbench ${hasWorkbench ? 'present' : 'missing'}`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const packagedRoot = testInfo.outputPath('package');
 		await mkdir(packagedRoot, { recursive: true });
 		if (hasWorkbench) {
@@ -114,7 +111,7 @@ try {
 }
 
 for (const boundary of ['readiness', 'initialization'] as const) {
-	test(`Desktop quit during ${boundary} drains startup before closing services`, async ({ }, testInfo) => {
+	test(`Desktop quit during ${boundary} drains startup before closing services`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
 		const statePath = join(userDataDirectory, 'state.json');
@@ -167,7 +164,7 @@ void app.whenReady().then(async () => {
 	});
 }
 
-test('Desktop starts when its application entry loads after Electron is ready', async ({ }, testInfo) => {
+test('Desktop starts when its application entry loads after Electron is ready', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
@@ -260,8 +257,7 @@ test('Desktop starts when its application entry loads after Electron is ready', 
 	}
 });
 
-test('tray Quit honors a window veto, keeps services usable, and restores drafts after shutdown', async ({ }, testInfo) => {
-	test.skip(process.platform !== 'win32' && process.platform !== 'darwin', 'The tray is available on Windows and macOS.');
+test('tray Quit honors a window veto, keeps services usable, and restores drafts after shutdown', { tag: ['@electron-ui', '@darwin', '@win32'] }, async ({ }, testInfo) => {
 	test.setTimeout(60_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
@@ -310,8 +306,7 @@ test('tray Quit honors a window veto, keeps services usable, and restores drafts
 	}
 });
 
-test('Windows development launcher shows the Workbench window', async ({ }, testInfo) => {
-	test.skip(process.platform !== 'win32', 'The launcher visibility regression is Windows-specific.');
+test('Windows development launcher shows the Workbench window', { tag: ['@electron-ui', '@win32'] }, async ({ }, testInfo) => {
 	test.setTimeout(60_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
@@ -374,7 +369,7 @@ test('Windows development launcher shows the Workbench window', async ({ }, test
 	}
 });
 
-test('Desktop exits with a failure status when entry initialization fails', async ({ }, testInfo) => {
+test('Desktop exits with a failure status when entry initialization fails', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: testInfo.outputPath('user-data') });
 	const result = await runUntilExit({ ...configuration, env: { ...configuration.env, ASH_HOME: 'relative-profile' } });
 	expect(result.code).toBe(1);
@@ -382,7 +377,7 @@ test('Desktop exits with a failure status when entry initialization fails', asyn
 	expect(result.output).toContain('ASH_HOME must be a non-empty absolute directory path');
 });
 
-test('Desktop exits with a failure status when persistent services cannot start', async ({ }, testInfo) => {
+test('Desktop exits with a failure status when persistent services cannot start', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'state.json'), { recursive: true });
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });

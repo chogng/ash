@@ -1,3 +1,4 @@
+import { Event as QuickPickTestEvent } from '../../../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../../../base/common/cancellation.js';
@@ -103,6 +104,9 @@ for (const reason of ['token', 'catalog', 'window'] as const) {
 }
 
 class Picker extends Disposable implements IQuickPick<IQuickPickItem> {
+	canSelectMany = false;
+	selectedItems: readonly IQuickPickItem[] = [];
+	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
 	readonly accepted = this._register(new Emitter<IQuickPickItem>());
 	readonly hidden = this._register(new Emitter<void>());

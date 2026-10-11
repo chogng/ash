@@ -19,11 +19,8 @@ async function readRemoteHead(cwd: string, remote: string): Promise<string | und
 
 test.describe('Git Fetch', () => {
 	test.use({ gitRepository: true });
-	test.beforeEach(async ({ target }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the Rust Git backend.');
-	});
 
-	test('fetches both local remotes from the palette, toolbar and title menus while preserving HEAD, index and dirty files', async ({ application, testWorkspace, workbench }) => {
+	test('fetches both local remotes from the palette, toolbar and title menus while preserving HEAD, index and dirty files', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd })).stdout.trim();
 		const remotes = await mkdtemp(join(tmpdir(), 'ash-fetch-remotes-'));
@@ -114,7 +111,7 @@ test.describe('Git Fetch', () => {
 		}
 	});
 
-	test('explains an empty remote list without changing the repository', async ({ testWorkspace, workbench }) => {
+	test('explains an empty remote list without changing the repository', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const head = (await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout;
 		for (const command of ['git.fetchAll', 'git.fetch']) {
@@ -125,7 +122,7 @@ test.describe('Git Fetch', () => {
 		expect((await run('git', ['status', '--porcelain=v1'], { cwd })).stdout).toBe('');
 	});
 
-	test('localizes both commands, the empty remote warning and the remote picker after restarting in Chinese', async ({ testWorkspace, workbench, restartWorkbench }) => {
+	test('localizes both commands, the empty remote warning and the remote picker after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }) => {
 		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 		const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 		await picker.getByRole('combobox').fill('简体中文');
@@ -156,7 +153,7 @@ test.describe('Git Fetch', () => {
 		} finally { await rm(remotes, { recursive: true, force: true }); }
 	});
 
-	test('selects the upstream remote, another remote and all remotes, and revalidates a removed remote after the picker opens', async ({ testWorkspace, workbench }) => {
+	test('selects the upstream remote, another remote and all remotes, and revalidates a removed remote after the picker opens', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd })).stdout.trim();
 		const remotes = await mkdtemp(join(tmpdir(), 'ash-fetch-selected-'));
@@ -234,7 +231,7 @@ test.describe('Git Fetch', () => {
 		} finally { await rm(remotes, { recursive: true, force: true }); }
 	});
 
-	test('fetches the sole configured remote through the default mode without a picker', async ({ testWorkspace, workbench }) => {
+	test('fetches the sole configured remote through the default mode without a picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const remotes = await mkdtemp(join(tmpdir(), 'ash-fetch-default-'));
 		try {
@@ -260,7 +257,7 @@ test.describe('Git Fetch', () => {
 		} finally { await rm(remotes, { recursive: true, force: true }); }
 	});
 
-	test('reports a failed local remote fetch and preserves local changes', async ({ testWorkspace, workbench }) => {
+	test('reports a failed local remote fetch and preserves local changes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		await run('git', ['remote', 'add', 'broken', join(cwd, 'missing-remote.git')], { cwd });
 		await writeFile(testWorkspace.file, 'const dirty = true;\n');

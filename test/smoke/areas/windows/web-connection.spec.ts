@@ -12,8 +12,7 @@ import type { Page } from '@playwright/test';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 
-test('two desktops isolate browser targets and closing one preserves the other', async ({ target, testWorkspace }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the shared managed backend');
+test('two desktops isolate browser targets and closing one preserves the other', { tag: ['@browser-app-server'] }, async ({ target, testWorkspace }) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
 	const profile = join(directory, 'profile');
 	const packageLocation = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
@@ -53,8 +52,7 @@ test('two desktops isolate browser targets and closing one preserves the other',
 	}
 });
 
-test('authenticated Web cannot claim directory authority or read an ungranted workspace', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the full Web product');
+test('authenticated Web cannot claim directory authority or read an ungranted workspace', { tag: ['@browser-app-server'] }, async ({ target, workbench }) => {
 	const denial = await workbench.page.evaluate(async () => {
 		const endpoint = new URL(sessionStorage.getItem('ash.appServer.endpoint')!);
 		const token = sessionStorage.getItem(`ash.appServer.session:${endpoint.origin}`)!;
@@ -85,8 +83,7 @@ test('authenticated Web cannot claim directory authority or read an ungranted wo
 	expect(foreignRead).toBe('denied');
 });
 
-test('Web opens a selected server folder with explicit authorization and a separate session', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the connected Code browser');
+test('Web opens a selected server folder with explicit authorization and a separate session', { tag: ['@browser-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const original = await page.evaluate(() => {
 		const endpoint = new URL(sessionStorage.getItem('ash.appServer.endpoint')!);
@@ -128,8 +125,7 @@ test('Web opens a selected server folder with explicit authorization and a separ
 	expect(URI.file((await prior.json() as { workspaceRoot: string; }).workspaceRoot).fsPath).toBe(URI.file(original.root).fsPath);
 });
 
-test('built Web workbench reads workspace files and reconnects after reload', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires a browser App Server connection');
+test('built Web workbench reads workspace files and reconnects after reload', { tag: ['@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	for (let attempt = 0; attempt < 2; attempt++) {
 		if (attempt > 0) {

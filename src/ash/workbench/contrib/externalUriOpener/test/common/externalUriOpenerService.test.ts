@@ -1,3 +1,4 @@
+import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import assert from 'node:assert/strict';
@@ -29,6 +30,9 @@ import { ExternalUriOpenerService, IExternalUriOpenerService, type IExternalUriO
 import '../../common/externalUriOpener.contribution.js';
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
+	canSelectMany = false;
+	selectedItems: readonly T[] = [];
+	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
 	private readonly accepted = this._register(new Emitter<T>());
 	private readonly hidden = this._register(new Emitter<void>());

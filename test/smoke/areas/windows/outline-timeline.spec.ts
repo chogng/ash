@@ -6,8 +6,7 @@ const source = 'function zebra() {\n  function nested() { return 1; }\n  return 
 
 test.describe('Explorer empty views', () => {
 	test.use({ openWorkspace: false });
-	test('Explorer keeps Outline and Timeline collapsed in an empty window and restores accessible focus', async ({ target, workbench }) => {
-		test.skip(target.kind === 'browser' && target.appServerMode === 'required', 'The connected Web fixture always opens a workspace; browser-ui covers the empty window.');
+	test('Explorer keeps Outline and Timeline collapsed in an empty window and restores accessible focus', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = workbench.page;
 		await workbench.openExplorer();
 		const empty = page.locator('[data-view-id="ash.emptyExplorer"]');
@@ -71,8 +70,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	}
 });
 
-test('Outline shows real nested symbols, filters, sorts, and navigates the editor', async ({ target, application, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Document symbols require the language backend.');
+test('Outline shows real nested symbols, filters, sorts, and navigates the editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 	await page.locator('[data-view-id="outline"] .ash-pane-view-header-button').click();
@@ -100,8 +98,7 @@ test('Outline shows real nested symbols, filters, sorts, and navigates the edito
 	await expect(view.locator('.ash-outline-label')).toHaveText(['replacement']);
 });
 
-test('Timeline records saves, compares a snapshot, and follows the selected file', async ({ target, application, workbench, reloadWorkbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Workspace files require App Server on desktop.');
+test('Timeline records saves, compares a snapshot, and follows the selected file', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {

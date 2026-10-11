@@ -5,8 +5,7 @@ import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 import type { Workbench } from '../../../automation/workbench.js';
 
-test('Explorer title actions create files and folders, refresh and collapse from the keyboard', async ({ target, workbench, application, restartWorkbench, restartMessage }, testInfo) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires browser folder access');
+test('Explorer title actions create files and folders, refresh and collapse from the keyboard', { tag: ['@browser-ui'] }, async ({ target, workbench, application, restartWorkbench, restartMessage }, testInfo) => {
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`explorer-actions-${crypto.randomUUID()}`, { create: true });
@@ -75,8 +74,7 @@ test('Explorer title actions create files and folders, refresh and collapse from
 	await restarted.workbench.page.screenshot({ path: testInfo.outputPath('explorer-actions-zh.png') });
 });
 
-test('browser picked folders refresh expanded directories and clean editors on resume while preserving unsaved edits', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires browser folder access');
+test('browser picked folders refresh expanded directories and clean editors on resume while preserving unsaved edits', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`watch-smoke-${crypto.randomUUID()}`, { create: true });
@@ -138,8 +136,7 @@ test('browser picked folders refresh expanded directories and clean editors on r
 	}, folderName)).toBe('competing external update');
 });
 
-test('large YAML lockfiles highlight text and minimap without editor interaction', async ({ target, testWorkspace, workbench }, testInfo) => {
-	test.skip(target.appServerMode !== 'required', 'Bundled language grammars require the Code App Server product.');
+test('large YAML lockfiles highlight text and minimap without editor interaction', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
 	const text = await readFile(new URL('../../../../pnpm-lock.yaml', import.meta.url), 'utf8');
 	const page = workbench.page;
 	const syntaxWorkers: string[] = [];
@@ -205,8 +202,7 @@ test.beforeEach(async ({ workbench }) => {
 	if (await showSidebar.isVisible()) { await showSidebar.click(); }
 });
 
-test('file tab copy and reveal actions target inactive and selected files', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop files require App Server');
+test('file tab copy and reveal actions target inactive and selected files', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {
@@ -335,11 +331,7 @@ test('file tab copy and reveal actions target inactive and selected files', asyn
 	await expect(untitled).toBeFocused();
 });
 
-test("App Server workspace files open in Stanza and save through the editor region", async ({ target, testWorkspace, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("App Server workspace files open in Stanza and save through the editor region", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer");
@@ -390,8 +382,7 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	).toBe("const value = 2;");
 });
 
-test('Bazel workspace files load bundled Starlark and bazelrc grammars', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires extension resources from App Server');
+test('Bazel workspace files load bundled Starlark and bazelrc grammars', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const samples = [
 		['BUILD.bazel', 'cc_library(name = "bazel_smoke")', 'string', 'bazel_smoke'],
 		['defs.bzl', 'def impl(ctx):\n    return 42\n', 'keyword', 'return'],
@@ -410,11 +401,7 @@ test('Bazel workspace files load bundled Starlark and bazelrc grammars', async (
 	}
 });
 
-test('Find input recalls saved searches with arrow keys and restores the draft', async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== 'required',
-		'This scenario requires the Code App Server product',
-	);
+test('Find input recalls saved searches with arrow keys and restores the draft', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const fileRow = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
@@ -461,11 +448,7 @@ test('Find input recalls saved searches with arrow keys and restores the draft',
 	await expect(replaceInput).toHaveValue('replacement draft');
 });
 
-test("Show All Editors searches recent editors and restores editor focus", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Show All Editors searches recent editors and restores editor focus", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const page = workbench.page;
@@ -511,8 +494,7 @@ test("Show All Editors searches recent editors and restores editor focus", async
 	await expect(group.content.locator(".stanza-editor-input")).toBeFocused();
 });
 
-test("Editor tabs support modifier selection and close the selected set", async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== "required", "This scenario requires the Code App Server product");
+test("Editor tabs support modifier selection and close the selected set", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
@@ -536,11 +518,7 @@ test("Editor tabs support modifier selection and close the selected set", async 
 	await expect(group.tabs).toHaveCount(0);
 });
 
-test("Editor breadcrumbs open sibling and nested files", async ({ target, testWorkspace, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Editor breadcrumbs open sibling and nested files", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer .ash-tree-row");
@@ -597,11 +575,7 @@ test("Editor breadcrumbs open sibling and nested files", async ({ target, testWo
 	await expect(breadcrumbs.getByRole('button')).toHaveText([basename(testWorkspace.directory), 'breadcrumb-folder', 'nested.ts']);
 });
 
-test("Sticky and ordinary editors occupy separate tab rows", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
@@ -657,11 +631,7 @@ test("Sticky and ordinary editors occupy separate tab rows", async ({ target, wo
 	await expect(ordinary.locator('.ash-tab').filter({ hasText: 'main.ts' })).toHaveAttribute('data-state', 'dirty');
 });
 
-test("Connected editor tab follows horizontal tab scrolling", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Connected editor tab follows horizontal tab scrolling", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer .ash-tree-row");
@@ -683,11 +653,7 @@ test("Connected editor tab follows horizontal tab scrolling", async ({ target, w
 	await expect.poll(() => selected.evaluate(tab => getComputedStyle(tab).borderBottomWidth)).toBe("0px");
 });
 
-test("Single editor tab uses the available title width", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Single editor tab uses the available title width", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
 	const mainFile = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
@@ -713,11 +679,7 @@ test("Single editor tab uses the available title width", async ({ target, workbe
 	expect(widths.tab).toBeGreaterThan(widths.available * 0.8);
 });
 
-test("Binary content shows an editor error with a working alternative", async ({ target, testWorkspace, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Binary content shows an editor error with a working alternative", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	await writeFile(testWorkspace.file, new Uint8Array([0x48, 0x69, 0x00, 0xff]));
 	const fileRow = workbench.page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
@@ -766,11 +728,7 @@ test("Binary content shows an editor error with a working alternative", async ({
 	await expect(content.locator('.ash-binary-editor-content')).toHaveCount(0);
 });
 
-test("Compare open files as binary shows both byte views", async ({ target, workbench, application, reloadWorkbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Compare open files as binary shows both byte views", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application, reloadWorkbench }) => {
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer .ash-tree-row");
 	const editor = workbench.editors.groupAt(0).editor;
@@ -817,11 +775,7 @@ test("Compare open files as binary shows both byte views", async ({ target, work
 	}
 });
 
-test("Reopen Editor With switches the active file to Binary Editor", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Reopen Editor With switches the active file to Binary Editor", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
 	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
@@ -840,8 +794,7 @@ test("Reopen Editor With switches the active file to Binary Editor", async ({ ta
 	await expect(content.locator(".ash-binary-editor-content")).toContainText("63 6f 6e 73 74");
 });
 
-test('Reopen Closed Editor reads the real file again and preserves its tab position', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the real App Server file provider.');
+test('Reopen Closed Editor reads the real file again and preserves its tab position', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
 	const explorer = page.locator('.ash-explorer');
@@ -875,8 +828,7 @@ test('Reopen Closed Editor reads the real file again and preserves its tab posit
 	await expect(group.editor.input).toBeFocused();
 });
 
-test('Reopen Closed Editor skips a deleted real file and does not restore replaced previews', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the real App Server file provider.');
+test('Reopen Closed Editor skips a deleted real file and does not restore replaced previews', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	await writeFile(join(testWorkspace.directory, 'history-preview-a.ts'), 'const previewA = 1;\n');
 	await writeFile(join(testWorkspace.directory, 'history-preview-b.ts'), 'const previewB = 2;\n');
 	const group = workbench.editors.groupAt(0);
@@ -911,11 +863,7 @@ test('Reopen Closed Editor skips a deleted real file and does not restore replac
 	await expect(group.tabs.filter({ hasText: 'history-preview-a.ts' })).toHaveCount(0);
 });
 
-test("Close Editor command closes the active tab", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Close Editor command closes the active tab", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const page = workbench.page;
@@ -932,11 +880,7 @@ test("Close Editor command closes the active tab", async ({ target, workbench })
 	await expect(group.tabs).toHaveCount(0);
 });
 
-test('Dragging a tab to a group edge shows the split target and moves the editor', async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== 'required',
-		'This scenario requires the Code App Server product',
-	);
+test('Dragging a tab to a group edge shows the split target and moves the editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const page = workbench.page;
@@ -981,11 +925,7 @@ test('Dragging a tab to a group edge shows the split target and moves the editor
 	await expect(editors.element.locator('[data-editor-drop-direction]')).toHaveCount(0);
 });
 
-test('minimap slider follows its theme color in the running editor', async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== 'required',
-		'This scenario requires the Code App Server product',
-	);
+test('minimap slider follows its theme color in the running editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const fileRow = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
@@ -1005,11 +945,7 @@ test('minimap slider follows its theme color in the running editor', async ({ ta
 	expect(colors.restored).toBe(colors.initial);
 });
 
-test('Code opens Go to Line from the command palette in the focused editor', async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== 'required',
-		'This scenario requires the Code App Server product',
-	);
+test('Code opens Go to Line from the command palette in the focused editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
 	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
@@ -1033,11 +969,7 @@ test('Code opens Go to Line from the command palette in the focused editor', asy
 	await expect(input).toBeFocused();
 });
 
-test("Code highlights Rust locally and obtains document symbols asynchronously", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Code highlights Rust locally and obtains document symbols asynchronously", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer");
@@ -1063,8 +995,7 @@ test("Code highlights Rust locally and obtains document symbols asynchronously",
 	await expect(page.locator('.ash-quick-pick-row-label')).toContainText('main');
 });
 
-test('Git files load bundled highlighting through the product extension catalog', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('Git files load bundled highlighting through the product extension catalog', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const samples = [
 		['.gitignore', '# generated\n!keep.log\n**/*.log', 'ignore', '!'],
 		['COMMIT_EDITMSG', 'Fix\n\n#\tnew file: file', 'git-commit', 'new file: file'],
@@ -1093,8 +1024,7 @@ test('Git files load bundled highlighting through the product extension catalog'
 	}
 });
 
-test('Markdown source styles follow all Ash themes and refresh after editing and undo', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'This scenario requires the Code App Server product');
+test('Markdown source styles follow all Ash themes and refresh after editing and undo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const source = '# Heading\n\n**strong** *emphasis* ~~removed~~ `inline` [link](https://example.com)\n\n- item\n> quote\n\n```javascript\nconst value = "hello";\n```';
 	await writeFile(join(testWorkspace.directory, 'syntax.md'), source);
 	const page = workbench.page;
@@ -1166,11 +1096,7 @@ test("Code finds local workspace symbols when the language server has no workspa
 	await expect(group.content.locator(".stanza-editor-accessibility-status")).toContainText("4 characters selected");
 });
 
-test("Code searches and opens a workspace symbol from unsaved editor content", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Code searches and opens a workspace symbol from unsaved editor content", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	test.setTimeout(120_000);
 
 	const page = workbench.page;
@@ -1203,11 +1129,7 @@ test("Code searches and opens a workspace symbol from unsaved editor content", a
 	await expect(group.content.locator(".stanza-editor-accessibility-status")).toContainText("26 characters selected");
 });
 
-test("Code expands and shrinks Smart Select through semantic editor state", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Code expands and shrinks Smart Select through semantic editor state", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	test.setTimeout(120_000);
 
 	const explorer = workbench.page.locator(".ash-explorer");
@@ -1384,11 +1306,7 @@ test("Code keeps App Server LSP linked edits in one undo step", async ({ target,
 	await expect(group.content.locator(".stanza-editor-line-text").nth(2)).toContainText("message.");
 });
 
-test("Code renders workspace PDFs and persists review annotations", async ({ target, testWorkspace, workbench }) => {
-	test.skip(
-		target.appServerMode !== "required",
-		"This scenario requires the Code App Server product",
-	);
+test("Code renders workspace PDFs and persists review annotations", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const explorer = workbench.page.locator(".ash-explorer");
 	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "paper.pdf" });
@@ -1429,11 +1347,7 @@ test("Code renders workspace PDFs and persists review annotations", async ({ tar
 test.describe("large files", () => {
 	test.use({ includeLargeTestFile: true });
 
-	test("Code keeps a 300,001-line file editable and saveable without background tokenization", async ({ target, testWorkspace, workbench }) => {
-		test.skip(
-			target.appServerMode !== "required",
-			"This scenario requires the Code App Server product",
-		);
+	test("Code keeps a 300,001-line file editable and saveable without background tokenization", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 		test.setTimeout(120_000);
 
 		const explorer = workbench.page.locator(".ash-explorer");
@@ -1468,8 +1382,7 @@ function selectedCharacterCount(status: string | null): number {
 
 
 for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto save on focus change'] as const) {
-	test(`Code preserves ${mode} file edits across restart`, async ({ target, testWorkspace, workbench, application, restartWorkbench }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+	test(`Code preserves ${mode} file edits across restart`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, application, restartWorkbench }) => {
 		if (mode.startsWith('auto save')) {
 			await workbench.settingsEditor.openUserSettingsUI();
 			await workbench.settingsEditor.selectEditorCategory('editor-files');
@@ -1527,11 +1440,7 @@ for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto sav
 	});
 }
 
-test("Code restores unsaved editor content after a browser reload", async ({ target, testWorkspace, workbench }) => {
-	test.skip(
-		target.kind !== "browser" || target.appServerMode !== "required",
-		"This scenario requires the browser-hosted Code App Server product",
-	);
+test("Code restores unsaved editor content after a browser reload", { tag: ['@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer");
@@ -1559,11 +1468,7 @@ test("Code restores unsaved editor content after a browser reload", async ({ tar
 	await expect.poll(() => hasWorkingCopyBackup(page, "const recovered = 42;"), { message: "saving removes the crash backup" }).toBe(false);
 });
 
-test("Code restores an untitled draft and opens the next document separately", async ({ target, workbench }) => {
-	test.skip(
-		target.appServerMode !== "disabled",
-		"This scenario requires the standalone Code workbench",
-	);
+test("Code restores an untitled draft and opens the next document separately", { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
@@ -1616,8 +1521,7 @@ async function hasWorkingCopyBackup(page: Page, content: string, application?: E
 }
 
 
-test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the desktop window', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a Code workspace');
+test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the desktop window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	await writeFile(testWorkspace.file, Array.from({ length: 200 }, (_, index) => `// line ${index} ${'x'.repeat(180)}`).join('\n'));
 	const page = workbench.page;
 	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
@@ -1649,8 +1553,7 @@ test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the de
 	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(180);
 });
 
-test('Code replaces a selection with multiline text and remains editable', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a Code workspace');
+test('Code replaces a selection with multiline text and remains editable', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await expect(fileRow).toHaveCount(1);
@@ -1673,8 +1576,7 @@ test('Code replaces a selection with multiline text and remains editable', async
 	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe(content + '!');
 });
 
-test('file open failures stay in the editor and binary actions work with an existing file open', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode === 'disabled', 'Requires the browser filesystem or a connected desktop workspace');
+test('file open failures stay in the editor and binary actions work with an existing file open', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {
@@ -1737,8 +1639,7 @@ test('file open failures stay in the editor and binary actions work with an exis
 	await expect(group.content.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
 });
 
-test('file state checks keep unchanged documents clean and report disk conflicts only after saving', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires workspace file reads and change notifications');
+test('file state checks keep unchanged documents clean and report disk conflicts only after saving', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const name = 'file-state.txt';
 	const path = join(testWorkspace.directory, name);
@@ -1776,8 +1677,7 @@ test('file state checks keep unchanged documents clean and report disk conflicts
 	expect(await readFile(path, 'utf8')).toBe('external\ntext');
 });
 
-test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain undoable', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain undoable', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const group = workbench.editors.groupAt(0);
 	for (const bom of ['', '\uFEFF']) {
 		const name = bom ? 'bom-crlf.txt' : 'plain-crlf.txt';
@@ -1803,8 +1703,7 @@ test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain und
 });
 
 
-test('Agent document requests preserve unsaved editor content, undo, BOM and CRLF', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('Agent document requests preserve unsaved editor content, undo, BOM and CRLF', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await installDocumentProtocolProbe(page);
 	await workbench.reloadWindow();
@@ -1839,8 +1738,7 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 });
 
 
-test('Agent document requests use the Agents window model and save closed files through editor services', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('Agent document requests use the Agents window model and save closed files through editor services', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await installDocumentProtocolProbe(page);
 	await workbench.reloadWindow(page);
@@ -1857,8 +1755,7 @@ test('Agent document requests use the Agents window model and save closed files 
 	await expect.poll(() => readFile(created, 'utf8')).toBe('created\ntext');
 });
 
-test('Agent review commands are available without an App Server connection', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode === 'required', 'Exercises the disconnected Code workbench');
+test('Agent review commands are available without an App Server connection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
 	const picker = workbench.page.getByRole('dialog', { name: 'Review Agent changes', exact: true });
 	await expect(picker).toBeVisible();
@@ -1876,8 +1773,7 @@ test('Agent review commands are available without an App Server connection', asy
 	await workbench.page.keyboard.press('Escape');
 });
 
-test('Agent review accepts individual hunks and rejects the remainder without losing user edits', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('Agent review accepts individual hunks and rejects the remainder without losing user edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await installDocumentProtocolProbe(page);
 	const restored = page.waitForEvent('console', { predicate: message => message.text() === '[lifecycle] Workbench restored' });
@@ -2048,8 +1944,7 @@ test('Agent automatic acceptance setting persists across window reload', async (
 	await workbench.page.locator('.ash-modal-editor-close').click();
 });
 
-test('Agent automatic acceptance setting has Chinese metadata', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode === 'required', 'Locale restart is covered by the Web and Electron UI hosts');
+test('Agent automatic acceptance setting has Chinese metadata', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
 	await setAutoAcceptDelay(workbench, 7);
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
@@ -2064,8 +1959,7 @@ test('Agent automatic acceptance setting has Chinese metadata', async ({ target,
 	await expect(localized).toContainText('回复完成后，等待多少秒自动接受修改');
 });
 
-test('Agent countdown preserves keyboard focus, can be cancelled, and accepts a subsequent reply', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the document host connection');
+test('Agent countdown preserves keyboard focus, can be cancelled, and accepts a subsequent reply', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await installDocumentProtocolProbe(page);
 	await workbench.reloadWindow();
@@ -2109,8 +2003,7 @@ test('Agent countdown preserves keyboard focus, can be cancelled, and accepts a 
 
 
 for (const mode of ['manual', 'After Delay', 'On Focus Change', 'On Window Change'] as const) {
-	test(`save cleanup persists configured bytes through ${mode} in the product`, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+	test(`save cleanup persists configured bytes through ${mode} in the product`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
 		await configureSaveCleanup(workbench, true, mode === 'manual' ? undefined : mode);
 		const name = 'save-cleanup.txt';
 		const path = join(testWorkspace.directory, name);
@@ -2136,8 +2029,7 @@ for (const mode of ['manual', 'After Delay', 'On Focus Change', 'On Window Chang
 	});
 }
 
-test('save cleanup uses live settings, preserves undo and keeps a manually saved draft after reload', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('save cleanup uses live settings, preserves undo and keeps a manually saved draft after reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
 	await configureSaveCleanup(workbench, true);
 	await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 	let group = workbench.editors.groupAt(0);
@@ -2159,8 +2051,7 @@ test('save cleanup uses live settings, preserves undo and keeps a manually saved
 	await expect(group.tabs.filter({ hasText: 'main.ts' })).not.toHaveAttribute('aria-label', /unsaved changes/u);
 });
 
-test('save cleanup protects a completion snippet during AUTO and retains Tab navigation after explicit cleanup', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('save cleanup protects a completion snippet during AUTO and retains Tab navigation after explicit cleanup', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
 	await configureSaveCleanup(workbench, true, 'After Delay');
 	const name = 'save-cleanup-snippet.js';
 	const path = join(testWorkspace.directory, name);

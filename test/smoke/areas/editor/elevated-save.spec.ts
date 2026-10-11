@@ -4,8 +4,7 @@ import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-test('read-only save recovery preserves edits and overwrites with ordinary permissions', async ({ target, application, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires real workspace IO');
+test('read-only save recovery preserves edits and overwrites with ordinary permissions', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, testWorkspace, workbench }) => {
 	const name = 'permission-save.txt';
 	const path = join(testWorkspace.directory, name);
 	await writeFile(path, '\uFEFForiginal\r\n');
@@ -34,8 +33,7 @@ test('read-only save recovery preserves edits and overwrites with ordinary permi
 });
 
 
-test('system permission save failures require an explicit desktop authorization choice', async ({ target, application, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required' || process.platform === 'win32', 'Requires real workspace IO and Unix directory modes');
+test('system permission save failures require an explicit desktop authorization choice', { tag: ['@browser-app-server', '@electron-app-server', '@darwin', '@linux'] }, async ({ target, application, testWorkspace, workbench }) => {
 	const directory = join(testWorkspace.directory, 'protected-save');
 	const name = 'protected.txt';
 	const path = join(directory, name);

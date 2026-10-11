@@ -17,8 +17,7 @@ test.beforeEach(async ({ target, workbench }) => {
 	if (target.kind === 'electron') { await installMainChannelTestClient(workbench.page); }
 });
 
-test('agent network authorizes subresources, rejects WebSocket and redirects and releases authority after the tool', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Request enforcement belongs to Chromium');
+test('agent network authorizes subresources, rejects WebSocket and redirects and releases authority after the tool', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const deniedRequests: string[] = [];
 	const denied = createServer((request, response) => { deniedRequests.push(request.url!); response.end('blocked'); });
 	await new Promise<void>(resolve => denied.listen(0, '127.0.0.1', resolve));
@@ -84,8 +83,7 @@ test('agent network authorizes subresources, rejects WebSocket and redirects and
 	}
 });
 
-test('downloads report completion and cancellation and closing a page releases the active download', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.kind !== 'electron', 'Downloads belong to the desktop page session');
+test('downloads report completion and cancellation and closing a page releases the active download', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const server = createServer((request, response) => {
 		if (request.url === '/') { response.setHeader('Content-Type', 'text/html'); response.end('<title>Download fixture</title>'); return; }
 		response.setHeader('Content-Disposition', `attachment; filename="${request.url === '/complete' ? 'completed.txt' : 'pending.txt'}"`);
@@ -134,8 +132,7 @@ test('downloads report completion and cancellation and closing a page releases t
 	}
 });
 
-test('website permission dialogs allow, remember, reset and deny the requesting site', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Website permissions belong to the desktop page session');
+test('website permission dialogs allow, remember, reset and deny the requesting site', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const server = createServer((_request, response) => {
 		response.setHeader('Content-Type', 'text/html');
 		response.end('<title>Permission fixture</title>');
@@ -185,8 +182,7 @@ test('website permission dialogs allow, remember, reset and deny the requesting 
 	}
 });
 
-test('sharing a user page exposes only that page to the chosen thread and revocation retains the page', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Page sharing requires a desktop browser host');
+test('sharing a user page exposes only that page to the chosen thread and revocation retains the page', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.browser.open');
 	const info = await page.evaluate(async () => {
@@ -228,8 +224,7 @@ test('sharing a user page exposes only that page to the chosen thread and revoca
 	await page.getByRole('button', { name: 'Close Browser', exact: true }).click();
 });
 
-test('browser automation runs in one separate process and its crash retains manually usable pages', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');
+test('browser automation runs in one separate process and its crash retains manually usable pages', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	const invoke = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
@@ -262,8 +257,7 @@ test('browser automation runs in one separate process and its crash retains manu
 	await expect(page.locator('.ash-browser-editor')).toHaveCount(0);
 });
 
-test('desktop browser retains a live page through renderer reload and restores workspace login after restart', async ({ target, application, workbench, reloadWorkbench }) => {
-	test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');
+test('desktop browser retains a live page through renderer reload and restores workspace login after restart', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench, reloadWorkbench }) => {
 	const cookies: string[] = [];
 	const server = createServer((request, response) => {
 		cookies.push(request.headers.cookie ?? '');
@@ -302,8 +296,7 @@ test('desktop browser retains a live page through renderer reload and restores w
 	}
 });
 
-test('desktop browser agent observes loaded pages, edits fields and follows navigation', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');
+test('desktop browser agent observes loaded pages, edits fields and follows navigation', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const server = createServer((request, response) => {
 		response.setHeader('Content-Type', 'text/html');
 		if (request.url === '/next') {
@@ -362,8 +355,7 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`desktop BrowserView navigation and accessibility stay usable in ${locale}`, async ({ target, application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
-		test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');
+	test(`desktop BrowserView navigation and accessibility stay usable in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
 		let application = initialApplication;
 		let workbench = initialWorkbench;
 		await workbench.settingsEditor.openUserSettingsUI();
@@ -508,8 +500,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await new Promise<void>(resolve => server.close(() => resolve()));
 		}
 	});
-	test(`desktop BrowserView Enter hands keyboard input to the page and commands return to Workbench in ${locale}`, async ({ target, application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
-		test.skip(target.kind !== 'electron', 'Keyboard focus crosses real Electron WebContents');
+	test(`desktop BrowserView Enter hands keyboard input to the page and commands return to Workbench in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
 		let application = initialApplication;
 		let workbench = initialWorkbench;
 		if (locale === 'zh-CN') {
@@ -572,8 +563,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 }
 
-test('desktop browser opens visible pages, navigates history, resizes and releases closed tabs', async ({ target, application, workbench }) => {
-	test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');
+test('desktop browser opens visible pages, navigates history, resizes and releases closed tabs', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	let finishSlowLoad: (() => void) | undefined;
 	const server = createServer((request, response) => {
 		response.setHeader('Content-Type', 'text/html');

@@ -170,8 +170,7 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 });
 
 
-test('browser screen chooser cancellation returns to the attachment picker', async ({ workbench, target }) => {
-	test.skip(target.kind !== 'browser', 'Only Browser uses the system screen chooser');
+test('browser screen chooser cancellation returns to the attachment picker', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench, target }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -207,8 +206,7 @@ test('Sessions direct image pastes use the shared resizing and preview path', as
 	await expect(composer.locator('.stanza-editor-input')).toBeFocused();
 });
 
-test('terminal, symbol and search context source buttons return to their product owners', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires workspace search, symbols and a real shell.');
+test('terminal, symbol and search context source buttons return to their product owners', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Toggle Panel Visibility', exact: true }).click();
 	await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeAttached();
@@ -325,8 +323,7 @@ test('live GitHub account attaches a real issue and pull request through the con
 	}
 });
 
-test('tool context reads the current backend catalog and opens Tools settings', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the backend tool catalog.');
+test('tool context reads the current backend catalog and opens Tools settings', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -342,8 +339,7 @@ test('tool context reads the current backend catalog and opens Tools settings', 
 });
 
 
-test('Sessions tool context opens the current Tools catalog in its settings dialog', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the backend tool catalog.');
+test('Sessions tool context opens the current Tools catalog in its settings dialog', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const chat = page.locator('.ash-sessions-chat-slot.active:visible');
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
@@ -373,8 +369,7 @@ instructionTest('Sessions instruction context is available before its first turn
 });
 
 for (const surface of ['Workbench', 'Sessions']) {
-	test(`${surface} tool selection controls the backend catalog and removal restores tools`, async ({ target, workbench }) => {
-		test.skip(target.appServerMode !== 'required', 'Requires the backend tool catalog.');
+	test(`${surface} tool selection controls the backend catalog and removal restores tools`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = surface === 'Sessions' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
 		if (surface === 'Workbench' && !await page.locator('.ash-chat-view-pane').isVisible()) {
 			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();

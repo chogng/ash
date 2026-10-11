@@ -301,7 +301,7 @@ export class GitService extends Disposable implements IGitService {
 
 	async graph(query: GraphQuery, repositoryId?: string): Promise<GraphPage> {
 		const repository = await this.getRepository(repositoryId);
-		const result = await this.api.graph({ repositoryId: repository.id, limit: query.limit, ...(query.cursor ? { cursor: query.cursor } : {}) });
+		const result = await this.api.graph({ repositoryId: repository.id, limit: query.limit, ...(query.cursor ? { cursor: query.cursor } : {}), ...(query.revisions === undefined ? {} : { revisions: [...query.revisions] }) });
 		return {
 			streamInstanceId: result.streamInstanceId, historyRevision: result.historyRevision, graphRevision: result.graphRevision,
 			commits: result.commits.map(commit => ({ ...commit, repositoryId: repository.id, parentObjectIds: [...commit.parentObjectIds] })),
@@ -341,13 +341,13 @@ export class GitService extends Disposable implements IGitService {
 	async commitFile(objectId: string, path: string, repositoryId?: string, parentObjectId?: string): Promise<GitCommitFile> {
 		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.commitFile({ repositoryId: repository.id, objectId, path, parentObjectId });
-		return { original: { ...result.original }, modified: { ...result.modified } };
+		return { original: decodeFileContent(result.original), modified: decodeFileContent(result.modified) };
 	}
 
 	async changeFile(path: string, comparison: GitChangeFileComparison, repositoryId?: string): Promise<GitChangeFile> {
 		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.changeFile({ repositoryId: repository.id, path, comparison });
-		return { original: { ...result.original }, modified: { ...result.modified } };
+		return { original: decodeFileContent(result.original), modified: decodeFileContent(result.modified) };
 	}
 
 	async conflictFile(path: string, repositoryId?: string): Promise<GitConflictFile> {
@@ -356,10 +356,10 @@ export class GitService extends Disposable implements IGitService {
 		return {
 			stageIds: result.stageIds,
 			resultObjectId: result.resultObjectId,
-			base: { ...result.base },
-			current: { ...result.current },
-			incoming: { ...result.incoming },
-			result: { ...result.result },
+			base: decodeFileContent(result.base),
+			current: decodeFileContent(result.current),
+			incoming: decodeFileContent(result.incoming),
+			result: decodeFileContent(result.result),
 		};
 	}
 
@@ -583,4 +583,10 @@ function toGitChange(change: GitRepositoryChangeDto): GitRepositoryChange {
 		conflicted: change.conflicted,
 		submodule: { ...change.submodule },
 	};
+}
+
+function decodeFileContent(content: import('../../../.build/protocol/typescript/index.js').GitCommitFileContentDto): import('./types.js').GitCommitFileContent {
+	if (content.kind === 'missing') { return { kind: 'missing' }; }
+	if (content.kind === 'text') { return { kind: 'text', text: content.text }; }
+	return { kind: 'binary', bytes: content.data === undefined ? undefined : Uint8Array.from(atob(content.data), character => character.charCodeAt(0)) };
 }

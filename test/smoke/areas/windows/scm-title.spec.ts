@@ -14,11 +14,10 @@ async function openGit(workbench: Workbench): Promise<void> {
 }
 test.use({ gitRepository: true });
 test.beforeEach(async ({ target, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	await writeFile(testWorkspace.file, 'const value = 2;\n');
 });
 
-test('Changes title menus switch and retain view and sort choices through registered commands', async ({ application, workbench, testWorkspace }) => {
+test('Changes title menus switch and retain view and sort choices through registered commands', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	await mkdir(join(testWorkspace.directory, 'a'), { recursive: true });
 	await mkdir(join(testWorkspace.directory, 'b'), { recursive: true });
 	await writeFile(join(testWorkspace.directory, 'a/z.ts'), 'export const z = 1;\n');
@@ -72,7 +71,7 @@ test('Changes title menus switch and retain view and sort choices through regist
 	await expect(page.locator('.ash-output')).toContainText('3 changed files');
 });
 
-test('Changes title stages and unstages all changes and commits through the toolbar', async ({ application, workbench, testWorkspace }) => {
+test('Changes title stages and unstages all changes and commits through the toolbar', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const page = workbench.page;
 	await openGit(workbench);
 	const toolbar = page.getByRole('toolbar', { name: 'Source control actions', exact: true });
@@ -96,7 +95,7 @@ test('Changes title stages and unstages all changes and commits through the tool
 	await expect(page.locator('.ash-scm-input .stanza-editor-placeholder-text')).toBeVisible();
 });
 
-test('Changes title registers Chinese menus and dispatches their actions', async ({ application, workbench, restartWorkbench }) => {
+test('Changes title registers Chinese menus and dispatches their actions', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');

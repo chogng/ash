@@ -54,8 +54,7 @@ test('Hooks management opens from Settings with keyboard search and accessibilit
 	}
 });
 
-test('Hooks management reads TOML, appends a draft, and configures a project through Quick Pick', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Uses an isolated desktop profile with App Server.');
+test('Hooks management reads TOML, appends a draft, and configures a project through Quick Pick', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	if (!('windows' in application)) return;
 	const profile = await application.evaluate(() => process.env.ASH_HOME);
 	if (!profile) throw new Error('The test application has no isolated profile');

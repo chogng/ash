@@ -8,7 +8,7 @@ export type ElectronWindowMode = 'hidden' | 'inactive' | 'active';
 
 export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
-	/** System focus/fullscreen tests opt into active; ordinary runs hide locally and show inactive in CI. */
+	/** Ordinary runs hide windows; system focus/fullscreen tests opt into active. */
 	readonly windowMode?: ElectronWindowMode;
 	/** Scenario-specific host inputs; the launcher still isolates the test home/profile. */
 	readonly environment?: Readonly<NodeJS.ProcessEnv>;
@@ -69,9 +69,8 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;
-	const isCI = Boolean(environment.CI || environment.GITHUB_WORKSPACE || environment.BUILD_ARTIFACTSTAGINGDIRECTORY);
 	const isDebug = Boolean(environment.PWDEBUG && environment.PWDEBUG !== '0');
-	const windowMode = options.windowMode ?? (isDebug ? 'active' : isCI ? 'inactive' : 'hidden');
+	const windowMode = options.windowMode ?? (isDebug ? 'active' : 'hidden');
 	delete environment.ASH_TEST_WINDOW_MODE;
 	if (windowMode !== 'active') environment.ASH_TEST_WINDOW_MODE = windowMode;
 

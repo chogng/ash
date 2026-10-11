@@ -22,8 +22,7 @@ test('Turn file selection starts disabled and explains review before commit', as
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Preview selected changes[\s\S]*Commit this preview[\s\S]*remaining files/u);
 });
 
-test('Turn file selection commits a reviewed file and keeps another Session separate', async ({ target, application, workbench, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Uses the profile daemon and two real isolated execution directories.');
+test('Turn file selection commits a reviewed file and keeps another Session separate', { tag: ['@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	test.setTimeout(120_000);
 	if (!('evaluate' in application)) throw new Error('This scenario requires Electron');
 	const host = await application.evaluate(({ app }) => ({

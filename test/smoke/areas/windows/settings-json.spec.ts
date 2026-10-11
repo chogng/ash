@@ -361,8 +361,7 @@ test('Preferred paste and drop commands reveal editable settings and persist the
 	});
 });
 
-test('Preferred paste and drop JSON completions use registered provider kinds', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the product language declarations');
+test('Preferred paste and drop JSON completions use registered provider kinds', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const group = workbench.editors.groupAt(0);
 	for (const [command, key] of [
 		['workbench.action.configurePreferredPasteAction', 'editor.pasteAs.preferences'],
@@ -618,8 +617,7 @@ test('Configured markers and modified filtering update after external persisted 
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
-test('Saving JSON token customization refreshes Markdown and the canonical profile settings', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the product grammar resources');
+test('Saving JSON token customization refreshes Markdown and the canonical profile settings', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await writeFile(join(testWorkspace.directory, 'settings-style.md'), '# Heading\n');
 	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
@@ -714,8 +712,7 @@ async function workingCopyBackupContents(page: Page): Promise<string[]> {
 	});
 }
 
-test('Electron backup shutdown failure resumes editing and a later close restores the new draft', async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+test('Electron backup shutdown failure resumes editing and a later close restores the new draft', { tag: ['@electron-ui'] }, async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
 	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
@@ -788,8 +785,7 @@ test('Electron backup shutdown failure resumes editing and a later close restore
 	}
 });
 
-test('Electron keeps a completed shutdown sealed after its close token expires and restores content after a new close', async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+test('Electron keeps a completed shutdown sealed after its close token expires and restores content after a new close', { tag: ['@electron-ui'] }, async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
 	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');

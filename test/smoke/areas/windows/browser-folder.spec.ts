@@ -3,8 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 test.use({ openWorkspace: false });
 
-test('standalone browser searches granted files and disables process commands', async ({ target, workbench, driver }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');
+test('standalone browser searches granted files and disables process commands', { tag: ['@browser-ui'] }, async ({ target, workbench, driver }) => {
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -94,8 +93,7 @@ test('standalone browser executes its extension command in a Worker and retires 
 	}
 });
 
-test('browser reload restores its folder, dirty editor and stable directory identity', async ({ target, driver, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');
+test('browser reload restores its folder, dirty editor and stable directory identity', { tag: ['@browser-ui'] }, async ({ target, driver, workbench }) => {
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -167,8 +165,7 @@ test('browser reload restores its folder, dirty editor and stable directory iden
 	expect(driver.diagnostics.consoleErrors.filter(message => message.startsWith('Unable to create workbench contribution'))).toEqual([]);
 });
 
-test('Explorer selection stays beneath its scrollbar', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+test('Explorer selection stays beneath its scrollbar', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -204,8 +201,7 @@ test('Explorer selection stays beneath its scrollbar', async ({ target, workbenc
 	expect(overlap).toBe(true);
 });
 
-test('browser opens an authorized local folder and saves its files', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+test('browser opens an authorized local folder and saves its files', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -357,8 +353,7 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Open Folder...' })).toHaveCount(1);
 });
 
-test('browser Explorer expands and collapses a folder without replacing sibling rows', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+test('browser Explorer expands and collapses a folder without replacing sibling rows', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -402,8 +397,7 @@ test('browser Explorer expands and collapses a folder without replacing sibling 
 	expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
 });
 
-test('browser nests related files when Explorer file nesting is enabled', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+test('browser nests related files when Explorer file nesting is enabled', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();

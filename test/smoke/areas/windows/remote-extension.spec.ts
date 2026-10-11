@@ -8,8 +8,7 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 // The product resolver is needed on the Desktop home page, before a directory grant exists.
 test.use({ openWorkspace: false });
 
-test('the product SSH resolver runs as a Rust provider on Web and Electron and survives window reload', async ({ target, workbench, application, webAppServer, testWorkspace, reloadWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the product extension host');
+test('the product SSH resolver runs as a Rust provider on Web and Electron and survives window reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application, webAppServer, testWorkspace, reloadWorkbench }) => {
 	let current = { application, workbench };
 	for (let generation = 0; generation < 2; generation++) {
 		const page = current.workbench.page;
@@ -88,8 +87,7 @@ test('the product SSH resolver runs as a Rust provider on Web and Electron and s
 test.describe('standard resolver startup', () => {
 	test.use({ openWorkspace: true });
 
-	test('a local V8 resolver connects a remote window before startup and resolves again after socket loss', async ({ target, application, workbench, testWorkspace }) => {
-		test.skip(process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the Desktop V8 extension host');
+	test('a local V8 resolver connects a remote window before startup and resolves again after socket loss', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, application, workbench, testWorkspace }) => {
 		test.setTimeout(150_000);
 		if (!('evaluate' in application)) { throw new Error('Expected Electron'); }
 		const { mkdir, writeFile } = await import('node:fs/promises');
@@ -214,8 +212,7 @@ exports.activate = function(context) {
 	});
 });
 
-test('inbound SSH hosting opens the Browser Workbench from a Chinese Desktop command and revokes access on stop', async ({ target, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the local macOS OpenSSH server and Desktop backend');
+test('inbound SSH hosting opens the Browser Workbench from a Chinese Desktop command and revokes access on stop', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, testWorkspace }) => {
 	test.setTimeout(120_000);
 	const { spawn, execFile } = await import('node:child_process');
 	const { promisify } = await import('node:util');

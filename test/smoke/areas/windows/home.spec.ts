@@ -9,8 +9,7 @@ import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../..
 
 const execFileAsync = promisify(execFile);
 
-test('Desktop development startup opens Agents with prepared runtime resources', async ({ target, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This checks development startup with the Desktop backend.');
+test('Desktop development startup opens Agents with prepared runtime resources', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
 	const previousReload = process.env.ASH_DEV_APP_SERVER_RELOAD;
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
@@ -34,8 +33,7 @@ test('Desktop development startup opens Agents with prepared runtime resources',
 	}
 });
 
-test('Desktop uses the selected Ash home for UI and backend startup', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'This scenario verifies process startup on the desktop host.');
+test('Desktop uses the selected Ash home for UI and backend startup', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) {
 		return;
 	}
@@ -62,8 +60,7 @@ test('Desktop uses the selected Ash home for UI and backend startup', async ({ a
 	}
 });
 
-test('Desktop reopens an authorized workspace after its backend stops', async ({ target, testWorkspace }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This checks a stopped backend on Desktop.');
+test('Desktop reopens an authorized workspace after its backend stops', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
@@ -94,8 +91,7 @@ for (const packageState of ['selected', 'other'] as const) {
 	const title = packageState === 'selected'
 		? 'Desktop reuses a daemon from the selected development package'
 		: 'Desktop replaces a daemon started from another package generation';
-	test(title, async ({ target }) => {
-		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the Desktop backend.');
+	test(title, { tag: ['@electron-app-server'] }, async ({ target }) => {
 		test.skip(packageState === 'other' && process.platform !== 'win32', 'This checks Windows package identity.');
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
 		const profile = join(userDataDirectory, 'profile');

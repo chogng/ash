@@ -13,8 +13,7 @@ interface SashMeasurements {
 	readonly rasters: { width: number; height: number; }[];
 }
 
-test('startup omits an empty source group created by Open to the Side and preserves unsaved content', async ({ target, application, workbench, reloadWorkbench }) => {
-	test.skip(target.appServerMode === 'disabled', 'Requires workspace files');
+test('startup omits an empty source group created by Open to the Side and preserves unsaved content', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, reloadWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await workbench.openExplorer();
 	const file = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true });
@@ -339,8 +338,7 @@ for (const groupCount of [1, 2]) {
 test.describe('startup layout defaults', () => {
 	test.use({ openWorkspace: false });
 
-	test('empty window shows Welcome with sidebars and Panel hidden', async ({ target, workbench }) => {
-		test.skip(target.kind === 'browser' && target.appServerMode === 'required');
+	test('empty window shows Welcome with sidebars and Panel hidden', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = workbench.page;
 		const workspaceId = target.kind === 'electron'
 			? parseWorkspace(await page.evaluate(() => {
@@ -355,8 +353,7 @@ test.describe('startup layout defaults', () => {
 		await expect(workbench.editors.groupAt(0).welcome).toBeVisible();
 	});
 
-	test('opening a browser folder shows Welcome before and after reload', async ({ target, workbench }) => {
-		test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the standalone browser folder picker.');
+	test('opening a browser folder shows Welcome before and after reload', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 		const page = workbench.page;
 		const group = workbench.editors.groupAt(0);
 		await expect(group.welcome).toBeVisible();
@@ -414,16 +411,14 @@ test.describe('startup layout defaults', () => {
 	});
 });
 
-test('new desktop workspace shows Explorer and Chat with Panel hidden', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron');
+test('new desktop workspace shows Explorer and Chat with Panel hidden', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await expect(page.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(page.locator("[data-part='auxiliarybar']")).toBeVisible();
 	await expect(page.locator("[data-part='panel']")).toBeHidden();
 });
 
-test('Git explains when the open folder has no repository', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+test('Git explains when the open folder has no repository', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await expect(page.getByText('The open folder does not contain a Git repository. Initialize a repository to start tracking changes.', { exact: true })).toBeVisible();
@@ -598,8 +593,7 @@ test.describe('welcome brand', () => {
 		await expect(github).toHaveCSS('background-color', 'rgb(38, 38, 38)');
 	});
 
-	test('Connect GitHub reports when account service is unavailable', async ({ target, workbench }) => {
-		test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');
+	test('Connect GitHub reports when account service is unavailable', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Connect GitHub' }).click();
 		const dialog = workbench.page.getByRole('dialog', { name: 'Connect GitHub' });
 		await expect(dialog).toContainText('Could not connect GitHub. Try again.');
@@ -710,8 +704,7 @@ test.describe('welcome brand', () => {
 	});
 });
 
-test('recent projects align with the welcome action cards', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'This scenario requires a local workspace');
+test('recent projects align with the welcome action cards', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');

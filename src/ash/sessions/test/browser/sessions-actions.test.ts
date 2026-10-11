@@ -1,3 +1,4 @@
+import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter, Event } from "../../../base/common/event.js";
@@ -167,6 +168,9 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements IQuickPick<TItem> {
+	canSelectMany = false;
+	selectedItems: readonly TItem[] = [];
+	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	constructor(private readonly onShow: () => void) { super(); }
 	private readonly acceptEmitter = this._register(new Emitter<TItem>());
 	private readonly hideEmitter = this._register(new Emitter<void>());

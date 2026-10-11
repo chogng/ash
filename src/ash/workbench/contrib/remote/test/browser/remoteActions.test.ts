@@ -1,3 +1,4 @@
+import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { IRemoteConnectionApi, RemoteConnectionService } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { strict as assert } from "node:assert";
@@ -97,6 +98,9 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
+	canSelectMany = false;
+	selectedItems: readonly TItem[] = [];
+	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
 	private readonly acceptEmitter = new Emitter<TItem>();
 	private readonly valueEmitter = new Emitter<string>();

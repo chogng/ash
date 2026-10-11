@@ -109,12 +109,6 @@ jobs:
       - name: Test connected Electron
         if: matrix.surface == 'electron'
         run: pnpm run smoketest-no-compile
-      - name: Test Academic workbench
-        if: matrix.surface == 'electron'
-        run: node test/smoke/run.ts electron-ui test/smoke/areas/academic/academic-workbench.spec.ts
-      - name: Test connected Academic document editing
-        if: matrix.surface == 'electron'
-        run: pnpm exec node test/smoke/run.ts electron-editor-app-server
       - name: Upload test diagnostics
         if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

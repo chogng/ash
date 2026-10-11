@@ -125,7 +125,7 @@ export function registerDiffEditorCommands(): void {
 
 	for (const [id, title, operation] of [
 		[DIFF_OPEN_SIDE, localize2({ bundle: 'ash.workbench', key: 'compare.openSide' }, 'Open Active Diff Side'), (service: IDiffEditorCommandsService) => service.openActiveDiffSide()],
-		[TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, localize2({ bundle: 'ash.workbench', key: 'diff.showWhitespace' }, 'Show Whitespace Differences'), (service: IDiffEditorCommandsService) => service.toggleDiffIgnoreTrimWhitespace()],
+		[TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, localize2({ bundle: 'ash.workbench', key: 'diff.showWhitespace' }, 'Show Leading/Trailing Whitespace Differences'), (service: IDiffEditorCommandsService) => service.toggleDiffIgnoreTrimWhitespace()],
 		[DIFF_SWAP_SIDES, localize2({ bundle: 'ash.workbench', key: 'diff.swapSides' }, 'Swap Sides'), (service: IDiffEditorCommandsService) => service.swapDiffSides()],
 	] as const) {
 		registerAction2(class DiffOperationAction extends Action2 {

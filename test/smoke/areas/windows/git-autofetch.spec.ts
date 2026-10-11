@@ -2,8 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('Git Auto Fetch setting saves all three modes through shared App Server config', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the desktop App Server.');
+test('Git Auto Fetch setting saves all three modes through shared App Server config', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) return;
 	const home = await application.evaluate(() => process.env.ASH_HOME!);
 	const readAutofetch = async () => (await readFile(join(home, 'config.toml'), 'utf8')).match(/^autofetch = "(off|default|all)"$/m)?.[1];

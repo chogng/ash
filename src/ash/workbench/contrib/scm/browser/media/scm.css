@@ -75,7 +75,8 @@
 	min-width: 0;
 	min-height: 22px;
 	align-items: center;
-	padding: 0 8px 0 0;
+	padding: 0 8px 0
+		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
 	line-height: 22px;
 }
 
@@ -265,8 +266,35 @@
 	list-style: none;
 }
 
-.ash-scm-graph-changes > li {
+.ash-scm-graph-changes li:not(.ash-scm-graph-directory) {
 	height: 22px;
+}
+
+.ash-scm-graph-directory {
+	height: auto;
+}
+
+.ash-scm-graph-folder-children {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ash-scm-graph-folder {
+	display: flex;
+	width: calc(100% - var(--scm-graph-content-x, 22px));
+	margin-left: var(--scm-graph-content-x, 22px);
+	height: 22px;
+	min-height: 22px;
+	justify-content: flex-start;
+	padding-left: calc(
+		var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120)
+	);
+}
+
+.ash-scm-graph-graph.incoming-changes .ash-scm-graph-node,
+.ash-scm-graph-graph.outgoing-changes .ash-scm-graph-node {
+	stroke-dasharray: 2 2;
 }
 
 .ash-scm-graph-change {

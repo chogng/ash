@@ -1805,3 +1805,56 @@ fn graph_comparisons_preserve_pagination_and_directory_read_authorization() {
         .unwrap();
     assert_eq!(next.commits[0].object_id, base);
 }
+
+#[test]
+fn filtered_graph_cursor_is_bound_to_selection_and_binary_history_retains_bytes() {
+    use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
+    use base64::Engine;
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "base\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "base"]);
+    let base = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.git(&["switch", "-c", "topic"]);
+    std::fs::write(repository.root().join("image.bin"), [0, 1, 255]).unwrap();
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "binary topic"]);
+    let topic = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.git(&["switch", "main"]);
+    repository.write("tracked.txt", "main\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "unselected main"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let roots = vec![topic.clone()];
+    let limit = std::num::NonZeroUsize::new(1).unwrap();
+    let first = runtime
+        .graph_for(None, 7, limit, None, Some(&roots))
+        .unwrap();
+    assert_eq!(first.commits[0].object_id, topic);
+    let cursor = first.next_cursor.unwrap();
+    assert!(matches!(
+        runtime.graph_for(None, 7, limit, Some(&cursor), None),
+        Err(super::GitRuntimeError::InvalidGraphCursor)
+    ));
+    let last = runtime
+        .graph_for(None, 7, limit, Some(&cursor), Some(&roots))
+        .unwrap();
+    assert_eq!(last.commits[0].object_id, base);
+    assert!(!last.has_more);
+    let file = runtime
+        .commit_file_for(None, &topic, Path::new("image.bin"), None)
+        .unwrap();
+    let GitCommitFileContentDto::Binary { data: Some(data) } = file.modified else {
+        panic!("binary bytes expected")
+    };
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .unwrap(),
+        [0, 1, 255]
+    );
+}

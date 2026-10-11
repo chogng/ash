@@ -433,13 +433,16 @@ impl GitService {
         })
     }
 
-    pub(crate) fn open_graph(&self) -> Result<GitGraphCursor, GitServiceError> {
+    pub(crate) fn open_graph(
+        &self,
+        revisions: Option<&[String]>,
+    ) -> Result<GitGraphCursor, GitServiceError> {
         self.ensure_readable()?;
         let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
         run(&runtime, async {
             let repository = self.open_repository().await?;
             self.client
-                .start_graph(&repository)
+                .start_graph_for_refs(&repository, revisions)
                 .await
                 .map_err(GitServiceError::Git)
         })

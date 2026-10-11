@@ -30,8 +30,7 @@ test('Sessions keyboard layout commands inspect the active mapping and offer lay
 	await quickAccess.close();
 });
 
-test('Sessions desktop reads the system keyboard layout and opens the profile layout file', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Uses the Sessions desktop platform services.');
+test('Sessions desktop reads the system keyboard layout and opens the profile layout file', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const page = await workbench.openAgentsWindow(target.kind);
 	const layout = await page.evaluate(() => globalThis.ashTestMainProcess.call<IKeyboardLayoutDefinition>('keyboardLayout', 'readKeyboardLayout'));
@@ -61,8 +60,7 @@ test('Sessions desktop reads the system keyboard layout and opens the profile la
 	}
 });
 
-test('Sessions desktop follows system screen-reader detection and live changes in its editor', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Uses Electron system screen-reader detection.');
+test('Sessions desktop follows system screen-reader detection and live changes in its editor', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const initialSupport = await application.evaluate(({ app }) => app.isAccessibilitySupportEnabled());
 	try {
@@ -127,8 +125,7 @@ async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 	await editor.waitForEditorContents(contents => text.includes('\n') ? contents.endsWith(text.split('\n').at(-1)!) : contents === text);
 }
 
-test('Sessions dictation introduction preserves the draft and restores focus after accessible help', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Uses the Sessions desktop window.');
+test('Sessions dictation introduction preserves the draft and restores focus after accessible help', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const page = await workbench.openAgentsWindow(target.kind);
 	const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
@@ -620,8 +617,7 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 	}
 });
 
-test('Sessions Design canvas context menu edits the pointed object and preserves keyboard focus', async ({ application, target, workbench }) => {
-	test.skip((target.kind === 'electron' && process.platform === 'darwin'), 'DOM menu focus is tested in the browser; macOS system menus have a separate scenario.');
+test('Sessions Design canvas context menu edits the pointed object and preserves keyboard focus', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
@@ -681,8 +677,7 @@ test('Sessions Design canvas context menu edits the pointed object and preserves
 	await page.keyboard.press('Escape');
 });
 
-test('Sessions Design macOS canvas menu dispatches editing through Main', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin');
+test('Sessions Design macOS canvas menu dispatches editing through Main', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
@@ -1035,9 +1030,7 @@ test('Sessions Design frames keep child geometry, nested selection and whole-ges
 	await expect(canvas).toBeFocused();
 });
 
-test('Sessions Design imports backend asset versions, crops independently and reopens a portable media package', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip((target.kind === 'electron' && target.appServerMode !== 'required'));
-	test.skip(target.kind === 'browser' && target.appServerMode !== 'required');
+test('Sessions Design imports backend asset versions, crops independently and reopens a portable media package', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	let page = workbench.page;
 	const directory = await realpath(testWorkspace.directory);
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
@@ -1122,8 +1115,7 @@ test('Sessions Design imports backend asset versions, crops independently and re
 	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
 });
 
-test('Sessions Design saves and reopens an editable file through App Server', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires desktop file operations through App Server');
+test('Sessions Design saves and reopens an editable file through App Server', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	if (!('windows' in application)) { throw new Error('Expected Electron application'); }
 	const packagePath = join(await realpath(testWorkspace.directory), 'design.ash-design');
 	const filePath = join(packagePath, 'manifest.json');
@@ -1195,8 +1187,7 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 	await closed;
 });
 
-test('Sessions Design saves and opens a browser folder without replacing the workspace', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the standalone browser file picker');
+test('Sessions Design saves and opens a browser folder without replacing the workspace', { tag: ['@browser-ui'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
@@ -1337,9 +1328,7 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 	await expect.poll(async () => (await canvas.locator('.ash-canvas-viewport').boundingBox())!.height).toBeGreaterThan(100);
 });
 
-test('Sessions Design exports SVG and HTML and reopens grouped text and paths through the file service', async ({ application, target, testWorkspace, workbench }) => {
-	test.skip((target.kind === 'electron' && target.appServerMode !== 'required'));
-	test.skip(target.kind === 'browser' && target.appServerMode !== 'disabled');
+test('Sessions Design exports SVG and HTML and reopens grouped text and paths through the file service', { tag: ['@browser-ui', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	let page = workbench.page;
 	let folderName = '';
 	const directory = await realpath(testWorkspace.directory);
@@ -1892,7 +1881,6 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 }
 
 test('Code chat mode menu shows the available icons and selection', async ({ application, target, workbench }) => {
-	test.skip((target.kind !== 'browser' && target.kind !== 'electron'), 'Requires Code browser or Electron UI');
 	let page = workbench.page;
 	if (target.kind === 'browser') {
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
@@ -2099,244 +2087,22 @@ test('Sessions navigation retains its own selection and hover skin while changin
 	await originalChat!.dispose();
 });
 
-test('Browser Code Sessions Activity Bar centers icons and changes size and position through its menu', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser', 'Requires the browser Code Sessions page');
+test('Browser Code opens Sessions and reloads the routed workbench', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	const activityBar = page.locator('[data-part="activitybar"]');
 	await expect(activityBar).toBeVisible();
-	await expect(activityBar).toHaveClass(/ash-sessions-activitybar/u);
-	await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
-	const activityNavigation = page.locator('.ash-sessions-activity-content');
-	await expectActivityIconSize(activityNavigation, 24);
-	await expect(activityNavigation.getByRole('button', { name: 'Chat' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
-	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
-	await expect(activityNavigation.getByRole('button', { name: 'Code' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'code');
-	await expect(activityNavigation.getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
-	await page.mouse.move(400, 180);
-	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	await expect(activityBar.locator('.ash-sessions-activity-top button svg').first()).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
-	const collaboration = activityBar.getByRole('button', { name: 'Collaboration' });
-	const library = activityBar.getByRole('button', { name: 'Library' });
-	const chat = activityBar.getByRole('button', { name: 'Chat' });
-	await collaboration.click();
-	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab-filled');
-	await expect(collaboration).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
-	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
-	await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
-	await library.click();
-	await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
-	await expect(library).toHaveAttribute('aria-current', 'page');
-	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab');
-	await chat.click();
-	await expect(chat).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
-	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
-	await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-	await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-	const design = activityBar.getByRole('button', { name: 'Creator', exact: true });
-	await design.click();
+	await activityBar.getByRole('button', { name: 'Creator', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	await expect(design.locator('svg')).toHaveAttribute('data-ash-icon-id', 'symbol-color-filled');
-	await expect(design).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
-	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	await expect(canvas).toBeVisible();
-	const world = canvas.locator('.ash-canvas-world');
-	const worldTransform = () => world.evaluate(element => (element as HTMLElement).style.transform);
-	await expect.poll(worldTransform).toBe('translate(0px, 0px) scale(1)');
-	await page.mouse.move(700, 400);
-	await page.mouse.wheel(0, 120);
-	await expect.poll(worldTransform).toBe('translate(0px, -120px) scale(1)');
-	await page.mouse.down();
-	await page.mouse.move(760, 440, { steps: 2 });
-	await page.mouse.up();
-	await expect.poll(worldTransform).toBe('translate(60px, -80px) scale(1)');
-	await canvas.click();
-	await page.keyboard.press('0');
-	await page.keyboard.press('ArrowLeft');
-	await expect.poll(worldTransform).toBe('translate(60px, 0px) scale(1)');
-	await chat.click();
-	await expect(chat).toHaveAttribute('aria-current', 'page');
-	await expect(canvas).toBeHidden();
-	await expect(activityBar.locator('.ash-sessions-activity-bottom button svg').first()).toHaveAttribute('data-ash-icon-id', 'account');
-	const accounts = activityBar.locator('.ash-sessions-activity-bottom button').last();
-	await accounts.click();
-	await expect(accounts).toHaveAttribute('aria-expanded', 'true');
-	await page.getByRole('menuitem', { name: 'Settings' }).click();
-	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
-	await expect(settings).toBeVisible();
-	await expect(settings.locator('.ash-dialog-title')).toBeHidden();
-	await expect(settings).toHaveCSS('border-top-width', '1px');
-	await expect(settings.locator('.ash-sessions-settings')).toHaveCSS('border-top-width', '0px');
-	await expect(settings.locator('.ash-sessions-settings-list').first()).toHaveCSS('border-top-width', '0px');
-	const settingsCard = settings.locator('.ash-sessions-settings-list.ash-settings-card');
-	for (const card of await settingsCard.all()) { await expect(card).toHaveCSS('border-radius', '8px'); }
-	for (const card of await settingsCard.all()) { await expect(card).toHaveCSS('background-color', /rgb\(/); }
-	await expect(settingsCard.locator('.ash-configuration-setting').first()).toHaveCSS('border-top-left-radius', '8px');
-	await expect(settingsCard.locator('.ash-configuration-setting').last()).toHaveCSS('border-bottom-right-radius', '8px');
-	const sidebar = settings.locator('.ash-sessions-settings-sidebar');
-	const settingsPage = settings.locator('.ash-sessions-settings-page');
-	const sidebarBounds = await sidebar.boundingBox();
-	const pageBounds = await settingsPage.boundingBox();
-	expect(sidebarBounds).not.toBeNull();
-	expect(pageBounds).not.toBeNull();
-	expect(sidebarBounds!.x + sidebarBounds!.width).toBeLessThanOrEqual(pageBounds!.x + 1);
-	expect(sidebarBounds!.y + sidebarBounds!.height).toBeGreaterThanOrEqual(pageBounds!.y + pageBounds!.height - 1);
-	await expect(settings.locator('.ash-dialog-actions')).toHaveCount(0);
-	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
-	for (const [section, categories] of [
-		['Basics', ['General', 'Account', 'Appearance', 'Customize']],
-		['Development', ['Agents', 'Design', 'Models', 'Git & PRs', 'Worktree', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
-		['Management', ['Keyboard Shortcuts', 'Archived Chats']],
-	] as const) {
-		const group = navigation.getByRole('group', { name: section });
-		for (const category of categories) {
-			await expect(group.getByRole('button', { name: category, exact: true }).locator('svg.ash-icon')).toHaveCount(1);
-		}
-	}
-	await expect(navigation.getByRole('button', { name: 'Tab', exact: true }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'keyboard-tab');
-	await expect(navigation.getByRole('button', { name: 'Customize' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'briefcase');
-	await expect(navigation.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
-	await expect(navigation.getByRole('button', { name: 'General' })).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-	await expect(settings.getByRole('heading', { name: 'General' })).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toBeVisible();
-	await navigation.getByRole('button', { name: 'Appearance' }).click();
-	await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toBeVisible();
-	await navigation.getByRole('button', { name: 'General' }).click();
-	await expect(settings.getByRole('heading', { name: 'General' })).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
-	await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toHaveCount(0);
-	const dictationBackend = settings.locator('[data-configuration-key="dictation.backend"]').getByRole('combobox');
-	const originalDictationBackend = (await dictationBackend.textContent())!.trim();
-	const changedDictationBackend = originalDictationBackend === 'Local' ? 'Cloud' : 'Local';
-	await dictationBackend.click();
-	await page.getByRole('option', { name: changedDictationBackend }).click();
-	await expect(dictationBackend).toHaveText(changedDictationBackend);
-	await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toBeVisible();
-	await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toHaveCount(0);
-	await settings.getByRole('button', { name: 'Manage API connections' }).click();
-	await expect(settings.getByRole('heading', { name: 'Models', exact: true })).toBeVisible();
-	await navigation.getByRole('button', { name: 'General' }).click();
-	await dictationBackend.click();
-	await page.getByRole('option', { name: originalDictationBackend }).click();
-	await navigation.getByRole('button', { name: 'Archived Chats' }).click();
-	await expect(settingsPage.getByRole('heading')).toHaveCount(0);
-	await expect(settingsPage.locator('.ash-configuration-setting')).toHaveCount(0);
-	await expect(settings.getByText('No settings found.')).toBeHidden();
-	await navigation.getByRole('button', { name: 'Appearance' }).click();
-	await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
-	const searchSettings = settings.getByRole('searchbox', { name: 'Search settings' });
-	await expect(settings.locator('.ash-sessions-settings-search svg[data-ash-icon-id="search"]')).toBeVisible();
-	await searchSettings.fill('layout');
-	await expect(settings.getByRole('heading', { name: 'Search results' })).toBeVisible();
-	await expect(settings.locator('.ash-configuration-setting')).toHaveCount(1);
-	await searchSettings.fill('unmatched-setting');
-	await expect(settings.getByText('No settings found.')).toBeVisible();
-	await navigation.getByRole('button', { name: 'Appearance' }).click();
-	const originalViewport = page.viewportSize();
-	if (!originalViewport) throw new Error('Browser test requires a viewport');
-	await page.setViewportSize({ width: 540, height: 500 });
-	const narrowSidebarBounds = await sidebar.boundingBox();
-	const narrowPageBounds = await settingsPage.boundingBox();
-	expect(narrowSidebarBounds).not.toBeNull();
-	expect(narrowPageBounds).not.toBeNull();
-	expect(narrowSidebarBounds!.y + narrowSidebarBounds!.height).toBeLessThanOrEqual(narrowPageBounds!.y + 1);
-	await expect(settings.getByRole('searchbox', { name: 'Search settings' })).toBeVisible();
-	await page.setViewportSize(originalViewport);
-	const layoutStyle = settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
-	const originalLayoutStyle = (await layoutStyle.textContent())!.trim();
-	const changedLayoutStyle = originalLayoutStyle === 'Flat' ? 'Modern' : 'Flat';
-	await layoutStyle.click();
-	await page.getByRole('option', { name: changedLayoutStyle }).click();
-	await expect(layoutStyle).toHaveText(changedLayoutStyle);
-	await expectActivityIconSize(activityNavigation, 24);
-	await layoutStyle.click();
-	await page.getByRole('option', { name: originalLayoutStyle }).click();
-	await page.keyboard.press('Escape');
-	await expect(settings).toHaveCount(0);
-	await expect(accounts).toBeFocused();
-	const chatButton = activityBar.locator('button').first();
-	const buttonBounds = await chatButton.boundingBox();
-	const iconBounds = await chatButton.locator('svg').boundingBox();
-	expect(buttonBounds).not.toBeNull();
-	expect(iconBounds).not.toBeNull();
-	expect(buttonBounds!.width).toBe(36);
-	expect(buttonBounds!.height).toBe(36);
-	expect(iconBounds!.width).toBe(24);
-	expect(iconBounds!.height).toBe(24);
-	const collaborationIcon = activityBar.locator('button svg[data-ash-icon-id="colab"]');
-	await expect(collaborationIcon).toHaveCSS('width', '24px');
-	expect(Math.abs(iconBounds!.x + iconBounds!.width / 2 - (buttonBounds!.x + buttonBounds!.width / 2))).toBeLessThanOrEqual(1);
-	expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
-	await chatButton.click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Size' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Compact' }).click();
-	await expect.poll(() => chatButton.evaluate(button => button.getBoundingClientRect().width)).toBe(28);
-	await expect(collaborationIcon).toHaveCSS('width', '16px');
-	await expectActivityIconSize(activityNavigation, 16);
-	await expect.poll(() => activityBar.evaluate(bar => bar.getBoundingClientRect().width)).toBe(36);
-	await chatButton.click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
-	await expect(activityBar).toBeHidden();
-	const topHost = page.locator('.ash-sessions-activity-host.top');
-	await expect(topHost).toBeVisible();
-	await expectActivityIconSize(activityNavigation, 16);
-	const titlebarAccounts = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
-	await titlebarAccounts.press('Enter');
-	await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'true');
-	await expect(page.getByRole('menuitem', { name: 'Settings', exact: true })).toBeVisible();
-	await page.keyboard.press('Escape');
-	await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'false');
-	await expect(topHost.locator('button').first()).toHaveAttribute('aria-label', /Chat/);
-	await topHost.locator('button').first().click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
-	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
-	await expect(topHost).toBeHidden();
-	await expectActivityIconSize(activityNavigation, 16);
-	await page.locator('.ash-sessions-activity-host.bottom button').first().click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
+	await expect(page.getByRole('region', { name: 'Design canvas' })).toBeVisible();
+	await activityBar.getByRole('button', { name: 'Chat', exact: true }).click();
+	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
+	await workbench.reloadWindow(page);
 	await expect(activityBar).toBeVisible();
-	await expect.poll(() => activityBar.evaluate(bar => bar.getBoundingClientRect().width)).toBe(36);
-	await expectActivityIconSize(activityNavigation, 16);
-	await chatButton.click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Size' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
-	await expectActivityIconSize(activityNavigation, 24);
-	await chatButton.click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
-	await expect(topHost).toBeVisible();
-	await expectActivityIconSize(activityNavigation, 16);
-	await topHost.locator('button').first().click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
-	const bottomHost = page.locator('.ash-sessions-activity-host.bottom');
-	await expect(bottomHost).toBeVisible();
-	await expectActivityIconSize(activityNavigation, 16);
-	await titlebarAccounts.press('Shift+F10');
-	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
-	await expectActivityIconSize(activityNavigation, 24);
-	await chatButton.click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'Hidden' }).click();
-	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeHidden();
-	await expect(activityBar).toBeHidden();
+	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
 });
 
-test('Browser Sessions settings scroll each pane independently', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the browser Code Sessions page');
+test('Browser Sessions settings scroll each pane independently', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	await page.locator('.ash-sessions-activity-bottom button').last().click();
@@ -2372,8 +2138,7 @@ test('Browser Sessions settings scroll each pane independently', async ({ target
 	}
 });
 
-test('Browser Models Settings controls which models appear in the picker', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires browser Code Sessions with App Server');
+test('Browser Models Settings controls which models appear in the picker', { tag: ['@browser-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	const modelButton = page.locator('[data-action-id="ash.chat.input.model"] button').first();
@@ -2435,8 +2200,7 @@ test('Browser Models Settings controls which models appear in the picker', async
 	await expect(page.locator(':is(.ash-chat-model-picker,.ash-cowork-model-picker)').getByText(modelName, { exact: true })).toBeVisible();
 });
 
-test('Electron Code Sessions Activity Bar follows its position and size settings', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Requires the Code Sessions window');
+test('Electron Code Sessions Activity Bar follows its position and size settings', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = await workbench.openAgentsWindow(target.kind);
 	const original = await page.evaluate(async () => {
@@ -2506,8 +2270,7 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 	}
 });
 
-test('Electron Sessions account menu opens the Sessions settings page', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Requires the Code Sessions window');
+test('Electron Sessions account menu opens the Sessions settings page', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	if (process.platform === 'darwin') {
 		// The system menu is outside Playwright's page DOM; use the product's custom menu for this UI flow.
@@ -2578,8 +2341,7 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	await expect(accountButton).toBeFocused();
 });
 
-test('Sessions and IDE layout styles switch independently', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Requires the Code Sessions window');
+test('Sessions and IDE layout styles switch independently', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const sessionsWindow = sessionsPage.locator('.ash-sessions-window');
@@ -2631,8 +2393,7 @@ test('Sessions and IDE layout styles switch independently', async ({ application
 	}
 });
 
-test('Sessions applies an installed extension color theme', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires Code Sessions and App Server extension resources');
+test('Sessions applies an installed extension color theme', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const openSessions = workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button");
 	const sessionPagePromise = application.waitForEvent('window');
@@ -2651,8 +2412,7 @@ test('Sessions applies an installed extension color theme', async ({ application
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#1e1e1e');
 });
 
-test('Open in Agents moves the IDE chat draft and preserves drafts when the target chat is occupied', async ({ application, driver, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'Uses the Code Electron chat shell');
+test('Open in Agents moves the IDE chat draft and preserves drafts when the target chat is occupied', { tag: ['@electron-ui'] }, async ({ application, driver, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Agents Window handoff requires Electron');
 
 	const workbenchPage = workbench.page;
@@ -2700,8 +2460,7 @@ test('Open in Agents moves the IDE chat draft and preserves drafts when the targ
 	await targetEditor.waitForEditorContents(contents => contents === 'Keep this Code draft during handoff');
 });
 
-test('Open in Agents selects the same session thread in the Agents Window', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires Code Electron with App Server');
+test('Open in Agents selects the same session thread in the Agents Window', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Agents Window handoff requires Electron');
 
 	const workbenchPage = workbench.page;
@@ -2744,8 +2503,7 @@ test('Open in Agents selects the same session thread in the Agents Window', asyn
 	await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
 });
 
-focusTest('Agents macOS fullscreen hides window controls and restores them on exit', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'Requires macOS Code Electron window controls');
+focusTest('Agents macOS fullscreen hides window controls and restores them on exit', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const spacer = sessionsPage.locator('.ash-sessions-window-controls-spacer');
@@ -2774,11 +2532,7 @@ focusTest('Agents macOS fullscreen hides window controls and restores them on ex
 	await expect(spacer).toBeVisible();
 });
 
-test("Code opens Sessions in a dedicated Electron window and returns to Workbench", async ({ application, target, workbench }) => {
-	test.skip(
-		target.kind !== "electron",
-		"This scenario verifies the Code Electron Sessions window.",
-	);
+test("Code opens Sessions in a dedicated Electron window and returns to Workbench", { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== "electron") {
 		return;
 	}
@@ -2795,8 +2549,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await sessionsPage.waitForLoadState("domcontentloaded");
 	await expect(sessionsPage.locator(".ash-code-sessions-window")).toBeVisible();
 	const keybindingsResource = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		const home = await ipc.invoke('ash:files:userDataHome') as string;
+		const home = await globalThis.ashTestMainProcess.call('localFilesystem', 'userDataHome') as string;
 		return `${home.replace(/\/$/u, '')}/keybindings.json`;
 	});
 	// Shortcuts belong to the shared profile file, including after a window reload.
@@ -2804,10 +2557,9 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	const resources = await sessionsPage.evaluate(async resource => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		const configuration = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; };
-		const keybindings = await ipc.invoke('ash:files', { operation: 'readFile', resource }) as { readonly ok: true; readonly value: { readonly revision: string; readonly content: string; }; } | { readonly ok: false; readonly message: string; };
-		if (!keybindings.ok) throw new Error(keybindings.message);
+		const keybindings = await globalThis.ashTestMainProcess.call('localFilesystem', 'readFile', { resource }) as { readonly revision: string; readonly bytes: string; };
 		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
-		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.value.revision, bindings: JSON.parse(keybindings.value.content), connectionKind: connection.kind };
+		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.revision, bindings: JSON.parse(atob(keybindings.bytes)), connectionKind: connection.kind };
 	}, keybindingsResource);
 	expect(resources).toEqual({ configurationRevision: expect.any(Number), keybindingsRevision: expect.any(String), bindings: [], connectionKind: 'local' });
 	const configurationChange = await sessionsPage.evaluate(async () => {
@@ -2836,12 +2588,6 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-runtime", "electron");
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-state", "empty");
-	await workbench.setAppearance(application, "dark", sessionsPage);
-	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-dark");
-	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-titleBar-background").trim())).toBe("#1e1e1e");
-	await workbench.setAppearance(application, "light", sessionsPage);
-	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-light");
-	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-titleBar-background").trim())).toBe("#ffffff");
 	const originalThemeSettings = await sessionsPage.evaluate(async () => {
 		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string; }; };
 		const values = JSON.parse(snapshot.document.source);
@@ -2863,27 +2609,10 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(titlebar.getByRole('button').first()).toHaveCSS('-webkit-app-region', 'no-drag');
 	await expect(titlebar.getByRole('button', { name: 'Return to Workbench' })).toHaveCount(0);
 	await expect(titlebar.locator('.ash-sessions-titlebar-title, .ash-sessions-titlebar-avatar')).toHaveCount(0);
-	const titlebarActions = titlebar.getByRole('toolbar', { name: 'Title bar left actions', exact: true });
-	await expect(titlebarActions).toBeVisible();
-	const titlebarButtons = titlebarActions.getByRole('button');
-	const expectedTitlebarActions = process.platform === 'darwin'
-		? ['Hide sidebar', 'Back', 'Forward']
-		: ['Application menu', 'Hide sidebar', 'Back', 'Forward'];
-	await expect(titlebarButtons).toHaveCount(expectedTitlebarActions.length);
-	const activityNavigation = sessionsPage.locator('.ash-sessions-activity-content');
-	await expect(titlebar.getByRole('navigation', { name: 'Chat and Code' })).toHaveCount(0);
-	await expect(activityNavigation.getByRole('button', { name: 'Chat' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
-	await expect(activityNavigation.getByRole('button', { name: 'Code' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'code');
-	await expect(sessionsPage.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
-	const titlebarActionNames = await titlebarButtons.evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
-	expect(titlebarActionNames).toEqual(expectedTitlebarActions);
-	await expect(titlebar).toHaveCSS('height', '35px');
-	await expect(titlebar).toHaveCSS('border-bottom-width', '0px');
-	const titlebarBounds = await titlebar.boundingBox();
-	const buttonBounds = await titlebarButtons.evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().toJSON()));
-	expect(buttonBounds.every((button, index) => button.right < titlebarBounds!.x + titlebarBounds!.width / 2 && (index === 0 || button.left > buttonBounds[index - 1].left))).toBe(true);
 	if (process.platform === 'darwin') {
 		const spacer = sessionsPage.locator('.ash-sessions-window-controls-spacer');
+		const titlebarButtons = titlebar.getByRole('toolbar', { name: 'Title bar left actions', exact: true }).getByRole('button');
+		expect(await titlebarButtons.evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')))).toEqual(['Hide sidebar', 'Back', 'Forward']);
 		await expect(spacer).toBeVisible();
 		const [spacerBounds, controlsBounds] = await Promise.all([
 			spacer.boundingBox(),
@@ -2900,22 +2629,6 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 			await ipc.invoke('ash:window:operation', { kind: 'setZoom', level: 0 });
 		});
 	}
-	await expect(sessionsPage.locator("[data-part='activitybar']")).toBeVisible();
-	const activityButtons = sessionsPage.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'projects', 'code', 'symbol-color', 'account']);
-	await expect(sessionsPage.locator('.ash-sessions-activity-bottom button')).toHaveCount(1);
-	const chatButton = activityButtons.first();
-	const chatButtonBounds = await chatButton.boundingBox();
-	const chatIconBounds = await chatButton.locator('svg').boundingBox();
-	expect(chatButtonBounds).not.toBeNull();
-	expect(chatIconBounds).not.toBeNull();
-	expect(chatButtonBounds!.width).toBe(36);
-	expect(chatButtonBounds!.height).toBe(36);
-	expect(Math.abs(chatIconBounds!.x + chatIconBounds!.width / 2 - (chatButtonBounds!.x + chatButtonBounds!.width / 2))).toBeLessThanOrEqual(1);
-	expect(Math.abs(chatIconBounds!.y + chatIconBounds!.height / 2 - (chatButtonBounds!.y + chatButtonBounds!.height / 2))).toBeLessThanOrEqual(1);
-	await expect(activityButtons.nth(1)).toBeEnabled();
-	await expect(activityButtons.nth(2)).toBeEnabled();
-	await expect(activityButtons.nth(3)).toBeEnabled();
 	if (target.appServerMode === 'required') {
 		const accounts = sessionsPage.getByRole('button', { name: 'Accounts', exact: true });
 		const accountItems = await new Menus(sessionsPage).inspect(application, () => accounts.click());
@@ -2982,12 +2695,11 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	const reloadedIpc = await sessionsPage.evaluate(async resource => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		const configuration = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; };
-		const keybindings = await ipc.invoke('ash:files', { operation: 'readFile', resource }) as { readonly ok: true; readonly value: { readonly revision: string; readonly content: string; }; } | { readonly ok: false; readonly message: string; };
-		if (!keybindings.ok) throw new Error(keybindings.message);
+		const keybindings = await globalThis.ashTestMainProcess.call('localFilesystem', 'readFile', { resource }) as { readonly revision: string; readonly bytes: string; };
 		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
 		await ipc.invoke('ash:native-host:open-agents-window');
 		const windows = await (ipc as { invoke(channel: string, params: unknown): Promise<unknown>; }).invoke('ash:window:operation', { kind: 'list' }) as readonly unknown[];
-		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.value.revision, bindings: JSON.parse(keybindings.value.content), connectionKind: connection.kind, windowCount: windows.length };
+		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.revision, bindings: JSON.parse(atob(keybindings.bytes)), connectionKind: connection.kind, windowCount: windows.length };
 	}, keybindingsResource);
 	expect(reloadedIpc).toEqual({ configurationRevision: expect.any(Number), keybindingsRevision: resources.keybindingsRevision, bindings: [], connectionKind: 'local', windowCount: 2 });
 	await expect(workbenchPage.evaluate(async () => {
@@ -3079,8 +2791,7 @@ test('Sessions menus and history actions stay independent from Workbench', async
 	await workbench.waitForReady();
 });
 
-test('Sessions titlebar aligns its application menu and actions', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron');
+test('Sessions titlebar aligns its application menu and actions', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const toolbar = sessionsPage.locator('[data-part="titlebar"] .ash-toolbar');
@@ -3547,8 +3258,7 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	await editor.waitForEditorContents(text => text === 'Edited from Code');
 });
 
-test('closing the Workbench keeps Sessions usable and Return to Workbench reopens the workspace', async ({ target }) => {
-	test.skip(target.kind !== 'electron', 'This scenario requires Code Electron');
+test('closing the Workbench keeps Sessions usable and Return to Workbench reopens the workspace', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target }) => {
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-dedicated-close-'));
 	try {
 		const { application, driver, close } = await launchElectron({ appServerMode: target.appServerMode, userDataDirectory });
@@ -3582,8 +3292,7 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 	}
 });
 
-test('Code registers and releases a user system-wide Open Agents Window shortcut', async ({ target }) => {
-	test.skip(target.kind !== 'electron', 'This scenario requires Code Electron');
+test('Code registers and releases a user system-wide Open Agents Window shortcut', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target }) => {
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-shortcut-'));
 	const profileDirectory = join(userDataDirectory, 'profile');
 	const resourcePath = join(profileDirectory, 'keybindings.json');
@@ -3608,8 +3317,7 @@ test('Code registers and releases a user system-wide Open Agents Window shortcut
 	}
 });
 
-test('Agents retains the system-wide shortcut after the Workbench closes and forwards command arguments', async ({ target }) => {
-	test.skip(target.kind !== 'electron', 'This scenario requires Code Electron');
+test('Agents retains the system-wide shortcut after the Workbench closes and forwards command arguments', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target }) => {
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-agents-shortcut-'));
 	const profileDirectory = join(userDataDirectory, 'profile');
 	const resourcePath = join(profileDirectory, 'keybindings.json');

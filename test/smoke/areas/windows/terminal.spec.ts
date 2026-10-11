@@ -2,8 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('terminal Find searches PTY output, restores focus and isolates each instance', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('terminal Find searches PTY output, restores focus and isolates each instance', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const terminal = workbench.terminal;
 	await terminal.show();
@@ -45,8 +44,7 @@ test('terminal Find searches PTY output, restores focus and isolates each instan
 	await expect(input).toHaveValue('ash-find-second');
 });
 
-test('terminal panel preserves focus, accepts input and retains instances when reopened', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('terminal panel preserves focus, accepts input and retains instances when reopened', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await expect(page.locator('.xterm')).toHaveCount(0);
 	await workbench.terminal.show();
@@ -71,8 +69,7 @@ test('terminal panel preserves focus, accepts input and retains instances when r
 	await expect(terminal.locator('.xterm-rows')).toContainText('ash-terminal-ready');
 });
 
-test('terminal instances keep output separate and start in the workspace', async ({ target, testWorkspace, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('terminal instances keep output separate and start in the workspace', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const terminal = workbench.terminal;
 	await terminal.show();
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');
@@ -98,8 +95,7 @@ test('terminal instances keep output separate and start in the workspace', async
 	await expect(terminal.activeInstance.locator('.xterm-rows')).not.toContainText('ash-first-terminal');
 });
 
-test('terminal relaunches an exited shell and accepts new commands', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+test('terminal relaunches an exited shell and accepts new commands', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const terminal = workbench.terminal;
 	await terminal.show();
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');

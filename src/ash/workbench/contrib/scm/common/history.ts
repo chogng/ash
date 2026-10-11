@@ -9,6 +9,7 @@ export class SCMHistoryUnavailableError extends Error { }
 export interface ISCMHistoryOptions {
 	readonly skip?: number;
 	readonly limit?: number;
+	readonly historyItemRefs?: readonly string[];
 }
 
 export interface ISCMHistoryItemRef {
@@ -23,6 +24,9 @@ export interface ISCMHistoryItemRef {
 	readonly canDelete?: boolean;
 }
 
+export const SCMIncomingHistoryItemId = 'scm-graph-incoming-changes';
+export const SCMOutgoingHistoryItemId = 'scm-graph-outgoing-changes';
+
 export interface ISCMHistoryItem {
 	readonly id: string;
 	readonly parentIds: readonly string[];
@@ -31,6 +35,8 @@ export interface ISCMHistoryItem {
 	readonly displayId?: string;
 	readonly timestamp?: number;
 	readonly references?: readonly ISCMHistoryItemRef[];
+	/** A graph summary compares two captured revisions rather than one commit with its parent. */
+	readonly comparison?: { readonly revision: string; readonly baseRevision: string; };
 	readonly remoteLinks?: readonly { readonly name: string; readonly uri: URI; }[];
 }
 
@@ -83,7 +89,8 @@ export interface SCMHistoryItemChangeViewModelTreeElement {
 
 export type ISCMHistoryItemContent =
 	| { readonly kind: 'text'; readonly text: string; }
-	| { readonly kind: 'missing' | 'binary'; };
+	| { readonly kind: 'missing'; }
+	| { readonly kind: 'binary'; readonly bytes?: Uint8Array; };
 
 export interface ISCMHistoryItemChangeContents {
 	readonly parentId: string | undefined;
@@ -93,10 +100,14 @@ export interface ISCMHistoryItemChangeContents {
 
 /** Repository-owned history capability consumed by the SCM view. */
 export interface ISCMHistoryProvider {
+	provideHistoryItemRefs?(historyItemRefs?: readonly string[]): Promise<readonly ISCMHistoryItemRef[]>;
+	resolveHistoryItemRefsCommonAncestor?(historyItemRefs: readonly string[]): Promise<string | undefined>;
+
 	readonly onDidChange: Event<void>;
 	/** Updated decorations for cached items; their identities and commit traversal remain unchanged. */
 	readonly onDidChangeHistoryItemRefs?: Event<readonly ISCMHistoryItem[]>;
 	readonly historyItemRef: IObservable<ISCMHistoryItemRef | undefined>;
+	readonly historyItemRemoteRef?: IObservable<ISCMHistoryItemRef | undefined>;
 	refresh(): void;
 	provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[] | undefined>;
 	resolveHistoryItemDetails(historyItemId: string): Promise<ISCMHistoryItemDetails>;

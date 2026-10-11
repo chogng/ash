@@ -5,8 +5,7 @@ import { expect, test } from '../../../automation/test.js';
 const focusTest = test.extend({ electronWindowMode: 'active' });
 
 for (const windowKind of ['Workbench', 'Agents'] as const) {
-	focusTest(`Electron ${windowKind} window operations use the registered window host`, async ({ application, target, workbench }) => {
-		test.skip(target.kind !== 'electron', 'This scenario requires the Code Electron Workbench');
+	focusTest(`Electron ${windowKind} window operations use the registered window host`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
 		const page = windowKind === 'Agents' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
 		const windowHandle = await application.browserWindow(page);
@@ -55,8 +54,7 @@ for (const windowKind of ['Workbench', 'Agents'] as const) {
 	});
 }
 
-focusTest('window picker data includes the Agents window and can focus it', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'This scenario requires the Code Electron Workbench');
+focusTest('window picker data includes the Agents window and can focus it', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const opened = application.waitForEvent('window');
 	await workbench.page.keyboard.press('F1');

@@ -82,7 +82,6 @@ process.stdin.on('data', data => {
 `;
 
 test.beforeEach(async ({ target, testWorkspace }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the Code DAP process boundary.');
 	const directory = testWorkspace.directory;
 	await mkdir(join(directory, '.vscode'));
 	await writeFile(join(directory, 'debug-adapter.cjs'), adapter);
@@ -97,7 +96,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	}));
 });
 
-test('debug launch resolves host paths and scalar settings through the shared variable owner', async ({ application, workbench, testWorkspace, webAppServer }) => {
+test('debug launch resolves host paths and scalar settings through the shared variable owner', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace, webAppServer }) => {
 	const directory = testWorkspace.directory;
 	const home = webAppServer?.profileDirectory ?? ('windows' in application ? await application.evaluate(() => process.env.HOME!) : undefined);
 	expect(home).toBeTruthy();
@@ -122,7 +121,7 @@ test('debug launch resolves host paths and scalar settings through the shared va
 	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
 });
 
-test('debug startup saves a dirty inactive source before the real adapter reads it', async ({ workbench, testWorkspace }) => {
+test('debug startup saves a dirty inactive source before the real adapter reads it', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const source = join(directory, 'debug-program.js');
 	const proof = join(directory, 'saved-before-launch.txt');
@@ -149,7 +148,7 @@ test('debug startup saves a dirty inactive source before the real adapter reads 
 	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
 });
 
-test('debug preLaunchTask waits for background compilation readiness before starting the adapter', async ({ workbench, testWorkspace }) => {
+test('debug preLaunchTask waits for background compilation readiness before starting the adapter', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	await writeFile(join(directory, 'debug-watch.cjs'), "const fs = require('node:fs'); fs.writeFileSync('compiler-pid.txt', String(process.pid)); console.log('BUILD'); console.log('ASH_DEBUG_COMPILER_WAITING'); const timer = setInterval(() => { if (fs.existsSync('release-compiler')) { clearInterval(timer); console.log('debug-program.js(1,1): warning TS1000: Debug compiler warning'); console.log('READY'); setInterval(() => {}, 1000); } }, 40);\n");
 	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Debug compiler', type: 'process', command: process.execPath, args: ['debug-watch.cjs'], isBackground: true, problemMatcher: { base: '$tsc', background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' } } }] }));
@@ -175,7 +174,7 @@ test('debug preLaunchTask waits for background compilation readiness before star
 	await expect.poll(() => { try { process.kill(pid, 0); return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false; throw error; } }).toBe(false);
 });
 
-test('withdrawing an unrelated declarative debugger preserves a launch waiting for its background task', async ({ application, workbench, testWorkspace }) => {
+test('withdrawing an unrelated declarative debugger preserves a launch waiting for its background task', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'unrelated-debug-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -220,8 +219,7 @@ test('withdrawing an unrelated declarative debugger preserves a launch waiting f
 	await manage('Uninstall');
 });
 
-test('debugging routes colliding adapter IDs to their own workspace folders', async ({ target, application, testWorkspace }) => {
-	test.skip(target.kind !== 'electron', 'The desktop host opens multi-folder workspace files.');
+test('debugging routes colliding adapter IDs to their own workspace folders', { tag: ['@electron-app-server'] }, async ({ target, application, testWorkspace }) => {
 	if (!('windows' in application)) return;
 	const folders = ['first', 'second'].map(name => ({ name, directory: join(testWorkspace.directory, name) }));
 	for (const { name, directory } of folders) {
@@ -341,7 +339,7 @@ interface DebugAdapterBoundary {
 	dispose(): void;
 }
 
-test('debug adapter exit retains every line from a 200 message output burst', async ({ workbench, testWorkspace }) => {
+test('debug adapter exit retains every line from a 200 message output burst', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const script = adapter.replace("if (request.command === 'next') {", `if (request.command === 'continue') {
     for (let index = 0; index < 200; index++) event('output', { category: 'console', output: 'ASH_DEBUG_TAIL_' + index + '\\n' });
     process.stdout.end(() => process.exit(0));
@@ -362,7 +360,7 @@ test('debug adapter exit retains every line from a 200 message output burst', as
 	expect(lines).toEqual(Array.from({ length: 200 }, (_, index) => `ASH_DEBUG_TAIL_${index}`));
 });
 
-test('debugging locates stopped source, edits nested variables by keyboard, refreshes watches, steps and stops', async ({ workbench, testWorkspace }) => {
+test('debugging locates stopped source, edits nested variables by keyboard, refreshes watches, steps and stops', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	const pane = page.locator('[data-view-id="workbench.view.debug"]');
@@ -510,7 +508,7 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	expect(requests.some(request => request.command === 'disconnect')).toBe(true);
 });
 
-test('configured debug inputs cancel before adapter creation and resolve nested selections through to DAP', async ({ workbench, testWorkspace }) => {
+test('configured debug inputs cancel before adapter creation and resolve nested selections through to DAP', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const page = workbench.page;
 	const directory = testWorkspace.directory;
 	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify({
@@ -551,7 +549,7 @@ test('configured debug inputs cancel before adapter creation and resolve nested 
 });
 
 
-test('default build task selection cancels Debug before execution and starts only the selected build', async ({ workbench, testWorkspace }) => {
+test('default build task selection cancels Debug before execution and starts only the selected build', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	await writeFile(join(directory, 'selected-builds.jsonl'), '');
 	await writeFile(join(directory, 'select-build.cjs'), `require('node:fs').appendFileSync(${JSON.stringify(join(directory, 'selected-builds.jsonl'))}, JSON.stringify(process.argv[2]) + '\\n');`);
@@ -584,8 +582,7 @@ test('default build task selection cancels Debug before execution and starts onl
 	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
 });
 
-test('installed Debug configuration provider creates launch templates and resolves the real DAP launch in Web and Electron', async ({ testWorkspace, application, workbench }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('installed Debug configuration provider creates launch templates and resolves the real DAP launch in Web and Electron', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ testWorkspace, application, workbench }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-extension');
@@ -682,8 +679,7 @@ exports.activate = function(context) {
 	await manage('Uninstall');
 });
 
-test('Debug type redirection activates a second installed dormant owner before its configuration and descriptor callbacks', async ({ testWorkspace, application, workbench }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('Debug type redirection activates a second installed dormant owner before its configuration and descriptor callbacks', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ testWorkspace, application, workbench }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const page = workbench.page;
@@ -743,8 +739,7 @@ exports.activate = function(context) {
 });
 
 
-test('installed Debug observer receives early custom events and termination after adapter release', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('installed Debug observer receives early custom events and termination after adapter release', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-events-extension');
@@ -875,8 +870,7 @@ exports.activate = function(context) {
 
 
 for (const transport of ['server', 'pipe', 'debugServer'] as const) {
-	test(`installed Debug ${transport} transport exchanges DAP and releases the connection`, async ({ application, workbench, testWorkspace }) => {
-		test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+	test(`installed Debug ${transport} transport exchanges DAP and releases the connection`, { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 		const directory = testWorkspace.directory;
 		const page = workbench.page;
 		const requests: string[] = [];
@@ -959,8 +953,7 @@ exports.activate = function(context) {
 	});
 }
 
-test('installed inline Debug implementation handles DAP and completes disposal before session end', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('installed inline Debug implementation handles DAP and completes disposal before session end', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const page = workbench.page;
 	const root = join(directory, 'debug-inline');
@@ -1043,7 +1036,7 @@ exports.activate = function(context) {
 });
 
 
-test('installed standard declarative Debug runtime resolves its package file and platform arguments', async ({ application, workbench, testWorkspace }) => {
+test('installed standard declarative Debug runtime resolves its package file and platform arguments', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'declarative-debug-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1097,7 +1090,7 @@ test('installed standard declarative Debug runtime resolves its package file and
 	await manage('Uninstall');
 });
 
-test('installed standard Debug command aliases activate their owner and resolve once per launch', async ({ application, workbench, testWorkspace, restartWorkbench }) => {
+test('installed standard Debug command aliases activate their owner and resolve once per launch', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace, restartWorkbench }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'alias-debug-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1260,8 +1253,7 @@ exports.activate = async context => {
 
 // The fixture is an installed IO peer. It uses the public broker operation shape
 // so the same client-owned sessions and console model are exercised in both hosts.
-test('installed Debug child shares its parent console and stops both owned adapters', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('installed Debug child shares its parent console and stops both owned adapters', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-session-options');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1351,8 +1343,7 @@ exports.activate = function(context) {
 	await expect(output).toContainText('Child_ANSWER');
 });
 
-test('installed adapter starts a DAP child and acknowledges its independent lifecycle', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('installed adapter starts a DAP child and acknowledges its independent lifecycle', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-reverse-start');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1443,8 +1434,7 @@ exports.activate = function(context) {
 });
 
 
-test('Debug provider undefined cancels and null opens the configuration in both resolution phases without starting Tasks or DAP', async ({ application, workbench, testWorkspace }) => {
-	test.skip(process.platform !== 'darwin', 'Requires the product JS confinement launcher.');
+test('Debug provider undefined cancels and null opens the configuration in both resolution phases without starting Tasks or DAP', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-cancellation');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1555,7 +1545,7 @@ exports.activate = function(context) {
 });
 
 
-test('Debug configure command reopens the existing launch document in the selected display language', async ({ workbench, testWorkspace, restartWorkbench }) => {
+test('Debug configure command reopens the existing launch document in the selected display language', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench }) => {
 	const resource = join(testWorkspace.directory, '.vscode', 'launch.json');
 	const original = await readFile(resource, 'utf8');
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');

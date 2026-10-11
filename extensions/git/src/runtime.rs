@@ -270,12 +270,14 @@ fn dispatch(
             connection_id,
             limit,
             cursor,
+            revisions,
         } => runtime
             .graph_for(
                 repository_id.as_deref(),
                 connection_id,
                 limit,
                 cursor.as_deref(),
+                revisions.as_deref(),
             )
             .map(GitProviderResponse::Graph),
         GitProviderRequest::TextDiff { repository_id } => runtime

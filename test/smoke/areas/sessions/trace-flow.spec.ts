@@ -126,8 +126,7 @@ function completedItem(events: readonly AgentTraceEvent[], type: string, callId:
 	return record!;
 }
 
-test('Execution Trace follows a controlled model through real tools, parallel children, returns and offline reopening', async ({ target, application, workbench, testWorkspace, traceModelFixture }, testInfo) => {
-	test.skip(target.appServerMode !== 'required', 'Needs the product App Server.');
+test('Execution Trace follows a controlled model through real tools, parallel children, returns and offline reopening', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace, traceModelFixture }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
 	const { client } = connection;
@@ -248,8 +247,7 @@ test('Execution Trace follows a controlled model through real tools, parallel ch
 	} finally { await connection.close(); }
 });
 
-test('Execution Trace retains real model failure and cancellation during concurrent Threads and reopening', async ({ target, application, workbench, testWorkspace, traceModelFixture }) => {
-	test.skip(target.appServerMode !== 'required', 'Needs the product App Server.');
+test('Execution Trace retains real model failure and cancellation during concurrent Threads and reopening', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace, traceModelFixture }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
 	const { client } = connection;
@@ -298,8 +296,7 @@ test('Execution Trace retains real model failure and cancellation during concurr
 });
 
 for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
-	test(`Hook outcomes reach Chat and Execution Trace through real scripts and survive reopening (${outcome})`, async ({ target, application, workbench, testWorkspace }) => {
-		test.skip(target.appServerMode !== 'required', 'Needs the product App Server.');
+	test(`Hook outcomes reach Chat and Execution Trace through real scripts and survive reopening (${outcome})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 		const page = await workbench.openAgentsWindow(target.kind);
 		const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
 		const { client } = connection;

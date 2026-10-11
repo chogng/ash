@@ -1,8 +1,7 @@
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
-test('Model options combine thinking effort and context size and save the context choice', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the model catalog and preferences backend.');
+test('Model options combine thinking effort and context size and save the context choice', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -54,8 +53,7 @@ test('Model options combine thinking effort and context size and save the contex
 	await expect(configuration).toBeFocused();
 });
 
-test('Model picker keeps search quiet and aligns menu rows and the chosen icon', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the model catalog.');
+test('Model picker keeps search quiet and aligns menu rows and the chosen icon', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -205,8 +203,7 @@ test('Model widget hover uses the same background as the input toolbar', async (
 	await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 
-test('Disconnected model picker explains the empty catalog and opens settings', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'disabled', 'This state requires a disconnected backend.');
+test('Disconnected model picker explains the empty catalog and opens settings', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -241,8 +238,7 @@ test('Disconnected model picker explains the empty catalog and opens settings', 
 	await expect(page.locator('.ash-settings-editor')).toBeVisible();
 });
 
-test('Model picker shows catalog descriptions through hover, keyboard and accessible view', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'The model catalog requires the product backend.');
+test('Model picker shows catalog descriptions through hover, keyboard and accessible view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
@@ -318,8 +314,7 @@ test('Model picker shows catalog descriptions through hover, keyboard and access
 	await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
 });
 
-test('Model picker details and keyboard help follow the Chinese display language', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'The model catalog requires the product backend.');
+test('Model picker details and keyboard help follow the Chinese display language', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Configure Display Language');
@@ -358,8 +353,7 @@ test('Model picker details and keyboard help follow the Chinese display language
 	await expect(selector).toBeFocused();
 });
 
-test('New Chat starts with the last model chosen in the picker', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'The model catalog requires the product backend.');
+test('New Chat starts with the last model chosen in the picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -403,8 +397,7 @@ async function expectModelPickerAnchored(picker: import('@playwright/test').Loca
 	expect(popup!.x + popup!.width).toBeGreaterThan(button!.x);
 }
 
-test('Advisor settings and direct questions use one chat command', async ({ target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Advisor configuration requires the product backend.');
+test('Advisor settings and direct questions use one chat command', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -432,8 +425,7 @@ test('Advisor settings and direct questions use one chat command', async ({ targ
 	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 });
 
-test('Model provider key entry uses the App Server and shows only saved status', async ({ application, target, workbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Model provider keys require the product backend.');
+test('Model provider key entry uses the App Server and shows only saved status', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -477,8 +469,7 @@ test('Model provider key entry uses the App Server and shows only saved status',
 });
 
 
-test('Model connections support Chinese labels and keyboard navigation', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Model connections require the product backend.');
+test('Model connections support Chinese labels and keyboard navigation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();

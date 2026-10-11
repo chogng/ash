@@ -18,8 +18,7 @@ test('resource pattern settings validate structured rules and persist their type
 	});
 });
 
-test('resource rules control readonly editing, automatic reveal and saved history', async ({ target, workbench }) => {
-	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Workspace files require App Server on desktop.');
+test('resource rules control readonly editing, automatic reveal and saved history', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {

@@ -12,13 +12,13 @@ import { Workbench } from '../../automation/workbench.js';
 import { captureElectronMenu } from '../../automation/menus.js';
 import { ElectronPlaywrightDriver, waitForElectronWindowState } from '../../automation/electronDriver.js';
 
-test('ordinary Electron tests keep startup, new windows and reloads from taking system focus', async ({ application, target, workbench, reloadWorkbench }) => {
-	test.skip(target.kind !== 'electron', 'Requires desktop windows.');
+test('ordinary Electron tests keep startup, new windows and reloads from taking system focus', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench, reloadWorkbench }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const readWindows = () => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({
 		focused: window.isFocused(), focusable: window.isFocusable(), visible: window.isVisible(),
 	})));
-	const visible = await application.evaluate(() => process.env.ASH_TEST_WINDOW_MODE === 'inactive');
+	const visible = false;
+	expect(await application.evaluate(() => process.env.ASH_TEST_WINDOW_MODE)).toBe('hidden');
 	await expect.poll(readWindows).toEqual([{ focused: false, focusable: false, visible }]);
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const input = workbench.editors.groupAt(0).editor.input;
@@ -52,8 +52,7 @@ test.describe('background Electron test launches preserve the active application
 	// The foreground process must own real OS focus before the background launch.
 	test.use({ electronWindowMode: 'active' });
 	for (const windowMode of ['hidden', 'inactive'] as const) {
-		test(`Electron ${windowMode} launch preserves another application's system focus`, async ({ application, target, workbench }, testInfo) => {
-			test.skip(target.kind !== 'electron', 'Requires desktop windows.');
+		test(`Electron ${windowMode} launch preserves another application's system focus`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 			if (!('windows' in application)) throw new Error('Expected Electron windows');
 			await application.evaluate(({ app, BrowserWindow }) => {
 				app.focus({ steal: true });
@@ -105,8 +104,7 @@ test.describe('startup diagnostics', () => {
 	});
 });
 
-test('an auxiliary window runtime error fails the scenario', async ({ target, workbench, driver }) => {
-	test.skip(target.kind !== 'electron', 'Requires an auxiliary desktop window.');
+test('an auxiliary window runtime error fails the scenario', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, driver }) => {
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const opened = workbench.page.context().waitForEvent('page');
 	await workbench.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
@@ -123,8 +121,7 @@ test('an auxiliary window runtime error fails the scenario', async ({ target, wo
 	}
 });
 
-test('opening Agents again reuses the restored desktop window', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Desktop focuses an existing window; Browser navigates the current page.');
+test('opening Agents again reuses the restored desktop window', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const context = workbench.page.context();
 	const originalCount = context.pages().length;
 	const agents = await workbench.openAgentsWindow(target.kind);
@@ -134,8 +131,7 @@ test('opening Agents again reuses the restored desktop window', async ({ target,
 	await expect(agents.locator('.ash-sessions-window')).toBeVisible();
 });
 
-test('a failed desktop menu selection restores capture and leaves Main running', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'Checks macOS system popup dispatch.');
+test('a failed desktop menu selection restores capture and leaves Main running', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron application');
 	const page = await workbench.openAgentsWindow(target.kind);
 	const button = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Application menu', exact: true });
@@ -161,8 +157,7 @@ test('a failed dialog choice cancels the request and permits the next confirmati
 	await expect(tab).toHaveCount(0);
 });
 
-test('failed browser navigation closes the allocated browser', async ({ }, testInfo) => {
-	test.skip(testInfo.project.name !== 'browser-ui', 'Checks the Web launcher without a backend.');
+test('failed browser navigation closes the allocated browser', { tag: ['@browser-ui'] }, async ({ }, testInfo) => {
 	const launch = chromium.launch;
 	let browser: Browser | undefined;
 	// Observe the real browser allocated by the launcher, including its failure path.
@@ -176,8 +171,7 @@ test('failed browser navigation closes the allocated browser', async ({ }, testI
 	}
 });
 
-test('an uncaught error in another browser page fails the scenario', async ({ target, workbench, driver }) => {
-	test.skip(target.kind !== 'browser', 'Checks browser context error reporting.');
+test('an uncaught error in another browser page fails the scenario', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, workbench, driver }) => {
 	const page = await workbench.page.context().newPage();
 	try {
 		const emitted = page.waitForEvent('pageerror');
@@ -193,8 +187,7 @@ test('an uncaught error in another browser page fails the scenario', async ({ ta
 // Both scenarios leave a file and a saved backend preference behind. Either
 // order must begin clean, and the Explorer must use that scenario's folder.
 for (const scenario of ['first', 'second']) {
-	test(`connected Web isolates workspace and profile for the ${scenario} scenario`, async ({ testWorkspace, workbench }, testInfo) => {
-		test.skip(testInfo.project.name !== 'browser-app-server', 'Checks per-scenario Web backend ownership.');
+	test(`connected Web isolates workspace and profile for the ${scenario} scenario`, { tag: ['@browser-app-server'] }, async ({ testWorkspace, workbench }, testInfo) => {
 		const fileName = 'scenario-created.ts';
 		expect(await readdir(testWorkspace.directory)).not.toContain(fileName);
 		await writeFile(join(testWorkspace.directory, fileName), 'export const scenario = 1;\n');
@@ -214,8 +207,7 @@ for (const scenario of ['first', 'second']) {
 }
 
 
-test('an Electron restoration timeout closes its process before rejecting launch', async ({ }, testInfo) => {
-	test.skip(!testInfo.project.name.startsWith('electron-'), 'Checks the desktop process lifecycle.');
+test('an Electron restoration timeout closes its process before rejecting launch', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ }, testInfo) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-startup-'));
 	const launch = _electron.launch;
 	const waitForReady = Workbench.prototype.waitForReady;
@@ -242,8 +234,7 @@ test('an Electron restoration timeout closes its process before rejecting launch
 	}
 });
 
-test('Electron window sizing controls the selected page when another window is open', async ({ application, target, workbench, driver }) => {
-	test.skip(target.kind !== 'electron', 'Checks Electron window identity.');
+test('Electron window sizing controls the selected page when another window is open', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench, driver }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron application');
 	const agents = await workbench.openAgentsWindow(target.kind);
 	const workbenchWindow = await application.browserWindow(workbench.page);
@@ -262,8 +253,7 @@ test('Electron window sizing controls the selected page when another window is o
 	} finally { await workbenchWindow.dispose(); }
 });
 
-test('Electron window waits report a locked desktop instead of a focus timeout', async ({ application, target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Checks desktop state diagnostics.');
+test('Electron window waits report a locked desktop instead of a focus timeout', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron application');
 	const original = await application.evaluateHandle(({ powerMonitor }) => powerMonitor.getSystemIdleState);
 	try {
@@ -276,8 +266,7 @@ test('Electron window waits report a locked desktop instead of a focus timeout',
 	}
 });
 
-test('a pending Dock request does not block the first desktop window', async ({ }, testInfo) => {
-	test.skip(process.platform !== 'darwin' || !testInfo.project.name.startsWith('electron-'), 'Checks macOS application startup.');
+test('a pending Dock request does not block the first desktop window', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ }, testInfo) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-dock-'));
 	const desktopDirectory = resolve(import.meta.dirname, '../../..');
 	// Launch from the repository root so Electron resolves the app resources.
@@ -321,8 +310,7 @@ void import('./.build/desktop/main/src/main.js').catch(error => {
 	}
 });
 
-test('an Electron shutdown that refuses to quit terminates its owned process tree', async ({ }, testInfo) => {
-	test.skip(!testInfo.project.name.startsWith('electron-'), 'Checks the desktop process lifecycle.');
+test('an Electron shutdown that refuses to quit terminates its owned process tree', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ }, testInfo) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-shutdown-'));
 	try {
 		const running = await launchElectron({ appServerMode: 'disabled', userDataDirectory: directory });
