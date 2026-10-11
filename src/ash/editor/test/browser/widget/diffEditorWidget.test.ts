@@ -213,6 +213,36 @@ test('DiffEditorWidget applies the split ratio and disables its separator when r
 	assert.throws(() => editor.setSplitViewOptions(true, 1), /between 0.1 and 0.9/);
 });
 
+test('DiffEditorWidget retains unwrapped alignment zones and accessible inline deletions across resizes', async () => {
+	using services = createServices();
+	using original = new TextModel('first\nremoved\nlast');
+	using modified = new TextModel('first\nlast');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	const container = browserEnvironment.window.document.createElement('main');
+	using editor = services.createInstance(DiffEditorWidget, { container, model, wordWrap: false, lineHeight: 20 });
+	editor.layout({ width: 800, height: 200 });
+	const zone = editor.element.querySelector('.ash-diff-alignment-zone');
+	assert.ok(zone);
+	editor.layout({ width: 780, height: 200 });
+	assert.strictEqual(editor.element.querySelector('.ash-diff-alignment-zone'), zone);
+	assert.equal(editor.originalEditor.getTopForLineNumber(3), editor.modifiedEditor.getTopForLineNumber(2));
+	editor.setViewMode(false, false, 900);
+	const deletion = editor.element.querySelector('.stanza-diff-inline-original-line');
+	assert.ok(deletion);
+	assert.equal(deletion.getAttribute('aria-label'), 'Removed line 2: removed');
+	editor.layout({ width: 760, height: 180 });
+	assert.strictEqual(editor.element.querySelector('.stanza-diff-inline-original-line'), deletion);
+	editor.modifiedEditor.updateOptions({ lineHeight: 24 });
+	editor.layout({ width: 760, height: 180 });
+	assert.notStrictEqual(editor.element.querySelector('.stanza-diff-inline-original-line'), deletion);
+	modified.setValue('first\nreplacement\nlast');
+	await waitForReady(model);
+	assert.equal(editor.element.querySelector('.stanza-diff-inline-original-line')?.textContent, 'removed');
+	assert.equal(editor.modifiedEditor.getModel()!.getLineContent(2), 'replacement');
+});
+
 test('DiffEditorWidget inserts paired view space for added lines and navigates without wrapping when requested', async () => {
 	using services = createServices();
 	using original = new TextModel('first\nlast\nold end');

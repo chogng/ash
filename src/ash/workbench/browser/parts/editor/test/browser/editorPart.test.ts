@@ -289,6 +289,37 @@ test('split editors reserve the shared detail column only once', async () => {
 	dom.window.close();
 });
 
+test('EditorPart resizes its active pane once when the content inset is unchanged', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const panes: TestEditorPane[] = [];
+		const registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('ash.test.resize', '.ts', () => trackPane(panes, 'ash.test.resize')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		editor.layout(new Dimension(800, 600));
+		await editor.openEditor(input('C:/project/resize.ts'));
+		const pane = panes[0]!;
+		const layout = pane.layout.bind(pane);
+		const dimensions: IDimension[] = [];
+		pane.layout = dimension => { dimensions.push(dimension); layout(dimension); };
+		editor.layout(new Dimension(820, 600));
+		assert.equal(dimensions.length, 1);
+		assert.equal(dimensions[0]!.width, pane.dimension!.width);
+		const beforeInsetChange = dimensions.length;
+		editor.setContentRightInset(100);
+		assert.equal(dimensions.length - beforeInsetChange, 1);
+		const afterInsetChange = dimensions.length;
+		editor.setContentRightInset(100);
+		assert.equal(dimensions.length, afterInsetChange);
+		dimensions.length = 0;
+		editor.layout(new Dimension(840, 600));
+		assert.equal(dimensions.length, 1);
+		assert.equal(dimensions[0]!.width, pane.dimension!.width);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('EditorPart uses presentation borders without reading DOM dimensions', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using configurationService = new InMemoryConfigurationService();

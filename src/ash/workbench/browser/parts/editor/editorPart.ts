@@ -787,6 +787,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	public setContentRightInset(inset: number): void {
+		if (this.contentRightInset === inset) {
+			return;
+		}
 		this.contentRightInset = inset;
 		this.layoutEditorContent();
 	}

@@ -12,7 +12,9 @@ import '../../../src/ash/base/browser/ui/toggle/toggle.css';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import '../../../src/ash/workbench/contrib/scm/browser/quickDiff.contribution.js';
-import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
+import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
+import { GridView } from '../../../src/ash/base/browser/ui/grid/gridview.js';
+import '../../../src/ash/base/browser/ui/grid/grid.css';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
@@ -129,6 +131,8 @@ const secondOriginal = resources.add(new TextModel('one\n'));
 const secondModified = resources.add(new TextModel('one'));
 const second = resources.add(new DiffModel({ original: secondOriginal, modified: secondModified, diffProvider: computation, diffOptions }));
 const single = resources.add(editorServices.createInstance(DiffEditorWidget, { container: document.getElementById('single')!, model }));
+let resizeGrid: GridView | undefined;
+const resizeLayoutCounts = [0, 0, 0];
 const embedded = resources.add(new MutableDisposable<EmbeddedDiffEditorWidget>());
 let layoutEventCount = 0;
 resources.add(single.modifiedEditor.onDidLayoutChange(() => layoutEventCount++));
@@ -691,6 +695,29 @@ const harness = {
 	setSecondComparisonText(originalText: string, modifiedText: string): void {
 		secondOriginal.setValue(originalText);
 		secondModified.setValue(modifiedText);
+	},
+	mountResizeGrid(): void {
+		const container = document.getElementById('single')!;
+		container.style.width = '900px';
+		if (single.wordWrap) { single.toggleWordWrap(); }
+		const views = [h(container.ownerDocument, 'div'), single.element, h(container.ownerDocument, 'div')].map((element, index) => ({
+			element, minimumWidth: 100, maximumWidth: Infinity, minimumHeight: 0, maximumHeight: Infinity,
+			layout: (size: { width: number; height: number; }): void => {
+				resizeLayoutCounts[index]!++;
+				if (index === 1) { single.layout(size); }
+			},
+		}));
+		resizeGrid = resources.add(new GridView(container, {
+			type: 'branch', orientation: 'horizontal', size: 900,
+			children: views.map((view, index) => ({ type: 'leaf', view, size: [180, 440, 280][index]! })),
+		}));
+		resizeGrid.element.style.width = '900px';
+		resizeGrid.element.style.height = '260px';
+		resizeGrid.layout(900, 260);
+		resizeLayoutCounts.fill(0);
+	},
+	resizeGridState() {
+		return { sizes: [0, 1, 2].map(index => resizeGrid!.getViewSize([index]).width), layouts: [...resizeLayoutCounts] };
 	},
 	selectModifiedAll(): void {
 		single.modifiedEditor.setSelection(Range.fromPositions(modified.positionAt(0), modified.positionAt(modified.getText().length)));

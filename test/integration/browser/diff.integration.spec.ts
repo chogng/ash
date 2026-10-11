@@ -12,6 +12,54 @@ async function openDiffPage(page: Page, locale: DiffTestLocale = 'en'): Promise<
 	await page.waitForFunction(() => !!window.ashDiffIntegration);
 }
 
+test('sash dragging under CPU throttling retains inline diff zones and skips unaffected grid leaves', async ({ page }, testInfo) => {
+	await openDiffPage(page, 'zh-CN');
+	const shared = Array.from({ length: 200 }, (_, index) => `shared ${index}`).join('\n');
+	await page.evaluate(([left, right]) => {
+		window.ashDiffIntegration.setComparisonText(left, right);
+		window.ashDiffIntegration.setViewMode(false, false, 900);
+	}, [`first\nremoved\n${shared}`, `first\n${shared}`]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await page.evaluate(() => window.ashDiffIntegration.mountResizeGrid());
+	const deletion = page.locator('#single .stanza-diff-inline-original-line').first();
+	await expect(deletion).toHaveText('removed');
+	const retainedDeletion = await deletion.elementHandle();
+	const sash = page.locator('#single .ash-grid-view > .ash-split-view > .ash-sash').nth(1);
+	const bounds = await sash.boundingBox();
+	expect(bounds).not.toBeNull();
+	const cdp = await page.context().newCDPSession(page);
+	try {
+		await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+		await cdp.send('Profiler.enable');
+		await cdp.send('Profiler.start');
+		const x = bounds!.x + bounds!.width / 2;
+		const y = bounds!.y + bounds!.height / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + 60, y, { steps: 20 });
+		await page.mouse.up();
+		const state = await page.evaluate(() => window.ashDiffIntegration.resizeGridState());
+		expect(state.sizes).toEqual([180, 500, 220]);
+		expect(state.layouts[0]).toBe(0);
+		expect(state.layouts[1]).toBeGreaterThan(0);
+		expect(state.layouts[2]).toBe(state.layouts[1]);
+		expect(await retainedDeletion!.evaluate(node => node === document.querySelector('#single .stanza-diff-inline-original-line'))).toBe(true);
+		await sash.focus();
+		await page.keyboard.press('ArrowLeft');
+		expect((await page.evaluate(() => window.ashDiffIntegration.resizeGridState())).sizes).toEqual([180, 490, 230]);
+		await expect(sash).toHaveAttribute('aria-valuenow', '490');
+		const { profile } = await cdp.send('Profiler.stop');
+		const profilePath = testInfo.outputPath('sash-resize.cpuprofile');
+		await writeFile(profilePath, JSON.stringify(profile));
+		await testInfo.attach('sash-resize-cpu', { path: profilePath, contentType: 'application/json' });
+		await testInfo.attach('sash-resize-layouts', { body: JSON.stringify(state), contentType: 'application/json' });
+	} finally {
+		await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+		await cdp.detach();
+		await retainedDeletion?.dispose();
+	}
+});
+
 test('diff scrolling preserves overview markers and does not emit editor layout changes', async ({ page }) => {
 	await openDiffPage(page);
 	const original = Array.from({ length: 200 }, (_, index) => `line ${index + 1}`).join('\n');

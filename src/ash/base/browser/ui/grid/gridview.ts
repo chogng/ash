@@ -63,6 +63,9 @@ abstract class GridNode {
 }
 
 class LeafNode extends GridNode {
+	private didLayout = false;
+	private layoutConstraints: readonly number[] | undefined;
+
 	constructor(
 		readonly view: IView,
 		public visible: boolean,
@@ -80,16 +83,29 @@ class LeafNode extends GridNode {
 	isVisible(): boolean { return this.visible; }
 
 	setDisplayed(visible: boolean): void {
+		this.invalidateLayout();
 		this.element.hidden = !visible;
 		this.view.setVisible?.(visible);
 	}
 
 	layout(width: number, height: number, top: number, left: number): void {
+		// Frame insets can change a view's constraints while its outer box stays put.
+		const constraints = [this.minimumWidth, this.maximumWidth, this.minimumHeight, this.maximumHeight];
+		if (this.didLayout && this.width === width && this.height === height && this.top === top && this.left === left
+			&& constraints.every((value, index) => value === this.layoutConstraints?.[index])) {
+			return;
+		}
+		this.didLayout = true;
+		this.layoutConstraints = constraints;
 		this.width = width;
 		this.height = height;
 		this.top = top;
 		this.left = left;
 		this.view.layout({ width, height, top, left });
+	}
+
+	invalidateLayout(): void {
+		this.didLayout = false;
 	}
 }
 
@@ -404,6 +420,11 @@ export class GridView extends Disposable {
 		this.didLayout = true;
 		this.layingOut = true;
 		try {
+			// Explicit layout also refreshes content insets and view constraints. Sash
+			// updates retain the cached geometry so unaffected leaves do no content work.
+			for (const leaf of this.leaves.values()) {
+				leaf.invalidateLayout();
+			}
 			this.root.layout(width, height, 0, 0);
 		} finally {
 			this.layingOut = false;

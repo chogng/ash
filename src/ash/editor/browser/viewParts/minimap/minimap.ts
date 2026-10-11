@@ -107,6 +107,9 @@ export class Minimap extends ViewPart {
 	}
 
 	public override onFlushed(): boolean { return this.invalidateRaster(); }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		return event.scrollTopChanged || event.scrollLeftChanged || event.scrollHeightChanged || event.scrollWidthChanged;
+	}
 	public override onLineMappingChanged(): boolean { return this.invalidateRaster(); }
 	public override onTokensChanged(): boolean { return this.invalidateRaster(); }
 	public override onTokensColorsChanged(): boolean { return this.invalidateRaster(); }

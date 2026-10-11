@@ -6,6 +6,7 @@ import { IClipboardService } from '../../../../../../platform/clipboard/common/c
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { EditorSemanticHighlightingConfiguration } from '../../../../../common/config/editorConfigurationSchema.js';
 import { EditorOption } from '../../../../../common/config/editorOptions.js';
+import type { FontInfo } from '../../../../../common/config/fontInfo.js';
 import { resolveSemanticTokenPresentation } from '../../../../../common/services/semanticTokensStyling.js';
 import { InlineDecoration, InlineDecorationType } from '../../../../../common/viewModel/inlineDecorations.js';
 import { type DiffModel } from '../../../../../common/diff/diffModel.js';
@@ -31,12 +32,26 @@ interface InlineOriginalLine {
 	rendered?: RenderLinesResult;
 }
 
+interface UnwrappedZoneLayout {
+	readonly rows: readonly LineDiffRow[];
+	readonly inlineView: boolean;
+	readonly renderIndicators: boolean;
+	readonly originalVersion: number;
+	readonly modifiedVersion: number;
+	readonly originalLineHeight: number;
+	readonly modifiedLineHeight: number;
+	readonly decorationsWidth: number;
+	readonly fontInfo: FontInfo;
+	readonly tabSize: number;
+}
+
 /** Owns the paired alignment zones and the original lines shown in inline mode. */
 export class DiffEditorViewZones extends Disposable {
 	private originalZones: string[] = [];
 	private modifiedZones: string[] = [];
 	private readonly inlineMargins = this._register(new DisposableStore());
 	private inlineOriginalLines: { readonly version: number; readonly lines: InlineOriginalLine[]; } | undefined;
+	private unwrappedZoneLayout: UnwrappedZoneLayout | undefined;
 
 	constructor(
 		private readonly originalEditor: CodeEditorWidget,
@@ -80,6 +95,30 @@ export class DiffEditorViewZones extends Disposable {
 	}
 
 	public update(inlineView: boolean, wordWrap: boolean, rows: readonly LineDiffRow[], renderIndicators: boolean, comparison?: LineRangeMapping): void {
+		const previous = this.unwrappedZoneLayout;
+		this.unwrappedZoneLayout = undefined;
+		if (!wordWrap && !comparison) {
+			const layout: UnwrappedZoneLayout = {
+				rows, inlineView, renderIndicators,
+				originalVersion: this.model.original.version,
+				modifiedVersion: this.model.modified.version,
+				originalLineHeight: this.originalEditor.getOption(EditorOption.lineHeight),
+				modifiedLineHeight: this.modifiedEditor.getOption(EditorOption.lineHeight),
+				decorationsWidth: this.modifiedEditor.getLayoutInfo().decorationsWidth,
+				fontInfo: this.originalEditor.getOption(EditorOption.fontInfo),
+				tabSize: this.model.original.getOptions().tabSize,
+			};
+			this.unwrappedZoneLayout = layout;
+			// Without wrapping or a moved-block comparison, viewport size does not
+			// change alignment. Retain zone DOM, selection and copy mappings on resize.
+			if (previous && previous.rows === layout.rows && previous.inlineView === layout.inlineView
+				&& previous.renderIndicators === layout.renderIndicators
+				&& previous.originalVersion === layout.originalVersion && previous.modifiedVersion === layout.modifiedVersion
+				&& previous.originalLineHeight === layout.originalLineHeight && previous.modifiedLineHeight === layout.modifiedLineHeight
+				&& previous.decorationsWidth === layout.decorationsWidth && previous.fontInfo === layout.fontInfo && previous.tabSize === layout.tabSize) {
+				return;
+			}
+		}
 		this.inlineOriginalLines = undefined;
 		this.inlineMargins.clear();
 		if (inlineView) {
@@ -164,6 +203,7 @@ export class DiffEditorViewZones extends Disposable {
 	}
 
 	private clear(): void {
+		this.unwrappedZoneLayout = undefined;
 		this.inlineOriginalLines = undefined;
 		this.inlineMargins.clear();
 		this.originalEditor.changeViewZones(accessor => {

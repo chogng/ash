@@ -20,7 +20,7 @@ import * as viewEvents from '../common/viewEvents.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { EditorLineWrapping, EditorOption, type EditorLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
-import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
+import { type EditorViewportChange, EditorViewportChangeReason, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
 import { applyFontInfo } from './config/domFontInfo.js';
 import { EditorConfiguration } from './config/editorConfiguration.js';
@@ -272,6 +272,14 @@ export class View extends ViewEventHandler {
 		this.coordinatesConverter = this.viewModel.coordinatesConverter;
 		this.viewport = viewport;
 		this.onDidChangeLayout = viewport.onDidChange;
+		this._register(viewport.onDidChange(event => {
+			// Scroll-dependent Parts invalidate themselves through view events.
+			// Other geometry changes must still reach every geometry consumer.
+			if (event.reason !== EditorViewportChangeReason.Scroll) {
+				for (const part of this.viewParts) part.forceShouldRender();
+			}
+			this.scheduleProjection();
+		}));
 		this.viewContext = new ViewContext(this.editorConfiguration, options.theme, this.viewModel);
 		// Update the shared theme before Parts handle the same theme event.
 		this.viewModel.addViewEventHandler(this);
@@ -953,11 +961,6 @@ export class View extends ViewEventHandler {
 		if (startLineNumber <= endLineNumber) {
 			this.viewModel.setViewport(startLineNumber, endLineNumber, Math.floor((startLineNumber + endLineNumber) / 2));
 			this.viewModel.visibleLinesStabilized();
-		}
-		// Every Part consumes viewport geometry, including Parts whose own event
-		// handlers only invalidate content. Geometry changes invalidate the whole view.
-		if (layout !== this.renderedLayout) {
-			for (const part of this.viewParts) part.forceShouldRender();
 		}
 		const viewportData = this.createViewportData();
 		for (const part of this.viewParts) {

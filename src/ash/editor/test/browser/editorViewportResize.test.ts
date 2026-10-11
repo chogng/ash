@@ -7,7 +7,7 @@ import { TextModel } from "../../common/model/textModel.js";
 import { installEditorTestGlobals } from './editorTestGlobals.js';
 import { scheduleAtNextAnimationFrame } from '../../../base/browser/scheduler.js';
 import { EditorLineWrapping } from '../../common/config/editorOptions.js';
-import { ContentWidgetPositionPreference } from '../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference } from '../../browser/editorBrowser.js';
 import { Position } from '../../common/core/position.js';
 import { Selection } from '../../common/core/selection.js';
 import { Range } from '../../common/core/range.js';
@@ -152,6 +152,82 @@ async function nextEditorFrame(targetWindow: Window): Promise<void> {
 		}, -1);
 	});
 }
+
+test('scrolling leaves fixed overlay measurements clean while resize and zone geometry still update them', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel(Array.from({ length: 200 }, (_, index) => `line ${String(index).padStart(3, '0')} ${'x'.repeat(100)}`).join('\n'));
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false } });
+	const node = dom.window.document.createElement('div');
+	let measurements = 0;
+	node.getBoundingClientRect = () => {
+		measurements++;
+		return new dom.window.DOMRect(0, 0, 80, 20);
+	};
+	try {
+		view.addOverlayWidget({
+			getId: () => 'fixed-overlay',
+			getDomNode: () => node,
+			getPosition: () => ({ preference: OverlayWidgetPositionPreference.TOP_CENTER }),
+		});
+		view.layout({ width: 400, height: 100 });
+		view.render(true, false);
+		const initialPosition = { left: node.style.left, top: node.style.top };
+		measurements = 0;
+		for (const position of [{ left: 20, top: 20 }, { left: 60, top: 100 }, { left: 0, top: 200 }, { left: 0, top: 0 }]) {
+			view.scrollTo(position);
+			view.render(true, false);
+			assert.deepEqual(view.viewportLayout.scrollPosition, position);
+			assert.deepEqual({ left: node.style.left, top: node.style.top }, initialPosition);
+		}
+		assert.equal(measurements, 0, 'Document scrolling must not remeasure a viewport-fixed widget');
+		view.layout({ width: 300, height: 100 });
+		view.render(true, false);
+		assert.equal(measurements, 1);
+		assert.notEqual(node.style.left, initialPosition.left);
+		view.changeViewZones(accessor => {
+			accessor.addZone({ afterLineNumber: 1, heightInPx: 40, domNode: dom.window.document.createElement('div') });
+		});
+		view.render(true, false);
+		assert.equal(measurements, 2, 'Non-scroll geometry changes still refresh all geometry consumers');
+	} finally {
+		view.dispose();
+		dom.window.close();
+	}
+});
+
+test('selective scroll rendering updates minimap slider and visible text without changing ruler geometry', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel(Array.from({ length: 200 }, (_, index) => `line ${index}`).join('\n'));
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, rulers: [40], minimap: { enabled: true, size: 'fit' } });
+	try {
+		view.layout({ width: 400, height: 100 });
+		view.render(true, false);
+		const slider = requiredElement<HTMLElement>(view.domNode.domNode, '.stanza-editor-minimap-slider');
+		const ruler = requiredElement<HTMLElement>(view.domNode.domNode, '.stanza-editor-ruler');
+		const first = requiredElement(view.domNode.domNode, '.stanza-editor-line-text').textContent;
+		const initialTop = slider.style.top;
+		const rulerHeight = ruler.style.height;
+		assert.equal(slider.hidden, false);
+		view.scrollTo({ left: 0, top: 200 });
+		view.render(true, false);
+		assert.ok(Number.parseFloat(slider.style.top) > Number.parseFloat(initialTop));
+		assert.notEqual(requiredElement(view.domNode.domNode, '.stanza-editor-line-text').textContent, first);
+		assert.equal(ruler.style.height, rulerHeight);
+		view.scrollTo({ left: 0, top: 0 });
+		view.render(true, false);
+		assert.equal(slider.style.top, initialTop);
+		assert.equal(requiredElement(view.domNode.domNode, '.stanza-editor-line-text').textContent, first);
+		model.setValue('short document');
+		view.render(true, false);
+		assert.ok(Number.parseFloat(ruler.style.height) < Number.parseFloat(rulerHeight));
+		assert.equal(slider.style.top, '0px');
+	} finally {
+		view.dispose();
+		dom.window.close();
+	}
+});
 
 test('one window frame renders all queued editors and later window frames do not repeat the batch', () => {
 	const firstDom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });

@@ -48,6 +48,8 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	private readonly bom: string;
 	private eol: '\n' | '\r\n';
 	private mightContainUnusualLineTerminatorsValue: boolean;
+	private mightContainRTLValue: boolean | undefined;
+	private mightContainNonBasicASCIIValue: boolean | undefined;
 
 	constructor(text: string, eol: '\n' | '\r\n' = preferredEOL(text), bom = '', shouldNormalizeEOL = true) {
 		super();
@@ -70,7 +72,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	}
 
 	mightContainRTL(): boolean {
-		return containsRTL(this.getText());
+		return this.mightContainRTLValue ??= containsRTL(this.getText());
 	}
 
 	mightContainUnusualLineTerminators(): boolean {
@@ -82,7 +84,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	}
 
 	mightContainNonBasicASCII(): boolean {
-		return !isBasicASCII(this.getText());
+		return this.mightContainNonBasicASCIIValue ??= !isBasicASCII(this.getText());
 	}
 
 	getLength(): number {
@@ -380,6 +382,10 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 
 	private replace(startOffset: number, endOffset: number, text: string): void {
 		this.assertRange(startOffset, endOffset);
+		// Visible-line queries reuse character flags until the live text changes.
+		// Unlike conservative flags, these queries become false again after removal.
+		this.mightContainRTLValue = undefined;
+		this.mightContainNonBasicASCIIValue = undefined;
 		if (!this.mightContainUnusualLineTerminatorsValue && (text.includes('\u2028') || text.includes('\u2029'))) {
 			this.mightContainUnusualLineTerminatorsValue = true;
 		}

@@ -136,6 +136,58 @@ test('PieceTreeTextBuffer exposes the ITextBuffer query contract', () => {
 	]);
 });
 
+test('PieceTreeTextBuffer character queries reuse full-text scans between edits', () => {
+	using buffer = new PieceTreeTextBuffer('ascii\ntext');
+	const reader = buffer as unknown as { getText(): string; };
+	const original = reader.getText;
+	let scans = 0;
+	reader.getText = () => { scans++; return original.call(buffer); };
+	try {
+		for (let iteration = 0; iteration < 1000; iteration++) {
+			assert.equal(buffer.mightContainRTL(), false);
+			assert.equal(buffer.mightContainNonBasicASCII(), false);
+		}
+		assert.equal(scans, 2);
+		applyOffsetEdit(buffer, buffer.getLength(), buffer.getLength(), '\u05D0');
+		assert.equal(buffer.mightContainRTL(), true);
+		assert.equal(buffer.mightContainNonBasicASCII(), true);
+		assert.equal(scans, 4);
+		buffer.setEOL('\r\n');
+		buffer.compact();
+		scans = 0;
+		assert.equal(buffer.mightContainRTL(), true);
+		assert.equal(buffer.mightContainNonBasicASCII(), true);
+		assert.equal(scans, 0, 'EOL normalization and storage compaction preserve character flags');
+	} finally {
+		reader.getText = original;
+	}
+});
+
+test('PieceTreeTextBuffer character flags refresh before change callbacks and inverse edits', () => {
+	using buffer = new PieceTreeTextBuffer('ascii');
+	const flags = () => ({ rtl: buffer.mightContainRTL(), nonASCII: buffer.mightContainNonBasicASCII() });
+	const observations: ReturnType<typeof flags>[] = [];
+	using listener = buffer.onDidChangeContent(() => observations.push(flags()));
+	assert.deepEqual(flags(), { rtl: false, nonASCII: false });
+	const result = buffer.applyEdits([
+		new ValidAnnotatedEditOperation(null, new Range(1, 6, 1, 6), '\u05D0😀', false, false, false),
+	], false, true);
+	assert.deepEqual(flags(), { rtl: true, nonASCII: true });
+	assert.ok(result.reverseEdits);
+	buffer.applyEdits(result.reverseEdits.map(edit => new ValidAnnotatedEditOperation(edit.identifier, edit.range, edit.text, false, false, false)), false, false);
+	assert.deepEqual(flags(), { rtl: false, nonASCII: false });
+	applyOffsetEdit(buffer, 0, buffer.getLength(), '中文😀');
+	assert.deepEqual(flags(), { rtl: false, nonASCII: true });
+	applyOffsetEdit(buffer, 0, buffer.getLength(), '');
+	assert.deepEqual(flags(), { rtl: false, nonASCII: false });
+	assert.deepEqual(observations, [
+		{ rtl: true, nonASCII: true },
+		{ rtl: false, nonASCII: false },
+		{ rtl: false, nonASCII: true },
+		{ rtl: false, nonASCII: false },
+	]);
+});
+
 test('PieceTreeTextBuffer applies one atomic edit batch and returns inverse edits', () => {
 	using buffer = new PieceTreeTextBuffer('abc\ndef');
 	let changeEvents = 0;

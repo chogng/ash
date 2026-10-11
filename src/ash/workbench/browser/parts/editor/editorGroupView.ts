@@ -835,9 +835,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	public setContentRightInset(inset: number): void {
+		if (this.contentRightInset === inset) {
+			return;
+		}
 		this.contentRightInset = inset;
 		this.contentDomNode.style.width = `calc(100% - ${inset}px)`;
-		this.layout(this.groupDimension);
+		// EditorPart applies insets before its Grid commits the final group dimensions.
 	}
 
 	public setEditorContentVisible(visible: boolean): void {
