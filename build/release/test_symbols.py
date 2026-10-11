@@ -43,6 +43,8 @@ class ReleaseSymbolsTests(unittest.TestCase):
         cls.root = Path(cls.temporary.name).resolve()
         cls.target = default_target()
         cls.spec = target_spec(cls.target)
+        # Stable MSVC requires packed PDBs; macOS needs a companion dSYM.
+        cls.split_debuginfo = "off" if cls.spec.is_linux else "packed"
         cls.binary = cls.root / ("fixture.exe" if cls.spec.is_windows else "fixture")
         cls.source = ROOT / "build/release/fixtures/crash.rs"
         command = [
@@ -54,7 +56,7 @@ class ReleaseSymbolsTests(unittest.TestCase):
             "-C",
             "opt-level=3",
             "-C",
-            "split-debuginfo=" + ("packed" if "darwin" in cls.target else "off"),
+            "split-debuginfo=" + cls.split_debuginfo,
             "-o",
             str(cls.binary),
         ]
@@ -194,9 +196,7 @@ class ReleaseSymbolsTests(unittest.TestCase):
         cargo.write_text("print(" + repr(json.dumps(artifact)) + ")\n")
         environment = os.environ.copy()
         environment["ASH_SYMBOLS_DIR"] = str(self.store.root)
-        environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = (
-            "packed" if self.spec.operating_system.value == "darwin" else "off"
-        )
+        environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = self.split_debuginfo
         status = capture_cargo_build(
             [sys.executable, str(cargo)], ROOT, environment, self.target
         )
