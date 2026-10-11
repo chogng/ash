@@ -138,7 +138,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 			const prompt = page.getByRole('dialog', { name: 'Ash' });
 			await Promise.race([ready, prompt.waitFor({ state: 'visible' })]);
 			if (await prompt.isVisible()) {
-				await prompt.getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
+				await prompt.getByRole('button', { name: /^(?:Trust Folder & Enable Features|信任文件夹并启用开发功能)$/u }).click();
 				onMilestone?.('trust-accepted');
 			}
 		}

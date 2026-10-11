@@ -1,3 +1,4 @@
+import type { TextResourceResolveRequest, TextResourceSaveRequest } from '../../../../services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import assert from "node:assert/strict";
@@ -357,7 +358,7 @@ for (const initialText of [undefined, 'bootstrap']) {
 		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore({
 			onDidSave: Event.None,
 			onDidChangeFiles: files.onDidChangeFiles,
-			resolve: async request => {
+			resolve: async (request: TextResourceResolveRequest) => {
 				const content = await files.resolve(request);
 				if (delayRead) { await started.complete(); await release.p; }
 				return content;
@@ -397,7 +398,7 @@ for (const completionFails of [false, true]) {
 		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore({
 			onDidSave: Event.None,
 			onDidChangeFiles: files.onDidChangeFiles,
-			resolve: async request => {
+			resolve: async (request: TextResourceResolveRequest) => {
 				const content = await files.resolve(request);
 				if (delayRead) { await reading.complete(); await releaseRead.p; }
 				return content;
@@ -580,7 +581,7 @@ test('a background read that overlaps local edits leaves the saved revision and 
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore({
 		onDidSave: Event.None,
 		onDidChangeFiles: textFiles.onDidChangeFiles,
-		resolve: async request => {
+		resolve: async (request: TextResourceResolveRequest) => {
 			if (delayRead) {
 				started.resolve();
 				await proceed.promise;
@@ -906,4 +907,115 @@ test("external file reload is one undo step and retains earlier saved edits", as
 	reference.model.redo();
 	reference.model.redo();
 	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty }, { text: "external\r\nsecond", dirty: false });
+});
+
+test('encoding saves retain the captured codec and later encoding changes remain dirty', async () => {
+	const { EncodingMode } = await import('../../../../services/textfile/common/textfiles.js');
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const writes: { text: string; encoding: string | undefined; expectedRevision: string | undefined }[] = [];
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async (request: TextResourceResolveRequest) => ({ resource: request.resource, text: '中文', revision: 'initial', encoding: 'utf8' }),
+		save: async (request: TextResourceSaveRequest) => {
+			writes.push({ text: request.text, encoding: request.encoding, expectedRevision: request.expectedRevision });
+			if (writes.length === 1) { await started.complete(); await release.p; }
+			return { revision: `saved-${writes.length}` };
+		},
+	}, {});
+	using reference = await models.acquire({ resource: URI.file('/encoding.txt') }, new AbortController().signal);
+	const support = models.getEncodingSupport(reference.resource)!;
+	const first = support.setEncoding('gbk', EncodingMode.Encode);
+	await started.p;
+	assert.equal(reference.isDirty, true);
+	const second = support.setEncoding('utf16le', EncodingMode.Encode);
+	reference.model.applyEdits([{ range: new Range(1, 3, 1, 3), text: '!' }]);
+	await release.complete();
+	await Promise.all([first, second]);
+	assert.deepEqual(writes, [{ text: '中文', encoding: 'gbk', expectedRevision: 'initial' }, { text: '中文', encoding: 'utf16le', expectedRevision: 'saved-1' }]);
+	assert.equal(support.getEncoding(), 'utf16le');
+	assert.equal(reference.isDirty, true);
+	await reference.save(new AbortController().signal);
+	assert.equal(reference.isDirty, false);
+});
+
+test('failed encoding saves preserve dirty preference and revert restores persisted encoding', async () => {
+	const { EncodingMode } = await import('../../../../services/textfile/common/textfiles.js');
+	const reads: (string | undefined)[] = [];
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async (request: TextResourceResolveRequest) => { reads.push(request.encoding); return { resource: request.resource, text: '🦀', revision: 'initial', encoding: 'utf8' }; },
+		save: async () => { throw new Error('unmappable'); },
+	}, {});
+	using reference = await models.acquire({ resource: URI.file('/encoding.txt') }, new AbortController().signal);
+	const support = models.getEncodingSupport(reference.resource)!;
+	await assert.rejects(support.setEncoding('gbk', EncodingMode.Encode), /unmappable/);
+	assert.equal(reference.isDirty, true);
+	assert.equal(support.getEncoding(), 'gbk');
+	assert.equal(reference.model.getText(), '🦀');
+	await reference.revert(new AbortController().signal);
+	assert.equal(reference.isDirty, false);
+	assert.equal(support.getEncoding(), 'utf8');
+	assert.deepEqual(reads, [undefined, 'utf8']);
+});
+
+test('reopening with encoding refuses dirty edits including edits arriving during the read', async () => {
+	const { EncodingMode } = await import('../../../../services/textfile/common/textfiles.js');
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async (request: TextResourceResolveRequest) => {
+			if (request.encoding) { await started.complete(); await release.p; }
+			return { resource: request.resource, text: request.encoding ? 'decoded' : 'original', revision: 'initial', encoding: request.encoding ?? 'utf8' };
+		},
+		save: async () => ({ revision: 'saved' }),
+	}, {});
+	using reference = await models.acquire({ resource: URI.file('/encoding.txt') }, new AbortController().signal);
+	const support = models.getEncodingSupport(reference.resource)!;
+	const decoding = support.setEncoding('gbk', EncodingMode.Decode);
+	await started.p;
+	reference.model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'user ' }]);
+	await release.complete();
+	await assert.rejects(decoding, /document changed/);
+	assert.equal(reference.model.getText(), 'user original');
+	assert.equal(support.getEncoding(), 'utf8');
+	assert.equal(reference.isDirty, true);
+	await assert.rejects(support.setEncoding('gbk', EncodingMode.Decode), /Save or revert/);
+});
+
+test('untitled encoding preferences reach Save As and encoding reload keeps a leading content BOM', async () => {
+	const { EncodingMode } = await import('../../../../services/textfile/common/textfiles.js');
+	const writes: (string | undefined)[] = [];
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async (request: TextResourceResolveRequest) => ({ resource: request.resource, text: request.bootstrapText ?? '\uFEFFcontent', revision: undefined, encoding: request.encoding ?? 'utf8' }),
+		save: async (request: TextResourceSaveRequest) => { writes.push(request.encoding); return { revision: 'saved' }; },
+	}, {});
+	using reference = await models.acquire({ resource: URI.parse('untitled:/encoding.txt'), initialText: 'draft' }, new AbortController().signal);
+	await models.getEncodingSupport(reference.resource)!.setEncoding('utf16be', EncodingMode.Encode);
+	assert.equal(writes.length, 0);
+	await reference.saveAs(URI.file('/saved.txt'), new AbortController().signal);
+	assert.deepEqual(writes, ['utf16be']);
+	assert.equal(reference.isDirty, false);
+	using persisted = await models.acquire({ resource: URI.file('/encoding.txt') }, new AbortController().signal);
+	await models.getEncodingSupport(persisted.resource)!.setEncoding('utf16le', EncodingMode.Decode);
+	assert.equal(persisted.model.getText(), '\uFEFFcontent');
+	assert.equal(models.getEncodingSupport(persisted.resource)!.getEncoding(), 'utf16le');
+});
+
+test('an explicit editor input encoding reaches the first file read and later saves', async () => {
+	const reads: (string | undefined)[] = [];
+	const writes: (string | undefined)[] = [];
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async (request: TextResourceResolveRequest) => { reads.push(request.encoding); return { resource: request.resource, text: '中文', encoding: request.encoding, revision: 'initial' }; },
+		save: async (request: TextResourceSaveRequest) => { writes.push(request.encoding); return { revision: 'saved' }; },
+	}, {});
+	using reference = await models.acquire({ resource: URI.file('/legacy.txt'), encoding: 'gbk' }, new AbortController().signal);
+	assert.equal(reference.model.getText(), '中文');
+	assert.deepEqual(reads, ['gbk']);
+	assert.equal(models.getEncodingSupport(reference.resource)!.getEncoding(), 'gbk');
+	await reference.save(new AbortController().signal);
+	assert.deepEqual(writes, ['gbk']);
 });

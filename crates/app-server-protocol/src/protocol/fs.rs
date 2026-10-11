@@ -106,7 +106,7 @@ pub struct FsReadDirectoryResult {
     pub entries: Vec<FsReadDirectoryEntry>,
 }
 
-/// Read one UTF-8 file relative to the configured directory root.
+/// Read one text file relative to the configured directory root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadFileParams {
@@ -117,6 +117,10 @@ pub struct FsReadFileParams {
     #[ts(optional)]
     pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
+    /// When present, decode/encode editor text using this codec. Reads also accept "auto" for BOM detection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub encoding: Option<String>,
 }
 
 /// UTF-8 text returned by `fs/readFile`.
@@ -126,6 +130,10 @@ pub struct FsReadFileResult {
     pub content: String,
     /// Opaque exact-content revision required to protect a later conditional write.
     pub revision: String,
+    /// Detected codec, absent for legacy UTF-8 reads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub encoding: Option<String>,
 }
 
 /// Read one binary file relative to the configured directory root.
@@ -150,7 +158,7 @@ pub struct FsReadBinaryFileResult {
     pub revision: String,
 }
 
-/// Atomically write one UTF-8 file relative to the configured directory root.
+/// Atomically write one text file relative to the configured directory root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsWriteFileParams {
@@ -166,6 +174,14 @@ pub struct FsWriteFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub expected_revision: Option<String>,
+    /// When present, decode/encode editor text using this codec. Reads also accept "auto" for BOM detection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub encoding: Option<String>,
+    /// Explicit editor publication policy. Absent preserves legacy unconditional writes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub options: Option<FsFileWriteOptions>,
 }
 
 /// Write exact bytes, with legacy paste semantics when no explicit options are supplied.
@@ -198,10 +214,15 @@ pub struct FsWriteFileElevatedParams {
     #[ts(optional)]
     pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
+    /// Exact bytes by default; UTF-8 logical text when an encoding is supplied.
     pub data_base64: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub expected_revision: Option<String>,
+    /// When present, decode/encode editor text using this codec. Reads also accept "auto" for BOM detection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub encoding: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -433,6 +433,7 @@ fn client_reads_writes_and_versions_files_through_typed_contracts() {
             dir_id: None,
             session_directory: None,
             path: "src/main.rs".into(),
+            encoding: None,
         })
         .unwrap();
     let binary = client
@@ -456,6 +457,8 @@ fn client_reads_writes_and_versions_files_through_typed_contracts() {
             path: "src/main.rs".into(),
             content: "fn main() { }\n".into(),
             expected_revision: None,
+            encoding: None,
+            options: None,
         })
         .unwrap();
 

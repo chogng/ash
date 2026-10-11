@@ -2875,6 +2875,8 @@ window.ashStandaloneIntegration = {
 			dispose: () => { }, [Symbol.dispose]: () => { },
 		});
 		services.registerInstance(IFileTextModelService, {
+			onDidChangeEncoding: snapshots.onDidChangeEncoding,
+			getEncodingSupport: resource => snapshots.getEncodingSupport(resource),
 			...services.get(ITextModelResourceService),
 			addSaveParticipant: participant => snapshots.addSaveParticipant(participant),
 			addSaveCompletionParticipant: participant => snapshots.addSaveCompletionParticipant(participant),

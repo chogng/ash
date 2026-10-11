@@ -21,6 +21,8 @@ import { SaveReason, type ISaveOptions } from '../../../common/editor.js';
 import type { ITextModelSaveParticipant } from '../common/textModelResourceService.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { EncodingMode, type IEncodingSupport } from '../../textfile/common/textfiles.js';
+import { assertEncoding } from '../../textfile/common/encoding.js';
 import { localize } from '../../../../nls.js';
 
 interface TextModelEntry {
@@ -35,6 +37,7 @@ interface TextModelEntry {
 	savedText: string;
 	revision: string | undefined;
 	encoding: TextResourceContent["encoding"];
+	savedEncoding: TextResourceContent["encoding"];
 	updatingFile: boolean;
 	completingSave: boolean;
 	dirty: boolean;
@@ -75,12 +78,52 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	private readonly modelAdded = this._register(new Emitter<TextModel>());
 	private readonly modelRemoved = this._register(new Emitter<TextModel>());
 	private readonly modelLanguageChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string; }>());
+	private readonly encodingChanged = this._register(new Emitter<URI>());
+	public readonly onDidChangeEncoding = this.encodingChanged.event;
 	public readonly onModelAdded = this.modelAdded.event;
 	public readonly onModelRemoved = this.modelRemoved.event;
 	public readonly onModelLanguageChanged = this.modelLanguageChanged.event;
 
 	public getModel(resource: URI): TextModel | null { return this.findEntry(resource)?.[1].model ?? null; }
 	public getModels(): readonly TextModel[] { return [...this.entries.values()].map(entry => entry.model); }
+
+	public getEncodingSupport(resource: URI): IEncodingSupport | undefined {
+		const entry = this.findEntry(resource)?.[1];
+		if (!entry || entry.encoding === undefined || (resource.scheme !== Schemas.file && resource.scheme !== Schemas.untitled && entry.revision === undefined)) return undefined;
+		return {
+			getEncoding: () => entry.encoding,
+			setEncoding: (encoding, mode) => this.setEncoding(entry, encoding, mode),
+		};
+	}
+
+	private async setEncoding(entry: TextModelEntry, encoding: string, mode: EncodingMode): Promise<void> {
+		this.ensureEntryAlive(entry);
+		assertEncoding(encoding);
+		if (mode === EncodingMode.Encode) {
+			if (entry.encoding !== encoding) {
+				entry.encoding = encoding;
+				this.encodingChanged.fire(entry.resource);
+				this.refreshDirty(entry);
+			}
+			if (entry.resource.scheme !== Schemas.untitled) await this.save(entry, new AbortController().signal);
+			return;
+		}
+		if (entry.dirty) throw new Error(localize('files.encodingDirty', 'Save or revert your changes before reopening with an encoding.'));
+		const lifetime = this.reference(entry.resource.toString(), entry);
+		const operation = entry.saveQueue.then(async () => {
+			this.ensureEntryAlive(entry);
+			if (entry.dirty) throw new Error(localize('files.encodingDirty', 'Save or revert your changes before reopening with an encoding.'));
+			const version = entry.model.version;
+			const previousEncoding = entry.encoding;
+			const content = await this.resourceStore.resolve({ resource: entry.resource, encoding }, new AbortController().signal);
+			this.ensureEntryAlive(entry);
+			if (entry.dirty || entry.model.version !== version || entry.encoding !== previousEncoding) throw new Error(localize('files.encodingChangedDuringRead', 'The document changed while reopening. Your changes were preserved.'));
+			this.applyFileContent(entry, content, 'revert');
+			this.setExternalChange(entry, false);
+		});
+		entry.saveQueue = operation.catch(() => undefined);
+		try { await operation; } finally { lifetime.dispose(); }
+	}
 
 	public hasPendingSaveRecovery(resource?: URI): boolean {
 		const states = resource ? this.findSaveRecoveries(resource).map(([, state]) => state) : this.saveRecovery.values();
@@ -144,6 +187,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const content = await this.resourceStore.resolve({
 			resource: input.resource,
 			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
+			...(input.encoding === undefined ? {} : { encoding: input.encoding }),
 		}, signal);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
 		this.ensureAlive();
@@ -192,6 +236,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			savedText: input.resource.scheme === Schemas.untitled ? "" : model.getText(),
 			revision: content.revision,
 			encoding: content.encoding,
+			savedEncoding: content.encoding,
 			updatingFile: false,
 			completingSave: false,
 			dirty: input.resource.scheme === Schemas.untitled && model.getText().length > 0,
@@ -268,13 +313,21 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		if (this.uriIdentity.extUri.isEqual(resource, entry.resource)) return this.save(entry, signal);
 		const text = entry.model.getText();
 		const languageId = entry.model.getLanguageId();
+		const encoding = entry.encoding;
 		// Save As runs against the destination so providers receive its URI and inferred language.
 		using target = await this.acquire({ resource, initialText: text, ...(languageId === 'plaintext' ? {} : { languageId }) }, signal);
+		const targetEntry = this.findEntry(target.resource)?.[1];
+		if (targetEntry && encoding !== undefined) {
+			targetEntry.encoding = encoding;
+			this.encodingChanged.fire(targetEntry.resource);
+			this.refreshDirty(targetEntry);
+		}
 		target.model.applyOperations([{ range: target.model.getFullModelRange(), text }]);
 		await target.save(signal);
 		if (!entry.disposed && entry.resource.scheme === Schemas.untitled && !target.isDirty) {
 			// Only the captured draft was saved. Edits made during the write remain dirty.
 			entry.savedText = text;
+			entry.savedEncoding = encoding;
 			this.refreshDirty(entry);
 		}
 	}
@@ -353,6 +406,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				}
 				if (entry.disposed) return;
 				entry.savedText = savedText;
+				entry.savedEncoding = encoding;
 				entry.revision = saved.revision;
 				this.setExternalChange(entry, false);
 				this.refreshDirty(entry);
@@ -397,20 +451,23 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				resource: entry.resource,
 				text: entry.savedText,
 				revision: entry.revision,
-				...(entry.encoding === undefined ? {} : { encoding: entry.encoding }),
+				...(entry.savedEncoding === undefined ? {} : { encoding: entry.savedEncoding }),
 			}, "revert");
 			this.setExternalChange(entry, false);
 			return;
 		}
-		const content = await this.resourceStore.resolve({ resource: entry.resource }, signal);
+		const version = entry.model.version;
+		const encoding = entry.encoding;
+		const content = await this.resourceStore.resolve({ resource: entry.resource, ...(entry.savedEncoding === undefined ? {} : { encoding: entry.savedEncoding }) }, signal);
 		throwIfCancelled(signal, "Text model revert was cancelled");
 		this.ensureEntryAlive(entry);
+		if (entry.model.version !== version || entry.encoding !== encoding) throw new Error(localize('files.encodingChangedDuringRead', 'The document changed while reopening. Your changes were preserved.'));
 		this.applyFileContent(entry, content, "revert");
 		this.setExternalChange(entry, false);
 	}
 
 	private refreshDirty(entry: TextModelEntry): void {
-		const dirty = entry.model.getText() !== entry.savedText;
+		const dirty = entry.model.getText() !== entry.savedText || entry.encoding !== entry.savedEncoding;
 		const changed = entry.dirty !== dirty;
 		entry.dirty = dirty;
 		if (!dirty) {
@@ -444,7 +501,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		await observedSaveQueue;
 		if (entry.disposed || entry.dirty || entry.saveQueue !== observedSaveQueue) return;
 		const observedVersion = entry.model.version;
-		const content = await this.resourceStore.resolve({ resource: entry.resource }, new AbortController().signal);
+		const content = await this.resourceStore.resolve({ resource: entry.resource, ...(entry.savedEncoding === undefined ? {} : { encoding: entry.savedEncoding }) }, new AbortController().signal);
 		if (entry.disposed || entry.dirty || entry.model.version !== observedVersion || entry.saveQueue !== observedSaveQueue) return;
 		if (content.revision !== undefined && content.revision === entry.revision) {
 			this.setExternalChange(entry, false);
@@ -475,6 +532,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			entry.savedText = buffer.getValueInRange(new Range(1, 1, lastLine, buffer.getLineLength(lastLine) + 1), EndOfLinePreference.TextDefined);
 			entry.revision = content.revision;
 			entry.encoding = content.encoding;
+			entry.savedEncoding = content.encoding;
 			// File reloads publish one dirty transition after text and EOL are both updated.
 			entry.updatingFile = true;
 			if (mode === "revert") {
@@ -490,6 +548,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			entry.updatingFile = false;
 			buffer.dispose();
 		}
+		this.encodingChanged.fire(entry.resource);
 		this.refreshDirty(entry);
 	}
 
@@ -574,6 +633,7 @@ function validateInput(input: TextModelInput): void {
 	if (!input || typeof input !== "object" || !input.resource || typeof input.resource.toString !== "function") {
 		throw new TypeError("Text model acquisition requires an editor input resource");
 	}
+	if (input.encoding !== undefined) assertEncoding(input.encoding);
 	if (input.initialText !== undefined && typeof input.initialText !== "string") {
 		throw new TypeError("Editor bootstrap content must be text");
 	}
@@ -581,5 +641,5 @@ function validateInput(input: TextModelInput): void {
 
 function modelText(content: TextResourceContent): string {
 	// The buffer consumes the encoding BOM; any following U+FEFF belongs to the document.
-	return content.encoding === "utf8bom" ? "\uFEFF" + content.text : content.text;
+	return content.encoding === "utf8bom" || content.text.startsWith("\uFEFF") ? "\uFEFF" + content.text : content.text;
 }

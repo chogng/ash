@@ -21,11 +21,12 @@ import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import { EditorAutoSave } from "./editorAutoSave.js";
 import { IEditorPart } from "./editorPart.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
-import { ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from "./editorStatus.js";
+import { ChangeEncodingAction, ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from "./editorStatus.js";
 import { DynamicEditorConfigurations } from "./editorConfiguration.js";
 
 registerAction2(ChangeLanguageAction);
 registerAction2(ChangeEOLAction);
+registerAction2(ChangeEncodingAction);
 
 EditorPanes.registerEditorPane(binaryDiffEditorDescriptor());
 

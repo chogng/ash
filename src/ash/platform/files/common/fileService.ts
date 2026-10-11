@@ -182,11 +182,18 @@ export class FileService extends Disposable implements IFileService {
 		return this.provider(resource).readDirectory(resource);
 	}
 
-	public readFile(resource: URI): Promise<IFileContent> {
-		// Keep the BOM in text so editor format detection remains owned by TextFileService.
-		return this.readFileBytes(resource).then(content => ({
-			resource, content: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(content.bytes), revision: content.revision,
-		}));
+	public readFile(resource: URI, encoding?: string): Promise<IFileContent> {
+		const provider = this.provider(resource);
+		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite)) throw new FileOperationNotSupportedError(resource, 'readFile');
+		if (encoding !== undefined && provider.readTextFile) return provider.readTextFile(resource, encoding);
+		if (encoding !== undefined && !['auto', 'utf8', 'utf8bom'].includes(encoding)) throw new FileOperationNotSupportedError(resource, 'readTextFile');
+		return this.readFileBytes(resource).then(content => {
+			const bom = content.bytes[0] === 0xef && content.bytes[1] === 0xbb && content.bytes[2] === 0xbf;
+			return {
+				resource, content: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(encoding !== undefined && bom ? content.bytes.subarray(3) : content.bytes), revision: content.revision,
+				...(encoding === undefined ? {} : { encoding: bom ? 'utf8bom' : 'utf8' }),
+			};
+		});
 	}
 
 	public readFileBytes(resource: URI): Promise<IFileBytes> {
@@ -237,8 +244,14 @@ export class FileService extends Disposable implements IFileService {
 		}
 	}
 
-	public writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
-		return this.writableProvider(request.resource, 'writeFile').writeFile(request.resource, new TextEncoder().encode(request.content), { create: true, overwrite: true, expectedRevision: request.expectedRevision });
+	public writeFile(request: IFileWriteRequest, options: IFileWriteOptions = { create: true, overwrite: true }, signal?: AbortSignal): Promise<IFileWriteResult> {
+		const provider = this.writableProvider(request.resource, 'writeFile');
+		const writeOptions = { ...options, expectedRevision: request.expectedRevision ?? options.expectedRevision };
+		if (options.writeElevated && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteElevated)) throw new FileOperationNotSupportedError(request.resource, 'writeFileElevated');
+		if (options.unlock && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteUnlock)) throw new FileOperationNotSupportedError(request.resource, 'unlock');
+		if (request.encoding !== undefined && provider.writeTextFile) return provider.writeTextFile(request.resource, request.content, request.encoding, writeOptions, signal);
+		if (request.encoding !== undefined && !['utf8', 'utf8bom'].includes(request.encoding)) throw new FileOperationNotSupportedError(request.resource, 'writeTextFile');
+		return provider.writeFile(request.resource, new TextEncoder().encode(request.encoding === 'utf8bom' ? '\uFEFF' + request.content : request.content), writeOptions, signal);
 	}
 
 	public writeFileBytes(resource: URI, bytes: Uint8Array, options: IFileWriteOptions = { create: true, overwrite: false }, signal?: AbortSignal): Promise<IFileWriteResult> {

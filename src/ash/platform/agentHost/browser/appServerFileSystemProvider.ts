@@ -24,6 +24,7 @@ import {
 	type FileExistingTargetBehavior,
 	type FileMissingTargetBehavior,
 	type IFileBytes,
+	type IFileContent,
 	type IFilePathIdentity,
 	type IFileSystemProviderWithPathIdentity,
 	type IFileChangeEvent,
@@ -331,6 +332,17 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 		}
 	}
 
+	async readTextFile(resource: URI, encoding: string): Promise<IFileContent> {
+		try {
+			const result = await this.api.readFile({ ...this.fileTarget(resource), encoding });
+			return { resource, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
+		} catch (error) {
+			if (isFileNotFound(error)) throw new FileNotFoundError(resource);
+			if (error instanceof AppServerRemoteError && error.errorName === 'FileSystemInvalidText') throw createFileSystemProviderError(localize('files.invalidTextEncoding', 'The file is not text in the selected encoding.'), FileSystemProviderErrorCode.FileNotText);
+			throw error;
+		}
+	}
+
 	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
 		this.assertNotDisposed();
 		const target = this.fileTarget(resource);
@@ -365,6 +377,14 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {
+		return this.writeContents(resource, content, undefined, options, signal);
+	}
+
+	async writeTextFile(resource: URI, content: string, encoding: string, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {
+		return this.writeContents(resource, content, encoding, options, signal);
+	}
+
+	private async writeContents(resource: URI, content: string | Uint8Array, encoding: string | undefined, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {
 		let mode: FsFileWriteMode;
 		if (options.create) mode = options.overwrite ? 'createOrReplace' : 'create';
 		else if (options.overwrite) mode = 'replace';
@@ -376,8 +396,10 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 		}
 		try {
 			const result = options.writeElevated
-				? await this.api.writeFileElevated({ ...this.fileTarget(resource), operationId: generateUuid(), dataBase64: encodeBinaryFile(content), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) }, signal)
-				: await this.api.writeBinaryFile({
+				? await this.api.writeFileElevated({ ...this.fileTarget(resource), operationId: generateUuid(), dataBase64: encodeBinaryFile(typeof content === 'string' ? new TextEncoder().encode(content) : content), ...(encoding === undefined ? {} : { encoding }), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) }, signal)
+				: typeof content === 'string'
+					? await this.api.writeFile({ ...this.fileTarget(resource), content, ...(encoding === undefined ? {} : { encoding }), options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) } })
+					: await this.api.writeBinaryFile({
 					...this.fileTarget(resource),
 					dataBase64: encodeBinaryFile(content),
 					options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
@@ -393,6 +415,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 				revision: result.revision,
 			});
 		} catch (error) {
+			if (error instanceof AppServerRemoteError && error.errorName === 'FileSystemEncodingUnmappable') throw createFileSystemProviderError(localize('files.encodingUnmappable', 'The selected encoding cannot represent all characters. Your changes remain unsaved.'), FileSystemProviderErrorCode.Unavailable);
 			if (isRevisionConflict(error)) throw new FileRevisionConflictError(resource);
 			if (error instanceof AppServerRemoteError && error.errorName === 'FileSystemWriteLocked') {
 				throw createFileSystemProviderError(localize('files.osWriteLocked', 'The file is read-only. Overwrite to make it writable and save.'), FileSystemProviderErrorCode.FileWriteLocked);

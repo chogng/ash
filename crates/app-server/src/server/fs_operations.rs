@@ -14,6 +14,7 @@ use ash_app_server_protocol::protocol::fs::FsDeleteParams;
 use ash_app_server_protocol::protocol::fs::FsExistingTargetBehavior;
 use ash_app_server_protocol::protocol::fs::FsFileType;
 use ash_app_server_protocol::protocol::fs::FsFileWriteMode;
+use ash_app_server_protocol::protocol::fs::FsFileWriteOptions;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataResult;
 use ash_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
@@ -47,6 +48,9 @@ use ash_file_system::FileWriteMode;
 use ash_file_system::LocalFileSystem;
 use ash_file_system::MissingTargetBehavior;
 use ash_file_system::SystemFileTransferOperation;
+use ash_file_system::TextEncodingError;
+use ash_file_system::decode_text;
+use ash_file_system::encode_text;
 use ash_file_system::file_revision;
 use base64::Engine;
 use serde_json::Value;
@@ -129,12 +133,21 @@ impl AppServer {
             )?
             .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
-        let text = String::from_utf8(content.bytes).map_err(|_| {
-            file_system_error(FileSystemError::Io("file is not valid UTF-8".into()))
-        })?;
+        let (text, encoding) = if let Some(encoding) = params.encoding {
+            let decoded = decode_text(&content.bytes, &encoding).map_err(text_encoding_error)?;
+            (decoded.text, Some(decoded.encoding))
+        } else {
+            (
+                String::from_utf8(content.bytes).map_err(|_| {
+                    file_system_error(FileSystemError::Io("file is not valid UTF-8".into()))
+                })?,
+                None,
+            )
+        };
         result(&FsReadFileResult {
             content: text,
             revision: content.revision,
+            encoding,
         })
     }
 
@@ -175,28 +188,36 @@ impl AppServer {
         })
     }
 
-    pub(super) fn fs_write_file(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn fs_write_file(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
         let params: FsWriteFileParams = decode(params)?;
-        let condition = match params.expected_revision {
+        if params.options.is_some() && params.expected_revision.is_some() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let legacy = match params.expected_revision {
             Some(revision) => FileWriteCondition::ExpectedRevision(revision),
             None => FileWriteCondition::Unconditional,
         };
+        let condition = file_write_condition(params.options, connection, legacy)?;
+        let bytes = encode_text(
+            &params.content,
+            params.encoding.as_deref().unwrap_or("utf8"),
+        )
+        .map_err(text_encoding_error)?;
         let metadata = self
             .file_system_for_request(
                 params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
                 Permission::WriteFiles,
             )?
-            .write_file_with_condition(
-                &params.path,
-                params.content.as_bytes(),
-                MAX_EDITOR_FILE_BYTES,
-                &condition,
-            )
+            .write_file_with_condition(&params.path, &bytes, MAX_EDITOR_FILE_BYTES, &condition)
             .map_err(file_system_error)?;
         result(&FsWriteFileResult {
             metadata: metadata_result(metadata),
-            revision: file_revision(params.content.as_bytes()),
+            revision: file_revision(&bytes),
         })
     }
 
@@ -223,6 +244,13 @@ impl AppServer {
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(&params.data_base64)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let bytes = if let Some(encoding) = params.encoding {
+            let text = std::str::from_utf8(&bytes)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            encode_text(text, &encoding).map_err(text_encoding_error)?
+        } else {
+            bytes
+        };
         let files = self.file_system_for_request(
             params.dir_id.as_deref(),
             params.session_directory.as_ref(),
@@ -279,33 +307,11 @@ impl AppServer {
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(&params.data_base64)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-        let condition = match params.options {
-            Some(options) if options.unlock == Some(true) => {
-                if !connection.allows_file_unlock() {
-                    return Err(RpcError::new(
-                        -32073,
-                        AppServerErrorName::PermissionRequired,
-                    ));
-                }
-                if options.mode == FsFileWriteMode::Create {
-                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-                }
-                FileWriteCondition::UnlockAndReplace {
-                    expected_revision: options
-                        .expected_revision
-                        .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
-                }
-            }
-            Some(options) => FileWriteCondition::Options {
-                mode: match options.mode {
-                    FsFileWriteMode::Create => FileWriteMode::Create,
-                    FsFileWriteMode::Replace => FileWriteMode::Replace,
-                    FsFileWriteMode::CreateOrReplace => FileWriteMode::CreateOrReplace,
-                },
-                expected_revision: options.expected_revision,
-            },
-            None => FileWriteCondition::MissingOrEmpty,
-        };
+        let condition = file_write_condition(
+            params.options,
+            connection,
+            FileWriteCondition::MissingOrEmpty,
+        )?;
         let metadata = self
             .file_system_for_request(
                 params.dir_id.as_deref(),
@@ -536,3 +542,53 @@ fn file_system_error(error: FileSystemError) -> RpcError {
         _ => RpcError::new(-32041, AppServerErrorName::FileSystemOperationFailed),
     }
 }
+
+fn file_write_condition(
+    options: Option<FsFileWriteOptions>,
+    connection: &ConnectionState,
+    legacy: FileWriteCondition,
+) -> Result<FileWriteCondition, RpcError> {
+    Ok(match options {
+        Some(options) if options.unlock == Some(true) => {
+            if !connection.allows_file_unlock() {
+                return Err(RpcError::new(
+                    -32073,
+                    AppServerErrorName::PermissionRequired,
+                ));
+            }
+            if options.mode == FsFileWriteMode::Create {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            FileWriteCondition::UnlockAndReplace {
+                expected_revision: options
+                    .expected_revision
+                    .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+            }
+        }
+        Some(options) => FileWriteCondition::Options {
+            mode: match options.mode {
+                FsFileWriteMode::Create => FileWriteMode::Create,
+                FsFileWriteMode::Replace => FileWriteMode::Replace,
+                FsFileWriteMode::CreateOrReplace => FileWriteMode::CreateOrReplace,
+            },
+            expected_revision: options.expected_revision,
+        },
+        None => legacy,
+    })
+}
+
+fn text_encoding_error(error: TextEncodingError) -> RpcError {
+    match error {
+        TextEncodingError::Unsupported => RpcError::new(-32602, AppServerErrorName::InvalidParams),
+        TextEncodingError::InvalidText => {
+            RpcError::new(-32000, AppServerErrorName::FileSystemInvalidText)
+        }
+        TextEncodingError::Unmappable => {
+            RpcError::new(-32000, AppServerErrorName::FileSystemEncodingUnmappable)
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "fs_operations_tests.rs"]
+mod tests;

@@ -7,6 +7,7 @@ import type { DocumentPlugin } from "../../../../editor/common/model/documentPlu
 import type { DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import type { ISaveOptions, SaveReason } from '../../../common/editor.js';
+import type { IEncodingSupport } from '../../textfile/common/textfiles.js';
 
 /** Runs against the shared model before the persistence owner captures the text to write. */
 export interface ITextModelSaveParticipant {
@@ -31,6 +32,7 @@ export interface ITextModelSaveCompletionParticipant {
 export interface TextModelInput {
 	readonly resource: URI;
 	readonly initialText?: string;
+	readonly encoding?: string;
 	readonly languageId?: string;
 	readonly contentType?: string;
 }
@@ -72,6 +74,9 @@ export interface ITextModelResourceService<TInput extends TextModelInput = TextM
 
 /** Shared open file models and their resource and language lifecycle. */
 export interface IFileTextModelService extends ITextModelResourceService {
+	readonly onDidChangeEncoding: Event<URI>;
+	/** Non-owning view of the currently open file model; never acquires a second model. */
+	getEncodingSupport(resource: URI): IEncodingSupport | undefined;
 	addSaveParticipant(participant: ITextModelSaveParticipant): IDisposable;
 	addSaveCompletionParticipant(participant: ITextModelSaveCompletionParticipant): IDisposable;
 	/** Includes queued saves and failed necessary checkpoints, without changing file dirty state. */

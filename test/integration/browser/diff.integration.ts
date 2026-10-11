@@ -1,3 +1,4 @@
+import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { Icon } from '../../../src/ash/base/common/icon.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
@@ -174,7 +175,7 @@ let titleGitDelay = 0;
 let titleGitEncoding: 'utf8' | 'utf8bom' = 'utf8';
 const inspectedFiles: string[] = [];
 const gitGutterCalls: unknown[] = [];
-const titleWrites: { resource: string; text: string; }[] = [];
+const titleWrites: { resource: string; text: string; encoding?: string; }[] = [];
 let titleSaveFailure = false;
 let writableTitleInput: import('../../../src/ash/workbench/common/editor.js').IResourceEditorInput | undefined;
 const titleGit = {
@@ -249,15 +250,16 @@ function createSessionChangesPane(): SessionChangesEditor {
 import '../../../src/ash/editor/contrib/indentation/browser/indentation.js';
 import '../../../src/ash/editor/contrib/quickAccess/browser/quickAccessController.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLineQuickAccess.js';
-import { EditorStatusContribution, ChangeLanguageAction, ChangeEOLAction } from '../../../src/ash/workbench/browser/parts/editor/editorStatus.js';
+import { EditorStatusContribution, ChangeLanguageAction, ChangeEOLAction, ChangeEncodingAction } from '../../../src/ash/workbench/browser/parts/editor/editorStatus.js';
 import { StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
 import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
 resources.add(registerAction2(ChangeLanguageAction));
 resources.add(registerAction2(ChangeEOLAction));
+resources.add(registerAction2(ChangeEncodingAction));
 
 const harness = {
-	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8'): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8'): Promise<void> {
 		titleGitEncoding = encoding;
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
@@ -265,7 +267,8 @@ const harness = {
 		document.body.prepend(host);
 		resources.add(toDisposable(() => host.remove()));
 		titleConfiguration = resources.add(new InMemoryConfigurationService());
-		const services = resources.add(createTestEditorServices(titleConfiguration));
+		const parentServices = resources.add(createTestEditorServices(titleConfiguration));
+		const services = resources.add(parentServices.createChild());
 		titleServices = services;
 		if (kind === 'git') {
 			services.registerInstance(INotificationService, { error: (message: string) => gitGutterCalls.push({ error: message }), info: () => { } } as unknown as INotificationService);
@@ -334,12 +337,14 @@ const harness = {
 		const contexts = services.get(IContextKeyService);
 		titleTheme = services.get(IThemeService) as TestThemeService;
 		resources.add(bindColorTheme(services.get(IThemeService), document.documentElement));
+		let storedEncoding = 'utf8';
 		const store: ITextResourceStore = {
 			onDidChange: Event.None,
-			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
-			save: async request => { if (titleSaveFailure) throw new Error('Save rejected'); titleWrites.push({ resource: request.resource.path, text: request.text }); return { revision: undefined }; },
+			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? 'after\nshared', revision: kind === 'encoding' ? 'encoding-revision' : undefined, ...(kind === 'encoding' ? { encoding: request.encoding ?? storedEncoding } : {}) }),
+			save: async request => { if (titleSaveFailure) throw new Error('Save rejected'); titleWrites.push({ resource: request.resource.path, text: request.text, ...(request.encoding === undefined ? {} : { encoding: request.encoding }) }); storedEncoding = request.encoding ?? storedEncoding; return { revision: kind === 'encoding' ? 'encoded-revision' : undefined }; },
 		};
 		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, store, {}));
+		services.registerInstance(IFileTextModelService, models);
 		const registry = new EditorPaneRegistry();
 		resources.add(registry.registerEditorPane({
 			id: DIFF_EDITOR_ID,
@@ -407,7 +412,7 @@ const harness = {
 			{ resource: URI.file('/title/after.ts'), label: 'after.ts', initialText: 'after\nshared' },
 		), { pinned: true });
 	},
-	readTitlePersistence(): { dirty: boolean; copies: number; writes: { resource: string; text: string; }[]; tabs: number; active: string | undefined; } {
+	readTitlePersistence(): { dirty: boolean; copies: number; writes: { resource: string; text: string; encoding?: string; }[]; tabs: number; active: string | undefined; } {
 		return { dirty: titleEditor!.activeGroup.editors.some(editor => editor.isDirty), copies: titleServices!.get(IWorkingCopyService).getAll().length, writes: [...titleWrites], tabs: titleEditor!.activeGroup.inputs.length, active: titleEditor!.activeInput?.resource.toString() };
 	},
 	async saveTitleFiles(fail = false): Promise<string | undefined> {

@@ -2978,7 +2978,7 @@ impl AppServer {
             Some(ClientMethod::LanguageResolveCodeAction) => {
                 self.language_resolve_code_action(&request.params, cancellation)
             }
-            Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),
+            Some(ClientMethod::FsWriteFile) => self.fs_write_file(connection, &request.params),
             Some(ClientMethod::FsWriteFileElevated) => {
                 self.fs_write_file_elevated(connection, &request.params, cancellation)
             }

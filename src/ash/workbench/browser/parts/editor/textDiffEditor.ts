@@ -1,3 +1,5 @@
+import { IWorkingCopyService, type IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
+import { EditorWorkingCopy } from './textResourceEditor.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { type IDimension } from "../../../../base/browser/dom.js";
@@ -52,6 +54,8 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	private readonly modelService: ITextModelResourceService;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
+
+	public get workingCopy(): IWorkingCopy | undefined { return this.session.value?.workingCopy; }
 
 	public override getControl(): DiffEditorWidget | undefined {
 		return this.session.value?.editor;
@@ -116,7 +120,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 			next = this.instantiationService.createInstance(
 				DiffEditorPaneSession, container, original, modified,
-				input.original.label, input.modified.label, input.modified.readOnly === true, this.options,
+				input.original.label, input.modified, this.options,
 			);
 			await next.waitForDiff(signal);
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
@@ -181,6 +185,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 
 class DiffEditorPaneSession extends Disposable {
 	readonly editor: DiffEditorWidget;
+	readonly workingCopy: IWorkingCopy | undefined;
 	private readonly model: DiffModel;
 	private initialRevealPending = true;
 
@@ -189,17 +194,16 @@ class DiffEditorPaneSession extends Disposable {
 		original: TextModelReference,
 		modified: TextModelReference,
 		originalLabel: string | undefined,
-		modifiedLabel: string | undefined,
-		readOnly: boolean,
+		modifiedInput: IResourceEditorInput,
 		options: DiffEditorPaneOptions,
 		@IConfigurationService configuration: IConfigurationService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IWorkingCopyService workingCopies: IWorkingCopyService,
 	) {
 		super();
 		this._register(original);
-		this._register(modified);
 		const originalEditorModel = this._register(new BaseTextEditorModel(original.model));
-		const modifiedEditorModel = this._register(new BaseTextEditorModel(modified.model, readOnly));
+		const modifiedEditorModel = this._register(new BaseTextEditorModel(modified.model, modifiedInput.readOnly === true));
 		const editorModel = this._register(new TextDiffEditorModel(originalEditorModel, modifiedEditorModel));
 		const textModels = editorModel.textDiffEditorModel;
 		assertDefined(textModels, new ReferenceError('Diff editor requires two resolved text models'));
@@ -294,9 +298,11 @@ class DiffEditorPaneSession extends Disposable {
 			showInlineChanges: options.showInlineChanges,
 			loopChanges: options.loopChanges,
 			originalAriaLabel: originalLabel,
-			modifiedAriaLabel: modifiedLabel,
+			modifiedAriaLabel: modifiedInput.label,
 		}));
 		this.editor.setAccessibilityHelpHint(configuration.getValue(AccessibilityVerbositySettingId.DiffEditor));
+		this.workingCopy = modifiedInput.readOnly ? undefined : this._register(new EditorWorkingCopy(modified, modifiedInput, workingCopies, undefined));
+		if (!this.workingCopy) this._register(modified);
 	}
 
 	updateOptions(options: IDocumentDiffProviderOptions): void {

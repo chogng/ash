@@ -1,3 +1,6 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -34,6 +37,8 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	using services = new InstantiationService();
 	services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);
+	using quickInput = new QuickInputController(dom.window.document.body);
+	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
 		openEditor: async (input, options) => { opened = input; openOptions = options; },
@@ -48,6 +53,15 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	assert.equal(opened?.resource.toString(), resource.toString());
 	assert.equal(opened?.readOnly, true);
 	assert.equal(opened?.initialText, 'Hi\u0000�');
+	assert.equal(openOptions?.preferredEditorId, CODE_EDITOR_ID);
+	opened = undefined;
+	dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-with-encoding')!.click();
+	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!;
+	input.value = 'GBK';
+	input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	await waitFor(() => opened !== undefined);
+	assert.deepEqual(opened, { resource, encoding: 'gbk' });
 	assert.equal(openOptions?.preferredEditorId, CODE_EDITOR_ID);
 	pane.dispose();
 	dom.window.close();

@@ -1,16 +1,15 @@
-import { VSBuffer } from '../../../../base/common/buffer.js';
 import { IElevatedFileService } from '../../files/common/elevatedFileService.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { FileRevisionConflictError, IFileService, type IFileChangeEvent } from '../../../../platform/files/common/files.js';
+import { FileRevisionConflictError, IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileChangeEvent } from '../../../../platform/files/common/files.js';
 import { IFilesConfigurationService } from '../../filesConfiguration/common/filesConfigurationService.js';
 import { TextFileBinaryError, TextFileContentSource, TextFileSaveConflictError, TextFileTooLargeError } from '../common/textFileService.js';
 import type { ITextFileSaveEvent, ResolvedTextFileContent, TextFileResolveRequest, TextFileSaveRequest, TextFileSaveResult } from '../common/textFileService.js';
 import type { ITextFileService } from '../common/textfiles.js';
+import { assertEncoding } from '../common/encoding.js';
 
 /** Resolves bootstrap snapshots first and otherwise delegates workspace reads to the file service. */
 export class TextFileService extends Disposable implements ITextFileService {
@@ -35,23 +34,30 @@ export class TextFileService extends Disposable implements ITextFileService {
 				text: request.bootstrapText,
 				source: TextFileContentSource.Bootstrap,
 				revision: undefined,
-				encoding: 'utf8',
+				encoding: request.encoding ?? 'utf8',
 			});
 		}
 		const stat = await raceCancellationError(this.files.stat(request.resource), signal, 'Text file resolution was cancelled');
 		if (stat.sizeBytes > MAX_SAFE_TEXT_FILE_BYTES) {
 			throw new TextFileTooLargeError(request.resource, stat.sizeBytes);
 		}
-		const content = await raceCancellationError(this.files.readFileBytes(request.resource), signal, 'Text file resolution was cancelled');
-		if (!(content.bytes instanceof Uint8Array) || typeof content.revision !== 'string') {
-			throw new TypeError('File service returned invalid text content');
+		let content;
+		try {
+			content = await raceCancellationError(this.files.readFile(request.resource, request.encoding ?? 'auto'), signal, 'Text file resolution was cancelled');
+		} catch (error) {
+			if (toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotText || error instanceof TypeError) throw new TextFileBinaryError(request.resource, undefined, { cause: error });
+			throw error;
 		}
+		const text = content.content;
+		const encoding = content.encoding ?? request.encoding ?? 'utf8';
+		throwIfCancelled(signal, 'Text file resolution was cancelled');
+		if (looksBinary(text)) throw new TextFileBinaryError(request.resource);
 		return Object.freeze({
 			resource: request.resource,
-			text: decodeUtf8Text(content.bytes, request.resource),
+			text,
 			source: TextFileContentSource.FileSystem,
 			revision: content.revision,
-			encoding: content.bytes[0] === 0xef && content.bytes[1] === 0xbb && content.bytes[2] === 0xbf ? 'utf8bom' : 'utf8',
+			encoding,
 		});
 	}
 
@@ -63,14 +69,13 @@ export class TextFileService extends Disposable implements ITextFileService {
 			throw new Error(typeof readonly === 'string' ? readonly : localize('files.readonly', 'This file is read-only.'));
 		}
 		try {
-			const content = request.encoding === 'utf8bom' ? '\uFEFF' + request.text : request.text;
+			const content = request.text;
+			if (request.writeElevated && !this.elevatedFiles.isSupported(request.resource)) throw new Error(localize('files.elevationUnavailable', 'System authorization is unavailable on this host.'));
 			// Join the provider write before cancellation can release a transaction for rollback.
-			const saved = request.writeElevated
-				? await this.elevatedFiles.writeFileElevated(request.resource, VSBuffer.fromString(content), { create: true, overwrite: true, expectedRevision: request.expectedRevision }, signal)
-				: request.unlock
-					? await this.files.writeFileBytes(request.resource, VSBuffer.fromString(content).buffer, { create: false, overwrite: true, expectedRevision: request.expectedRevision, unlock: true }, signal)
-					: await this.files.writeFileBytes(request.resource, VSBuffer.fromString(content).buffer, { create: true, overwrite: true, expectedRevision: request.expectedRevision }, signal);
-			this.saved.fire({ resource: request.resource, content, revision: saved.revision });
+			const saved = await this.files.writeFile({ resource: request.resource, content, encoding: request.encoding ?? 'utf8', ...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision }) }, {
+				create: !request.unlock, overwrite: true, ...(request.unlock ? { unlock: true } : {}), ...(request.writeElevated ? { writeElevated: true } : {}),
+			}, signal);
+			this.saved.fire({ resource: request.resource, content: request.encoding === 'utf8bom' ? '\uFEFF' + content : content, revision: saved.revision });
 			return Object.freeze({ revision: saved.revision });
 		} catch (error) {
 			if (error instanceof FileRevisionConflictError) {
@@ -83,26 +88,14 @@ export class TextFileService extends Disposable implements ITextFileService {
 
 const MAX_SAFE_TEXT_FILE_BYTES = 32 * 1024 * 1024;
 
-function decodeUtf8Text(bytes: Uint8Array, resource: URI): string {
-	if (looksBinary(bytes)) {
-		throw new TextFileBinaryError(resource);
-	}
-	try {
-		const offset = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
-		return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes.subarray(offset));
-	} catch (error) {
-		throw new TextFileBinaryError(resource, 'The file is not valid UTF-8 text', { cause: error });
-	}
-}
-
-function looksBinary(bytes: Uint8Array): boolean {
-	const sampleLength = Math.min(bytes.length, 8_192);
+function looksBinary(text: string): boolean {
+	const sampleLength = Math.min(text.length, 8_192);
 	if (sampleLength === 0) {
 		return false;
 	}
 	let suspicious = 0;
 	for (let index = 0; index < sampleLength; index += 1) {
-		const byte = bytes[index]!;
+		const byte = text.charCodeAt(index);
 		if (byte === 0) {
 			return true;
 		}
@@ -120,6 +113,7 @@ function validateRequest(request: TextFileResolveRequest): void {
 	if (request.bootstrapText !== undefined && typeof request.bootstrapText !== 'string') {
 		throw new TypeError('Text file bootstrap content must be text');
 	}
+	if (request.encoding !== undefined) assertEncoding(request.encoding);
 }
 
 function validateSaveRequest(request: TextFileSaveRequest): void {
@@ -132,4 +126,5 @@ function validateSaveRequest(request: TextFileSaveRequest): void {
 	if (request.expectedRevision !== undefined && typeof request.expectedRevision !== 'string') {
 		throw new TypeError('Text file expected revision must be text');
 	}
+	if (request.encoding !== undefined) assertEncoding(request.encoding);
 }

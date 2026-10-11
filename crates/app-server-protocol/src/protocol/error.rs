@@ -77,6 +77,8 @@ pub enum AppServerErrorName {
     InvalidResourceOffset,
     FileSystemUnavailable,
     FileSystemOperationFailed,
+    FileSystemInvalidText,
+    FileSystemEncodingUnmappable,
     FileSystemNotFound,
     FileSystemRevisionConflict,
     FileSystemPermissionDenied,

@@ -11,7 +11,7 @@ import { FileKind, IFileService, FileOperationNotSupportedError, FileSystemProvi
 import { createDisconnectedFileApi } from '../../../../../platform/files/browser/fileApi.js';
 import { AppServerFileSystemProvider } from '../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
 import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
-import type { FsWriteBinaryFileParams, FsWriteFileElevatedParams, FsWriteFileResult } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { FsWriteFileParams, FsWriteFileElevatedParams, FsWriteFileResult } from '../../../../../../../.build/protocol/typescript/index.js';
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../../filesConfiguration/common/filesConfigurationService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -29,7 +29,7 @@ suiteTeardown(() => uriIdentityServices.dispose());
 const resource = URI.file('/project/notes.txt');
 const saved: FsWriteFileResult = { revision: 'saved-revision', metadata: { fileType: 'file', readonly: false, sizeBytes: 10, modifiedAtMillis: 1 } };
 
-function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSignal) => Promise<FsWriteFileResult>, ordinary?: (request: FsWriteBinaryFileParams) => Promise<FsWriteFileResult>) {
+function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSignal) => Promise<FsWriteFileResult>, ordinary?: (request: FsWriteFileParams) => Promise<FsWriteFileResult>) {
 	const services = new InstantiationService();
 	const workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
 	const configuration = new InMemoryConfigurationService();
@@ -37,7 +37,7 @@ function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSigna
 	const provider = new AppServerFileSystemProvider({
 		workspaceContextService: workspace,
 		resourceApi: { connectionGeneration: 1, metadata: async () => { throw new Error('Unexpected resource metadata'); }, read: async () => { throw new Error('Unexpected resource read'); }, release: async () => undefined },
-		api: { ...createDisconnectedFileApi(() => { throw new Error('Unexpected ordinary file operation'); }), writeFileElevated: write, ...(ordinary ? { writeBinaryFile: ordinary } : {}) },
+		api: { ...createDisconnectedFileApi(() => { throw new Error('Unexpected ordinary file operation'); }), readFile: async () => ({ content: 'old\r\n', revision: 'original-revision', encoding: 'utf8bom' }), writeFileElevated: write, ...(ordinary ? { writeFile: ordinary } : {}) },
 	});
 	provider.stat = async () => ({ resource, kind: FileKind.File, readonly: false, sizeBytes: 5, modifiedAtMillis: 1 });
 	provider.readFile = async () => ({ resource, bytes: new TextEncoder().encode('\uFEFFold\r\n'), revision: 'original-revision' });
@@ -60,8 +60,8 @@ test('explicit elevated model saves retain byte encoding, revision and completed
 	reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: 'editor\r\n' }]);
 	assert.equal(reference.isDirty, true);
 	await reference.save(new AbortController().signal, { writeElevated: true });
-	assert.deepEqual({ dirty: reference.isDirty, completed, target: requests[0]?.path, dirId: requests[0]?.dirId, revision: requests[0]?.expectedRevision, bytes: Buffer.from(requests[0]!.dataBase64, 'base64').toString('utf8') }, {
-		dirty: false, completed: ['saved-revision'], target: 'notes.txt', dirId: 'project', revision: 'original-revision', bytes: '\uFEFFeditor\r\n',
+	assert.deepEqual({ dirty: reference.isDirty, completed, target: requests[0]?.path, dirId: requests[0]?.dirId, revision: requests[0]?.expectedRevision, encoding: requests[0]?.encoding, bytes: Buffer.from(requests[0]!.dataBase64, 'base64').toString('utf8') }, {
+		dirty: false, completed: ['saved-revision'], target: 'notes.txt', dirId: 'project', revision: 'original-revision', encoding: 'utf8bom', bytes: 'editor\r\n',
 	});
 });
 
@@ -124,13 +124,13 @@ test('unsupported elevated provider modes fail before requesting authorization',
 
 
 test('explicit ordinary overwrite keeps encoding and revision without requesting elevation', async () => {
-	const requests: FsWriteBinaryFileParams[] = [];
+	const requests: FsWriteFileParams[] = [];
 	using context = fixture(async () => { throw new Error('Must not elevate an ordinary overwrite'); }, async request => { requests.push(request); return saved; });
 	using reference = await context.models.acquire({ resource }, new AbortController().signal);
 	reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: 'overwrite\r\n' }]);
 	await reference.save(new AbortController().signal, { unlock: true, skipSaveParticipants: true });
-	assert.deepEqual({ dirty: reference.isDirty, options: requests[0]?.options, bytes: Buffer.from(requests[0]!.dataBase64, 'base64').toString('utf8') }, {
-		dirty: false, options: { mode: 'replace', unlock: true, expectedRevision: 'original-revision' }, bytes: '\uFEFFoverwrite\r\n',
+	assert.deepEqual({ dirty: reference.isDirty, options: requests[0]?.options, content: requests[0]?.content, encoding: requests[0]?.encoding }, {
+		dirty: false, options: { mode: 'replace', unlock: true, expectedRevision: 'original-revision' }, content: 'overwrite\r\n', encoding: 'utf8bom',
 	});
 });
 
@@ -147,4 +147,11 @@ test('authorization failures expose distinct localized causes and keep the model
 		await assert.rejects(reference.save(new AbortController().signal, { writeElevated: true }), error => error instanceof Error && 'code' in error && error.code === code && error.message === message);
 		assert.equal(reference.isDirty, true);
 	}
+});
+
+test('an elevated legacy text save delegates its codec and logical UTF-8 payload to Rust', async () => {
+	const requests: FsWriteFileElevatedParams[] = [];
+	using context = fixture(async request => { requests.push(request); return saved; });
+	await context.textFiles.save({ resource, text: '中文', encoding: 'gbk', expectedRevision: 'original-revision', writeElevated: true }, new AbortController().signal);
+	assert.deepEqual({ encoding: requests[0]?.encoding, content: Buffer.from(requests[0]!.dataBase64, 'base64').toString('utf8'), expectedRevision: requests[0]?.expectedRevision }, { encoding: 'gbk', content: '中文', expectedRevision: 'original-revision' });
 });

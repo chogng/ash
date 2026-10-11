@@ -2226,3 +2226,78 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(editorInputs.last()).toBeFocused();
 	});
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`encoding status action saves, reopens and cancels without changing another editor (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('encoding'));
+		const encoding = page.locator('#title-comparison [data-statusbar-item-id="ash.status.editor.encoding"]');
+		const input = page.locator('#title-comparison .stanza-editor-input').last();
+		const picker = page.locator('.ash-quick-input-host input');
+		await input.focus();
+		await encoding.getByRole('button').focus();
+		await page.keyboard.press('Enter');
+		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select an Encoding Action', '选择编码操作'));
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Enter');
+		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select File Encoding', '选择文件编码'));
+		await picker.fill('GBK');
+		await page.keyboard.press('Enter');
+		await expect(encoding).toHaveText('GBK');
+		await expect(input).toBeFocused();
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().writes)).toEqual([{ resource: '/title/after.ts', text: 'after\nshared', encoding: 'gbk' }]);
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().dirty)).toBe(false);
+		await encoding.getByRole('button').click();
+		await expect(picker).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select File Encoding', '选择文件编码'));
+		await picker.fill('UTF-16 LE');
+		await page.keyboard.press('Enter');
+		await expect(encoding).toHaveText('UTF-16 LE');
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().writes)).toHaveLength(1);
+		await encoding.getByRole('button').click();
+		await page.keyboard.press('Escape');
+		await expect(input).toBeFocused();
+		await expect(encoding).toHaveText('UTF-16 LE');
+		await encoding.getByRole('button').click();
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Enter');
+		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select File Encoding', '选择文件编码'));
+		await page.evaluate(() => window.ashDiffIntegration.openOtherTitleFile());
+		await picker.fill('UTF-8');
+		await page.keyboard.press('Enter');
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().writes)).toHaveLength(1);
+	});
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`encoding reopening confirms dirty discard and readonly sides offer only reopen (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('encoding'));
+		const encoding = page.locator('#title-comparison [data-statusbar-item-id="ash.status.editor.encoding"]');
+		const inputs = page.locator('#title-comparison .stanza-editor-input');
+		const picker = page.locator('.ash-quick-input-host input');
+		await inputs.first().focus();
+		await encoding.getByRole('button').click();
+		await expect(picker).toBeFocused();
+		await expect(page.getByText(localized(locale, 'Reopen with Encoding', '通过编码重新打开'), { exact: true })).toBeVisible();
+		await expect(page.getByText(localized(locale, 'Save with Encoding', '通过编码保存'), { exact: true })).not.toBeVisible();
+		await page.keyboard.press('Escape');
+		await inputs.last().focus();
+		await page.keyboard.press('End');
+		await page.keyboard.type('!');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().dirty)).toBe(true);
+		for (const confirm of [false, true]) {
+			await encoding.getByRole('button').click();
+			await expect(picker).toBeFocused();
+			await page.keyboard.press('Enter');
+			await picker.fill('UTF-16 LE');
+			await page.keyboard.press('Enter');
+			await expect(page.getByText(localized(locale, 'Your unsaved changes will be discarded.', '未保存的更改将被丢弃。'), { exact: true })).toBeVisible();
+			await page.getByRole('button', { name: confirm ? localized(locale, 'Reopen', '重新打开') : localized(locale, 'Cancel', '取消'), exact: true }).click();
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().dirty)).toBe(!confirm);
+			await expect(encoding).toHaveText(confirm ? 'UTF-16 LE' : 'UTF-8');
+		}
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().writes)).toHaveLength(0);
+	});
+}

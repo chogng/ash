@@ -8,6 +8,7 @@ export enum TextFileContentSource {
 export interface TextFileResolveRequest {
 	readonly resource: URI;
 	readonly bootstrapText?: string;
+	readonly encoding?: string;
 }
 
 export interface ResolvedTextFileContent {
@@ -16,7 +17,7 @@ export interface ResolvedTextFileContent {
 	readonly source: TextFileContentSource;
 	/** Opaque file revision when the content came from the workspace file service. */
 	readonly revision: string | undefined;
-	readonly encoding: "utf8" | "utf8bom";
+	readonly encoding: string;
 }
 
 export interface TextFileSaveRequest {
@@ -26,7 +27,7 @@ export interface TextFileSaveRequest {
 	readonly unlock?: boolean;
 	readonly resource: URI;
 	readonly text: string;
-	readonly encoding?: "utf8" | "utf8bom";
+	readonly encoding?: string;
 	readonly expectedRevision?: string;
 }
 

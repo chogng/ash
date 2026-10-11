@@ -1,3 +1,4 @@
+import { IFileTextModelService } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices } from '../../../../../test/common/testEditorServices.js';
@@ -31,7 +32,7 @@ import { IQuickInputService } from '../../../../../../platform/quickinput/common
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { registerAction2 } from '../../../../../../platform/actions/common/actions.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
 const { createCodeEditorServices, createTestCodeEditor } = await import('../../../../../../editor/test/browser/testCodeEditor.js');
 await import('../../../../../../editor/editor.code.all.js');
 registerAction2(ChangeLanguageAction);
@@ -201,7 +202,7 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	using contribution = new EditorStatusContribution(editorPart, statusbar, {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
-	} as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput);
+	} as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput, emptyFileModels);
 
 	assert.deepEqual(statusTexts(statusbar), ["TypeScript", "LF", "UTF-8", "Ln 4, Col 9"]);
 	state.activeInput = { ...input, readOnly: true };
@@ -250,7 +251,7 @@ test("EditorStatusContribution explains screen reader mode and restores focus", 
 		onDidChangeEditors: Event.None,
 	} as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = new EditorStatusContribution(editorPart, statusbar, accessibility, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput);
+	using contribution = new EditorStatusContribution(editorPart, statusbar, accessibility, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput, emptyFileModels);
 	assert.equal(statusTexts(statusbar).length, 0);
 
 	optimized = true;
@@ -345,6 +346,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 const emptyCodeEditors = { onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None, listCodeEditors: () => [], listDiffEditors: () => [] } as unknown as import('../../../../../../editor/browser/services/codeEditorService.js').ICodeEditorService;
 const emptyCommands = { executeCommand: async () => undefined } as unknown as import('../../../../../../platform/commands/common/commands.js').ICommandService;
 const testLanguages = { onDidChange: Event.None, getLanguageName: (id: string) => ({ typescript: 'TypeScript', json: 'JSON' })[id] ?? id } as unknown as import('../../../../../../editor/common/languages/language.js').IAshLanguageService;
+const emptyFileModels = { onDidChangeEncoding: Event.None, getModel: () => null, getEncodingSupport: () => undefined } as unknown as IFileTextModelService;
 const emptyQuickInput = {} as import('../../../../../../platform/quickinput/common/quickInput.js').IQuickInputService;
 
 test('Editor status actions update the real model and clear when the active editor closes', async () => {
@@ -352,7 +354,9 @@ test('Editor status actions update the real model and clear when the active edit
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using resources = new DisposableStore();
-	const services = createCodeEditorServices(resources);
+	const parentServices = createCodeEditorServices(resources);
+	const services = resources.add(parentServices.createChild());
+	services.registerInstance(IFileTextModelService, emptyFileModels);
 	using model = new TextModel('\talpha\r\nbeta', { languageId: 'plaintext' });
 	using editor = createTestCodeEditor({ container: dom.window.document.querySelector('main')!, model, instantiationService: services });
 	using editorChanges = new Emitter<void>();
@@ -433,13 +437,13 @@ test('Editor status actions update the real model and clear when the active edit
 
 test('Editor status uses the Chinese language pack', () => {
 	using reset = toDisposable(() => resetNlsResolver());
-	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using closeWindow = toDisposable(() => dom.window.close());
 	using pane = new TestStatusPane(dom.window.document, undefined);
 	const editorPart = { domNode: dom.window.document.body, activeInput: { resource: URI.file('/status.ts') }, activePane: pane, onDidChangeEditors: Event.None } as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = new EditorStatusContribution(editorPart, statusbar, { onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false } as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput);
+	using contribution = new EditorStatusContribution(editorPart, statusbar, { onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false } as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput, emptyFileModels);
 	assert.ok(statusTexts(statusbar).includes('行 4，列 9'));
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.eol')?.entry.tooltip, '选择行尾序列');
 });

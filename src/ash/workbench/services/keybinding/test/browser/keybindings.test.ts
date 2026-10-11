@@ -40,8 +40,10 @@ import { ContextKeyExpr } from "../../../../../platform/contextkey/common/contex
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { NotificationService } from "../../../../../workbench/services/notification/common/notificationService.js";
-import { NotificationsToasts } from "../../../../browser/parts/notifications/notificationsToasts.js";
-import { NotificationActionRunner } from "../../../../browser/parts/notifications/notificationsCommands.js";
+import { NotificationsAlerts } from "../../../../browser/parts/notifications/notificationsAlerts.js";
+import { AccessibilityService } from "../../../../../platform/accessibility/browser/accessibilityService.js";
+import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
+import { ConfigurationRegistry } from "../../../../../platform/configuration/common/configurationRegistry.js";
 import { INotificationService, NotificationSeverity } from "../../../../../platform/notification/common/notification.js";
 import {
 	KeybindingResolveKind,
@@ -335,6 +337,10 @@ test('failed keyboard command appears as a warning notification', async () => {
 	using resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	resources.add(toDisposable(() => dom.window.close()));
+	const frames = new Map<number, FrameRequestCallback>();
+	let frameId = 0;
+	dom.window.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId; };
+	dom.window.cancelAnimationFrame = id => { frames.delete(id); };
 	const registry = new KeybindingRegistry();
 	const commands = new CommandRegistry();
 	resources.add(commands.register('test.failedShortcut', () => { throw new Error('Shortcut failed'); }));
@@ -351,8 +357,12 @@ test('failed keyboard command appears as a warning notification', async () => {
 	const files = resources.add(new KeybindingTestServices());
 	const services = files.services;
 	services.registerInstance(INotificationService, notifications);
-	const notificationActionRunner = resources.add(services.createInstance(NotificationActionRunner));
-	resources.add(new NotificationsToasts(dom.window.document.body, notifications, notificationActionRunner));
+	const accessibility = resources.add(new AccessibilityService({
+		root: dom.window.document.body,
+		contextKeyService: contexts,
+		configurationService: resources.add(new InMemoryConfigurationService(new ConfigurationRegistry())),
+	}));
+	resources.add(new NotificationsAlerts(notifications, accessibility));
 	const keybindings = resources.add(services.createInstance(WorkbenchKeybindingService, {
 		ownerDocument: dom.window.document,
 		commandService: resources.add(new CommandService(services, commands)),
@@ -366,7 +376,9 @@ test('failed keyboard command appears as a warning notification', async () => {
 	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
 		{ severity: NotificationSeverity.Warning, message: 'Shortcut failed' },
 	]);
-	assert.equal(dom.window.document.querySelector('.ash-notification')?.getAttribute('role'), 'status');
+	assert.equal(frames.size, 1);
+	for (const callback of [...frames.values()]) { callback(0); }
+	assert.equal(dom.window.document.querySelector('[role="alert"]')?.textContent, 'Shortcut failed');
 });
 
 test("keyboard shortcut troubleshooting traces native, mapped, and resolved events", async () => {

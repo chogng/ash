@@ -1,9 +1,29 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import manifest from '../../extensions/git/package.json' with { type: 'json' };
 import english from '../../extensions/git/package.nls.json' with { type: 'json' };
 import chinese from '../../extensions/git/package.nls.zh-CN.json' with { type: 'json' };
 import { localize, setLanguage } from '../../extensions/git/browser/support.js';
+
+test('Git SCM title contributions use compact product icons and the public history menu', () => {
+	const menus = manifest.contributes.menus as Record<string, { command?: string; group?: string; }[]>;
+	assert.ok(menus['scm/history/title'], 'History uses the public extension menu location');
+	assert.equal(menus.SCMHistoryTitle, undefined);
+	for (const menu of ['scm/title', 'scm/history/title']) {
+		const primary = menus[menu].filter(item => item.group?.split('@')[0] === 'navigation');
+		assert.ok(primary.length <= 3, `${menu} leaves room for the pane title`);
+		for (const item of primary) {
+			const command = manifest.contributes.commands.find(command => command.command === item.command);
+			assert.ok(command, item.command);
+			const icon = (command as { icon?: string; }).icon;
+			assert.match(icon ?? '', /^\$\([a-z-]+\)$/u, `${item.command} has a product icon`);
+			assert.ok(existsSync(resolve('resources/icons', `${icon!.slice(2, -1)}.svg`)), `${item.command} icon exists`);
+		}
+	}
+	assert.deepEqual(menus['scm/history/title'].filter(item => item.group?.split('@')[0] === 'navigation').map(item => item.command), ['git.fetchAll', 'git.pull', 'git.push']);
+});
 
 test('Git manifest localization resolves every contribution in English and Chinese', () => {
 	const keys = [...JSON.stringify(manifest).matchAll(/%([\w.-]+)%/g)].map(match => match[1]);

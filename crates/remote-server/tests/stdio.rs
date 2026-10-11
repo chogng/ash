@@ -80,6 +80,7 @@ fn remote_directories_share_a_backend_with_separate_authorities() {
         dir_id: None,
         session_directory: None,
         path,
+        encoding: None,
     };
     let mut first_client = first.client();
     let mut second_client = second.client();
@@ -120,6 +121,8 @@ fn remote_directories_share_a_backend_with_separate_authorities() {
             path: "file.txt".into(),
             content: "changed externally".into(),
             expected_revision: Some(before.revision.clone()),
+            encoding: None,
+            options: None,
         })
         .unwrap();
     assert!(
@@ -130,6 +133,8 @@ fn remote_directories_share_a_backend_with_separate_authorities() {
                 path: "file.txt".into(),
                 content: "unsaved editor text".into(),
                 expected_revision: Some(before.revision),
+                encoding: None,
+                options: None,
             })
             .is_err()
     );
@@ -205,6 +210,7 @@ fn empty_remote_connection_has_no_directory_authority() {
                     dir_id: None,
                     session_directory: None,
                     path: outside,
+                    encoding: None,
                 })
                 .is_err()
         );
@@ -275,6 +281,8 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::ConnectionOwned,
             env: None,
+            cwd: None,
+            execution: None,
         })
         .unwrap();
     #[cfg(windows)]
@@ -382,6 +390,8 @@ fn shared_backend_preserves_a_reconnectable_terminal_between_stdio_clients() {
             profile: TerminalProfileSelection::Default,
             lifecycle: TerminalLifecycle::Reconnectable,
             env: None,
+            cwd: None,
+            execution: None,
         })
         .unwrap();
     let lease = created.reconnect.unwrap();

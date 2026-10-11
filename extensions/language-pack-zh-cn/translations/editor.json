@@ -804,9 +804,9 @@
     "skills.discoveryFailed": "无法加载技能文件。请尝试刷新目录。",
     "skills.openFailed": "无法打开技能 {0}。请刷新目录后重试。",
     "diffEditor.collapsedLines": "已折叠 {0} 行未修改内容",
-    "accessibility.editorStatus": "状态栏显示活动编辑器的位置、缩进、编码、行尾和语言。聚焦状态栏后，用左右方向键选择操作，按 Enter 执行。缩进、行尾和语言操作会打开选择器，Escape 取消。行尾更改可以撤销。",
+    "accessibility.editorStatus": "状态栏显示活动编辑器的位置、缩进、编码、行尾和语言。聚焦状态栏后，用左右方向键选择操作，按 Enter 执行。缩进、编码、行尾和语言操作会打开选择器，Escape 取消。行尾更改可以撤销。",
     "diffEditor.foldUnchanged": "折叠未修改区域",
-    "diffEditor.statusBar.help": "状态栏跟随比较中获得焦点的一侧。激活位置条目可转到指定行或列。在状态栏中用左右方向键选择操作，按 Enter 执行。缩进、行尾和语言操作会打开选择器，Escape 取消。仅可在可写的一侧更改行尾，更改可以撤销。",
+    "diffEditor.statusBar.help": "状态栏跟随比较中获得焦点的一侧。激活位置条目可转到指定行或列。在状态栏中用左右方向键选择操作，按 Enter 执行。缩进、编码、行尾和语言操作会打开选择器，Escape 取消。仅可在可写的一侧更改行尾，更改可以撤销。",
     "multiDiffEditor.binary": "二进制文件已更改，无法进行文本比较。"
   },
   "ash.editor.clipboard": {

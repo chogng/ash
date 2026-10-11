@@ -705,14 +705,15 @@ suite('FileService capability and watch ownership', () => {
 		assert.equal(second.watchRequests[0].disposed, true);
 	});
 
-	test('workspace replacement releases old roots and forwards only current workspace changes', () => {
+	test('workspace replacement releases old roots and forwards only current workspace changes', async () => {
 		using provider = new TestFileProvider('workspace');
 		using service = new FileService();
 		using registration = service.registerProvider('file', provider);
 		using workspace = new WorkspaceContextService({ id: 'first', uri: URI.file('/first') });
 		using watcher = new WorkspaceWatcher(service, workspace);
 		const observed: (readonly URI[] | undefined)[] = [];
-		using listener = watcher.onDidChange(event => observed.push(event));
+		const changed = new DeferredPromise<void>();
+		using listener = watcher.onDidChange(event => { observed.push(event); void changed.complete(); });
 		workspace.updateWorkspace({ id: 'second', uri: URI.file('/second') });
 		provider.emit(URI.file('/first/old.txt'));
 		provider.emit(URI.file('/second/new.txt'));
@@ -720,6 +721,7 @@ suite('FileService capability and watch ownership', () => {
 			{ resource: URI.file('/first'), options: { recursive: true, excludes: [] }, disposed: true },
 			{ resource: URI.file('/second'), options: { recursive: true, excludes: [] }, disposed: false },
 		]);
+		await changed.p;
 		assert.deepEqual(observed, [[URI.file('/second/new.txt')]]);
 		watcher.dispose();
 		assert.equal(provider.watchRequests[1].disposed, true);
@@ -854,3 +856,38 @@ class TestFileProvider implements IFileSystemProvider {
 		this.dispose();
 	}
 }
+
+test('file text codec requests preserve logical text and backend encoding metadata through the provider', async () => {
+	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	const resource = URI.file('/project/encoding.txt');
+	const requests: unknown[] = [];
+	using provider = new AppServerFileSystemProvider({
+		workspaceContextService: workspace, resourceApi: unavailableResourceApi(),
+		api: {
+			...unavailableFileApi(),
+			readFile: async params => { requests.push(params); return { content: '中文', encoding: 'gbk', revision: 'bytes-revision' }; },
+			writeFile: async params => { requests.push(params); return { metadata: { fileType: 'file', sizeBytes: 4, readonly: false, modifiedAtMillis: null }, revision: 'encoded-revision' }; },
+		},
+	});
+	using files = new FileService();
+	using registration = files.registerProvider('file', provider);
+	assert.deepEqual(await files.readFile(resource, 'gbk'), { resource, content: '中文', encoding: 'gbk', revision: 'bytes-revision' });
+	const saved = await files.writeFile({ resource, content: '中文', encoding: 'gbk', expectedRevision: 'bytes-revision' }, { create: false, overwrite: true });
+	assert.equal(saved.revision, 'encoded-revision');
+	assert.deepEqual(requests, [{ dirId: 'project', path: 'encoding.txt', encoding: 'gbk' }, { dirId: 'project', path: 'encoding.txt', content: '中文', encoding: 'gbk', options: { mode: 'replace', expectedRevision: 'bytes-revision' } }]);
+});
+
+test('file text codec errors retain their domain category and conflicts protect encoding-only saves', async () => {
+	const { FileSystemProviderErrorCode, toFileSystemProviderErrorCode } = await import('../../common/files.js');
+	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	const resource = URI.file('/project/encoding.txt');
+	using provider = new AppServerFileSystemProvider({
+		workspaceContextService: workspace, resourceApi: unavailableResourceApi(),
+		api: { ...unavailableFileApi(),
+			readFile: async () => { throw new AppServerRemoteError(-32000, 'Invalid text', { kind: 'FileSystemInvalidText' }); },
+			writeFile: async () => { throw new AppServerRemoteError(-32000, 'Revision conflict', { kind: 'FileSystemRevisionConflict' }); },
+		},
+	});
+	await assert.rejects(provider.readTextFile(resource, 'auto'), error => toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotText);
+	await assert.rejects(provider.writeTextFile(resource, '中文', 'gbk', { create: false, overwrite: true, expectedRevision: 'stale' }), FileRevisionConflictError);
+});

@@ -1,6 +1,6 @@
 {
   "ash": {
-    "diffEditor.statusBar.help": "The status bar follows the focused side of the comparison. Activate the position entry to go to a line or column. Use Left and Right arrows in the status bar and Enter to run an action. Indentation, line endings, and language actions open a picker; Escape cancels it. Line endings can only be changed on a writable side, and the change can be undone.",
+    "diffEditor.statusBar.help": "The status bar follows the focused side of the comparison. Activate the position entry to go to a line or column. Use Left and Right arrows in the status bar and Enter to run an action. Indentation, encoding, line endings, and language actions open a picker; Escape cancels it. Line endings can only be changed on a writable side, and the change can be undone.",
     "diffEditor.foldUnchanged": "Collapse unchanged region",
     "diffEditor.collapsedLines": "Collapsed {0} unchanged lines",
     "accessibility.editorSaveRecovery": "Save failures offer recovery actions in a dialog. Use Tab to choose Overwrite, Retry with administrator permission, Save As, or Revert when available, and Enter to run the selected action. Escape cancels and preserves your unsaved changes. Overwrite makes a read-only file writable; Revert discards unsaved changes.",
@@ -39,7 +39,7 @@
     "skills.discoveryFailed": "Unable to load skill files. Try refreshing the catalog.",
     "skills.openFailed": "Unable to open skill {0}. Refresh the catalog and try again.",
     "multiDiffEditor.binary": "Binary file changed. Text comparison is unavailable.",
-    "accessibility.editorStatus": "The status bar shows the active editor position, indentation, encoding, line endings, and language. Focus the status bar and use Left and Right arrows to select an action, then Enter to run it. Indentation, line endings, and language actions open a picker; Escape cancels it. Line ending changes can be undone."
+    "accessibility.editorStatus": "The status bar shows the active editor position, indentation, encoding, line endings, and language. Focus the status bar and use Left and Right arrows to select an action, then Enter to run it. Indentation, encoding, line endings, and language actions open a picker; Escape cancels it. Line ending changes can be undone."
   },
   "ash.editor.clipboard": {
     "selection.title": "Selection clipboard",

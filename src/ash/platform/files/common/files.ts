@@ -27,6 +27,7 @@ export interface IFileStat {
 export interface IFileContent {
 	readonly resource: URI;
 	readonly content: string;
+	readonly encoding?: string;
 	readonly revision: string;
 }
 
@@ -41,6 +42,7 @@ export interface IFileBytes {
 export interface IFileWriteRequest {
 	readonly resource: URI;
 	readonly content: string;
+	readonly encoding?: string;
 	/** Omit only when intentionally creating or overwriting without a prior read. */
 	readonly expectedRevision?: string;
 }
@@ -91,6 +93,7 @@ export enum FileSystemProviderErrorCode {
 	FileExceedsStorageQuota = 'EntryExceedsStorageQuota',
 	FileTooLarge = 'EntryTooLarge',
 	FileWriteLocked = 'EntryWriteLocked',
+	FileNotText = 'EntryNotText',
 	NoPermissions = 'NoPermissions',
 	Unavailable = 'Unavailable',
 	Unknown = 'Unknown',
@@ -199,6 +202,9 @@ export interface IFileSystemProvider {
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	/** Reads exact stored bytes; the revision continues to identify those bytes across text decoding. */
 	readFile(resource: URI): Promise<IFileBytes>;
+	/** Text codecs are provider-owned; absence limits this provider to UTF-8. */
+	readTextFile?(resource: URI, encoding: string): Promise<IFileContent>;
+	writeTextFile?(resource: URI, content: string, encoding: string, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
@@ -223,10 +229,10 @@ export interface IFileService {
 	watch(resource: URI, options?: IWatchOptions): IDisposable;
 	stat(resource: URI): Promise<IFileStat>;
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
-	readFile(resource: URI): Promise<IFileContent>;
+	readFile(resource: URI, encoding?: string): Promise<IFileContent>;
 	readFileBytes(resource: URI): Promise<IFileBytes>;
 	readFileStream(resource: URI, options?: IReadFileStreamOptions, token?: CancellationToken): Promise<IFileStreamContent>;
-	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
+	writeFile(request: IFileWriteRequest, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	/** Writes exact bytes; default import options reject existing files, including empty ones. */
 	writeFileBytes(resource: URI, bytes: Uint8Array, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;

@@ -181,6 +181,8 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 }
 
 class PreviewTextModelService extends Disposable implements IFileTextModelService {
+	readonly onDidChangeEncoding = Event.None;
+	getEncodingSupport() { return undefined; }
 	hasPendingSaveRecovery(): boolean { return false; }
 	async waitForSaveRecovery(): Promise<void> { }
 	private readonly participants = new Set<ITextModelSaveParticipant>();

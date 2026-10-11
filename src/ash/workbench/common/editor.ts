@@ -92,6 +92,7 @@ export interface IResourceEditorInput {
 	/** Whether the resource path is meaningful to show as breadcrumbs. */
 	readonly showBreadcrumbs?: boolean;
 	readonly initialText?: string;
+	readonly encoding?: string;
 }
 
 /** Comparison inputs keep a tab identity separate from the resources displayed on each side. */

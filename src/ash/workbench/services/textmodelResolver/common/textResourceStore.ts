@@ -5,14 +5,15 @@ import { type URI } from "../../../../base/common/uri.js";
 export interface TextResourceResolveRequest {
 	readonly resource: URI;
 	readonly bootstrapText?: string;
+	readonly encoding?: string;
 }
 
 /** Text returned by a resource adapter. */
 export interface TextResourceContent {
 	readonly resource: URI;
 	readonly text: string;
-	/** Persistence format; absent for resources without a UTF-8 file encoding. */
-	readonly encoding?: "utf8" | "utf8bom";
+	/** Persistence format; absent for resources without a file encoding. */
+	readonly encoding?: string;
 	/** Opaque file revision when the resource was resolved from persistent storage. */
 	readonly revision: string | undefined;
 }
@@ -25,8 +26,8 @@ export interface TextResourceSaveRequest {
 	readonly unlock?: boolean;
 	readonly resource: URI;
 	readonly text: string;
-	/** Persistence format; absent for resources without a UTF-8 file encoding. */
-	readonly encoding?: "utf8" | "utf8bom";
+	/** Persistence format; absent for resources without a file encoding. */
+	readonly encoding?: string;
 	readonly expectedRevision?: string;
 }
 
