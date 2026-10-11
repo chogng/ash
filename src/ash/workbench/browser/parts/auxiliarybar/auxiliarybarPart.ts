@@ -25,7 +25,7 @@ export interface AuxiliarybarPartOptions {
 export class AuxiliarybarPart extends PaneCompositePart {
 
 	override get minimumWidth(): number { return 180; }
-	override get maximumWidth(): number { return 600; }
+	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;
 		return active ? Math.max(this.getComposite(active)!.getOptimalWidth(), 300) : undefined;

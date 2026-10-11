@@ -76,7 +76,7 @@
 	box-sizing: border-box;
 	border: var(--ash-strokeThickness) solid var(--ash-input-border);
 	border-radius: var(--ash-cornerRadius-circle);
-	background: var(--ash-input-background);
+	background: var(--ash-button-secondaryBackground);
 	transition:
 		background var(--ash-animation-durationNormal, 200ms)
 			cubic-bezier(0.4, 0, 0.2, 1),
@@ -101,13 +101,24 @@
 }
 
 .ash-switch.checked > .ash-switch-track {
-	border-color: var(--ash-success-foreground);
-	background: var(--ash-success-foreground);
+	border-color: var(--ash-accent-background);
+	background: var(--ash-accent-background);
 }
 
 .ash-switch.checked > .ash-switch-track::after {
 	transform: translateX(16px);
-	background: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-button-primaryForeground);
+}
+
+[data-color-scheme="hcDark"] .ash-switch.checked > .ash-switch-track,
+[data-color-scheme="hcLight"] .ash-switch.checked > .ash-switch-track {
+	border-color: var(--ash-foreground);
+	background: var(--ash-foreground);
+}
+
+[data-color-scheme="hcDark"] .ash-switch.checked > .ash-switch-track::after,
+[data-color-scheme="hcLight"] .ash-switch.checked > .ash-switch-track::after {
+	background: var(--ash-input-background);
 }
 
 .ash-switch > input:focus-visible ~ .ash-switch-track {

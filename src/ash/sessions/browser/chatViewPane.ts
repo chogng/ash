@@ -109,7 +109,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.empty.textContent = "Start a new chat to begin.";
 		this.body = h(container.ownerDocument, "div");
 		this.body.className = "ash-chat-body";
-		this.body.append(this.paneHost);
 		const sidebarContextKeys = contextKeyService ?? this._register(new ContextKeyService());
 		this.sessionsSidebarVisible = AgentSessionsSidebarVisibleContext.bindTo(sidebarContextKeys);
 		this._register(toDisposable(() => this.sessionsSidebarVisible.reset()));
@@ -125,7 +124,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		newSessionButton.textContent = localize('chat.sessions.new', 'New Session');
 		sessionsHeader.append(sessionsTitle, newSessionButton);
 		this.sessionsSidebar.append(sessionsHeader);
-		this.body.append(this.sessionsSidebar);
+		this.body.append(this.sessionsSidebar, this.paneHost);
 		this._register(toDisposable(() => this.sessionsSidebar.remove()));
 		this._register(registerAgentSessionsAccessibility(this.sessionsSidebar, sidebarContextKeys));
 		this._register(addDisposableListener(newSessionButton, 'click', () => this.sessionService.createUntitledSession()));
