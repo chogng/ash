@@ -9,3 +9,4 @@ pub use store::PackageLease;
 pub use store::PackageStore;
 pub use store::PublishedPackage;
 pub use store::acquire_package_lease_for_executable;
+pub use store::validate_package_identity;

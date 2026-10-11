@@ -8,6 +8,7 @@
 
 mod catalog;
 mod install;
+mod profiles;
 mod runtime_updater;
 mod ssh;
 mod tunnel;
@@ -37,6 +38,9 @@ pub use install::RemoteRuntimeInstallProgress;
 pub use install::RemoteRuntimeInstallRoot;
 pub use install::RemoteRuntimeVersion;
 pub use install::SshRemoteRuntimeInstaller;
+pub use profiles::RemoteProfileError;
+pub use profiles::VerifiedRemoteProfile;
+pub use profiles::rollback_remote_profile;
 pub use runtime_updater::RemoteRuntimeCatalogRelease;
 pub use runtime_updater::RemoteRuntimeCatalogUpdater;
 pub use runtime_updater::RemoteRuntimeDownloadCache;

@@ -3,11 +3,13 @@
 //! A trace groups Thread streams by the `session_id` recorded on each root event. It is an
 //! inspection artifact, never a second authority or an input to runtime decisions. Raw durable
 //! events can contain sensitive user and tool data. Diagnostic writes are local and opt-in;
-//! exporters and connection authorization remain owned by their product callers.
+//! artifact assembly belongs to this domain; connection authorization and file output remain
+//! owned by its product callers.
 
 mod budget;
 mod diagnostics;
 mod error;
+mod export;
 mod page;
 mod reader;
 mod recorder;
@@ -28,6 +30,9 @@ pub use diagnostics::PayloadRef;
 pub use diagnostics::PayloadStatus;
 pub use diagnostics::RecordingStatus;
 pub use error::RolloutTraceError;
+pub use export::TraceExportError;
+pub use export::TraceExportSource;
+pub use export::export_session_trace;
 pub use page::TracePage;
 pub use page::read_session_trace_page;
 pub use reader::TraceReader;

@@ -27,6 +27,8 @@ serde_json = { workspace = true }
 zeroize = { workspace = true }
 ash-app-server = { workspace = true, optional = true }
 ash-app-server-protocol = { workspace = true }
+ash-rollout-trace = { workspace = true }
+ash-protocol = { workspace = true }
 ash-app-server-transport = { workspace = true }
 ash-client = { workspace = true, optional = true }
 [lints]
@@ -39,7 +41,6 @@ ash-utils-pty = { workspace = true }
 queue-runtime = { package = "ash-queue", path = "../ext/queue" }
 ash-app-server = { workspace = true }
 ash-client = { workspace = true }
-ash-protocol = { workspace = true }
 core-api = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-core = { workspace = true }

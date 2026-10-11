@@ -371,6 +371,11 @@ fn package_identity(metadata: &PackageMetadata) -> PackageIdentity {
     }
 }
 
+/// Validates the complete immutable package without selecting, copying or publishing it.
+pub fn validate_package_identity(root: &Path) -> io::Result<PackageIdentity> {
+    validate_package(root).map(|metadata| package_identity(&metadata))
+}
+
 fn validate_package(root: &Path) -> io::Result<PackageMetadata> {
     require_real_directory(root)?;
     let metadata_bytes = read_bounded_file(&root.join(METADATA_FILE), MAX_METADATA_BYTES)?;

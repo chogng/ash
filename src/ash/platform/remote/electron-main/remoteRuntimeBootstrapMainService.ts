@@ -23,7 +23,7 @@ export interface RemoteRuntimeConnectionProfile {
 /** Persists credential-free active and previous runtime identities for one SSH Workspace. */
 export interface IRemoteRuntimeConnectionProfiles {
 	get(host: string, workspace: string): Promise<RemoteRuntimeConnectionProfile | undefined>;
-	activate(host: string, workspace: string, runtime: string): Promise<RemoteRuntimeConnectionProfile>;
+	activate(host: string, workspace: string, runtime: string, sshExecutable: string): Promise<RemoteRuntimeConnectionProfile>;
 	rollback(host: string, workspace: string, sshExecutable: string): Promise<RemoteRuntimeConnectionProfile>;
 }
 
@@ -60,7 +60,7 @@ export class RemoteRuntimeBootstrapMainService extends Disposable {
 			provisionRuntime: host => this.provisionRuntime(host),
 			settleRuntimeProvision: () => this.settleRuntimeProvision(),
 			resolveRuntime: profiles === undefined ? undefined : async (host, workspace) => (await profiles.get(host, workspace))?.activeRuntime,
-			activateRuntime: profiles === undefined ? undefined : async (host, workspace, runtime) => { await profiles.activate(host, workspace, runtime); },
+			activateRuntime: profiles === undefined ? undefined : async (host, workspace, runtime) => { await profiles.activate(host, workspace, runtime, options.sshExecutable); },
 			rollbackRuntime: profiles === undefined ? undefined : async (host, workspace, runtimeSshExecutable) => (await profiles.rollback(host, workspace, runtimeSshExecutable)).activeRuntime,
 		});
 	}

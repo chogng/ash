@@ -5,7 +5,6 @@ use tempfile::TempDir;
 
 use super::UpdateOutput;
 use super::eligible_for_automatic_updates;
-use super::extract_zip;
 use super::update_public_key;
 
 #[test]
@@ -114,6 +113,13 @@ fn signed_zip_extraction_rejects_paths_outside_the_package() {
     let package = root.path().join("package");
     fs::create_dir(&package).unwrap();
 
-    assert!(extract_zip(&archive, &package).is_err());
+    assert!(
+        ash_product_update::extract_package(
+            &archive,
+            ash_product_update::PackageFormat::Zip,
+            &package
+        )
+        .is_err()
+    );
     assert!(!root.path().join("outside").exists());
 }

@@ -1,11 +1,7 @@
 //! Installs a signed App Server release without changing a running generation.
 
-use std::collections::BTreeSet;
 use std::fs;
-use std::fs::File;
 use std::io::Read;
-use std::io::Write;
-use std::path::Component;
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
@@ -29,8 +25,6 @@ use crate::endpoint::EndpointPaths;
 
 const REPOSITORY: &str = "chogng/ash";
 const MAX_DESCRIPTOR_BYTES: u64 = 64 * 1024;
-const MAX_ARCHIVE_ENTRIES: usize = 100_000;
-const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const INITIAL_CHECK_DELAY: Duration = Duration::from_secs(60);
 const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
@@ -262,7 +256,8 @@ fn install_stable_with_mode(
             .map_err(|error| error.to_string())?;
         let package = staging.join("package");
         fs::create_dir(&package).map_err(|error| error.to_string())?;
-        extract_archive(&archive, release.package.format, &package)?;
+        ash_product_update::extract_package(&archive, release.package.format, &package)
+            .map_err(|error| error.to_string())?;
         let metadata = package_metadata(&package)?;
         let expected_entrypoint = if cfg!(windows) {
             "bin/ash-app-server.exe"
@@ -365,138 +360,6 @@ fn package_metadata(root: &Path) -> Result<PackageMetadata, String> {
         &fs::read(root.join("ash-package.json")).map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())
-}
-
-fn extract_archive(
-    archive: &Path,
-    format: PackageFormat,
-    destination: &Path,
-) -> Result<(), String> {
-    match format {
-        PackageFormat::TarGz => extract_tar_gz(archive, destination),
-        PackageFormat::Zip => extract_zip(archive, destination),
-        _ => Err("App Server update package has an unsupported format".into()),
-    }
-}
-
-fn extract_tar_gz(archive: &Path, destination: &Path) -> Result<(), String> {
-    let file = File::open(archive).map_err(|error| error.to_string())?;
-    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(file));
-    let mut unpacked = 0u64;
-    let mut paths = BTreeSet::new();
-    for entry in archive.entries().map_err(|error| error.to_string())? {
-        let mut entry = entry.map_err(|error| error.to_string())?;
-        let path = entry
-            .path()
-            .map_err(|error| error.to_string())?
-            .into_owned();
-        if !safe_relative_path(&path) || !paths.insert(path.clone()) {
-            return Err(format!(
-                "App Server archive entry escapes or repeats the package: {}",
-                path.display()
-            ));
-        }
-        let kind = entry.header().entry_type();
-        if !kind.is_file() && !kind.is_dir() {
-            return Err(format!(
-                "App Server archive entry has an unsupported type: {}",
-                path.display()
-            ));
-        }
-        unpacked = unpacked
-            .checked_add(entry.size())
-            .filter(|total| *total <= MAX_UNPACKED_BYTES)
-            .ok_or("unpacked App Server package exceeds the size limit")?;
-        entry
-            .unpack_in(destination)
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(())
-}
-
-fn extract_zip(archive: &Path, destination: &Path) -> Result<(), String> {
-    let file = File::open(archive).map_err(|error| error.to_string())?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|error| error.to_string())?;
-    if archive.len() > MAX_ARCHIVE_ENTRIES {
-        return Err("App Server archive contains too many entries".into());
-    }
-    let mut unpacked = 0u64;
-    let mut paths = BTreeSet::new();
-    for index in 0..archive.len() {
-        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
-        let path = entry
-            .enclosed_name()
-            .ok_or_else(|| format!("App Server archive entry path is invalid: {}", entry.name()))?
-            .to_owned();
-        if !safe_relative_path(&path) || !paths.insert(path.clone()) {
-            return Err(format!(
-                "App Server archive entry escapes or repeats the package: {}",
-                path.display()
-            ));
-        }
-        if entry.is_symlink() || entry.encrypted() {
-            return Err(format!(
-                "App Server archive entry has an unsupported type: {}",
-                path.display()
-            ));
-        }
-        unpacked = unpacked
-            .checked_add(entry.size())
-            .filter(|total| *total <= MAX_UNPACKED_BYTES)
-            .ok_or("unpacked App Server package exceeds the size limit")?;
-        let output = destination.join(&path);
-        if entry.is_dir() {
-            fs::create_dir_all(output).map_err(|error| error.to_string())?;
-            continue;
-        }
-        if !entry.is_file() {
-            return Err(format!(
-                "App Server archive entry has an unsupported type: {}",
-                path.display()
-            ));
-        }
-        fs::create_dir_all(
-            output
-                .parent()
-                .ok_or("App Server archive entry has no parent")?,
-        )
-        .map_err(|error| error.to_string())?;
-        let mut target = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&output)
-            .map_err(|error| error.to_string())?;
-        let size = entry.size();
-        #[cfg(unix)]
-        let mode = entry.unix_mode();
-        let copied = std::io::copy(&mut entry.take(size + 1), &mut target)
-            .map_err(|error| error.to_string())?;
-        if copied != size {
-            return Err(format!(
-                "App Server archive entry is truncated: {}",
-                path.display()
-            ));
-        }
-        target.flush().map_err(|error| error.to_string())?;
-        #[cfg(unix)]
-        if let Some(mode) = mode {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(
-                &output,
-                fs::Permissions::from_mode(if mode & 0o111 == 0 { 0o644 } else { 0o755 }),
-            )
-            .map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
-}
-
-fn safe_relative_path(path: &Path) -> bool {
-    let mut components = path.components();
-    components
-        .next()
-        .is_some_and(|component| matches!(component, Component::Normal(_)))
-        && components.all(|component| matches!(component, Component::Normal(_)))
 }
 
 #[cfg(test)]

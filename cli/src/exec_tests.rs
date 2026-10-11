@@ -135,49 +135,6 @@ fn exec_validates_missing_values_duplicates_and_empty_tasks() {
     assert_eq!(options.output, ExecOutputMode::JsonLines);
 }
 
-#[test]
-fn exec_trace_pages_retain_prefixes_from_earlier_pages_and_add_child_history() {
-    use serde_json::json;
-
-    let prefix = json!({ "reference": "earlier", "events": [{ "sequence": 1 }] });
-    let child_prefix = json!({ "reference": "child", "events": [{ "sequence": 2 }] });
-    let mut trace = json!({
-        "formatVersion": 3,
-        "sessionId": "session",
-        "threads": [{ "threadId": "root", "events": [{ "sequence": 1 }] }],
-        "historyPrefixes": [prefix.clone()]
-    });
-    merge_trace_page(
-        &mut trace,
-        &json!({
-            "threads": [{ "threadId": "root", "events": [{ "sequence": 2 }] }],
-            "historyPrefixes": []
-        }),
-    )
-    .unwrap();
-    merge_trace_page(
-        &mut trace,
-        &json!({
-            "threads": [{ "threadId": "child", "events": [{ "sequence": 1 }] }],
-            "historyPrefixes": [prefix.clone(), child_prefix.clone()]
-        }),
-    )
-    .unwrap();
-
-    assert_eq!(
-        trace,
-        json!({
-            "formatVersion": 3,
-            "sessionId": "session",
-            "threads": [
-                { "threadId": "root", "events": [{ "sequence": 1 }, { "sequence": 2 }] },
-                { "threadId": "child", "events": [{ "sequence": 1 }] }
-            ],
-            "historyPrefixes": [prefix, child_prefix]
-        })
-    );
-}
-
 fn parse_exec_arguments(arguments: Vec<String>) -> Result<HeadlessCliOptions, CliError> {
     use clap::Parser;
     let cli = crate::Cli::try_parse_from(

@@ -9,6 +9,7 @@ pub use memory::MemoryRecording;
 mod in_process;
 mod notification;
 mod session;
+mod trace;
 
 use ash_app_server_protocol::protocol::account::AccountLoginCancelParams;
 use ash_app_server_protocol::protocol::account::AccountLoginCancelResult;

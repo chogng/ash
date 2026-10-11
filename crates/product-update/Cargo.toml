@@ -11,6 +11,7 @@ path = "src/bin/ash_update_host.rs"
 
 [features]
 signing = []
+archives = ["dep:flate2", "dep:tar", "dep:zip"]
 
 [dependencies]
 base64 = { workspace = true }
@@ -23,6 +24,9 @@ sha2 = { workspace = true }
 toml = { workspace = true }
 url = { workspace = true }
 ureq-update = { workspace = true }
+flate2 = { workspace = true, optional = true }
+tar = { workspace = true, optional = true }
+zip = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

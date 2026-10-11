@@ -116,6 +116,7 @@ stable launcher to the selected package. `[tui].autoUpdate` is one of `latest`, 
 `never`; the first two check at local TUI startup and hourly while it remains open, with network
 checks limited to once per six hours per channel. `latest` follows each GitHub Release, while
 `stable` follows only versions explicitly promoted by `.github/workflows/ash-code-promote.yml`.
+Download, archive extraction and complete package identity validation use the shared update/package libraries. The CLI owns its update schedule, release selection, installation layout and notices.
 Each update requires an Ed25519 descriptor signed by the release key stored outside the repository,
 then verifies the archive SHA-256 and every file digest in `ash-package.json`. Source builds and
 packages outside this layout are never rewritten, and changing streams never downgrades an installed

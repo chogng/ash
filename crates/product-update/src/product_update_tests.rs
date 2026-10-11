@@ -68,7 +68,12 @@ fn staging_requires_the_signed_size_and_digest_before_publishing() {
         sha256: sha2::Sha256::digest(bytes).into(),
     };
     assert!(
-        stage_package_reader(&package, staging.path(), &b"altered desktop package"[..]).is_err()
+        stage_verified_package_with_reader(
+            &package,
+            staging.path(),
+            &b"altered desktop package"[..]
+        )
+        .is_err()
     );
     assert!(!staging.path().join(&package.file_name).exists());
     assert!(
@@ -77,7 +82,7 @@ fn staging_requires_the_signed_size_and_digest_before_publishing() {
             .join(format!(".{}.part", package.file_name))
             .exists()
     );
-    let staged = stage_package_reader(&package, staging.path(), &bytes[..]).unwrap();
+    let staged = stage_verified_package_with_reader(&package, staging.path(), &bytes[..]).unwrap();
     assert_eq!(std::fs::read(staged).unwrap(), bytes);
 }
 

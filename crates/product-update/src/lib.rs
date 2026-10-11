@@ -1,9 +1,15 @@
 //! Shared release verification and product announcement selection.
 
 mod announcement;
+#[cfg(feature = "archives")]
+mod archive;
+#[cfg(all(test, feature = "archives"))]
+mod archive_tests;
 pub use announcement::Announcement;
 pub use announcement::AnnouncementContext;
 pub use announcement::AnnouncementDocument;
+#[cfg(feature = "archives")]
+pub use archive::extract_package;
 
 use base64::Engine;
 use ed25519_dalek::Signature;
@@ -47,6 +53,17 @@ pub enum UpdatePolicy {
 impl Default for UpdatePolicy {
     fn default() -> Self {
         Self::Latest
+    }
+}
+
+impl UpdatePolicy {
+    /// Reads only the update preference; unrelated frontend settings belong to their own decoder.
+    pub fn from_setting(value: Option<&serde_json::Value>) -> Result<Self, serde_json::Error> {
+        value
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map(Option::unwrap_or_default)
     }
 }
 
@@ -140,10 +157,11 @@ pub fn stage_verified_package(
         .build()
         .call()
         .map_err(|error| UpdateError::new(format!("could not download signed update: {error}")))?;
-    stage_package_reader(package, directory, response.into_body().into_reader())
+    stage_verified_package_with_reader(package, directory, response.into_body().into_reader())
 }
 
-fn stage_package_reader(
+/// Stages host-fetched bytes with the same signed size and digest checks as the shared downloader.
+pub fn stage_verified_package_with_reader(
     package: &VerifiedPackage,
     directory: &Path,
     mut reader: impl Read,

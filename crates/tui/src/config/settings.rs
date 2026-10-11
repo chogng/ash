@@ -128,6 +128,7 @@ pub(crate) struct TerminalSettings {
     glyph_set: GlyphSet,
     memory_diagnostics: bool,
     show_tips: bool,
+    #[serde(skip_deserializing)]
     auto_update: crate::UpdatePolicy,
     language: Language,
 }
@@ -156,8 +157,12 @@ impl TerminalSettings {
                 values.insert(key.into(), value.clone());
             }
         }
-        serde_json::from_value::<Self>(values.into())
-            .map_err(|error| format!("invalid [tui] configuration: {error}"))
+        values.remove("autoUpdate");
+        let mut settings = serde_json::from_value::<Self>(values.into())
+            .map_err(|error| format!("invalid [tui] configuration: {error}"))?;
+        settings.auto_update = crate::UpdatePolicy::from_setting(section.0.get("autoUpdate"))
+            .map_err(|error| format!("invalid [tui] configuration: {error}"))?;
+        Ok(settings)
     }
 
     pub(crate) fn write_to_tui(

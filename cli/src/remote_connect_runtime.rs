@@ -59,7 +59,7 @@ pub(super) enum RemoteRuntimeCacheSelection {
 }
 
 pub(super) struct ReadyRemoteRuntime {
-    pub(super) profile: RemoteProfile,
+    pub(super) profile: ash_remote_connections::VerifiedRemoteProfile,
     pub(super) session: AppServerSession,
 }
 
@@ -227,12 +227,7 @@ fn establish_session(
     requested_profile: &RemoteProfile,
     ssh_executable: Option<&Path>,
 ) -> Result<ReadyRemoteRuntime, RemoteConnectionError> {
-    let probe = connection(requested_profile, ssh_executable).probe_runtime()?;
-    let profile = RemoteProfile::new(
-        requested_profile.target().clone(),
-        probe.resolved_runtime().clone(),
-    );
-    let session = connection(&profile, ssh_executable).connect(
+    let (profile, session) = connection(requested_profile, ssh_executable).connect_verified(
         ClientInfo {
             name: "ash-cli-remote".into(),
             version: env!("CARGO_PKG_VERSION").into(),

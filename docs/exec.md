@@ -219,7 +219,7 @@ contract，不表示 scheduler job protocol，也不表示 remote process execut
 
 CLI 的 `ash exec --model provider/model --timeout-seconds 120 --trace-output trace.json
 --changes-output changes.json -- "任务"` 固定准确模型和 Turn 时间预算；超时仍先通过产品请求中断。
-`--trace-output` 在终态后调用正式 Trace 接口保存版本 3 rollout Trace，累计各页的历史前缀；
+`--trace-output` 在终态后通过共享客户端调用正式 Trace 接口；`rollout-trace` 累计分页历史、历史前缀和所有类型的诊断正文（包括 Hook），并从同一份捕获生成关系图，保存版本 3 rollout Trace；
 已启用的本地诊断、请求／响应正文与执行关系一并导出。启用诊断需在拥有 App Server 的进程启动前设置
 `ASH_ROLLOUT_TRACE_ROOT`，对已运行的共享后端需先重启。未启用时仍可导出持久历史，并标记 disabled。
 `--changes-output`

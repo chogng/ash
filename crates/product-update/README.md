@@ -1,6 +1,8 @@
 # `ash-product-update`
 
 - Owns the signed cross-product release description, policy, target and package validation.
+- `stage_verified_package` and `stage_verified_package_with_reader` enforce signed size and digest before publishing downloaded bytes.
+- The `archives` feature provides bounded tar/ZIP extraction with shared path, duplicate-entry and file-type checks; installation consumers enable it explicitly.
 - Verifies release identity before product hosts download or install an artifact.
 - Exposes signing only to release tooling; it does not own UI, scheduling or installation.
 

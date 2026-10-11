@@ -6,6 +6,8 @@
 2. `AppServerClient<T>` 提供由 protocol crate 定义的 typed request/response 接口，不复制路径解析、目录授权或运行时策略。
 3. `StdioAppServerCommand` 只携带产品选择的进程参数和环境；目录、cwd 与 capability 通过正式协议传递。
 
+`export_session_trace` 将已有的授权分页读取适配为 `rollout-trace` 领域契约；领域 exporter 负责累积历史、收集诊断正文和生成同一份捕获的关系图，产品宿主只负责文件输出。
+
 产品宿主使用单独打包的 `ash-app-server` 程序；普通客户端依赖不编译服务实现。协议契约见 [`docs/ash-app-server-api.md`](../../docs/ash-app-server-api.md)。
 
 stdio 命令必须在 stdin EOF 后退出，转发程序必须等待其服务进程结束。`shutdown` 与 stdio 会话的 Drop 先停止并 join 写入线程，关闭其唯一持有的 stdin，再等待命令退出及读取线程结束；initialize 或协议兼容性校验失败也走同一清理路径。不能只杀掉转发程序并把 stdout 读取取消当作服务进程退出，否则 Windows 上服务进程仍可能持有 profile 的 SQLite 文件。进程内会话不拥有子进程，保留原有通知关闭方式。

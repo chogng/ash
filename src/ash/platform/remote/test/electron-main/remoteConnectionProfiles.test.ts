@@ -9,7 +9,7 @@ test("Electron Main delegates Remote profile reads, activation, and rollback to 
 		environment: { ASH_HOME: "/Users/test/Library/Application Support/Ash/state" },
 		runCommand: async (executable, args, environment) => {
 			invocations.push({ executable, args, environment });
-			const activeRuntime = args.includes("activate") ? args.at(-1) : "/srv/ash/runtime/one/bin/ash-remote-server";
+			const activeRuntime = args.includes("activate") ? args[args.indexOf("--runtime") + 1] : "/srv/ash/runtime/one/bin/ash-remote-server";
 			return { exitCode: 0, stdout: JSON.stringify({ activeRuntime }), stderr: "" };
 		},
 	});
@@ -17,16 +17,16 @@ test("Electron Main delegates Remote profile reads, activation, and rollback to 
 	assert.deepEqual(await profiles.get("Build-Linux", "/srv/project"), {
 		activeRuntime: "/srv/ash/runtime/one/bin/ash-remote-server",
 	});
-	assert.deepEqual(await profiles.activate("Build-Linux", "/srv/project", "/srv/ash/runtime/two/bin/ash-remote-server"), {
+	assert.deepEqual(await profiles.activate("Build-Linux", "/srv/project", "/srv/ash/runtime/two/bin/ash-remote-server", "/usr/bin/ssh"), {
 		activeRuntime: "/srv/ash/runtime/two/bin/ash-remote-server",
 	});
 	assert.deepEqual(await profiles.rollback("Build-Linux", "/srv/project", "/usr/bin/ssh"), {
 		activeRuntime: "/srv/ash/runtime/one/bin/ash-remote-server",
 	});
 	assert.deepEqual(invocations.map(invocation => invocation.args), [
-		["profile", "get", "--host", "build-linux", "--workspace", "/srv/project"],
-		["profile", "activate", "--host", "build-linux", "--workspace", "/srv/project", "--runtime", "/srv/ash/runtime/two/bin/ash-remote-server"],
-		["profile", "rollback", "--host", "build-linux", "--workspace", "/srv/project", "--ssh", "/usr/bin/ssh"],
+		["profile", "get", "--host", "build-linux", "--dir", "/srv/project"],
+		["profile", "activate", "--host", "build-linux", "--dir", "/srv/project", "--runtime", "/srv/ash/runtime/two/bin/ash-remote-server", "--ssh", "/usr/bin/ssh"],
+		["profile", "rollback", "--host", "build-linux", "--dir", "/srv/project", "--ssh", "/usr/bin/ssh"],
 	]);
 	assert.equal(invocations[0]?.environment.ASH_HOME, "/Users/test/Library/Application Support/Ash/state");
 });

@@ -25,28 +25,28 @@ process-hardening = { workspace = true }
 ash-package-store = { workspace = true }
 build-info = { workspace = true }
 build-identity = { workspace = true }
-flate2 = { workspace = true }
 fs2 = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 signal-hook = { workspace = true }
-tar = { workspace = true }
 ureq-update = { workspace = true }
-zip = { workspace = true }
 ash-app-server-client = { workspace = true }
 ash-app-server-protocol = { workspace = true }
 ash-exec = { workspace = true }
 ash-install-context = { workspace = true }
 ash-protocol = { workspace = true }
-ash-product-update = { workspace = true }
+ash-product-update = { workspace = true, features = ["archives"] }
 ash-remote = { workspace = true }
 ash-remote-connections = { workspace = true }
 arg0 = { workspace = true }
 ash-tui = { workspace = true }
 
 [dev-dependencies]
+flate2 = { workspace = true }
+tar = { workspace = true }
+zip = { workspace = true }
+sha2 = { workspace = true }
 ash-app-server = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-http-client = { workspace = true }

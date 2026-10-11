@@ -14,10 +14,10 @@ pub(crate) enum Message {
     ExecTraceHelp,
     ExecInvalidModel,
     ExecTraceFailed,
-    ExecInvalidTrace,
     ExecChangesHelp,
     ExecChangesFailed,
     ExecChangesUnavailable,
+    UpdatePackageFailed,
 }
 
 pub(crate) fn text(message: Message) -> &'static str {
@@ -36,6 +36,12 @@ pub(crate) fn format(message: Message, argument: impl AsRef<str>) -> String {
 fn localized(message: Message, locale: &str) -> &'static str {
     let language = locale.split(['-', '_', '.']).next().unwrap_or_default();
     match (message, language) {
+        (Message::UpdatePackageFailed, "zh") => "无法准备更新包：{0}",
+        (Message::UpdatePackageFailed, "ja") => "更新パッケージを準備できません：{0}",
+        (Message::UpdatePackageFailed, "fr") => {
+            "Impossible de préparer le paquet de mise à jour : {0}"
+        }
+        (Message::UpdatePackageFailed, _) => "Could not prepare update package: {0}",
         (Message::ExecChangesHelp, "zh") => "保存本次 Turn 的变更记录和保留的文件正文 JSON。",
         (Message::ExecChangesFailed, "zh") => "无法保存 Turn 变更：{0}",
         (Message::ExecChangesUnavailable, "zh") => {
@@ -53,13 +59,11 @@ fn localized(message: Message, locale: &str) -> &'static str {
         (Message::ExecTraceHelp, "zh") => "保存本次会话的持久执行 Trace JSON。",
         (Message::ExecInvalidModel, "zh") => "模型标识必须采用 provider/model 格式。",
         (Message::ExecTraceFailed, "zh") => "无法保存执行 Trace：{0}",
-        (Message::ExecInvalidTrace, "zh") => "执行 Trace 的数据格式无效。",
         (Message::ExecModelHelp, _) => "Exact provider/model selection for this Turn.",
         (Message::ExecTimeoutHelp, _) => "Execution time in seconds before interrupting the Turn.",
         (Message::ExecTraceHelp, _) => "Save the Session's durable execution trace as JSON.",
         (Message::ExecInvalidModel, _) => "Model selection must use provider/model format.",
         (Message::ExecTraceFailed, _) => "Could not save execution trace: {0}",
-        (Message::ExecInvalidTrace, _) => "Invalid execution trace data.",
         (Message::AppAbout, "zh") => "打开 Ash 桌面应用及指定工作区。",
         (Message::Workspace, "zh") => "要打开的目录、文件或工作区文件。",
         (Message::AppPath, "zh") => "Ash 桌面可执行文件或 macOS .app 的路径。",
@@ -102,3 +106,7 @@ fn localized(message: Message, locale: &str) -> &'static str {
         (Message::LaunchFailed, _) => "Could not launch the Ash desktop app: {0}",
     }
 }
+
+#[cfg(test)]
+#[path = "nls_tests.rs"]
+mod tests;

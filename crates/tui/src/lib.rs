@@ -108,15 +108,6 @@ pub fn client_capabilities() -> ClientCapabilities {
     }
 }
 
-/// Reads the profile-wide automatic-update preference owned by the terminal product.
-///
-/// The CLI host uses this narrow view of `[tui]` so the setting has one decoder and one default.
-pub fn update_policy(
-    section: &ash_app_server_protocol::protocol::config::FrontendConfigDto,
-) -> Result<UpdatePolicy, String> {
-    config::TerminalSettings::from_tui(section).map(config::TerminalSettings::auto_update)
-}
-
 /// Cloneable receiver for short notices emitted by the local CLI host.
 #[derive(Clone)]
 pub struct TuiNotices {

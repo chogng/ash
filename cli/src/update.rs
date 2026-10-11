@@ -1,17 +1,11 @@
-use flate2::read::GzDecoder;
 use fs2::FileExt;
 use semver::Version;
 use serde::Deserialize;
-use sha2::Digest;
-use sha2::Sha256;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Read;
-use std::io::Write;
-use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -32,8 +26,6 @@ const SCHEDULE_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const MAX_RELEASE_DOCUMENT_BYTES: usize = 256 * 1024;
 const MAX_SIGNED_RELEASE_BYTES: usize = 64 * 1024;
 const MAX_ARCHIVE_BYTES: usize = 1024 * 1024 * 1024;
-const MAX_ARCHIVE_ENTRIES: usize = 100_000;
-const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 pub(super) struct AutomaticUpdater {
     clients: mpsc::Sender<ash_app_server_client::AppServerRequestHandle>,
@@ -67,8 +59,11 @@ fn automatic_loop(
         if let Ok(policy) = client
             .read_config()
             .map_err(|error| error.to_string())
-            .and_then(|config| ash_tui::update_policy(&config.tui))
-            && policy != ash_tui::UpdatePolicy::Never
+            .and_then(|config| {
+                ash_product_update::UpdatePolicy::from_setting(config.tui.0.get("autoUpdate"))
+                    .map_err(|error| error.to_string())
+            })
+            && policy != ash_product_update::UpdatePolicy::Never
         {
             match run(UpdateMode::Automatic, policy, &HttpTransport) {
                 Ok(UpdateOutcome::Installed { current, .. }) => {
@@ -98,12 +93,12 @@ pub(super) fn run_manual(arguments: Vec<String>) -> Result<(), String> {
         return print_status();
     }
     let channel = match arguments.as_slice() {
-        [] => ash_tui::UpdatePolicy::Latest,
+        [] => ash_product_update::UpdatePolicy::Latest,
         [option, value] if option == "--channel" && value == "latest" => {
-            ash_tui::UpdatePolicy::Latest
+            ash_product_update::UpdatePolicy::Latest
         }
         [option, value] if option == "--channel" && value == "stable" => {
-            ash_tui::UpdatePolicy::Stable
+            ash_product_update::UpdatePolicy::Stable
         }
         _ => return Err("usage: ash update [--channel latest|stable] [--status]".into()),
     };
@@ -253,7 +248,7 @@ fn managed_install_required() -> String {
 
 fn run(
     mode: UpdateMode,
-    policy: ash_tui::UpdatePolicy,
+    policy: ash_product_update::UpdatePolicy,
     transport: &dyn Transport,
 ) -> Result<UpdateOutcome, String> {
     let install = ManagedInstall::current()?;
@@ -278,7 +273,7 @@ fn run_for_install(
     install: &ManagedInstall,
     current: Version,
     target: &str,
-    policy: ash_tui::UpdatePolicy,
+    policy: ash_product_update::UpdatePolicy,
     mode: UpdateMode,
     transport: &dyn Transport,
 ) -> Result<UpdateOutcome, String> {
@@ -286,6 +281,8 @@ fn run_for_install(
         return Ok(UpdateOutcome::SkippedRecentCheck);
     }
     let _lock = UpdateLock::acquire(&install.root)?;
+    // A different updater may have selected a new generation since startup detection.
+    install.require_selected_package()?;
     clean_staging(&install.versions)?;
     let resolved = resolve_release(install.update_public_key, target, policy, transport)?;
     let latest = resolved.release.version.clone();
@@ -293,26 +290,25 @@ fn run_for_install(
         record_check(&install.root, policy)?;
         return Ok(UpdateOutcome::Current(current));
     }
-    let expected_digest = resolved.release.package.sha256;
+    if resolved.release.package.size > MAX_ARCHIVE_BYTES as u64 {
+        return Err(format!(
+            "download from {} exceeds {MAX_ARCHIVE_BYTES} bytes",
+            resolved.release.package.url
+        ));
+    }
     let staging = install
         .versions
         .join(format!(".update-package-{}", std::process::id()));
     fs::create_dir(&staging)
         .map_err(|error| format!("could not create update staging: {error}"))?;
-    let archive_path = install.versions.join(format!(
-        ".update-archive-{}-{}",
-        std::process::id(),
-        resolved.release.package.file_name
-    ));
+    let package = staging.join("package");
+    fs::create_dir(&package)
+        .map_err(|error| format!("could not create update staging: {error}"))?;
     let result = (|| {
-        let downloaded =
-            transport.fetch_file(&resolved.archive_url, &archive_path, MAX_ARCHIVE_BYTES)?;
-        if downloaded.size != resolved.release.package.size || downloaded.sha256 != expected_digest
-        {
-            return Err("downloaded Ash package does not match its SHA-256 checksum".into());
-        }
-        extract_package(&archive_path, resolved.release.package.format, &staging)?;
-        let metadata = validate_package(&staging, &latest, target)?;
+        let archive = transport.stage_package(&resolved.release.package, &staging)?;
+        ash_product_update::extract_package(&archive, resolved.release.package.format, &package)
+            .map_err(package_error)?;
+        let metadata = validate_package(&package, &latest, target)?;
         let id = format!(
             "{}-{}",
             latest,
@@ -325,10 +321,8 @@ fn run_for_install(
         let installed = install.versions.join(id);
         if installed.exists() {
             validate_package(&installed, &latest, target)?;
-            fs::remove_dir_all(&staging)
-                .map_err(|error| format!("could not remove duplicate update staging: {error}"))?;
         } else {
-            fs::rename(&staging, &installed).map_err(|error| {
+            fs::rename(&package, &installed).map_err(|error| {
                 format!("could not publish the downloaded Ash version: {error}")
             })?;
         }
@@ -339,26 +333,22 @@ fn run_for_install(
             current: latest,
         })
     })();
-    let _ = fs::remove_file(&archive_path);
-    if result.is_err() {
-        let _ = fs::remove_dir_all(&staging);
-    }
+    let _ = fs::remove_dir_all(&staging);
     result
 }
 
 struct ResolvedRelease {
     release: ash_product_update::VerifiedRelease,
-    archive_url: String,
 }
 
 fn resolve_release(
     public_key: ash_product_update::UpdatePublicKey,
     target: &str,
-    policy: ash_tui::UpdatePolicy,
+    policy: ash_product_update::UpdatePolicy,
     transport: &dyn Transport,
 ) -> Result<ResolvedRelease, String> {
     match policy {
-        ash_tui::UpdatePolicy::Latest => {
+        ash_product_update::UpdatePolicy::Latest => {
             let github: Release =
                 serde_json::from_slice(&transport.fetch(RELEASE_API, MAX_RELEASE_DOCUMENT_BYTES)?)
                     .map_err(|error| format!("invalid GitHub release response: {error}"))?;
@@ -383,12 +373,9 @@ fn resolve_release(
             {
                 return Err("signed update size does not match the GitHub release asset".into());
             }
-            Ok(ResolvedRelease {
-                release,
-                archive_url: archive.browser_download_url.clone(),
-            })
+            Ok(ResolvedRelease { release })
         }
-        ash_tui::UpdatePolicy::Stable => {
+        ash_product_update::UpdatePolicy::Stable => {
             let descriptor_url = format!(
                 "https://github.com/{REPOSITORY}/releases/download/ash-code-stable/ash-code-stable-{target}.update.json"
             );
@@ -409,12 +396,9 @@ fn resolve_release(
             if release.package.url != expected_url {
                 return Err("signed stable update URL does not match its release identity".into());
             }
-            Ok(ResolvedRelease {
-                release,
-                archive_url: expected_url,
-            })
+            Ok(ResolvedRelease { release })
         }
-        ash_tui::UpdatePolicy::Never => {
+        ash_product_update::UpdatePolicy::Never => {
             Err("the never update policy does not select a release".into())
         }
     }
@@ -426,14 +410,14 @@ struct UpdateStatus {
     schema_version: u8,
     attempted_at: u64,
     current_version: String,
-    policy: ash_tui::UpdatePolicy,
+    policy: ash_product_update::UpdatePolicy,
     result: StatusResult,
 }
 
 impl UpdateStatus {
     fn from_result(
         current: Version,
-        policy: ash_tui::UpdatePolicy,
+        policy: ash_product_update::UpdatePolicy,
         result: &Result<UpdateOutcome, String>,
     ) -> Result<Self, String> {
         let result = match result {
@@ -504,11 +488,11 @@ fn print_status() -> Result<(), String> {
     Ok(())
 }
 
-fn policy_label(policy: ash_tui::UpdatePolicy) -> &'static str {
+fn policy_label(policy: ash_product_update::UpdatePolicy) -> &'static str {
     match policy {
-        ash_tui::UpdatePolicy::Latest => "latest",
-        ash_tui::UpdatePolicy::Stable => "stable",
-        ash_tui::UpdatePolicy::Never => "never",
+        ash_product_update::UpdatePolicy::Latest => "latest",
+        ash_product_update::UpdatePolicy::Stable => "stable",
+        ash_product_update::UpdatePolicy::Never => "never",
     }
 }
 
@@ -550,7 +534,7 @@ fn clean_staging(versions: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn checked_recently(root: &Path, policy: ash_tui::UpdatePolicy) -> Result<bool, String> {
+fn checked_recently(root: &Path, policy: ash_product_update::UpdatePolicy) -> Result<bool, String> {
     let path = check_path(root, policy)?;
     let contents = match fs::read_to_string(path) {
         Ok(contents) => contents,
@@ -565,17 +549,17 @@ fn checked_recently(root: &Path, policy: ash_tui::UpdatePolicy) -> Result<bool, 
     Ok(now.saturating_sub(checked) < CHECK_INTERVAL.as_secs())
 }
 
-fn record_check(root: &Path, policy: ash_tui::UpdatePolicy) -> Result<(), String> {
+fn record_check(root: &Path, policy: ash_product_update::UpdatePolicy) -> Result<(), String> {
     fs::write(check_path(root, policy)?, unix_time()?.to_string())
         .map_err(|error| format!("could not record the update check time: {error}"))
 }
 
-fn check_path(root: &Path, policy: ash_tui::UpdatePolicy) -> Result<PathBuf, String> {
+fn check_path(root: &Path, policy: ash_product_update::UpdatePolicy) -> Result<PathBuf, String> {
     match policy {
-        ash_tui::UpdatePolicy::Latest | ash_tui::UpdatePolicy::Stable => {
+        ash_product_update::UpdatePolicy::Latest | ash_product_update::UpdatePolicy::Stable => {
             Ok(root.join(format!("{CHECKED_AT_PREFIX}-{}", policy_label(policy))))
         }
-        ash_tui::UpdatePolicy::Never => {
+        ash_product_update::UpdatePolicy::Never => {
             Err("the never update policy has no check timestamp".into())
         }
     }
@@ -639,23 +623,17 @@ struct ReleaseAsset {
     size: u64,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct DownloadedFile {
-    sha256: [u8; 32],
-    size: u64,
-}
-
 trait Transport {
     fn fetch(&self, url: &str, maximum: usize) -> Result<Vec<u8>, String>;
 
-    fn fetch_file(&self, url: &str, path: &Path, maximum: usize) -> Result<DownloadedFile, String> {
-        let bytes = self.fetch(url, maximum)?;
-        fs::write(path, &bytes)
-            .map_err(|error| format!("could not write downloaded update: {error}"))?;
-        Ok(DownloadedFile {
-            sha256: Sha256::digest(&bytes).into(),
-            size: bytes.len() as u64,
-        })
+    fn stage_package(
+        &self,
+        package: &ash_product_update::VerifiedPackage,
+        directory: &Path,
+    ) -> Result<PathBuf, String> {
+        let bytes = self.fetch(&package.url, MAX_ARCHIVE_BYTES)?;
+        ash_product_update::stage_verified_package_with_reader(package, directory, bytes.as_slice())
+            .map_err(package_error)
     }
 }
 
@@ -689,211 +667,19 @@ impl Transport for HttpTransport {
         Ok(bytes)
     }
 
-    fn fetch_file(&self, url: &str, path: &Path, maximum: usize) -> Result<DownloadedFile, String> {
-        let response = ureq::get(url)
-            .header("Accept", "application/octet-stream")
-            .header("User-Agent", "ash-code-updater")
-            .config()
-            .proxy(None)
-            .timeout_connect(Some(Duration::from_secs(30)))
-            .max_redirects(5)
-            .tls_config(
-                ureq::tls::TlsConfig::builder()
-                    .root_certs(ureq::tls::RootCerts::PlatformVerifier)
-                    .build(),
-            )
-            .build()
-            .call()
-            .map_err(|error| format!("could not download {url}: {error}"))?;
-        let mut reader = response.into_body().into_reader().take(maximum as u64 + 1);
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-            .map_err(|error| format!("could not create update archive: {error}"))?;
-        let mut digest = Sha256::new();
-        let mut total = 0usize;
-        let mut buffer = [0u8; 64 * 1024];
-        loop {
-            let read = reader
-                .read(&mut buffer)
-                .map_err(|error| format!("could not read {url}: {error}"))?;
-            if read == 0 {
-                break;
-            }
-            total += read;
-            if total > maximum {
-                return Err(format!("download from {url} exceeds {maximum} bytes"));
-            }
-            digest.update(&buffer[..read]);
-            file.write_all(&buffer[..read])
-                .map_err(|error| format!("could not write update archive: {error}"))?;
-        }
-        file.sync_all()
-            .map_err(|error| format!("could not flush update archive: {error}"))?;
-        Ok(DownloadedFile {
-            sha256: digest.finalize().into(),
-            size: total as u64,
-        })
+    fn stage_package(
+        &self,
+        package: &ash_product_update::VerifiedPackage,
+        directory: &Path,
+    ) -> Result<PathBuf, String> {
+        ash_product_update::stage_verified_package(package, directory).map_err(package_error)
     }
-}
-
-fn decode_sha256(value: &str) -> Result<[u8; 32], String> {
-    if value.len() != 64 {
-        return Err("SHA-256 value must contain 64 hexadecimal characters".into());
-    }
-    let mut decoded = [0u8; 32];
-    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
-        let text = std::str::from_utf8(pair).expect("ASCII hex pairs remain UTF-8");
-        decoded[index] = u8::from_str_radix(text, 16)
-            .map_err(|_| "SHA-256 value contains a non-hexadecimal character".to_owned())?;
-    }
-    Ok(decoded)
-}
-
-fn extract_package(
-    archive: &Path,
-    format: ash_product_update::PackageFormat,
-    destination: &Path,
-) -> Result<(), String> {
-    match format {
-        ash_product_update::PackageFormat::TarGz => extract_tar_gz(archive, destination),
-        ash_product_update::PackageFormat::Zip => extract_zip(archive, destination),
-        _ => Err("Ash Code update package has an unsupported format".into()),
-    }
-}
-
-fn extract_tar_gz(archive: &Path, destination: &Path) -> Result<(), String> {
-    let file =
-        File::open(archive).map_err(|error| format!("could not open update archive: {error}"))?;
-    let mut archive = tar::Archive::new(GzDecoder::new(file));
-    let mut unpacked = 0u64;
-    for entry in archive
-        .entries()
-        .map_err(|error| format!("could not read update archive: {error}"))?
-    {
-        let mut entry = entry.map_err(|error| format!("could not read archive entry: {error}"))?;
-        let path = entry
-            .path()
-            .map_err(|error| format!("archive entry path is invalid: {error}"))?
-            .into_owned();
-        if !safe_relative_path(&path) {
-            return Err(format!(
-                "archive entry escapes the package root: {}",
-                path.display()
-            ));
-        }
-        let kind = entry.header().entry_type();
-        if !kind.is_file() && !kind.is_dir() {
-            return Err(format!(
-                "archive entry has unsupported type: {}",
-                path.display()
-            ));
-        }
-        unpacked = unpacked
-            .checked_add(entry.size())
-            .filter(|total| *total <= MAX_UNPACKED_BYTES)
-            .ok_or_else(|| "unpacked Ash package exceeds the size limit".to_owned())?;
-        entry
-            .unpack_in(destination)
-            .map_err(|error| format!("could not unpack {}: {error}", path.display()))?;
-    }
-    Ok(())
-}
-
-fn extract_zip(archive: &Path, destination: &Path) -> Result<(), String> {
-    let file =
-        File::open(archive).map_err(|error| format!("could not open update archive: {error}"))?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|error| format!("could not read update archive: {error}"))?;
-    if archive.len() > MAX_ARCHIVE_ENTRIES {
-        return Err("update archive contains too many entries".into());
-    }
-    let mut unpacked = 0u64;
-    let mut paths = BTreeSet::new();
-    for index in 0..archive.len() {
-        let entry = archive
-            .by_index(index)
-            .map_err(|error| format!("could not read archive entry: {error}"))?;
-        let path = entry
-            .enclosed_name()
-            .ok_or_else(|| format!("archive entry path is invalid: {}", entry.name()))?
-            .to_owned();
-        if !safe_relative_path(&path) || !paths.insert(path.clone()) {
-            return Err(format!(
-                "archive entry escapes or repeats the package root: {}",
-                path.display()
-            ));
-        }
-        if entry.is_symlink() || entry.encrypted() {
-            return Err(format!(
-                "archive entry has unsupported type: {}",
-                path.display()
-            ));
-        }
-        unpacked = unpacked
-            .checked_add(entry.size())
-            .filter(|total| *total <= MAX_UNPACKED_BYTES)
-            .ok_or_else(|| "unpacked Ash package exceeds the size limit".to_owned())?;
-        let output = destination.join(&path);
-        if entry.is_dir() {
-            fs::create_dir_all(&output)
-                .map_err(|error| format!("could not create {}: {error}", path.display()))?;
-            continue;
-        }
-        if !entry.is_file() {
-            return Err(format!(
-                "archive entry has unsupported type: {}",
-                path.display()
-            ));
-        }
-        if let Some(parent) = output.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-        }
-        let mut target = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&output)
-            .map_err(|error| format!("could not create {}: {error}", path.display()))?;
-        let expected = entry.size();
-        #[cfg(unix)]
-        let unix_mode = entry.unix_mode();
-        let copied = std::io::copy(&mut entry.take(expected + 1), &mut target)
-            .map_err(|error| format!("could not unpack {}: {error}", path.display()))?;
-        if copied != expected {
-            return Err(format!("archive entry is truncated: {}", path.display()));
-        }
-        target
-            .flush()
-            .map_err(|error| format!("could not flush {}: {error}", path.display()))?;
-        #[cfg(unix)]
-        if let Some(mode) = unix_mode {
-            use std::os::unix::fs::PermissionsExt;
-            let installed_mode = if mode & 0o111 == 0 { 0o644 } else { 0o755 };
-            fs::set_permissions(&output, fs::Permissions::from_mode(installed_mode)).map_err(
-                |error| format!("could not set {} permissions: {error}", path.display()),
-            )?;
-        }
-    }
-    Ok(())
-}
-
-fn safe_relative_path(path: &Path) -> bool {
-    let mut components = path.components();
-    components
-        .next()
-        .is_some_and(|component| matches!(component, Component::Normal(_)))
-        && components.all(|component| matches!(component, Component::Normal(_)))
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PackageMetadata {
     layout_version: u8,
-    version: String,
-    target: String,
-    build_id: String,
     files: BTreeMap<String, String>,
     components: BTreeMap<String, serde_json::Value>,
 }
@@ -923,41 +709,19 @@ fn validate_package(
     package: &Path,
     expected_version: &Version,
     expected_target: &str,
-) -> Result<PackageMetadata, String> {
+) -> Result<ash_package_store::PackageIdentity, String> {
     let metadata_path = package.join("ash-package.json");
     let metadata: PackageMetadata = serde_json::from_slice(
         &fs::read(&metadata_path)
             .map_err(|error| format!("downloaded package has no metadata: {error}"))?,
     )
     .map_err(|error| format!("downloaded package metadata is invalid: {error}"))?;
-    if metadata.layout_version != 2
-        || metadata.version != expected_version.to_string()
-        || metadata.target != expected_target
-        || !metadata.components.contains_key("cli")
-    {
+    if metadata.layout_version != 2 || !metadata.components.contains_key("cli") {
         return Err("downloaded package identity does not match this Ash release".into());
     }
-    let build_digest = metadata
-        .build_id
-        .strip_prefix("sha256:")
-        .ok_or_else(|| "package buildId is invalid".to_owned())?;
-    decode_sha256(build_digest).map_err(|_| "package buildId is invalid".to_owned())?;
-    let mut actual = BTreeSet::new();
-    collect_files(package, package, &mut actual)?;
-    actual.remove("ash-package.json");
-    actual.remove(".lease");
-    let expected = metadata.files.keys().cloned().collect::<BTreeSet<_>>();
-    if actual != expected {
-        return Err("downloaded package file set does not match its metadata".into());
-    }
-    for (relative, expected_digest) in &metadata.files {
-        let path = package.join(relative);
-        let actual_digest = file_sha256(&path)?;
-        if actual_digest != *expected_digest {
-            return Err(format!(
-                "downloaded package file failed validation: {relative}"
-            ));
-        }
+    let identity = ash_package_store::validate_package_identity(package).map_err(package_error)?;
+    if identity.version != expected_version.to_string() || identity.target != expected_target {
+        return Err("downloaded package identity does not match this Ash release".into());
     }
     let executable = package
         .join("bin")
@@ -993,57 +757,7 @@ fn validate_package(
             return Err("downloaded Ash CLI is not executable".into());
         }
     }
-    Ok(metadata)
-}
-
-fn collect_files(
-    root: &Path,
-    directory: &Path,
-    files: &mut BTreeSet<String>,
-) -> Result<(), String> {
-    for entry in fs::read_dir(directory)
-        .map_err(|error| format!("could not inspect downloaded package: {error}"))?
-    {
-        let entry = entry.map_err(|error| format!("could not inspect package entry: {error}"))?;
-        let kind = entry
-            .file_type()
-            .map_err(|error| format!("could not inspect package entry type: {error}"))?;
-        let path = entry.path();
-        if kind.is_symlink() || (!kind.is_file() && !kind.is_dir()) {
-            return Err(format!(
-                "downloaded package contains an unsupported entry: {}",
-                path.display()
-            ));
-        }
-        if kind.is_dir() {
-            collect_files(root, &path, files)?;
-        } else {
-            let relative = path
-                .strip_prefix(root)
-                .expect("walked package entries remain below the package root")
-                .to_string_lossy()
-                .replace('\\', "/");
-            files.insert(relative);
-        }
-    }
-    Ok(())
-}
-
-fn file_sha256(path: &Path) -> Result<String, String> {
-    let mut file =
-        File::open(path).map_err(|error| format!("could not open {}: {error}", path.display()))?;
-    let mut digest = Sha256::new();
-    let mut buffer = [0u8; 64 * 1024];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(|error| format!("could not read {}: {error}", path.display()))?;
-        if read == 0 {
-            break;
-        }
-        digest.update(&buffer[..read]);
-    }
-    Ok(format!("{:x}", digest.finalize()))
+    Ok(identity)
 }
 
 fn current_target() -> Result<&'static str, String> {
@@ -1070,6 +784,10 @@ fn current_target() -> Result<&'static str, String> {
     } else {
         Err("automatic updates are not published for this platform".into())
     }
+}
+
+fn package_error(error: impl std::fmt::Display) -> String {
+    crate::nls::format(crate::nls::Message::UpdatePackageFailed, error.to_string())
 }
 
 #[cfg(test)]

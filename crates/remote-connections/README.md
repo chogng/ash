@@ -119,6 +119,8 @@ JSON schema 明确没有密码、私钥、SSH 路径、agent socket 或任意 SS
 symlink 或非普通文件、未知字段、重复 target、错误身份、重复 active/previous runtime、超大文档和
 锁竞争都会失败即关闭。
 
+`SshAppServerConnectionOptions::connect_verified` 和 `verify_profile` 在可用性探测与协议握手后返回 `VerifiedRemoteProfile`，由该结果激活共享记录；`rollback_remote_profile` 验证 previous 后执行条件交换。命令适配器只解析参数和输出结果，`profile activate` 同样执行验证，支持 `--ssh` 选择本机 OpenSSH。
+
 产品必须只在完成可用性与 App Server 兼容性检查后调用 `activate`。激活不同路径时，当前 active 会
 进入唯一 previous 槽位；幂等激活不会丢失该槽位。`rollback_to_verified` 在持有写 lease 时比较调用方
 刚验证的 previous profile，避免另一个进程让调用方切换到未验证的运行时代际；它还保存验证期间解析

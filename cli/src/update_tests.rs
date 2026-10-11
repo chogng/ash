@@ -1,63 +1,49 @@
 use super::*;
+use ash_product_update::extract_package;
 use ed25519_dalek::SigningKey;
+use sha2::Digest;
+use sha2::Sha256;
+use std::io::Write;
 use std::sync::Mutex;
 use tempfile::TempDir;
 
 #[test]
-fn http_transport_enforces_status_and_size_for_metadata_and_archives() {
-    for archive in [false, true] {
-        for (body, status, valid) in [
-            (&b"abc"[..], 200, true),
-            (&b"abcd"[..], 200, false),
-            (&b"abc"[..], 503, false),
-        ] {
-            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-            let url = format!("http://{}/update", listener.local_addr().unwrap());
-            let worker = std::thread::spawn(move || {
-                let (mut stream, _) = listener.accept().unwrap();
-                stream
-                    .set_read_timeout(Some(Duration::from_secs(3)))
-                    .unwrap();
-                let mut request = Vec::new();
-                while !request.ends_with(b"\r\n\r\n") {
-                    let mut byte = [0];
-                    stream.read_exact(&mut byte).unwrap();
-                    request.push(byte[0]);
-                }
-                let request = String::from_utf8(request).unwrap().to_ascii_lowercase();
-                assert!(request.contains("user-agent: ash-code-updater"));
-                assert!(request.contains(if archive {
-                    "accept: application/octet-stream"
-                } else {
-                    "accept: application/vnd.github+json"
-                }));
-                write!(
-                    stream,
-                    "HTTP/1.1 {status} Response\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    body.len()
-                )
+fn http_transport_enforces_status_and_size_for_metadata() {
+    for (body, status, valid) in [
+        (&b"abc"[..], 200, true),
+        (&b"abcd"[..], 200, false),
+        (&b"abc"[..], 503, false),
+    ] {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/update", listener.local_addr().unwrap());
+        let worker = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
                 .unwrap();
-                let _ = stream.write_all(body);
-            });
-            if archive {
-                let directory = TempDir::new().unwrap();
-                let path = directory.path().join("update.zip");
-                let result = HttpTransport.fetch_file(&url, &path, 3);
-                assert_eq!(result.is_ok(), valid, "{result:?}");
-                if let Ok(downloaded) = result {
-                    assert_eq!(downloaded.size, 3);
-                    assert_eq!(downloaded.sha256, Sha256::digest(body).as_slice());
-                    assert_eq!(fs::read(path).unwrap(), body);
-                }
-            } else {
-                let result = HttpTransport.fetch(&url, 3);
-                assert_eq!(result.is_ok(), valid, "{result:?}");
-                if let Ok(bytes) = result {
-                    assert_eq!(bytes, body);
-                }
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut byte = [0];
+                stream.read_exact(&mut byte).unwrap();
+                request.push(byte[0]);
             }
-            worker.join().unwrap();
+            let request = String::from_utf8(request).unwrap().to_ascii_lowercase();
+            assert!(request.contains("user-agent: ash-code-updater"));
+            assert!(request.contains("accept: application/vnd.github+json"));
+            write!(
+                stream,
+                "HTTP/1.1 {status} Response\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .unwrap();
+            let _ = stream.write_all(body);
+        });
+        let result = HttpTransport.fetch(&url, 3);
+        assert_eq!(result.is_ok(), valid, "{result:?}");
+        if let Ok(bytes) = result {
+            assert_eq!(bytes, body);
         }
+        worker.join().unwrap();
     }
 }
 
@@ -70,7 +56,7 @@ fn signed_release_requires_the_installed_key_and_exact_identity() {
         update_public_key(),
         &ash_product_update::ExpectedRelease {
             product: ash_product_update::UpdateProduct::AshCode,
-            policy: ash_tui::UpdatePolicy::Latest,
+            policy: ash_product_update::UpdatePolicy::Latest,
             target: target.into(),
         },
     )
@@ -85,7 +71,7 @@ fn signed_release_requires_the_installed_key_and_exact_identity() {
             update_public_key(),
             &ash_product_update::ExpectedRelease {
                 product: ash_product_update::UpdateProduct::AshCode,
-                policy: ash_tui::UpdatePolicy::Latest,
+                policy: ash_product_update::UpdatePolicy::Latest,
                 target: target.into(),
             },
         )
@@ -97,7 +83,7 @@ fn signed_release_requires_the_installed_key_and_exact_identity() {
             update_public_key(),
             &ash_product_update::ExpectedRelease {
                 product: ash_product_update::UpdateProduct::AshCode,
-                policy: ash_tui::UpdatePolicy::Latest,
+                policy: ash_product_update::UpdatePolicy::Latest,
                 target: target.into(),
             },
         )
@@ -162,11 +148,23 @@ fn package_validation_checks_identity_file_set_and_digests() {
 
     assert!(validate_package(package, &version, target).is_ok());
 
+    let metadata_path = package.join("ash-package.json");
+    let original = fs::read(&metadata_path).unwrap();
+    let mut altered: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    altered["buildId"] = format!("sha256:{}", "a".repeat(64)).into();
+    fs::write(&metadata_path, serde_json::to_vec(&altered).unwrap()).unwrap();
+    assert!(
+        validate_package(package, &version, target)
+            .unwrap_err()
+            .contains("build identity")
+    );
+    fs::write(&metadata_path, original).unwrap();
+
     fs::write(&executable, b"tampered").unwrap();
     assert!(
         validate_package(package, &version, target)
             .unwrap_err()
-            .contains("failed validation")
+            .contains("file digest does not match")
     );
 }
 
@@ -196,6 +194,7 @@ fn package_extraction_rejects_links() {
             &output,
         )
         .unwrap_err()
+        .to_string()
         .contains("unsupported type")
     );
 }
@@ -253,6 +252,7 @@ fn zip_package_extraction_preserves_executables_and_rejects_links() {
             &linked_output,
         )
         .unwrap_err()
+        .to_string()
         .contains("unsupported type")
     );
 }
@@ -302,7 +302,7 @@ fn update_installs_a_verified_package_and_switches_the_managed_pointer() {
         &install,
         Version::parse("0.1.0").unwrap(),
         target,
-        ash_tui::UpdatePolicy::Latest,
+        ash_product_update::UpdatePolicy::Latest,
         UpdateMode::Manual,
         &transport,
     )
@@ -331,21 +331,21 @@ fn stable_policy_uses_only_the_signed_promoted_release() {
         target,
         17,
         &"11".repeat(32),
-        ash_tui::UpdatePolicy::Stable,
+        ash_product_update::UpdatePolicy::Stable,
     );
     let transport = FakeTransport(Mutex::new(BTreeMap::from([(descriptor_url, signed)])));
 
     let release = resolve_release(
         update_public_key(),
         target,
-        ash_tui::UpdatePolicy::Stable,
+        ash_product_update::UpdatePolicy::Stable,
         &transport,
     )
     .unwrap();
 
     assert_eq!(release.release.version, Version::parse("0.2.0").unwrap());
     assert_eq!(
-        release.archive_url,
+        release.release.package.url,
         format!(
             "https://github.com/{REPOSITORY}/releases/download/v0.2.0/ash-code-{target}.tar.gz"
         )
@@ -353,11 +353,42 @@ fn stable_policy_uses_only_the_signed_promoted_release() {
 }
 
 #[test]
+fn an_outdated_updater_cannot_replace_another_selected_generation() {
+    let directory = TempDir::new().unwrap();
+    let root = directory.path();
+    let versions = root.join("versions");
+    let old = versions.join("old");
+    fs::create_dir_all(&old).unwrap();
+    fs::create_dir_all(versions.join("new")).unwrap();
+    let install = ManagedInstall {
+        root: root.into(),
+        package: old,
+        versions,
+        update_public_key: update_public_key(),
+    };
+    select_for_test(root, "new");
+    let result = run_for_install(
+        &install,
+        Version::parse("0.1.0").unwrap(),
+        current_target().unwrap(),
+        ash_product_update::UpdatePolicy::Stable,
+        UpdateMode::Manual,
+        &FakeTransport(Mutex::new(BTreeMap::new())),
+    );
+    assert!(
+        result
+            .unwrap_err()
+            .contains("cannot update the managed launcher")
+    );
+    assert_eq!(selected_for_test(root), "new");
+}
+
+#[test]
 fn update_status_preserves_success_failure_and_readable_age() {
     let current = Version::parse("1.2.3").unwrap();
     let installed = UpdateStatus::from_result(
         current.clone(),
-        ash_tui::UpdatePolicy::Stable,
+        ash_product_update::UpdatePolicy::Stable,
         &Ok(UpdateOutcome::Installed {
             previous: current.clone(),
             current: Version::parse("1.3.0").unwrap(),
@@ -372,7 +403,7 @@ fn update_status_preserves_success_failure_and_readable_age() {
 
     let failed = UpdateStatus::from_result(
         current,
-        ash_tui::UpdatePolicy::Latest,
+        ash_product_update::UpdatePolicy::Latest,
         &Err("signature rejected".into()),
     )
     .unwrap();
@@ -440,22 +471,28 @@ fn write_metadata(
     files: BTreeMap<String, String>,
 ) {
     let cli_digest = files.values().next().unwrap().clone();
+    let mut document = serde_json::json!({
+        "layoutVersion": 2, "version": version.to_string(), "target": target,
+        "buildProfile": "release", "javascriptRuntime": { "kind": "packagedNode" },
+        "protocol": { "major": 1, "schemaHash": format!("sha256:{}", "0".repeat(64)) },
+        "components": { "cli": { "binarySha256": cli_digest, "updatePublicKey": hex(&update_public_key().as_bytes()) } }
+    });
+    document.sort_all_objects();
+    let mut digest = Sha256::new();
+    digest.update(b"ash-package-build-v2\0");
+    digest.update(serde_json::to_vec(&document).unwrap());
+    digest.update(b"\0");
+    for (path, hash) in &files {
+        digest.update(path.as_bytes());
+        digest.update(b"\0");
+        digest.update(hash.as_bytes());
+        digest.update(b"\0");
+    }
+    document["buildId"] = format!("sha256:{:x}", digest.finalize()).into();
+    document["files"] = serde_json::to_value(files).unwrap();
     fs::write(
         package.join("ash-package.json"),
-        serde_json::to_vec(&serde_json::json!({
-            "layoutVersion": 2,
-            "version": version.to_string(),
-            "target": target,
-            "buildId": format!("sha256:{}", "a".repeat(64)),
-            "files": files,
-            "components": {
-                "cli": {
-                    "binarySha256": cli_digest,
-                    "updatePublicKey": hex(&update_public_key().as_bytes())
-                }
-            }
-        }))
-        .unwrap(),
+        serde_json::to_vec(&document).unwrap(),
     )
     .unwrap();
 }
@@ -474,7 +511,13 @@ fn write_installed_metadata(package: &Path) {
 }
 
 fn signed_update(version: &str, target: &str, size: u64, sha256: &str) -> Vec<u8> {
-    signed_update_with_policy(version, target, size, sha256, ash_tui::UpdatePolicy::Latest)
+    signed_update_with_policy(
+        version,
+        target,
+        size,
+        sha256,
+        ash_product_update::UpdatePolicy::Latest,
+    )
 }
 
 fn signed_update_with_policy(
@@ -482,7 +525,7 @@ fn signed_update_with_policy(
     target: &str,
     size: u64,
     sha256: &str,
-    policy: ash_tui::UpdatePolicy,
+    policy: ash_product_update::UpdatePolicy,
 ) -> Vec<u8> {
     ash_product_update::sign_release(
         ash_product_update::ReleaseInput {
@@ -554,4 +597,8 @@ fn select_for_test(root: &Path, name: &str) {
 #[cfg(windows)]
 fn selected_for_test(root: &Path) -> String {
     fs::read_to_string(root.join("current")).unwrap()
+}
+
+fn file_sha256(path: &Path) -> Result<String, std::io::Error> {
+    Ok(format!("{:x}", Sha256::digest(fs::read(path)?)))
 }

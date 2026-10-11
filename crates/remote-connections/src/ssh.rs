@@ -61,6 +61,10 @@ impl SshAppServerConnectionOptions {
         &self.ssh_executable
     }
 
+    pub(crate) const fn connect_timeout_seconds(&self) -> NonZeroU16 {
+        self.connect_timeout_seconds
+    }
+
     /// Builds the child command that owns the local SSH transport.
     pub fn stdio_command(&self) -> StdioAppServerCommand {
         let target = self.profile.target();
@@ -220,7 +224,7 @@ impl RemoteConnectionError {
         }
     }
 
-    fn transport(message: impl Into<String>) -> Self {
+    pub(crate) fn transport(message: impl Into<String>) -> Self {
         Self {
             kind: RemoteConnectionFailureKind::Transport,
             message: message.into(),

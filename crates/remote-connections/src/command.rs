@@ -46,7 +46,7 @@ const PROFILE_GET_USAGE: &str =
     "usage: ash-remote profile get --host <ssh-host> --dir <absolute-remote-path>";
 const PROFILE_ACTIVATE_USAGE: &str = concat!(
     "usage: ash-remote profile activate --host <ssh-host> ",
-    "--dir <absolute-remote-path> --runtime <verified-remote-runtime>"
+    "--dir <absolute-remote-path> --runtime <remote-runtime> [--ssh <openssh-path>]"
 );
 const PROFILE_ROLLBACK_USAGE: &str = concat!(
     "usage: ash-remote profile rollback --host <ssh-host> ",
@@ -98,6 +98,7 @@ pub(crate) struct RemoteProfileTargetOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RemoteProfileActivateOptions {
     pub(crate) profile: RemoteProfile,
+    pub(crate) ssh_executable: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -281,6 +282,7 @@ fn parse_profile_activation(arguments: &[String]) -> Result<RemoteProfileActivat
     let mut host = None;
     let mut dir = None;
     let mut runtime = None;
+    let mut ssh_executable = None;
     parse_options(arguments, |name, value| match name {
         "--host" => assign_once(
             &mut host,
@@ -297,6 +299,7 @@ fn parse_profile_activation(arguments: &[String]) -> Result<RemoteProfileActivat
             RemoteRuntime::new_exact_executable(value).map_err(string_error)?,
             name,
         ),
+        "--ssh" => assign_once(&mut ssh_executable, PathBuf::from(value), name),
         _ => Err(format!(
             "unknown remote profile activate option: {name}\n\n{PROFILE_ACTIVATE_USAGE}"
         )),
@@ -306,6 +309,7 @@ fn parse_profile_activation(arguments: &[String]) -> Result<RemoteProfileActivat
         dir.ok_or_else(|| required_for("--dir", PROFILE_ACTIVATE_USAGE))?,
     );
     Ok(RemoteProfileActivateOptions {
+        ssh_executable,
         profile: RemoteProfile::new(
             target,
             runtime.ok_or_else(|| required_for("--runtime", PROFILE_ACTIVATE_USAGE))?,
@@ -467,12 +471,30 @@ fn run_profile(command: RemoteProfileCommand) -> Result<(), String> {
         RemoteProfileCommand::Get(options) => store
             .connection(&options.target)
             .map_err(|error| error.to_string())?,
-        RemoteProfileCommand::Activate(options) => Some(
-            store
-                .activate(&options.profile)
-                .map_err(|error| error.to_string())?,
+        RemoteProfileCommand::Activate(options) => {
+            let mut connection = SshAppServerConnectionOptions::new(options.profile);
+            if let Some(ssh) = options.ssh_executable {
+                connection = connection.with_ssh_executable(ssh);
+            }
+            let verified = connection
+                .verify_profile(profile_client_info(), ClientCapabilities::default())
+                .map_err(|error| error.to_string())?;
+            Some(
+                verified
+                    .activate(&store)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
+        RemoteProfileCommand::Rollback(options) => Some(
+            crate::rollback_remote_profile(
+                &store,
+                &options.target,
+                options.ssh_executable.as_deref(),
+                profile_client_info(),
+                ClientCapabilities::default(),
+            )
+            .map_err(|error| error.to_string())?,
         ),
-        RemoteProfileCommand::Rollback(options) => Some(rollback_profile(&store, options)?),
     };
     println!(
         "{}",
@@ -482,49 +504,11 @@ fn run_profile(command: RemoteProfileCommand) -> Result<(), String> {
     Ok(())
 }
 
-fn rollback_profile(
-    store: &RemoteConnectionProfileStore,
-    options: RemoteProfileRollbackOptions,
-) -> Result<RemoteConnectionProfileRecord, String> {
-    let stored = store
-        .connection(&options.target)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| {
-            "Remote connection profile has no runtime generation to roll back".to_owned()
-        })?;
-    let previous = stored
-        .previous_profile()
-        .ok_or_else(|| "Remote connection profile has no previous runtime generation".to_owned())?;
-    let mut connection = SshAppServerConnectionOptions::new(previous.clone());
-    if let Some(ssh_executable) = options.ssh_executable.as_deref() {
-        connection = connection.with_ssh_executable(ssh_executable);
+fn profile_client_info() -> ClientInfo {
+    ClientInfo {
+        name: "ash-remote-profile".into(),
+        version: build_info::VERSION.into(),
     }
-    let probe = connection
-        .probe_runtime()
-        .map_err(|error| format!("previous Remote runtime failed its readiness check: {error}"))?;
-    let verified = RemoteProfile::new(previous.target().clone(), probe.resolved_runtime().clone());
-    let mut compatibility = SshAppServerConnectionOptions::new(verified.clone());
-    if let Some(ssh_executable) = options.ssh_executable.as_deref() {
-        compatibility = compatibility.with_ssh_executable(ssh_executable);
-    }
-    compatibility
-        .probe_compatibility(
-            ClientInfo {
-                name: "ash-remote-profile-rollback".into(),
-                version: build_info::VERSION.into(),
-            },
-            ClientCapabilities::default(),
-        )
-        .map_err(|error| {
-            format!("previous Remote runtime failed its compatibility check: {error}")
-        })?;
-    store
-        .rollback_to_verified(&previous, &verified)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| {
-            "Remote runtime generations changed while rollback was being verified; retry rollback"
-                .to_owned()
-        })
 }
 
 #[derive(Serialize)]

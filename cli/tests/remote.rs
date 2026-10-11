@@ -60,6 +60,13 @@ fn ash_code_cli_owns_shared_remote_profile_persistence() {
             .as_nanos(),
     ));
     fs::create_dir_all(&root).unwrap();
+    let fake_ssh = root.join("fake-ssh");
+    let response = initialize_response(&schema_hash());
+    let incompatible = initialize_response("incompatible-schema");
+    fs::write(&fake_ssh, format!(
+        "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'connect'\"*) IFS= read -r request || exit 65; if [ \"$ASH_TEST_BAD_HANDSHAKE\" = 1 ]; then printf '%s\\n' '{}'; else printf '%s\\n' '{}'; fi ;;\n  *) if [ \"$ASH_TEST_MISSING\" = 1 ]; then printf '%s\\n' '__ASH_REMOTE_RUNTIME_MISSING__'; exit 127; fi; printf '__ASH_REMOTE_RUNTIME_FOUND__:%s\\n' \"${{ASH_TEST_RUNTIME:-/srv/ash/runtime/one/bin/ash-remote-server}}\" ;;\nesac\n", incompatible, response
+    )).unwrap();
+    make_executable(&fake_ssh);
     let activate = Command::new(env!("CARGO_BIN_EXE_ash"))
         .args([
             "remote",
@@ -71,7 +78,13 @@ fn ash_code_cli_owns_shared_remote_profile_persistence() {
             "/srv/project",
             "--runtime",
             "/srv/ash/runtime/one/bin/ash-remote-server",
+            "--ssh",
         ])
+        .arg(&fake_ssh)
+        .env(
+            "ASH_TEST_RUNTIME",
+            "/srv/ash/runtime/one/bin/ash-remote-server",
+        )
         .env("ASH_HOME", &root)
         .output()
         .unwrap();
@@ -96,7 +109,13 @@ fn ash_code_cli_owns_shared_remote_profile_persistence() {
             "/srv/project",
             "--runtime",
             "/srv/ash/runtime/two/bin/ash-remote-server",
+            "--ssh",
         ])
+        .arg(&fake_ssh)
+        .env(
+            "ASH_TEST_RUNTIME",
+            "/srv/ash/runtime/two/bin/ash-remote-server",
+        )
         .env("ASH_HOME", &root)
         .output()
         .unwrap();
@@ -121,17 +140,32 @@ fn ash_code_cli_owns_shared_remote_profile_persistence() {
         "{\"activeRuntime\":\"/srv/ash/runtime/two/bin/ash-remote-server\",\"previousRuntime\":\"/srv/ash/runtime/one/bin/ash-remote-server\"}\n"
     );
 
-    let fake_ssh = root.join("fake-ssh");
-    let response = initialize_response(&schema_hash());
-    fs::write(
-        &fake_ssh,
-        format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{}' ;;\n  *) printf '%s\\n' '__ASH_REMOTE_RUNTIME_FOUND__:/srv/ash/runtime/one/bin/ash-remote-server' ;;\nesac\n",
-            response,
-        ),
-    )
-    .unwrap();
-    make_executable(&fake_ssh);
+    let before = fs::read(root.join("remote/connections.json")).unwrap();
+    for failure in ["ASH_TEST_BAD_HANDSHAKE", "ASH_TEST_MISSING"] {
+        let rejected = Command::new(env!("CARGO_BIN_EXE_ash"))
+            .args([
+                "remote",
+                "profile",
+                "activate",
+                "--host",
+                "build-linux",
+                "--dir",
+                "/srv/project",
+                "--runtime",
+                "/srv/ash/runtime/unverified/bin/ash-remote-server",
+                "--ssh",
+            ])
+            .arg(&fake_ssh)
+            .env("ASH_HOME", &root)
+            .env(failure, "1")
+            .output()
+            .unwrap();
+        assert!(!rejected.status.success());
+        assert_eq!(
+            fs::read(root.join("remote/connections.json")).unwrap(),
+            before
+        );
+    }
     let rollback = Command::new(env!("CARGO_BIN_EXE_ash"))
         .args([
             "remote",
@@ -278,35 +312,9 @@ fn initialize_response(server_schema_hash: &str) -> String {
                 "major": APP_SERVER_PROTOCOL_MAJOR,
             },
             "schemaHash": server_schema_hash,
-            "capabilities": {
-                "agentInteractions": false,
-                "documentCollaboration": false,
-                "sessions": true,
-                "threads": true,
-                "turns": true,
-                "projects": false,
-                "memories": false,
-                "approvalEnvironment": false,
-                "resources": false,
-                "attachments": false,
-                "fileSystem": false,
-                "git": false,
-                "github": false,
-                "contentSearch": false,
-                "codebase": false,
-                "cloudCodebase": false,
-                "terminal": false,
-                "debugAdapter": false,
-                "typst": false,
-                "updateReplay": false,
-                "extensions": false,
-                "extensionHost": false,
-                "connectors": false,
-                "plugins": false,
-                "extensions": false,
-                "mcp": false,
-                "mcpOAuth": false,
-                "contracts": {}
+            "capabilities": ash_app_server_protocol::protocol::initialize::ServerCapabilities {
+                sessions: true, threads: true, turns: true,
+                ..Default::default()
             },
             "slashCommands": []
         }

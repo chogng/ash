@@ -18,7 +18,7 @@ pub(super) fn run(
     ssh_executable: Option<PathBuf>,
     entry: RemoteConnectEntry,
 ) -> Result<(), String> {
-    let mut profile = ready.profile;
+    let mut profile = ready.profile.into_profile();
     let mut session = ready.session;
     let announcement = crate::announcement::start()?;
     let mut recovery = match entry {
@@ -55,7 +55,7 @@ pub(super) fn run(
                 let selected = RemoteProfile::new(target, profile.runtime().clone());
                 let ready = runtime::reconnect_exact(&selected, ssh_executable.as_deref())
                     .map_err(|error| error.to_string())?;
-                profile = ready.profile;
+                profile = ready.profile.into_profile();
                 session = ready.session;
                 recovery = None;
                 drafts = None;

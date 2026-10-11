@@ -25,9 +25,9 @@ export class RemoteConnectionProfiles {
 		return parseProfile(result);
 	}
 
-	async activate(host: string, workspace: string, runtime: string): Promise<RemoteConnectionRuntimeProfile> {
+	async activate(host: string, workspace: string, runtime: string, sshExecutable: string): Promise<RemoteConnectionRuntimeProfile> {
 		if (!isCanonicalAbsolutePosixPath(runtime)) throw new Error("Verified Remote runtime must be a canonical absolute POSIX path");
-		const result = await this.invoke("activate", host, workspace, runtime);
+		const result = await this.invoke("activate", host, workspace, runtime, sshExecutable);
 		const profile = parseProfile(result);
 		if (profile === undefined || profile.activeRuntime !== runtime) throw new Error("Remote profile activation returned an unexpected runtime");
 		return profile;
@@ -44,7 +44,7 @@ export class RemoteConnectionProfiles {
 	private async invoke(command: "get" | "activate" | "rollback", host: string, workspace: string, runtime?: string, sshExecutable?: string) {
 		const normalizedHost = normalizeCredentialFreeSshHost(host);
 		if (!isCanonicalAbsolutePosixPath(workspace)) throw new Error("Remote profile Workspace must be a canonical absolute POSIX path");
-		const args = ["profile", command, "--host", normalizedHost, "--workspace", workspace];
+		const args = ["profile", command, "--host", normalizedHost, "--dir", workspace];
 		if (runtime !== undefined) args.push("--runtime", runtime);
 		if (sshExecutable !== undefined) args.push("--ssh", sshExecutable);
 		const result = await this.runCommand(this.options.remoteExecutable, args, this.options.environment);

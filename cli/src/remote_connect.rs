@@ -207,11 +207,11 @@ pub(super) fn run(options: RemoteConnectOptions) -> Result<(), String> {
                 .session
                 .shutdown()
                 .map_err(|error| format!("Remote connection did not shut down cleanly: {error}"))?;
-            let record = store.activate(&ready.profile).map_err(string_error)?;
+            let record = ready.profile.activate(&store).map_err(string_error)?;
             print_profile(&record)
         }
         RemoteConnectMode::Interactive => {
-            store.activate(&ready.profile).map_err(string_error)?;
+            ready.profile.activate(&store).map_err(string_error)?;
             tui::run(ready, ssh_executable, entry)
         }
     }

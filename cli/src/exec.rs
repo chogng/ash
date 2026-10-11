@@ -209,94 +209,10 @@ fn save_trace(outcome: &ExecOutcome, path: PathBuf) -> Result<(), CliError> {
         AppServerSession::start_stdio(command, exec_client_info(), ClientCapabilities::default())
             .map_err(CliError::failure)?;
     let captured = (|| -> Result<(), CliError> {
-        let mut client = session.client();
-        let mut after = std::collections::BTreeMap::new();
-        let mut captured: Option<serde_json::Value> = None;
-        loop {
-            let page = client
-                .read_session_trace(
-                    ash_app_server_protocol::protocol::session::SessionTraceReadParams {
-                        session_id: session_id.clone(),
-                        after,
-                        limit: 500,
-                    },
-                )
-                .map_err(CliError::failure)?;
-            if let Some(trace) = &mut captured {
-                merge_trace_page(trace, &page.trace)?;
-            } else {
-                captured = Some(page.trace);
-            }
-            after = page.cursors;
-            if !page.has_more {
-                break;
-            }
-        }
-        let mut trace = captured.unwrap();
-        let mut after = 0;
-        let mut diagnostics: Option<serde_json::Value> = None;
-        loop {
-            let page = client
-                .read_trace_diagnostics(
-                    ash_app_server_protocol::protocol::session::SessionTraceDiagnosticsReadParams {
-                        session_id: session_id.clone(),
-                        after,
-                        limit: 500,
-                    },
-                )
-                .map_err(CliError::failure)?;
-            if let Some(captured) = &mut diagnostics {
-                let mut events = captured["events"]
-                    .as_array()
-                    .cloned()
-                    .ok_or_else(|| CliError::failure(nls::text(Message::ExecInvalidTrace)))?;
-                events.extend(
-                    page.diagnostics["events"]
-                        .as_array()
-                        .ok_or_else(|| CliError::failure(nls::text(Message::ExecInvalidTrace)))?
-                        .iter()
-                        .cloned(),
-                );
-                *captured = page.diagnostics;
-                captured["events"] = events.into();
-            } else {
-                diagnostics = Some(page.diagnostics);
-            }
-            after = page.cursor;
-            if !page.has_more {
-                break;
-            }
-        }
-        let mut diagnostics = diagnostics.unwrap();
-        let mut payloads = serde_json::Map::new();
-        let mut incomplete = false;
-        if let Some(capture_id) = diagnostics["captureId"].as_str() {
-            for record in diagnostics["events"].as_array().into_iter().flatten() {
-                let event = &record["event"];
-                for field in ["requestPayload", "responsePayload", "partialOutput"] {
-                    let reference = &event[field];
-                    if reference["status"] != "saved" {
-                        continue;
-                    }
-                    if let Some(id) = reference["payloadId"].as_str() {
-                        // Missing optional evidence must not erase an otherwise usable capture.
-                        if let Ok(result) = client.read_trace_payload(ash_app_server_protocol::protocol::session::SessionTracePayloadReadParams { session_id: session_id.clone(), capture_id: capture_id.into(), payload_id: id.into() }) { payloads.insert(id.into(), result.payload); }
-                        else { incomplete = true; }
-                    }
-                }
-            }
-        }
-        if incomplete {
-            diagnostics["recordingStatus"] = "incomplete".into();
-        }
-        diagnostics["payloads"] = payloads.into();
-        trace["diagnostics"] = diagnostics;
-        trace["graph"] = client
-            .read_trace_graph(
-                ash_app_server_protocol::protocol::session::SessionReadParams { session_id },
-            )
-            .map_err(CliError::failure)?
-            .graph;
+        let trace = session
+            .client()
+            .export_session_trace(&session_id)
+            .map_err(CliError::failure)?;
         std::fs::write(
             path,
             serde_json::to_vec_pretty(&trace).map_err(CliError::failure)?,
@@ -415,42 +331,6 @@ fn save_changes(outcome: &ExecOutcome, path: PathBuf) -> Result<(), CliError> {
     captured
         .and(shutdown)
         .map_err(|error| CliError::failure(nls::format(Message::ExecChangesFailed, error.message)))
-}
-
-fn merge_trace_page(
-    trace: &mut serde_json::Value,
-    page: &serde_json::Value,
-) -> Result<(), CliError> {
-    let invalid = || CliError::failure(nls::text(Message::ExecInvalidTrace));
-    let threads = trace["threads"].as_array_mut().ok_or_else(invalid)?;
-    for thread in page["threads"].as_array().ok_or_else(invalid)? {
-        if let Some(existing) = threads
-            .iter_mut()
-            .find(|existing| existing["threadId"] == thread["threadId"])
-        {
-            existing["events"]
-                .as_array_mut()
-                .ok_or_else(invalid)?
-                .extend(
-                    thread["events"]
-                        .as_array()
-                        .ok_or_else(invalid)?
-                        .iter()
-                        .cloned(),
-                );
-        } else {
-            threads.push(thread.clone());
-        }
-    }
-    let prefixes = trace["historyPrefixes"]
-        .as_array_mut()
-        .ok_or_else(invalid)?;
-    for prefix in page["historyPrefixes"].as_array().ok_or_else(invalid)? {
-        if !prefixes.contains(prefix) {
-            prefixes.push(prefix.clone());
-        }
-    }
-    Ok(())
 }
 
 fn parse_model(value: &str) -> Result<ash_protocol::ModelRef, String> {
