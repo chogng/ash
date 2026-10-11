@@ -392,10 +392,7 @@ async fn spawn_process_preserving_fds(
 
     let handles = PtyHandles {
         _slave: None,
-        _master: PtyMasterHandle::Opaque {
-            raw_fd: master.as_raw_fd(),
-            _handle: Box::new(master),
-        },
+        _master: PtyMasterHandle::File(master),
     };
 
     let handle = ProcessHandle::new(
@@ -445,14 +442,20 @@ fn open_unix_pty(size: TerminalSize) -> Result<(File, File)> {
         anyhow::bail!("failed to openpty: {:?}", std::io::Error::last_os_error());
     }
 
-    set_cloexec(master)?;
-    set_cloexec(slave)?;
+    // Own both descriptors before configuration so any error closes both ends.
+    let master = unsafe { File::from_raw_fd(master) };
+    let slave = unsafe { File::from_raw_fd(slave) };
+    set_cloexec(master.as_raw_fd())?;
+    set_cloexec(slave.as_raw_fd())?;
 
-    Ok(unsafe { (File::from_raw_fd(master), File::from_raw_fd(slave)) })
+    Ok((master, slave))
 }
 
 #[cfg(unix)]
 fn set_cloexec(fd: RawFd) -> std::io::Result<()> {
+    #[cfg(test)]
+    tests::before_set_cloexec(fd)?;
+
     let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
     if flags == -1 {
         return Err(std::io::Error::last_os_error());
@@ -463,6 +466,10 @@ fn set_cloexec(fd: RawFd) -> std::io::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(all(test, unix))]
+#[path = "pty_tests.rs"]
+mod tests;
 
 // The child has a private descriptor table after fork. Darwin's size query reports
 // the table capacity, so this also covers sparse descriptors above a lowered rlimit.

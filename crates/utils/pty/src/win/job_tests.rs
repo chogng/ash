@@ -1,11 +1,11 @@
 use super::JobObject;
-use filedescriptor::OwnedHandle;
 use portable_pty::CommandBuilder;
 use portable_pty::PtySize;
 use portable_pty::PtySystem;
 use std::os::windows::io::AsHandle;
 use std::os::windows::io::FromRawHandle;
 use std::os::windows::io::IntoRawHandle;
+use std::os::windows::io::OwnedHandle;
 use std::sync::Mutex;
 use tokio::process::Command;
 

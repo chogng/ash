@@ -256,7 +256,6 @@ cap-std = "4.0.3"
 winapi-util = "0.1.11"
 core-foundation = { version = "0.10" }
 ctor = { version = "=0.6.3" }
-filedescriptor = { version = "0.8.3" }
 # Explicit SDK API version; consumers retain their existing ABI and feature selection.
 objc2-06 = { package = "objc2", version = "0.6.3" }
 # Explicit SDK API version; consumers retain their existing ABI and feature selection.

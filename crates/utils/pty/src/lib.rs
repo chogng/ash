@@ -16,8 +16,6 @@ mod windows_console_tests;
 #[cfg(windows)]
 mod windows_input;
 
-pub const DEFAULT_OUTPUT_BYTES_CAP: usize = 1024 * 1024;
-
 /// Spawn a non-interactive process using regular pipes for stdin/stdout/stderr.
 pub use pipe::spawn_process as spawn_pipe_process;
 /// Spawn a non-interactive process using regular pipes, but close stdin immediately.
@@ -36,10 +34,6 @@ pub use process::TerminalSize;
 pub use process::combine_output_receivers;
 /// Adapt an externally-driven process into the standard spawned-process handle.
 pub use process::spawn_from_driver;
-/// Backwards-compatible alias for ProcessHandle.
-pub type ExecCommandSession = ProcessHandle;
-/// Backwards-compatible alias for SpawnedProcess.
-pub type SpawnedPty = SpawnedProcess;
 /// Report whether ConPTY is available on this platform (Windows only).
 pub use pty::conpty_supported;
 /// Spawn a process attached to a PTY for interactive use.

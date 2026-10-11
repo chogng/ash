@@ -19,7 +19,6 @@ tokio = { workspace = true, features = ["io-util", "macros", "process", "rt-mult
 pretty_assertions = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-filedescriptor = { workspace = true }
 log = { workspace = true }
 winapi = { workspace = true, features = ["handleapi", "namedpipeapi", "jobapi2", "minwinbase", "processthreadsapi", "synchapi", "winbase", "wincon", "winerror", "winnt"] }
 

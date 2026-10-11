@@ -1,9 +1,9 @@
-use filedescriptor::OwnedHandle;
 use std::io;
 use std::os::windows::io::AsHandle;
 use std::os::windows::io::AsRawHandle;
 use std::os::windows::io::BorrowedHandle;
 use std::os::windows::io::FromRawHandle;
+use std::os::windows::io::OwnedHandle;
 use std::os::windows::io::RawHandle;
 use std::sync::Mutex;
 use tokio::process::Child;
@@ -174,8 +174,7 @@ impl AsRawHandle for JobObject {
 
 impl AsHandle for JobObject {
     fn as_handle(&self) -> BorrowedHandle<'_> {
-        // SAFETY: this object owns the job handle for the duration of the borrow.
-        unsafe { BorrowedHandle::borrow_raw(self.handle.as_raw_handle()) }
+        self.handle.as_handle()
     }
 }
 

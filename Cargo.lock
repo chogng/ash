@@ -3098,7 +3098,6 @@ name = "ash-utils-pty"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "filedescriptor",
  "libc",
  "log",
  "portable-pty",

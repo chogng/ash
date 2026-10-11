@@ -59,12 +59,7 @@ Unix PTY 要求 Tokio runtime 启用 I/O driver；缺少 driver 时在创建子�
 | `ProcessHandle::{has_exited,exit_code}`         | non-blocking observed exit state                                           | `exit_rx` 是 authoritative completion notification            |
 | `ProcessHandle::release_pty_handles_after_exit` | authoritative exit 后处理 parent-held PTY/ConPTY handles                   | 新版 Windows 保留 console 至 session 结束；旧版释放后排空输出 |
 
-`ExecCommandSession` 与 `SpawnedPty` 是 backward-compatible type aliases。新增代码应优先使用
-`ProcessHandle` 与 `SpawnedProcess` 的真实名称。
-
-`DEFAULT_OUTPUT_BYTES_CAP` 当前是 public 1 MiB constant，但 crate 内没有读取或 enforce 它。Output
-channels 以 chunk 数 bounded；总 captured bytes、truncation 与 persistence 必须由 consumer 实施。
-不要把这个常量写成现有 hard limit。
+Output channels 以 chunk 数 bounded；总 captured bytes、truncation 与 persistence 必须由 consumer 实施。
 
 ## 内部接口地图
 
@@ -74,7 +69,7 @@ channels 以 chunk 数 bounded；总 captured bytes、truncation 与 persistence
 | `PipeChildTerminator`                     | private                | Unix process group 或 Windows job/process kill             | pipe backend 不泄漏 OS handle                                  |
 | `PtyChildTerminator` / `RawPidTerminator` | private                | PTY child/process-group control                            | interactive descendants 必须一起 cleanup                       |
 | `ProcessHandle::new`                      | crate-private          | 组装 writer、killer、tasks、exit state、PTY handles        | 所有 spawn paths 共享 lifecycle                                |
-| `PtyMasterHandle`                         | crate-private          | portable resizable 或 raw-FD PTY master                    | raw handle 必须存活到 session drop                             |
+| `PtyMasterHandle`                         | crate-private          | portable resizable 或持有 File 的 PTY master               | 文件所有者必须存活到 session drop                              |
 | `read_output_stream`                      | private async fn       | 8 KiB pipe reads → bounded mpsc                            | stdout/stderr reader 独立 drain                                |
 | `spawn_process_with_stdin_mode`           | private async fn       | pipe command + containment + channel/tasks                 | public pipe variants 的唯一 spawn path                         |
 | `spawn_process_portable`                  | private async fn       | portable-pty/ConPTY path                                   | 无 inherited FDs 的常规 PTY                                    |
@@ -148,7 +143,7 @@ spawn_pty_process
       ├─ std::process::Command
       ├─ pre_exec: reset signals, setsid, TIOCSCTTY, close FDs
       ├─ AsyncFd master reader/writer + blocking wait
-      └─ ProcessHandle::new(RawPidTerminator, opaque raw master...)
+      └─ ProcessHandle::new(RawPidTerminator, owned File master...)
 ```
 
 PTY stdout 与 stderr 指向同一个 terminal slave，因此 result 的 `stderr_rx` 不承载独立 PTY stderr。
@@ -216,7 +211,7 @@ terminate / Drop
 - Tool command/policy/sandbox 进入 spawn API：utility 获得 execution authority；
 - Pipe/PTY 各自实现一套 `ProcessHandle` lifecycle：cleanup semantics 分叉；
 - 只 kill root PID、不测试 descendants：process tree 泄漏；
-- 把 `DEFAULT_OUTPUT_BYTES_CAP` 当作已 enforce：内存/输出安全假设错误；
+- 把 bounded output channel 当作总字节上限：内存/输出安全假设错误；
 - PTY caller 期待 split stderr：terminal stream contract 被误读；
 - Driver 在 final output 前关闭 sender：tail output 被丢弃；
 - Driver sender 永不关闭：exit 后 reader task 泄漏；
@@ -237,6 +232,9 @@ Cross-platform tests 覆盖 PTY Python REPL、pipe stdin、session detach、统�
 driver resize/tail drain、terminate reader abort、Unix descendant kill、inherited FDs、spawn failure 与
 resize。Windows-only tests 覆盖 job/ConPTY descendant behavior、foreground input、Ctrl-C 与 input
 normalization。
+
+Unix PTY 在设置 CLOEXEC 前由 File 接管两个描述符，配置失败会关闭两端。
+`pty_tests.rs` 在独立子进程中注入 slave 配置失败并检查两个描述符都已关闭，避免并行测试复用 FD 编号。
 
 `lifecycle_tests.rs` 覆盖 pipe terminate/Drop 回收、PTY 等待任务排队时回收、后台 child 保持 slave
 打开、输入/输出背压下取消、关闭输出后 drain、大输入与 EOF，以及 driver 转发清理。macOS

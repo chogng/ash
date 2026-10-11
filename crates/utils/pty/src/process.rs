@@ -1,5 +1,9 @@
 use core::fmt;
+#[cfg(unix)]
+use std::fs::File;
 use std::io;
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
 #[cfg(unix)]
 use std::os::fd::RawFd;
 use std::process::ExitStatus;
@@ -77,19 +81,10 @@ impl From<TerminalSize> for PtySize {
     }
 }
 
-#[cfg(unix)]
-pub(crate) trait PtyHandleKeepAlive: Send {}
-
-#[cfg(unix)]
-impl<T: Send + ?Sized> PtyHandleKeepAlive for T {}
-
 pub(crate) enum PtyMasterHandle {
     Resizable(Box<dyn MasterPty + Send>),
     #[cfg(unix)]
-    Opaque {
-        raw_fd: RawFd,
-        _handle: Box<dyn PtyHandleKeepAlive>,
-    },
+    File(File),
 }
 
 pub struct PtyHandles {
@@ -240,7 +235,7 @@ impl ProcessHandle {
                 return match &handles._master {
                     PtyMasterHandle::Resizable(master) => master.resize(size.into()),
                     #[cfg(unix)]
-                    PtyMasterHandle::Opaque { raw_fd, .. } => resize_raw_pty(*raw_fd, size),
+                    PtyMasterHandle::File(file) => resize_raw_pty(file.as_raw_fd(), size),
                 };
             }
         }
@@ -285,7 +280,7 @@ impl ProcessHandle {
                     PtyMasterHandle::Resizable(master) => master
                         .as_raw_fd()
                         .ok_or_else(|| unsupported_signal(signal))?,
-                    PtyMasterHandle::Opaque { raw_fd, .. } => *raw_fd,
+                    PtyMasterHandle::File(file) => file.as_raw_fd(),
                 };
                 // Interactive shells move each foreground job to a separate group. The
                 // PTY, rather than the shell's cached group, identifies the current target.
