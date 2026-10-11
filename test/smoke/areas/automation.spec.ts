@@ -306,10 +306,11 @@ void import('./.build/desktop/main/src/main.js').catch(error => {
 		};
 		const running = await launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000 });
 		try {
+			const background = await running.application.evaluate(() => process.env.ASH_TEST_WINDOW_MODE !== undefined);
 			expect(await running.application.evaluate(({ app }) => {
 				const state = globalThis as typeof globalThis & { ashTestDockInstalled?: boolean; ashTestDockRequested?: boolean; ashTestDockSettled?: boolean; };
 				return { installed: state.ashTestDockInstalled, requested: state.ashTestDockRequested, settled: state.ashTestDockSettled, visible: app.dock!.isVisible() };
-			})).toEqual({ installed: true, requested: true, settled: false, visible: true });
+			})).toEqual({ installed: true, requested: true, settled: false, visible: !background });
 			await expect(running.driver.workbench.element).toBeVisible();
 		}
 		finally { await running.close(); }

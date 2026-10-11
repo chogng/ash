@@ -15,7 +15,8 @@ import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';
 import { USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../src/ash/platform/keyboardLayout/common/userKeyboardLayout.js';
 
-const focusTest = test.extend({ electronWindowMode: 'active' });
+// macOS fullscreen transitions require a shown, focused window.
+const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 
 test('Sessions keyboard layout commands inspect the active mapping and offer layout selection', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -3346,7 +3347,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 });
 
 // Only macOS chooses the application menu from the OS-focused window.
-test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined })('Sessions application menu follows its host and uses Sessions actions', async ({ application, target, workbench }) => {
+focusTest('Sessions application menu follows its host and uses Sessions actions', async ({ application, target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
 	if (target.kind === 'electron' && process.platform === 'darwin') {

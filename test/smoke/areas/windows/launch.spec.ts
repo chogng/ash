@@ -10,7 +10,12 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { toDisposable } from '../../../../src/ash/base/common/lifecycle.js';
 import type { ConsoleMessage, Page } from '@playwright/test';
 
-const focusTest = test.extend({ electronWindowMode: 'active' });
+// Reuse-window routing selects the OS-active window; the UI-only case asserts its focus.
+const focusTest = test.extend({
+	electronWindowMode: async ({ target }, use) => {
+		await use(target.appServerMode === 'disabled' ? 'active' : undefined);
+	}
+});
 
 for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands the current directory to the real desktop window through ${launchKind === 'bundle' ? 'a bundle' : 'an executable'}`, async ({ application, target, testWorkspace }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled' || process.platform === 'win32', 'This scenario uses a Unix development launcher without a backend.');
@@ -70,7 +75,11 @@ test('the first process opens its requested file after restoring the Workbench a
 	}
 });
 
-focusTest('desktop launch opens files, positions the caret and distinguishes new and reused windows', async ({ application, target, testWorkspace, workbench }) => {
+test.extend({
+	electronWindowMode: async ({ target }, use) => {
+		await use(target.appServerMode === 'required' ? 'active' : undefined);
+	}
+})('desktop launch opens files, positions the caret and distinguishes new and reused windows', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Disk files require the Electron App Server.');
 	if (!('windows' in application)) {
 		return;

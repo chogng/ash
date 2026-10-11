@@ -80,7 +80,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		args: [
 			"--disable-gpu",
 			"--in-process-gpu",
-			...(windowMode === 'active' ? [] : [`--require=${join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')}`]),
+			...(windowMode === 'active' ? [] : ['--require', join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')]),
 			...(bundle ? [] : [desktopDirectory]),
 			`--user-data-dir=${options.userDataDirectory}`,
 			// AppKit's recovery prompt can block ready after test-owned processes are terminated.

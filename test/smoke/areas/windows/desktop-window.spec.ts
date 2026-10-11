@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
+import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
 const focusTest = test.extend({ electronWindowMode: 'active' });
 
@@ -88,12 +89,16 @@ test('desktop window commands update and persist zoom', async ({ application, ta
 });
 
 // The current-window marker comes from the OS-focused window in the window list.
-focusTest('desktop window switcher marks the focused window as current', async ({ target, workbench }) => {
+focusTest('desktop window switcher marks the focused window as current', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'This scenario requires the Code desktop');
+	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const page = workbench.page;
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Switch Window');
-	await page.keyboard.press('Enter');
+	await application.evaluate(({ app, BrowserWindow }) => {
+		app.focus({ steal: true });
+		BrowserWindow.getAllWindows()[0]!.focus();
+	});
+	await waitForElectronWindowState(application, page, { focused: true });
+	await workbench.quickaccess.runCommand('workbench.action.switchWindow');
 	const picker = page.locator('.ash-quick-pick');
 	await expect(picker.getByRole('combobox')).toHaveAttribute('aria-label', 'Select a window');
 	await expect(picker.locator('.ash-window-switch-current')).toHaveCount(1);

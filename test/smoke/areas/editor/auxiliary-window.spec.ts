@@ -1,6 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
+// Window switching must transfer OS focus to the detached editor.
 const focusTest = test.extend({ electronWindowMode: 'active' });
 
 test('detached editor window inherits workbench theme and accessibility state', async ({ workbench }) => {

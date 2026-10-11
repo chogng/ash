@@ -194,7 +194,7 @@ test('Desktop starts when its application entry loads after Electron is ready', 
 			]);
 			expect(await application.evaluate(() => (globalThis as typeof globalThis & { __ashTrayTooltip?: string; }).__ashTrayTooltip)).toBe('Ash');
 			if (process.platform === 'darwin') {
-				expect(await application.evaluate(({ app }) => app.dock!.isVisible())).toBe(true);
+				expect(await application.evaluate(({ app }) => app.dock!.isVisible())).toBe(configuration.env.ASH_TEST_WINDOW_MODE === undefined);
 				const menuBarIconPaths = [18, 27, 36].map(size => resolve(desktop, `../resources/tray/ash-black-${size}.png`));
 				const menuBarIconSizes = await application.evaluate(({ nativeImage }, paths) => paths.map(path => nativeImage.createFromPath(path).getSize()), menuBarIconPaths);
 				expect(menuBarIconSizes).toEqual([{ width: 18, height: 18 }, { width: 27, height: 27 }, { width: 36, height: 36 }]);

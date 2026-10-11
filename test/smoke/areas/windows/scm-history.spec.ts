@@ -445,6 +445,15 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	const [hash, timestamp] = stdout.trim().split('\n');
 	const page = workbench.page;
 	if (target.kind === 'browser') { await page.context().grantPermissions(['clipboard-read', 'clipboard-write']); }
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = workbench.settingsEditor.element;
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="layout"]').click();
+		await settings.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Custom', exact: true }).click();
+		await settings.locator('.ash-modal-editor-close').click();
+	}
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	const header = history.locator('.ash-pane-view-header');
@@ -645,6 +654,13 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await commit.press('Enter');
 	await expect(commit).toHaveAttribute('aria-expanded', 'true');
 	await expect(commit.getByRole('button', { name: /details\.txt/ })).toBeVisible();
+	const committedFile = commit.getByRole('button', { name: /details\.txt/ });
+	await committedFile.press('Shift+F10');
+	await page.getByRole('menuitem', { name: 'Open File', exact: true }).click();
+	const snapshot = workbench.editors.groupAt(0).editor;
+	await snapshot.waitForEditorContents(text => text.startsWith('first line\nsecond line'));
+	await expect(snapshot.input).toHaveAttribute('aria-readonly', 'true');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
@@ -667,6 +683,10 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="scm.graph.pageSize"]').getByRole('spinbutton')).toHaveAttribute('aria-label', '源代码管理 › 提交图：每页数量');
 	await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="scm.graph.pageOnScroll"]').getByRole('switch')).toHaveAttribute('aria-label', '源代码管理 › 提交图：滚动时加载');
 	await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+	await localizedCommit.press('ArrowRight');
+	await localizedCommit.getByRole('button', { name: /details\.txt/ }).press('Shift+F10');
+	await expect(workbench.page.getByRole('menuitem', { name: '打开文件', exact: true })).toBeVisible();
+	await workbench.page.keyboard.press('Escape');
 	await workbench.page.mouse.move(900, 100);
 	for (const width of target.kind === 'electron' ? [1100, 640] : [1100, 360]) {
 		if (target.kind === 'electron') {
@@ -677,6 +697,9 @@ test('SCM history reserves title width and reveals commit details on pointer and
 			await workbench.page.setViewportSize({ width, height: 820 });
 		}
 		await workbench.waitForUiIdle();
+		await localizedCommit.focus();
+		await localizedCommit.press('Alt+ArrowDown');
+		await expect(localizedHover).toBeVisible();
 		const geometry = await localizedHover.evaluate(element => {
 			const tooltip = element.closest<HTMLElement>('.ash-hover')!;
 			const bounds = tooltip.getBoundingClientRect();

@@ -11,6 +11,7 @@ import type { IStorageSnapshot } from '../../../../src/ash/platform/storage/comm
 
 import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
 
+// Reopening a workspace or Agents must focus its existing OS window.
 const focusTest = test.extend({ electronWindowMode: 'active' });
 
 const workspacesToDispose: TestWorkspace[] = [];

@@ -1,5 +1,9 @@
 const { app } = require('electron');
 
+// The product must not interpret this test-only preload path as an app entry or file to open.
+const preloadIndex = process.argv.findIndex((argument, index) => argument === '--require' && process.argv[index + 1] === __filename);
+if (preloadIndex >= 0) process.argv.splice(preloadIndex, 2);
+
 // Load before the product entrypoint so its first window cannot activate before Playwright attaches.
 const mode = process.env.ASH_TEST_WINDOW_MODE;
 if (mode !== 'hidden' && mode !== 'inactive') throw new Error(`Invalid test window mode: ${mode}`);

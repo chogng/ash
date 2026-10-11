@@ -9,8 +9,20 @@ import type { Workbench } from '../../../automation/workbench.js';
 import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
+import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, resolveContextMenuStyle } from '../../../../src/ash/platform/window/common/window.js';
 
-const focusTest = test.extend({ electronWindowMode: 'active' });
+// Genuine OS popups need a focused owner for keyboard input and cancellation callbacks.
+const focusTest = test.extend({
+	electronWindowMode: async ({ target }, use) => {
+		const systemMenu = resolveContextMenuStyle(DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, process.platform === 'darwin' ? 'macos' : 'desktop') === 'system';
+		await use(target.appServerMode === 'required' && systemMenu ? 'active' : undefined);
+	}
+});
+const macFocusTest = test.extend({
+	electronWindowMode: async ({ target }, use) => {
+		await use(process.platform === 'darwin' && target.appServerMode === 'required' ? 'active' : undefined);
+	}
+});
 
 async function notificationClipboard(application: PlaywrightApplication, page: Page): Promise<{ read(): Promise<string>; }> {
 	// Start with a fixture value; never read or retain the user's previous clipboard.
@@ -259,7 +271,7 @@ async function notificationPopupProbe(application: PlaywrightApplication): Promi
 	};
 }
 
-focusTest('notification Copy Text selected in a genuine Electron popup writes after its OS callback', async ({ target, application, workbench }, testInfo) => {
+macFocusTest('notification Copy Text selected in a genuine Electron popup writes after its OS callback', async ({ target, application, workbench }, testInfo) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.platform !== 'darwin', 'Uses macOS input targeted at the owned Electron process.');
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	test.skip(!await workbench.menus.isSystemMenu(application), 'Requires the system menu configuration.');

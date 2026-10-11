@@ -310,6 +310,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
+	// A focused OS window is needed to detect whether display changes steal focus.
 	const session = await launch(userDataDirectory, undefined, ['--force-device-scale-factor=1'], { windowMode: 'active' });
 	const application = session.application;
 	try {
@@ -437,6 +438,7 @@ for (const restoreFullscreen of [false, true]) {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.restoreFullscreen': restoreFullscreen }));
+		// Exercise real fullscreen transitions before persisting and restoring the windows.
 		let session = await launch(userDataDirectory, undefined, undefined, { windowMode: 'active' });
 		try {
 			let application = session.application;
