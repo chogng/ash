@@ -4,6 +4,7 @@ packages:
   - test/scenario
 engineStrict: true
 allowBuilds:
+  bun: true
   electron: true
   esbuild: true
   native-keymap: true

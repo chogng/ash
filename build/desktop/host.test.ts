@@ -47,6 +47,7 @@ for (const mode of ['build', 'watch'] as const) {
 		for (const file of ['host.ts', 'paths.ts']) {
 			await copyFile(join(import.meta.dirname, file), join(root, 'build/desktop', file));
 		}
+		await copyFile(join(import.meta.dirname, '../processes.ts'), join(root, 'build/processes.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(desktop, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 		await writeFile(join(root, 'package.json'), '{"type":"module"}');
 		await writeFile(join(desktop, 'src/main.ts'), 'export const version = 1;');

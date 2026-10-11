@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -27,6 +27,17 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		"localization:check": "localization-check",
 		"typecheck:common": "common",
 		"icons:check": "icons",
+		"typecheck:renderer": "renderer",
+		"build": "desktop-build",
+		"rebuild:native": "electron-dependencies",
+		"prepare:backend": "backend",
+		"prepare:backend:web": "backend-web",
+		"bundle:web": "bundle-web",
+		"bundle:web:full": "bundle-web-full",
+		"test:smoke:browser:no-compile": "browser-ui-tests",
+		"test:smoke:browser:full:no-compile": "browser-connected-tests",
+		"test:smoke:ui:no-compile": "electron-ui-tests",
+		"test:smoke:desktop:no-compile": "electron-connected-tests",
 	})) scripts[name] = `node record.ts ${operation}`;
 	await writeFile(join(directory, "package.json"), JSON.stringify({ private: true, type: "module", scripts }));
 	await writeFile(join(directory, "record.ts"), `
@@ -34,26 +45,35 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
     appendFileSync('operations.jsonl', JSON.stringify(process.argv[2]) + '\\n');
     if (process.argv[2] === process.env.FAIL_OPERATION) process.exitCode = 1;
   `);
+	await mkdir(join(directory, 'build/builtin'), { recursive: true });
+	await writeFile(join(directory, 'build/builtin/extensions.ts'), `process.argv[2] = 'extensions'; await import('../../record.ts');`);
+	await mkdir(join(directory, 'node_modules/.bin'), { recursive: true });
+	const compiler = join(directory, 'node_modules/.bin/tsc');
+	await writeFile(compiler, `#!/usr/bin/env node\nprocess.exitCode = require('node:child_process').spawnSync(process.execPath, ['record.ts', 'automation'], { stdio: 'inherit' }).status;\n`);
+	await chmod(compiler, 0o755);
+	await writeFile(`${compiler}.cmd`, `@"${process.execPath}" "%~dp0../../record.ts" automation\r\n`);
 	const pnpm = process.env.npm_execpath;
 	assert.ok(pnpm, "Run through the owning pnpm test script");
 	const script = /\.[cm]?js$/.test(pnpm);
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
-		["test:main", ["styles", "tools", "output", "extensions", "protocol", "localization", "common", "icons", "unit"], ""],
+		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit"], ""],
 		["test:main", ["styles"], "styles"],
-		["test:browser:integration", ["extensions", "protocol"], "protocol"],
-		["test:unit", ["output", "extensions", "protocol", "localization", "common", "icons", "unit"], ""],
-		["test:editor:unit", ["output", "extensions", "protocol", "localization", "common", "icons", "editor"], ""],
-		["test:extensions", ["output", "extensions", "protocol", "localization", "common", "icons", "extension-tests"], ""],
-		["test:browser:integration", ["extensions", "protocol", "localization", "common", "icons", "browser"], ""],
-		["test:editor:browser", ["extensions", "protocol", "localization", "common", "icons", "editor-browser"], ""],
-		["test:editor:browser:build", ["extensions", "protocol", "localization", "common", "icons", "browser-build"], ""],
+		["test:browser:integration", ["protocol"], "protocol"],
+		["test:unit", ["output", "protocol", "localization", "common", "extensions", "icons", "unit"], ""],
+		["test:editor:unit", ["output", "protocol", "localization", "common", "extensions", "icons", "editor"], ""],
+		["test:extensions", ["output", "protocol", "localization", "common", "extensions", "icons", "extension-tests"], ""],
+		["test:browser:integration", ["protocol", "localization", "common", "extensions", "icons", "browser"], ""],
+		["test:editor:browser", ["protocol", "localization", "common", "extensions", "icons", "editor-browser"], ""],
+		["test:editor:browser:build", ["protocol", "localization", "common", "extensions", "icons", "browser-build"], ""],
+		["prepare:extensions", ["protocol", "localization", "extensions"], ""],
 		["typecheck:protocol", ["protocol", "protocol-check"], ""],
 		["localization:check", ["protocol", "localization-check"], ""],
 		["typecheck:common", ["protocol", "localization", "common"], ""],
-		["test:browser:integration", ["extensions", "protocol", "localization"], "localization"],
-		["test:main", ["styles", "tools", "output", "extensions", "protocol", "localization", "common"], "common"],
+		["test:browser:integration", ["protocol", "localization"], "localization"],
+		["test:main", ["styles", "tools", "output", "protocol", "localization", "common"], "common"],
+		["prepare:generated", ["protocol", "localization", "common", "extensions"], "extensions"],
 	] as const) {
 		await writeFile(join(directory, "operations.jsonl"), "");
 		const result = spawnSync(executable, [...prefix, "run", command], {
@@ -68,5 +88,34 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		else assert.equal(result.status, 0, result.stdout + result.stderr);
 		const operations = (await readFile(join(directory, "operations.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
 		assert.deepEqual(operations, expected, command);
+	}
+
+	const workflow = await readFile(resolve(import.meta.dirname, '../../.github/workflows/frontend.yml'), 'utf8');
+	const smokeSteps = workflow.slice(workflow.indexOf('      - name: Prepare production browser UI smoke tests')).split('      - name: ');
+	for (const [surface, failure, expected] of [
+		['browser', '', ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer', 'automation', 'bundle-web', 'browser-ui-tests', 'bundle-web-full', 'backend-web', 'browser-connected-tests']],
+		['electron', '', ['backend', 'electron-dependencies', 'protocol', 'localization', 'common', 'extensions', 'icons', 'desktop-build', 'automation', 'electron-ui-tests', 'electron-connected-tests']],
+		['browser', 'renderer', ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer']],
+		['electron', 'backend', ['backend']],
+	] as const) {
+		await writeFile(join(directory, 'operations.jsonl'), '');
+		const commands = smokeSteps.filter(step => step.includes(`if: matrix.surface == '${surface}'`)).flatMap(step => {
+			const run = step.match(/^        run: (.+)$/m)?.[1];
+			assert.ok(run, step);
+			return run === '|' ? [...step.matchAll(/^          (pnpm .+)$/gm)].map(match => match[1]) : [run];
+		});
+		let status: number | null = 0;
+		for (const command of commands) {
+			assert.match(command, /^pnpm (run|exec) /);
+			const result = spawnSync(executable, [...prefix, ...command.split(' ').slice(1)], {
+				cwd: directory, env: { ...process.env, FAIL_OPERATION: failure }, encoding: 'utf8', windowsHide: true, timeout: 30_000,
+			});
+			assert.equal(result.error, undefined);
+			status = result.status;
+			if (status !== 0) break;
+		}
+		assert.equal(status, failure ? 1 : 0);
+		const operations = (await readFile(join(directory, 'operations.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+		assert.deepEqual(operations, expected, `${surface} smoke preparation (${failure || 'success'})`);
 	}
 });

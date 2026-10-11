@@ -87,28 +87,33 @@ jobs:
         run: pnpm run test:browser:integration --project=chromium
       - name: Prepare production browser UI smoke tests
         if: matrix.surface == 'browser'
-        run: pnpm run pretest:smoke:browser
+        # Both Web modes share the checked sources and automation compilation.
+        run: |
+          pnpm run typecheck:renderer
+          pnpm exec tsc -p test/automation/tsconfig.json
+          pnpm run bundle:web
       - name: Test production browser UI
         if: matrix.surface == 'browser'
         run: pnpm run test:smoke:browser:no-compile
       - name: Prepare Electron UI smoke tests
         if: matrix.surface == 'electron'
+        # Startup reads runtime metadata for Tunnel services even in UI-only mode.
+        # Connected smoke tests reuse this runtime and the same Desktop build.
         run: pnpm run pretest:smoke:ui
       - name: Test Electron UI
         if: matrix.surface == 'electron'
         run: pnpm run test:smoke:ui:no-compile
       - name: Prepare connected Web smoke tests
         if: matrix.surface == 'browser'
-        run: pnpm run pretest:smoke:browser:full
+        run: |
+          pnpm run bundle:web:full
+          pnpm run prepare:backend:web
       - name: Test connected Web
         if: matrix.surface == 'browser'
         run: pnpm run test:smoke:browser:full:no-compile
-      - name: Prepare connected Electron smoke tests
-        if: matrix.surface == 'electron'
-        run: pnpm run pretest:smoke:desktop
       - name: Test connected Electron
         if: matrix.surface == 'electron'
-        run: pnpm run smoketest-no-compile
+        run: pnpm run test:smoke:desktop:no-compile
       - name: Upload test diagnostics
         if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

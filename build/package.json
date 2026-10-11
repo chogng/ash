@@ -5,7 +5,7 @@
   "scripts": {
     "test": "node --test \"**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json",
-    "pretest": "node protocol/generate.ts",
+    "pretest": "node protocol/generate.ts && pnpm --dir ../test/scenario compile",
     "pretypecheck": "node protocol/generate.ts"
   },
   "devDependencies": {

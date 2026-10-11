@@ -21,6 +21,39 @@ the shared development package; `desktop/` owns incremental Desktop selection.
 Task entrypoints use the existing pnpm and Just commands, with Vite
 and Cargo retaining compilation. Gulp is not required for these tasks.
 
+Frontend CI checks Renderer sources and compiles smoke automation once before
+running the two Web modes. `pnpm bundle:web` and `pnpm bundle:web:full` only run
+Vite against those prepared, checked sources; use `pnpm build:web` or
+`pnpm build:web:full` for a standalone build. The two bundles have different
+App Server compile-time flags and share an output directory, so CI runs each
+mode's tests before replacing its bundle. Electron smoke preparation publishes
+the runtime required by startup's Tunnel services and builds Desktop once;
+UI and connected tests reuse those artifacts with separate test profiles.
+
+Linux ARM64 Renderer checks were compared in the existing Debian 12 devcontainer
+on an Apple M5, with 10 Docker VM CPUs and about 8 GB VM memory. The source and
+prepared protocol/localization data were snapshotted onto container storage.
+After one warmup, five alternating full checks per checker had median times of
+0.814 s for TS7 7.0.2 and 0.337 s for Bun 1.4.3; median peak RSS was 1.042 GiB and
+0.341 GiB respectively. Both passed the complete Renderer project, and injected
+TS2322/TS2345 diagnostics matched in file, position, code and message. Raw data,
+resource limits and the input manifest are in
+`.build/benchmarks/bun-renderer-linux-arm64/`. These are warm-cache container
+measurements. Renderer checks (`pnpm typecheck:renderer`, its Web alias and the
+Desktop/Web build gate) now use the pinned Bun 1.4.3 dependency. Common checks,
+Main/Preload and test JavaScript compilation, and watch checks continue to use
+TS7; build tools retain the TS6 API. Node and pnpm remain the runtime and package
+manager for repository commands.
+
+- [ ] TODO: Benchmark Bun 1.4.3 against TS7 7.0.2 for Renderer checks on the
+      `ubuntu-24.04` and `windows-latest` x64 CI runners to measure the cross-platform
+      benefit of the Renderer switch. Use identical prepared inputs, alternate repeated full checks, and
+      compare successful checks plus injected-error diagnostics. Record peak memory
+      and complete job time, including cold installation and warm cache restoration.
+      The macOS measurement is in `.build/benchmarks/bun-renderer/results.json`;
+      Linux ARM64 containers or emulated x64 runs on this Mac do not establish the
+      performance of the x64 CI runners.
+
 ```text
 <package>/
 ├── ash-package.json
