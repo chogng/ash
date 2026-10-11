@@ -99,7 +99,6 @@ impl SandboxLaunch for Launch {
                     &helper_env,
                     &None,
                     self.size,
-                    &[],
                 )
                 .await
                 .map_err(|_| io::Error::other("could not start PTY helper")),

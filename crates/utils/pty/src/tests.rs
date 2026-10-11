@@ -214,58 +214,6 @@ async fn wait_for_python_repl_ready(
 }
 
 #[cfg(unix)]
-async fn wait_for_python_repl_ready_via_probe(
-    writer: &tokio::sync::mpsc::Sender<Vec<u8>>,
-    output_rx: &mut tokio::sync::broadcast::Receiver<Vec<u8>>,
-    timeout_ms: u64,
-    newline: &str,
-) -> anyhow::Result<Vec<u8>> {
-    let mut collected = Vec::new();
-    let marker = "__codex_pty_ready__";
-    let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_millis(timeout_ms);
-    let probe_window = tokio::time::Duration::from_millis(if cfg!(windows) { 750 } else { 250 });
-
-    while tokio::time::Instant::now() < deadline {
-        writer
-            .send(format!("print('{marker}'){newline}").into_bytes())
-            .await?;
-
-        let probe_deadline = tokio::time::Instant::now() + probe_window;
-        loop {
-            let now = tokio::time::Instant::now();
-            if now >= deadline || now >= probe_deadline {
-                break;
-            }
-            let remaining = std::cmp::min(
-                deadline.saturating_duration_since(now),
-                probe_deadline.saturating_duration_since(now),
-            );
-            match tokio::time::timeout(remaining, output_rx.recv()).await {
-                Ok(Ok(chunk)) => {
-                    collected.extend_from_slice(&chunk);
-                    if String::from_utf8_lossy(&collected).contains(marker) {
-                        return Ok(collected);
-                    }
-                }
-                Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => continue,
-                Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => {
-                    anyhow::bail!(
-                        "PTY output closed while waiting for Python REPL readiness: {:?}",
-                        String::from_utf8_lossy(&collected)
-                    );
-                }
-                Err(_) => break,
-            }
-        }
-    }
-
-    anyhow::bail!(
-        "timed out waiting for Python REPL readiness in PTY: {:?}",
-        String::from_utf8_lossy(&collected)
-    );
-}
-
-#[cfg(unix)]
 fn process_exists(pid: i32) -> anyhow::Result<bool> {
     let result = unsafe { libc::kill(pid, 0) };
     if result == 0 {
@@ -364,7 +312,6 @@ async fn pty_python_repl_emits_output_and_exits() -> anyhow::Result<()> {
         &env_map,
         &None,
         TerminalSize::default(),
-        &[],
     )
     .await?;
     let (session, mut output_rx, exit_rx) = combine_spawned_output(spawned);
@@ -509,7 +456,6 @@ async fn pipe_and_pty_share_interface() -> anyhow::Result<()> {
         &env_map,
         &None,
         TerminalSize::default(),
-        &[],
     )
     .await?;
     let (_pipe_session, pipe_output_rx, pipe_exit_rx) = combine_spawned_output(pipe);
@@ -795,7 +741,6 @@ async fn pty_terminate_kills_background_children_in_same_process_group() -> anyh
         &env_map,
         &None,
         TerminalSize::default(),
-        &[],
     )
     .await?;
     let (session, mut output_rx, _exit_rx) = combine_spawned_output(spawned);
@@ -829,144 +774,7 @@ async fn pty_terminate_kills_background_children_in_same_process_group() -> anyh
 
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn pty_spawn_can_preserve_inherited_fds() -> anyhow::Result<()> {
-    use std::io::Read;
-    use std::os::fd::AsRawFd;
-    use std::os::fd::FromRawFd;
-
-    let mut fds = [0; 2];
-    let result = unsafe { libc::pipe(fds.as_mut_ptr()) };
-    if result != 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-
-    let mut read_end = unsafe { std::fs::File::from_raw_fd(fds[0]) };
-    let write_end = unsafe { std::fs::File::from_raw_fd(fds[1]) };
-
-    let mut env_map: HashMap<String, String> = std::env::vars().collect();
-    env_map.insert(
-        "PRESERVED_FD".to_string(),
-        write_end.as_raw_fd().to_string(),
-    );
-
-    let script = "printf __preserved__ >\"/dev/fd/$PRESERVED_FD\"";
-    let spawned = spawn_pty_process(
-        "/bin/sh",
-        &["-c".to_string(), script.to_string()],
-        Path::new("."),
-        &env_map,
-        &None,
-        TerminalSize::default(),
-        &[write_end.as_raw_fd()],
-    )
-    .await?;
-
-    drop(write_end);
-
-    let (_session, output_rx, exit_rx) = combine_spawned_output(spawned);
-    let (_, code) = collect_output_until_exit(output_rx, exit_rx, /*timeout_ms*/ 2_000).await;
-    assert_eq!(code, 0, "expected preserved-fd PTY child to exit cleanly");
-
-    let mut pipe_output = String::new();
-    read_end.read_to_string(&mut pipe_output)?;
-    assert_eq!(pipe_output, "__preserved__");
-
-    Ok(())
-}
-
-#[cfg(unix)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn pty_preserving_inherited_fds_keeps_python_repl_running() -> anyhow::Result<()> {
-    use std::os::fd::AsRawFd;
-    use std::os::fd::FromRawFd;
-
-    let Some(python) = find_python() else {
-        eprintln!(
-            "python not found; skipping pty_preserving_inherited_fds_keeps_python_repl_running"
-        );
-        return Ok(());
-    };
-
-    let mut fds = [0; 2];
-    let result = unsafe { libc::pipe(fds.as_mut_ptr()) };
-    if result != 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-
-    let read_end = unsafe { std::fs::File::from_raw_fd(fds[0]) };
-    let preserved_fd = unsafe { std::fs::File::from_raw_fd(fds[1]) };
-
-    let mut env_map: HashMap<String, String> = std::env::vars().collect();
-    env_map.insert(
-        "PRESERVED_FD".to_string(),
-        preserved_fd.as_raw_fd().to_string(),
-    );
-
-    let spawned = spawn_pty_process(
-        &python,
-        &[],
-        Path::new("."),
-        &env_map,
-        &None,
-        TerminalSize::default(),
-        &[preserved_fd.as_raw_fd()],
-    )
-    .await?;
-    drop(read_end);
-    drop(preserved_fd);
-
-    let (session, mut output_rx, exit_rx) = combine_spawned_output(spawned);
-    let writer = session.writer_sender();
-    let newline = "\n";
-    let mut output = wait_for_python_repl_ready_via_probe(
-        &writer,
-        &mut output_rx,
-        /*timeout_ms*/ 5_000,
-        newline,
-    )
-    .await?;
-    let marker = "__codex_preserved_py_pid:";
-    writer
-        .send(format!("import os; print('{marker}' + str(os.getpid())){newline}").into_bytes())
-        .await?;
-
-    let python_pid = match wait_for_marker_pid(&mut output_rx, marker, /*timeout_ms*/ 2_000).await {
-        Ok(pid) => pid,
-        Err(err) => {
-            session.terminate();
-            return Err(err);
-        }
-    };
-    assert!(
-        process_exists(python_pid)?,
-        "expected python pid {python_pid} to stay alive after prompt output"
-    );
-
-    writer.send(format!("exit(){newline}").into_bytes()).await?;
-    let (remaining_output, code) =
-        collect_output_until_exit(output_rx, exit_rx, /*timeout_ms*/ 5_000).await;
-    output.extend_from_slice(&remaining_output);
-
-    assert_eq!(code, 0, "expected python to exit cleanly");
-
-    Ok(())
-}
-
-#[cfg(unix)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn pty_spawn_with_inherited_fds_reports_exec_failures() -> anyhow::Result<()> {
-    use std::os::fd::AsRawFd;
-    use std::os::fd::FromRawFd;
-
-    let mut fds = [0; 2];
-    let result = unsafe { libc::pipe(fds.as_mut_ptr()) };
-    if result != 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-
-    let read_end = unsafe { std::fs::File::from_raw_fd(fds[0]) };
-    let write_end = unsafe { std::fs::File::from_raw_fd(fds[1]) };
-
+async fn pty_spawn_reports_exec_failures() -> anyhow::Result<()> {
     let env_map: HashMap<String, String> = std::env::vars().collect();
     let spawn_result = spawn_pty_process(
         "/definitely/missing/command",
@@ -975,12 +783,8 @@ async fn pty_spawn_with_inherited_fds_reports_exec_failures() -> anyhow::Result<
         &env_map,
         &None,
         TerminalSize::default(),
-        &[write_end.as_raw_fd()],
     )
     .await;
-
-    drop(read_end);
-    drop(write_end);
 
     let err = match spawn_result {
         Ok(spawned) => {
@@ -1002,19 +806,7 @@ async fn pty_spawn_with_inherited_fds_reports_exec_failures() -> anyhow::Result<
 
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn pty_spawn_with_inherited_fds_supports_resize() -> anyhow::Result<()> {
-    use std::os::fd::AsRawFd;
-    use std::os::fd::FromRawFd;
-
-    let mut fds = [0; 2];
-    let result = unsafe { libc::pipe(fds.as_mut_ptr()) };
-    if result != 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-
-    let read_end = unsafe { std::fs::File::from_raw_fd(fds[0]) };
-    let write_end = unsafe { std::fs::File::from_raw_fd(fds[1]) };
-
+async fn pty_spawn_supports_resize() -> anyhow::Result<()> {
     let env_map: HashMap<String, String> = std::env::vars().collect();
     let script = "stty -echo; printf 'start:%s\\n' \"$(stty size)\"; IFS= read _line; printf 'after:%s\\n' \"$(stty size)\"";
     let spawned = spawn_pty_process(
@@ -1027,7 +819,6 @@ async fn pty_spawn_with_inherited_fds_supports_resize() -> anyhow::Result<()> {
             rows: 31,
             cols: 101,
         },
-        &[write_end.as_raw_fd()],
     )
     .await?;
 
@@ -1058,9 +849,6 @@ async fn pty_spawn_with_inherited_fds_supports_resize() -> anyhow::Result<()> {
         "expected resized PTY dimensions in output: {text:?}"
     );
     assert_eq!(code, 0, "expected shell to exit cleanly after resize");
-
-    drop(read_end);
-    drop(write_end);
 
     Ok(())
 }

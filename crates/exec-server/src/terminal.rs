@@ -271,7 +271,6 @@ impl TerminalService {
                     rows: params.rows,
                     cols: params.cols,
                 },
-                &[],
             ))
             .map_err(|_| TerminalError::OperationFailed)?;
         let ready = TerminalProcessReady {

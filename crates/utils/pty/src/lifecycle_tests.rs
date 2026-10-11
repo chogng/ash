@@ -92,7 +92,7 @@ fn descriptor_cleanup_covers_sparse_fds_above_a_lowered_limit() -> anyhow::Resul
             if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) == -1 {
                 return Err(std::io::Error::last_os_error());
             }
-            crate::pty::close_inherited_fds_except(&[preserved_fd])
+            crate::pipe::close_inherited_fds_except(&[preserved_fd])
         });
     }
     let output = command.output()?;
@@ -157,10 +157,7 @@ enum PtyShutdown {
 }
 
 #[cfg(unix)]
-fn assert_pty_shutdown_with_detached_child(
-    inherited_fds: &[i32],
-    shutdown: PtyShutdown,
-) -> anyhow::Result<()> {
+fn assert_pty_shutdown_with_detached_child(shutdown: PtyShutdown) -> anyhow::Result<()> {
     let Some(python) = find_python() else {
         eprintln!("python not found; skipping detached PTY shutdown test");
         return Ok(());
@@ -196,7 +193,6 @@ time.sleep(10)
             &env_map,
             &None,
             TerminalSize::default(),
-            inherited_fds,
         )
         .await?;
         let (session, mut output_rx, exit_rx) = combine_spawned_output(spawned);
@@ -248,149 +244,56 @@ time.sleep(10)
 #[cfg(unix)]
 #[test]
 fn pty_spawn_without_io_driver_returns_error() -> anyhow::Result<()> {
-    use std::os::fd::AsRawFd;
-
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .build()?;
-    let preserved_fd = std::fs::File::open("/dev/null")?;
     let env_map: HashMap<String, String> = std::env::vars().collect();
     let (program, args) = shell_command("true");
-    for inherited_fds in [&[][..], &[preserved_fd.as_raw_fd()][..]] {
-        let Err(error) = runtime.block_on(spawn_pty_process(
-            &program,
-            &args,
-            Path::new("."),
-            &env_map,
-            &None,
-            TerminalSize::default(),
-            inherited_fds,
-        )) else {
-            anyhow::bail!("PTY spawn succeeded without a Tokio I/O driver");
-        };
-        assert_eq!(
-            error.to_string(),
-            "PTY I/O requires a Tokio runtime with I/O enabled"
-        );
-    }
+    let Err(error) = runtime.block_on(spawn_pty_process(
+        &program,
+        &args,
+        Path::new("."),
+        &env_map,
+        &None,
+        TerminalSize::default(),
+    )) else {
+        anyhow::bail!("PTY spawn succeeded without a Tokio I/O driver");
+    };
+    assert_eq!(
+        error.to_string(),
+        "PTY I/O requires a Tokio runtime with I/O enabled"
+    );
     Ok(())
 }
 
 #[cfg(unix)]
 #[test]
 fn pty_terminate_allows_runtime_shutdown_with_detached_child() -> anyhow::Result<()> {
-    assert_pty_shutdown_with_detached_child(&[], PtyShutdown::Terminate)
+    assert_pty_shutdown_with_detached_child(PtyShutdown::Terminate)
 }
 
 #[cfg(unix)]
 #[test]
 fn pty_drop_allows_runtime_shutdown_with_detached_child() -> anyhow::Result<()> {
-    assert_pty_shutdown_with_detached_child(&[], PtyShutdown::Drop)
-}
-
-#[cfg(unix)]
-#[test]
-fn pty_preserving_fds_terminate_allows_runtime_shutdown_with_detached_child() -> anyhow::Result<()>
-{
-    use std::os::fd::AsRawFd;
-
-    let preserved_fd = std::fs::File::open("/dev/null")?;
-    assert_pty_shutdown_with_detached_child(&[preserved_fd.as_raw_fd()], PtyShutdown::Terminate)
-}
-
-#[cfg(unix)]
-#[test]
-fn pty_preserving_fds_drop_allows_runtime_shutdown_with_detached_child() -> anyhow::Result<()> {
-    use std::os::fd::AsRawFd;
-
-    let preserved_fd = std::fs::File::open("/dev/null")?;
-    assert_pty_shutdown_with_detached_child(&[preserved_fd.as_raw_fd()], PtyShutdown::Drop)
+    assert_pty_shutdown_with_detached_child(PtyShutdown::Drop)
 }
 
 #[cfg(unix)]
 #[test]
 fn pty_terminate_allows_runtime_shutdown_with_full_output_channel() -> anyhow::Result<()> {
-    use std::os::fd::AsRawFd;
-
     let Some(python) = find_python() else {
         eprintln!("python not found; skipping PTY output backpressure test");
         return Ok(());
     };
-    let preserved_fd = std::fs::File::open("/dev/null")?;
-    for inherited_fds in [&[][..], &[preserved_fd.as_raw_fd()][..]] {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-        let (session, stdout_rx) = runtime.block_on(async {
-            let env_map: HashMap<String, String> = std::env::vars().collect();
-            let script =
-                "import os, signal\nsignal.alarm(10)\nwhile True:\n    os.write(1, b'x' * 8192)\n";
-            let SpawnedProcess {
-                session,
-                stdout_rx,
-                exit_rx,
-                ..
-            } = spawn_pty_process(
-                &python,
-                &["-c".to_string(), script.to_string()],
-                Path::new("."),
-                &env_map,
-                &None,
-                TerminalSize::default(),
-                inherited_fds,
-            )
-            .await?;
-            tokio::time::timeout(std::time::Duration::from_secs(2), async {
-                while stdout_rx.len() < stdout_rx.max_capacity() {
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                }
-            })
-            .await?;
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-            session.terminate();
-            tokio::time::timeout(std::time::Duration::from_secs(2), exit_rx).await??;
-            Ok::<_, anyhow::Error>((session, stdout_rx))
-        })?;
-
-        // Keep the receiver alive through runtime shutdown. An OS-thread
-        // watchdog releases a regressed blocking_send without a Tokio timer.
-        let (shutdown_tx, shutdown_rx) = std::sync::mpsc::channel();
-        let receiver_guard = std::thread::spawn(move || {
-            let _ = shutdown_rx.recv_timeout(std::time::Duration::from_secs(3));
-            drop(stdout_rx);
-        });
-        let started = std::time::Instant::now();
-        drop(runtime);
-        let elapsed = started.elapsed();
-        let _ = shutdown_tx.send(());
-        receiver_guard
-            .join()
-            .map_err(|_| anyhow::anyhow!("output receiver watchdog panicked"))?;
-        drop(session);
-        assert!(
-            elapsed < std::time::Duration::from_secs(2),
-            "runtime shutdown waited on a full PTY output channel: {elapsed:?}"
-        );
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn pty_dropped_output_receiver_keeps_draining_child() -> anyhow::Result<()> {
-    use std::os::fd::AsRawFd;
-
-    let Some(python) = find_python() else {
-        eprintln!("python not found; skipping PTY dropped output receiver test");
-        return Ok(());
-    };
-    let preserved_fd = std::fs::File::open("/dev/null")?;
-    let env_map: HashMap<String, String> = std::env::vars().collect();
-    let script =
-        "import signal, sys\nsignal.alarm(10)\nsys.stdout.buffer.write(b'x' * (4 * 1024 * 1024))";
-    for inherited_fds in [&[][..], &[preserved_fd.as_raw_fd()][..]] {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let (session, stdout_rx) = runtime.block_on(async {
+        let env_map: HashMap<String, String> = std::env::vars().collect();
+        let script =
+            "import os, signal\nsignal.alarm(10)\nwhile True:\n    os.write(1, b'x' * 8192)\n";
         let SpawnedProcess {
-            session: _session,
+            session,
             stdout_rx,
             exit_rx,
             ..
@@ -401,13 +304,69 @@ async fn pty_dropped_output_receiver_keeps_draining_child() -> anyhow::Result<()
             &env_map,
             &None,
             TerminalSize::default(),
-            inherited_fds,
         )
         .await?;
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while stdout_rx.len() < stdout_rx.max_capacity() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await?;
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        session.terminate();
+        tokio::time::timeout(std::time::Duration::from_secs(2), exit_rx).await??;
+        Ok::<_, anyhow::Error>((session, stdout_rx))
+    })?;
+
+    // Keep the receiver alive through runtime shutdown. An OS-thread
+    // watchdog releases a regressed blocking_send without a Tokio timer.
+    let (shutdown_tx, shutdown_rx) = std::sync::mpsc::channel();
+    let receiver_guard = std::thread::spawn(move || {
+        let _ = shutdown_rx.recv_timeout(std::time::Duration::from_secs(3));
         drop(stdout_rx);
-        let code = tokio::time::timeout(std::time::Duration::from_secs(2), exit_rx).await??;
-        assert_eq!(code, 0, "child should finish even when output is discarded");
-    }
+    });
+    let started = std::time::Instant::now();
+    drop(runtime);
+    let elapsed = started.elapsed();
+    let _ = shutdown_tx.send(());
+    receiver_guard
+        .join()
+        .map_err(|_| anyhow::anyhow!("output receiver watchdog panicked"))?;
+    drop(session);
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "runtime shutdown waited on a full PTY output channel: {elapsed:?}"
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pty_dropped_output_receiver_keeps_draining_child() -> anyhow::Result<()> {
+    let Some(python) = find_python() else {
+        eprintln!("python not found; skipping PTY dropped output receiver test");
+        return Ok(());
+    };
+    let env_map: HashMap<String, String> = std::env::vars().collect();
+    let script =
+        "import signal, sys\nsignal.alarm(10)\nsys.stdout.buffer.write(b'x' * (4 * 1024 * 1024))";
+    let SpawnedProcess {
+        session: _session,
+        stdout_rx,
+        exit_rx,
+        ..
+    } = spawn_pty_process(
+        &python,
+        &["-c".to_string(), script.to_string()],
+        Path::new("."),
+        &env_map,
+        &None,
+        TerminalSize::default(),
+    )
+    .await?;
+    drop(stdout_rx);
+    let code = tokio::time::timeout(std::time::Duration::from_secs(2), exit_rx).await??;
+    assert_eq!(code, 0, "child should finish even when output is discarded");
     Ok(())
 }
 
@@ -438,7 +397,6 @@ print('__complete__', flush=True)
         &env_map,
         &None,
         TerminalSize::default(),
-        &[],
     )
     .await?;
     let (session, mut output_rx, exit_rx) = combine_spawned_output(spawned);
@@ -496,7 +454,6 @@ fn pty_terminate_reaps_child_when_waiter_is_queued() -> anyhow::Result<()> {
             &env_map,
             &None,
             TerminalSize::default(),
-            &[],
         )
         .await?;
         let (session, _output_rx, exit_rx) = combine_spawned_output(spawned);

@@ -12,11 +12,6 @@ use tokio::io::unix::AsyncFd;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-pub(crate) enum StdinCloseBehavior {
-    SendEof,
-    NoEof,
-}
-
 pub(crate) struct PtyIo {
     fd: Arc<AsyncFd<File>>,
 }
@@ -44,7 +39,6 @@ impl PtyIo {
         self,
         stdout_tx: mpsc::Sender<Vec<u8>>,
         mut writer_rx: mpsc::Receiver<Vec<u8>>,
-        stdin_close: StdinCloseBehavior,
     ) -> (JoinHandle<()>, JoinHandle<()>) {
         let fd = self.fd;
         let reader = Arc::clone(&fd);
@@ -72,21 +66,14 @@ impl PtyIo {
                     return;
                 }
             }
-            match stdin_close {
-                StdinCloseBehavior::SendEof => {
-                    // Preserve portable-pty's newline + current VEOF on stdin close,
-                    // including when the terminal input queue requires waiting.
-                    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
-                    if unsafe { libc::tcgetattr(fd.get_ref().as_raw_fd(), termios.as_mut_ptr()) }
-                        == 0
-                    {
-                        let eof = unsafe { termios.assume_init() }.c_cc[libc::VEOF];
-                        if eof != 0 {
-                            let _ = write_all(&fd, &[b'\n', eof]).await;
-                        }
-                    }
+            // Preserve portable-pty's newline + current VEOF on stdin close,
+            // including when the terminal input queue requires waiting.
+            let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+            if unsafe { libc::tcgetattr(fd.get_ref().as_raw_fd(), termios.as_mut_ptr()) } == 0 {
+                let eof = unsafe { termios.assume_init() }.c_cc[libc::VEOF];
+                if eof != 0 {
+                    let _ = write_all(&fd, &[b'\n', eof]).await;
                 }
-                StdinCloseBehavior::NoEof => {}
             }
         });
         (reader_handle, writer_handle)

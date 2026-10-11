@@ -18,7 +18,7 @@ pipe 的进程组信号与强制终止整棵子进程树的语义保持不变。
 ## 来源边界
 
 PTY integration 基于 `NOTICE` 中固定的 OpenAI Codex revision 并在 Ash 内适配，Apache-2.0。
-ConPTY 底层实现统一位于 [`portable-pty 0.9.0`](../../../third_party/wezterm/README.md)
+本 crate 的 Unix PTY 与 Windows ConPTY 底层实现统一位于 [`portable-pty 0.9.0`](../../../third_party/wezterm/README.md)
 的本地副本，MIT license 位于 `third_party/wezterm/LICENSE`。
 `src/win.rs` 只适配 Ash 的 Job 与正常退出策略，并为沙箱转换控制台接口。
 这是 source reuse，不是 Codex wire protocol/runtime dependency。
@@ -41,8 +41,9 @@ tests 审查行为；不能用“来自上游”替代本地 correctness review�
 | `TerminalSize`                | rows/cols                                   | 默认 24 × 80                                       |
 | `combine_output_receivers`    | split mpsc → one broadcast stream           | 不保证 stdout/stderr total order                   |
 
-`spawn_*` 参数包括 program、args、cwd、完整 env map、optional arg0 与 Unix inherited FDs；PTY 额外
-接收 `TerminalSize`。Spawn 前 `env_clear`，因此 child 只看到 caller 显式提供的 environment。
+`spawn_*` 参数包括 program、args、cwd、完整 env map 与 optional arg0；PTY 额外接收
+`TerminalSize`，pipe 额外接收 Unix inherited FDs。PTY 不支持额外的 FD 继承；当前生产调用没有
+该需求。Spawn 前 `env_clear`，因此 child 只看到 caller 显式提供的 environment。
 Unix PTY 要求 Tokio runtime 启用 I/O driver；缺少 driver 时在创建子进程前返回错误。
 
 ### 外部驱动适配器
@@ -63,24 +64,23 @@ Output channels 以 chunk 数 bounded；总 captured bytes、truncation 与 pers
 
 ## 内部接口地图
 
-| Symbol                                    | 可见性                 | 当前职责                                                   | 方向约束                                                       |
-| ----------------------------------------- | ---------------------- | ---------------------------------------------------------- | -------------------------------------------------------------- |
-| `ChildTerminator`                         | crate-private trait    | backend-specific interrupt/hard kill                       | 与 helper-task abortion 分离                                   |
-| `PipeChildTerminator`                     | private                | Unix process group 或 Windows job/process kill             | pipe backend 不泄漏 OS handle                                  |
-| `PtyChildTerminator` / `RawPidTerminator` | private                | PTY child/process-group control                            | interactive descendants 必须一起 cleanup                       |
-| `ProcessHandle::new`                      | crate-private          | 组装 writer、killer、tasks、exit state、PTY handles        | 所有 spawn paths 共享 lifecycle                                |
-| `PtyMasterHandle`                         | crate-private          | portable resizable 或持有 File 的 PTY master               | 文件所有者必须存活到 session drop                              |
-| `read_output_stream`                      | private async fn       | 8 KiB pipe reads → bounded mpsc                            | stdout/stderr reader 独立 drain                                |
-| `spawn_process_with_stdin_mode`           | private async fn       | pipe command + containment + channel/tasks                 | public pipe variants 的唯一 spawn path                         |
-| `spawn_process_portable`                  | private async fn       | portable-pty/ConPTY path                                   | 无 inherited FDs 的常规 PTY                                    |
-| `spawn_process_preserving_fds`            | private async fn, Unix | raw openpty + setsid + controlling TTY                     | inherited FD contract 不走 portable path                       |
-| `unix_io::PtyIo`                          | crate-private, Unix    | 非阻塞 master FD、异步读写与背压                           | 两条 Unix PTY 路径共用；取消不等待 slave 关闭                  |
-| `WaitTask`                                | crate-private enum     | 区分 child 回收与 driver exit 转发                         | child waiter 即使仍在排队也必须执行；driver 转发随 handle 取消 |
-| `close_inherited_fds_except`              | crate-private, Unix    | exec 前关闭非 stdio/non-preserved non-CLOEXEC FDs          | 保留 stdio、explicit FDs 与 exec-error pipe                    |
-| `exit_code_from_status`                   | crate-private          | exit code；Unix signal → `128 + signal`；unknown `-1`      | 所有 wait paths使用一致编码                                    |
-| `ClosureTerminator`                       | private                | driver closure → hard-kill adapter                         | driver signal 当前 unsupported                                 |
-| `WindowsTtyInputNormalizer`               | Windows-only public    | LF→CR、CRLF collapse、backspace→DEL                        | state 跨 write chunk 保留                                      |
-| process-group helpers                     | public module          | detach、pdeathsig、SIGINT/SIGTERM/SIGKILL group operations | non-Unix 多数为 no-op                                          |
+| Symbol                             | 可见性              | 当前职责                                                   | 方向约束                                                       |
+| ---------------------------------- | ------------------- | ---------------------------------------------------------- | -------------------------------------------------------------- |
+| `ChildTerminator`                  | crate-private trait | backend-specific interrupt/hard kill                       | 与 helper-task abortion 分离                                   |
+| `PipeChildTerminator`              | private             | Unix process group 或 Windows job/process kill             | pipe backend 不泄漏 OS handle                                  |
+| `PtyChildTerminator`               | private             | PTY child/process-group control                            | interactive descendants 必须一起 cleanup                       |
+| `ProcessHandle::new`               | crate-private       | 组装 writer、killer、tasks、exit state、PTY handles        | 所有 spawn paths 共享 lifecycle                                |
+| `PtyHandles`                       | internal            | 持有 portable-pty master 与 Windows slave                  | 所有者必须存活到释放 PTY handles                               |
+| `read_output_stream`               | private async fn    | 8 KiB pipe reads → bounded mpsc                            | stdout/stderr reader 独立 drain                                |
+| `spawn_process_with_stdin_mode`    | private async fn    | pipe command + containment + channel/tasks                 | public pipe variants 的唯一 spawn path                         |
+| `pty::spawn_process`               | exported async fn   | 唯一 portable-pty/ConPTY spawn path                        | 不另行创建 Unix PTY                                            |
+| `unix_io::PtyIo`                   | crate-private, Unix | 非阻塞 master FD、异步读写与背压                           | 取消不等待 slave 关闭                                          |
+| `WaitTask`                         | crate-private enum  | 区分 child 回收与 driver exit 转发                         | child waiter 即使仍在排队也必须执行；driver 转发随 handle 取消 |
+| `pipe::close_inherited_fds_except` | crate-private, Unix | pipe exec 前清理非 stdio/non-preserved FDs                 | 保留 stdio、explicit FDs 与 exec-error pipe                    |
+| `exit_code_from_status`            | crate-private       | exit code；Unix signal → `128 + signal`；unknown `-1`      | 所有 wait paths使用一致编码                                    |
+| `ClosureTerminator`                | private             | driver closure → hard-kill adapter                         | driver signal 当前 unsupported                                 |
+| `WindowsTtyInputNormalizer`        | Windows-only public | LF→CR、CRLF collapse、backspace→DEL                        | state 跨 write chunk 保留                                      |
+| process-group helpers              | public module       | detach、pdeathsig、SIGINT/SIGTERM/SIGKILL group operations | non-Unix 多数为 no-op                                          |
 
 ## Pipe spawn 调用图
 
@@ -123,37 +123,30 @@ Windows 控制台、管道、进程属性和命令构造
 CLI PTY 测试也通过根 Cargo 依赖使用同一份 portable-pty。
 CLI 宿主保留原有进程启动策略，不套用执行命令的 Job 包装，允许 App Server 启动后台进程。
 
+Unix 的 MXC 沙箱使用 SDK 的 `StdioMode::Pty`，由 SDK 分配终端并启动 Bubblewrap 或 Seatbelt，
+不经过本 crate 的 spawn API。该沙箱实现仍有自己的 PTY 分配与控制代码；本 crate 的统一不代表
+整个仓库仅剩一套 PTY 实现。其接入边界见 [MXC PTY 启动](../../mxc-sandbox/README.md#pty-启动)。
+
 ## PTY spawn 调用图
 
 ```text
 spawn_pty_process
 ├─ validate non-empty program
-├─ inherited_fds empty / non-Unix
-│  └─ spawn_process_portable
-│     ├─ pty_system
-│     ├─ openpty(size)
-│     ├─ CommandBuilder + env_clear
-│     ├─ spawn child
-│     ├─ Unix: AsyncFd reader/writer；Windows: blocking reader + async writer
-│     ├─ blocking wait
-│     └─ ProcessHandle::new(PtyChildTerminator, PtyHandles...)
-└─ inherited_fds non-empty [Unix]
-   └─ spawn_process_preserving_fds
-      ├─ open_unix_pty + CLOEXEC
-      ├─ std::process::Command
-      ├─ pre_exec: reset signals, setsid, TIOCSCTTY, close FDs
-      ├─ AsyncFd master reader/writer + blocking wait
-      └─ ProcessHandle::new(RawPidTerminator, owned File master...)
+├─ pty_system → openpty(size)
+├─ CommandBuilder + env_clear → spawn child
+├─ Unix: AsyncFd reader/writer；Windows: blocking reader + async writer
+├─ blocking wait
+└─ ProcessHandle::new(PtyChildTerminator, PtyHandles...)
 ```
 
 PTY stdout 与 stderr 指向同一个 terminal slave，因此 result 的 `stderr_rx` 不承载独立 PTY stderr。
 Caller 如果需要 split stderr，应选择 pipe backend。
 
 Unix reader/writer 共享非阻塞 master FD；读、写及输出队列等待都可取消。输出 receiver 关闭后
-仍继续 drain child，避免停止消费让正常进程堵住。普通 PTY 在 stdin sender 全部释放后排空输入，
-再发送换行与终端当前 VEOF；保留 FD 的 PTY 路径不额外注入 EOF。
+仍继续 drain child，避免停止消费让正常进程堵住。PTY 在 stdin sender 全部释放后排空输入，
+再发送换行与终端当前 VEOF。
 
-Windows portable writer 在写入 ConPTY 前经过 `WindowsTtyInputNormalizer`。Normalizer 维护
+Windows 的单个 writer task 独占 portable writer，在写入 ConPTY 前经过 `WindowsTtyInputNormalizer`。Normalizer 维护
 `previous_was_cr`，所以 CR 和下一 chunk 的 LF 也只生成一个 carriage return。
 
 Windows 使用系统 ConPTY，不从进程目录加载 `conpty.dll`。客户端创建成功后释放 console 创建阶段的
@@ -229,19 +222,16 @@ bazel test //crates/utils/pty:pty-unit-tests
 ```
 
 Cross-platform tests 覆盖 PTY Python REPL、pipe stdin、session detach、统一 result、split stderr、
-driver resize/tail drain、terminate reader abort、Unix descendant kill、inherited FDs、spawn failure 与
+driver resize/tail drain、terminate reader abort、Unix descendant kill、pipe inherited FDs、spawn failure 与
 resize。Windows-only tests 覆盖 job/ConPTY descendant behavior、foreground input、Ctrl-C 与 input
 normalization。
-
-Unix PTY 在设置 CLOEXEC 前由 File 接管两个描述符，配置失败会关闭两端。
-`pty_tests.rs` 在独立子进程中注入 slave 配置失败并检查两个描述符都已关闭，避免并行测试复用 FD 编号。
 
 `lifecycle_tests.rs` 覆盖 pipe terminate/Drop 回收、PTY 等待任务排队时回收、后台 child 保持 slave
 打开、输入/输出背压下取消、关闭输出后 drain、大输入与 EOF，以及 driver 转发清理。macOS
 另验证降低 FD limit 后仍能清理高位描述符并保留指定 FD。
 
 部分 integration tests 依赖 Python、`setsid` 或特定 OS capability，会在环境不满足时 skip。当前
-Unix inherited-FD cases 还要求 child 能打开 `/dev/fd/<n>`；禁止该访问的 managed sandbox 会使
+Unix pipe inherited-FD cases 还要求 child 能打开 `/dev/fd/<n>`；禁止该访问的 managed sandbox 会使
 child 以非零状态退出，即使 FD preservation path 本身已经执行。
 
 当前

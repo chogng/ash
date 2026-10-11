@@ -1,11 +1,5 @@
 use core::fmt;
-#[cfg(unix)]
-use std::fs::File;
 use std::io;
-#[cfg(unix)]
-use std::os::fd::AsRawFd;
-#[cfg(unix)]
-use std::os::fd::RawFd;
 use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
@@ -81,15 +75,9 @@ impl From<TerminalSize> for PtySize {
     }
 }
 
-pub(crate) enum PtyMasterHandle {
-    Resizable(Box<dyn MasterPty + Send>),
-    #[cfg(unix)]
-    File(File),
-}
-
 pub struct PtyHandles {
     pub _slave: Option<Box<dyn SlavePty + Send>>,
-    pub(crate) _master: PtyMasterHandle,
+    pub(crate) _master: Box<dyn MasterPty + Send>,
 }
 
 impl fmt::Debug for PtyHandles {
@@ -232,11 +220,7 @@ impl ProcessHandle {
                 .lock()
                 .map_err(|_| anyhow!("failed to lock PTY handles"))?;
             if let Some(handles) = handles.as_ref() {
-                return match &handles._master {
-                    PtyMasterHandle::Resizable(master) => master.resize(size.into()),
-                    #[cfg(unix)]
-                    PtyMasterHandle::File(file) => resize_raw_pty(file.as_raw_fd(), size),
-                };
+                return handles._master.resize(size.into());
             }
         }
 
@@ -276,12 +260,10 @@ impl ProcessHandle {
                 .lock()
                 .map_err(|_| io::Error::other("PTY handle lock poisoned"))?;
             if let Some(handles) = handles.as_ref() {
-                let fd = match &handles._master {
-                    PtyMasterHandle::Resizable(master) => master
-                        .as_raw_fd()
-                        .ok_or_else(|| unsupported_signal(signal))?,
-                    PtyMasterHandle::File(file) => file.as_raw_fd(),
-                };
+                let fd = handles
+                    ._master
+                    .as_raw_fd()
+                    .ok_or_else(|| unsupported_signal(signal))?;
                 // Interactive shells move each foreground job to a separate group. The
                 // PTY, rather than the shell's cached group, identifies the current target.
                 let group = unsafe { libc::tcgetpgrp(fd) };
@@ -400,21 +382,6 @@ impl ChildTerminator for ClosureTerminator {
         }
         Ok(())
     }
-}
-
-#[cfg(unix)]
-fn resize_raw_pty(raw_fd: RawFd, size: TerminalSize) -> anyhow::Result<()> {
-    let mut winsize = libc::winsize {
-        ws_row: size.rows,
-        ws_col: size.cols,
-        ws_xpixel: 0,
-        ws_ypixel: 0,
-    };
-    let result = unsafe { libc::ioctl(raw_fd, libc::TIOCSWINSZ, &mut winsize) };
-    if result == -1 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-    Ok(())
 }
 
 /// Combine split stdout/stderr receivers into a single broadcast receiver.
