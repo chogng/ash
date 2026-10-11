@@ -5,7 +5,7 @@ import { type ServicesAccessor } from '../../../../platform/instantiation/common
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, type ExtensionsEditorExtensionPolicy } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IPluginService, type PluginPackageView, type PluginPermission } from '../../../../platform/plugins/common/pluginService.js';
+import { IPluginManagementService, type PluginPackageView, type PluginPermission } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { type IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
@@ -69,7 +69,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 	registrations.add(registerAction2(class InstallLocalExtension extends Action2 {
 		constructor() { super({ id: 'ash.extensions.installLocal', get title() { return localize2({ bundle: 'ash.extensions', key: 'installLocalExtension' }, 'Install extension from workspace'); }, f1: true }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> {
-			const plugins = accessor.get(IPluginService);
+			const plugins = accessor.get(IPluginManagementService);
 			const dialogs = accessor.get(IDialogService);
 			const catalog = await plugins.list();
 			const input = await dialogs.input({
@@ -99,7 +99,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 	return registrations;
 }
 
-function describePermission(permission: PluginPermission): string {
+export function describePluginPermission(permission: PluginPermission): string {
 	switch (permission.type) {
 		case 'directory': return permission.access === 'read' ? localize({ bundle: 'ash.extensions', key: 'permissionRead' }, 'Read workspace files') : localize({ bundle: 'ash.extensions', key: 'permissionWrite' }, 'Write workspace files');
 		case 'process': return localize({ bundle: 'ash.extensions', key: 'permissionProcess' }, 'Run {0}', permission.executable);
@@ -109,7 +109,7 @@ function describePermission(permission: PluginPermission): string {
 
 
 /** Resolve current authority at invocation time; rows and editors never retain a policy revision. */
-export async function changeExtensionEnablement(input: ExtensionsInput, enablement: IGlobalExtensionEnablementService, management: IExtensionManagementService, plugins: IPluginService): Promise<void> {
+export async function changeExtensionEnablement(input: ExtensionsInput, enablement: IGlobalExtensionEnablementService, management: IExtensionManagementService, plugins: IPluginManagementService): Promise<void> {
 	if (input.source === ExtensionsInputSource.BuiltIn) {
 		const descriptor = (await createBrowserExtensionApi().list('cached')).extensions.find(value => value.id === input.summary.id);
 		if (!descriptor) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
@@ -151,13 +151,13 @@ export async function reviewExtensionExecution(extension: ExtensionsEditorExtens
 	});
 }
 
-export async function reviewLocalExtensionPermissions(plugin: PluginPackageView, plugins: IPluginService, dialogs: IDialogService): Promise<void> {
+export async function reviewLocalExtensionPermissions(plugin: PluginPackageView, plugins: IPluginManagementService, dialogs: IDialogService): Promise<void> {
 	const catalog = await plugins.list();
 	const selected = catalog.packages.find(value => value.id === plugin.id && value.digest === plugin.digest);
 	if (!selected) { return; }
 	await dialogs.prompt({
 		title: selected.displayName, message: `${selected.id} · ${selected.version}`,
-		detail: [localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', selected.permissions.length ? selected.permissions.map(describePermission).join('; ') : localize({ bundle: 'ash.extensions', key: 'noPermissions' }, 'None')),
+		detail: [localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', selected.permissions.length ? selected.permissions.map(describePluginPermission).join('; ') : localize({ bundle: 'ash.extensions', key: 'noPermissions' }, 'None')),
 		localize({ bundle: 'ash.extensions', key: 'localExtensionDocumentNotice' }, 'VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
 		localize({ bundle: 'ash.extensions', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.digest)].join('\n\n'),
 		buttons: [{ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeLocalExtension' }, 'Revoke permissions') : localize({ bundle: 'ash.extensions', key: 'grantLocalExtension' }, 'Grant permissions'), run: () => selected.granted ? plugins.revokeGrant(selected, catalog.revision) : plugins.grant(selected, catalog.revision) }],

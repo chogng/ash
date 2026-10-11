@@ -1,9 +1,9 @@
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { IPluginApi } from "../common/pluginApi.js";
+import type { IPluginManagementApi } from "../common/pluginManagementApi.js";
 
-export function createDisconnectedPluginApi(unavailable: UnavailableOperation): IPluginApi {
+export function createDisconnectedPluginManagementApi(unavailable: UnavailableOperation): IPluginManagementApi {
 	return {
 		list: () => unavailable("plugins.list"),
 		installLocal: () => unavailable("plugins.installLocal"),
@@ -15,7 +15,7 @@ export function createDisconnectedPluginApi(unavailable: UnavailableOperation): 
 	};
 }
 
-export function createAppServerPluginApi(connection: AppServerProtocolClient): IPluginApi {
+export function createAppServerPluginManagementApi(connection: AppServerProtocolClient): IPluginManagementApi {
 	return {
 		list: () => appServerRequest(connection, "plugin/list", {}),
 		installLocal: params => appServerRequest(connection, "plugin/installLocal", params),

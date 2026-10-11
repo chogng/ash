@@ -1,5 +1,5 @@
 /** Public Ash SCM provider bridge. Callback objects never leave the extension realm. */
-export function createSCMApi(runtime, request, invoke, retain) {
+export function createSCMApi(runtime, request, invoke, retain, stateRequest = request) {
 	const providers = new Map();
 	const registrationId = 'ash.scm';
 	let registration;
@@ -47,7 +47,8 @@ export function createSCMApi(runtime, request, invoke, retain) {
 		if (!active || disposed || pending) return;
 		pending = Promise.resolve().then(async () => {
 			const current = revision;
-			await request({ operation: 'scmUpdate', registrationId, revision: current, providers: snapshot() }, 'done');
+			console.debug('GIT REF DIAGNOSTIC publish', current, [...providers.values()].map(entry => [entry.historyRevision, entry.historyRefsRevision]));
+			await stateRequest({ operation: 'scmUpdate', registrationId, revision: current, providers: snapshot() }, 'done');
 			return current;
 		}).then(current => { pending = undefined; if (current !== revision) publish(); }, error => { pending = undefined; if (!disposed) console.error('SCM update failed', error); });
 		// A queued replacement must send before the originating callback retires.
@@ -60,7 +61,11 @@ export function createSCMApi(runtime, request, invoke, retain) {
 			const entry = providers.get(payload.providerId);
 			if (!entry) throw new Error('SCM provider was removed');
 			const provider = entry.provider;
-			if (payload.value !== undefined) { provider.input.value = payload.value; entry.inputRevision = payload.inputRevision ?? entry.inputRevision; }
+			if (payload.value !== undefined) {
+				const inputRevision = payload.inputRevision ?? entry.inputRevision;
+				if (typeof payload.value !== 'string' || payload.value.length > 32768 || !Number.isSafeInteger(inputRevision) || inputRevision < 0) throw new TypeError('Invalid SCM input revision');
+				if (inputRevision >= entry.inputRevision) { provider.input.value = payload.value; entry.inputRevision = inputRevision; }
+			}
 			switch (payload.method) {
 				case 'setInput': publish(); return null;
 				case 'multiDiff': return serial(await entry.multiDiff.resolve(entry.parseUri(payload.resource)));

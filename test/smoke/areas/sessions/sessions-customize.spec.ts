@@ -117,7 +117,7 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	}
 	await navigation.getByRole('button', { name: 'Customize', exact: true }).click();
 	const tabs = settings.getByRole('tablist', { name: 'Customize tabs' });
-	await expect(tabs.getByRole('tab')).toHaveText(['Settings', 'Extensions', 'Skills', 'Hooks']);
+	await expect(tabs.getByRole('tab')).toHaveText(['Settings', 'Hooks']);
 	const settingsTab = tabs.getByRole('tab', { name: 'Settings', exact: true });
 	await expect(settingsTab).toHaveAttribute('aria-selected', 'true');
 	await expect(settings.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await settingsTab.getAttribute('id') ?? '');
@@ -125,35 +125,16 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	await settingsTab.focus();
 	await settingsTab.press('Alt+F1');
 	await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true })).toBeVisible();
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Customize has Settings, Extensions, Skills, and Hooks tabs/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Customize has Settings and Hooks tabs/u);
 	await page.keyboard.press('Escape');
 	await expect(settingsTab).toBeFocused();
 	await settingsTab.press('ArrowRight');
-	const pluginsTab = tabs.getByRole('tab', { name: 'Extensions', exact: true });
-	await expect(pluginsTab).toBeFocused();
+	const hooksTab = tabs.getByRole('tab', { name: 'Hooks', exact: true });
+	await expect(hooksTab).toBeFocused();
 	await expect(settingsTab).toHaveAttribute('aria-selected', 'true');
-	await pluginsTab.press('Enter');
-	const plugins = settings.locator('.ash-extensions');
-	await expect(plugins.getByRole('button', { name: 'Installed', exact: true })).toHaveAttribute('aria-pressed', 'true');
-	const pluginQuery = plugins.getByLabel('Search Extensions', { exact: true });
-	await pluginQuery.fill('retained query');
-	const queryElement = await pluginQuery.elementHandle();
-	await tabs.getByRole('tab', { name: 'Skills', exact: true }).click();
-	const skills = settings.locator('.ash-skills');
-	await expect(skills.getByLabel('Skills', { exact: true })).toBeVisible();
-	await expect(plugins).toHaveCount(0);
-	const skillList = await skills.getByLabel('Skills', { exact: true }).elementHandle();
-	await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
+	await hooksTab.press('Enter');
 	await expect(settings.getByRole('button', { name: 'Manage Hooks', exact: true })).toBeVisible();
 	await expect(settings.locator('[data-hook-event]')).toHaveCount(0);
-	await pluginsTab.click();
-	await expect(pluginQuery).toHaveValue('retained query');
-	expect(await pluginQuery.evaluate((element, original) => element === original, queryElement)).toBe(true);
-	await tabs.getByRole('tab', { name: 'Skills', exact: true }).click();
-	expect(await skills.getByLabel('Skills', { exact: true }).evaluate((element, original) => element === original, skillList)).toBe(true);
-	await queryElement?.dispose();
-	await skillList?.dispose();
-	await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
 	await settings.getByRole('button', { name: 'Manage Hooks', exact: true }).click();
 	await expect(settings).toHaveCount(0);
 	const hooks = page.locator('.ash-ai-customization-management');
@@ -187,22 +168,12 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 		await draft.waitForEditorContents(text => text.includes('Help me configure'));
 		await expect(page.locator(':is(.ash-chat-item-userMessage,.ash-cowork-item-userMessage)')).toHaveCount(0);
 	}
-	if (target.appServerMode === 'required') {
-		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
-		await expect(page.getByRole('dialog', { name: 'Select a skill file to open', exact: true })).toHaveAttribute('aria-busy', 'false');
-		await new QuickAccess(page).select('Manage skill enablement…');
-	} else {
-		await openSettings(page);
-		await settings.getByRole('button', { name: 'Customize', exact: true }).click();
-		await tabs.getByRole('tab', { name: 'Skills', exact: true }).click();
-	}
-	await expect(settings).toBeVisible();
-	await expect(settings.getByRole('tab', { name: 'Skills', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await skills.getByRole('button', { name: 'Get skills from Extensions', exact: true }).click();
-	await expect(pluginsTab).toHaveAttribute('aria-selected', 'true');
-	await expect(plugins.getByRole('button', { name: 'Installed', exact: true })).toHaveAttribute('aria-pressed', 'false');
-	await expect(plugins.getByRole('button', { name: 'Skills', exact: true })).toBeVisible();
-	await page.keyboard.press('Escape');
+	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
+	await expect(settings).toHaveCount(0);
+	const skills = page.locator('[data-view-id="ash.extensions.skills"]');
+	await expect(skills.getByRole('button', { name: 'Skills', exact: true })).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.locator('[data-view-id="ash.extensions.plugins"]')).toBeVisible();
+	await expect(page.locator('[data-view-id="ash.extensions.mcp"]')).toBeVisible();
 	expect(failures).toEqual([]);
 });
 
@@ -247,11 +218,7 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 	await expect(settings.getByRole('switch', { name: '启用顾问' })).toBeVisible();
 	await settings.getByRole('button', { name: '自定义', exact: true }).click();
 	const tabs = settings.getByRole('tablist', { name: '自定义标签页' });
-	await expect(tabs.getByRole('tab')).toHaveText(['设置', '扩展', '技能', 'Hooks']);
-	await tabs.getByRole('tab', { name: '技能', exact: true }).click();
-	await expect(settings.locator('.ash-skills').getByLabel('技能', { exact: true })).toBeVisible();
-	await expect(settings.getByRole('button', { name: '从扩展获取技能', exact: true })).toBeVisible();
-	await expect(settings.getByRole('button', { name: '刷新', exact: true })).toBeVisible();
+	await expect(tabs.getByRole('tab')).toHaveText(['设置', 'Hooks']);
 	await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
 	await settings.getByRole('button', { name: '管理 Hooks', exact: true }).click();
 	const hooks = page.locator('.ash-ai-customization-management');

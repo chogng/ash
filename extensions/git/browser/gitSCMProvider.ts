@@ -56,9 +56,11 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	private readonly retiredStreams = new Set<string>();
 	private requestRevision = 0;
 	private busy = false;
+	private operation: Promise<unknown> = Promise.resolve();
 	private inputValue = '';
 	private inputRevision = 0;
 	private message = localize('git.readingStatus', 'Reading Git status…');
+	private operationError: string | undefined;
 
 	constructor(
 		private readonly gitService: IGitService,
@@ -84,7 +86,8 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 					? localize('git.commitMessageOnBranch', 'Message ({0} to commit on "{1}")', shortcut, branch.name)
 					: localize('git.commitMessage', 'Message ({0} to commit)', shortcut);
 			},
-			get enabled() { return provider.status !== undefined && !provider.busy; },
+			// Git work disables acceptance separately; users can keep composing the next draft.
+			enabled: true,
 			get canAccept() { return provider.status?.changes.some(change => !change.conflicted && change.indexStatus !== 'unmodified') === true; },
 			buttonLabel: localize('git.commit', 'Commit'),
 			buttonTooltip: localize('git.commitStagedTooltip', 'Commit staged changes'),
@@ -165,15 +168,15 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	}
 
 	public async activate(): Promise<void> {
-		this.setBusy(true, localize('git.switchingRepository', 'Switching repository…'));
 		try {
-			this.acceptStatus(await this.gitService.selectRepository(this.id));
-			if (this.status) this.setMessage(statusSummary(this.status));
+			await this.queueAction(async () => {
+				this.setMessage(localize('git.switchingRepository', 'Switching repository…'));
+				this.acceptStatus(await this.gitService.selectRepository(this.id));
+				if (this.status) this.setMessage(statusSummary(this.status));
+			});
 		} catch (error) {
 			this.showError(error);
 			throw error;
-		} finally {
-			this.setBusy(false);
 		}
 	}
 
@@ -207,7 +210,8 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		this.status = status;
 		this.resourceGroups = this.createGroups(status);
 		this.updateDecorations();
-		this.message = statusSummary(status);
+		// Repository notifications keep resources current without erasing a failed operation's explanation.
+		this.message = this.operationError ?? statusSummary(status);
 		this.changeEmitter.fire();
 	}
 
@@ -258,8 +262,11 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		return { id, label, tooltip: label, icon, enabled: true, checked: undefined, run: () => this.mutatePaths(action, paths) };
 	}
 
-	public async runTitleOperation(operation: () => Promise<unknown>): Promise<void> {
-		await this.runAction(async () => { await operation(); });
+	public async runTitleOperation(operation: () => Promise<GitStatus>): Promise<void> {
+		await this.runAction(async () => {
+			this.acceptStatus(await operation());
+			if (this.status) this.setMessage(statusSummary(this.status));
+		});
 	}
 
 	public async stageAll(): Promise<void> {
@@ -278,13 +285,24 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	}
 
 	private async runAction(run: () => Promise<void>): Promise<void> {
-		if (this.busy || this.isDisposed) return;
-		this.setBusy(true);
-		try { await run(); } catch (error) { this.showError(error); } finally { this.setBusy(false); }
+		await this.queueAction(async () => {
+			try { await run(); } catch (error) { this.showError(error); }
+		});
+	}
+
+	private queueAction<T>(run: () => Promise<T>): Promise<T | undefined> {
+		// Selection can still be activating when a palette command arrives. Retain the user's intent.
+		const operation = this.operation.then(async () => {
+			if (this.isDisposed) return undefined;
+			this.operationError = undefined;
+			this.setBusy(true);
+			try { return await run(); } finally { this.setBusy(false); }
+		});
+		this.operation = operation.catch(() => undefined);
+		return operation;
 	}
 
 	public async mutatePaths(action: PathAction, paths: readonly string[]): Promise<void> {
-		if (this.busy) return;
 		const status = this.status;
 		if (!status || paths.length === 0) return;
 		if (action === 'stage') {
@@ -422,7 +440,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		if (result === 'empty' && this.status === status) this.setMessage(`No text changes are available in ${title}.`);
 	}
 
-	private showError(error: unknown): void { this.setMessage(gitErrorMessage(error)); }
+	private showError(error: unknown): void { this.operationError = gitErrorMessage(error); this.setMessage(this.operationError); }
 	private setMessage(message: string): void { this.message = message; this.changeEmitter.fire(); }
 	private setBusy(busy: boolean, message?: string): void {
 		this.busy = busy;

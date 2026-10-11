@@ -22,7 +22,8 @@ Promise.prototype.then = function <TResult1 = unknown, TResult2 = never>(fulfill
 	};
 	return originalThen.call(this, bind(fulfilled), bind(rejected)) as Promise<TResult1 | TResult2>;
 };
-const commands = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
+const commands = new Map<number, { request: JsonValue; sent: boolean; resolve(value: JsonValue): void; reject(error: Error): void; }>();
+let sentCommands = 0;
 let nextCommand = 1;
 const scope = globalThis as unknown as { onmessage: (event: MessageEvent<BrowserExtensionHostRequest>) => void; postMessage(value: unknown): void; };
 
@@ -31,7 +32,9 @@ scope.onmessage = event => {
 	if (message.type === 'commandResult') {
 		const command = commands.get(message.id);
 		commands.delete(message.id);
+		if (command?.sent) sentCommands--;
 		if (message.success) command?.resolve(message.result); else command?.reject(new Error(message.error));
+		pumpClientRequests();
 		return;
 	}
 	if (message.type === 'cancel') { invocations.get(message.invocationId)?.abort(); runtime?.cancel(message.invocationId); return; }
@@ -53,7 +56,7 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 			return clientRequest(JSON.parse(encoded), invocation.signal).then(value => JSON.stringify(value));
 		};
 		globals.__ashBackgroundRequest = (encoded: string): Promise<string> => {
-			if (!runtime || currentInvocation !== undefined) throw new Error('Browser extension invocation has retired');
+			if (!runtime) throw new Error('Browser extension incarnation has retired');
 			return clientRequest(JSON.parse(encoded)).then(value => JSON.stringify(value));
 		};
 		globals.__ashWebviewResource = (url: string): void => scope.postMessage({ type: 'webviewResource', url });
@@ -71,6 +74,7 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 				command.reject(new Error('Browser extension has stopped'));
 			}
 			commands.clear();
+			sentCommands = 0;
 			invocations.clear();
 		}
 		return null;
@@ -91,9 +95,26 @@ function clientRequest(request: JsonValue, signal?: AbortSignal): Promise<JsonVa
 	signal?.throwIfAborted();
 	const id = nextCommand++;
 	return new Promise((resolve, reject) => {
-		const abort = (): void => { commands.delete(id); scope.postMessage({ type: 'clientCancel', id }); reject(signal!.reason); };
+		const abort = (): void => {
+			const command = commands.get(id);
+			if (!commands.delete(id)) return;
+			if (command?.sent) { sentCommands--; scope.postMessage({ type: 'clientCancel', id }); }
+			reject(signal!.reason);
+			pumpClientRequests();
+		};
 		signal?.addEventListener('abort', abort, { once: true });
-		commands.set(id, { resolve: value => { signal?.removeEventListener('abort', abort); resolve(value); }, reject: error => { signal?.removeEventListener('abort', abort); reject(error); } });
-		scope.postMessage({ type: 'clientRequest', id, request });
+		commands.set(id, { request, sent: false, resolve: value => { signal?.removeEventListener('abort', abort); resolve(value); }, reject: error => { signal?.removeEventListener('abort', abort); reject(error); } });
+		pumpClientRequests();
 	});
+}
+
+function pumpClientRequests(): void {
+	// Match the host's concurrency limit instead of terminating an extension on a large Explorer batch.
+	for (const [id, command] of commands) {
+		if (sentCommands >= 32) return;
+		if (command.sent) continue;
+		command.sent = true;
+		sentCommands++;
+		scope.postMessage({ type: 'clientRequest', id, request: command.request });
+	}
 }

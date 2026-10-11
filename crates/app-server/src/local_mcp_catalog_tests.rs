@@ -101,6 +101,8 @@ impl McpServer {
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
                     Err(error) => panic!("accept MCP request: {error}"),
                 };
+                // Accepted sockets inherit the listener's nonblocking mode on macOS.
+                socket.set_nonblocking(false).unwrap();
                 socket.set_read_timeout(Some(WAIT)).unwrap();
                 socket.set_write_timeout(Some(WAIT)).unwrap();
                 let mut reader = BufReader::new(socket.try_clone().unwrap());

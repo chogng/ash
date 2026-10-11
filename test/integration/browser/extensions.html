@@ -5,14 +5,13 @@
 		<title>Extensions integration</title>
 		<style>
 			:root { --ash-strokeThickness: 1px; --ash-input-border: #888; --ash-input-foreground: #222; --ash-input-background: #fff; --ash-focusBorder: #165dba; --ash-dialog-border: #777; --ash-dialog-background: #fff; --ash-dialog-shadow: #999; --ash-dialog-backdropBackground: #0005; --ash-foreground: #111; }
-			body { font-family: sans-serif; } main { display: flex; gap: 12px; } main > div { width: 360px; min-width: 0; height: 650px; }
+			body { font-family: sans-serif; background: var(--ash-editor-background); color: var(--ash-foreground); } main { display: flex; gap: 12px; } main > div { width: 360px; min-width: 0; height: 650px; }
 		</style>
 	</head>
 	<body>
 		<main>
 			<div id="extensions"></div>
 			<div id="details"></div>
-			<div id="skills"></div>
 			<div id="lsp"></div>
 		</main>
 		<script type="module" src="./extensions.integration.ts"></script>

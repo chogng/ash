@@ -31,7 +31,7 @@ export interface PluginCatalogView {
 	readonly packages: readonly PluginPackageView[];
 }
 
-export interface IPluginService {
+export interface IPluginManagementService {
 	readonly onDidChange: Event<number>;
 	list(): Promise<PluginCatalogView>;
 	/** Path is relative to the selected authorized directory; installation does not activate it. */
@@ -43,4 +43,4 @@ export interface IPluginService {
 	uninstall(plugin: PluginPackageView, revision: number): Promise<void>;
 }
 
-export const IPluginService = createServiceIdentifier<IPluginService>("pluginService");
+export const IPluginManagementService = createServiceIdentifier<IPluginManagementService>("pluginManagementService");

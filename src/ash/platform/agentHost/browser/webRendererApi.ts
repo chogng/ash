@@ -33,7 +33,7 @@ import { createAppServerCodebaseSymbolsApi } from "../../codebaseSymbols/browser
 import { createAppServerConnectorApi, type BrowserConnectorHostServices } from "../../connectors/browser/connectorApi.js";
 import { createAppServerToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createAppServerLanguageApi } from "../../language/browser/languageApi.js";
-import { createAppServerPluginApi } from "../../plugins/browser/pluginApi.js";
+import { createAppServerPluginManagementApi } from "../../extensionManagement/browser/pluginManagementApi.js";
 import { createAppServerExtensionHostApi } from './extensionHostApi.js';
 import { createAppServerExtensionManagementApi } from "../../extensionManagement/browser/extensionManagementApi.js";
 import { createAppServerDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
@@ -134,7 +134,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		codebase: createAppServerCodebaseApi(connection),
 		codebaseSymbols: createAppServerCodebaseSymbolsApi(connection),
 		connectors: createAppServerConnectorApi(connection, connectorHostServices),
-		plugins: createAppServerPluginApi(connection),
+		plugins: createAppServerPluginManagementApi(connection),
 		extensionManagement: createAppServerExtensionManagementApi(connection),
 		toolSearch: createAppServerToolSearchApi(connection),
 		dirPermissions: createAppServerDirPermissionsApi(connection),

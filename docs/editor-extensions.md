@@ -98,6 +98,10 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 
 产品统一使用 Extensions / 扩展作为获取、安装、更新和管理入口。远端来源只有两种协议：Open VSX 提供标准 VSIX；Ash 开放扩展源提供 Rust Provider、Skills、MCP、Connectors、主题、语言和多能力 Plugin bundle。每种协议可以配置多个命名来源，Ash 官方源、社区源和企业内部源使用同一个开放协议。Rust 是执行形态，不是来源类型；内置和本地内容保留来源身份，通过相同领域契约消费。
 
+Desktop 的 Extensions 入口包含可折叠的 Extensions、Plugins、Skills、MCP Servers 和 Recommended 窗格，选中项在右侧编辑器打开详情；Skills 管理由此入口承载。前端本地 Plugin 包管理契约归 `platform/extensionManagement`，后端仍拥有安装、启用和授权状态。
+
+Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根工作区文件中的顶层 `extensions` 对象。配置支持 JSONC，`recommendations` 声明推荐 ID，`unwantedRecommendations` 排除 ID；合并时忽略大小写并去重，任一工作区声明的排除项适用于合并结果。标准 Open VSX 扩展可使用 `publisher.name`，Ash 包使用目录中的完整 ID。读取遵循当前文件服务的授权范围，不可访问的配置会显示诊断。文件修改自动刷新；无效编辑显示诊断并保留当前工作区的上次有效配置，删除文件则清空对应声明。推荐只提供发现入口，安装和权限审核继续由包详情处理。
+
 扩展包是安装、更新和卸载单位，capability 是发现和使用单位。Plugin 表示组合多种 capability 的包。纯 Skill 保留标准 `SKILL.md`，由 Skills authority 校验并加载；包含 executable Provider 的能力才进入 `external-ext`。Connector 账号、MCP 会话、Skill 上下文和编辑器文档分别保留原领域 owner。
 
 | Owner          | 职责                                                                             |

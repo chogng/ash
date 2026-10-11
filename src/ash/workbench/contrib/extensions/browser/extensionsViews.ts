@@ -3,8 +3,9 @@ import { mainWindow } from '../../../../base/browser/window.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { List } from '../../../../base/browser/ui/list/listWidget.js';
-import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
-import { DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { getHoverDelegate, type IManagedHover } from '../../../../base/browser/ui/hover/hoverDelegate.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -12,39 +13,50 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import { IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, type ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
-import { ExtensionsCapabilityInput, type ExtensionsCapabilityTarget } from '../common/extensionsInput.js';
+import { ExtensionsInput, ExtensionsCapabilityInput, type ExtensionsCapabilityTarget } from '../common/extensionsInput.js';
+import { IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import './extensions.css';
 
-interface CapabilityListSnapshot {
-	readonly items: readonly CapabilityListItem[];
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Skills, defaultValue: true,
+	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Skills accessibility verbosity must be boolean'); } return value; },
+	setting: { valueType: 'boolean', title: localize({ bundle: 'ash.extensions', key: 'skillsVerbosityTitle' }, 'Skills accessibility help'), description: localize({ bundle: 'ash.extensions', key: 'skillsVerbosityDescription' }, 'Announce keyboard help when Skills receives focus.') },
+});
+
+interface ExtensionsListSnapshot {
+	readonly items: readonly ExtensionsListItem[];
 	readonly note?: string;
 }
 
-interface CapabilityListItem {
-	readonly target: ExtensionsCapabilityTarget;
+interface ExtensionsListItem {
+	readonly target: ExtensionsCapabilityTarget | { readonly kind: 'recommendation'; readonly id: string; readonly summary?: ExtensionsPackageSummary; };
 	readonly name: string;
 	readonly description: string;
 	readonly metadata: string;
 }
 
 /** Each pane retains navigation only; capability state is read from its domain owner. */
-abstract class ExtensionsCapabilityViewPane extends ViewPane {
+abstract class ExtensionsListViewPane extends ViewPane {
 	private readonly query: InputBox;
-	private readonly list: List<CapabilityListItem>;
+	private readonly list: List<ExtensionsListItem>;
 	protected readonly status: HTMLElement;
+	private readonly statusHover: IManagedHover;
 	private readonly rows = this._register(new DisposableMap<HTMLDivElement, DisposableStore>());
-	private items: readonly CapabilityListItem[] = [];
+	private items: readonly ExtensionsListItem[] = [];
 	private generation = 0;
+	private readonly loadLifetime = this._register(new MutableDisposable());
 	private catalogNote = '';
 
-	protected constructor(container: HTMLElement, options: IViewPaneOptions, private readonly editors: IEditorService, contextKeys: IContextKeyService, configuration: IConfigurationService) {
+	protected constructor(container: HTMLElement, options: IViewPaneOptions, private readonly editors: IEditorService, contextKeys: IContextKeyService, configuration: IConfigurationService, private readonly verbositySetting = AccessibilityVerbositySettingId.Extensions) {
 		super(container, { ...options, minimumBodySize: 80 });
 		const body = h(mainWindow.document, 'section');
 		body.className = 'ash-extensions extension-capability-pane';
@@ -52,10 +64,12 @@ abstract class ExtensionsCapabilityViewPane extends ViewPane {
 		const search = h(mainWindow.document, 'div'); search.className = 'extensions-search'; body.append(search);
 		this.query = this._register(new InputBox(search, { type: 'search', presentation: 'compact', placeholder: options.title, ariaLabel: localize({ bundle: 'ash.extensions', key: 'searchPane' }, 'Search {0}', options.title) }));
 		this.status = h(mainWindow.document, 'div'); this.status.className = 'extensions-status'; this.status.setAttribute('role', 'status'); body.append(this.status);
+		this.statusHover = this._register(getHoverDelegate().setupHover({ target: this.status, content: '' }));
 		const listContainer = h(mainWindow.document, 'div'); listContainer.className = 'extensions-list'; body.append(listContainer);
+		this.trackBodyMinimum(listContainer, 64);
 		this.list = this._register(new List(listContainer, {
 			ariaLabel: options.title, domFocusable: true, keyboardNavigation: true,
-			getId: item => JSON.stringify(item.target),
+			getId: item => item.target.kind === 'recommendation' ? item.target.id : JSON.stringify(item.target),
 			accessibilityProvider: { getAriaLabel: item => `${item.name}, ${item.description}, ${item.metadata}` },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.name },
 			renderItem: (item, _index, row) => {
@@ -70,12 +84,16 @@ abstract class ExtensionsCapabilityViewPane extends ViewPane {
 			},
 			onDidRemoveRow: row => this.rows.deleteAndDispose(row),
 		}));
-		this._register(this.list.onDidAccept(({ item }) => { void this.editors.openEditor(new ExtensionsCapabilityInput(item.target)).catch(error => { if (!this.isDisposed) { this.status.textContent = String(error); } }); }));
+		this._register(this.list.onDidAccept(({ item }) => {
+			if (item.target.kind === 'recommendation' && !item.target.summary) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'recommendationUnavailable' }, 'This recommendation is currently unavailable from the enabled extension sources.'); return; }
+			const input = item.target.kind === 'recommendation' ? new ExtensionsInput(item.target.summary!) : new ExtensionsCapabilityInput(item.target);
+			void this.editors.openEditor(input).catch(error => { if (!this.isDisposed) { this.status.textContent = String(error); } });
+		}));
 		this._register(addDisposableListener(this.list.element, 'keydown', event => { if (event.key === 'Enter' && event.target === this.list.element) { event.preventDefault(); this.list.acceptActive(event); } }));
 		this._register(this.query.onDidChange(() => this.filter()));
 		this._register(this.query.onKeyDown(event => { if (event.key === 'ArrowDown') { event.preventDefault(); this.list.domFocus(); } }));
-		this._register(new Button(this.headerActionsElement, { label: localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), icon: Lxicon.refresh, iconOnly: true, size: 'small', onClick: () => { void this.refresh(); } }));
-		this._register(this.onDidChangeBodyVisibility(visible => { if (visible) { void this.refresh(); } else { ++this.generation; } }));
+		this._register(new Button(this.headerActionsElement, { label: localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), icon: Lxicon.refresh, iconOnly: true, size: 'small', onClick: () => this.reload() }));
+		this._register(this.onDidChangeBodyVisibility(visible => { if (visible) { void this.refresh(); } else { ++this.generation; this.loadLifetime.clear(); } }));
 		const scope = this._register(contextKeys.createScoped(this.element)); scope.createKey('extensionsCapabilitiesFocused', true);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
@@ -84,24 +102,27 @@ abstract class ExtensionsCapabilityViewPane extends ViewPane {
 					const focused = mainWindow.document.activeElement;
 					if (!this.isBodyVisible() || !(focused instanceof HTMLElement) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.Help
-						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions contains collapsible Extensions, Plugins, Skills and MCP Servers panes. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Search within a pane, use arrow keys to select an item, and Enter to open details in the editor. Skill enablement and diagnostics are in its details. Package installation, permissions and removal are in package details. Refresh reloads the current catalog.')
-						: [this.status.textContent, ...this.list.items.map(item => `${item.name}\n${item.description}\n${item.metadata}`)].join('\n\n'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions contains collapsible Extensions, Plugins, Skills, MCP Servers and Recommended panes. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Search within a pane, use arrow keys to select an item, and Enter to open details in the editor. Skill enablement and diagnostics are in its details. Package installation, permissions and removal are in package details. Refresh reloads the current catalog.')
+						: [this.status.textContent, ...this.list.items.map(item => `${item.name}\n${item.description}\n${item.metadata}`)].join('\n\n'), () => focused.focus(), this.verbositySetting);
 				},
 			}));
 		}
-		this._register(this.onDidFocus(() => { if (configuration.getValue<boolean>('accessibility.verbosity.extensions')) { this.query.element.setAttribute('aria-description', localize({ bundle: 'ash.extensions', key: 'focusHint' }, 'Extensions. Use Tab to navigate and Alt+F1 for help.')); } else { this.query.element.removeAttribute('aria-description'); } }));
+		this._register(this.onDidFocus(() => { if (configuration.getValue<boolean>(this.verbositySetting)) { this.query.element.setAttribute('aria-description', localize({ bundle: 'ash.extensions', key: 'focusHint' }, 'Extensions. Use Tab to navigate and Alt+F1 for help.')); } else { this.query.element.removeAttribute('aria-description'); } }));
 	}
 
 	public override focus(): void { this.query.focus(); this.invalidate(); }
-	protected abstract readItems(): Promise<CapabilityListSnapshot>;
+	protected abstract readItems(signal: AbortSignal): Promise<ExtensionsListSnapshot>;
 	protected invalidate(): void { if (this.isBodyVisible()) { void this.refresh(); } }
+	protected reload(): void { void this.refresh(); }
 
 	public async refresh(): Promise<void> {
 		const generation = ++this.generation;
+		const controller = new AbortController();
+		this.loadLifetime.value = toDisposable(() => controller.abort());
 		this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…');
 		this.contentElement.setAttribute('aria-busy', 'true');
 		try {
-			const snapshot = await this.readItems();
+			const snapshot = await this.readItems(controller.signal);
 			if (this.isDisposed || generation !== this.generation) { return; }
 			this.items = snapshot.items; this.catalogNote = snapshot.note ?? ''; this.filter();
 		} catch (error) {
@@ -115,22 +136,56 @@ abstract class ExtensionsCapabilityViewPane extends ViewPane {
 		const query = this.query.value.trim().toLowerCase();
 		this.list.items = this.items.filter(item => [item.name, item.description, item.metadata].some(text => text.toLowerCase().includes(query)));
 		this.status.textContent = [localize({ bundle: 'ash.extensions', key: 'paneResults' }, '{0} items', this.list.items.length), this.catalogNote].filter(Boolean).join(' · ');
+		this.statusHover.update(this.status.textContent);
 	}
 }
 
-export class SkillsViewPane extends ExtensionsCapabilityViewPane {
+export class RecommendedExtensionsView extends ExtensionsListViewPane {
+	constructor(container: HTMLElement, options: IViewPaneOptions,
+		@IEditorService editors: IEditorService, @IContextKeyService contextKeys: IContextKeyService, @IConfigurationService configuration: IConfigurationService,
+		@IExtensionRecommendationsService private readonly recommendations: IExtensionRecommendationsService, @IExtensionManagementService private readonly extensions: IExtensionManagementService,
+	) {
+		super(container, options, editors, contextKeys, configuration);
+		this._register(recommendations.onDidChangeRecommendations(() => this.invalidate()));
+		this._register(extensions.onDidChangeInstalled(() => this.invalidate()));
+	}
+	protected override reload(): void { this.recommendations.refresh(); }
+
+	protected async readItems(signal: AbortSignal): Promise<ExtensionsListSnapshot> {
+		const snapshot = await this.recommendations.getWorkspaceRecommendations();
+		const items: ExtensionsListItem[] = [];
+		for (let index = 0; index < snapshot.recommendations.length; index += 6) {
+			if (signal.aborted) { throw new CancellationError(); }
+			items.push(...await Promise.all(snapshot.recommendations.slice(index, index + 6).map(async recommendation => {
+				let summary: ExtensionsPackageSummary | undefined;
+				try {
+					const packages = await this.extensions.search(recommendation.extensionId, { limit: 20 });
+					// Open VSX packages carry a registry suffix while workspace declarations use publisher.name.
+					summary = packages.find(entry => entry.id.toLowerCase() === recommendation.extensionId || entry.id.toLowerCase().replace(/@open-vsx$/u, '') === recommendation.extensionId);
+				} catch { /* Keep declared IDs visible while their catalog source is unavailable. */ }
+				return {
+					target: { kind: 'recommendation' as const, id: recommendation.extensionId, summary }, name: summary?.displayName ?? recommendation.extensionId,
+					description: recommendation.reason.reasonText, metadata: summary?.id ?? localize({ bundle: 'ash.extensions', key: 'recommendationNotFound' }, 'Unavailable from enabled sources'),
+				};
+			})));
+		}
+		return { items, note: [...snapshot.diagnostics, ...(!items.length ? [snapshot.resources.length ? localize({ bundle: 'ash.extensions', key: 'workspaceRecommendationsEmpty' }, 'Add recommendations to .ash/extensions.json or the extensions field in the workspace file.') : localize({ bundle: 'ash.extensions', key: 'recommendationsNoWorkspace' }, 'Open a workspace to see its recommendations.')] : [])].join('\n') };
+	}
+}
+
+export class SkillsViewPane extends ExtensionsListViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions,
 		@IEditorService editors: IEditorService, @IContextKeyService contextKeys: IContextKeyService, @IConfigurationService configuration: IConfigurationService,
 		@IPromptsService private readonly prompts: IPromptsService, @IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
 		@IExtensionManagementService extensions: IExtensionManagementService,
 	) {
-		super(container, options, editors, contextKeys, configuration);
+		super(container, options, editors, contextKeys, configuration, AccessibilityVerbositySettingId.Skills);
 		this._register(prompts.onDidChangeSkills(() => this.invalidate()));
 		this._register(extensions.onDidChangeInstalled(() => this.invalidate()));
 		this._register(editors.onDidActiveEditorChange(() => this.invalidate()));
 	}
 
-	protected async readItems(): Promise<CapabilityListSnapshot> {
+	protected async readItems(): Promise<ExtensionsListSnapshot> {
 		const sessionId = this.sessions.getActiveConversation()?.sessionId;
 		const snapshot = await this.prompts.readSkillManagement(sessionId);
 		if (sessionId !== this.sessions.getActiveConversation()?.sessionId) { throw new Error(localize({ bundle: 'ash.extensions', key: 'skillScopeChanged' }, 'The active conversation changed. Refresh Skills.')); }
@@ -143,7 +198,7 @@ export class SkillsViewPane extends ExtensionsCapabilityViewPane {
 	}
 }
 
-export class McpServersViewPane extends ExtensionsCapabilityViewPane {
+export class McpServersViewPane extends ExtensionsListViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions,
 		@IEditorService editors: IEditorService, @IContextKeyService contextKeys: IContextKeyService, @IConfigurationService configuration: IConfigurationService,
 		@IExtensionManagementService private readonly extensions: IExtensionManagementService, @IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
@@ -152,16 +207,17 @@ export class McpServersViewPane extends ExtensionsCapabilityViewPane {
 		this._register(extensions.onDidChangeInstalled(() => this.invalidate()));
 	}
 
-	protected async readItems(): Promise<CapabilityListSnapshot> {
+	protected async readItems(): Promise<ExtensionsListSnapshot> {
 		const installed = await this.extensions.listInstalled();
-		const items: CapabilityListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp').map(capability => ({
-			target: { kind: 'mcp' as const, serverId: capability.id, installationId: installation.installationId, capabilityId: capability.reference.id },
-			name: capability.id, description: installation.package.id, metadata: localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),
+		// Installed MCP providers use the backend package namespace; registered tool sets carry that same server ID.
+		const items: ExtensionsListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp').map(capability => ({
+			target: { kind: 'mcp' as const, serverId: `marketplace:${installation.package.id}:mcp:${capability.id}`, installationId: installation.installationId, capabilityId: capability.reference.id },
+			name: capability.id, description: `${installation.package.id} · ${installation.package.version}`, metadata: installation.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),
 		})));
 		if (this.capabilities.isAvailable) {
 			const catalog = await this.capabilities.read();
 			for (const set of catalog.toolSets.filter(set => set.source === 'mcp')) {
-				if (items.some(item => item.name === set.sourceId)) { continue; }
+				if (items.some(item => item.target.kind === 'mcp' && item.target.serverId === set.sourceId)) { continue; }
 				items.push({ target: { kind: 'mcp', serverId: set.sourceId }, name: set.sourceId, description: localize({ bundle: 'ash.extensions', key: 'mcpToolsCount' }, '{0} registered tools', set.tools.length), metadata: localize({ bundle: 'ash.extensions', key: 'mcpRegistered' }, 'Registered') });
 			}
 		}

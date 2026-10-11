@@ -26,9 +26,6 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 			'sessions.settings.voice': '语音',
 			'sessions.settings.customize': '自定义',
 			'sessions.customize.settings': '设置',
-			'skills.title': '技能',
-			'skills.enable': '启用技能',
-			'skills.disable': '停用技能',
 			'sessions.settings.agents': '智能体',
 			'sessions.settings.models': '模型',
 			'sessions.settings.gitPrs': 'Git 与 PR',
@@ -37,7 +34,6 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 			'sessions.settings.tab': '标签页',
 			'sessions.settings.codeIntelligence': '代码智能',
 			'sessions.settings.environment': '环境',
-			'sessions.settings.plugins': '插件',
 			'sessions.settings.shortcuts': '快捷键',
 			'sessions.settings.archivedChats': '已归档聊天',
 		})) {

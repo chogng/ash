@@ -206,12 +206,12 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		const runtime = this.snapshot.extensions.find(extension => extension.id === id);
 		if (!runtime || runtime.activationGeneration !== activationGeneration) { return; }
 		this.workers.deleteAndDispose(id);
-		this.snapshot = normalizeExtensionHostSnapshot({
+		this.snapshot = {
 			generation: this.snapshot.generation + 1,
 			extensions: this.snapshot.extensions.map(extension => extension.id === id
 				? { ...extension, lifecycle: 'failed', failure: { code: 'hostExited', message: error.message, incarnation: extension.incarnation }, registrations: [] }
 				: extension),
-		});
+		};
 		this.changes.fire(++this.snapshotGeneration);
 	}
 }
@@ -259,7 +259,12 @@ class BrowserExtensionWorker extends Disposable {
 				webviewResources.deleteAndDispose(message.url);
 				return;
 			}
-			if (message?.type === 'clientCancel') { clients.get(message.id)?.abort(); return; }
+			if (message?.type === 'clientCancel') {
+				const client = clients.get(message.id);
+				clients.delete(message.id);
+				client?.abort();
+				return;
+			}
 			if (message?.type === 'clientRequest') {
 				if (!Number.isSafeInteger(message.id) || message.id <= 0 || clients.has(message.id) || clients.size >= 32) {
 					this.fail(new TypeError('Invalid browser extension client request ID'));

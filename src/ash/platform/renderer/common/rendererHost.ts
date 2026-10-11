@@ -30,7 +30,7 @@ import type { ICodebaseApi } from "../../codebase/common/codebaseApi.js";
 import type { IConnectorApi } from "../../connectors/common/connectorApi.js";
 import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";
 import type { ILanguageApi } from "../../language/common/languageApi.js";
-import type { IPluginApi } from "../../plugins/common/pluginApi.js";
+import type { IPluginManagementApi } from "../../extensionManagement/common/pluginManagementApi.js";
 import type { IDebugAdapterProcessService } from "../../debug/common/debugAdapterProcessService.js";
 import type { IExtensionHostApi } from '../../agentHost/common/extensionHostApi.js';
 import type { ICodebaseSymbolsApi } from "../../codebaseSymbols/common/codebaseSymbolsApi.js";
@@ -118,7 +118,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly codebase: ICodebaseApi;
 	readonly codebaseSymbols: ICodebaseSymbolsApi;
 	readonly connectors: IConnectorApi;
-	readonly plugins: IPluginApi;
+	readonly plugins: IPluginManagementApi;
 	readonly extensionManagement: IExtensionManagementApi;
 	readonly toolSearch: IToolSearchApi;
 	readonly dirPermissions: IDirPermissionsApi;

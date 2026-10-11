@@ -24,7 +24,7 @@ import { createDisconnectedCodebaseSymbolsApi } from "../../codebaseSymbols/brow
 import { createDisconnectedConnectorApi } from "../../connectors/browser/connectorApi.js";
 import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
-import { createDisconnectedPluginApi } from "../../plugins/browser/pluginApi.js";
+import { createDisconnectedPluginManagementApi } from "../../extensionManagement/browser/pluginManagementApi.js";
 import { createDisconnectedExtensionHostApi } from './extensionHostApi.js';
 import { createDisconnectedExtensionsApi } from "../../extensionManagement/browser/extensionManagementApi.js";
 import { createDisconnectedDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
@@ -80,7 +80,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		codebase: createDisconnectedCodebaseApi(unavailableOperation),
 		codebaseSymbols: createDisconnectedCodebaseSymbolsApi(unavailableOperation),
 		connectors: createDisconnectedConnectorApi(unavailableOperation),
-		plugins: createDisconnectedPluginApi(unavailableOperation),
+		plugins: createDisconnectedPluginManagementApi(unavailableOperation),
 		extensionManagement: createDisconnectedExtensionsApi(unavailableOperation),
 		toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
 		dirPermissions: createDisconnectedDirPermissionsApi(unavailableOperation),

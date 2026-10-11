@@ -1,5 +1,54 @@
 import { expect, test } from '@playwright/test';
 
+for (const [locale, title, reason] of [['en', 'Recommended', 'Recommended by this workspace'], ['zh-CN', '推荐', '此工作区推荐']]) {
+	test(`Workspace recommendations open package details by keyboard in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}`);
+		await page.locator('#extensions').getByRole('button', { name: title, exact: true }).click();
+		const recommended = page.locator('[data-view-id="ash.extensions.recommended"]');
+		await expect(recommended.getByRole('option')).toHaveCount(2);
+		await expect(recommended.getByRole('option').filter({ hasText: reason })).toHaveCount(2);
+		await expect(recommended).not.toContainText('excluded/tool');
+		await recommended.getByRole('searchbox').fill('Sample');
+		await expect(recommended.getByRole('option')).toHaveCount(1);
+		await recommended.getByRole('searchbox').press('ArrowDown');
+		await page.keyboard.press('Enter');
+		await expect(page.locator('.ash-extension-editor')).toContainText('Sample editor extension');
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'get' && entry[1].packageId === 'publisher.sample@open-vsx'))).toBe(true);
+	});
+}
+
+test('Recommendations follow file edits, preserve valid declarations during invalid edits and clear on workspace replacement', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.locator('#extensions').getByRole('button', { name: 'Recommended', exact: true }).click();
+	const recommended = page.locator('[data-view-id="ash.extensions.recommended"]');
+	await expect(recommended.getByRole('option')).toHaveCount(2);
+	await page.evaluate(() => window.ashExtensionsIntegration.setRecommendations('{"recommendations":["example/web"]}'));
+	await expect(recommended.getByRole('option')).toHaveCount(1);
+	await page.evaluate(() => window.ashExtensionsIntegration.setRecommendations('{'));
+	await expect(recommended.getByRole('status')).toContainText('Could not read recommendations');
+	await expect(recommended.getByRole('option')).toHaveCount(1);
+	await page.evaluate(() => window.ashExtensionsIntegration.setRecommendations('{"recommendations":["missing/tool"]}'));
+	await expect(recommended.getByRole('option')).toContainText('missing/tool');
+	await expect(recommended.getByRole('option')).toContainText('Unavailable from enabled sources');
+	await recommended.getByRole('option').click();
+	await expect(recommended.getByRole('status')).toContainText('This recommendation is currently unavailable');
+	await expect(page.locator('.ash-extension-editor')).toHaveCount(0);
+	await page.evaluate(() => window.ashExtensionsIntegration.leaveWorkspace());
+	await expect(recommended.getByRole('option')).toHaveCount(0);
+	await expect(recommended.getByRole('status')).toContainText('Open a workspace');
+});
+
+test('Recommendations retain declared IDs when the catalog is offline', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => window.ashExtensionsIntegration.setOffline());
+	await page.locator('#extensions').getByRole('button', { name: 'Recommended', exact: true }).click();
+	const recommended = page.locator('[data-view-id="ash.extensions.recommended"]');
+	await expect(recommended.getByRole('option')).toHaveCount(2);
+	await expect(recommended).toContainText('example/web');
+	await expect(recommended).toContainText('publisher.sample');
+	await expect(recommended.getByRole('option').filter({ hasText: 'Unavailable from enabled sources' })).toHaveCount(2);
+});
+
 test('Extensions retains its list when wrapped filters share a short view container', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -277,7 +326,7 @@ for (const [locale, skillsTitle, disable, enable, openInstructions] of [
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/extensions.html?locale=${locale}`);
-		await expect(page.locator('#extensions .ash-pane-view-header-button')).toHaveCount(4);
+		await expect(page.locator('#extensions .ash-pane-view-header-button')).toHaveCount(5);
 		const skills = page.locator('[data-view-id="ash.extensions.skills"]');
 		const header = skills.getByRole('button', { name: skillsTitle, exact: true });
 		await expect(header).toHaveAttribute('aria-expanded', 'false');
@@ -332,3 +381,42 @@ test('Plugins pane includes packages without editor extensions and retains indep
 	await expect(plugins.getByRole('searchbox')).toHaveValue('skills');
 	await expect(page.locator('[data-view-id="ash.extensions.view"]').getByRole('searchbox')).toHaveValue('');
 });
+
+test('Changing the selected capability aborts a pending instructions read and discards its document', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
+	await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
+	await page.evaluate(() => window.ashExtensionsIntegration.holdInstructions());
+	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Open instructions', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.instructionsStarted())).toBe(true);
+	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+	await mcp.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+	await mcp.getByRole('option').click();
+	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.instructionsAborted())).toBe(true);
+	await page.evaluate(() => window.ashExtensionsIntegration.completeInstructions());
+	await expect(page.locator('.ash-extension-editor')).toContainText('fixture_search');
+	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document'))).toEqual([]);
+});
+
+for (const theme of ['light', 'dark', 'hc']) {
+	test(`Extensions pane layout and details remain usable in ${theme}`, async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 840 });
+		await page.goto(`/extensions.html?preview&theme=${theme}`);
+		await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.addSkillOnlyPlugin(); });
+		for (const name of ['Plugins', 'Skills', 'MCP Servers']) {
+			await page.locator('#extensions').getByRole('button', { name, exact: true }).click();
+		}
+		await page.locator('[data-view-id="ash.extensions.mcp"]').getByRole('option').click();
+		await expect(page.locator('.ash-extension-editor')).toContainText('fixture_search');
+		for (const viewId of ['view', 'plugins', 'skills', 'mcp']) {
+			const view = page.locator(`[data-view-id="ash.extensions.${viewId}"]`);
+			await expect(view.getByRole('listbox')).toBeVisible();
+			await expect.poll(() => view.locator('.extensions-list').evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(64);
+		}
+		const boundary = page.locator('#extensions .ash-split-view-pane').nth(1);
+		const separator = await boundary.evaluate(element => { const style = getComputedStyle(element, '::before'); return { height: style.height, color: style.backgroundColor }; });
+		expect(separator.height).toBe('1px');
+		expect(separator.color).not.toBe('rgba(0, 0, 0, 0)');
+		await page.screenshot({ path: `.build/desktop/ui-previews/extensions-panes-${theme}.png` });
+	});
+}

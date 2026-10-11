@@ -41,7 +41,8 @@ export interface ElectronConfiguration {
 
 /** Resolves the Electron executable, arguments, and environment for a test run. */
 export function resolveElectronConfiguration(options: ElectronLaunchOptions): ElectronConfiguration {
-	const desktopDirectory = options.desktopDirectory ?? resolve(import.meta.dirname, "../..");
+	// A long smoke run can pin a copy of this checkout's prepared product artifacts.
+	const desktopDirectory = options.desktopDirectory ?? (options.environment ?? process.env).ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve(import.meta.dirname, "../..");
 	const bundle = options.packagedBundle && resolve(options.packagedBundle);
 	const resourcesPath = bundle ? process.platform === 'darwin' ? join(bundle, 'Contents', 'Resources') : join(bundle, 'resources') : '';
 	const electronExecutablePath = bundle

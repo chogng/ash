@@ -115,3 +115,9 @@
 	white-space: pre-wrap;
 	line-height: 1.6;
 }
+
+.extension-capability-pane .extensions-status {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}

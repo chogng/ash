@@ -1203,7 +1203,12 @@ export function createApi(configuration, initialization) {
 		const translated = bundle && Object.hasOwn(bundle, key) ? bundle[key] : message;
 		return translated.replace(/\{([^}]+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? String(values[name]) : placeholder);
 	}
-	const scmBridge = createSCMApi(ashRuntime, request, invoke, promise => serviceOwner()?.push(promise));
+	const scmBridge = createSCMApi(ashRuntime, request, invoke, promise => serviceOwner()?.push(promise), async (operation, resultKind) => {
+		// Provider state belongs to the incarnation, even when a short-lived read callback triggers it.
+		const result = JSON.parse(await globalThis.__ashBackgroundRequest(JSON.stringify(operation)));
+		if (result.result !== resultKind) throw new Error(`Invalid result for ${operation.operation}`);
+		return result;
+	});
 	let outputSequence = 0;
 	function createOutputChannel(name) {
 		if (typeof name !== 'string' || !name || name.length > 512 || name.includes('\0')) throw new TypeError('Invalid output channel label');

@@ -29,12 +29,12 @@ import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/vi
 import { ExtensionsInput, ExtensionsInputSource } from '../common/extensionsInput.js';
 import { changeExtensionPackage } from './extensionsEditor.js';
 import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
-import { IPluginService } from '../../../../platform/plugins/common/pluginService.js';
+import { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
 import { changeExtensionEnablement, extensionEnablementLabel } from './extensionsActions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewContainerLocation, type WorkbenchViewRegistry } from '../../../common/views.js';
-import { SkillsViewPane, McpServersViewPane } from './extensionsViews.js';
+import { SkillsViewPane, McpServersViewPane, RecommendedExtensionsView } from './extensionsViews.js';
 import './extensions.css';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -52,7 +52,7 @@ interface ExtensionListItem {
 }
 
 /** The Workbench and Sessions share catalog rendering; package authority stays in the backend. */
-export class ExtensionsContent extends Disposable {
+class ExtensionsContent extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
@@ -60,11 +60,12 @@ export class ExtensionsContent extends Disposable {
 	private readonly list: List<ExtensionListItem>;
 	private readonly status: HTMLElement;
 	private readonly installedButton: Button;
-	private readonly builtInButton: Button;
+	private readonly builtInButton: Button | undefined;
 	private readonly filterButton: Button;
 	private readonly rowResources = this._register(new DisposableMap<HTMLDivElement, DisposableStore>());
 	private readonly searchScheduler = this._register(new RunOnceScheduler(() => { void this.run(() => this.load()); }, 250));
 	private options: ExtensionsOpenOptions;
+	private readonly isPluginsPane: boolean;
 	private installed: readonly ExtensionsInstalledPackage[] = [];
 	private visible = false;
 	private generation = 0;
@@ -80,29 +81,32 @@ export class ExtensionsContent extends Disposable {
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@ICommandService private readonly commands: ICommandService,
 		@IGlobalExtensionEnablementService private readonly enablement: IGlobalExtensionEnablementService,
-		@IPluginService private readonly plugins: IPluginService,
+		@IPluginManagementService private readonly plugins: IPluginManagementService,
 	) {
 		super();
 		this.options = options;
+		this.isPluginsPane = options.view === 'plugins';
 		this.domNode = h(mainWindow.document, 'section'); this.domNode.className = 'ash-extensions';
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const search = h(mainWindow.document, 'div'); search.className = 'extensions-search'; this.domNode.append(search);
-		this.query = this._register(new InputBox(search, { type: 'search', presentation: 'compact', placeholder: localize({ bundle: 'ash.extensions', key: 'searchPackages' }, 'Search extensions'), ariaLabel: localize({ bundle: 'ash.extensions', key: 'searchExtensions' }, 'Search Extensions') }));
+		this.query = this._register(new InputBox(search, { type: 'search', presentation: 'compact', placeholder: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search plugins') : localize({ bundle: 'ash.extensions', key: 'searchPackages' }, 'Search extensions'), ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search plugins') : localize({ bundle: 'ash.extensions', key: 'searchExtensions' }, 'Search Extensions') }));
 		this.query.value = options.query ?? '';
 		const controlsHost = h(mainWindow.document, 'div'); controlsHost.className = 'extensions-controls-host'; this.domNode.append(controlsHost);
 		const controlsScroll = this._register(new ScrollableElement(controlsHost, { direction: 'horizontal', tabIndex: -1, wheel: { consume: 'when-scrolling' } }));
 		const controls = h(mainWindow.document, 'div'); controls.className = 'extensions-controls'; controlsScroll.contentElement.append(controls);
-		this.installedButton = this._register(new Button(controls, { label: localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'), size: 'small', checked: options.mode === 'installed', onClick: () => { this.options = { ...this.options, mode: this.options.mode === 'installed' ? 'browse' : 'installed' }; this.installedButton.checked = this.options.mode === 'installed'; this.builtInButton.checked = false; void this.run(() => this.load()); } }));
-		this.builtInButton = this._register(new Button(controls, { label: localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in'), size: 'small', checked: options.mode === 'builtIn', onClick: () => { this.options = { ...this.options, mode: this.options.mode === 'builtIn' ? 'browse' : 'builtIn' }; this.builtInButton.checked = this.options.mode === 'builtIn'; this.installedButton.checked = false; void this.run(() => this.load()); } }));
-		this._register(new Button(controls, { label: localize({ bundle: 'ash.extensions', key: 'installLocalAction' }, 'Install local…'), size: 'small', onClick: () => { void this.run(async () => { await this.commands.executeCommand('ash.extensions.installLocal'); await this.open({ mode: 'installed' }); }); } }));
+		this.installedButton = this._register(new Button(controls, { label: localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'), size: 'small', checked: options.mode === 'installed', onClick: () => { this.options = { ...this.options, mode: this.options.mode === 'installed' ? 'browse' : 'installed' }; this.installedButton.checked = this.options.mode === 'installed'; if (this.builtInButton) { this.builtInButton.checked = false; } void this.run(() => this.load()); } }));
+		this.builtInButton = this.isPluginsPane ? undefined : this._register(new Button(controls, { label: localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in'), size: 'small', checked: options.mode === 'builtIn', onClick: () => { this.options = { ...this.options, mode: this.options.mode === 'builtIn' ? 'browse' : 'builtIn' }; if (this.builtInButton) { this.builtInButton.checked = this.options.mode === 'builtIn'; } this.installedButton.checked = false; void this.run(() => this.load()); } }));
+		if (this.isPluginsPane) {
+			this._register(new Button(controls, { label: localize({ bundle: 'ash.extensions', key: 'installLocalAction' }, 'Install local…'), size: 'small', onClick: () => { void this.run(async () => { await this.commands.executeCommand('ash.extensions.installLocal'); await this.open({ mode: 'installed' }); }); } }));
+		}
 		this.filterButton = this._register(new Button(controls, { label: this.filterLabel(), size: 'small', onClick: () => { void this.run(() => this.chooseFilter()); } }));
 		this._register(new Button(controls, { label: localize({ bundle: 'ash.extensions', key: 'sources' }, 'Sources'), size: 'small', onClick: () => { void this.run(async () => { await this.commands.executeCommand('ash.extensions.manageSources'); await this.load(); }); } }));
 		this._register(new Button(controls, { label: localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), icon: Lxicon.refresh, iconOnly: true, size: 'small', onClick: () => { void this.run(() => this.load(true)); } }));
 		this.status = h(mainWindow.document, 'div'); this.status.className = 'extensions-status'; this.status.setAttribute('role', 'status'); this.domNode.append(this.status);
 		const listContainer = h(mainWindow.document, 'div'); listContainer.className = 'extensions-list'; this.domNode.append(listContainer);
 		this.list = this._register(new List(listContainer, {
-			ariaLabel: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), domFocusable: true, keyboardNavigation: true, focusOnMouseMove: false,
+			ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Plugins') : localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), domFocusable: true, keyboardNavigation: true, focusOnMouseMove: false,
 			getId: item => `${item.source ?? ExtensionsInputSource.Registry}/${item.installation?.installationId ?? item.summary.id}/${item.summary.version}`,
 			accessibilityProvider: { getAriaLabel: item => `${item.summary.displayName}, ${item.summary.version}, ${item.summary.description}, ${item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')}` },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.summary.displayName },
@@ -129,7 +133,7 @@ export class ExtensionsContent extends Disposable {
 			type: AccessibleViewType.Help, priority: 100, name: `extensions-help-${generateUuid()}`, when: ContextKeyExpr.has('extensionsFocused'), getProvider: () => {
 				const focused = mainWindow.document.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions, Plugins, Skills and MCP Servers are collapsible panes. Use Left and Right on headers to collapse or expand them. Open /extensions to browse and manage extensions. Use Built-in for bundled extensions and Installed for market and local extensions, even offline. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Use Sources to add or pause an Ash open source. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions, Plugins, Skills, MCP Servers and Recommended are collapsible panes. Use Left and Right on headers to collapse or expand them. Open /extensions to browse and manage extensions. Use Built-in for bundled extensions and Installed for market and local extensions, even offline. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Use Sources to add or pause an Ash open source. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 			}
 		}));
 	}
@@ -137,7 +141,7 @@ export class ExtensionsContent extends Disposable {
 	public async open(options: ExtensionsOpenOptions = {}): Promise<void> {
 		if (this.working) { this.focus(); return; }
 		this.options = options; this.query.value = options.query ?? ''; this.searchScheduler.cancel();
-		this.installedButton.checked = options.mode === 'installed'; this.builtInButton.checked = options.mode === 'builtIn'; this.filterButton.label = this.filterLabel();
+		this.installedButton.checked = options.mode === 'installed'; if (this.builtInButton) { this.builtInButton.checked = options.mode === 'builtIn'; } this.filterButton.label = this.filterLabel();
 		this.focus(); await this.run(() => this.load());
 	}
 	public setVisible(visible: boolean): void { this.visible = visible; if (!visible) { ++this.generation; this.searchScheduler.cancel(); } else if (!this.loaded) { void this.run(() => this.load()); } }
@@ -214,16 +218,16 @@ export class ExtensionsContent extends Disposable {
 					};
 				});
 			} else if (isInstalled) {
-				items = installed.filter(entry => (this.options.view !== 'plugins' || !entry.capabilities.some(capability => capability.kind === 'editorExtension')) && (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
+				items = installed.filter(entry => (!this.isPluginsPane || !entry.capabilities.some(capability => capability.kind === 'editorExtension')) && (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
 					const policy = policies.extensions.find(value => value.installationId === installation.installationId);
 					return { installation, enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: installation.package.id.split('@')[0], packageType: 'installed', description: installation.capabilities.map(capability => capability.kind).join(' · ') } };
 				});
-				if (this.options.view === 'plugins' || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
+				if (this.isPluginsPane || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
 					const catalog = await this.plugins.list();
-					items.push(...catalog.packages.filter(plugin => this.options.view === 'plugins' || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, description: this.options.view === 'plugins' ? localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') : localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
+					items.push(...catalog.packages.filter(plugin => this.isPluginsPane || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, description: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') : localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
 				}
 			} else {
-				const options = { limit: 200, packageType: this.options.view === 'plugins' ? 'plugin' : undefined, capabilityKind: this.options.capabilityKind, languageId: this.options.languageId };
+				const options = { limit: 200, packageType: this.isPluginsPane ? 'plugin' : undefined, capabilityKind: this.options.capabilityKind, languageId: this.options.languageId };
 				const snapshot = await (refresh ? this.extensionManagement.refreshBrowse(query, options) : this.extensionManagement.browse(query, options));
 				unavailableSources = snapshot.unavailableSources;
 				items = snapshot.packages.map(entry => {
@@ -236,7 +240,13 @@ export class ExtensionsContent extends Disposable {
 			this.installed = installed;
 			this.list.items = this.options.mode === 'browse' || this.options.mode === undefined ? items : items.filter(item => [item.summary.id, item.summary.displayName, item.summary.description].some(value => value.toLowerCase().includes(query.toLowerCase())));
 			this.loaded = true;
-			this.status.textContent = unavailableSources.length ? localize({ bundle: 'ash.extensions', key: 'sourcesUnavailable' }, 'Some sources are unavailable: {0}', unavailableSources.join(', ')) : this.list.items.length ? localize({ bundle: 'ash.extensions', key: 'results' }, '{0} extensions', this.list.items.length) : localize({ bundle: 'ash.extensions', key: 'noMatching' }, 'No matching extensions.');
+			if (unavailableSources.length) {
+				this.status.textContent = localize({ bundle: 'ash.extensions', key: 'sourcesUnavailable' }, 'Some sources are unavailable: {0}', unavailableSources.join(', '));
+			} else if (this.list.items.length) {
+				this.status.textContent = this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginResults' }, '{0} plugins', this.list.items.length) : localize({ bundle: 'ash.extensions', key: 'results' }, '{0} extensions', this.list.items.length);
+			} else {
+				this.status.textContent = this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'noMatchingPlugins' }, 'No matching plugins.') : localize({ bundle: 'ash.extensions', key: 'noMatching' }, 'No matching extensions.');
+			}
 			this.changed.fire();
 		} catch (error) { if (!this.isDisposed && generation === this.generation) { throw error; } }
 		finally { if (!this.isDisposed && generation === this.generation) { this.domNode.setAttribute('aria-busy', 'false'); } }
@@ -262,8 +272,8 @@ export class ExtensionsContent extends Disposable {
 
 export class ExtensionsViewPane extends ViewPane {
 	private readonly content: ExtensionsContent;
-	constructor(container: HTMLElement, options: IViewPaneOptions, @IInstantiationService instantiation: IInstantiationService) { super(container, options); this.content = this._register(instantiation.createInstance(ExtensionsContent, this.contentElement, options.id === 'ash.extensions.plugins' ? { view: 'plugins', mode: 'installed' } : {})); this._register(this.onDidChangeBodyVisibility(visible => this.content.setVisible(visible))); }
-	public async open(options?: ExtensionsOpenOptions): Promise<void> { this.setExpanded(true); await this.content.open(this.id === 'ash.extensions.plugins' ? { ...options, view: 'plugins' } : options); }
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IInstantiationService instantiation: IInstantiationService) { super(container, { ...options, minimumBodySize: 160 }); this.content = this._register(instantiation.createInstance(ExtensionsContent, this.contentElement, options.id === 'ash.extensions.plugins' ? { view: 'plugins', mode: 'installed' } : {})); this._register(this.onDidChangeBodyVisibility(visible => this.content.setVisible(visible))); }
+	public async open(options?: ExtensionsOpenOptions): Promise<void> { this.setExpanded(true); await this.content.open(this.id === 'ash.extensions.plugins' ? { ...options, view: 'plugins', mode: options?.mode === 'builtIn' ? 'installed' : options?.mode ?? 'installed' } : options); }
 	public override focus(): void { this.content.focus(); }
 }
 
@@ -276,6 +286,7 @@ export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry,
 		{ id: 'ash.extensions.plugins', title: localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Plugins'), canToggleVisibility: false, order: 1, collapsed: true, ctorDescriptor: new SyncDescriptor(ExtensionsViewPane) },
 		{ id: 'ash.extensions.skills', title: localize({ bundle: 'ash.extensions', key: 'filterSkills' }, 'Skills'), canToggleVisibility: false, order: 2, collapsed: true, ctorDescriptor: new SyncDescriptor(SkillsViewPane) },
 		{ id: 'ash.extensions.mcp', title: localize({ bundle: 'ash.extensions', key: 'mcpPane' }, 'MCP Servers'), canToggleVisibility: false, order: 3, collapsed: true, ctorDescriptor: new SyncDescriptor(McpServersViewPane) },
+		{ id: 'ash.extensions.recommended', title: localize({ bundle: 'ash.extensions', key: 'recommendedPane' }, 'Recommended'), canToggleVisibility: false, order: 4, collapsed: true, ctorDescriptor: new SyncDescriptor(RecommendedExtensionsView) },
 	]));
 	return registrations;
 }

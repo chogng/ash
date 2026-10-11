@@ -1,5 +1,5 @@
 import { editors } from 'ash';
-import { commands, window } from 'vscode';
+import { commands } from 'vscode';
 import { URI, type IResourceEditorInput, type EditorOpenOptions, type EditorOpenTarget } from '../../../sdk/browser/index.js';
 export interface CommandClient { executeCommand<T = unknown>(command: string, ...args: readonly unknown[]): Promise<T>; }
 export interface DialogClient { confirm(options: { title?: string; message: string; detail?: string; primaryButton?: string; }): Promise<{ confirmed: boolean; }>; }
@@ -14,12 +14,13 @@ export const workingCopyClient: WorkingCopyClient = { get: uri => editors.reques
 function encode(value: unknown): unknown { return JSON.parse(JSON.stringify(value, function (key, entry) { const original = this[key]; return original instanceof URI ? original.toString() : entry; })); }
 export async function input(options: { title?: string; placeHolder?: string; value?: string; validateInput?(value: string): Promise<string | undefined>; }): Promise<string | undefined> {
 	let value = options.value;
+	let validationMessage: string | undefined;
 	for (;;) {
-		const result = await editors.request<string | null>({ method: 'input', title: options.title, placeHolder: options.placeHolder, value });
+		const result = await editors.request<string | null>({ method: 'input', title: options.title, placeHolder: options.placeHolder, value, validationMessage });
 		if (result === null) { return undefined; }
 		const error = await options.validateInput?.(result);
 		if (!error) { return result; }
-		await window.showErrorMessage(error);
+		validationMessage = error;
 		value = result;
 	}
 }

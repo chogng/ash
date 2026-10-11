@@ -56,6 +56,8 @@ import { IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { registerExtensionManagementActions } from '../../workbench/contrib/extensions/browser/extensionsActions.js';
 import { AppServerExtensionManagementService } from '../../workbench/services/extensionManagement/browser/appServerExtensionManagementService.js';
+import { IPluginManagementService } from '../../platform/extensionManagement/common/pluginManagementService.js';
+import { AppServerPluginManagementService } from '../../workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
 import { IAppServerRemoteAgentService } from '../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -308,6 +310,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
+		services.registerInstance(IPluginManagementService, this._register(new AppServerPluginManagementService(options.api.plugins, options.api.events)));
 		const languagePacks = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePacks);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
@@ -526,14 +529,14 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
 		this._register(registerExtensionManagementActions());
 		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, () => { void commandService.executeCommand('sessions.open.code').catch(error => notificationService.error(String(error))); }));
-		this._register(registerExtensionsViewContainer(SessionsViewRegistry, ViewContainerLocation.AuxiliaryBar));
+		this._register(registerExtensionsViewContainer(SessionsViewRegistry, ViewContainerLocation.Sidebar));
 		const openExtensions = async (options: ExtensionsOpenOptions): Promise<void> => {
 			await commandService.executeCommand('sessions.open.code');
 			const viewId = options.view && options.view !== 'extensions' ? `ash.extensions.${options.view}` : 'ash.extensions.view';
 			const view = await services.get(IViewsService).openView(viewId, true);
 			if (view instanceof ExtensionsViewPane) { void view.open(options); }
 		};
-		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, () => openExtensions({ view: 'plugins', mode: 'installed' })));
+		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, (_accessor, options) => openExtensions({ ...options as ExtensionsOpenOptions | undefined, view: 'plugins', mode: 'installed' })));
 		this._register(CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, value: unknown) => {
 			const options = value as ExtensionsOpenOptions | string | undefined;
 			return openExtensions(typeof options === 'string' ? { query: options.trim() } : { mode: 'browse', ...options });

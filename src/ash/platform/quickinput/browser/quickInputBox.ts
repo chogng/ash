@@ -25,6 +25,7 @@ export class QuickInputBox extends Disposable {
 		}));
 		this.inputBox.element.classList.add('ash-quick-pick-input');
 		if (options.value !== undefined) this.inputBox.value = options.value;
+		if (options.validationMessage) this.inputBox.showValidation(options.validationMessage);
 		this.onDidAccept = this.acceptEmitter.event;
 		this.onDidCancel = this.cancelEmitter.event;
 		this.onDidError = this.errorEmitter.event;

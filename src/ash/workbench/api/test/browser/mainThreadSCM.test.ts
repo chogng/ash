@@ -53,6 +53,33 @@ test('SCM input completion preserves a draft edited while the command was runnin
 	assert.equal(await accepting, 'committed'); assert.equal(input.value, 'next commit');
 });
 
+test('SCM refresh keeps newer drafts separate from its asynchronous callback', async () => {
+	const started = new DeferredPromise<void>();
+	const completion = new DeferredPromise<JsonValue>();
+	const calls: JsonValue[] = [];
+	const value = fixture(async request => {
+		calls.push(request.payload);
+		if ((request.payload as { method: string; }).method === 'refresh') {
+			started.complete();
+			return completion.p;
+		}
+		return null;
+	});
+	using cleanup = value.lifetime;
+	const repository = value.scm.getRepository('repo')!;
+	repository.provider.input.value = 'first draft';
+	const refreshing = repository.provider.refresh();
+	await started.p;
+	repository.provider.input.value = 'newer draft';
+	value.bridge.set(source, 'ash.scm', 2, [provider('first draft', 1)]);
+	assert.equal(repository.provider.input.value, 'newer draft');
+	const callback = calls.find(call => (call as { method: string; }).method === 'refresh') as Record<string, JsonValue>;
+	assert.equal('value' in callback, false);
+	completion.complete(null);
+	await refreshing;
+	assert.equal(repository.provider.input.value, 'newer draft');
+});
+
 test('SCM resource refreshes preserve the current selection until a new selection request', () => {
 	const first = { ...(provider() as Record<string, JsonValue>), selectionRevision: 1 };
 	const second = { ...first, id: 'other', selected: false, selectionRevision: 0 };

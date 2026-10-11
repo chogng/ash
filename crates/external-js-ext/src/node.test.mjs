@@ -424,3 +424,16 @@ exports.activate = context => {
 	state = (await h.invoke('test.node', []).result).body.body.payload;
 	assert.equal(state.changes.length, 1, 'disposed listeners do not receive later commits');
 });
+
+
+test('command categories and enablement stay separate from menu titles', async t => {
+	const h = await host(t, `const v = require('vscode'); exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', () => 'ready'));`, 'extension.cjs', ['command'], undefined, {
+	 manifest: { contributes: { commands: [{ command: 'test.node', title: 'Run', category: 'Acme', enablement: '!scmBusy' }], menus: { 'scm/title': [{ command: 'test.node', group: 'navigation' }] } } }
+	});
+	const command = h.registrations.find(value => value.command === 'test.node');
+	assert.equal(command.title, 'Run');
+	assert.equal(command.category, 'Acme');
+	assert.equal(command.enablement, '!scmBusy');
+	assert.deepEqual(command.menus, [{ menu: 'scm/title', group: 'navigation' }]);
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'ready');
+});

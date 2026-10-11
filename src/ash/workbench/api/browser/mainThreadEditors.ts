@@ -56,7 +56,7 @@ export class MainThreadEditors {
 				const abort = () => cancellation.cancel();
 				signal.addEventListener('abort', abort, { once: true });
 				try {
-					const result = await this.quickInput.input({ title: optionalText(request.title), placeHolder: optionalText(request.placeHolder), value: optionalText(request.value), password: request.password === true }, cancellation.token);
+					const result = await this.quickInput.input({ title: optionalText(request.title), placeHolder: optionalText(request.placeHolder), value: optionalText(request.value), password: request.password === true, validationMessage: optionalText(request.validationMessage) }, cancellation.token);
 					signal.throwIfAborted();
 					return result ?? null;
 				}
@@ -101,7 +101,7 @@ export class MainThreadEditors {
 				const input = typeof index === 'number' ? group?.inputs[index] : group?.activeInput;
 				const pane = input === group?.activeInput ? group?.activePane : undefined;
 				const selection = isEditorPaneWithSelection(pane) ? pane.getSelection() : undefined;
-				return normalizeExtensionHostPayload({ input: input ? { resource: input.resource.toString(), modified: 'modified' in input ? { resource: (input.modified as IResourceEditorInput).resource.toString() } : null } : null, selection: selection ?? null });
+				return normalizeExtensionHostPayload({ input: input ? { resource: input.resource.toString(), modified: 'modified' in input ? { resource: (input.modified as IResourceEditorInput).resource.toString() } : null } : null, selection: selection ? { startLineNumber: selection.startLineNumber, startColumn: selection.startColumn, endLineNumber: selection.endLineNumber, endColumn: selection.endColumn } : null });
 			}
 			case 'dirty':
 			case 'diffChange':

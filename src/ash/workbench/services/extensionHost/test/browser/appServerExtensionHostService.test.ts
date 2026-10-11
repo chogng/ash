@@ -348,7 +348,7 @@ test('document callback errors do not suppress later commits and language change
 
 test('extension editor menus capture the clicked input and reject malformed replacement menus before commit', async () => {
 	const placement = { menu: 'editor/title/context', when: 'resourceLangId == markdown', group: 'navigation@1' };
-	const registration = { kind: 'command' as const, registrationId: 'preview', command: 'acme.preview', title: 'Preview', menus: [placement] };
+	const registration = { kind: 'command' as const, registrationId: 'preview', command: 'acme.preview', title: 'Preview', category: 'Acme', enablement: 'editorTextFocus', menus: [placement] };
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.old', [registration]));
 	const commands = new CommandRegistry();
 	using languages = new LanguageFeaturesService();
@@ -358,6 +358,7 @@ test('extension editor menus capture the clicked input and reject malformed repl
 	Object.assign(services.get(IEditorPart), { groups: [group], activeGroup: group });
 	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
 	await service.start();
+	assert.equal(commands.getCommands().get('acme.preview')?.metadata?.description, 'Acme: Preview');
 	await services.invokeFunction(accessor => commands.getCommand('acme.preview')!(accessor, { groupId: group.id, editorIndex: 0 }));
 	assert.deepEqual(JSON.parse(JSON.stringify(api.invocations[0]!.payload)), {
 		arguments: [{ groupId: group.id, editorIndex: 0 }],
@@ -365,6 +366,9 @@ test('extension editor menus capture the clicked input and reject malformed repl
 	});
 	const placements = MenusRegistry.getMenuItems(MenuId.EditorTitleContext).filter(item => 'command' in item && item.command.id === 'acme.preview');
 	assert.equal(placements.length, 1);
+	assert.ok('command' in placements[0]!);
+	assert.equal(placements[0].command.title, 'Preview');
+	assert.deepEqual([...placements[0].command.precondition!.keys()], ['editorTextFocus']);
 	api.current = snapshot(2, 'acme.new', [{ ...registration, menus: [{ ...placement, group: 'navigation@bad-order' }] }]);
 	await service.reload();
 	assert.equal(service.state, 'degraded');

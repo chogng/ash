@@ -17,7 +17,7 @@
   "git.menu.push": "推送",
   "git.menu.clone": "克隆",
   "git.menu.checkout": "签出到…",
-  "git.menu.fetch": "提取",
+  "git.menu.fetch": "获取",
   "git.menu.amend": "修改上次提交…",
   "git.menu.undoCommit": "撤销上次提交",
   "git.menu.stageAll": "暂存所有更改",

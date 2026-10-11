@@ -84,6 +84,7 @@ export interface IInputOptions {
 	readonly placeHolder?: string;
 	readonly value?: string;
 	readonly password?: boolean;
+	readonly validationMessage?: string;
 	readonly validateInput?: (value: string) => Promise<string | null | undefined>;
 }
 

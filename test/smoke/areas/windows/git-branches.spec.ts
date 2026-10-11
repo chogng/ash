@@ -87,6 +87,7 @@ test.describe('Git branch lifecycle', () => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		page.on('console', message => { if (message.text().startsWith('GIT REF DIAGNOSTIC')) console.log(message.text()); });
 		const history = page.locator('[data-view-id="ash.gitGraph"]');
 		await history.locator('.ash-pane-view-header').click();
 		await expect(history.getByRole('treeitem', { name: /Initial/ }).first()).toBeVisible();

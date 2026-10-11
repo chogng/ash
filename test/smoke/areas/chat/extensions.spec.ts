@@ -36,11 +36,14 @@ test('Skills command opens Extensions with keyboard help and no Settings managem
 	await expect(skills).toBeVisible();
 	await expect(page.locator('.ash-settings-editor')).toHaveCount(0);
 	await expect(skills.getByRole('button', { name: 'Skills', exact: true })).toHaveAttribute('aria-expanded', 'true');
+	const recommended = page.locator('[data-view-id="ash.extensions.recommended"]');
+	await recommended.getByRole('button', { name: 'Recommended', exact: true }).click();
+	await expect(recommended.getByRole('status')).toContainText('0 items');
 	const search = skills.getByRole('searchbox');
 	await search.focus();
 	await search.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-	await expect(help.getByRole('textbox')).toHaveValue(/collapsible Extensions, Plugins, Skills and MCP Servers panes/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/collapsible Extensions, Plugins, Skills, MCP Servers and Recommended panes/u);
 	await page.keyboard.press('Escape');
 	await expect(search).toBeFocused();
 });
@@ -52,6 +55,9 @@ test('Skills configuration command opens Extensions in the Agents window', async
 	await expect(skills).toBeVisible();
 	await expect(skills.getByRole('button', { name: 'Skills', exact: true })).toHaveAttribute('aria-expanded', 'true');
 	await expect(page.locator('.ash-sessions-settings-dialog')).toHaveCount(0);
+	const recommended = page.locator('[data-view-id="ash.extensions.recommended"]');
+	await recommended.getByRole('button', { name: 'Recommended', exact: true }).click();
+	await expect(recommended.getByRole('status')).toContainText('0 items');
 });
 
 test('Skill enablement updates Chat completion and survives a window reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {

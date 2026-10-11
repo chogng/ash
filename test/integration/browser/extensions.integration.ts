@@ -1,9 +1,11 @@
+import '../../../src/ash/base/browser/ui/styles.css';
 import { IGlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionManagement.js';
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
-import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { ExtensionsEditor } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsEditor.js';
 import { ExtensionsInput, ExtensionsCapabilityInput } from '../../../src/ash/workbench/contrib/extensions/common/extensionsInput.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
@@ -45,13 +47,23 @@ import '../../../src/ash/workbench/contrib/extensions/browser/extensions.contrib
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import { IPluginService } from '../../../src/ash/platform/plugins/common/pluginService.js';
-import type { IPluginApi } from '../../../src/ash/platform/plugins/common/pluginApi.js';
+import { IPluginManagementService } from '../../../src/ash/platform/extensionManagement/common/pluginManagementService.js';
+import type { IPluginManagementApi } from '../../../src/ash/platform/extensionManagement/common/pluginManagementApi.js';
 import type { PluginPackageDto, PluginPackageCommandParams } from '../../../.build/protocol/typescript/index.js';
-import { AppServerPluginService } from '../../../src/ash/workbench/services/plugins/browser/appServerPluginService.js';
+import { AppServerPluginManagementService } from '../../../src/ash/workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
-import { SkillsViewPane, McpServersViewPane } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViews.js';
+import { SkillsViewPane, McpServersViewPane, RecommendedExtensionsView } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViews.js';
+import { IFileService, type IFileChangeEvent } from '../../../src/ash/platform/files/common/files.js';
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { URI } from '../../../src/ash/base/common/uri.js';
+import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
+import { UriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentityService.js';
+import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } from '../../../src/ash/workbench/services/extensionRecommendations/common/workspaceExtensionsConfig.js';
+import { IExtensionRecommendationsService } from '../../../src/ash/workbench/services/extensionRecommendations/common/extensionRecommendations.js';
+import { ExtensionRecommendationsService } from '../../../src/ash/workbench/contrib/extensions/browser/extensionRecommendationsService.js';
 import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { registerSkillActions } from '../../../src/ash/workbench/contrib/chat/browser/promptSyntax/skillActions.js';
@@ -148,7 +160,7 @@ const api: IExtensionManagementApi = {
 		requests.push(['search', params]);
 		if (holdSearch) { holdSearch = false; await new Promise<void>((_, reject) => { rejectSearch = reject; }); }
 		if (offline) { throw new Error('Catalog unavailable'); }
-		return { packages: [params.capabilityKind === 'editorExtension' ? extensionSummary : summary], unavailableSources: [] };
+		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample' ? extensionSummary : summary], unavailableSources: [] };
 	},
 	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } const details = params.packageId === extensionSummary.id ? extensionDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
 	listInstalled: async () => ({ instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
@@ -174,12 +186,15 @@ services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);
 services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
 services.registerInstance(ICommandService, { executeCommand: async (id: string, options: ExtensionsOpenOptions) => { requests.push(['command', id, options]); if (id === CLOSE_EDITOR_COMMAND_ID) { return; } if (id === 'ash.extensions.installed') { await plugins.open({ ...options, mode: 'installed' }); } else if (id === OPEN_EXTENSIONS_COMMAND_ID) { await commands.executeCommand(id, options); } else { await commands.executeCommand(id, options); } } } as unknown as ICommandService);
+let instructionSignal: AbortSignal | undefined;
+let holdInstructions = false;
+let completeInstructions: ((text: string) => void) | undefined;
 let revision = 3;
 let enabled = true;
 const skillId = { source: 'marketplace:example/web', name: 'review' };
 services.registerInstance(IAppServerSkillApi, {
 	onDidChangeSkills: Event.None,
-	readInstructions: async () => '# Review\nReview changes carefully.',
+	readInstructions: async (_reference, signal) => { instructionSignal = signal; if (holdInstructions) { return new Promise<string>(resolve => { completeInstructions = resolve; }); } return '# Review\nReview changes carefully.'; },
 	list: async () => ({ generation: 1, skills: [] }),
 	read: async () => ({ revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
 	setEnabled: async (id, value, expectedRevision, sessionId) => { requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
@@ -205,7 +220,7 @@ const mutatePlugin = async (action: string, params: PluginPackageCommandParams) 
 	pluginRevision++;
 	return { revision: pluginRevision, activationGeneration: pluginRevision, disposition: 'updated' as const };
 };
-const pluginApi: IPluginApi = {
+const pluginApi: IPluginManagementApi = {
 	list: async () => ({ revision: pluginRevision, activationGeneration: pluginRevision, packages: structuredClone(localPackages) }),
 	installLocal: async params => {
 		requests.push(['pluginInstall', params]);
@@ -221,13 +236,16 @@ const pluginApi: IPluginApi = {
 	revokeGrant: params => mutatePlugin('pluginRevoke', params),
 	uninstall: params => mutatePlugin('pluginUninstall', params),
 };
-services.registerInstance(IPluginService, disposables.add(new AppServerPluginService(pluginApi, { subscribe: () => ({ dispose() { } }) })));
+services.registerInstance(IPluginManagementService, disposables.add(new AppServerPluginManagementService(pluginApi, { subscribe: () => ({ dispose() { } }) })));
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
 services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
 services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'typescriptreact' }) }) } as unknown as ICodeEditorService);
-services.registerInstance(IThemeService, disposables.add(new TestThemeService(darkColorTheme)));
+const themeName = new URLSearchParams(location.search).get('theme');
+const themeService = disposables.add(new TestThemeService(themeName === 'light' ? lightColorTheme : themeName === 'hc' ? highContrastDarkColorTheme : darkColorTheme));
+services.registerInstance(IThemeService, themeService);
+if (themeName) { disposables.add(bindColorTheme(themeService, document.body)); }
 services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
 services.registerInstance(IGlobalExtensionEnablementService, disposables.add(services.createInstance(GlobalExtensionEnablementService)));
 let pane: ExtensionsEditor | undefined;
@@ -242,24 +260,37 @@ services.registerInstance(IEditorService, {
 		await pane.setInput(input, editorAbort.signal);
 	},
 } as IEditorService);
-services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'fixture', folders: [] }) } as unknown as IWorkspaceContextService);
+const workspace = disposables.add(new WorkspaceContextService({ id: 'fixture', uri: URI.file('/project') }));
+services.registerInstance(IWorkspaceContextService, workspace);
+const recommendationsResource = URI.file('/project/.ash/extensions.json');
+const files = disposables.add(new FileService());
+const recommendationChanges = disposables.add(new Emitter<IFileChangeEvent>());
+const recommendationFiles = new class extends MemoryFileService { public override readonly onDidChangeFiles = recommendationChanges.event; }([[recommendationsResource, '{ "recommendations": ["example/web", "publisher.sample", "excluded/tool"], "unwantedRecommendations": ["excluded/tool"] }']]);
+disposables.add(files.registerProvider('file', recommendationFiles));
+services.registerInstance(IFileService, files);
+services.registerInstance(IUriIdentityService, disposables.add(new UriIdentityService(files)));
+services.registerInstance(IWorkspaceExtensionsConfigService, disposables.add(services.createInstance(WorkspaceExtensionsConfigService)));
+services.registerInstance(IExtensionRecommendationsService, services.createInstance(ExtensionRecommendationsService));
 services.registerInstance(IAgentCapabilitiesService, {
 	isAvailable: true,
-	read: async () => ({ tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp', sourceDetails: ['fixture-server'], exposure: 'direct', authority: 'providerDefined' }], toolSets: [{ id: 'fixture-set', source: 'mcp', sourceId: 'fixture-server', tools: ['fixture_search'] }], localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false }),
+	read: async () => ({ tools: [{ name: 'fixture_search', description: 'Search fixture records', source: 'mcp', sourceDetails: ['marketplace:example/web:mcp:fixture-server'], exposure: 'direct', authority: 'providerDefined' }], toolSets: [{ id: 'fixture-set', source: 'mcp', sourceId: 'marketplace:example/web:mcp:fixture-server', tools: ['fixture_search'] }], localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false }),
 });
 const host = document.getElementById('extensions')!;
 const paneLayout = new URLSearchParams(location.search).has('paneLayout');
-host.style.width = paneLayout ? '280px' : '360px'; host.style.height = paneLayout ? '260px' : '650px';
+const previewHeight = new URLSearchParams(location.search).has('preview') ? 780 : 650;
+if (new URLSearchParams(location.search).has('preview')) { document.getElementById('lsp')!.hidden = true; document.getElementById('details')!.style.width = '720px'; }
+host.style.width = paneLayout ? '280px' : '360px'; host.style.height = paneLayout ? '260px' : `${previewHeight}px`;
 const panes = disposables.add(new PaneView(host));
 const extensionManagement = disposables.add(services.createInstance(ExtensionsViewPane, host, { id: 'ash.extensions.view', title: 'Extensions' }));
 const plugins = disposables.add(services.createInstance(ExtensionsViewPane, host, { id: 'ash.extensions.plugins', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '插件' : 'Plugins', collapsed: true }));
 const skills = disposables.add(services.createInstance(SkillsViewPane, host, { id: 'ash.extensions.skills', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '技能' : 'Skills', collapsed: true }));
 const mcp = disposables.add(services.createInstance(McpServersViewPane, host, { id: 'ash.extensions.mcp', title: 'MCP Servers', collapsed: true }));
-for (const pane of [extensionManagement, plugins, skills, mcp]) { panes.addPane(pane, 350); pane.setVisible(true); }
-panes.layout(paneLayout ? 260 : 650, paneLayout ? 280 : 360);
+const recommended = disposables.add(services.createInstance(RecommendedExtensionsView, host, { id: 'ash.extensions.recommended', title: new URLSearchParams(location.search).get('locale') === 'zh-CN' ? '推荐' : 'Recommended', collapsed: true }));
+for (const pane of [extensionManagement, plugins, skills, mcp, recommended]) { panes.addPane(pane, 350); pane.setVisible(true); }
+panes.layout(paneLayout ? 260 : previewHeight, paneLayout ? 280 : 360);
 services.registerInstance(IViewsService, {
 	openView: (id: string) => {
-		const pane = [extensionManagement, plugins, skills, mcp].find(pane => pane.id === id)!;
+		const pane = [extensionManagement, plugins, skills, mcp, recommended].find(pane => pane.id === id)!;
 		pane.setExpanded(true); pane.focus(); return pane;
 	}
 } as unknown as IViewsService);
@@ -274,14 +305,20 @@ lsp.setVisible(true);
 
 window.ashExtensionsIntegration = {
 	requests,
+	setRecommendations: async (content: string) => { await files.writeFile({ resource: recommendationsResource, content }); recommendationChanges.fire({ resources: [recommendationsResource] }); },
+	leaveWorkspace: () => workspace.updateWorkspace({ id: 'empty', folders: [] }),
 	startCommand: id => { commandCompletion = commands.executeCommand(id).catch((error: unknown) => requests.push(['commandError', String(error)])); },
 	waitCommand: async () => { await commandCompletion; },
 	changePluginRevision: () => { pluginRevision++; },
 	removeEditorEntrypoint: () => { editorEntrypoint = null; },
 	localPackages: () => structuredClone(localPackages),
 	open: options => extensionManagement.open(options),
+	holdInstructions: () => { holdInstructions = true; },
+	instructionsStarted: () => !!instructionSignal,
+	instructionsAborted: () => !!instructionSignal?.aborted,
+	completeInstructions: () => { completeInstructions?.('# Retired instructions'); },
 	setSession: (id: string) => { activeSessionId = id; },
-	addMcpPackage: () => { installed.push({ installationId: 'fixture-mcp-installation', package: reference, state: 'installed', capabilities: [{ kind: 'mcp', id: 'fixture-server', reference: { id: 'fixture-mcp-capability' }, contractVersion: '1', permissions: ['network'], authenticationProvider: null }] }); changed.fire(); },
+	addMcpPackage: () => { installed.push({ installationId: 'fixture-mcp-installation', package: reference, state: 'installed', capabilities: [{ kind: 'mcp', id: 'fixture-server', reference: { id: 'fixture-mcp-capability' }, contractVersion: '1', permissions: ['network'], authenticationProvider: null }] }); generation++; changed.fire(); },
 	addSkillOnlyPlugin: () => { localPackages.push({ id: 'acme/skills', version: '1.0.0', digest: 'sha256:' + 'c'.repeat(64), displayName: 'Skill-only plugin', permissions: [], hasEditorExtensions: false, enabled: false, granted: false, effective: false, revoked: false }); },
 	setOffline: () => { offline = true; },
 	changeRevision: () => { revision++; },
@@ -295,6 +332,6 @@ window.ashExtensionsIntegration = {
 };
 declare global {
 	interface Window {
-		ashExtensionsIntegration: { setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

@@ -1,14 +1,14 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { IPluginApi } from "../../../../platform/plugins/common/pluginApi.js";
-import type { IPluginService, PluginCatalogView, PluginInstallation, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
+import type { IPluginManagementApi } from "../../../../platform/extensionManagement/common/pluginManagementApi.js";
+import type { IPluginManagementService, PluginCatalogView, PluginInstallation, PluginPackageView } from "../../../../platform/extensionManagement/common/pluginManagementService.js";
 
-export class AppServerPluginService extends Disposable implements IPluginService {
+export class AppServerPluginManagementService extends Disposable implements IPluginManagementService {
 	private readonly _onDidChange = this._register(new Emitter<number>());
 	readonly onDidChange = this._onDidChange.event;
 
-	constructor(private readonly api: IPluginApi, events: IServerEventApi) {
+	constructor(private readonly api: IPluginManagementApi, events: IServerEventApi) {
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method === "plugin/changed") this._onDidChange.fire(event.params.revision);

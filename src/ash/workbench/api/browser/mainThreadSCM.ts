@@ -367,8 +367,14 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			return;
 		} const revision = this.draftRevision; await this.call('setInput', { value: this.draft, inputRevision: revision }); this.syncedDraftRevision = revision;
 	}
-	public async refresh(): Promise<void> { await this.call('refresh', { value: this.draft }); }
-	public async activate(): Promise<void> { await this.call('activate', { value: this.draft }); }
+	public async refresh(): Promise<void> {
+		if (this.syncedDraftRevision !== this.draftRevision) await this.syncInput();
+		await this.call('refresh', {});
+	}
+	public async activate(): Promise<void> {
+		if (this.syncedDraftRevision !== this.draftRevision) await this.syncInput();
+		await this.call('activate', {});
+	}
 	public accept(value: ProviderSnapshot): void {
 		if (value.providerId !== this.providerId || value.rootUri !== this.snapshot.rootUri || value.hasHistory !== this.snapshot.hasHistory || value.hasMerge !== this.snapshot.hasMerge || value.hasHistoryItemRefs !== this.snapshot.hasHistoryItemRefs || value.hasHistoryMergeBase !== this.snapshot.hasHistoryMergeBase) {
 			throw new Error('SCM provider identity changed within one registration');
@@ -378,6 +384,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		}
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
+		console.debug('GIT REF DIAGNOSTIC accept', historyChanged, value.historyRefsRevision, this.snapshot.historyRefsRevision);
 		this.snapshot = value;
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }

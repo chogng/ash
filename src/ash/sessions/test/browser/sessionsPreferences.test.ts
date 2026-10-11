@@ -8,7 +8,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { errorHandler } from '../../../base/common/errors.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { IGlobalExtensionEnablementService } from '../../../platform/extensionManagement/common/extensionManagement.js';
-import { IPluginService } from '../../../platform/plugins/common/pluginService.js';
+import { IPluginManagementService } from '../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IDirPermissionsService } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -185,7 +185,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 		onDidChangeEnablement: Event.None, getDisabledExtensions: () => [],
 		enableExtension: unsupportedExtensionAction, disableExtension: unsupportedExtensionAction,
 	});
-	services.registerInstance(IPluginService, {
+	services.registerInstance(IPluginManagementService, {
 		onDidChange: Event.None, list: async () => ({ revision: 0, activationGeneration: 0, packages: [] }),
 		installLocal: unsupportedExtensionAction, enable: unsupportedExtensionAction, disable: unsupportedExtensionAction,
 		grant: unsupportedExtensionAction, revokeGrant: unsupportedExtensionAction, uninstall: unsupportedExtensionAction,

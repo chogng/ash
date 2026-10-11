@@ -9,6 +9,21 @@ function collectErrors(page: Page): string[] {
 	return errors;
 }
 
+test('Worker queues a large client request batch without retiring its incarnation', async ({ page }) => {
+	const errors = collectErrors(page);
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitSCMTransportIntegration.holdOutputs());
+		const burst = page.evaluate(() => window.gitSCMTransportIntegration.burst());
+		await expect.poll(() => page.evaluate(() => window.gitSCMTransportIntegration.waitingOutputs())).toBe(32);
+		await page.evaluate(() => window.gitSCMTransportIntegration.releaseOutputs());
+		expect(await burst).toEqual(Array.from({ length: 64 }, () => ({ result: 'value', value: null })));
+		expect(errors).toEqual([]);
+	} finally {
+		await page.evaluate(() => { window.gitSCMTransportIntegration.releaseOutputs(); window.gitExtensionIntegration.dispose(); });
+	}
+});
+
 test('SCM delivers changes queued while its initialization update is in flight', async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');

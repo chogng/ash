@@ -77,7 +77,7 @@ test.describe('Git Fetch', () => {
 			if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
 			await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 			const fetch = graph.locator('[data-action-id="git.fetchAll"] button');
-			await expect(fetch).toHaveAccessibleName('Git: Fetch From All Remotes');
+			await expect(fetch).toHaveAccessibleName('Fetch From All Remotes');
 			await fetch.focus();
 			await page.keyboard.press('Enter');
 			await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(secondHead);
@@ -101,6 +101,7 @@ test.describe('Git Fetch', () => {
 				expect(await git('rev-parse', 'refs/remotes/origin/main')).toBe(previousRemoteHead);
 				expect(await git('rev-parse', 'refs/remotes/backup/main')).toBe(previousRemoteHead);
 				await workbench.git.selectTitleMenu(application, path);
+				await workbench.quickaccess.select('Fetch all remotes');
 				await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(remoteHead);
 				await expect.poll(() => git('rev-parse', 'refs/remotes/backup/main')).toBe(remoteHead);
 				await expect(toolbar.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();

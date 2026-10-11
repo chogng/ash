@@ -239,7 +239,8 @@
         "command": "git.commitStaged",
         "title": "%git.menu.commitStaged%",
         "category": "Git",
-        "enablement": "!scmBusy"
+        "enablement": "!scmBusy",
+        "icon": "$(check)"
       },
       {
         "command": "git.commitStagedAmend",
@@ -312,11 +313,6 @@
       {
         "command": "git.getRepositoryContexts",
         "title": "%command.git.getRepositoryContexts%"
-      },
-      {
-        "command": "git.graph.checkoutBranch",
-        "title": "%command.git.graph.checkoutBranch%",
-        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.checkout",
@@ -708,7 +704,7 @@
           "group": "navigation@2"
         },
         {
-          "command": "git.commit",
+          "command": "git.commitStaged",
           "when": "scmProvider == git",
           "group": "navigation@1"
         },
@@ -1118,7 +1114,6 @@
           "command": "git.graph.deleteTag",
           "when": "scmHistoryProviderId == git && scmHistoryRefHasTag",
           "group": "3_tag@1"
-
         }
       ]
     },

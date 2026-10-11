@@ -58,6 +58,7 @@ const packages = createBrowserExtensionApi();
 const storage = lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'git-extension', profileId: 'git-extension-test', flushInterval: 0 }));
 const enablement = lifetime.add(new GlobalExtensionEnablementService(storage));
 let includeGeneric = false;
+let includeGit = true;
 const genericProvider = {
 	id: 'snapshots', providerId: 'snapshots', label: 'Snapshots', rootUri: 'file:///snapshots', selected: false,
 	groups: [{ id: 'changes', label: 'Snapshots', resources: [{ id: 'one', sourceUri: 'file:///snapshots/one.ts', path: 'one.ts', decorations: { badge: 'M', tooltip: 'Changed snapshot', kind: 'modified' }, openLabel: 'Open snapshot', actions: [] }], actions: [] }],
@@ -69,6 +70,7 @@ const genericSource = new TextEncoder().encode(`
  let calls = 0;
  export async function activate() { return [{ kind: 'sourceControl', registrationId: 'scm', revision: 1, providers: [${JSON.stringify(genericProvider)}] }]; }
  export async function invoke(_id, payload) {
+  if (payload.method === 'burst') return Promise.all(Array.from({ length: 64 }, (_, index) => globalThis.__ashBackgroundRequest(JSON.stringify({ operation: 'editorOperation', payload: { method: 'output', index } })).then(JSON.parse)));
   if (payload.method === 'quickDiff') return { originalResource: 'snapshot:/one.ts', text: 'before\\n', revision: 1 };
   if (payload.method === 'multiDiff') return { kind: 'multiDiff', resource: 'ash-scm://test.snapshots/changes', label: 'Snapshots', items: [{ label: 'one.ts', original: { resource: 'snapshot:/one.ts', initialText: 'before' }, modified: { resource: 'file:///snapshots/one.ts', initialText: 'after' } }] };
   if (payload.method === 'refresh') return ++calls;
@@ -82,7 +84,7 @@ const catalog = withEnabledBuiltInExtensions({
 	list: async () => {
 		const value = await packages.list('cached');
 		const git = value.extensions.find(extension => extension.id === 'ash.git')!;
-		return { ...value, extensions: [git, ...(includeGeneric ? [{ ...git, id: 'test.snapshots', manifestJson: JSON.stringify({ browser: './main.js' }) }] : [])] };
+		return { ...value, extensions: [...(includeGit ? [git] : []), ...(includeGeneric ? [{ ...git, id: 'test.snapshots', manifestJson: JSON.stringify({ browser: './main.js' }) }] : [])] };
 	},
 }, enablement);
 services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
@@ -127,6 +129,8 @@ const hostChanges = host.onDidChange(() => { void host.list().then(snapshot => b
 lifetime.add(toDisposable(() => hostChanges.dispose()));
 let scmUpdateGate: DeferredPromise<void> | undefined;
 let waitingSCMUpdates = 0;
+let outputGate: DeferredPromise<void> | undefined;
+let waitingOutputs = 0;
 const clientHandler = host.registerClientHandler(async (raw, signal, source): Promise<ExtensionClientResult> => {
 	const operation = raw as ExtensionClientOperation;
 	switch (operation.operation) {
@@ -142,7 +146,10 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			if (request.method === 'openWorkspace') return { result: 'value', value: null };
 			if (request.method === 'dirty') return { result: 'value', value: [] };
 			if (request.method === 'confirm') return { result: 'value', value: { confirmed: true } };
-			if (request.method === 'output') return { result: 'value', value: null };
+			if (request.method === 'output') {
+				if (outputGate) { waitingOutputs++; await outputGate.p; }
+				return { result: 'value', value: null };
+			}
 			if (request.method === 'open') return { result: 'value', value: null };
 			throw new Error(`Unexpected editor request ${request.method}`);
 		}
@@ -215,13 +222,23 @@ declare global { interface Window { gitScmPaneIntegration: typeof gitScmPaneInte
 
 declare global {
 	interface Window {
-		gitSCMTransportIntegration: { hold(): void; release(): void; waiting(): number; };
+		gitSCMTransportIntegration: { hold(): void; release(): void; waiting(): number; burst(): Promise<unknown>; holdOutputs(): void; releaseOutputs(): void; waitingOutputs(): number; };
 	}
 }
 window.gitSCMTransportIntegration = {
 	hold: () => { scmUpdateGate = new DeferredPromise<void>(); },
 	release: () => { const gate = scmUpdateGate; scmUpdateGate = undefined; void gate?.complete(undefined); },
 	waiting: () => waitingSCMUpdates,
+	holdOutputs: () => { outputGate = new DeferredPromise<void>(); waitingOutputs = 0; },
+	releaseOutputs: () => { const gate = outputGate; outputGate = undefined; void gate?.complete(undefined); },
+	waitingOutputs: () => waitingOutputs,
+	burst: async () => {
+		includeGeneric = true;
+		includeGit = false;
+		const snapshot = await host.reconcile('refresh');
+		const runtime = snapshot.extensions.find(value => value.id === 'test.snapshots')!;
+		return host.invoke({ extensionId: runtime.id, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration, registrationId: 'scm', operation: 'scm', payload: { method: 'burst' }, deadlineUnixMillis: Date.now() + 10_000 }, new AbortController().signal);
+	},
 };
 
 let reference: TextModelReference | undefined;
