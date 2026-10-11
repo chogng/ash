@@ -118,7 +118,8 @@
 	align-items: center;
 	flex-direction: column;
 	gap: 12px;
-	justify-content: center;
+	justify-content: safe center;
+	overflow: auto;
 	padding: 24px;
 	text-align: center;
 }
@@ -129,6 +130,10 @@
 	color: color-mix(in srgb, currentColor 70%, transparent);
 	font-size: 12px;
 	line-height: 18px;
+}
+
+.ash-empty-explorer > * {
+	flex-shrink: 0;
 }
 
 .ash-empty-explorer-open-folder.ash-button {

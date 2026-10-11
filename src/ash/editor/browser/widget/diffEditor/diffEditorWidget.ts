@@ -192,7 +192,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('diffEditor.renderIndicators')) {
-				this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
+				this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 				this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 			}
 			if (event.affectsConfiguration('diffEditor.renderMarginRevertIcon')
@@ -375,7 +375,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	public updateOptions(options: IDiffEditorOptions): void {
 		this.diffOptions.updateOptions(options);
-		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
+		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 		if (options.readOnly !== undefined) this.modifiedEditor.updateOptions({ readOnly: options.readOnly });
 		this.updateFeatures();
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
@@ -414,7 +414,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			if (inlineView && this.originalContainer.contains(this.element.ownerDocument.activeElement)) this.modifiedEditor.focus();
 			if (inlineView && this.movedTextToCompare) {
 				this.clearComparedMove();
-				this.diffDecorations.update(this.model.diff?.rows ?? [], -1, this.showInlineChanges, this.diffOptions.renderIndicators);
+				this.diffDecorations.update(this.model.diff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 				this.overviewRuler.setRows(this.model.diff?.rows ?? []);
 			}
 			this.updateFeatures();
@@ -493,7 +493,6 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	private revealDiffRow(rows: readonly LineDiffRow[], rowIndex: number, announce: boolean): void {
 		this.activeChangeRow = rowIndex;
-		this.diffDecorations.update(rows, this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
 		const row = rows[rowIndex];
 		let signal = AccessibilitySignal.diffLineModified;
 		if (row.kind === LineDiffKind.Added) { signal = AccessibilitySignal.diffLineInserted; }
@@ -530,9 +529,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	public clearActiveChange(): void {
-		if (this.activeChangeRow < 0) return;
 		this.activeChangeRow = -1;
-		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
 	}
 
 	private updateWordWrap(): void {
@@ -563,7 +560,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 				: '';
 		this.updateIncompleteStatus();
 		this.updateFeatures();
-		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
+		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 		this.overviewRuler.setRows(this.displayedDiff?.rows ?? []);
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}
@@ -571,7 +568,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private updateFeatures(): void {
 		if (!this.diffOptions.showMoves && this.movedTextToCompare) {
 			this.clearComparedMove();
-			this.diffDecorations.update(this.model.diff?.rows ?? [], -1, this.showInlineChanges, this.diffOptions.renderIndicators);
+			this.diffDecorations.update(this.model.diff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 			this.overviewRuler.setRows(this.model.diff?.rows ?? []);
 		}
 		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare);

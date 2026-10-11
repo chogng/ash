@@ -219,6 +219,16 @@ services.registerInstance(IEditorService, {
 } as IEditorService);
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'fixture', folders: [] }) } as unknown as IWorkspaceContextService);
 const extensionManagement = disposables.add(services.createInstance(ExtensionsViewPane, document.getElementById('extensions')!, { id: 'extensions', title: 'Extensions' }));
+if (new URLSearchParams(location.search).has('paneLayout')) {
+	const { PaneView, Pane } = await import('../../../src/ash/base/browser/ui/splitview/paneview.js');
+	const host = document.getElementById('extensions')!;
+	host.style.width = '280px';
+	host.style.height = '180px';
+	const panes = disposables.add(new PaneView(host));
+	panes.addPane(extensionManagement, 120);
+	panes.addPane(disposables.add(new Pane(host, { id: 'extensions.sibling', title: 'Other view', minimumBodySize: 0 })), 60);
+	panes.layout(180, 280);
+}
 services.registerInstance(IViewsService, { openView: () => extensionManagement } as unknown as IViewsService);
 const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }));
 contributions.advance(WorkbenchPhase.BlockStartup);

@@ -84,6 +84,7 @@ export class BulkEditPane extends ViewPane {
 		this.listElement.className = "ash-bulk-edit-list";
 		this.listElement.setAttribute("aria-label", localize('bulkEdit.previewLabel', 'Bulk edit preview'));
 		this.contentElement.append(toolbar, this.statusElement, this.listElement);
+		this.trackBodyMinimum(this.listElement, 22);
 		this._register(addDisposableListener(this.selectAllButton, "click", () => this.selectAll()));
 		this._register(addDisposableListener(this.applyButton, "click", () => this.accept()));
 		this._register(addDisposableListener(this.cancelButton, "click", () => this.discard()));

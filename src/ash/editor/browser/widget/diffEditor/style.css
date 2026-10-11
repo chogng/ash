@@ -80,11 +80,6 @@
 	background: var(--ash-diffEditor-insertedLineBackground);
 }
 
-.stanza-diff-line-active {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
-}
-
 .stanza-diff-inline-removed {
 	background: var(--ash-diffEditor-removedTextBackground);
 }

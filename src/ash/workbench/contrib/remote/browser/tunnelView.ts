@@ -72,6 +72,7 @@ export class TunnelPanel extends ViewPane {
 		this.listElement.className = "ash-remote-ports-list";
 		this.listElement.setAttribute("aria-label", localize({ bundle: 'ash.workbench', key: 'ports.forwarded' }, "Forwarded ports"));
 		this.contentElement.append(this.formElement, this.statusElement, this.listElement);
+		this.trackBodyMinimum(this.listElement, 22);
 
 		this._register(addDisposableListener(this.formElement, "submit", event => this.forward(event)));
 		this._register(addDisposableListener(this.stopAllButton, "click", () => this.stopAll()));

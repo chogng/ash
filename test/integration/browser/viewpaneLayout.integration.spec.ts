@@ -57,10 +57,18 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 test('Sessions Changes retains its tree viewport beside review controls', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/viewpaneLayout.html?view=changes');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	const viewport = page.locator('.ash-sessions-changes-tree .ash-tree');
 	await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
+	await expect(page.locator('.ash-sessions-changes').getByRole('status')).toHaveText('30 changed files');
+	await viewport.focus();
+	await viewport.press('End');
+	await expect(viewport.getByRole('treeitem').last()).toBeInViewport({ ratio: 1 });
+	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	expect(errors).toEqual([]);
 });
 
 test('Debug Console keeps its output and expression reachable after a wrapping error', async ({ page }) => {
@@ -91,3 +99,28 @@ for (const [view, content] of [['problems', '.ash-problems-results'], ['bulk', '
 		expect(errors).toEqual([]);
 	});
 }
+
+test('Empty Explorer keeps a long folder error scrollable without losing the opening action', async ({ page }) => {
+	await page.goto('/viewpaneLayout.html?view=empty');
+	const body = page.locator('.ash-empty-explorer');
+	const open = body.getByRole('button', { name: 'Open Folder', exact: true });
+	await open.press('Enter');
+	await expect(body.getByRole('status')).toContainText('Folder opening failed.');
+	await body.hover();
+	await page.mouse.wheel(0, 1000);
+	await expect.poll(() => body.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	await expect(body.getByRole('status')).toBeInViewport();
+	await page.mouse.wheel(0, -1000);
+	await expect.poll(() => body.evaluate(element => element.scrollTop)).toBe(0);
+	await expect(body.locator('.ash-empty-explorer-message')).toBeInViewport({ ratio: 1 });
+	await open.focus();
+	await expect(open).toBeInViewport({ ratio: 1 });
+});
+
+test('SCM Agent Review keeps its empty message and action inside the minimum body', async ({ page }) => {
+	await page.goto('/viewpaneLayout.html?view=review');
+	const body = page.locator('.ash-scm-secondary-pane');
+	await expect(body.locator('.ash-scm-empty')).toBeInViewport({ ratio: 1 });
+	await expect(body.getByRole('button')).toBeInViewport({ ratio: 1 });
+	expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+});

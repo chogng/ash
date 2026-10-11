@@ -560,17 +560,61 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(page.locator('#multi .stanza-diff-editor')).toHaveCount(2);
 		await expect(page.locator('#multi .stanza-editor')).toHaveCount(4);
 		await expect(page.locator('#multi .stanza-diff-inline-removed')).toHaveText('😀');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.activeMultiControl())).toBe('same\nbefore 🤖 after\nlast');
 		await page.locator('#single .stanza-diff-editor').focus();
 		await page.keyboard.press('F7');
-		await expect(page.locator('#single .stanza-diff-line-active')).toHaveCount(2);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().activeRow)).toBe(1);
 		await expect(page.locator('#single .stanza-diff-editor-accessibility-status')).toContainText('2');
 		await page.locator('#multi .stanza-multi-diff-editor').focus();
+		await page.keyboard.press('F7');
+		await expect(page.locator('#multi .stanza-multi-diff-editor-accessibility-status')).toContainText(localized(locale, 'Change 2 of 2, second.ts', '第 2 处差异，共 2 处，second.ts'));
 		await page.keyboard.press('F7');
 		await expect(page.locator('#multi .stanza-multi-diff-editor-accessibility-status')).toContainText(localized(locale, 'Change 1 of 2, first.ts', '第 1 处差异，共 2 处，first.ts'));
 		await expect(page.locator('#multi .stanza-multi-diff-editor')).toHaveAttribute('aria-label', localized(locale, 'Multi-file diff editor with 2 files', '多文件差异编辑器，共 2 个文件'));
 		expect(errors).toEqual([]);
 	});
 }
+
+test('diff navigation keeps line decorations free of focus rings in every theme', async ({ page }, testInfo) => {
+	await openDiffPage(page);
+	const editor = page.locator('#single .stanza-diff-editor');
+	for (const themeId of ['vs', 'vs-dark', 'hc-light', 'hc-black']) {
+		await page.evaluate(themeId => {
+			window.ashDiffIntegration.setTheme(themeId);
+			if (themeId.startsWith('hc-')) {
+				document.getElementById('single')!.style.setProperty('--ash-contrastBorder', 'rgb(10, 20, 30)');
+			}
+			window.ashDiffIntegration.setComparisonText(`head\nbefore\nmiddle\nold\n${themeId}`, `head\nafter\nmiddle\nnew\n${themeId}`);
+		}, themeId);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await editor.focus();
+		await page.keyboard.press('F7');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().activeRow)).toBe(1);
+		await page.keyboard.press('F7');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().activeRow)).toBe(3);
+		await page.keyboard.press('Shift+F7');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().activeRow)).toBe(1);
+		await page.keyboard.press('Escape');
+		await expect(editor).toBeFocused();
+		await expect(editor).toHaveCSS('outline-style', 'solid');
+		await expect(editor.locator('.stanza-diff-editor-accessibility-status')).toContainText('Change 1 of 2');
+		await page.locator('#modified').click();
+		for (const side of ['original', 'modified']) {
+			const lines = editor.locator(`.${side} .stanza-diff-line-removed, .${side} .stanza-diff-line-added`);
+			await expect(lines).toHaveCount(2);
+			for (const line of await lines.all()) {
+				await expect(line).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				if (themeId.startsWith('hc-')) {
+					await expect(line).toHaveCSS('outline-style', 'solid');
+					await expect(line).toHaveCSS('outline-color', 'rgb(10, 20, 30)');
+				} else {
+					await expect(line).toHaveCSS('outline-style', 'none');
+				}
+			}
+		}
+		await testInfo.attach(`diff-navigation-${themeId}`, { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+	}
+});
 
 test('diff decorations render themed lines, gutter signs, and overview markers', async ({ page }) => {
 	await openDiffPage(page);
@@ -1134,6 +1178,7 @@ test('inline navigation reveals deleted text after earlier insertions', async ({
 
 test('multi diff wraps editable columns and repositions sections through resize and collapse', async ({ page }) => {
 	await openDiffPage(page);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.activeMultiControl())).toBe('same\nbefore 🤖 after\nlast');
 	const original = `same\n${'before '.repeat(70)}😀 tail\nsame end`;
 	const modified = `same\n${'before '.repeat(70)}🤖 tail\nsame end`;
 	await page.evaluate(([left, right]) => window.ashDiffIntegration.setComparisonText(left, right), [original, modified]);
@@ -1160,7 +1205,8 @@ test('multi diff wraps editable columns and repositions sections through resize 
 	await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'true');
 	await page.keyboard.press('F7');
 	await expect(editor.locator('.stanza-multi-diff-editor-accessibility-status')).toContainText('Change 2 of 2');
-	await expect(sections.nth(1).locator('.stanza-diff-line-active')).toHaveCount(1);
+	await expect(sections.nth(1).locator('.stanza-diff-line-removed')).toBeVisible();
+	await expect(sections.nth(1)).toHaveClass(/\bactive\b/);
 	await editor.focus();
 	await page.keyboard.press('Alt+Z');
 	await expect(editor).not.toHaveClass(/word-wrapped/);

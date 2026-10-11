@@ -1,5 +1,16 @@
 import { expect, test } from '@playwright/test';
 
+test('Extensions retains its list when wrapped filters share a short view container', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/extensions.html?paneLayout');
+	const view = page.locator('#extensions .ash-extensions');
+	await expect(view.locator('.extension-row')).not.toHaveCount(0);
+	await expect.poll(() => view.locator('.extensions-list').evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(22);
+	await expect.poll(() => view.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+	expect(errors).toEqual([]);
+});
+
 for (const [locale, installTitle, manageTitle, enable, grant, permission, disable, revoke, uninstall] of [
 	['en', 'Install extension from workspace', 'Manage local extensions', 'Enable', 'Grant permissions', 'Read workspace files', 'Disable', 'Revoke permissions', 'Uninstall'],
 	['zh-CN', '从工作区安装扩展', '管理本地扩展', '启用', '授予权限', '读取工作区文件', '禁用', '撤销权限', '卸载'],

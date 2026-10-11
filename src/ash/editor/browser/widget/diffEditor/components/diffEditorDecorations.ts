@@ -20,17 +20,17 @@ export class DiffEditorDecorations extends Disposable {
 		}));
 	}
 
-	public update(rows: readonly LineDiffRow[], activeRow: number, showInlineChanges: boolean, renderIndicators: boolean): void {
+	public update(rows: readonly LineDiffRow[], showInlineChanges: boolean, renderIndicators: boolean): void {
 		const original: IModelDeltaDecoration[] = [];
 		const modified: IModelDeltaDecoration[] = [];
-		for (const [rowIndex, row] of rows.entries()) {
+		for (const row of rows) {
 			if (row.kind === LineDiffKind.Unchanged) {
 				continue;
 			}
 			if (row.originalLineIndex !== undefined) {
 				original.push({
 					range: new Range(row.originalLineIndex + 1, 1, row.originalLineIndex + 1, 1),
-					options: lineOptions(renderIndicators ? diffLineDeleteDecorationBackgroundWithIndicator : diffLineDeleteDecorationBackground, rowIndex === activeRow),
+					options: renderIndicators ? diffLineDeleteDecorationBackgroundWithIndicator : diffLineDeleteDecorationBackground,
 				});
 				if (showInlineChanges) {
 					addInlineDecorations(original, row.originalLineIndex + 1, row.originalChanges, diffDeleteDecoration, diffDeleteDecorationEmpty);
@@ -39,7 +39,7 @@ export class DiffEditorDecorations extends Disposable {
 			if (row.modifiedLineIndex !== undefined) {
 				modified.push({
 					range: new Range(row.modifiedLineIndex + 1, 1, row.modifiedLineIndex + 1, 1),
-					options: lineOptions(renderIndicators ? diffLineAddDecorationBackgroundWithIndicator : diffLineAddDecorationBackground, rowIndex === activeRow),
+					options: renderIndicators ? diffLineAddDecorationBackgroundWithIndicator : diffLineAddDecorationBackground,
 				});
 				if (showInlineChanges) {
 					addInlineDecorations(modified, row.modifiedLineIndex + 1, row.modifiedChanges, diffAddDecoration, diffAddDecorationEmpty);
@@ -49,10 +49,6 @@ export class DiffEditorDecorations extends Disposable {
 		this.original.set(original);
 		this.modified.set(modified);
 	}
-}
-
-function lineOptions(base: IModelDecorationOptions, active: boolean): IModelDecorationOptions {
-	return active ? { ...base, className: `${base.className} stanza-diff-line-active` } : base;
 }
 
 function addInlineDecorations(target: IModelDeltaDecoration[], lineNumber: number, changes: LineDiffRow['originalChanges'], options: IModelDecorationOptions, emptyOptions: IModelDecorationOptions): void {
