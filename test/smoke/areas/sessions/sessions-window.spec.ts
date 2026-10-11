@@ -3345,7 +3345,8 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 	}
 });
 
-focusTest('Sessions application menu follows its host and uses Sessions actions', async ({ application, target, workbench }) => {
+// Only macOS chooses the application menu from the OS-focused window.
+test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined })('Sessions application menu follows its host and uses Sessions actions', async ({ application, target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
 	if (target.kind === 'electron' && process.platform === 'darwin') {

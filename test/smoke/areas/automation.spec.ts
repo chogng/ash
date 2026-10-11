@@ -49,6 +49,7 @@ test('ordinary Electron tests keep startup, new windows and reloads from taking 
 });
 
 test.describe('background Electron test launches preserve the active application', () => {
+	// The foreground process must own real OS focus before the background launch.
 	test.use({ electronWindowMode: 'active' });
 	for (const windowMode of ['hidden', 'inactive'] as const) {
 		test(`Electron ${windowMode} launch preserves another application's system focus`, async ({ application, target, workbench }, testInfo) => {
@@ -231,7 +232,7 @@ test('an Electron restoration timeout closes its process before rejecting launch
 		await new Promise<void>(() => { });
 	};
 	try {
-		await expect(launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000, windowMode: 'active' })).rejects.toThrow('Workbench startup timed out');
+		await expect(launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000 })).rejects.toThrow('Workbench startup timed out');
 		expect(reachedRestoration).toBe(true);
 		expect(child && (child.exitCode !== null || child.signalCode !== null)).toBe(true);
 	} finally {
@@ -303,7 +304,7 @@ void import('./.build/desktop/main/src/main.js').catch(error => {
 			expect(options!.args).toContain(desktopDirectory);
 			return launch.call(this, { ...options, args: options!.args!.map(argument => argument === desktopDirectory ? entry : argument) });
 		};
-		const running = await launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000, windowMode: 'active' });
+		const running = await launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000 });
 		try {
 			expect(await running.application.evaluate(({ app }) => {
 				const state = globalThis as typeof globalThis & { ashTestDockInstalled?: boolean; ashTestDockRequested?: boolean; ashTestDockSettled?: boolean; };

@@ -62,31 +62,35 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 	});
 }
 
-focusTest('desktop window commands update zoom and open the window switcher', async ({ application, target, workbench }) => {
+test('desktop window commands update and persist zoom', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'This scenario requires the Code desktop');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;
-	await expect(page.locator('[data-statusbar-item-id="ash.status.zoom"]')).toHaveCount(0);
+	const window = await application.browserWindow(page);
+	try {
+		await expect(page.locator('[data-statusbar-item-id="ash.status.zoom"]')).toHaveCount(0);
 
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Zoom In');
-	await page.keyboard.press('Enter');
-	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.webContents.getZoomLevel())).toBe(1);
-	const profileRoot = await application.evaluate(() => process.env.ASH_HOME);
-	if (!profileRoot) throw new Error('Test profile is unavailable');
-	await expect.poll(async () => {
-		return (JSON.parse(await readFile(join(profileRoot, 'settings.json'), 'utf8')) as Record<string, unknown>)['window.zoomLevel'];
-	}).toBe(1);
-	await page.reload({ waitUntil: 'domcontentloaded' });
-	await expect(page.locator('.ash-workbench')).toBeVisible();
-	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.webContents.getZoomLevel())).toBe(1);
-	await expect(page.locator('[data-statusbar-item-id="ash.status.zoom"]')).toHaveCount(0);
+		await workbench.quickaccess.runCommand('workbench.action.zoomIn');
+		await expect.poll(() => window.evaluate(window => window.webContents.getZoomLevel())).toBe(1);
+		const profileRoot = await application.evaluate(() => process.env.ASH_HOME);
+		if (!profileRoot) throw new Error('Test profile is unavailable');
+		await expect.poll(async () => {
+			return (JSON.parse(await readFile(join(profileRoot, 'settings.json'), 'utf8')) as Record<string, unknown>)['window.zoomLevel'];
+		}).toBe(1);
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.locator('.ash-workbench')).toBeVisible();
+		await expect.poll(() => window.evaluate(window => window.webContents.getZoomLevel())).toBe(1);
+		await expect(page.locator('[data-statusbar-item-id="ash.status.zoom"]')).toHaveCount(0);
 
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Reset Zoom');
-	await page.keyboard.press('Enter');
-	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.webContents.getZoomLevel())).toBe(0);
+		await workbench.quickaccess.runCommand('workbench.action.zoomReset');
+		await expect.poll(() => window.evaluate(window => window.webContents.getZoomLevel())).toBe(0);
+	} finally { await window.dispose(); }
+});
 
+// The current-window marker comes from the OS-focused window in the window list.
+focusTest('desktop window switcher marks the focused window as current', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron', 'This scenario requires the Code desktop');
+	const page = workbench.page;
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Switch Window');
 	await page.keyboard.press('Enter');

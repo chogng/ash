@@ -117,7 +117,20 @@
     "scm.settings.group": "源代码管理",
     "scm.settings.groupDescription": "配置源代码管理提供程序和差异标记。",
     "scm.history.openCommit": "打开提交 {0}",
-    "scm.history.goToCurrent": "转到当前历史记录项"
+    "scm.history.goToCurrent": "转到当前历史记录项",
+    "scm.history.pageSizeInvalid": "历史记录每页数量必须为 1 到 1000 之间的数字。",
+    "scm.history.pageSizeTitle": "源代码管理 › 提交图：每页数量",
+    "scm.history.pageSizeDescription": "控制初次及每次加载下一页时的提交数量。",
+    "scm.history.pageOnScrollInvalid": "历史记录自动加载设置必须为布尔值。",
+    "scm.history.pageOnScrollTitle": "源代码管理 › 提交图：滚动时加载",
+    "scm.history.pageOnScrollDescription": "当提交图末尾可见时，自动加载下一页。",
+    "scm.history.loadingMore": "正在加载提交历史记录…",
+    "scm.history.loadMore": "加载更多提交",
+    "scm.history.retryMore": "重试加载提交历史记录",
+    "scm.history.openFile": "打开文件",
+    "scm.history.loadingFiles": "正在加载已更改的文件…",
+    "scm.history.noFiles": "没有已更改的文件。",
+    "scm.history.openChange": "从 {1} 打开 {0}"
   },
   "ash.workbench": {
     "command.scm.quickDiff.next": "转到下一个快速差异更改",

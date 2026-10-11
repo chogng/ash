@@ -99,6 +99,55 @@ test('SCM history retains the reading position, expanded files and row actions a
 	}
 });
 
+test('SCM history respects saved page size and manual loading settings', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
+	const cwd = testWorkspace.directory;
+	const { stdout } = await run('git', ['rev-parse', 'HEAD'], { cwd });
+	const commits = Array.from({ length: 20 }, (_, index) => {
+		const message = `Configured history ${index}`;
+		return `commit refs/heads/main\nmark :${index + 1}\ncommitter History Author <history@example.invalid> ${1_700_000_000 + index} +0000\ndata ${message.length}\n${message}\nfrom ${index === 0 ? stdout.trim() : `:${index}`}\n\n`;
+	}).join('');
+	await new Promise<void>((resolve, reject) => {
+		const importer = execFile('git', ['fast-import', '--quiet'], { cwd }, error => error ? reject(error) : resolve());
+		importer.stdin!.end(commits);
+	});
+	await workbench.settingsEditor.openUserSettingsUI();
+	const settings = workbench.settingsEditor.element;
+	await settings.getByRole('searchbox').fill('scm.graph');
+	const size = settings.locator('[data-settings-item-id="scm.graph.pageSize"]').getByRole('spinbutton');
+	await expect(size).toHaveValue('50');
+	await size.fill('3');
+	await size.press('Tab');
+	await expect(size).toHaveValue('3');
+	const automatic = settings.locator('[data-settings-item-id="scm.graph.pageOnScroll"]').getByRole('switch');
+	await expect(automatic).toHaveAttribute('aria-checked', 'true');
+	await automatic.press('Space');
+	await expect(automatic).toHaveAttribute('aria-checked', 'false');
+	await settings.locator('.ash-modal-editor-close').click();
+	({ workbench } = await reloadWorkbench());
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	const rows = history.getByRole('treeitem');
+	await expect(rows.first()).toHaveAttribute('aria-setsize', '3');
+	const more = history.getByRole('button', { name: 'Load more commits', exact: true });
+	await expect(more).toBeVisible();
+	await more.click();
+	await expect(rows.first()).toHaveAttribute('aria-setsize', '6');
+	await expect(more).toBeVisible();
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.element.getByRole('searchbox').fill('scm.graph');
+	await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="scm.graph.pageSize"]').getByRole('spinbutton')).toHaveValue('3');
+	await workbench.settingsEditor.element.locator('[data-settings-item-id="scm.graph.pageOnScroll"] .ash-switch-track').click();
+	await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+	await expect.poll(async () => Number(await rows.first().getAttribute('aria-setsize'))).toBeGreaterThan(6);
+	await history.locator('.ash-scm-graph .ash-scrollbar-viewport').evaluate(element => { element.scrollTop = element.scrollHeight; });
+	await expect(rows.first()).toHaveAttribute('aria-setsize', '21');
+	await expect(more).toHaveCount(0);
+	await test.info().attach('scm-history-configured-pages', { body: await history.screenshot(), contentType: 'image/png' });
+});
+
 test('SCM startup keeps commit hover targets stable in a large history', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	const cwd = testWorkspace.directory;
@@ -612,6 +661,12 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	await expect(localizedHistory.locator('[data-action-id="workbench.scm.action.graph.revealCurrentHistoryItem"] > button')).toHaveAttribute('aria-label', '转到当前历史记录项');
 	await expect(localizedHover.getByRole('button', { name: '在 GitHub 上打开', exact: true })).toHaveText('在 GitHub 上打开');
 	await expect(localizedHover.getByRole('region', { name: '提交消息', exact: true })).toHaveCSS('height', '180px');
+	await workbench.page.keyboard.press('Escape');
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.element.getByRole('searchbox').fill('scm.graph');
+	await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="scm.graph.pageSize"]').getByRole('spinbutton')).toHaveAttribute('aria-label', '源代码管理 › 提交图：每页数量');
+	await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="scm.graph.pageOnScroll"]').getByRole('switch')).toHaveAttribute('aria-label', '源代码管理 › 提交图：滚动时加载');
+	await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
 	await workbench.page.mouse.move(900, 100);
 	for (const width of target.kind === 'electron' ? [1100, 640] : [1100, 360]) {
 		if (target.kind === 'electron') {

@@ -18,6 +18,7 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Action2, IMenuService, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { ContextKeyExpr, RawContextKey, type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
@@ -76,7 +77,36 @@ registerAction2(class extends Action2 {
 	}
 });
 
-const PageSize = 50;
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.graph.openFile',
+			title: localize2('scm.history.openFile', 'Open File'),
+			icon: Lxicon.goToFile,
+			f1: false,
+			precondition: ContextKeyExpr.notEquals('scmHistoryItemChangeStatus', 'deleted'),
+			menu: { id: MenuId.SCMHistoryItemChangeContext, group: '0_view', order: 1 },
+		});
+	}
+
+	public override async run(accessor: ServicesAccessor, element: SCMHistoryItemChangeViewModelTreeElement): Promise<void> {
+		if (element?.type !== 'historyItemChangeViewModel') { return; }
+		const { repository, historyItemViewModel, historyItemChange } = element;
+		const provider = repository.provider.historyProvider;
+		if (!provider) { return; }
+		const historyItem = historyItemViewModel.historyItem;
+		const file = await provider.resolveHistoryItemChangeContents(historyItem.id, historyItemChange);
+		if (file.modified.kind !== 'text') { return; }
+		const name = historyItemChange.path.split('/').at(-1) ?? historyItemChange.path;
+		await accessor.get(IEditorService).openEditor({
+			resource: historyItemChange.modifiedUri ?? historyItemChange.uri,
+			label: `${name} (${historyItem.displayId ?? historyItem.id})`,
+			readOnly: true,
+			initialText: file.modified.text,
+		});
+	}
+});
+
 const CurrentHistoryItemAvailable = new RawContextKey<boolean>('scmHistoryCurrentItemAvailable', false);
 
 registerAction2(class extends Action2 {
@@ -166,7 +196,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService, @IConfigurationService private readonly configurationService: IConfigurationService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
@@ -195,6 +225,10 @@ export class SCMHistoryViewPane extends ViewPane {
 		));
 		toolbar.element.classList.add("ash-scm-remote-actions");
 		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('scm.graph.pageSize')) { void this.refresh(); }
+			else if (event.affectsConfiguration('scm.graph.pageOnScroll')) { this.loadMoreIfVisible(); }
+		}));
 		void this.refresh();
 	}
 
@@ -299,13 +333,14 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 		try {
 			// One bounded look-ahead page retains the loaded tail when new commits arrive.
-			const limit = previousPage ? Math.max(PageSize, previousPage.items.length) + PageSize : PageSize;
+			const pageSize = this.configurationService.getValue<number>('scm.graph.pageSize');
+			const limit = previousPage ? Math.max(pageSize, previousPage.items.length) + pageSize : pageSize;
 			const loaded = await provider.provideHistoryItems({ skip: 0, limit: limit + 1 });
 			if (this.isDisposed || generation !== this.generation) return;
 			const items = loaded ?? [];
 			const previousTail = previousPage?.items.at(-1)?.id;
 			const tailIndex = previousTail === undefined ? -1 : items.findIndex(item => item.id === previousTail);
-			const retainedCount = Math.max(PageSize, tailIndex + 1);
+			const retainedCount = Math.max(pageSize, tailIndex + 1);
 			const page = { items: items.slice(0, retainedCount), hasMore: items.length > retainedCount };
 			this.page = page;
 			this.head = provider.historyItemRef.get();
@@ -422,7 +457,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private loadMoreIfVisible(): void {
-		if (this.isBodyVisible() && this.graphElement.querySelector('.ash-scm-graph-load-more')) void this.loadMore();
+		if (this.configurationService.getValue<boolean>('scm.graph.pageOnScroll') && this.isBodyVisible() && this.graphElement.querySelector('.ash-scm-graph-load-more')) void this.loadMore();
 	}
 
 	private updateCommitAccessibility(row: HistoryItemRow, index: number): void {
@@ -457,8 +492,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		button.className = "ash-scm-command";
 		button.type = "button";
 		button.disabled = this.loading;
-		button.textContent = this.loading ? "Loading commit history…" : this.moreError ? "Retry" : "Load more commits";
-		button.setAttribute("aria-label", this.moreError ? "Retry loading commit history" : "Load more commits");
+		button.textContent = this.loading ? localize('scm.history.loadingMore', 'Loading commit history…') : this.moreError ? localize('scm.history.retry', 'Retry') : localize('scm.history.loadMore', 'Load more commits');
+		button.setAttribute('aria-label', this.moreError ? localize('scm.history.retryMore', 'Retry loading commit history') : localize('scm.history.loadMore', 'Load more commits'));
 		this.more.add(addDisposableListener(button, "click", () => void this.loadMore()));
 		container.append(button);
 		return container;
@@ -484,10 +519,11 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.updateMore();
 		try {
 			// Load one page per request so startup and scrolling do not drain the repository history.
-			const next = await provider.provideHistoryItems({ skip: page.items.length, limit: PageSize + 1 });
+			const pageSize = this.configurationService.getValue<number>('scm.graph.pageSize');
+			const next = await provider.provideHistoryItems({ skip: page.items.length, limit: pageSize + 1 });
 			if (this.isDisposed || generation !== this.generation) return;
 			const items = next ?? [];
-			this.page = { items: [...page.items, ...items.slice(0, PageSize)], hasMore: items.length > PageSize };
+			this.page = { items: [...page.items, ...items.slice(0, pageSize)], hasMore: items.length > pageSize };
 			this.loading = false;
 			this.renderGraph(this.page);
 			this.updateMore();
@@ -813,7 +849,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (expanded.state !== "ready" || expanded.result.length === 0) {
 			const state = h(document, "li");
 			state.className = `ash-scm-graph-change-state ${expanded.state}`;
-			state.textContent = expanded.state === "loading" ? "Loading changed files…" : expanded.state === "error" ? expanded.message : "No changed files.";
+			state.textContent = expanded.state === "loading" ? localize('scm.history.loadingFiles', 'Loading changed files…') : expanded.state === "error" ? expanded.message : localize('scm.history.noFiles', 'No changed files.');
 			list.append(state);
 			return list;
 		}
@@ -822,7 +858,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			const button = h(document, "button");
 			button.className = "ash-scm-graph-change";
 			button.type = "button";
-			button.title = `Open ${change.path} from ${historyItem.displayId ?? historyItem.id}`;
+			button.title = localize('scm.history.openChange', 'Open {0} from {1}', change.path, historyItem.displayId ?? historyItem.id);
 			const name = change.path.split("/").at(-1) ?? change.path;
 			const parentPath = change.path.includes("/") ? change.path.slice(0, change.path.lastIndexOf("/")) : "";
 			const fileLabel = resources.add(this.resourceLabels.create(button));
@@ -838,18 +874,20 @@ export class SCMHistoryViewPane extends ViewPane {
 			resources.add(registerOpenEditorListeners(button, options => {
 				void this.openCommitChange(historyItem, change, options);
 			}));
-			resources.add(addDisposableListener(button, "contextmenu", event => {
-				event.preventDefault();
-				event.stopPropagation();
+			const scope = resources.add(this.contextKeyService.createScoped(button));
+			scope.setContext('scmHistoryItemChangeStatus', change.status);
+			const showMenu = (event?: MouseEvent): void => {
 				const repository = this.scmViewService.activeRepository;
 				if (!repository) return;
+				button.focus();
 				this.contextMenuService.showContextMenu({
-					getAnchor: () => ({
+					getAnchor: () => event ? {
 						x: event.clientX,
 						y: event.clientY,
 						targetWindow: event.view ?? undefined,
-					}),
+					} : button,
 					menuId: MenuId.SCMHistoryItemChangeContext,
+					contextKeyService: scope,
 					menuActionOptions: {
 						arg: {
 							repository,
@@ -859,7 +897,20 @@ export class SCMHistoryViewPane extends ViewPane {
 							type: 'historyItemChangeViewModel',
 						} satisfies SCMHistoryItemChangeViewModelTreeElement
 					},
+					onHide: cancelled => { if (cancelled && button.isConnected) { button.focus(); } },
 				});
+			};
+			resources.add(addDisposableListener(button, 'contextmenu', event => {
+				event.preventDefault();
+				event.stopPropagation();
+				showMenu(event);
+			}));
+			resources.add(addDisposableListener(button, 'keydown', event => {
+				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+					event.preventDefault();
+					event.stopPropagation();
+					showMenu();
+				}
 			}));
 			row.append(button);
 			list.append(row);

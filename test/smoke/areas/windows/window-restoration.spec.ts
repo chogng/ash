@@ -372,7 +372,8 @@ for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) 
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.newWindowDimensions': policy }));
-		const session = await launch(userDataDirectory, undefined, undefined, { windowMode: 'active' });
+		// Inherit/offset read the last OS-active window; fullscreen requires a shown window.
+		const session = await launch(userDataDirectory, undefined, undefined, { windowMode: policy === 'maximized' ? undefined : 'active' });
 		try {
 			const application = session.application;
 			const page = await application.firstWindow();
@@ -403,7 +404,9 @@ for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) 
 						return Math.max(...(['x', 'y', 'width', 'height'] as const).map(key => Math.abs(actual[key] - expected[key])));
 					}).toBeLessThanOrEqual(2);
 				}
-				await agentsWindow.evaluate(window => window.focus());
+				if (policy === 'inherit' || policy === 'offset') {
+					await agentsWindow.evaluate(window => window.focus());
+				}
 				const openedEmpty = application.waitForEvent('window');
 				await agents.evaluate(() => {
 					const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;

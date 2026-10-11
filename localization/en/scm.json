@@ -41,6 +41,19 @@
     "multiDiff.working": "Working…",
     "multiDiff.failed": "The operation failed.",
     "scm.history.openCommit": "Open Commit {0}",
-    "scm.history.goToCurrent": "Go to Current History Item"
+    "scm.history.goToCurrent": "Go to Current History Item",
+    "scm.history.pageSizeInvalid": "History page size must be a number between 1 and 1000.",
+    "scm.history.pageSizeTitle": "Source Control › Graph: Page Size",
+    "scm.history.pageSizeDescription": "Number of commits loaded initially and with each additional page.",
+    "scm.history.pageOnScrollInvalid": "Automatic history loading must be a boolean.",
+    "scm.history.pageOnScrollTitle": "Source Control › Graph: Page On Scroll",
+    "scm.history.pageOnScrollDescription": "Automatically load the next page when the end of the commit graph is visible.",
+    "scm.history.loadingMore": "Loading commit history…",
+    "scm.history.loadMore": "Load more commits",
+    "scm.history.retryMore": "Retry loading commit history",
+    "scm.history.openFile": "Open File",
+    "scm.history.loadingFiles": "Loading changed files…",
+    "scm.history.noFiles": "No changed files.",
+    "scm.history.openChange": "Open {0} from {1}"
   }
 }

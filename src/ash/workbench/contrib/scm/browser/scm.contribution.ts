@@ -1,4 +1,4 @@
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -97,6 +97,41 @@ for (const [order, action] of sortActions.entries()) {
 }
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+configurationRegistry.registerConfiguration<number>({
+	key: 'scm.graph.pageSize',
+	defaultValue: 50,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'number', minimum: 1, maximum: 1000 },
+	parse: value => {
+		if (typeof value !== 'number' || !Number.isFinite(value) || value < 1 || value > 1000) {
+			throw new TypeError(localize('scm.history.pageSizeInvalid', 'History page size must be a number between 1 and 1000.'));
+		}
+		return Math.floor(value);
+	},
+	setting: {
+		valueType: 'number', minimum: 1, maximum: 1000,
+		get title() { return localize('scm.history.pageSizeTitle', 'Source Control › Graph: Page Size'); },
+		get description() { return localize('scm.history.pageSizeDescription', 'Number of commits loaded initially and with each additional page.'); },
+	},
+});
+configurationRegistry.registerConfiguration<boolean>({
+	key: 'scm.graph.pageOnScroll',
+	defaultValue: true,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'boolean' },
+	parse: value => {
+		if (typeof value !== 'boolean') {
+			throw new TypeError(localize('scm.history.pageOnScrollInvalid', 'Automatic history loading must be a boolean.'));
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('scm.history.pageOnScrollTitle', 'Source Control › Graph: Page On Scroll'); },
+		get description() { return localize('scm.history.pageOnScrollDescription', 'Automatically load the next page when the end of the commit graph is visible.'); },
+	},
+});
 
 ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
 	content: localize('scm.welcome.noProviders', 'No source control providers registered.'),

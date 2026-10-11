@@ -1,10 +1,11 @@
 import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
 import { expect, test } from '../../../automation/test.js';
 
-test.use({ electronWindowMode: 'active' });
+// These cases assert the OS focus result of the host focus operation.
+const focusTest = test.extend({ electronWindowMode: 'active' });
 
 for (const windowKind of ['Workbench', 'Agents'] as const) {
-	test(`Electron ${windowKind} window operations use the registered window host`, async ({ application, target, workbench }) => {
+	focusTest(`Electron ${windowKind} window operations use the registered window host`, async ({ application, target, workbench }) => {
 		test.skip(target.kind !== 'electron', 'This scenario requires the Code Electron Workbench');
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
 		const page = windowKind === 'Agents' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
@@ -54,7 +55,7 @@ for (const windowKind of ['Workbench', 'Agents'] as const) {
 	});
 }
 
-test('window picker data includes the Agents window and can focus it', async ({ application, target, workbench }) => {
+focusTest('window picker data includes the Agents window and can focus it', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'This scenario requires the Code Electron Workbench');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const opened = application.waitForEvent('window');

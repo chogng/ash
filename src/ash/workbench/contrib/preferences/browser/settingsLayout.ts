@@ -347,7 +347,7 @@ export const SettingsNavigation = [
 						id: 'source-control',
 						get label() { return localize('scm.settings.group', 'Source Control'); },
 						get description() { return localize('scm.settings.groupDescription', 'Configure source control providers and diff decorations.'); },
-						settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace'],
+						settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace', 'scm.graph.pageSize', 'scm.graph.pageOnScroll'],
 					},
 				],
 			},
