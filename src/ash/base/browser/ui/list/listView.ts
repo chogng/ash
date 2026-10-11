@@ -395,9 +395,13 @@ export class ListView<T> extends Disposable {
 	}
 
 	get scrollTop(): number { return this.scrollable?.state.top ?? this.element.scrollTop; }
+	set scrollTop(top: number) {
+		if (this.scrollable) this.scrollable.scrollTo(this.scrollable.state.left, top);
+		else this.element.scrollTop = top;
+	}
 	get renderHeight(): number { return this.scrollable?.state.height ?? this.element.clientHeight; }
 
-	reveal(index: number): void {
+	reveal(index: number, relativeTop?: number): void {
 		if (!this.scrollable || index < 0 || index >= this._items.length) return;
 		if (!this.isVirtualized) {
 			const row = this.row(index);
@@ -407,7 +411,8 @@ export class ListView<T> extends Disposable {
 		const top = this.getElementTop(index);
 		const bottom = top + this.getElementHeight(index);
 		const viewport = this.scrollable.state;
-		if (top < viewport.top) this.scrollable.scrollTo(viewport.left, top);
+		if (relativeTop !== undefined) this.scrollable.scrollTo(viewport.left, top - relativeTop * (viewport.height - this.getElementHeight(index)));
+		else if (top < viewport.top) this.scrollable.scrollTo(viewport.left, top);
 		else if (bottom > viewport.top + viewport.height) this.scrollable.scrollTo(viewport.left, bottom - viewport.height);
 	}
 

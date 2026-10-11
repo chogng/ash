@@ -32,7 +32,9 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 		const editor = this.codeEditorService.getFocusedCodeEditor() ?? this.codeEditorService.getActiveCodeEditor();
 		const menu = disposables.add(this.menuService.createMenu(MenuId.CommandPalette));
 		const updateItems = (): void => {
-			const editorCommands = editor?.getSupportedActions().map(action => {
+			// A preview can close while the picker is open; the service owns editor registration.
+			const editorActions = editor && this.codeEditorService.listCodeEditors().includes(editor) ? editor.getSupportedActions() : [];
+			const editorCommands = editorActions.map(action => {
 				const keybinding = this.keybindingService.lookupKeybinding(action.id);
 				return {
 					commandId: action.id,
@@ -41,7 +43,7 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 					detail: action.alias !== action.label ? action.alias : undefined,
 					keybinding: keybinding ? getKeybindingLabel(keybinding) : undefined,
 				};
-			}) ?? [];
+			});
 			const editorCommandIds = new Set(editorCommands.map(command => command.commandId));
 			const globalCommands = menu.getActions()
 				.flatMap(([, actions]) => actions)

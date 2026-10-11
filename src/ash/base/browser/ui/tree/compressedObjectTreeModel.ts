@@ -93,7 +93,13 @@ export class CompressibleObjectTreeModel<T> extends Disposable {
 	rerender(element?: T): void { this.model.rerender(element === undefined ? undefined : this.requireCompressedId(element)); }
 
 	private rebuild(nextRoots: readonly CompressibleTreeElement<T>[]): void {
-		const compressed = this.compressionEnabled ? nextRoots.map(compressTreeElement) : nextRoots.map(noCompressTreeElement);
+		const prepared = this.compressionEnabled ? nextRoots.map(compressTreeElement) : nextRoots.map(noCompressTreeElement);
+		const retainIdentity = (entry: ObjectTreeElement<CompressedTreeNode<T>>): ObjectTreeElement<CompressedTreeNode<T>> => {
+			const previous = this.getCompressedNode(entry.element.elements[0]!);
+			const unchanged = previous?.incompressible === entry.element.incompressible && previous.elements.length === entry.element.elements.length && previous.elements.every((element, index) => element === entry.element.elements[index]);
+			return { ...entry, element: unchanged ? previous : entry.element, children: entry.children?.map(retainIdentity) };
+		};
+		const compressed = prepared.map(retainIdentity);
 		const index = new Map<string, CompressedTreeNode<T>>();
 		const visit = (element: ObjectTreeElement<CompressedTreeNode<T>>): void => {
 			for (const original of element.element.elements) {

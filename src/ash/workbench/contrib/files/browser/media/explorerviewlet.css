@@ -148,3 +148,13 @@
 	font-size: 12px;
 	line-height: 18px;
 }
+
+
+.ash-explorer-compressed .ash-icon-label-segment {
+	cursor: pointer;
+}
+
+.ash-explorer .focused .ash-explorer-active-segment {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

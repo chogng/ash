@@ -1,3 +1,4 @@
+import { AsyncDataTree } from '../../../src/ash/base/browser/ui/tree/asyncDataTree.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { IndexedDB, DBClosedError } from '../../../src/ash/base/browser/indexedDB.js';
@@ -107,6 +108,33 @@ function trackForegroundListeners(target: EventTarget, eventType: string): void 
 
 const textInput = { resource: URI.parse('review:/content.txt'), label: 'Provider text', languageId: 'plaintext' };
 const integration = {
+	async treeFocusAndRestore() {
+		const host = document.createElement('div');
+		host.style.cssText = 'height: 66px; width: 240px;';
+		document.body.append(host);
+		const root = { id: 'root', children: true };
+		const folder = { id: 'folder', children: true };
+		const entries = Array.from({ length: 100 }, (_, index) => ({ id: `file${index}`, children: false }));
+		const source = { hasChildren: (item: typeof root) => item.children, getChildren: async (item: typeof root) => item === root ? [folder] : entries };
+		const options = { scrolling: 'managed' as const, getHeight: () => 22, identityProvider: { getId: (item: typeof root) => item.id }, renderElement: (item: typeof root) => Object.assign(document.createElement('span'), { textContent: item.id }) };
+		using first = new AsyncDataTree(host, source, options);
+		await first.setInput(root);
+		await first.expand(folder);
+		first.setFocus(entries[80]!);
+		first.setSelection([entries[80]!]);
+		const beforeReveal = first.scrollTop;
+		first.reveal(entries[80]!, 0.5);
+		const saved = first.getViewState();
+		first.domNode.remove();
+		using second = new AsyncDataTree(host, source, options);
+		await second.setInput(root, saved);
+		const restored = second.getViewState();
+		second.setFocus(entries[0]!);
+		second.setSelection([entries[0]!]);
+		const afterSelection = second.scrollTop;
+		host.remove();
+		return { beforeReveal, saved, restored, afterSelection };
+	},
 	async cancelBrowserReplacement(): Promise<{ settledBeforeRelease: boolean; cancelled: boolean; disk: string; }> {
 		const name = 'cancel-replacement.txt';
 		await integration.changeBrowserFile(name, 'original');

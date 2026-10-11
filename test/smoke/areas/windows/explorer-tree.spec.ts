@@ -1,3 +1,4 @@
+import type { Workbench } from '../../../automation/workbench.js';
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
@@ -354,6 +355,7 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 		await page.reload();
 		await workbench.waitForReady();
 	}
+	await setExplorerSettings(workbench, { 'explorer.compactFolders': false, 'workbench.iconTheme': hasFileIcons ? 'vs-seti' : null });
 	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 	if (await showSidebar.isVisible()) await showSidebar.click();
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
@@ -543,3 +545,134 @@ test('List smooth scrolling settings persist and display their Chinese translati
 	await expect(setting.control).toBeChecked();
 	await expect(setting.settings.locator('[data-settings-item-id="workbench.list.smoothScrolling"]')).toContainText('控制列表和树形列表是否使用短动画滚动。');
 });
+
+test('Explorer compact folders, unloaded search, drag moves and reload state use the real workbench', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Uses browser-owned test directories');
+	const page = workbench.page;
+	await setExplorerSettings(workbench, {
+		'explorer.autoReveal': false,
+		'explorer.compactFolders': true,
+		'explorer.confirmDragAndDrop': false,
+		'files.exclude': { '**/.git': true, '**/hidden.txt': true },
+	});
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	const directoryName = await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const name = `explorer-alignment-${crypto.randomUUID()}`;
+		const workspace = await root.getDirectoryHandle(name, { create: true });
+		for (const name of ['file10.txt', 'file2.txt', 'hidden.txt']) {
+			const file = await workspace.getFileHandle(name, { create: true });
+			const writer = await file.createWritable(); await writer.write(name); await writer.close();
+		}
+		await workspace.getDirectoryHandle('.git', { create: true });
+		const src = await workspace.getDirectoryHandle('src', { create: true });
+		const deep = await src.getDirectoryHandle('deep', { create: true });
+		const leaf = await deep.getFileHandle('leaf.ts', { create: true });
+		const writer = await leaf.createWritable(); await writer.write('export const leaf = true;'); await writer.close();
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+		return name;
+	});
+	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	const tree = page.locator('.ash-explorer').getByRole('tree');
+	const compact = tree.locator('.ash-tree-row').filter({ hasText: 'src/deep' });
+	await expect(compact).toHaveCount(1);
+	await expect(tree.locator('.ash-icon-label-text')).toHaveText(['src/deep', 'file2.txt', 'file10.txt']);
+	await tree.focus();
+	await tree.press('ControlOrMeta+f');
+	const find = page.getByRole('searchbox', { name: 'Find files in Explorer' });
+	await find.fill('leaf');
+	await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toBeVisible();
+	await find.press('Escape');
+	await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toHaveCount(0);
+	await compact.locator('[data-explorer-segment]').last().click();
+	await expect(compact).toHaveAccessibleName('deep, folder 2 of 2');
+	await tree.press('ArrowLeft');
+	await expect(compact).toHaveAccessibleName('src, folder 1 of 2');
+	await tree.press('ArrowRight');
+	await expect(compact).toHaveAccessibleName('deep, folder 2 of 2');
+	const file10 = tree.locator('.ash-tree-row').filter({ hasText: 'file10.txt' });
+	await file10.click({ modifiers: ['ControlOrMeta'] });
+	await expect(tree.locator('.ash-tree-row.selected')).toHaveCount(2);
+	await compact.locator('[data-explorer-segment]').first().click({ button: 'right' });
+	await expect(tree.locator('.ash-tree-row.selected')).toHaveCount(2);
+	await expect(file10).toHaveAttribute('aria-selected', 'true');
+	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
+	await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/gu, '\n'))).toBe('src\nfile10.txt');
+	const file2 = tree.locator('.ash-tree-row').filter({ hasText: 'file2.txt' });
+	await file2.dragTo(compact.locator('[data-explorer-segment]').last());
+	await expect.poll(() => page.evaluate(async name => {
+		const root = await navigator.storage.getDirectory();
+		const workspace = await root.getDirectoryHandle(name);
+		try { await workspace.getFileHandle('file2.txt'); return false; } catch { }
+		const src = await workspace.getDirectoryHandle('src');
+		const deep = await src.getDirectoryHandle('deep');
+		return (await (await deep.getFileHandle('file2.txt')).getFile()).text();
+	}, directoryName)).toBe('file2.txt');
+	const leafRow = tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' });
+	await expect(leafRow).toBeVisible();
+	await leafRow.click();
+	await expect(leafRow).toHaveClass(/selected/u);
+	await page.reload();
+	await workbench.waitForReady();
+	await expect(tree.locator('.ash-tree-row').filter({ hasText: 'src/deep' })).toBeVisible();
+	await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toHaveClass(/selected/u);
+});
+
+
+test('Explorer focusNoScroll preserves the viewport while explicit reveal and reload restore selection', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Uses browser-owned test directories');
+	const page = workbench.page;
+	await setExplorerSettings(workbench, { 'explorer.autoReveal': 'focusNoScroll', 'explorer.compactFolders': false });
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const workspace = await root.getDirectoryHandle(`explorer-focus-${crypto.randomUUID()}`, { create: true });
+		for (let index = 0; index < 100; index++) {
+			const name = `focus-${String(index).padStart(3, '0')}.txt`;
+			const file = await workspace.getFileHandle(name, { create: true });
+			const writer = await file.createWritable(); await writer.write(name); await writer.close();
+		}
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+	});
+	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	const explorer = page.locator('.ash-explorer');
+	const tree = explorer.getByRole('tree');
+	const viewport = explorer.locator('.ash-scrollbar-viewport');
+	await expect(tree.getByRole('treeitem', { name: 'focus-000.txt', exact: true })).toBeVisible();
+	await workbench.quickaccess.open('focus-090.txt');
+	await workbench.quickaccess.select('focus-090.txt');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'focus-090.txt');
+	await expect(tree).toHaveClass(/has-focused-item/u);
+	expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+	await viewport.evaluate(element => { element.scrollTop = 1600; });
+	const selected = tree.locator('.ash-tree-row.selected');
+	await expect(selected).toContainText('focus-090.txt');
+	const scrollTop = await viewport.evaluate(element => element.scrollTop);
+	await page.reload();
+	await workbench.waitForReady();
+	await expect(selected).toContainText('focus-090.txt');
+	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(scrollTop);
+	await viewport.evaluate(element => { element.scrollTop = 0; });
+	await workbench.editors.groupAt(0).tabs.filter({ hasText: 'focus-090.txt' }).click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Reveal in Explorer View', exact: true }).click();
+	await expect(selected).toContainText('focus-090.txt');
+	await expect(selected).toBeInViewport();
+	expect(await viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(1000);
+});
+
+async function setExplorerSettings(workbench: Workbench, values: Record<string, unknown>): Promise<void> {
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.press('ControlOrMeta+A');
+	await group.editor.input.evaluate((element, values) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', JSON.stringify(values));
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, values);
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+}

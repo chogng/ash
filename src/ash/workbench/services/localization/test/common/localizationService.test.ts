@@ -329,6 +329,10 @@ suite('Workbench localization', () => {
 			localization.translate('ash', 'workbench.editorOpenTooLarge', '', { '0': '128.0' }),
 		], ['警告', '此文件是二进制文件或使用不支持的文本编码，无法显示为文本。', '找不到此文件，无法打开。', '创建文件', '此文件过大，无法作为文本打开（128.0 MiB）。']);
 		assert.match(localization.translate('ash', 'accessibility.explorerHelp', 'Explorer'), /Option\+Command\+V/);
+		assert.match(localization.translate('ash', 'accessibility.explorerHelp', 'Explorer'), /紧凑文件夹/);
+		assert.equal(localization.translate('ash', 'files.compactFoldersTitle', 'Compact folders'), '紧凑文件夹');
+		assert.equal(localization.translate('ash', 'files.autoRevealNoScroll', 'Select without scrolling'), '选中但不滚动');
+		assert.equal(localization.translate('ash', 'accessibility.explorerFolderSegment', '', { '0': 'src', '1': 1, '2': 2 }), 'src，第 1 个文件夹，共 2 个');
 		assert.equal(localization.translate('ash', 'accessibility.explorerSystemFilesPasted', 'Files pasted into the selected folder.'), '文件已粘贴到选中的文件夹。');
 	});
 

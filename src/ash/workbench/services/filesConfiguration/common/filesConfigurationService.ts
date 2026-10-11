@@ -53,14 +53,19 @@ for (const [key, title] of expressionSettings) {
 	});
 }
 registry.registerConfiguration({
-	key: 'explorer.autoReveal', defaultValue: true, parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') {
-			throw new TypeError(localize('files.invalidAutoReveal', 'Auto reveal must be a boolean.'));
+	key: 'explorer.autoReveal', defaultValue: true as boolean | 'focusNoScroll', parse(value: unknown): boolean | 'focusNoScroll' {
+		if (typeof value !== 'boolean' && value !== 'focusNoScroll') {
+			throw new TypeError(localize('files.invalidAutoReveal', 'Auto reveal must be true, false, or focusNoScroll.'));
 		}
 		return value;
-	}, scope: ConfigurationScope.WINDOW, setting: {
-		valueType: 'boolean', title: localize('files.autoRevealTitle', 'Auto reveal'),
+	}, scope: ConfigurationScope.WINDOW, schema: { enum: [true, false, 'focusNoScroll'] }, setting: {
+		valueType: 'select', title: localize('files.autoRevealTitle', 'Auto reveal'),
 		description: localize('files.autoRevealDescription', 'Select the active editor file in Explorer without moving keyboard focus.'),
+		options: [
+			{ value: true, label: localize('files.autoRevealOn', 'Reveal and select') },
+			{ value: false, label: localize('files.autoRevealOff', 'Off') },
+			{ value: 'focusNoScroll', label: localize('files.autoRevealNoScroll', 'Select without scrolling') },
+		],
 	}
 });
 

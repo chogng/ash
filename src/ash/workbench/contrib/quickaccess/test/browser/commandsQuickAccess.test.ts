@@ -146,4 +146,8 @@ test('Command Palette retains the focused embedded editor actions while its pick
 	await Promise.resolve();
 	assert.deepEqual(executed, [true]);
 	editors.removeCodeEditor(editor);
+	// Refresh after the captured preview editor has left its owning registry.
+	editor.getSupportedActions = () => { throw new Error('Disposed preview editor'); };
+	assert.doesNotThrow(() => updated.fire());
+	assert.equal(picker.items.some(candidate => !('type' in candidate) && candidate.description === 'test.outputCommand'), false);
 });

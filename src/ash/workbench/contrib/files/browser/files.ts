@@ -11,6 +11,7 @@ export interface IExplorerView {
 	getContext(): readonly ExplorerItem[];
 	getAccessibleContent(): string;
 	focus(): void;
+	hasFocus(): boolean;
 }
 
 export interface IExplorerClipboardItem {
@@ -30,6 +31,7 @@ export interface IExplorerService {
 	readonly onDidChangeResources: Event<readonly URI[] | undefined>;
 	getRoot(): ExplorerItem | undefined;
 	getContext(): readonly ExplorerItem[];
+	hasViewFocus(): boolean;
 	/** The caller opens the Explorer view before requesting selection. */
 	select(resource: URI, reveal?: boolean | string): Promise<void>;
 	shouldAutoReveal(resource: URI, hasSibling?: (name: string) => boolean): boolean;

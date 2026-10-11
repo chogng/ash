@@ -245,7 +245,18 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 
 	setFocus(id: string, browserEvent?: UIEvent): void {
 		const index = this.items.findIndex((node) => node.id === id);
-		if (index >= 0) this.list.setActiveIndex(index, browserEvent);
+		if (index >= 0) this.list.setActiveIndex(index, browserEvent, { reveal: browserEvent !== undefined });
+	}
+
+	get scrollTop(): number { return this.list.scrollTop; }
+	set scrollTop(top: number) { this.list.scrollTop = top; }
+	reveal(id: string, relativeTop?: number): void {
+		const index = this.items.findIndex(node => node.id === id);
+		if (index >= 0) this.list.reveal(index, relativeTop);
+	}
+	getRelativeTop(id: string): number | null {
+		const index = this.items.findIndex(node => node.id === id);
+		return index < 0 ? null : this.list.getRelativeTop(index);
 	}
 
 	setSelection(ids: readonly string[], browserEvent?: UIEvent): void {
@@ -260,7 +271,10 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		if (!pattern) this.findCandidates = undefined;
 		this.restoreStickyContainer();
 		const active = this.findController.activeMatch;
-		if (active) this.setFocus(active.id);
+		if (active) {
+			this.reveal(active.id);
+			this.setFocus(active.id);
+		}
 		this.updateStickyScroll();
 		this.emitFindResult();
 	}
@@ -455,7 +469,10 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private moveFind(delta: 1 | -1): TNode | undefined {
 		const candidates = this.findController?.query ? this.findableNodes() : this.sourceItems;
 		const match = this.findController?.next(candidates, delta);
-		if (match) this.setFocus(match.id);
+		if (match) {
+			this.reveal(match.id);
+			this.setFocus(match.id);
+		}
 		this.emitFindResult();
 		return match;
 	}

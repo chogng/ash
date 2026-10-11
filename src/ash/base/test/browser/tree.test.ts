@@ -12,6 +12,7 @@ import { CompressibleObjectTree, ObjectTree } from "../../browser/ui/tree/object
 import { ObjectTreeModel } from "../../browser/ui/tree/objectTreeModel.js";
 import { TreeVisibility } from "../../browser/ui/tree/tree.js";
 import { h, svg } from "../../browser/dom.js";
+import { isMacintosh } from "../../common/platform.js";
 
 interface TestNode {
 	readonly id: string;
@@ -21,6 +22,130 @@ interface TestNode {
 	readonly collapsible?: boolean;
 	readonly collapsed?: boolean;
 }
+
+test('Async trees preserve modifier-click selection when multiple selection is enabled', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const root: TestNode = { id: 'root', label: 'Root', expanded: false };
+		const first: TestNode = { id: 'first', label: 'First', expanded: false };
+		const second: TestNode = { id: 'second', label: 'Second', expanded: false };
+		const source = {
+			hasChildren: (item: TestNode) => item === root,
+			getChildren: () => [first, second],
+		};
+		const options = {
+			multipleSelectionSupport: true,
+			identityProvider: { getId: (item: TestNode) => item.id },
+		};
+		using ordinary = new AsyncDataTree(dom.window.document.body, source, {
+			...options,
+			renderElement: item => h(dom.window.document, 'span', item.label),
+		});
+		using compressed = new CompressibleAsyncDataTree(dom.window.document.body, source, {
+			...options,
+			renderCompressedElements: items => h(dom.window.document, 'span', items.map(item => item.label).join('/')),
+		});
+		for (const tree of [ordinary, compressed]) {
+			await tree.setInput(root);
+			assert.equal(tree.element.getAttribute('aria-multiselectable'), 'true');
+			const rows = tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-row');
+			rows[0]!.click();
+			rows[1]!.dispatchEvent(new dom.window.MouseEvent('click', {
+				bubbles: true,
+				ctrlKey: !isMacintosh,
+				metaKey: isMacintosh,
+			}));
+			assert.deepEqual(tree.selection, [first, second]);
+		}
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('AsyncDataTree restores lazy expansion and selection without scrolling programmatic focus', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: false };
+	const folder: TestNode = { id: 'folder', label: 'Folder', expanded: false };
+	const files = Array.from({ length: 50 }, (_, index) => ({ id: `file-${index}`, label: `File ${index}`, expanded: false }));
+	const source = { hasChildren: (item: TestNode) => item === root || item === folder, getChildren: async (item: TestNode) => item === root ? [folder] : files };
+	const options = { ariaLabel: 'Files', scrolling: 'managed' as const, identityProvider: { getId: (item: TestNode) => item.id }, collapseByDefault: () => true, getHeight: () => 22, renderElement: (item: TestNode) => { const label = dom.window.document.createElement('span'); label.textContent = item.label; return label; } };
+	using first = new AsyncDataTree(dom.window.document.body, source, options);
+	const viewport = first.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+	Object.defineProperties(viewport, { clientHeight: { value: 66 }, clientWidth: { value: 200 }, scrollHeight: { value: 1122 } });
+	await first.setInput(root);
+	await first.expand(folder);
+	first.setFocus(files[40]!);
+	first.setSelection([files[40]!]);
+	assert.equal(first.scrollTop, 0);
+	assert.equal(first.getRelativeTop(files[40]!), null);
+	first.reveal(files[40]!, 0.5);
+	assert.ok(first.scrollTop > 0);
+	const saved = first.getViewState();
+	using second = new AsyncDataTree(dom.window.document.body, source, options);
+	const restoredViewport = second.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+	Object.defineProperties(restoredViewport, { clientHeight: { value: 66 }, clientWidth: { value: 200 }, scrollHeight: { value: 1122 } });
+	await second.setInput(root, saved);
+	assert.deepEqual(second.getViewState(), saved);
+	second.setFocus(files[0]!);
+	second.setSelection([files[0]!]);
+	assert.equal(second.scrollTop, saved.scrollTop);
+	dom.window.close();
+});
+
+test('Compact async chains retain selection and loaded expansion across branching and configuration changes', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const root = { id: 'root', label: 'root', directory: true };
+		const a = { id: 'a', label: 'a', directory: true };
+		const b = { id: 'b', label: 'b', directory: true };
+		const c = { id: 'c', label: 'c', directory: true };
+		const file = { id: 'file', label: 'file.txt', directory: false };
+		const sibling = { id: 'sibling', label: 'sibling.txt', directory: false };
+		let branched = false;
+		const reads: string[] = [];
+		using tree = new CompressibleAsyncDataTree<typeof root, typeof root>(dom.window.document.body, {
+			hasChildren: item => item.directory,
+			getChildren: item => {
+				reads.push(item.id);
+				if (item === root) return [a];
+				if (item === a) return branched ? [b, sibling] : [b];
+				if (item === b) return [c];
+				if (item === c) return [file];
+				return [];
+			},
+		}, {
+			compressionEnabled: true,
+			identityProvider: { getId: item => item.id },
+			isIncompressible: item => !item.directory,
+			collapseByDefault: () => true,
+			renderCompressedElements: items => h(dom.window.document, 'span', items.map(item => item.label).join('/')),
+		});
+		await tree.setInput(root);
+		assert.deepEqual(tree.getCompressedTreeNode(a)?.elements, [a, b, c]);
+		assert.deepEqual(reads, ['root', 'a', 'b', 'c']);
+		await tree.updateChildren(root, { recursive: true, deferIfCollapsed: true });
+		assert.deepEqual(tree.getCompressedTreeNode(a)?.elements, [a, b, c]);
+		assert.equal(tree.isCollapsed(c), true);
+		assert.deepEqual(reads.slice(4), ['root', 'a', 'b', 'c']);
+		await tree.expand(c);
+		tree.setFocus(file);
+		tree.setSelection([file]);
+		const before = tree.getViewState();
+		branched = true;
+		await tree.updateChildren(root, { recursive: true });
+		assert.deepEqual(tree.selection, [file]);
+		assert.equal(tree.focus, file);
+		assert.equal(tree.isCollapsed(c), false);
+		assert.deepEqual(tree.getCompressedTreeNode(b)?.elements, [b, c]);
+		tree.updateOptions({ compressionEnabled: false });
+		assert.deepEqual(tree.selection, [file]);
+		assert.equal(tree.focus, file);
+		assert.ok(tree.getVisibleElements().includes(file));
+		tree.updateOptions({ compressionEnabled: true });
+		assert.deepEqual(tree.getViewState().focus, before.focus);
+		assert.deepEqual(tree.getViewState().selection, before.selection);
+	} finally { dom.window.close(); }
+});
 
 test("IndexTreeModel owns index locations and atomic splice", () => {
 	const model = new IndexTreeModel<TestNode>({ id: "root", label: "Root", expanded: true });

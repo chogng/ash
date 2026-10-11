@@ -236,6 +236,11 @@ export class ObjectTree<TNode> extends Disposable {
 		this.tree.setFocus(id, browserEvent);
 	}
 
+	get scrollTop(): number { return this.tree.scrollTop; }
+	set scrollTop(top: number) { this.tree.scrollTop = top; }
+	reveal(id: string, relativeTop?: number): void { this.tree.reveal(id, relativeTop); }
+	getRelativeTop(id: string): number | null { return this.tree.getRelativeTop(id); }
+
 	setSelection(ids: readonly string[], browserEvent?: UIEvent): void {
 		this.tree.setSelection(ids, browserEvent);
 	}
@@ -277,7 +282,11 @@ export interface CompressibleKeyboardNavigationLabelProvider<T> {
 }
 
 export interface CompressibleObjectTreeOptions<T> {
+	readonly onWillRender?: () => void;
+	readonly reuseRows?: boolean;
+	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 	readonly ariaLabel?: string;
+	readonly multipleSelectionSupport?: boolean;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
@@ -354,6 +363,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 		this.model = this._register(new CompressibleObjectTreeModel(options.modelOptions));
 		this.tree = this._register(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
+			multipleSelectionSupport: options.multipleSelectionSupport,
 			scrolling: options.scrolling,
 			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
@@ -368,6 +378,8 @@ export class CompressibleObjectTree<T> extends Disposable {
 			findMatchType: options.findMatchType,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
+			reuseRows: options.reuseRows,
+			onDidRemoveRow: options.onDidRemoveRow,
 			renderElement: (node) => options.renderCompressedElements(node.element.elements, node),
 			renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element.elements, state, container) : undefined,
 		}));
@@ -408,6 +420,16 @@ export class CompressibleObjectTree<T> extends Disposable {
 		const node = this.model.getNode(element);
 		if (node) this.tree.setFocus(node.id, browserEvent);
 	}
+	get scrollTop(): number { return this.tree.scrollTop; }
+	set scrollTop(top: number) { this.tree.scrollTop = top; }
+	reveal(element: T, relativeTop?: number): void {
+		const node = this.model.getNode(element);
+		if (node) this.tree.reveal(node.id, relativeTop);
+	}
+	getRelativeTop(element: T): number | null {
+		const node = this.model.getNode(element);
+		return node ? this.tree.getRelativeTop(node.id) : null;
+	}
 	setSelection(elements: readonly T[], browserEvent?: UIEvent): void {
 		const ids = [...new Set(elements.flatMap((element) => {
 			const node = this.model.getNode(element);
@@ -421,6 +443,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 	}
 
 	private render(): void {
+		this.options.onWillRender?.();
 		this.tree.setFindCandidates(() => flattenTreeNodes(this.model.rootNodes));
 		this.tree.items = this.model.visibleNodes;
 	}

@@ -351,6 +351,8 @@ export class View extends ViewEventHandler {
 		this.decorations = new DecorationsOverlay(this.viewContext, () => this.textLeft);
 		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext));
 		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.contentElement, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
+		// Opaque decoration backgrounds must be painted before indentation and bracket guides.
+		this.contentViewOverlays.addDynamicOverlay(this.decorations);
 		this.contentViewOverlays.addDynamicOverlay(new IndentGuidesOverlay(this.viewContext, {
 			viewModel: this.viewModel,
 			host: this.contentElement,
@@ -358,7 +360,6 @@ export class View extends ViewEventHandler {
 			readTextLeft: () => this.textLeft,
 			textMeasurer: this.textMeasurer,
 		}));
-		this.contentViewOverlays.addDynamicOverlay(this.decorations);
 		this.contentViewOverlays.addDynamicOverlay(new WhitespaceOverlay(
 			this.viewContext,
 			this.model,

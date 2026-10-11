@@ -40,7 +40,7 @@ export class ExplorerService extends Disposable implements IExplorerService {
 	}
 
 	public shouldAutoReveal(resource: URI, hasSibling?: (name: string) => boolean): boolean {
-		if (!this.configuration.getValue<boolean>('explorer.autoReveal') || this.revealExcludeMatcher.matches(resource, hasSibling)) return false;
+		if (!this.configuration.getValue<boolean | 'focusNoScroll'>('explorer.autoReveal') || this.revealExcludeMatcher.matches(resource, hasSibling)) return false;
 		const root = this.model.root;
 		const folder = root?.children?.find(item => extUriBiasedIgnorePathCase.isEqualOrParent(resource, item.resource)) ?? root;
 		if (!folder || !extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.resource)) return true;
@@ -60,6 +60,10 @@ export class ExplorerService extends Disposable implements IExplorerService {
 
 	public getContext(): readonly ExplorerItem[] {
 		return this.view?.getContext() ?? [];
+	}
+
+	public hasViewFocus(): boolean {
+		return this.view?.hasFocus() ?? false;
 	}
 
 	public select(resource: URI, reveal?: boolean | string): Promise<void> {

@@ -300,3 +300,14 @@ test('text groups share provider content and release it only after the last view
 	await expect(page.locator('#text-groups .view-lines')).toContainText('Provider content');
 	expect(await page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({ disposed: false, resolutions: 3, values: ['Provider content'], sameModel: true });
 });
+
+
+test('async file tree separates focus from reveal and restores unloaded expansion', async ({ page }) => {
+	await page.goto('/files.html');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+	const result = await page.evaluate(() => window.ashFilesIntegration.treeFocusAndRestore());
+	expect(result.beforeReveal).toBe(0);
+	expect(result.saved.scrollTop).toBeGreaterThan(1000);
+	expect(result.restored).toEqual(result.saved);
+	expect(result.afterSelection).toBe(result.saved.scrollTop);
+});

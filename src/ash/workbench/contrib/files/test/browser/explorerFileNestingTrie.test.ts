@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
+import { Event } from '../../../../../base/common/event.js';
+import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { FileKind, type IFileService } from '../../../../../platform/files/common/files.js';
 import { ExplorerFileNestingSettingId, ExplorerFileNestingTrie } from '../../common/explorerFileNestingTrie.js';
@@ -33,9 +35,11 @@ test('Explorer data source nests configured files and keeps folders separate', a
 	} as unknown as IFileService;
 	let enabled = true;
 	const configuration = {
-		getValue: (key: string) => key === ExplorerFileNestingSettingId.Enabled ? enabled : { '*.ts': '${capture}.js' },
+		onDidChangeConfiguration: Event.None,
+		getValue: (key: string) => key === ExplorerFileNestingSettingId.Enabled ? enabled : key === ExplorerFileNestingSettingId.Patterns ? { '*.ts': '${capture}.js' } : undefined,
 	} as IConfigurationService;
-	const source = new ExplorerDataSource(fileService, new FileSorter(), configuration);
+	using workspace = new WorkspaceContextService({ id: 'project', uri: folder });
+	using source = new ExplorerDataSource(new FileSorter(configuration), fileService, configuration, workspace);
 	const root = new ExplorerItem(folder, 'project', FileKind.Directory);
 
 	const nested = await source.getChildren(root);

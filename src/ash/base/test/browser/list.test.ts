@@ -600,6 +600,9 @@ test("List DnD exposes target sectors and positional feedback", () => {
 	const second = list.row(1)!;
 	second.getBoundingClientRect = () => ({ top: 40, bottom: 80, left: 0, right: 100, width: 100, height: 40, x: 0, y: 40, toJSON() { } });
 	const transfer = testDataTransfer();
+	const down = new dom.window.MouseEvent("mousedown", { bubbles: true, cancelable: true });
+	first.dispatchEvent(down);
+	assert.equal(down.defaultPrevented, false, "A draggable row must allow the browser to start dragging");
 	first.dispatchEvent(dragEvent(dom, "dragstart", 10, transfer));
 	second.dispatchEvent(dragEvent(dom, "dragover", 79, transfer));
 	assert.equal(second.classList.contains("ash-dnd-drop-before"), true);

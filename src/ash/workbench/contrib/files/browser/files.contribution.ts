@@ -6,7 +6,8 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { OpenEditorsFocusedContext } from '../common/files.js';
+import { OpenEditorsFocusedContext, SortOrder, LexicographicOptions } from '../common/files.js';
+import { ConfigurationScope } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { DirtyFilesIndicator } from '../common/dirtyFilesIndicator.js';
 import { IActivityService } from '../../../services/activity/common/activity.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
@@ -25,6 +26,67 @@ import "./fileActions.contribution.js";
 EditorPanes.registerEditorPane(binaryFileEditorDescriptor());
 
 const configuration = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+configuration.registerConfiguration({
+	key: 'explorer.sortOrder',
+	defaultValue: SortOrder.Default,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: Object.values(SortOrder) },
+	parse(value: unknown): SortOrder {
+		if (!Object.values(SortOrder).includes(value as SortOrder)) throw new TypeError(localize('files.invalidSortOrder', 'Invalid Explorer sort order.'));
+		return value as SortOrder;
+	},
+	setting: {
+		valueType: 'select',
+		title: localize('files.sortOrderTitle', 'Explorer sort order'),
+		description: localize('files.sortOrderDescription', 'Choose how files and folders are ordered in Explorer.'),
+		options: [
+			{ value: SortOrder.Default, label: localize('files.sortFoldersFirst', 'Folders first') },
+			{ value: SortOrder.Mixed, label: localize('files.sortMixed', 'Files and folders together') },
+			{ value: SortOrder.FilesFirst, label: localize('files.sortFilesFirst', 'Files first') },
+			{ value: SortOrder.Type, label: localize('files.sortType', 'File type') },
+			{ value: SortOrder.Modified, label: localize('files.sortModified', 'Last modified') },
+			{ value: SortOrder.FoldersNestsFiles, label: localize('files.sortNests', 'Folders and nested files first') },
+		],
+	},
+});
+configuration.registerConfiguration({
+	key: 'explorer.sortOrderLexicographicOptions',
+	defaultValue: LexicographicOptions.Default,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: Object.values(LexicographicOptions) },
+	parse(value: unknown): LexicographicOptions {
+		if (!Object.values(LexicographicOptions).includes(value as LexicographicOptions)) throw new TypeError(localize('files.invalidLexicographicOrder', 'Invalid Explorer name order.'));
+		return value as LexicographicOptions;
+	},
+	setting: {
+		valueType: 'select',
+		title: localize('files.lexicographicTitle', 'Explorer name order'),
+		description: localize('files.lexicographicDescription', 'Choose how letter case is handled when sorting file names.'),
+		options: [
+			{ value: LexicographicOptions.Default, label: localize('files.lexicographicDefault', 'Natural order') },
+			{ value: LexicographicOptions.Upper, label: localize('files.lexicographicUpper', 'Uppercase first') },
+			{ value: LexicographicOptions.Lower, label: localize('files.lexicographicLower', 'Lowercase first') },
+			{ value: LexicographicOptions.Unicode, label: localize('files.lexicographicUnicode', 'Unicode order') },
+		],
+	},
+});
+for (const [key, defaultValue, title, description] of [
+	['explorer.enableDragAndDrop', true, localize('files.dragEnabledTitle', 'Enable Explorer drag and drop'), localize('files.dragEnabledDescription', 'Move, copy, or import files by dragging them into a folder.')],
+	['explorer.confirmDragAndDrop', true, localize('files.dragConfirmTitle', 'Confirm file moves by dragging'), localize('files.dragConfirmDescription', 'Ask before moving files with drag and drop.')],
+	['explorer.compactFolders', true, localize('files.compactFoldersTitle', 'Compact folders'), localize('files.compactFoldersDescription', 'Show folders with a single child folder in one row.')],
+	['explorer.sortOrderReverse', false, localize('files.sortReverseTitle', 'Reverse Explorer sort order'), localize('files.sortReverseDescription', 'Reverse the order within each group of files and folders.')],
+	['explorer.decorations.colors', true, localize('files.decorationColorsTitle', 'Explorer decoration colors'), localize('files.decorationColorsDescription', 'Show file status colors in Explorer.')],
+	['explorer.decorations.badges', true, localize('files.decorationBadgesTitle', 'Explorer decoration badges'), localize('files.decorationBadgesDescription', 'Show file status badges in Explorer.')],
+] as const) {
+	configuration.registerConfiguration({
+		key, defaultValue, scope: ConfigurationScope.WINDOW, schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value !== 'boolean') throw new TypeError(localize('files.invalidBooleanSetting', '{0} must be a boolean.', key));
+			return value;
+		},
+		setting: { valueType: 'boolean', title, description },
+	});
+}
 configuration.registerConfiguration({
 	key: ExplorerFileNestingSettingId.Enabled,
 	defaultValue: false,
@@ -90,7 +152,7 @@ AccessibleViewRegistry.register({
 	getProvider: accessor => new AccessibleContentProvider(
 		AccessibleViewProviderId.Explorer,
 		{ type: AccessibleViewType.Help },
-		() => localize('accessibility.explorerHelp', 'Explorer\nUse the arrow keys to move through files and folders. Use Page Up and Page Down to move by one visible page. Type a file or folder name to move focus to a matching visible item; repeat its first letter to cycle through matches. Press Right Arrow to expand a folder and Left Arrow to collapse it. Press Enter to open a file. Press the Context Menu key or Shift+F10 for file actions. Press Ctrl or Command+X to cut selected files, Ctrl or Command+C to copy them, and Ctrl or Command+V to paste into a folder. You can also paste files copied from your system file manager. Files cut in Windows or Linux file managers move into the selected local folder. On Mac, press Option+Command+V to move copied files into the selected local folder. Press Escape to cancel a cut. Press Ctrl+F to find loaded file names. Press Escape to close find. Press Alt+F2 to read the visible files. From an editor tab, press Shift+F10 to close editors, copy file paths, split selected editors, or choose Reveal in Explorer View to locate its file in this tree. Use Close Folder or Close Workspace in the File menu to return to an empty workspace after resolving unsaved changes.'),
+		() => localize('accessibility.explorerHelp', 'Explorer\nUse the arrow keys to move through files and folders. Use Page Up and Page Down to move by one visible page. Type a file or folder name to move focus to a matching visible item; repeat its first letter to cycle through matches. Press Right Arrow to expand a folder and Left Arrow to collapse it. In a compact folder row, Left and Right Arrow move between folder names before expanding or collapsing. Press Enter to open a file. Press the Context Menu key or Shift+F10 for file actions. Press Ctrl or Command+X to cut selected files, Ctrl or Command+C to copy them, and Ctrl or Command+V to paste into a folder. You can also paste files copied from your system file manager. Files cut in Windows or Linux file managers move into the selected local folder. On Mac, press Option+Command+V to move copied files into the selected local folder. Press Escape to cancel a cut. Press Ctrl or Command+F to find file names, including collapsed folders. Press Escape to close find. Press Alt+F2 to read the visible files. From an editor tab, press Shift+F10 to close editors, copy file paths, split selected editors, or choose Reveal in Explorer View to locate its file in this tree. Use Close Folder or Close Workspace in the File menu to return to an empty workspace after resolving unsaved changes.'),
 		() => accessor.get(IExplorerService).focus(),
 		AccessibilityVerbositySettingId.Explorer,
 	),

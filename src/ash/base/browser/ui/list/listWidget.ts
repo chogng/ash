@@ -122,7 +122,8 @@ export class List<T> extends Disposable {
 				if (index !== undefined) this.setActiveIndex(index, event);
 			}));
 			this._register(addDisposableListener(this.element, "mousedown", (event: MouseEvent) => {
-				if (this.view.getRowIndex(event) !== undefined) stopEvent(event);
+				const index = this.view.getRowIndex(event);
+				if (index !== undefined) stopEvent(event, { preventDefault: this.view.row(index)?.draggable !== true });
 			}));
 			this._register(addDisposableListener(this.element, "click", (event: MouseEvent) => this.onClick(event)));
 			this._register(addDisposableListener(this.element, "auxclick", (event: MouseEvent) => this.onAuxClick(event)));
@@ -173,9 +174,10 @@ export class List<T> extends Disposable {
 	get activeItem(): T | undefined { return this.items[this._activeIndex]; }
 	get selection(): readonly T[] { return this._selectionIndexes.map((index) => this.items[index]!).filter((item) => item !== undefined); }
 
-	setActiveIndex(index: number, browserEvent?: UIEvent): void {
+	setActiveIndex(index: number, browserEvent?: UIEvent, options: { readonly reveal?: boolean; } = {}): void {
 		if (!Number.isInteger(index) || index < 0 || index >= this.items.length || this._activeIndex === index) return;
 		this._activeIndex = index;
+		if (options.reveal !== false) this.reveal(index);
 		this.syncRows();
 		this.emitFocus(browserEvent);
 	}
@@ -215,6 +217,17 @@ export class List<T> extends Disposable {
 	getElementHeight(index: number): number { return this.view.getElementHeight(index); }
 	indexAt(position: number): number { return this.view.indexAt(position); }
 	get scrollTop(): number { return this.view.scrollTop; }
+	set scrollTop(top: number) { this.view.scrollTop = top; }
+	reveal(index: number, relativeTop?: number): void {
+		this.view.reveal(index, relativeTop);
+		if (this.options.scrolling !== 'managed') this.view.row(index)?.scrollIntoView?.({ block: 'nearest' });
+	}
+	getRelativeTop(index: number): number | null {
+		const top = this.view.getElementTop(index);
+		const height = this.view.getElementHeight(index);
+		if (top < this.scrollTop || top + height > this.scrollTop + this.view.renderHeight) return null;
+		return (top - this.scrollTop) / Math.max(1, this.view.renderHeight - height);
+	}
 
 	private onClick(event: MouseEvent): void {
 		const index = this.view.getRowIndex(event);
@@ -358,15 +371,12 @@ export class List<T> extends Disposable {
 	private syncRows(): void {
 		// Logical focus survives virtualized rows leaving the DOM during scrolling.
 		this.element.classList.toggle("has-focused-item", this.activeItem !== undefined);
-		this.view.reveal(this._activeIndex);
 		const rows = this.element.querySelectorAll<HTMLElement>(":scope > .ash-list-row");
 		rows.forEach((row) => {
 			const index = Number(row.dataset.index);
 			this.updateRowState(row, index);
 		});
 		this.syncActiveDescendant();
-		const activeRow = this.view.row(this._activeIndex);
-		if (activeRow && this.options.scrolling !== "managed") activeRow.scrollIntoView?.({ block: "nearest" });
 	}
 
 	private syncActiveDescendant(): void {

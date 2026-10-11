@@ -1,3 +1,10 @@
+import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
+import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { ILabelService, LabelService } from '../../../../../platform/label/common/labelService.js';
+import { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -16,16 +23,20 @@ import { ConfigurationRegistry, Extensions, type IConfigurationRegistry } from '
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
 import '../../../../services/filesConfiguration/common/filesConfigurationService.js';
+import '../../browser/files.contribution.js';
 import { FileKind, FileNotFoundError, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
-import type { IResourceIconRenderer } from "../../../../browser/labels.js";
-import type { IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
+import { IResourceIconRenderer } from "../../../../browser/labels.js";
+import { IHoverService, type IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { ListConfiguration } from "../../../../../platform/list/browser/listService.js";
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 import type { IContextMenuMenuDelegate, IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 
@@ -164,10 +175,9 @@ test("ExplorerView opens workspace files on single click", async () => {
 	for (const registered of Registry.as<IConfigurationRegistry>(Extensions.Configuration).getRegisteredConfigurations()) {
 		configurationRegistry.registerConfiguration({ key: registered.key, defaultValue: registered.defaultValue, parse: registered.parse });
 	}
-	configurationRegistry.registerConfiguration({ key: ExplorerFileNestingSettingId.Enabled, defaultValue: false, parse: value => Boolean(value) });
-	configurationRegistry.registerConfiguration({ key: ExplorerFileNestingSettingId.Patterns, defaultValue: {}, parse: value => value as Record<string, string> });
 	using configurationService = new InMemoryConfigurationService(configurationRegistry);
 	await configurationService.updateValue(ListConfiguration.openMode, "doubleClick");
+	await configurationService.updateValue('explorer.compactFolders', false);
 	using iconChanges = new Emitter<void>();
 	let fileIconTheme = { ...noFileIconTheme, hasFileIcons: true };
 	const resourceIconRenderer: IResourceIconRenderer = {
@@ -239,6 +249,21 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.equal(openFolderButton?.disabled, false);
 
 		using decorations = new DecorationsService(browser.window.document, new NullLoggerService());
+		using services = new InstantiationService();
+		const getValue = configurationService.getValue.bind(configurationService);
+		configurationService.getValue = ((section?: string) => section ? getValue(section) : getValue()) as typeof configurationService.getValue;
+		services.registerInstance(IConfigurationService, configurationService);
+		services.registerInstance(IWorkspaceContextService, workspaceContextService);
+		services.registerInstance(IFileService, fileService);
+		services.registerInstance(IDialogService, { confirm: async () => { throw new Error('Unexpected drag confirmation'); } } as unknown as IDialogService);
+		services.registerInstance(IResourceIconRenderer, resourceIconRenderer);
+		services.registerInstance(IHoverService, hoverService);
+		services.registerInstance(IDecorationsService, decorations);
+		const paths = new BrowserPathService(createDisconnectedRendererApi(), workspaceContextService);
+		using labels = new LabelService(workspaceContextService, paths, createDisconnectedRendererApi());
+		services.registerInstance(ILabelService, labels);
+		services.registerInstance(IPathService, paths);
+		using storageService = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: workspaceContextService.getWorkspace().id, flushInterval: 0, onError: () => { } });
 		using pane = new ExplorerView(
 			browser.window.document.body,
 			{
@@ -249,15 +274,14 @@ test("ExplorerView opens workspace files on single click", async () => {
 			workspaceContextService,
 			editorService,
 			resourceIconRenderer,
-			hoverService,
 			configurationService,
 			explorerService,
-			{} as IInstantiationService,
+			services,
 			contextKeyService,
 			accessibleViewService,
 			{ showContextMenu: delegate => { contextMenu = delegate as IContextMenuMenuDelegate; } } as IContextMenuService,
 			{ executeCommand: async () => undefined } as unknown as ICommandService,
-			decorations,
+			storageService,
 		);
 		browser.window.document.body.append(pane.element);
 		assert.equal(
@@ -310,6 +334,11 @@ test("ExplorerView opens workspace files on single click", async () => {
 		await waitFor(() => explorerService.getContext()[0]?.name === 'README.md');
 		completeSourceRead!();
 		await oldSelection;
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		pane.element.querySelector('.ash-tree')!.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		assert.deepEqual(contextMenu?.getActionsContext?.(), []);
+		contextMenu?.onHide?.(true);
 		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
 		assert.ok(rowLabels(pane.element).includes('main.ts'));
 		sourceFolder.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
@@ -414,6 +443,15 @@ test("ExplorerView opens workspace files on single click", async () => {
 			}
 			pane.focus();
 			pane.element.querySelector('.ash-tree')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+			assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+			const treeElement = pane.element.querySelector<HTMLElement>('.ash-tree')!;
+			treeElement.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'm' }));
+			assert.equal(treeElement.getAttribute('aria-activedescendant'), mainRow.id);
+			activeEditor = { resource: URI.file('/project/README.md'), label: 'README.md' };
+			activeEditorChanges.fire();
+			await Promise.resolve();
+			await Promise.resolve();
+			assert.equal(treeElement.getAttribute('aria-activedescendant'), mainRow.id);
 			assert.equal(explorerService.getContext()[0]?.name, 'README.md');
 			assert.deepEqual(loadingStates, []);
 			sourceFolder.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
@@ -558,13 +596,13 @@ test("ExplorerView opens workspace files on single click", async () => {
 		await waitFor(() => rowLabels(pane.element).includes("new.txt"));
 		assert.deepEqual(directoryReads, [root.toString()]);
 		assert.equal(browser.window.document.activeElement, treeElement);
-		assert.deepEqual(rowLabels(pane.element), ["src", "main.ts", "README.md", "new.txt"]);
+		assert.deepEqual(rowLabels(pane.element), ["src", "main.ts", "new.txt", "README.md"]);
 		directoryReads.length = 0;
 		addedNestedFile = true;
 		fileChanges.fire({ resources: [URI.file('/project/src/nested.ts')] });
 		await waitFor(() => rowLabels(pane.element).includes('nested.ts'));
 		assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
-		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'README.md', 'new.txt']);
+		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'new.txt', 'README.md']);
 		directoryReads.length = 0;
 		fileChanges.fire({ resources: [URI.file('/project/src')] });
 		await waitFor(() => directoryReads.length === 2);
@@ -578,7 +616,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		await waitFor(() => pane.element.querySelector(".ash-explorer-error")?.textContent === "Workspace files are temporarily unavailable");
 		fileChanges.fire({ resources: [root] });
 		await waitFor(() => pane.element.querySelector(".ash-explorer-error") === null);
-		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'README.md', 'new.txt']);
+		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'new.txt', 'README.md']);
 
 		directoryReads.length = 0;
 		fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
@@ -603,7 +641,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		expandedSourceFolder.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
 		await waitFor(() => rowLabels(pane.element).includes('main.ts'));
 		assert.deepEqual({ reads: directoryReads, labels: rowLabels(pane.element) }, {
-			reads: [URI.file('/project/src').toString()], labels: ['src', 'main.ts', 'README.md', 'new.txt'],
+			reads: [URI.file('/project/src').toString()], labels: ['src', 'main.ts', 'new.txt', 'README.md'],
 		});
 
 		directoryReads.length = 0;
@@ -639,6 +677,18 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.equal(decoratedRows[1]?.querySelector(".ash-icon-label-suffix"), null);
 		assert.equal(decoratedRows[2]?.querySelector(".ash-icon-label-suffix")?.textContent, "?");
 		assert.equal(decoratedRows[2]?.querySelector(".ash-icon-label")?.getAttribute("aria-label"), "unknown, Unknown File Type");
+		using decorationRegistration = decorations.registerDecorationsProvider({ label: 'Test status', onDidChange: Event.None, provideDecorations: resource => resource.path === '/next-project/next.txt' ? { color: 'gitDecoration.modifiedResourceForeground', letter: 'M' } : undefined });
+		const nextLabel = () => [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'next.txt')?.querySelector<HTMLElement>('.ash-icon-label');
+		await waitFor(() => nextLabel()?.className.includes('-color') === true);
+		await configurationService.updateValue('explorer.decorations.colors', false);
+		await waitFor(() => nextLabel()?.className.includes('-color') === false);
+		await configurationService.updateValue('explorer.decorations.badges', false);
+		await waitFor(() => pane.element.querySelectorAll('.ash-icon-label-suffix').length === 0 && nextLabel()?.className.includes('-badge') === false);
+		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'link')?.querySelector('.ash-icon-label')?.getAttribute('aria-label'), 'link, Symbolic Link');
+		await configurationService.updateValue('files.exclude', { '**/next.txt': true });
+		await waitFor(() => !rowLabels(pane.element).includes('next.txt'));
+		await configurationService.updateValue('files.exclude', {});
+		await waitFor(() => rowLabels(pane.element).includes('next.txt'));
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) {

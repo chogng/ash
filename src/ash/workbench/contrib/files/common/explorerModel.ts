@@ -11,6 +11,7 @@ export class ExplorerItem {
 		public readonly name: string,
 		public readonly kind: FileKind,
 		public readonly children?: readonly ExplorerItem[],
+		public readonly mtime?: number,
 	) { }
 
 	public static fromFileEntry(entry: IFileEntry): ExplorerItem {

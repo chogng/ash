@@ -65,8 +65,8 @@ const symbolProvider = resources.add(editorServices.languageFeaturesService.docu
 const diffOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 const service = new DiffService();
 const computation = resources.add(service.createComputationService());
-const original = resources.add(new TextModel('same\nbefore 😀 after\nlast'));
-const modified = resources.add(new TextModel('same\nbefore 🤖 after\nlast'));
+const original = resources.add(new TextModel('same\nbefore 😀 after\nlast', { languageConfigurationService: editorServices.languageConfigurationService }));
+const modified = resources.add(new TextModel('same\nbefore 🤖 after\nlast', { languageConfigurationService: editorServices.languageConfigurationService }));
 const model = resources.add(new DiffModel({ original, modified, diffProvider: computation, diffOptions }));
 const secondOriginal = resources.add(new TextModel('one\n'));
 const secondModified = resources.add(new TextModel('one'));
@@ -192,6 +192,10 @@ const harness = {
 	},
 	setEditorFeatures(options: IDiffEditorOptions): void {
 		single.updateOptions(options);
+	},
+	setGuides(options: Pick<IDiffEditorOptions, 'guides'>): void {
+		single.originalEditor.updateOptions(options);
+		single.modifiedEditor.updateOptions(options);
 	},
 	setFontOptions(options: Pick<IDiffEditorOptions, 'fontFamily' | 'fontSize' | 'lineHeight' | 'fontLigatures'>): void {
 		single.originalEditor.updateOptions(options);

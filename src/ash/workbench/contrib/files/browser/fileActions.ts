@@ -12,6 +12,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IFilesConfigurationService } from '../../../services/filesConfiguration/common/filesConfigurationService.js';
 import { IExplorerService } from './files.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
 
@@ -50,21 +51,28 @@ export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<voi
 
 /** Handles {@link PASTE_FILE_COMMAND_ID}; Ash resources retain cut semantics when the OS also supplies files. */
 export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: unknown, moveRequested?: unknown): Promise<void> {
+	// Menu actions forward the clicked URI and the selected resource snapshot.
+	if ((fileList === undefined || URI.isUri(fileList)) && Array.isArray(moveRequested) && moveRequested.every(URI.isUri)) {
+		fileList = undefined;
+		moveRequested = undefined;
+	}
 	if (fileList !== undefined && !(fileList instanceof FileList)) throw new TypeError('Invalid files to paste');
 	if (moveRequested !== undefined && typeof moveRequested !== 'boolean') throw new TypeError('Invalid system paste operation');
 	const move = moveRequested === true;
 	const explorer = accessor.get(IExplorerService);
 	const clipboard = accessor.get(IClipboardService);
-	const { resources, operation } = await clipboard.readResources();
-	const nativeFiles = resources.length === 0 && fileList && fileList.length > 0 ? [...fileList] : [];
-	const localClipboard = explorer.getToCopy();
-	const cut = nativeFiles.length === 0 && (operation === 'move' || move);
 	const selection = explorer.getContext()[0];
 	const workspaceContext = accessor.get(IWorkspaceContextService);
+	const workspaceId = workspaceContext.getWorkspace().id;
 	const directory = selection && selection.resource.scheme !== 'ash-workspace'
 		? selection.kind === FileKind.Directory ? selection.resource : dirname(selection.resource)
 		: await resolveCreationDirectory(accessor, 'folder');
-	if (!directory) return;
+	if (!directory || workspaceContext.getWorkspace().id !== workspaceId) return;
+	const { resources, operation } = await clipboard.readResources();
+	if (workspaceContext.getWorkspace().id !== workspaceId) return;
+	const nativeFiles = resources.length === 0 && fileList && fileList.length > 0 ? [...fileList] : [];
+	const localClipboard = explorer.getToCopy();
+	const cut = nativeFiles.length === 0 && (operation === 'move' || move);
 	const files = accessor.get(IFileService);
 	const paths = accessor.get(IPathService);
 	if (!resources.length && await accessor.get(ISystemFileTransferService).pasteSystemFiles(directory, move)) {
@@ -75,11 +83,15 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	if (move && !resources.length) return;
 	if (!nativeFiles.length && !resources.length) return;
 	for (const file of nativeFiles) {
+		if (workspaceContext.getWorkspace().id !== workspaceId) return;
 		if (!await paths.hasValidBasename(directory, file.name)) continue;
 		const target = await availablePasteTarget(files, directory, file.name);
-		await files.writeFileBytes(target, new Uint8Array(await file.arrayBuffer()));
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		if (workspaceContext.getWorkspace().id !== workspaceId) return;
+		await files.writeFileBytes(target, bytes);
 	}
 	for (const resource of resources) {
+		if (workspaceContext.getWorkspace().id !== workspaceId) return;
 		const local = localClipboard.items.find(item => extUriBiasedIgnorePathCase.isEqual(item.resource, resource));
 		const kind = local?.kind ?? (await files.stat(resource)).kind;
 		const name = local?.name ?? basename(resource);
@@ -90,6 +102,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		const desired = directory.joinPathSegment(name);
 		if (cut && extUriBiasedIgnorePathCase.isEqual(desired, resource)) continue;
 		const target = await availablePasteTarget(files, directory, name);
+		if (workspaceContext.getWorkspace().id !== workspaceId) return;
 		const sourceFolder = workspaceContext.getWorkspaceFolder(resource);
 		if (cut && sourceFolder && sourceFolder.id === workspaceContext.getWorkspaceFolder(target)?.id) {
 			await files.rename(resource, target, 'error');
@@ -126,6 +139,13 @@ async function availablePasteTarget(files: IFileService, directory: URI, name: s
 export async function renameExplorerItem(accessor: ServicesAccessor): Promise<void> {
 	const item = accessor.get(IExplorerService).getContext()[0];
 	if (!item || isWorkspaceRoot(accessor, item.resource)) return;
+	const filesConfiguration = accessor.get(IFilesConfigurationService);
+	const assertWritable = (): void => {
+		if (filesConfiguration.isReadonly(item.resource)) {
+			throw new Error(localize('files.renameReadonly', 'Cannot rename {0} because it is configured as read-only.', item.name));
+		}
+	};
+	assertWritable();
 	const paths = accessor.get(IPathService);
 	const name = await accessor.get(IQuickInputService).input({
 		title: localize({ bundle: 'ash', key: 'files.rename' }, 'Rename'),
@@ -136,19 +156,28 @@ export async function renameExplorerItem(accessor: ServicesAccessor): Promise<vo
 	});
 	if (name === undefined || name === item.name) return;
 	if (!await paths.hasValidBasename(item.resource, name)) throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'));
+	assertWritable();
 	await accessor.get(IFileService).rename(item.resource, dirname(item.resource).joinPathSegment(name), 'error');
 }
 
 /** Handles {@link DELETE_FILE_COMMAND_ID} with confirmation before permanent deletion. */
 export async function deleteExplorerItem(accessor: ServicesAccessor): Promise<void> {
-	const item = accessor.get(IExplorerService).getContext()[0];
-	if (!item || isWorkspaceRoot(accessor, item.resource)) return;
+	const selection = accessor.get(IExplorerService).getContext().filter(item => !isWorkspaceRoot(accessor, item.resource));
+	const items = selection.filter(item => !selection.some(parent => parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)));
+	if (!items.length) return;
+	const filesConfiguration = accessor.get(IFilesConfigurationService);
+	const includesReadonly = items.some(item => filesConfiguration.isReadonly(item.resource));
 	const dialog = accessor.get(IDialogService);
 	const result = await dialog.confirm({
-		message: localize({ bundle: 'ash', key: 'files.deleteConfirm' }, 'Permanently delete {0}?', item.name),
+		message: items.length === 1
+			? localize({ bundle: 'ash', key: 'files.deleteConfirm' }, 'Permanently delete {0}?', items[0]!.name)
+			: localize('files.deleteManyConfirm', 'Permanently delete {0} selected items?', items.length),
+		detail: includesReadonly ? localize('files.deleteReadonlyDetail', 'Selected files or folders are configured as read-only. Deleting them will override their read-only protection.') : undefined,
 		primaryButton: localize({ bundle: 'ash', key: 'files.deletePermanently' }, 'Delete Permanently'),
 	});
-	if (result.confirmed) await accessor.get(IFileService).delete(item.resource, 'error', 'recursive');
+	if (!result.confirmed) return;
+	const files = accessor.get(IFileService);
+	for (const item of items) await files.delete(item.resource, 'error', 'recursive');
 }
 
 /** Handles {@link OPEN_TO_SIDE_COMMAND_ID} for a selected file. */

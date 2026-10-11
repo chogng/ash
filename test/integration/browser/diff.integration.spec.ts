@@ -15,6 +15,52 @@ test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.ashDiffIntegration?.dispose());
 });
 
+for (const bracketPairs of [false, true]) {
+	test(`diff line backgrounds stay behind ${bracketPairs ? 'bracket' : 'indent'} guides in every theme`, async ({ page }, testInfo) => {
+		await openDiffPage(page);
+		await page.evaluate(bracketPairs => {
+			window.ashDiffIntegration.setComparisonText('{\n    before\n    unchanged\n}', '{\n    after\n    unchanged\n}');
+			window.ashDiffIntegration.setGuides({ guides: { indentation: !bracketPairs, bracketPairs, bracketPairsHorizontal: false } });
+		}, bracketPairs);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const guideClass = bracketPairs ? '.stanza-editor-bracket-guide' : '.stanza-editor-indent-guide';
+		for (const themeId of ['vs', 'vs-dark', 'hc-light', 'hc-black']) {
+			await page.evaluate(themeId => window.ashDiffIntegration.setTheme(themeId), themeId);
+			for (const [side, backgroundClass] of [['original', '.stanza-diff-line-removed'], ['modified', '.stanza-diff-line-added']] as const) {
+				const row = page.locator(`#single .${side} .view-overlay-line[data-line-index="1"]`);
+				const guide = row.locator(guideClass).first();
+				await expect(guide).toBeVisible();
+				await expect(guide).toHaveCSS('pointer-events', 'none');
+				await expect(guide).toHaveCSS('border-left-width', '1px');
+				await expect(row.locator(backgroundClass)).toBeVisible();
+				await expect.poll(() => guide.evaluate((element, backgroundClass) => {
+					const background = element.parentElement!.querySelector<HTMLElement>(backgroundClass)!;
+					const guide = element as HTMLElement;
+					const rect = guide.getBoundingClientRect();
+					const guidePointerEvents = guide.style.pointerEvents;
+					const backgroundPointerEvents = background.style.pointerEvents;
+					// Include decorative nodes in the browser's paint-order hit test, then restore their input behavior.
+					guide.style.pointerEvents = 'auto';
+					background.style.pointerEvents = 'auto';
+					try {
+						const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+						const guideIndex = stack.indexOf(guide);
+						return {
+							guideAboveBackground: guideIndex >= 0 && stack.indexOf(background) > guideIndex,
+							hasStroke: getComputedStyle(guide).borderLeftColor !== 'rgba(0, 0, 0, 0)',
+							hiddenFromAccessibility: guide.closest('[aria-hidden="true"]') !== null,
+						};
+					} finally {
+						guide.style.pointerEvents = guidePointerEvents;
+						background.style.pointerEvents = backgroundPointerEvents;
+					}
+				}, backgroundClass)).toEqual({ guideAboveBackground: true, hasStroke: true, hiddenFromAccessibility: true });
+			}
+			await testInfo.attach(`diff-guides-${themeId}`, { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+		}
+	});
+}
+
 test('session Changes retains collapse and scroll through hiding, refresh and deferred restoration', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());

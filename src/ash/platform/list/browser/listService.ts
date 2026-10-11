@@ -1,4 +1,4 @@
-import { AsyncDataTree, type AsyncDataTreeOptions } from "../../../base/browser/ui/tree/asyncDataTree.js";
+import { AsyncDataTree, CompressibleAsyncDataTree, type CompressibleAsyncDataTreeOptions, type AsyncDataTreeOptions } from "../../../base/browser/ui/tree/asyncDataTree.js";
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "../../../base/browser/ui/tree/objectTree.js";
 import type { AsyncTreeDataSource, TreeIndentGuides } from "../../../base/browser/ui/tree/tree.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
@@ -47,7 +47,7 @@ export class WorkbenchObjectTree<T> extends ObjectTree<T> {
 			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
 			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
 		}));
-		this.navigator = this._register(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
+		this.navigator = this._register(new TreeResourceNavigator<T>(this, configurationService, openOnSingleClick));
 		this.onDidOpen = this.navigator.onDidOpen;
 	}
 }
@@ -73,16 +73,39 @@ export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> 
 			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
 			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
 		}));
-		this.navigator = this._register(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
+		this.navigator = this._register(new TreeResourceNavigator<T>(this, configurationService, openOnSingleClick));
 		this.onDidOpen = this.navigator.onDidOpen;
 	}
 }
 
+export interface WorkbenchCompressibleAsyncDataTreeOptions<T> extends CompressibleAsyncDataTreeOptions<T>, ResourceNavigatorOptions { }
+
+/** Workbench resource navigation over the shared compressed async tree. */
+export class WorkbenchCompressibleAsyncDataTree<TInput, T> extends CompressibleAsyncDataTree<TInput, T> {
+	readonly onDidOpen: Event<ResourceOpenEvent<T>>;
+
+	constructor(container: HTMLElement, dataSource: AsyncTreeDataSource<TInput, T>, options: WorkbenchCompressibleAsyncDataTreeOptions<T>) {
+		const { configurationService, openOnSingleClick, ...treeOptions } = options;
+		super(container, dataSource, {
+			...treeOptions,
+			smoothScrolling: treeOptions.smoothScrolling ?? configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
+			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
+			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
+		});
+		this.onDidOpen = this._register(new TreeResourceNavigator<T>(this, configurationService, openOnSingleClick)).onDidOpen;
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined) this.updateOptions({ smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling) });
+			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
+			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
+		}));
+	}
+}
+
 interface ResourceNavigationTree<T> {
-	readonly onPointer: Event<ObjectTreePointerEvent<T>>;
-	readonly onDidDoubleClick: Event<ObjectTreePointerEvent<T>>;
-	readonly onDidAccept: Event<ObjectTreeAcceptEvent<T>>;
-	readonly onDidChangeSelection: Event<ObjectTreeSelectionChangeEvent<T>>;
+	readonly onPointer: Event<Pick<ObjectTreePointerEvent<T>, "element" | "target" | "browserEvent">>;
+	readonly onDidDoubleClick: Event<Pick<ObjectTreePointerEvent<T>, "element" | "target" | "browserEvent">>;
+	readonly onDidAccept: Event<Pick<ObjectTreeAcceptEvent<T>, "element" | "browserEvent">>;
+	readonly onDidChangeSelection: Event<Pick<ObjectTreeSelectionChangeEvent<T>, "elements" | "browserEvent">>;
 }
 
 /** Shared interaction policy behind every Platform List resource-capable wrapper. */
@@ -99,23 +122,23 @@ class TreeResourceNavigator<T> extends Disposable {
 		this._register(tree.onDidChangeSelection((event) => this.onSelection(event)));
 	}
 
-	private onPointer(event: ObjectTreePointerEvent<T>): void {
+	private onPointer(event: Pick<ObjectTreePointerEvent<T>, "element" | "target" | "browserEvent">): void {
 		if (!this.shouldOpenOnSingleClick() || event.browserEvent.detail === 2) return;
 		this.open(event.element, toOpenEditorOptions(event.browserEvent), event.browserEvent);
 	}
 
-	private onDoubleClick(event: ObjectTreePointerEvent<T>): void {
+	private onDoubleClick(event: Pick<ObjectTreePointerEvent<T>, "element" | "target" | "browserEvent">): void {
 		this.open(event.element, toOpenEditorOptions(event.browserEvent, true), event.browserEvent);
 	}
 
-	private onAccept(event: ObjectTreeAcceptEvent<T>): void {
+	private onAccept(event: Pick<ObjectTreeAcceptEvent<T>, "element" | "browserEvent">): void {
 		this.open(event.element, {
 			editorOptions: { pinned: event.browserEvent.key !== " ", preserveFocus: event.browserEvent.key === " " },
 			openToSide: event.browserEvent.ctrlKey || event.browserEvent.metaKey || event.browserEvent.altKey,
 		}, event.browserEvent);
 	}
 
-	private onSelection(event: ObjectTreeSelectionChangeEvent<T>): void {
+	private onSelection(event: Pick<ObjectTreeSelectionChangeEvent<T>, "elements" | "browserEvent">): void {
 		if (!isKeyboardEvent(event.browserEvent) || event.elements.length !== 1 || event.browserEvent.key === "Enter" || event.browserEvent.key === " ") return;
 		this.open(event.elements[0]!, { editorOptions: { pinned: false, preserveFocus: true }, openToSide: false }, event.browserEvent);
 	}

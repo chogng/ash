@@ -27,6 +27,7 @@ test('Explorer service exposes the current view and releases it on disposal', ()
 		getAccessibleContent: () => 'main.ts',
 		selectResource: async () => { },
 		focus: () => { focused++; },
+		hasFocus: () => focused > 0,
 	};
 	const registration = service.registerView(view);
 	assert.deepEqual(service.getContext(), [selected]);
@@ -124,7 +125,7 @@ test('Explorer auto-reveal honors conditions and settings without changing manua
 	assert.equal(service.shouldAutoReveal(resource), true);
 	await configuration.updateValue('explorer.autoRevealExclude', { '**/*.js': { when: '$(basename).ts' } });
 	let selected: string | undefined;
-	using registration = service.registerView({ selectResource: async resource => { selected = resource?.path; }, getContext: () => [], getAccessibleContent: () => '', focus() { } });
+	using registration = service.registerView({ selectResource: async resource => { selected = resource?.path; }, getContext: () => [], getAccessibleContent: () => '', focus() { }, hasFocus: () => false });
 	await service.select(resource, 'force');
 	assert.equal(selected, '/root/main.js');
 	await configuration.updateValue('explorer.autoReveal', false);
