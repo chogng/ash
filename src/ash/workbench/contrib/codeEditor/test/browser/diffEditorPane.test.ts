@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from "../../../../../base/common/uri.js";
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
@@ -32,6 +32,8 @@ import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../.
 import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { type ITextFileService } from "../../../../services/textfile/common/textfiles.js";
 
+import { StatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
+
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
@@ -48,6 +50,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
+const { EditorStatusContribution } = await import('../../../../browser/parts/editor/editorStatus.js');
 const { TextDiffEditor: DiffEditorPane } = await import("../../../../browser/parts/editor/textDiffEditor.js");
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 await import('../../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js');
@@ -590,3 +593,40 @@ function requiredElement<T extends Element>(ownerDocument: Document, selector: s
 	if (!element) throw new Error(`Missing ${selector}`);
 	return element;
 }
+
+
+test('Diff editor status follows the selected side and ignores the inactive side', async () => {
+	const dom = createTestDom();
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+	using services = new DisposableStore();
+	const container = registerTestComponentServices(createCodeEditorServices(services));
+	using pane = container.createInstance(DiffEditorPane, resourceStore, { modelService: models, createComputationService: () => new PaneTestDiffComputationService() });
+	pane.create(parent);
+	pane.layout({ width: 600, height: 300 });
+	const input = createDiffEditorInput(
+		{ resource: URI.file('/status-before.txt'), initialText: 'before\nshared', readOnly: true },
+		{ resource: URI.file('/status-after.txt'), initialText: 'after\nshared' },
+	);
+	await pane.setInput(input, new AbortController().signal);
+	const widget = pane.getControl();
+	assert.ok(widget);
+	using statusbar = new StatusbarService();
+	const statusPart = { domNode: parent, activeInput: input, activePane: pane, onDidChangeEditors: Event.None } as unknown as IEditorPart;
+	using status = container.createInstance(EditorStatusContribution, statusPart, statusbar);
+	const cursorStatus = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.cursor')?.entry.text;
+	assert.equal(cursorStatus(), 'Ln 1, Col 1');
+	widget.modifiedEditor.focus();
+	widget.modifiedEditor.setSelection(new Range(2, 3, 2, 3));
+	assert.equal(cursorStatus(), 'Ln 2, Col 3');
+	widget.originalEditor.focus();
+	widget.originalEditor.setSelection(new Range(1, 4, 1, 4));
+	assert.equal(cursorStatus(), 'Ln 1, Col 4');
+	widget.modifiedEditor.setSelection(new Range(2, 1, 2, 1));
+	assert.equal(cursorStatus(), 'Ln 1, Col 4');
+	widget.modifiedEditor.focus();
+	assert.equal(cursorStatus(), 'Ln 2, Col 1');
+});

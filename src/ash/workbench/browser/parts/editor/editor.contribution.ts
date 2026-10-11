@@ -1,7 +1,8 @@
 import { EditorPanes } from "../../editor.js";
 import { binaryDiffEditorDescriptor } from "./binaryDiffEditor.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import { QuickAccessRegistry } from "../../../../platform/quickinput/common/quickAccess.js";
 import { localize } from "../../../../nls.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
@@ -21,8 +22,11 @@ import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import { EditorAutoSave } from "./editorAutoSave.js";
 import { IEditorPart } from "./editorPart.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
-import { EditorStatusContribution } from "./editorStatus.js";
+import { ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from "./editorStatus.js";
 import { DynamicEditorConfigurations } from "./editorConfiguration.js";
+
+registerAction2(ChangeLanguageAction);
+registerAction2(ChangeEOLAction);
 
 EditorPanes.registerEditorPane(binaryDiffEditorDescriptor());
 
@@ -62,10 +66,9 @@ QuickAccessRegistry.register({
 registerWorkbenchContribution(
 	EditorStatusContribution.ID,
 	WorkbenchPhase.AfterRestored,
-	accessor => new EditorStatusContribution(
+	accessor => accessor.get(IInstantiationService).createInstance(EditorStatusContribution,
 		accessor.get(IEditorPart),
 		accessor.get(IStatusbarService),
-		accessor.get(IAccessibilityService),
 	),
 );
 

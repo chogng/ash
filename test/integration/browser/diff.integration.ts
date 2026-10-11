@@ -87,12 +87,10 @@ import gitChinese from '../../../extensions/git/package.nls.zh-CN.json' with { t
 import { MainThreadEditorChanges } from '../../../src/ash/workbench/api/browser/mainThreadEditorChanges.js';
 import { parseExtensionEditorInput } from '../../../src/ash/workbench/api/browser/mainThreadEditorInput.js';
 import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
-import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 async function createGitMultiDiffEditorInput(...args: Parameters<typeof gitMultiDiffInput>) { return parseExtensionEditorInput(normalizeExtensionHostPayload(JSON.parse(JSON.stringify(await gitMultiDiffInput(...args), wireReplacer)))); }
 function wireReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown { return this[key] instanceof URI ? this[key].toString() : value; }
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
-import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
@@ -248,6 +246,16 @@ function createSessionChangesPane(): SessionChangesEditor {
 	return pane;
 }
 
+import '../../../src/ash/editor/contrib/indentation/browser/indentation.js';
+import '../../../src/ash/editor/contrib/quickAccess/browser/quickAccessController.js';
+import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLineQuickAccess.js';
+import { EditorStatusContribution, ChangeLanguageAction, ChangeEOLAction } from '../../../src/ash/workbench/browser/parts/editor/editorStatus.js';
+import { StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
+import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
+resources.add(registerAction2(ChangeLanguageAction));
+resources.add(registerAction2(ChangeEOLAction));
+
 const harness = {
 	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8'): Promise<void> {
 		titleGitEncoding = encoding;
@@ -293,6 +301,7 @@ const harness = {
 		services.registerInstance(IDialogService, dialogs);
 		resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 		registerCodeEditorServices(services);
+		resources.add(services.get(ILanguageService).registerLanguage({ id: 'status-language', aliases: ['Status Language'] }));
 		services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 		if (kind === 'git') {
 			const locale = new URLSearchParams(location.search).get('locale') === 'zh-CN' ? 'zh-CN' : 'en';
@@ -361,6 +370,9 @@ const harness = {
 			titleActions: { menuService: services.get(IMenuService), contextMenuProvider: services.get(IContextMenuService) },
 		}));
 		titleEditor.layout({ width: 1000, height: 300 });
+		const statusbar = resources.add(new StatusbarService());
+		resources.add(services.createInstance(StatusbarPart, host, statusbar));
+		resources.add(services.createInstance(EditorStatusContribution, titleEditor, statusbar));
 		if (kind === 'git') {
 			titleGitStatus = makeTitleGitStatus(['src/first.ts', 'src/second.ts'], 1);
 			if (gitComparison === 'staged') {

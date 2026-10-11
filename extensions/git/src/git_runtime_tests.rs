@@ -899,6 +899,229 @@ fn ref_snapshots_preserve_ancestor_labels_but_invalidate_added_and_removed_histo
 }
 
 #[test]
+fn head_moves_with_retained_history_update_metadata_without_retiring_cursors() {
+    let repository = TestRepository::init();
+    for index in 0..8 {
+        repository.write("tracked.txt", &format!("{index}\n"));
+        repository.git(&["add", "."]);
+        repository.git(&["commit", "-m", &format!("retained {index}")]);
+    }
+    let tip = repository.git_output(&["rev-parse", "HEAD"]);
+    let ancestor = repository.git_output(&["rev-parse", "HEAD~3"]);
+    repository.git(&["tag", "retained-tip", &tip]);
+    repository.git(&["branch", "same-tip", &tip]);
+    repository.git(&["branch", "ancestor", &ancestor]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let limit = std::num::NonZeroUsize::new(1).unwrap();
+    let initial = runtime.graph(1, limit, None).unwrap();
+    let mut previous = runtime.status().unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    for (index, expected_name, expected_id) in [
+        (0, Some("same-tip"), &tip),
+        (1, Some("ancestor"), &ancestor),
+        (2, None, &tip),
+        (3, Some("main"), &tip),
+        (4, Some("main"), &ancestor),
+        (5, Some("main"), &tip),
+        (6, Some("main"), &ancestor),
+        (7, Some("main"), &tip),
+    ] {
+        let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+        let status = match index {
+            0 => runtime.switch_branch("same-tip").unwrap(),
+            1 => runtime.switch_branch("ancestor").unwrap(),
+            2 => {
+                runtime
+                    .command_for(
+                        None,
+                        &ash_git::GitCommand::CheckoutDetached {
+                            object_id: tip.clone(),
+                        },
+                        &cancellation.token(),
+                    )
+                    .unwrap()
+                    .0
+            }
+            3 => runtime.switch_branch("main").unwrap(),
+            4 | 6 => {
+                repository.git(&[
+                    "reset",
+                    if index == 4 { "--soft" } else { "--mixed" },
+                    &ancestor,
+                ]);
+                runtime.status().unwrap()
+            }
+            5 | 7 => {
+                repository.git(&["reset", "--hard", &tip]);
+                runtime.status().unwrap()
+            }
+            _ => unreachable!(),
+        };
+        assert!(status.history_revision > previous.history_revision);
+        match &status.head {
+            ash_app_server_protocol::protocol::git::GitHeadDto::Branch {
+                name, object_id, ..
+            } => {
+                assert_eq!(Some(name.as_str()), expected_name);
+                assert_eq!(object_id, expected_id);
+            }
+            ash_app_server_protocol::protocol::git::GitHeadDto::Detached { object_id } => {
+                assert_eq!(expected_name, None);
+                assert_eq!(object_id, expected_id);
+            }
+            head => panic!("unexpected HEAD: {head:?}"),
+        }
+        let refs = runtime.history_refs_for(None).unwrap();
+        assert_eq!(refs.graph_revision, initial.graph_revision);
+        let current = refs
+            .branches
+            .iter()
+            .filter(|branch| branch.current)
+            .collect::<Vec<_>>();
+        assert_eq!(current.len(), usize::from(expected_name.is_some()));
+        if let Some(name) = expected_name {
+            assert_eq!(current[0].name, name);
+        }
+        let rest = runtime
+            .graph(1, std::num::NonZeroUsize::new(20).unwrap(), Some(&cursor))
+            .unwrap();
+        assert_eq!(rest.graph_revision, initial.graph_revision);
+        assert_eq!(rest.history_revision, status.history_revision);
+        assert_eq!(
+            rest.commits
+                .iter()
+                .map(|commit| commit.subject.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "retained 6",
+                "retained 5",
+                "retained 4",
+                "retained 3",
+                "retained 2",
+                "retained 1",
+                "retained 0"
+            ]
+        );
+        assert!(!rest.has_more);
+        previous = status;
+    }
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    let amended = runtime
+        .commit_for(
+            None,
+            GitCommitRequest::new("amended tip".into()).unwrap().amend(),
+        )
+        .unwrap();
+    let refs = runtime.history_refs_for(None).unwrap();
+    assert!(refs.graph_revision > initial.graph_revision);
+    assert!(matches!(
+        runtime.graph(1, limit, Some(&cursor)),
+        Err(super::GitRuntimeError::InvalidGraphCursor)
+    ));
+    repository.git(&["tag", "retained-amend", &amended.object_id]);
+    let retained = runtime.history_refs_for(None).unwrap();
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    repository.git(&["reset", "--hard", &tip]);
+    let reset = runtime.history_refs_for(None).unwrap();
+    assert_eq!(reset.graph_revision, retained.graph_revision);
+    assert!(runtime.graph(1, limit, Some(&cursor)).is_ok());
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    repository.git(&["tag", "-d", "retained-amend"]);
+    let removed = runtime.history_refs_for(None).unwrap();
+    assert!(removed.graph_revision > reset.graph_revision);
+    assert!(matches!(
+        runtime.graph(1, limit, Some(&cursor)),
+        Err(super::GitRuntimeError::InvalidGraphCursor)
+    ));
+}
+
+#[test]
+fn fetch_then_pull_reuses_fetched_history_and_ref_only_fetch_preserves_cursors() {
+    let source = TestRepository::init();
+    for message in ["first", "second"] {
+        source.write("tracked.txt", message);
+        source.git(&["add", "."]);
+        source.git(&["commit", "-m", message]);
+    }
+    let second = source.git_output(&["rev-parse", "HEAD"]);
+    let consumer = TestRepository::init();
+    consumer.git(&["remote", "add", "origin", source.root().to_str().unwrap()]);
+    consumer.git(&["fetch", "origin"]);
+    consumer.git(&["switch", "-C", "main", "--track", "origin/main"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(consumer.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let limit = std::num::NonZeroUsize::new(1).unwrap();
+    let initial = runtime.graph(1, limit, None).unwrap();
+    let cursor = initial.next_cursor.as_deref().unwrap();
+    let status = runtime.status().unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let noop = runtime.fetch(&cancellation.token()).unwrap();
+    assert_eq!(noop.history_revision, status.history_revision);
+    assert!(runtime.graph(1, limit, Some(cursor)).is_ok());
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    source.write("tracked.txt", "third");
+    source.git(&["add", "."]);
+    source.git(&["commit", "-m", "third"]);
+    let third = source.git_output(&["rev-parse", "HEAD"]);
+    let fetched = runtime.fetch(&cancellation.token()).unwrap();
+    assert!(fetched.history_revision > status.history_revision);
+    assert!(matches!(
+        runtime.graph(1, limit, Some(&cursor)),
+        Err(super::GitRuntimeError::InvalidGraphCursor)
+    ));
+    let page = runtime.graph(1, limit, None).unwrap();
+    assert_eq!(page.commits[0].object_id, third);
+    let pulled = runtime
+        .pull_fast_forward_for(None, &cancellation.token())
+        .unwrap();
+    assert_ne!(pulled.head, fetched.head);
+    let refs = runtime.history_refs_for(None).unwrap();
+    assert_eq!(refs.graph_revision, page.graph_revision);
+    let rest = runtime
+        .graph(1, limit, page.next_cursor.as_deref())
+        .unwrap();
+    assert_eq!(rest.commits[0].object_id, second);
+    assert_eq!(rest.history_revision, pulled.history_revision);
+    assert!(
+        refs.references
+            .iter()
+            .filter(|reference| reference.object_id == third)
+            .any(|reference| reference.current)
+    );
+    // A forced remote rewind changes labels and ahead/behind, but local HEAD retains its commits.
+    source.git(&["reset", "--hard", &second]);
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    let rewound = runtime.fetch(&cancellation.token()).unwrap();
+    assert!(rewound.history_revision > pulled.history_revision);
+    assert_eq!(
+        runtime.history_refs_for(None).unwrap().graph_revision,
+        page.graph_revision
+    );
+    let rest = runtime
+        .graph(1, std::num::NonZeroUsize::new(10).unwrap(), Some(&cursor))
+        .unwrap();
+    assert_eq!(
+        rest.commits
+            .iter()
+            .map(|commit| commit.subject.as_str())
+            .collect::<Vec<_>>(),
+        ["second", "first"]
+    );
+    assert!(
+        rest.references
+            .iter()
+            .any(|reference| reference.name == "origin/main" && reference.object_id == second)
+    );
+}
+
+#[test]
 fn discovery_watches_empty_dirs_and_preserves_existing_repository_owners() {
     let repository = TestRepository::init();
     std::fs::remove_dir_all(repository.root().join(".git")).unwrap();

@@ -1,4 +1,6 @@
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { autorun, type IReader } from '../../../../../base/common/observable.js';
 import { localize } from '../../../../../nls.js';
@@ -10,7 +12,8 @@ import { type DiffModel } from '../../../../common/diff/diffModel.js';
 import { LineDiffKind, type LineDiff } from '../../../../common/diff/lineDiff.js';
 import { type LanguageSymbolKind } from '../../../../common/languages.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
-import { type IViewZoneChangeAccessor } from '../../../editorBrowser.js';
+import { GlyphMarginLane } from '../../../../common/model.js';
+import { type IGlyphMarginWidget, type IOverlayWidget, type IViewZoneChangeAccessor } from '../../../editorBrowser.js';
 import { type CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
 
 export interface IDiffEditorBreadcrumbsSource extends IDisposable {
@@ -37,6 +40,7 @@ export class HideUnchangedRegionsFeature extends Disposable {
 	private readonly source = this._register(new MutableDisposable<IDiffEditorBreadcrumbsSource>());
 	private regions: UnchangedRegion[] = [];
 	private options: HideUnchangedRegionsOptions;
+	private isUpdatingHiddenAreas = false;
 
 	constructor(
 		private readonly original: CodeEditorWidget,
@@ -51,6 +55,9 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		this._register(model.onDidChange(() => this.recompute()));
 		for (const [editor, side] of [[original, 'original'], [modified, 'modified']] as const) {
 			this._register(editor.onDidChangeCursorSelection(() => {
+				if (this.isUpdatingHiddenAreas) {
+					return;
+				}
 				let changed = false;
 				for (const region of this.regions) {
 					const range = hiddenRange(region[side], region);
@@ -71,6 +78,10 @@ export class HideUnchangedRegionsFeature extends Disposable {
 			this.modified.setHiddenAreas([]);
 		}));
 		this.recompute();
+	}
+
+	public get isEnabled(): boolean {
+		return this.options.enabled;
 	}
 
 	public setOptions(options: HideUnchangedRegionsOptions): void {
@@ -102,12 +113,47 @@ export class HideUnchangedRegionsFeature extends Disposable {
 			const modified = hiddenRange(region.modified, region);
 			return original && modified ? [{ region, original, modified }] : [];
 		});
-		this.original.setHiddenAreas(visibleRegions.map(({ original }) => original.toInclusiveRange()!));
-		this.modified.setHiddenAreas(visibleRegions.map(({ modified }) => modified.toInclusiveRange()!));
+		this.isUpdatingHiddenAreas = true;
+		try {
+			this.original.setHiddenAreas(visibleRegions.map(({ original }) => original.toInclusiveRange()!));
+			this.modified.setHiddenAreas(visibleRegions.map(({ modified }) => modified.toInclusiveRange()!));
+		} finally {
+			this.isUpdatingHiddenAreas = false;
+		}
 		for (const { region, original, modified } of visibleRegions) {
 			this.addZone(this.original, original, region, false);
 			this.addZone(this.modified, modified, region, true);
 		}
+		for (const region of this.regions) {
+			if (hiddenRange(region.original, region)) {
+				continue;
+			}
+			this.addCollapseButton(this.original, region, region.original);
+			this.addCollapseButton(this.modified, region, region.modified);
+		}
+	}
+
+	private addCollapseButton(editor: CodeEditorWidget, region: UnchangedRegion, range: LineRange): void {
+		const domNode = h(editor.getDomNode().ownerDocument, 'div');
+		domNode.className = 'ash-diff-fold-unchanged';
+		const label = localize('diffEditor.foldUnchanged', 'Collapse unchanged region');
+		const button = this.zones.add(new Button(domNode, { label, title: label, icon: Lxicon.fold, iconOnly: true, size: 'small' }));
+		this.zones.add(button.onDidClick(() => {
+			region.revealedAbove = 0;
+			region.revealedBelow = 0;
+			this.render();
+			const line = range.startLineNumber > 1 ? range.startLineNumber - 1 : range.endLineNumberExclusive;
+			editor.revealRange(new Range(line, 1, line, 1));
+			editor.focus();
+			editor.announceAccessibilityStatus(localize('diffEditor.collapsedLines', 'Collapsed {0} unchanged lines', range.length));
+		}));
+		const widget: IGlyphMarginWidget = {
+			getId: () => `diff-fold-unchanged-${range.startLineNumber}`,
+			getDomNode: () => domNode,
+			getPosition: () => ({ range: new Range(range.startLineNumber, 1, range.startLineNumber, 1), lane: GlyphMarginLane.Center, zIndex: 20 }),
+		};
+		editor.addGlyphMarginWidget(widget);
+		this.zones.add(toDisposable(() => editor.removeGlyphMarginWidget(widget)));
 	}
 
 	private addZone(editor: CodeEditorWidget, range: LineRange, region: UnchangedRegion, showBreadcrumbs: boolean): void {
@@ -116,13 +162,27 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		const content = h(domNode.ownerDocument, 'div');
 		content.className = 'ash-diff-hidden-region-content';
 		domNode.append(content);
+		const disclosure = h(domNode.ownerDocument, 'div');
+		disclosure.className = 'ash-diff-hidden-region-disclosure';
+		content.append(disclosure);
 		const count = h(domNode.ownerDocument, 'span');
 		count.className = 'ash-diff-hidden-region-count';
 		count.textContent = localize('diffEditor.hiddenLines', '{0} hidden lines', range.length);
 		count.title = count.textContent;
 		content.append(count);
+		this.zones.add(addDisposableListener(count, 'dblclick', event => {
+			if (event.button !== 0) {
+				return;
+			}
+			event.preventDefault();
+			region.revealedAbove = region.original.length;
+			this.render();
+			editor.revealRange(new Range(range.startLineNumber, 1, range.startLineNumber, 1));
+			editor.focus();
+			editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', range.length));
+		}));
 
-		this.addButton(content, localize('diffEditor.showMoreAbove', 'Show {0} more lines above', Math.min(range.length, this.options.revealLineCount)), '↑', () => {
+		this.addButton(domNode, localize('diffEditor.showMoreAbove', 'Show {0} more lines above', Math.min(range.length, this.options.revealLineCount)), 'ash-diff-hidden-region-above', () => {
 			const count = Math.min(range.length, this.options.revealLineCount);
 			region.revealedAbove += count;
 			this.render();
@@ -130,14 +190,23 @@ export class HideUnchangedRegionsFeature extends Disposable {
 			editor.focus();
 			editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', count));
 		});
-		this.addButton(content, localize('diffEditor.showAll', 'Show all unchanged lines'), '⋯', () => {
+		const showAllLabel = localize('diffEditor.showAll', 'Show all unchanged lines');
+		const showAll = this.zones.add(new Button(disclosure, {
+			label: showAllLabel,
+			title: showAllLabel,
+			icon: Lxicon.unfold,
+			iconOnly: true,
+			presentation: 'quiet',
+			size: 'small',
+		}));
+		this.zones.add(showAll.onDidClick(() => {
 			region.revealedAbove = region.original.length;
 			this.render();
 			editor.revealRange(new Range(range.startLineNumber, 1, range.startLineNumber, 1));
 			editor.focus();
 			editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', range.length));
-		});
-		this.addButton(content, localize('diffEditor.showMoreBelow', 'Show {0} more lines below', Math.min(range.length, this.options.revealLineCount)), '↓', () => {
+		}));
+		this.addButton(domNode, localize('diffEditor.showMoreBelow', 'Show {0} more lines below', Math.min(range.length, this.options.revealLineCount)), 'ash-diff-hidden-region-below', () => {
 			const count = Math.min(range.length, this.options.revealLineCount);
 			region.revealedBelow += count;
 			this.render();
@@ -176,18 +245,46 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		}
 
 		let id!: string;
-		editor.changeViewZones(accessor => { id = accessor.addZone({ afterLineNumber: range.startLineNumber - 1, heightInPx: 32, showInHiddenAreas: true, isAccessible: true, domNode }); });
+		let top: number | undefined;
+		const overlay: IOverlayWidget = {
+			getId: () => `ash-diff-hidden-region-${editor.getId()}-${id}`,
+			getDomNode: () => domNode,
+			getPosition: () => top === undefined ? null : { preference: { top, left: 0 } },
+		};
+		const layout = (): void => {
+			const info = editor.getLayoutInfo();
+			domNode.style.width = `${info.width - info.verticalScrollbarWidth}px`;
+			disclosure.style.width = `${info.contentLeft}px`;
+			editor.layoutOverlayWidget(overlay);
+		};
+		// The zone owns vertical space; the overlay keeps disclosure controls fixed to the viewport during horizontal scrolling.
+		editor.changeViewZones(accessor => {
+			id = accessor.addZone({
+				afterLineNumber: range.startLineNumber - 1,
+				heightInPx: 24,
+				showInHiddenAreas: true,
+				domNode: h(domNode.ownerDocument, 'div'),
+				onDomNodeTop: position => {
+					const nextTop = position + 24 <= 0 ? undefined : position;
+					if (top === nextTop) {
+						return;
+					}
+					top = nextTop;
+					editor.layoutOverlayWidget(overlay);
+				},
+			});
+		});
+		editor.addOverlayWidget(overlay);
+		layout();
+		this.zones.add(editor.onDidLayoutChange(layout));
+		this.zones.add(toDisposable(() => editor.removeOverlayWidget(overlay)));
 		this.zones.add(toDisposable(() => editor.changeViewZones((accessor: IViewZoneChangeAccessor) => accessor.removeZone(id))));
 	}
 
-	private addButton(container: HTMLElement, label: string, icon: string, action: () => void): void {
-		const button = h(container.ownerDocument, 'button');
-		button.type = 'button';
-		button.textContent = icon;
-		button.setAttribute('aria-label', label);
-		button.title = label;
-		container.append(button);
-		this.zones.add(addDisposableListener(button, 'click', action));
+	private addButton(container: HTMLElement, label: string, className: string, action: () => void): void {
+		const button = this.zones.add(new Button(container, { label, title: label, iconOnly: true, presentation: 'quiet', size: 'small' }));
+		button.domNode.classList.add(className);
+		this.zones.add(button.onDidClick(action));
 	}
 }
 
@@ -204,8 +301,7 @@ function unchangedRegions(diff: LineDiff, options: HideUnchangedRegionsOptions):
 		if (diff.rows[start].kind !== LineDiffKind.Unchanged) { start++; continue; }
 		let end = start + 1;
 		while (end < diff.rows.length && diff.rows[end].kind === LineDiffKind.Unchanged) end++;
-		// Ash's visible-line projection requires the first logical line to remain present.
-		const contextAbove = start === 0 ? 1 : options.contextLineCount;
+		const contextAbove = start === 0 ? 0 : options.contextLineCount;
 		const contextBelow = end === diff.rows.length ? 0 : options.contextLineCount;
 		if (end - start - contextAbove - contextBelow >= options.minimumLineCount) {
 			const first = diff.rows[start + contextAbove];

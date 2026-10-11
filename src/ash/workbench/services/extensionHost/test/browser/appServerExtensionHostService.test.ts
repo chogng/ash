@@ -1,4 +1,12 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
+import { IEditorService } from '../../../editor/common/editorService.js';
+import { IWorkspaceOpenService } from '../../../workspaces/browser/workspaceOpenService.js';
+import { IWorkingCopyService } from '../../../workingCopy/common/workingCopyService.js';
+import { IViewsService } from '../../../views/common/viewsService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { ITextFileService } from '../../../textfile/common/textfiles.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { ExtensionClientHandler } from '../../../../api/common/extHost.protocol.js';
@@ -80,7 +88,7 @@ test('SCM registrations dispatch updates and Quick Diff, and retire before a res
 	const provider = {
 		id: 'repository', providerId: 'git', label: 'Git', rootUri: 'file:///workspace', selected: true, groups: [],
 		input: { value: '', placeholder: '', buttonLabel: 'Commit', buttonTooltip: 'Commit', enabled: true, canAccept: false },
-		statusMessage: '', isBusy: false, statusBarCommands: [], historyRef: null, historyRevision: 0, hasHistory: false, hasMerge: false, inputRevision: 0,
+		statusMessage: '', isBusy: false, statusBarCommands: [], historyRef: null, historyRevision: 0, inputRevision: 0, hasHistory: false, hasMerge: false,
 	};
 	const registration = { kind: 'sourceControl' as const, registrationId: 'scm', revision: 1, providers: [provider] };
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.scm', [registration]));
@@ -100,7 +108,7 @@ test('SCM registrations dispatch updates and Quick Diff, and retire before a res
 	assert.deepEqual(await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 2, providers: [{ ...provider, label: 'Updated Git' }] }, new AbortController().signal, source), { result: 'done' });
 	assert.equal(scm.getRepository('repository'), repository);
 	assert.equal(changes, 1);
-	api.invocationResult = Promise.resolve({ resource: 'git:///workspace/file.ts?ref=HEAD', text: 'original' });
+	api.invocationResult = Promise.resolve({ providerId: 'acme.demo:repository', providerLabel: 'Updated Git', label: 'Updated Git', resource: 'git:///workspace/file.ts?ref=HEAD', text: 'original' });
 	assert.deepEqual(await quickDiff.getQuickDiffs(URI.file('/workspace/file.ts'), new AbortController().signal), [{ providerId: 'acme.demo:repository', providerLabel: 'Updated Git', label: 'Updated Git', originalResource: URI.parse('git:///workspace/file.ts?ref=HEAD'), revision: 2, text: 'original' }]);
 	const count = api.invocations.length;
 	assert.deepEqual(await quickDiff.getQuickDiffs(URI.file('/elsewhere/file.ts'), new AbortController().signal), []);
@@ -125,7 +133,7 @@ test('SCM registrations dispatch updates and Quick Diff, and retire before a res
 });
 
 test('SCM registrations reach their owner, preserve history on resource updates and retire with the host', async () => {
-	const provider = { id: 'extension-repo', providerId: 'acme', label: 'Synthetic SCM', selected: true, groups: [], input: { value: '', placeholder: '', buttonLabel: '', buttonTooltip: '' }, statusMessage: '', statusBarCommands: [], historyRevision: 1, hasHistory: true, hasMerge: false };
+	const provider = { id: 'extension-repo', providerId: 'acme', label: 'Synthetic SCM', selected: true, groups: [], input: { value: '', placeholder: '', buttonLabel: '', buttonTooltip: '' }, statusMessage: '', statusBarCommands: [], historyRevision: 1, inputRevision: 0, hasHistory: true, hasMerge: false };
 	const initial = snapshot(1, 'unused');
 	const api = new FakeExtensionHostApi({ ...initial, extensions: initial.extensions.map(runtime => ({ ...runtime, registrations: [{ kind: 'sourceControl', registrationId: 'scm', revision: 1, providers: [provider] }] })) });
 	api.invocationResult = Promise.resolve(null);
@@ -151,7 +159,7 @@ test('SCM registrations reach their owner, preserve history on resource updates 
 	assert.deepEqual(invalidations, [undefined], 'Resource invalidation refreshes all quick diffs through their typed contract');
 	await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 3, providers: [{ ...provider, historyRevision: 2 }] }, signal, source);
 	assert.equal(historyChanges, 1);
-	api.invocationResult = Promise.resolve({ resource: 'git-original:/file.txt', text: 'base' });
+	api.invocationResult = Promise.resolve({ providerId: 'acme.demo:extension-repo', providerLabel: provider.label, label: provider.label, resource: 'git-original:/file.txt', text: 'base' });
 	assert.deepEqual(await quickDiff.getQuickDiffs(URI.file('/workspace/file.txt'), signal), [{ providerId: 'acme.demo:extension-repo', providerLabel: provider.label, label: provider.label, originalResource: URI.parse('git-original:/file.txt'), revision: 3, text: 'base' }]);
 	const cancelled = new AbortController();
 	cancelled.abort();
@@ -345,7 +353,7 @@ test('extension editor menus capture the clicked input and reject malformed repl
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
 	const inputs = [{ resource: URI.file('/notes/clicked.md') }, { resource: URI.file('/notes/active.md') }];
 	const group = { id: 'clicked-group', inputs, activeInput: inputs[1] };
-	services.registerInstance(IEditorPart, { groups: [group], activeGroup: group } as unknown as IEditorPart);
+	Object.assign(services.get(IEditorPart), { groups: [group], activeGroup: group });
 	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
 	await service.start();
 	await services.invokeFunction(accessor => commands.getCommand('acme.preview')!(accessor, { groupId: group.id, editorIndex: 0 }));
@@ -895,6 +903,17 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	services.registerInstance(IExtensionHostApi, api);
+	// These registrations exercise host callbacks without opening editor UI.
+	services.registerInstance(IEditorService, { openEditor: async () => assert.fail('Unexpected editor open') } as unknown as IEditorService);
+	services.registerInstance(IEditorPart, { groups: [], activeGroup: undefined } as unknown as IEditorPart);
+	services.registerInstance(IWorkspaceOpenService, { canOpenFolder: false, canOpenWorkspace: false, openFolder: async () => assert.fail('Unexpected folder open'), openWorkspace: async () => assert.fail('Unexpected workspace open'), pickFolder: async () => assert.fail('Unexpected folder picker') });
+	services.registerInstance(IWorkingCopyService, { get: () => assert.fail('Unexpected working copy request') } as unknown as IWorkingCopyService);
+	services.registerInstance(IViewsService, { openView: async () => assert.fail('Unexpected view open') } as unknown as IViewsService);
+	services.registerInstance(IClipboardService, { writeText: async () => assert.fail('Unexpected clipboard write') } as unknown as IClipboardService);
+	services.registerInstance(IOpenerService, { open: async () => assert.fail('Unexpected external open') } as unknown as IOpenerService);
+	services.registerInstance(ICodeEditorService, { listDiffEditors: () => assert.fail('Unexpected diff editor request') } as unknown as ICodeEditorService);
+	services.registerInstance(ITextFileService, { read: async () => assert.fail('Unexpected text file request') } as unknown as ITextFileService);
+
 	services.registerInstance(IExtensionApi, {
 		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
 		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),

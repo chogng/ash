@@ -372,3 +372,20 @@ class StatefulStatusbar extends StatusbarPart {
 		Object.assign(this.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE), { saves: ++this.saves });
 	}
 }
+
+
+test('right status entries navigate in their visual left-to-right order', () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using service = new StatusbarService();
+	using outer = service.addEntry({ text: 'language', run() { } }, { id: 'test.language', alignment: StatusbarAlignment.Right, priority: 80 });
+	using inner = service.addEntry({ text: 'cursor', run() { } }, { id: 'test.cursor', alignment: StatusbarAlignment.Right, priority: 40 });
+	using services = createStatusbarServices(dom.window.document);
+	using part = services.createInstance(StatusbarPart, dom.window.document.body, service);
+	part.focusNextEntry();
+	assert.equal(dom.window.document.activeElement?.textContent, 'cursor');
+	part.focusNextEntry();
+	assert.equal(dom.window.document.activeElement?.textContent, 'language');
+	part.focusPreviousEntry();
+	assert.equal(dom.window.document.activeElement?.textContent, 'cursor');
+	dom.window.close();
+});

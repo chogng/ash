@@ -5,6 +5,7 @@ import { IQuickInputService } from '../../../platform/quickinput/common/quickInp
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceOpenService } from '../../services/workspaces/browser/workspaceOpenService.js';
 import { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -35,8 +36,8 @@ export class MainThreadEditors {
 		private readonly workspace: IWorkspaceOpenService,
 		@IWorkingCopyService
 		private readonly workingCopies: IWorkingCopyService,
-		@IViewsService
-		private readonly views: IViewsService,
+		@IInstantiationService
+		private readonly instantiation: IInstantiationService,
 		@IClipboardService
 		private readonly clipboard: IClipboardService,
 		@IOpenerService
@@ -77,7 +78,7 @@ export class MainThreadEditors {
 				await this.workspace.openWorkspace(text(request.path));
 				return null;
 			case 'openView':
-				await this.views.openView(text(request.id), request.focus === true);
+				await this.instantiation.invokeFunction(accessor => accessor.get(IViewsService).openView(text(request.id), request.focus === true));
 				return null;
 			case 'clipboard':
 				await this.clipboard.writeText(text(request.text));

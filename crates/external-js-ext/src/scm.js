@@ -94,6 +94,7 @@ export function createSCMApi(runtime, request, invoke) {
 			providers.set(provider.id, entry);
 			const listeners = [provider.onDidChangeResources(publish)];
 			if (provider.historyProvider) {
+				listeners.push(provider.historyProvider.historyItemRef.onDidChange(publish));
 				listeners.push(provider.historyProvider.onDidChange(() => { ++entry.historyRevision; entry.historyRefsItems = []; publish(); }));
 				if (provider.historyProvider.onDidChangeHistoryItemRefs) {
 					listeners.push(provider.historyProvider.onDidChangeHistoryItemRefs(items => {

@@ -220,6 +220,10 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.providerListener.value = listeners;
 			if (provider) {
 				listeners.add(provider.onDidChange(() => void this.refresh()));
+				listeners.add(provider.historyItemRef.onDidChange(head => {
+					this.head = head;
+					if (this.page) this.renderGraph(this.page);
+				}));
 				if (provider.onDidChangeHistoryItemRefs) {
 					listeners.add(provider.onDidChangeHistoryItemRefs(items => {
 						if (!this.page) { return; }

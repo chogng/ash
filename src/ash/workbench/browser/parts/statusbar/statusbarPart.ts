@@ -154,7 +154,7 @@ export class StatusbarPart extends Part {
 	private focusableItems(): StatusbarEntryItem[] {
 		const entries = [
 			...this.statusbarService.getEntries(StatusbarAlignment.Left),
-			...this.statusbarService.getEntries(StatusbarAlignment.Right),
+			...this.statusbarService.getEntries(StatusbarAlignment.Right).slice().reverse(),
 		];
 		return entries
 			.map(({ id }) => this.items.get(id))

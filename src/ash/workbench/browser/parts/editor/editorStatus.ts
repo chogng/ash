@@ -1,8 +1,18 @@
 import { isEditorPaneWithStatus } from '../../../common/editor.js';
 import "./media/editorstatus.css";
 import { addDisposableListener, h, isHTMLElement } from "../../../../base/browser/dom.js";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import { localize, localize2 } from '../../../../nls.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
+import { EndOfLineSequence, type ITextModel } from '../../../../editor/common/model.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { Action2 } from '../../../../platform/actions/common/actions.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 
 import type { IEditorPart } from "./editorPart.js";
@@ -13,15 +23,36 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 	static readonly ID = "workbench.contrib.editorStatus";
 
 	private readonly cursor = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
-	private readonly format = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly indentation = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly eol = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly encoding = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly language = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly state = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly screenReaderMode = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly explanation = this._register(new MutableDisposable<DisposableStore>());
-	private readonly paneListener = this._register(new MutableDisposable<IDisposable>());
+	private readonly paneListeners = this._register(new DisposableStore());
+	private readonly controlListeners = this._register(new DisposableStore());
+	private readonly pickerResources = this._register(new DisposableStore());
+	private readonly editorListeners = this._register(new DisposableMap<ICodeEditor, IDisposable>());
+	private activeControl: ICodeEditor | undefined;
 
-	constructor(private readonly editorPart: IEditorPart, private readonly statusbar: IStatusbarService, private readonly accessibility: IAccessibilityService) {
+	constructor(
+		private readonly editorPart: IEditorPart,
+		private readonly statusbar: IStatusbarService,
+		@IAccessibilityService private readonly accessibility: IAccessibilityService,
+		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
+		@ICommandService private readonly commands: ICommandService,
+		@ILanguageService private readonly languages: ILanguageService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
+	) {
 		super();
+		this._register(codeEditors.onCodeEditorAdd(editor => this.trackEditor(editor)));
+		this._register(codeEditors.onCodeEditorRemove(editor => {
+			this.editorListeners.deleteAndDispose(editor);
+			if (editor === this.activeControl) { this.update(); }
+		}));
+		for (const editor of codeEditors.listCodeEditors()) { this.trackEditor(editor); }
+		this._register(languages.onDidChange(() => this.updateEntries()));
 		this._register(editorPart.onDidChangeEditors(() => this.update()));
 		this._register(accessibility.onDidChangeScreenReaderOptimized(() => this.updateScreenReaderMode()));
 		this.update();
@@ -35,9 +66,9 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 			return;
 		}
 		this.setEntry(this.screenReaderMode, {
-			text: "Screen Reader Mode",
-			ariaLabel: "Screen reader mode enabled. Open explanation",
-			tooltip: "Screen reader mode is enabled. Open explanation",
+			text: localize('status.editor.screenReaderMode', 'Screen Reader Mode'),
+			ariaLabel: localize('status.editor.screenReaderAria', 'Screen reader mode enabled. Open explanation'),
+			tooltip: localize('status.editor.screenReaderTooltip', 'Screen reader mode is enabled. Open explanation'),
 			run: () => this.showScreenReaderExplanation(),
 		}, "ash.status.editor.screenReaderMode", 100);
 	}
@@ -50,15 +81,16 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		const dialog = h(doc, "section");
 		dialog.className = "ash-screen-reader-explanation";
 		dialog.setAttribute("role", "dialog");
+		dialog.setAttribute("aria-modal", "true");
 		dialog.setAttribute("aria-labelledby", "ash-screen-reader-explanation-title");
 		const heading = h(doc, "h2");
 		heading.id = "ash-screen-reader-explanation-title";
-		heading.textContent = "Screen reader mode is on";
+		heading.textContent = localize('status.editor.screenReaderHeading', 'Screen reader mode is on');
 		const details = h(doc, "p");
-		details.textContent = "Ash has adjusted editor interactions for a screen reader. You can change this in Settings under Screen reader optimization.";
+		details.textContent = localize('status.editor.screenReaderDetails', 'Ash has adjusted editor interactions for a screen reader. You can change this in Settings under Screen reader optimization.');
 		const close = h(doc, "button");
 		close.type = "button";
-		close.textContent = "Close";
+		close.textContent = localize('status.editor.close', 'Close');
 		dialog.append(heading, details, close);
 		doc.body.append(dialog);
 		resources.add(toDisposable(() => {
@@ -67,6 +99,11 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		}));
 		resources.add(addDisposableListener(close, "click", () => this.explanation.clear()));
 		resources.add(addDisposableListener(dialog, "keydown", (event: KeyboardEvent) => {
+			if (event.key === "Tab") {
+				event.preventDefault();
+				close.focus();
+				return;
+			}
 			if (event.key !== "Escape") return;
 			event.preventDefault();
 			this.explanation.clear();
@@ -75,16 +112,44 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		close.focus();
 	}
 
+	private trackEditor(editor: ICodeEditor): void {
+		this.editorListeners.set(editor, editor.onDidFocusEditorText(() => this.update()));
+	}
+
 	private update(): void {
-		const input = this.editorPart.activeInput;
+		this.paneListeners.clear();
+		this.controlListeners.clear();
 		const pane = this.editorPart.activePane;
-		this.paneListener.value = isEditorPaneWithStatus(pane) ? pane.onDidChangeStatus(() => this.updateEntries()) : undefined;
-		if (!input || !pane) {
-			this.cursor.clear();
-			this.format.clear();
-			this.language.clear();
-			this.state.clear();
-			return;
+		const control = pane?.getControl();
+		const registered = this.codeEditors.listCodeEditors();
+		const diff = this.codeEditors.listDiffEditors().find(editor => editor === control);
+		if (diff) {
+			const original = diff.getOriginalEditor();
+			const modified = diff.getModifiedEditor();
+			// Retain the selected side while focus moves to a status action or picker.
+			const previous = this.activeControl;
+			this.activeControl = original.hasTextFocus() ? original
+				: modified.hasTextFocus() ? modified
+				: previous === original || previous === modified ? previous : modified;
+		} else {
+			this.activeControl = registered.find(editor => editor === control);
+		}
+		if (isEditorPaneWithStatus(pane)) { this.paneListeners.add(pane.onDidChangeStatus(() => this.updateEntries())); }
+		if (pane?.workingCopy) {
+			this.paneListeners.add(pane.workingCopy.onDidChangeDirty(() => this.updateEntries()));
+			this.paneListeners.add(pane.workingCopy.onDidChangeExternalChange(() => this.updateEntries()));
+		}
+		const editor = this.activeControl;
+		if (editor) {
+			this.controlListeners.add(editor.onDidChangeModel(() => this.update()));
+			this.controlListeners.add(editor.onDidChangeCursorSelection(() => this.updateEntries()));
+			this.controlListeners.add(editor.onDidChangeConfiguration(() => this.updateEntries()));
+			const model = editor.getModel();
+			if (model) {
+				this.controlListeners.add(model.onDidChangeOptions(() => this.updateEntries()));
+				this.controlListeners.add(model.onDidChangeLanguage(() => this.updateEntries()));
+				this.controlListeners.add(model.onDidChangeContent(() => this.updateEntries()));
+			}
 		}
 		this.updateEntries();
 	}
@@ -92,19 +157,81 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 	private updateEntries(): void {
 		const input = this.editorPart.activeInput;
 		const pane = this.editorPart.activePane;
-		if (!input || !pane) return;
-		const status = isEditorPaneWithStatus(pane) ? pane.getStatus() : undefined;
-		const cursorText = status?.lineNumber !== undefined && status.columnNumber !== undefined
-			? `Ln ${status.lineNumber}, Col ${status.columnNumber}${status.selectionCount ? ` (${status.selectionCount} selections)` : ""}`
-			: undefined;
-		this.setEntry(this.cursor, cursorText ? { text: cursorText, ariaLabel: cursorText } : undefined, "ash.status.editor.cursor", 80);
-		const formatText = [status?.endOfLine, status?.encoding].filter(Boolean).join("  ");
-		this.setEntry(this.format, formatText ? { text: formatText, ariaLabel: `Editor format ${formatText}` } : undefined, "ash.status.editor.format", 70);
-		const language = status?.languageId ?? input.languageId;
-		this.setEntry(this.language, language ? { text: languageDisplayName(language), ariaLabel: `Language ${languageDisplayName(language)}` } : undefined, "ash.status.editor.language", 60);
-		const workingCopy = pane.workingCopy;
-		const stateText = workingCopy?.hasExternalChange ? "Conflict" : workingCopy?.isDirty ? "Unsaved" : workingCopy && input.readOnly ? "Read-only" : undefined;
-		this.setEntry(this.state, stateText ? { text: stateText, ariaLabel: `Editor state ${stateText}`, tooltip: stateText === "Conflict" ? "The file changed on disk while this editor has unsaved changes." : undefined } : undefined, "ash.status.editor.state", 90);
+		const editor = this.activeControl;
+		const model = editor?.getModel();
+		const status = input && isEditorPaneWithStatus(pane) ? pane.getStatus() : undefined;
+		const selections = editor?.getSelections();
+		const position = selections?.[0]?.getPosition();
+		const line = position?.lineNumber ?? status?.lineNumber;
+		const column = position && editor ? editor.getStatusbarColumn(position) : status?.columnNumber;
+		const count = selections?.length ?? status?.selectionCount ?? 1;
+		const selected = model && selections ? selections.reduce((total, selection) => total + model.getValueLengthInRange(selection), 0) : 0;
+		let cursorText = line !== undefined && column !== undefined ? localize('status.editor.position', 'Ln {0}, Col {1}', line, column) : undefined;
+		if (count > 1) { cursorText = localize('status.editor.selections', '{0} selections', count); }
+		if (cursorText && selected > 0) { cursorText = localize('status.editor.selected', '{0} ({1} selected)', cursorText, selected); }
+		this.setEntry(this.cursor, cursorText ? {
+			text: cursorText, ariaLabel: cursorText,
+			tooltip: localize('status.editor.gotoLine', 'Go to Line/Column'),
+			run: () => { editor?.focus(); return this.commands.executeCommand('workbench.action.gotoLine'); },
+		} : undefined, 'ash.status.editor.cursor', 40);
+		const options = model?.getOptions();
+		const indentation = options ? options.insertSpaces
+			? localize('status.editor.spaces', 'Spaces: {0}', options.indentSize)
+			: localize('status.editor.tabs', 'Tab Size: {0}', options.tabSize) : undefined;
+		this.setEntry(this.indentation, indentation ? {
+			text: indentation, ariaLabel: indentation,
+			tooltip: localize('status.editor.selectIndentation', 'Select Indentation'),
+			run: () => this.showIndentationPicker(),
+		} : undefined, 'ash.status.editor.indentation', 50);
+		const encoding = model ? model.getValueLength(undefined, true) > model.getValueLength() ? localize('status.editor.utf8Bom', 'UTF-8 with BOM') : 'UTF-8' : status?.encoding;
+		this.setEntry(this.encoding, encoding ? { text: encoding, ariaLabel: localize('status.editor.encoding', 'Editor encoding {0}', encoding) } : undefined, 'ash.status.editor.encoding', 60);
+		const endOfLine = model ? model.getEOL() === '\r\n' ? 'CRLF' : 'LF' : status?.endOfLine;
+		this.setEntry(this.eol, endOfLine ? {
+			text: endOfLine, ariaLabel: localize('status.editor.eol', 'Editor end of line {0}', endOfLine),
+			tooltip: localize('status.editor.selectEOL', 'Select End of Line Sequence'),
+			...(editor && !editor.getOption(EditorOption.readOnly) ? { run: () => { editor.focus(); return this.commands.executeCommand('workbench.action.editor.changeEOL'); } } : {}),
+		} : undefined, 'ash.status.editor.eol', 70);
+		const languageId = model?.getLanguageId() ?? status?.languageId ?? input?.languageId;
+		const language = languageId ? this.languages.getLanguageName(languageId) ?? languageId : undefined;
+		this.setEntry(this.language, language ? {
+			text: language, ariaLabel: localize('status.editor.language', 'Language {0}', language),
+			tooltip: localize('status.editor.selectLanguage', 'Select Language Mode'),
+			...(editor ? { run: () => { editor.focus(); return this.commands.executeCommand(ChangeLanguageAction.ID); } } : {}),
+		} : undefined, 'ash.status.editor.language', 80);
+		const workingCopy = pane?.workingCopy;
+		const stateText = workingCopy?.hasExternalChange ? localize('status.editor.conflict', 'Conflict')
+			: workingCopy?.isDirty ? localize('status.editor.unsaved', 'Unsaved')
+			: workingCopy && input?.readOnly ? localize('status.editor.readOnly', 'Read-only') : undefined;
+		this.setEntry(this.state, stateText ? {
+			text: stateText, ariaLabel: stateText,
+			...(workingCopy?.hasExternalChange ? { tooltip: localize('status.editor.conflictTooltip', 'The file changed on disk while this editor has unsaved changes.') } : {}),
+		} : undefined, 'ash.status.editor.state', 90);
+	}
+
+	private async showIndentationPicker(): Promise<void> {
+		const editor = this.activeControl;
+		const model = editor?.getModel();
+		if (!editor || !model) { return; }
+		const items = [
+			{ label: localize('status.editor.indentSpaces', 'Indent Using Spaces'), id: 'editor.action.indentUsingSpaces' },
+			{ label: localize('status.editor.indentTabs', 'Indent Using Tabs'), id: 'editor.action.indentUsingTabs' },
+			{ label: localize('status.editor.tabDisplay', 'Change Tab Display Size'), id: 'editor.action.changeTabDisplaySize' },
+			{ label: localize('status.editor.detectIndentation', 'Detect Indentation from Content'), id: 'editor.action.detectIndentation' },
+			...(!editor.getOption(EditorOption.readOnly) ? [
+				{ label: localize('status.editor.convertSpaces', 'Convert Indentation to Spaces'), id: 'editor.action.indentationToSpaces' },
+				{ label: localize('status.editor.convertTabs', 'Convert Indentation to Tabs'), id: 'editor.action.indentationToTabs' },
+			] : []),
+		];
+		const item = await pickStatusItem(this.quickInput, items, localize('status.editor.selectIndentation', 'Select Indentation'), this.pickerResources);
+		if (!item || this.isDisposed || this.activeControl !== editor || editor.getModel() !== model) { return; }
+		let size: number | undefined;
+		if (items.indexOf(item) < 3) {
+			const choice = await pickStatusItem(this.quickInput, Array.from({ length: 8 }, (_, index) => ({ label: String(index + 1), size: index + 1 })), localize('status.editor.selectTabSize', 'Select Tab Size'), this.pickerResources);
+			if (!choice || this.isDisposed || this.activeControl !== editor || editor.getModel() !== model) { return; }
+			size = choice.size;
+		}
+		editor.focus();
+		await this.commands.executeCommand(item.id, size);
 	}
 
 	private setEntry(slot: MutableDisposable<IStatusbarEntryAccessor>, entry: IStatusbarEntry | undefined, id: string, priority: number): void {
@@ -117,14 +244,63 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 	}
 }
 
-function languageDisplayName(languageId: string): string {
-	const known: Readonly<Record<string, string>> = {
-		plaintext: "Plain Text",
-		typescript: "TypeScript",
-		javascript: "JavaScript",
-		json: "JSON",
-		jsonc: "JSON with Comments",
-		markdown: "Markdown",
-	};
-	return known[languageId] ?? languageId;
+function pickStatusItem<T extends IQuickPickItem>(quickInput: IQuickInputService, items: readonly T[], label: string, owner?: DisposableStore): Promise<T | undefined> {
+	return new Promise(resolve => {
+		const resources = new DisposableStore();
+		owner?.add(resources);
+		resources.add(toDisposable(() => { resolve(undefined); owner?.delete(resources); }));
+		const picker = resources.add(quickInput.createQuickPick<T>());
+		picker.items = items;
+		picker.sortByLabel = false;
+		picker.placeholder = label;
+		picker.ariaLabel = label;
+		resources.add(picker.onDidAccept(item => { resolve(item); picker.hide(); }));
+		resources.add(picker.onDidHide(() => { resolve(undefined); resources.dispose(); }));
+		picker.show();
+	});
+}
+
+export class ChangeLanguageAction extends Action2 {
+	public static readonly ID = 'workbench.action.editor.changeLanguageMode';
+	constructor() {
+		super({ id: ChangeLanguageAction.ID, title: localize2('status.editor.changeLanguage', 'Change Language Mode'), f1: true });
+	}
+	public override async run(accessor: ServicesAccessor, language?: unknown): Promise<void> {
+		const editors = accessor.get(ICodeEditorService);
+		const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+		const model = editor?.getModel();
+		if (!editor || !model) { return; }
+		const languages = accessor.get(ILanguageService);
+		let languageId: string | undefined;
+		if (language !== undefined) {
+			if (typeof language !== 'string') { throw new TypeError('Language mode must be a string'); }
+			languageId = languages.isRegisteredLanguageId(language) ? language : languages.getLanguageIdByLanguageName(language) ?? undefined;
+			if (!languageId) { throw new RangeError(`Unknown language mode: ${language}`); }
+		} else {
+			const item = await pickStatusItem(accessor.get(IQuickInputService), languages.getSortedRegisteredLanguageNames().map(item => ({ label: item.languageName, languageId: item.languageId })), localize('status.editor.selectLanguage', 'Select Language Mode'));
+			languageId = item?.languageId;
+		}
+		if (languageId && !model.isDisposed() && editor.getModel() === model && (editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor()) === editor) { model.setLanguage(languageId); editor.focus(); }
+	}
+}
+
+export class ChangeEOLAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.editor.changeEOL', title: localize2('status.editor.changeEOL', 'Change End of Line Sequence'), f1: true });
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const editors = accessor.get(ICodeEditorService);
+		const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+		const model: ITextModel | null | undefined = editor?.getModel();
+		if (!editor || !model || editor.getOption(EditorOption.readOnly)) { return; }
+		const item = await pickStatusItem(accessor.get(IQuickInputService), [
+			{ label: 'LF', eol: EndOfLineSequence.LF },
+			{ label: 'CRLF', eol: EndOfLineSequence.CRLF },
+		], localize('status.editor.selectEOL', 'Select End of Line Sequence'));
+		if (!item || model.isDisposed() || editor.getModel() !== model || editor.getOption(EditorOption.readOnly) || (editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor()) !== editor) { return; }
+		model.pushStackElement();
+		model.pushEOL(item.eol);
+		model.pushStackElement();
+		editor.focus();
+	}
 }

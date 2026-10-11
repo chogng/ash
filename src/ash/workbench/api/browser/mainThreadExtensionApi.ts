@@ -447,6 +447,7 @@ export class MainThreadExtensionApi extends Disposable {
 				if (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'workspaceEvents' || registration.kind === 'statusBar' || registration.kind === 'sourceControl' || registration.kind === 'textDocumentEvents' || registration.kind === 'taskEvents' || registration.kind === 'debugEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
+				const runtimeId = runtime.id;
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
 				if (registration.kind === 'remoteConnectionResolver') {
 					remoteResolvers.push({
@@ -459,17 +460,16 @@ export class MainThreadExtensionApi extends Disposable {
 					continue;
 				}
 				if (registration.kind === "command") {
-					const extensionId = runtime.id;
 					commands.push(Object.freeze({
 						id: registration.command, metadata: { description: registration.title }, handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
 							if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
-								return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args) }), controller.signal);
+								return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtimeId, args) }), controller.signal);
 							}
 							const part = accessor.get(IEditorPart);
 							const context = args[0] as { groupId?: string; editorIndex?: number; } | undefined;
 							const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
 							const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
-							return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args), activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
+							return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtimeId, args), activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
 						}
 					}));
 					for (const placement of registration.menus ?? []) {

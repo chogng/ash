@@ -1,3 +1,4 @@
+import '../../../../../../editor/test/browser/testEditorDom.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
@@ -8,8 +9,8 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, Event } from "../../../../../../base/common/event.js";
-import type { IAccessibilityService } from "../../../../../../platform/accessibility/common/accessibility.js";
-import { Disposable } from "../../../../../../base/common/lifecycle.js";
+import { IAccessibilityService } from "../../../../../../platform/accessibility/common/accessibility.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { BrowserWorkingCopyService } from "../../../../../services/workingCopy/browser/browserWorkingCopyService.js";
@@ -20,7 +21,21 @@ import { EditorPane } from '../../editorPane.js';
 
 import type { IEditorPart } from "../../editorPart.js";
 import { EditorAutoSave } from "../../editorAutoSave.js";
-import { EditorStatusContribution } from "../../editorStatus.js";
+import { ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from "../../editorStatus.js";
+
+import { TextModel } from '../../../../../../editor/common/model/textModel.js';
+import { Range } from '../../../../../../editor/common/core/range.js';
+import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
+import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
+import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { registerAction2 } from '../../../../../../platform/actions/common/actions.js';
+import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
+import { builtinLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
+const { createCodeEditorServices, createTestCodeEditor } = await import('../../../../../../editor/test/browser/testCodeEditor.js');
+await import('../../../../../../editor/editor.code.all.js');
+registerAction2(ChangeLanguageAction);
+registerAction2(ChangeEOLAction);
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -186,9 +201,9 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	using contribution = new EditorStatusContribution(editorPart, statusbar, {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
-	} as unknown as IAccessibilityService);
+	} as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput);
 
-	assert.deepEqual(statusTexts(statusbar), ["Ln 4, Col 9", "LF  UTF-8", "TypeScript"]);
+	assert.deepEqual(statusTexts(statusbar), ["TypeScript", "LF", "UTF-8", "Ln 4, Col 9"]);
 	state.activeInput = { ...input, readOnly: true };
 	editorChanges.fire();
 	assert.equal(statusTexts(statusbar)[0], "Read-only");
@@ -202,12 +217,12 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	editorChanges.fire();
 	workingCopy.markDirty();
 	editorChanges.fire();
-	assert.deepEqual(statusTexts(statusbar), ["Unsaved", "Ln 4, Col 9", "LF  UTF-8", "TypeScript"]);
+	assert.deepEqual(statusTexts(statusbar), ["Unsaved", "TypeScript", "LF", "UTF-8", "Ln 4, Col 9"]);
 	workingCopy.setExternalChange(true);
 	editorChanges.fire();
 	assert.equal(statusTexts(statusbar)[0], "Conflict");
 	pane.setStatus({ lineNumber: 10, columnNumber: 2, selectionCount: 3, languageId: "json", encoding: "UTF-8", endOfLine: "CRLF" });
-	assert.deepEqual(statusTexts(statusbar), ["Conflict", "Ln 10, Col 2 (3 selections)", "CRLF  UTF-8", "JSON"]);
+	assert.deepEqual(statusTexts(statusbar), ["Conflict", "JSON", "CRLF", "UTF-8", "3 selections"]);
 
 	state.activeInput = undefined;
 	state.activePane = undefined;
@@ -235,7 +250,7 @@ test("EditorStatusContribution explains screen reader mode and restores focus", 
 		onDidChangeEditors: Event.None,
 	} as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = new EditorStatusContribution(editorPart, statusbar, accessibility);
+	using contribution = new EditorStatusContribution(editorPart, statusbar, accessibility, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput);
 	assert.equal(statusTexts(statusbar).length, 0);
 
 	optimized = true;
@@ -326,3 +341,104 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		await delay(5);
 	}
 }
+
+const emptyCodeEditors = { onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None, listCodeEditors: () => [], listDiffEditors: () => [] } as unknown as import('../../../../../../editor/browser/services/codeEditorService.js').ICodeEditorService;
+const emptyCommands = { executeCommand: async () => undefined } as unknown as import('../../../../../../platform/commands/common/commands.js').ICommandService;
+const testLanguages = { onDidChange: Event.None, getLanguageName: (id: string) => ({ typescript: 'TypeScript', json: 'JSON' })[id] ?? id } as unknown as import('../../../../../../editor/common/languages/language.js').IAshLanguageService;
+const emptyQuickInput = {} as import('../../../../../../platform/quickinput/common/quickInput.js').IQuickInputService;
+
+test('Editor status actions update the real model and clear when the active editor closes', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	using model = new TextModel('\talpha\r\nbeta', { languageId: 'plaintext' });
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector('main')!, model, instantiationService: services });
+	using editorChanges = new Emitter<void>();
+	let active = true;
+	const pane = { getControl: () => editor } as unknown as IEditorPane;
+	const editorPart = {
+		domNode: dom.window.document.body,
+		get activeInput() { return active ? { resource: URI.file('/status.txt') } : undefined; },
+		get activePane() { return active ? pane : undefined; },
+		onDidChangeEditors: editorChanges.event,
+	} as unknown as IEditorPart;
+	using statusbar = new StatusbarService();
+	using contribution = services.createInstance(EditorStatusContribution, editorPart, statusbar);
+	const entry = (suffix: string) => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === `ash.status.editor.${suffix}`)!.entry;
+	assert.equal(entry('eol').text, 'CRLF');
+	model.updateOptions({ tabSize: 4, indentSize: 4, insertSpaces: false });
+	editor.setSelection(new Range(1, 2, 1, 2));
+	assert.equal(entry('cursor').text, 'Ln 1, Col 5');
+	assert.equal(entry('indentation').text, 'Tab Size: 4');
+	editor.setSelection(new Range(1, 2, 1, 4));
+	assert.equal(entry('cursor').text, 'Ln 1, Col 7 (2 selected)');
+	using language = services.get(ILanguageService).registerLanguage({ id: 'status-language', aliases: ['Status Language'] });
+	await services.get(ICommandService).executeCommand(ChangeLanguageAction.ID, 'status-language');
+	assert.equal(model.getLanguageId(), 'status-language');
+	assert.equal(entry('language').text, 'Status Language');
+
+	const changeEOL = Promise.resolve(entry('eol').run!());
+	const quickInput = services.get(IQuickInputService);
+	assert.ok(quickInput.currentQuickInput);
+	const input = globalThis.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!;
+	assert.ok(input);
+	input.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await changeEOL;
+	assert.equal(model.getEOL(), '\n');
+	assert.equal(entry('eol').text, 'LF');
+	model.undo();
+	assert.equal(model.getEOL(), '\r\n');
+	assert.equal(entry('eol').text, 'CRLF');
+
+	const changeIndentation = Promise.resolve(entry('indentation').run!());
+	const indentInput = globalThis.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!;
+	indentInput.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await Promise.resolve();
+	const sizeInput = globalThis.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!;
+	sizeInput.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+	sizeInput.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await changeIndentation;
+	assert.equal(model.getOptions().insertSpaces, true);
+	assert.equal(model.getOptions().tabSize, 2);
+	assert.equal(entry('indentation').text, 'Spaces: 2');
+
+	editor.updateOptions({ readOnly: true });
+	assert.equal(entry('eol').run, undefined);
+	await services.get(ICommandService).executeCommand('workbench.action.editor.changeEOL');
+	assert.equal(quickInput.currentQuickInput, undefined);
+	editor.updateOptions({ readOnly: false });
+	const staleChange = Promise.resolve(entry('eol').run!());
+	using replacement = new TextModel('replacement');
+	editor.setModel(replacement);
+	globalThis.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await staleChange;
+	assert.equal(model.getEOL(), '\r\n');
+	assert.equal(replacement.getEOL(), '\n');
+	const pendingIndentation = Promise.resolve(entry('indentation').run!());
+	assert.ok(quickInput.currentQuickInput);
+	contribution.dispose();
+	await pendingIndentation;
+	assert.equal(quickInput.currentQuickInput, undefined);
+	assert.deepEqual(statusTexts(statusbar), []);
+
+	active = false;
+	editorChanges.fire();
+	assert.deepEqual(statusTexts(statusbar), []);
+	model.setLanguage('plaintext');
+	assert.deepEqual(statusTexts(statusbar), []);
+});
+
+test('Editor status uses the Chinese language pack', () => {
+	using reset = toDisposable(() => resetNlsResolver());
+	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	using pane = new TestStatusPane(dom.window.document, undefined);
+	const editorPart = { domNode: dom.window.document.body, activeInput: { resource: URI.file('/status.ts') }, activePane: pane, onDidChangeEditors: Event.None } as unknown as IEditorPart;
+	using statusbar = new StatusbarService();
+	using contribution = new EditorStatusContribution(editorPart, statusbar, { onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false } as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput);
+	assert.ok(statusTexts(statusbar).includes('行 4，列 9'));
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.eol')?.entry.tooltip, '选择行尾序列');
+});

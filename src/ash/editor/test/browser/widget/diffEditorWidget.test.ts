@@ -242,11 +242,19 @@ test('DiffEditorWidget hides paired unchanged lines and reveals them from either
 
 	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 2);
 	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), false);
-	(editor.element.querySelector('.ash-diff-hidden-region button') as HTMLButtonElement).click();
-	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '31 hidden lines');
-	(editor.element.querySelectorAll('.ash-diff-hidden-region button')[1] as HTMLButtonElement).click();
+	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '34 hidden lines');
+	(editor.element.querySelector('.ash-diff-hidden-region-above') as HTMLButtonElement).click();
+	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '32 hidden lines');
+	(editor.element.querySelector('.ash-diff-hidden-region-disclosure button') as HTMLButtonElement).click();
 	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 0);
 	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), true);
+	assert.equal(editor.element.querySelectorAll('.ash-diff-fold-unchanged').length, 2);
+	(editor.modifiedEditor.getDomNode().querySelector('.ash-diff-fold-unchanged button') as HTMLButtonElement).click();
+	assert.equal(editor.element.querySelectorAll('.ash-diff-fold-unchanged').length, 0);
+	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 2);
+	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '34 hidden lines');
+	assert.equal(editor.modifiedEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), false);
+	assert.equal(original.getValue(), lines.join('\n'));
 });
 
 for (const [originalText, modifiedText] of [

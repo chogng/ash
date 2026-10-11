@@ -393,6 +393,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	public setHideUnchangedRegionsOptions(options: HideUnchangedRegionsOptions): void {
 		this.hiddenRegions.setOptions(options);
+		this.updateFeatures();
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}
 
@@ -613,7 +614,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare, { renderRevert: this.diffOptions.renderMarginRevertIcon && !this.inlineView });
 		const marginEnabled = this.diffOptions.renderMarginRevertIcon && this.gutter.width === 0 && !this.movedTextToCompare;
 		this.revertButtons.update(marginEnabled);
-		this.modifiedEditor.updateOptions({ glyphMargin: marginEnabled && !this.modifiedEditor.getOption(EditorOption.readOnly) });
+		this.modifiedEditor.updateOptions({ glyphMargin: this.hiddenRegions.isEnabled || (marginEnabled && !this.modifiedEditor.getOption(EditorOption.readOnly)) });
 		this.movedBlocks.update(this.diffOptions.showMoves && !this.inlineView, this.movedTextToCompare);
 		this.overviewRuler.setEnabled(this.diffOptions.renderOverviewRuler);
 	}

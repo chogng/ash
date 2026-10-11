@@ -287,7 +287,7 @@ Quick Fix 有多个类别时使用 `TabbedActionListWidget` 显示“全部操�
 
 用户确认删除仅 Ash 的 `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` 和 `contrib/diffEditorBreadcrumbs/browser/media/diffEditorBreadcrumbs.css`。这两个文件实现的是改动行按钮，并非上游同目录的文档符号面包屑。`DiffEditorPane` 的创建调用、`breadcrumbs` 选项和 `diffEditor.breadcrumbs.enabled` 设置已同步移除；Quick Diff 仍使用 Diff Editor 的行跳转方法，因此保留该方法。下方旧审查表记录删除前的文件状态。
 
-新增同路径 `contrib/diffEditorBreadcrumbs/browser/contribution.ts`，由修改侧文档符号模型提供折叠区中的符号按钮；模型内容、语言或提供者变化时会取消旧请求并更新按钮。`DiffEditorWidget` 的 `HideUnchangedRegionsFeature` 根据差异结果成对隐藏两侧未修改行，提供分段展开、全部展开和符号跳转。`DiffEditorPane` 读取并监听四项 `diffEditor.hideUnchangedRegions.*` 设置；标准 Diff 视图与直接创建的 Diff Editor 均可启用。首行保持可见，以满足 Ash 编辑器的视图模型约束。折叠区按钮可通过键盘操作，展开后将焦点送回编辑器并播报结果。下方旧审查表只记录删除前状态。
+新增同路径 `contrib/diffEditorBreadcrumbs/browser/contribution.ts`，由修改侧文档符号模型提供折叠区中的符号按钮；模型内容、语言或提供者变化时会取消旧请求并更新按钮。`DiffEditorWidget` 的 `HideUnchangedRegionsFeature` 根据差异结果成对隐藏两侧未修改行，提供分段展开、全部展开和符号跳转。`DiffEditorPane` 读取并监听四项 `diffEditor.hideUnchangedRegions.*` 设置；标准 Diff 视图与直接创建的 Diff Editor 均可启用。未修改区域可从首行隐藏；24px 折叠条覆盖文本与行号区，横向滚动时保持控件位置。隐藏行数支持双击全部展开；完全展开后，两侧区域首行的边栏按钮可重新折叠。折叠区按钮可通过键盘操作，展开后将焦点送回编辑器并播报结果。下方旧审查表只记录删除前状态。
 
 ## Diff 单栏删除标记（2026-10-03）
 

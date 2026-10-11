@@ -2,7 +2,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import "./media/auxiliaryEditorPart.css";
 import { Dimension } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IAuxiliaryWindow } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 import { StatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
@@ -39,7 +39,9 @@ export class AuxiliaryEditorPart extends Disposable {
 		this._register(creation.titlebar.onDidChange!(() => window.layout()));
 		const statusbarService = this._register(new StatusbarService());
 		const statusbarPart = this._register(instantiationService.createInstance(StatusbarPart, window.container, statusbarService));
-		this._register(new EditorStatusContribution(creation.part, statusbarService, accessibility));
+		const statusServices = this._register(instantiationService.createChild());
+		statusServices.registerInstance(IAccessibilityService, accessibility);
+		this._register(statusServices.createInstance(EditorStatusContribution, creation.part, statusbarService));
 		this._register(window.onBeforeUnload(event => {
 			if (creation.part.getEditorState().groups.some(group => group.editors.some(editor => editor.isDirty))) {
 				event.veto("The auxiliary editor window contains unsaved changes.");
