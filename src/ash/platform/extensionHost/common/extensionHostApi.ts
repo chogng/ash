@@ -261,7 +261,6 @@ export type ExtensionClientOperation =
 	| { operation: 'scmUpdate'; registrationId: string; revision: number; providers: readonly JsonValue[]; }
 	| { operation: 'backendRequest'; capability: string; method: string; params: JsonValue; }
 	| { operation: 'backendState'; capability: string; after: number; }
-	| { operation: 'editorOperation'; payload: JsonValue; }
 	| Extract<ProtocolExtensionClientOperation, { operation: "readResourceFile" | "statResource" | "readResourceDirectory"; }>
 	| { operation: 'readInitialization'; }
 	| { operation: 'openRemoteConnection'; authority: string; }

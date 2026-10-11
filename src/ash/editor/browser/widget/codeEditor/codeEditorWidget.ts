@@ -262,6 +262,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.isSimpleWidget = this.configuration.isSimpleWidget;
 			this.contextMenuId = this.configuration.contextMenuId;
 			this.onDidChangeConfiguration = this.configuration.onDidChange;
+			this._register(this.configuration.onDidChange(event => {
+				if (event.hasChanged(EditorOption.layoutInfo)) {
+					this.layoutChangeEmitter.fire(this.getLayoutInfo());
+				}
+			}));
 			this.rootDomNode = h(options.container.ownerDocument, 'div');
 			options.container.append(this.rootDomNode);
 			this._register(toDisposable(() => this.rootDomNode.remove()));
@@ -416,7 +421,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				},
 			}));
 			this.modelState = { model, view, viewModel, contributions };
-			modelStore.add(view.onDidChangeLayout(() => this.layoutChangeEmitter.fire(this.getLayoutInfo())));
 			for (const widget of this.contentWidgets.values()) this.view.addContentWidget(widget);
 			for (const widget of this.overlayWidgets.values()) this.view.addOverlayWidget(widget);
 			for (const widget of this.glyphWidgets.values()) this.view.addGlyphMarginWidget(widget);

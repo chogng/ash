@@ -348,11 +348,6 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			if (operation.operation === 'readWorkspaceFile') {
 				throw new Error('Workspace file requests must be handled by App Server');
 			}
-			// Core HTTP and secret services belong to the backend's authorized extension scope.
-			const operationName: string = operation.operation;
-			if (operationName === 'coreService') {
-				throw new Error('Core service requests must be handled by App Server');
-			}
 			const request = operation.operation === 'addDebugBreakpoints' ? { ...operation, breakpoints: operation.breakpoints.map(normalizeExtensionHostPayload) }
 				: operation.operation === 'startDebugging' ? { ...operation, configuration: normalizeExtensionHostPayload(operation.configuration) }
 					: operation.operation === 'debugCustomRequest' ? { ...operation, arguments: normalizeExtensionHostPayload(operation.arguments) }
@@ -366,6 +361,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			const result = await handler(request, context.signal, source);
 			// Domain payloads are immutable; the transport owns a separate mutable wire value.
 			switch (result.result) {
+				case 'value': throw new TypeError('Browser extension results cannot be returned over the App Server protocol');
 				case 'resourceFile': return { ...result, bytes: [...result.bytes] };
 				case 'resourceDirectory': return { ...result, entries: result.entries.map(([name, type]) => [name, type] as [string, number]) };
 				case 'initialization': return { result: result.result, initialization: { ...result.initialization, workspaceFolders: result.initialization.workspaceFolders.map(folder => ({ ...folder })), configurationValues: protocolJsonValue(normalizeExtensionHostPayload(result.initialization.configurationValues)), configurationData: protocolJsonValue(normalizeExtensionHostPayload(result.initialization.configurationData)) } };
@@ -422,6 +418,5 @@ function normalizeBrowserClientOperation(value: JsonValue): ExtensionClientOpera
 		if (!Number.isSafeInteger(input.after) || Number(input.after) < 0) { throw new TypeError('Invalid backend event cursor'); }
 		return { operation: 'backendState', capability: identifier(input.capability), after: Number(input.after) };
 	}
-	if (input.operation === 'editorOperation') { return { operation: 'editorOperation', payload: input.payload }; }
 	return undefined;
 }

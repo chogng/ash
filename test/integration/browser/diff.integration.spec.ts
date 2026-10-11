@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
 
 type DiffTestLocale = 'en' | 'zh-CN';
 
@@ -17,24 +18,25 @@ test('diff scrolling preserves overview markers and does not emit editor layout 
 	const modified = Array.from({ length: 200 }, (_, index) => `changed line ${index + 1}`).join('\n');
 	await page.evaluate(([left, right]) => window.ashDiffIntegration.setComparisonText(left, right), [original, modified]);
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect(page.locator('#single .stanza-diff-overview-lane.modified .stanza-diff-overview-marker').first()).toBeAttached();
 	const result = await page.evaluate(async () => {
-		const marker = document.querySelector('#single .stanza-diff-overview-marker.modified')!;
+		const marker = document.querySelector('#single .stanza-diff-overview-lane.modified .stanza-diff-overview-marker')!;
 		const before = window.ashDiffIntegration.layoutEventCount;
 		window.ashDiffIntegration.scrollModified(100);
 		await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 		return {
 			scrollTop: window.ashDiffIntegration.linePositions(1, 1).modifiedScrollTop,
 			layoutEvents: window.ashDiffIntegration.layoutEventCount - before,
-			markerRetained: marker === document.querySelector('#single .stanza-diff-overview-marker.modified'),
+			markerRetained: marker === document.querySelector('#single .stanza-diff-overview-lane.modified .stanza-diff-overview-marker'),
 		};
 	});
 	expect(result).toEqual({ scrollTop: 100, layoutEvents: 0, markerRetained: true });
 	const beforeResize = await page.evaluate(() => window.ashDiffIntegration.layoutEventCount);
-	await page.evaluate(() => window.ashDiffIntegration.setFontOptions({ lineHeight: 30 }));
+	await page.locator('#single').evaluate(node => { node.style.width = '760px'; });
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.layoutEventCount)).toBeGreaterThan(beforeResize);
 });
 
-for (const theme of ['light', 'hc-black']) {
+for (const theme of ['vs', 'hc-black']) {
 	test(`diff scrolling retains unchanged overlay children and refreshes changed content in ${theme}`, async ({ page }) => {
 		await openDiffPage(page, 'zh-CN');
 		const original = Array.from({ length: 200 }, (_, index) => `line ${index + 1}`).join('\n');
@@ -127,12 +129,61 @@ test('diff scrolling keeps retained decorations stable during wheel input', asyn
 		}
 		return output;
 	});
-	await testInfo.attach('diff-scroll-samples', { body: JSON.stringify(samples, null, 2), contentType: 'application/json' });
+	const samplePath = testInfo.outputPath('diff-scroll-samples.json');
+	await writeFile(samplePath, JSON.stringify(samples, null, 2));
+	await testInfo.attach('diff-scroll-samples', { path: samplePath, contentType: 'application/json' });
 	for (const sample of samples) {
 		expect(sample.finalTop).toBe(400);
 		expect(sample.layoutEvents).toBe(0);
 		expect(sample.overviewUpdates).toBe(0);
 		expect(sample.retainedOverlayReplacements).toBe(0);
+	}
+});
+
+test('diff scrolling in a tall inline viewport preserves visible rows and keyboard focus', async ({ page }, testInfo) => {
+	await openDiffPage(page, 'zh-CN');
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await page.locator('#single').evaluate(node => { node.style.height = '720px'; });
+	const original = Array.from({ length: 1200 }, (_, index) => `export const entry${index} = ${index};`);
+	const modified = original.map((line, index) => index % 5 === 0 ? `${line} // changed` : line);
+	await page.evaluate(([left, right]) => {
+		window.ashDiffIntegration.setTheme('vs');
+		window.ashDiffIntegration.setViewMode(false, false, 900);
+		window.ashDiffIntegration.setComparisonText(left, right);
+	}, [original.join('\n'), modified.join('\n')]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const editor = page.locator('#single .modified .stanza-editor');
+	const input = editor.locator('.stanza-editor-input');
+	await input.focus();
+	const before = await page.evaluate(() => window.ashDiffIntegration.layoutEventCount);
+	const cdp = await page.context().newCDPSession(page);
+	try {
+		await cdp.send('Performance.enable');
+		await cdp.send('Profiler.enable');
+		await cdp.send('Profiler.start');
+		await editor.hover();
+		for (let iteration = 0; iteration < 30; iteration++) {
+			await page.mouse.wheel(0, 80);
+		}
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(1, 1).modifiedScrollTop)).toBe(2400);
+		await expect(input).toBeFocused();
+		expect(await page.evaluate(() => window.ashDiffIntegration.layoutEventCount)).toBe(before);
+		const geometry = await editor.evaluate(node => {
+			const bounds = node.getBoundingClientRect();
+			const lines = [...node.querySelectorAll('.view-lines .view-line')].map(line => line.getBoundingClientRect());
+			return { height: bounds.height, visibleRows: lines.filter(line => line.bottom > bounds.top && line.top < bounds.bottom).length };
+		});
+		expect(geometry.height).toBeGreaterThan(700);
+		expect(geometry.visibleRows).toBeGreaterThan(25);
+		await testInfo.attach('tall-inline-diff', { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+		const { profile } = await cdp.send('Profiler.stop');
+		const metrics = await cdp.send('Performance.getMetrics');
+		const profilePath = testInfo.outputPath('tall-inline-diff.cpuprofile');
+		await writeFile(profilePath, JSON.stringify(profile));
+		await testInfo.attach('tall-inline-diff-cpu', { path: profilePath, contentType: 'application/json' });
+		await testInfo.attach('tall-inline-diff-metrics', { body: JSON.stringify(metrics), contentType: 'application/json' });
+	} finally {
+		await cdp.detach();
 	}
 });
 

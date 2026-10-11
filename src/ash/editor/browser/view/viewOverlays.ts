@@ -13,6 +13,7 @@ export class ViewOverlays extends ViewPart {
 	protected readonly domNode: FastDomNode<HTMLElement>;
 	private readonly _visibleLines: ViewPartRows;
 	private readonly _dynamicOverlays: DynamicViewOverlay[] = [];
+	private readonly renderedContents = new WeakMap<HTMLElement, string>();
 	private _isFocused = false;
 
 	constructor(context: ViewContext, host: HTMLElement) {
@@ -95,9 +96,13 @@ export class ViewOverlays extends ViewPart {
 		const startLineNumber = context.viewportData.startLineNumber;
 		for (const [lineIndex, row] of this._visibleLines.render(context)) {
 			const lineNumber = lineIndex + 1;
-			row.innerHTML = this._dynamicOverlays
+			const content = this._dynamicOverlays
 				.map(overlay => overlay.render(startLineNumber, lineNumber))
 				.join('');
+			if (this.renderedContents.get(row) !== content) {
+				row.innerHTML = content;
+				this.renderedContents.set(row, content);
+			}
 		}
 	}
 }

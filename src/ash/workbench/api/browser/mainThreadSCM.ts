@@ -1,5 +1,5 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { Emitter } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
 import { observableValue } from '../../../base/common/observable.js';
 import { URI } from '../../../base/common/uri.js';
 import { Icon } from '../../../base/common/icon.js';
@@ -38,10 +38,19 @@ export class MainThreadSCM extends Disposable {
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) { continue; }
 			for (const registration of runtime.registrations) {
+				if (registration.kind === 'sourceControl') {
+					current.add(registrationKey({ extensionId: runtime.id, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation }, registration.registrationId));
+				}
+			}
+		}
+		// Retire the old process before its replacement reuses repository identities.
+		for (const key of this.registrations.keys()) { if (!current.has(key)) { this.registrations.deleteAndDispose(key); } }
+		for (const runtime of snapshot.extensions) {
+			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) { continue; }
+			for (const registration of runtime.registrations) {
 				if (registration.kind !== 'sourceControl') { continue; }
 				const source = { extensionId: runtime.id, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation };
 				const key = registrationKey(source, registration.registrationId);
-				current.add(key);
 				if (!this.registrations.has(key)) {
 					const owner = this.registrations.set(key, new SCMRegistration(runtime, registration));
 					this.set(source, registration.registrationId, registration.revision, registration.providers);
@@ -49,7 +58,6 @@ export class MainThreadSCM extends Disposable {
 				} else { this.set(source, registration.registrationId, registration.revision, registration.providers); }
 			}
 		}
-		for (const key of this.registrations.keys()) { if (!current.has(key)) { this.registrations.deleteAndDispose(key); } }
 	}
 
 	public set(source: ExtensionClientSource, registrationId: string, revision: number, values: readonly JsonValue[]): void {
@@ -68,29 +76,36 @@ export class MainThreadSCM extends Disposable {
 				if (this.scm.getRepository(value.id)) { throw new Error('SCM repository identity is already registered'); }
 				provider = owner.providers.set(value.id, new ExtensionSCMProvider(value, (method, payload) => this.invoke(owner, method, { providerId: value.id, ...payload }), this.reportError));
 				provider.add(this.scm.registerSCMProvider(provider));
-				provider.add(this.quickDiff.addProvider({ id: `${source.extensionId}:${value.id}`, label: value.label, onDidChange: provider.onDidChangeResources, getOriginalResource: async resource => {
-					const result = await provider!.call('quickDiff', { resource: resource.toString() });
-					if (result === null) { return undefined; }
-					const original = object(result);
-					return { resource: URI.parse(string(original.resource)), text: string(original.text, 16 * 1024 * 1024) };
-				} }));
-				provider.add(this.decorations.registerDecorationsProvider({ label: value.label, onDidChange: provider.onDidChangeDecorations, provideDecorations: async resource => {
-					const result = await provider!.call('decoration', { resource: resource.toString() });
-					if (result === null) { return undefined; }
-					const data = object(result);
-					return { tooltip: optionalString(data.tooltip), color: optionalString(data.color), letter: optionalString(data.letter), weight: typeof data.weight === 'number' ? data.weight : undefined };
-				} }));
+				const providerId = `${source.extensionId}:${value.id}`;
+				provider.add(this.quickDiff.addProvider({
+					id: providerId, label: value.label, rootUri: provider.rootUri, onDidChange: Event.map(provider.onDidChangeResources, () => undefined), provideOriginalResource: async (resource, signal) => {
+						const revision = owner.revision;
+						const result = await this.invoke(owner, 'quickDiff', { providerId: value.id, resource: resource.toString() }, signal);
+						if (result === null) { return undefined; }
+						const original = object(result);
+						return { providerId, providerLabel: provider!.label, label: provider!.label, originalResource: URI.parse(string(original.resource)), revision, text: string(original.text, 16 * 1024 * 1024) };
+					}
+				}));
+				provider.add(this.decorations.registerDecorationsProvider({
+					label: value.label, onDidChange: provider.onDidChangeDecorations, provideDecorations: async resource => {
+						const result = await provider!.call('decoration', { resource: resource.toString() });
+						if (result === null) { return undefined; }
+						const data = object(result);
+						return { tooltip: optionalString(data.tooltip), color: optionalString(data.color), letter: optionalString(data.letter), weight: typeof data.weight === 'number' ? data.weight : undefined };
+					}
+				}));
 			} else { provider.accept(value); }
 			if (value.selected) { this.view.selectRepository(value.id); }
 		}
 		owner.revision = revision;
 	}
 
-	private async invoke(owner: SCMRegistration, method: string, payload: Record<string, unknown>): Promise<JsonValue> {
-		owner.controller.signal.throwIfAborted();
+	private async invoke(owner: SCMRegistration, method: string, payload: Record<string, unknown>, callerSignal?: AbortSignal): Promise<JsonValue> {
+		const signal = callerSignal ? AbortSignal.any([owner.controller.signal, callerSignal]) : owner.controller.signal;
+		signal.throwIfAborted();
 		const runtime = owner.runtime;
-		const result = await this.api.invoke({ extensionId: runtime.id, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration, registrationId: owner.registration.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload({ method, ...payload }), deadlineUnixMillis: Date.now() + this.timeout }, owner.controller.signal);
-		owner.controller.signal.throwIfAborted();
+		const result = await this.api.invoke({ extensionId: runtime.id, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration, registrationId: owner.registration.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload({ method, ...payload }), deadlineUnixMillis: Date.now() + this.timeout }, signal);
+		signal.throwIfAborted();
 		return result;
 	}
 

@@ -81,6 +81,7 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 	try {
 		using remote = new RemoteHost();
 		remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
+		remote.registerClientHandler = () => Disposable.None;
 		// No callback requests a service in this lifecycle fixture.
 		remote.instantiation.registerInstance(ICommandService, {} as ICommandService);
 		remote.instantiation.registerInstance(IFileService, {} as IFileService);
@@ -95,6 +96,11 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 			}),
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 		}, remote, remote.instantiation);
+		const registration = api.registerClientHandler(async operation => {
+			assert.equal(operation.operation, 'readInitialization');
+			return { result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } };
+		});
+		using handler = toDisposable(() => registration.dispose());
 		assert.equal((await api.reconcile('refresh')).extensions[0]?.lifecycle, 'ready');
 		assert.equal(await (await fetch(urls[0]!)).text(), 'style');
 		assert.equal((await api.reconcile('refresh')).extensions[0]?.lifecycle, 'ready');

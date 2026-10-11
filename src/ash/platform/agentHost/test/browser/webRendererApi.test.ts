@@ -3,7 +3,7 @@ import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
-import { decodeAppServerServerResponse } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { AppServerProtocolDecodeError, decodeAppServerServerResponse } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../common/appServerError.js";
@@ -1015,6 +1015,37 @@ test('extension client callbacks round-trip immutable JSON and release their req
 	} finally { registration.dispose(); }
 });
 
+test('extension backend routes validate generated parameters before dispatch', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const signal = new AbortController().signal;
+	assert.deepEqual(JSON.parse(JSON.stringify(await connected.api.extensionBackend.request('session/list', {}, signal))), { sessions: [] });
+	const count = transport.requests.length;
+	for (const params of [[], { unknown: true }]) {
+		await assert.rejects(connected.api.extensionBackend.request('session/list', params, signal), AppServerProtocolDecodeError);
+	}
+	for (const method of ['unknown/route', '__proto__']) {
+		await assert.rejects(connected.api.extensionBackend.request(method, {}, signal), TypeError);
+	}
+	assert.equal(transport.requests.length, count);
+	await assert.rejects(connected.api.extensionBackend.request('session/list', {}, AbortSignal.abort()));
+	assert.equal(transport.requests.length, count);
+});
+
+test('browser-only extension results are rejected by the App Server adapter', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const registration = connected.api.extensionHost.registerClientHandler(async () => ({ result: 'value', value: null }));
+	try {
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'browser-result', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'readConfiguration', section: 'editor', resource: null } } }) });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Browser extension results cannot be returned over the App Server protocol', data: null });
+		assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
+	} finally { registration.dispose(); }
+});
+
 test('Call service is assembled from the negotiated contract and ignores stale or foreign updates', async () => {
 	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, calls: { version: 1 } } } }));
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
@@ -1060,8 +1091,14 @@ for (const [operation, message] of [
 			transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-backend', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation } }) });
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(calls, 0);
-			assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message, data: null });
-			assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
+			if (operation.operation === 'coreService') {
+				// Backend-only services have no renderer wire variant and fail protocol decoding.
+				assert.equal(transport.requests.some(request => request.id === 'extension-backend'), false);
+				assert.equal(await connected.api.extensionHost.getConnectionState(), 'crashed');
+			} else {
+				assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message, data: null });
+				assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
+			}
 		} finally { registration.dispose(); }
 	});
 }

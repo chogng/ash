@@ -59,8 +59,88 @@ import { ILifecycleService, LifecyclePhase } from '../../../lifecycle/common/lif
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
+import { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
+import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
+import { IExtensionBackendApi } from '../../../../../platform/extensionHost/common/extensionBackendApi.js';
+import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { ISCMService, ISCMViewService } from '../../../../contrib/scm/common/scm.js';
+import { SCMService } from '../../../../contrib/scm/common/scmService.js';
+import { SCMViewService } from '../../../../contrib/scm/browser/scmViewService.js';
+import { IQuickDiffService } from '../../../../contrib/scm/common/quickDiff.js';
+import { QuickDiffService } from '../../../../contrib/scm/common/quickDiffService.js';
+import { IDecorationsService } from '../../../decorations/common/decorations.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
+
+test('SCM registrations dispatch updates and Quick Diff, and retire before a restarted provider reuses its identity', async () => {
+	const provider = {
+		id: 'repository', providerId: 'git', label: 'Git', rootUri: 'file:///workspace', selected: true, groups: [],
+		input: { value: '', placeholder: '', buttonLabel: 'Commit', buttonTooltip: 'Commit', enabled: true, canAccept: false },
+		statusMessage: '', isBusy: false, statusBarCommands: [], historyRef: null, historyRevision: 0, hasHistory: false, hasMerge: false,
+	};
+	const registration = { kind: 'sourceControl' as const, registrationId: 'scm', revision: 1, providers: [provider] };
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.scm', [registration]));
+	api.invocationResult = Promise.resolve(null);
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const scm = services.get(ISCMService);
+	const quickDiff = services.get(IQuickDiffService);
+	const source = { extensionId: 'acme.demo', activationGeneration: 11, incarnation: 3 };
+	const repository = scm.getRepository('repository')!;
+	assert.equal(host.currentSnapshot.extensions[0]!.registrations.find(entry => entry.id === 'scm')?.kind, 'sourceControl');
+	assert.equal(services.get(ISCMViewService).activeRepository, repository);
+	let changes = 0;
+	using changed = quickDiff.onDidChange(resource => { assert.equal(resource, undefined); changes++; });
+	assert.deepEqual(await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 2, providers: [{ ...provider, label: 'Updated Git' }] }, new AbortController().signal, source), { result: 'done' });
+	assert.equal(scm.getRepository('repository'), repository);
+	assert.equal(changes, 1);
+	api.invocationResult = Promise.resolve({ resource: 'git:///workspace/file.ts?ref=HEAD', text: 'original' });
+	assert.deepEqual(await quickDiff.getQuickDiffs(URI.file('/workspace/file.ts'), new AbortController().signal), [{ providerId: 'acme.demo:repository', providerLabel: 'Updated Git', label: 'Updated Git', originalResource: URI.parse('git:///workspace/file.ts?ref=HEAD'), revision: 2, text: 'original' }]);
+	const count = api.invocations.length;
+	assert.deepEqual(await quickDiff.getQuickDiffs(URI.file('/elsewhere/file.ts'), new AbortController().signal), []);
+	await assert.rejects(quickDiff.getQuickDiffs(URI.file('/workspace/file.ts'), AbortSignal.abort()));
+	assert.equal(api.invocations.length, count);
+	const pending = deferred<JsonValue>();
+	api.invocationResult = pending.promise;
+	const reading = quickDiff.getQuickDiffs(URI.file('/workspace/file.ts'), new AbortController().signal);
+	const signal = api.invocationSignals.at(-1)!;
+	api.current = snapshot(2, 'acme.scm', [registration]);
+	api.invocationResult = Promise.resolve(null);
+	await host.reload();
+	assert.notEqual(scm.getRepository('repository'), repository);
+	assert.equal(quickDiff.providers.length, 1);
+	assert.equal(signal.aborted, true);
+	pending.resolve({ resource: 'git:///workspace/file.ts', text: 'late' });
+	await assert.rejects(reading);
+	await assert.rejects(api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 3, providers: [] }, new AbortController().signal, source), /retired/);
+	await host.stop();
+	assert.equal(scm.getRepository('repository'), undefined);
+	assert.equal(quickDiff.providers.length, 0);
+});
+
+test('extension backend client operations reach the admitted capability owner', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.backend'));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	services.get(IExtensionApi).list = async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1', displayName: 'Demo', sourceKind: 'builtIn', manifestJson: JSON.stringify({ ashFrontend: { capabilities: { catalog: { methods: { list: { route: 'session/list', fields: [], resultFields: ['sessions'] } }, notifications: [] } } } }), manifestSha256: DIGEST, packageSha256: DIGEST }] });
+	const requests: unknown[] = [];
+	services.get(IExtensionBackendApi).request = async (method, params) => { requests.push([method, params]); return { sessions: [], privateValue: 'hidden' }; };
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const source = { extensionId: 'acme.demo', activationGeneration: 11, incarnation: 3 };
+	const signal = new AbortController().signal;
+	assert.deepEqual(await api.clientHandler!({ operation: 'backendRequest', capability: 'catalog', method: 'list', params: {} }, signal, source), { result: 'value', value: { sessions: [] } });
+	assert.deepEqual(requests, [['session/list', {}]]);
+	await assert.rejects(api.clientHandler!({ operation: 'backendRequest', capability: 'catalog', method: 'undeclared', params: {} }, signal, source), /not authorized/);
+	await assert.rejects(api.clientHandler!({ operation: 'backendRequest', capability: 'catalog', method: 'list', params: { forbidden: true } }, signal, source), /exceed/);
+	const result = await api.clientHandler!({ operation: 'backendState', capability: 'catalog', after: 0 }, signal, source);
+	assert.equal(result.result, 'value');
+	if (result.result !== 'value') { assert.fail('Expected backend state'); }
+	assert.deepEqual(JSON.parse(JSON.stringify(result.value)), { sequence: 0, connection: 'ready', generation: 1, reset: false, events: [], folders: services.get(IWorkspaceContextService).getWorkspace().folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })) });
+	assert.equal(requests.length, 1);
+});
 
 test('extension command requests preserve value presence through the real CommandService owner', async () => {
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.commands'));
@@ -771,6 +851,17 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	services.registerInstance(IExtensionHostApi, api);
+	services.registerInstance(IExtensionApi, {
+		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
+		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+	});
+	services.registerInstance(IExtensionBackendApi, { request: async () => assert.fail('Unexpected extension backend request') });
+	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: () => api.getConnectionState(), getSlashCommands: async () => [], onConnectionState: listener => api.onConnectionState(listener) });
+	services.registerInstance(IServerEventApi, { subscribe: () => toDisposable(() => { }) });
+	services.registerInstance(ISCMService, services.resources.add(new SCMService()));
+	services.registerSingleton(ISCMViewService, () => services.createInstance(SCMViewService));
+	services.registerInstance(IQuickDiffService, services.resources.add(new QuickDiffService()));
+	services.registerInstance(IDecorationsService, { onDidChangeDecorations: Event.None, registerDecorationsProvider: () => toDisposable(() => { }), getDecoration: () => undefined });
 	services.registerInstance(IHostService, {
 		hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => assert.fail('Unexpected window'),
 		restart: async () => assert.fail('Unexpected restart'), getScreenshot: async () => undefined,
