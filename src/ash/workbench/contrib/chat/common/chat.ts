@@ -14,6 +14,13 @@ export const AgentSessionsSidebarVisibleContext = new RawContextKey<boolean>(
 	'agentSessionsSidebarVisible',
 	false,
 );
+export const AGENT_SESSIONS_ORIENTATION_SETTING = 'chat.viewSessions.orientation';
+export enum AgentSessionsOrientation {
+	Auto = 'auto',
+	SideBySide = 'sideBySide',
+	Stacked = 'stacked',
+}
+export const AgentSessionsOrientationContext = new RawContextKey<AgentSessionsOrientation>('agentSessionsOrientation', AgentSessionsOrientation.Auto);
 export const OPEN_CHAT_BROWSER_COMMAND_ID =
 	"workbench.action.chat.openBrowser";
 export const MOVE_CHAT_TO_EDITOR_COMMAND_ID =

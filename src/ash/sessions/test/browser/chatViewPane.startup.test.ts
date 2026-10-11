@@ -1,4 +1,6 @@
 import { IExecutionSettingsService } from '../../../platform/execution/common/executionSettingsService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
@@ -43,6 +45,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { ChatViewPane } = await import("../../browser/chatViewPane.js");
+await import('../../browser/actions/chatLayoutActions.js');
 const { BrowserContextViewService } = await import("../../../platform/contextview/browser/contextViewService.js");
 const { BrowserLayoutService } = await import("../../../platform/layout/browser/layoutService.js");
 
@@ -81,6 +84,8 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
 		new NotificationService(),
 		services,
+		services.get(IConfigurationService),
+		services.get(IStorageService),
 	);
 
 	assert.deepEqual(escaped, []);

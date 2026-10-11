@@ -278,15 +278,21 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		}));
 		this.render();
 		this.initialization = this.initialize();
-		const revealActiveEditor = (): void => {
+		const revealActiveEditor = (options: { readonly revealSelectedResource?: boolean; } = {}): void => {
 			const token = this.startSelection();
+			if (!this.isBodyVisible()) return;
 			const resource = editorService.activeEditor?.resource;
 			if (!resource || !workspaceContextService.getWorkspaceFolder(resource)) return;
-			void this.autoReveal(resource, token).catch(error => {
+			void this.autoReveal(resource, token, options).catch(error => {
 				if (!this.isDisposed && !token.isCancellationRequested && !isCancellationError(error)) console.error('Could not reveal the active editor', error);
 			});
 		};
-		this._register(editorService.onDidActiveEditorChange(revealActiveEditor));
+		this._register(editorService.onDidActiveEditorChange(() => revealActiveEditor()));
+		this._register(this.onDidChangeBodyVisibility(visible => {
+			// Hidden trees have no usable viewport for revealing the active file.
+			if (visible) revealActiveEditor({ revealSelectedResource: true });
+			else this.selectionCancellation.value?.cancel();
+		}));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('explorer.autoReveal') || event.affectsConfiguration('explorer.autoRevealExclude')) revealActiveEditor();
 		}));
@@ -301,12 +307,14 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		return source.token;
 	}
 
-	private async autoReveal(resource: URI, token: CancellationToken): Promise<void> {
+	private async autoReveal(resource: URI, token: CancellationToken, options: { readonly revealSelectedResource?: boolean; } = {}): Promise<void> {
 		await this.initialization;
 		if (this.isDisposed || token.isCancellationRequested) return;
-		if (this.tree.focus && extUriBiasedIgnorePathCase.isEqual(this.tree.focus.resource, resource) && this.tree.selection.length === 1 && extUriBiasedIgnorePathCase.isEqual(this.tree.selection[0]!.resource, resource)) return;
-		// A delayed preview activation must not undo subsequent keyboard name navigation.
-		if (this.hasFocus() && this.tree.selection.some(item => extUriBiasedIgnorePathCase.isEqual(item.resource, resource))) return;
+		if (!options.revealSelectedResource) {
+			if (this.tree.focus && extUriBiasedIgnorePathCase.isEqual(this.tree.focus.resource, resource) && this.tree.selection.length === 1 && extUriBiasedIgnorePathCase.isEqual(this.tree.selection[0]!.resource, resource)) return;
+			// A delayed preview activation must not undo subsequent keyboard name navigation.
+			if (this.hasFocus() && this.tree.selection.some(item => extUriBiasedIgnorePathCase.isEqual(item.resource, resource))) return;
+		}
 		let needsSiblings = false;
 		if (!this.explorerService.shouldAutoReveal(resource, () => { needsSiblings = true; return false; })) return;
 		if (needsSiblings) {

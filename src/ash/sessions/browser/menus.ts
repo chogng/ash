@@ -6,4 +6,5 @@ export const Menus = {
 	MenubarFileMenu: new MenuId('SessionsMenubarFileMenu'),
 	TitleBarLeftLayout: new MenuId('SessionsTitleBarLeftLayout'),
 	CodeAddTab: new MenuId('SessionsAddTab'),
+	ChatSessionsLayout: new MenuId('chatAgentSessionsOrientationSubmenu'),
 } as const;

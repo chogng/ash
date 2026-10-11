@@ -58,7 +58,8 @@ import type { IPaneComposite } from '../../../workbench/common/panecomposite.js'
 import { ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from "../../../workbench/common/views.js";
 import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import { ChatWidgetModel } from "../../browser/chatWidgetModel.js";
-import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { Menus } from '../../browser/menus.js';
 import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../workbench/services/preferences/common/preferences.js";
 import { PreferencesService as BrowserPreferencesService } from "../../../workbench/services/preferences/browser/preferencesService.js";
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
@@ -259,7 +260,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(contextViewService, paneChat), contextKeys,
+			createInputServices(contextViewService, paneChat), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -323,6 +324,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	}, contextKeys);
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	using configuration = new WorkbenchConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
@@ -372,7 +375,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, chat), contextKeys,
+		createInputServices(contextViewService, chat), configuration, inputResources.add(createTestStorage()), contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, "div");
@@ -431,6 +434,12 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.equal(sessionsSidebar?.contains(dom.window.document.activeElement), true);
 	sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row')[1]?.click();
 	assert.equal(sessions.active?.session.sessionId, 'session-2');
+	assert.equal(sessionsSidebar?.hidden, true);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, false);
+	assert.equal(pane.element.querySelector('.ash-chat:where(:not([hidden]))')?.contains(dom.window.document.activeElement), true);
+	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, true);
 	const search = sessionsSidebar?.querySelector<HTMLInputElement>('.ash-agent-sessions-search');
 	assert.ok(search);
 	search.value = 'session-1';
@@ -453,13 +462,16 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	paneChanges.disconnect();
 	sessions.discardUntitledSession(draftId);
 	sessions.selectThread('session-1', 'thread-1');
+	assert.equal(sessionsSidebar?.hidden, true);
+	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
 	pane.element.querySelector(".ash-chat-body")!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 	assert.equal(sessionsSidebar?.hidden, true);
 	assert.equal(contextKeys.getValue('agentSessionsSidebarVisible'), false);
 	assert.equal(dom.window.document.activeElement, layoutToolbar?.querySelector("button"));
 	assert.equal(layoutToolbar?.hidden, false);
 	const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
-		.filter(([group]) => group !== "navigation")
+		.filter(([group]) => group === 'chatActions')
 		.flatMap(([, actions]) => actions);
 	assert.deepEqual(
 		chatActions.map((action) => ({
@@ -495,6 +507,27 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 			},
 		],
 	);
+	assert.deepEqual(menuService.getMenuActions(MenuId.ChatTitle).find(([group]) => group === 'layout')?.[1].map(action => action.label), ['Sessions layout']);
+	const layoutChoices = () => menuService.getMenuActions(Menus.ChatSessionsLayout).flatMap(([, actions]) => actions);
+	assert.deepEqual(layoutChoices().map(action => [action.label, action.checked]), [['Automatic', true], ['Side by side', false], ['Stacked', false]]);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
+	assert.equal(configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.Stacked);
+	assert.deepEqual(layoutChoices().map(action => action.checked), [false, false, true]);
+	await assert.rejects(configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, 'diagonal'), /Invalid Sessions layout/);
+	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 900, 600);
+	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide);
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	sessionsSidebar?.querySelector<HTMLButtonElement>('.ash-agent-session-row')?.click();
+	assert.equal(sessionsSidebar?.hidden, false);
+	assert.equal(paneHost.hidden, false);
+	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.Stacked);
+	assert.equal(body.classList.contains('sessions-list-only'), true);
+	assert.equal(body.classList.contains('sessions-stacked'), false);
+	assert.equal(paneHost.hidden, true);
+	sessionsSidebar?.querySelector<HTMLButtonElement>('.ash-agent-session-row')?.click();
+	assert.equal(sessionsSidebar?.hidden, true);
+	assert.equal(paneHost.hidden, false);
 	await chatActions[3]?.run();
 	const settingsInput = dom.window.document.querySelector<HTMLInputElement>(".ash-quick-pick-input input");
 	assert.ok(settingsInput);
@@ -916,6 +949,8 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		unavailableAccessibleViewService,
 		notifications,
 		createInputServices(contextViewService, paneChat),
+		inputResources.add(new WorkbenchConfigurationService()),
+		inputResources.add(createTestStorage()),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -944,6 +979,8 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.ok(input);
 	assert.equal(untitledPane.classList.contains("empty"), true);
 	let contextResolutions = 0;
+	pane.toggleSessionsSidebar();
+	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), true);
 	pane.addContext({
 		id: "commit-1",
 		kind: "scmHistoryItem",
@@ -965,6 +1002,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.ok(untitledPane.querySelector(":scope > .ash-chat-list-widget"));
 	assert.ok(untitledPane.querySelector(":scope > .ash-chat-input-part"));
 	await waitFor(() => fake.turnStartRequests.length === 1);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')?.hidden, true);
 
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'default' });
@@ -1042,6 +1080,8 @@ test("the New Chat slash command opens an untitled session", async () => {
 		unavailableAccessibleViewService,
 		notifications,
 		createInputServices(contextViewService, paneChat),
+		inputResources.add(new WorkbenchConfigurationService()),
+		inputResources.add(createTestStorage()),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1121,6 +1161,8 @@ test("failed first send keeps the untitled session and its input draft", async (
 		unavailableAccessibleViewService,
 		notifications,
 		createInputServices(contextViewService, paneChat),
+		inputResources.add(new WorkbenchConfigurationService()),
+		inputResources.add(createTestStorage()),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1204,6 +1246,8 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		unavailableAccessibleViewService,
 		notifications,
 		createInputServices(contextViewService, paneChat),
+		inputResources.add(new WorkbenchConfigurationService()),
+		inputResources.add(createTestStorage()),
 	);
 	dom.window.document.body.append(pane.element);
 

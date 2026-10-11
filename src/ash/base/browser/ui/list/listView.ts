@@ -408,6 +408,8 @@ export class ListView<T> extends Disposable {
 			if (row) this.scrollable.reveal(row);
 			return;
 		}
+		// A recently shown list may still have the scroll bounds of its hidden viewport.
+		this.scrollable.layout();
 		const top = this.getElementTop(index);
 		const bottom = top + this.getElementHeight(index);
 		const viewport = this.scrollable.state;

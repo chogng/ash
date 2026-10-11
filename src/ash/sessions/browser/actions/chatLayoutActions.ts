@@ -2,7 +2,7 @@ import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/l
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { localize, localize2 } from "../../../nls.js";
-import { Action2, MenuId, registerAction2 } from "../../../platform/actions/common/actions.js";
+import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../platform/actions/common/actions.js";
 import { ContextKeyExpr } from "../../../platform/contextkey/common/contextkey.js";
 import { DialogSeverity, IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
@@ -11,8 +11,65 @@ import { IChatService } from "../../../workbench/services/chat/common/chatServic
 import type { ModelProviderCredentialStatus } from '../../../workbench/services/chat/common/chatService.js';
 import { IPreferencesService } from "../../../workbench/services/preferences/common/preferences.js";
 import { IViewsService } from "../../../workbench/services/views/common/viewsService.js";
-import { AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import { ChatViewPane } from "../chatViewPane.js";
+import { Menus } from '../menus.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../platform/registry/common/platform.js';
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsOrientation>({
+	key: AGENT_SESSIONS_ORIENTATION_SETTING,
+	defaultValue: AgentSessionsOrientation.Auto,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: Object.values(AgentSessionsOrientation) },
+	parse(value: unknown): AgentSessionsOrientation {
+		switch (value) {
+			case AgentSessionsOrientation.Auto:
+			case AgentSessionsOrientation.SideBySide:
+			case AgentSessionsOrientation.Stacked: return value;
+			default: throw new TypeError(localize('chat.sessions.layout.invalid', 'Invalid Sessions layout.'));
+		}
+	},
+	setting: {
+		title: localize('chat.sessions.layout.title', 'Sessions layout'),
+		description: localize('chat.sessions.layout.description', 'Automatic uses side by side when space allows and stacks sessions above a new chat input in narrow panels. Side by side switches to the list in narrow panels. Stacked only shows above new chats; existing conversations use the list.'),
+		valueType: 'select',
+		options: [
+			{ value: AgentSessionsOrientation.Auto, label: localize('chat.sessions.layout.auto', 'Automatic') },
+			{ value: AgentSessionsOrientation.SideBySide, label: localize('chat.sessions.layout.sideBySide', 'Side by side') },
+			{ value: AgentSessionsOrientation.Stacked, label: localize('chat.sessions.layout.stacked', 'Stacked') },
+		],
+	},
+});
+
+MenusRegistry.appendMenuItem(MenuId.ChatTitle, {
+	submenu: Menus.ChatSessionsLayout,
+	title: localize2('chat.sessions.layout.title', 'Sessions layout'),
+	group: 'layout',
+	order: 1,
+});
+
+for (const [orientation, title, id] of [
+	[AgentSessionsOrientation.Auto, localize2('chat.sessions.layout.auto', 'Automatic'), 'workbench.action.chat.setAgentSessionsOrientationAuto'],
+	[AgentSessionsOrientation.SideBySide, localize2('chat.sessions.layout.sideBySide', 'Side by side'), 'workbench.action.chat.setAgentSessionsOrientationSideBySide'],
+	[AgentSessionsOrientation.Stacked, localize2('chat.sessions.layout.stacked', 'Stacked'), 'workbench.action.chat.setAgentSessionsOrientationStacked'],
+] as const) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id,
+				title,
+				toggled: AgentSessionsOrientationContext.isEqualTo(orientation),
+				menu: { id: Menus.ChatSessionsLayout, group: 'navigation' },
+				f1: true,
+			});
+		}
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			await accessor.get(IConfigurationService).updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, orientation, ConfigurationTarget.USER_LOCAL);
+		}
+	});
+}
 
 const ChatBrowserAvailable = ContextKeyExpr.equals("chatBrowserAvailable", true);
 const ChatEditorAreaAvailable = ContextKeyExpr.equals("chatEditorAreaAvailable", true);

@@ -1,5 +1,5 @@
 import "./media/chatViewPane.css";
-import { setDisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
+import { MutableDisposable, setDisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
@@ -19,7 +19,8 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { URI } from '../../base/common/uri.js';
 import { type IContextKey } from "../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService, IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
-import { AgentSessionsSidebarVisibleContext } from '../../workbench/contrib/chat/common/chat.js';
+import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext } from '../../workbench/contrib/chat/common/chat.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { AgentSessionsControl } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsControl.js';
 import { registerAgentSessionsAccessibility } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsAccessibility.js';
 import { createAgentSessionsModel } from './agentSessionsModel.js';
@@ -28,9 +29,15 @@ import { ChatWidgetModel } from './chatWidgetModel.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
+import { Sash, SashState } from '../../base/browser/ui/sash/sash.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
+const sessionsSidebarWidthKey = 'chat.sessionsSidebarWidth';
+const defaultSessionsSidebarWidth = 320;
+const minimumSessionsSidebarWidth = 220;
+const minimumChatWidth = 360;
 
 interface ChatPaneEntry {
 	readonly tabId: string;
@@ -55,7 +62,12 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private readonly body: HTMLDivElement;
 	private readonly sessionsSidebar: HTMLElement;
 	private readonly sessionsControl: AgentSessionsControl;
+	private readonly sessionsSash: Sash;
+	private sessionsSidebarWidth: number;
 	private readonly sessionsSidebarVisible: IContextKey<boolean>;
+	private readonly sessionsOrientation: IContextKey<AgentSessionsOrientation>;
+	private readonly activePaneListener = this._register(new MutableDisposable());
+	private sessionsPresentation: 'sideBySide' | 'stacked' | 'list' = 'list';
 	private readonly empty: HTMLDivElement;
 	private readonly panes = new Map<string, ChatWidget<ChatWidgetModel>>();
 	private readonly tabOrder: string[] = [];
@@ -78,6 +90,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IStorageService private readonly storage: IStorageService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
@@ -111,9 +125,12 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.body.className = "ash-chat-body";
 		const sidebarContextKeys = contextKeyService ?? this._register(new ContextKeyService());
 		this.sessionsSidebarVisible = AgentSessionsSidebarVisibleContext.bindTo(sidebarContextKeys);
+		this.sessionsOrientation = AgentSessionsOrientationContext.bindTo(sidebarContextKeys);
 		this._register(toDisposable(() => this.sessionsSidebarVisible.reset()));
+		this._register(toDisposable(() => this.sessionsOrientation.reset()));
 		this.sessionsSidebar = h(container.ownerDocument, 'aside');
 		this.sessionsSidebar.className = 'ash-chat-sessions-sidebar';
+		this.sessionsSidebar.id = `${viewId}-sessions`;
 		this.sessionsSidebar.setAttribute('aria-label', localize('chat.sessions.sidebar', 'Agent sessions'));
 		const sessionsHeader = h(container.ownerDocument, 'header');
 		const sessionsTitle = h(container.ownerDocument, 'h2');
@@ -127,15 +144,55 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.body.append(this.sessionsSidebar, this.paneHost);
 		this._register(toDisposable(() => this.sessionsSidebar.remove()));
 		this._register(registerAgentSessionsAccessibility(this.sessionsSidebar, sidebarContextKeys));
-		this._register(addDisposableListener(newSessionButton, 'click', () => this.sessionService.createUntitledSession()));
-		this.sessionsControl = this._register(new AgentSessionsControl(this.sessionsSidebar, createAgentSessionsModel(sessionService)));
+		this._register(addDisposableListener(newSessionButton, 'click', () => {
+			this.sessionService.createUntitledSession();
+			if (this.sessionsPresentation === 'list') this.setSessionsSidebarVisible(false);
+			this.activePane?.focus();
+		}));
+		this.sessionsControl = this._register(new AgentSessionsControl(this.sessionsSidebar, createAgentSessionsModel(sessionService, () => {
+			if (this.sessionsPresentation !== 'sideBySide') this.setSessionsSidebarVisible(false);
+			this.activePane?.focus();
+		})));
 		this.sessionsSidebar.hidden = true;
+		const storedWidth = storage.getNumber(sessionsSidebarWidthKey, StorageScope.WORKSPACE);
+		this.sessionsSidebarWidth = storedWidth !== undefined && storedWidth >= minimumSessionsSidebarWidth ? storedWidth : defaultSessionsSidebarWidth;
+		this.sessionsSash = this._register(new Sash(this.body, 'vertical'));
+		this.sessionsSash.element.classList.add('ash-chat-sessions-sash');
+		this.sessionsSash.element.setAttribute('aria-label', localize('chat.sessions.resize', 'Resize Sessions list'));
+		this.sessionsSash.element.setAttribute('aria-controls', this.sessionsSidebar.id);
+		let resizeStartWidth: number | undefined;
+		this._register(this.sessionsSash.onDidStart(() => {
+			resizeStartWidth = this.getSessionsSidebarWidth(this.body.getBoundingClientRect().width);
+		}));
+		this._register(this.sessionsSash.onDidChange(event => {
+			if (resizeStartWidth === undefined || this.sessionsSash.element.hidden) {
+				return;
+			}
+			const width = this.body.getBoundingClientRect().width;
+			this.sessionsSidebarWidth = this.getSessionsSidebarWidth(width, resizeStartWidth - event.delta);
+			this.layoutSessionsSidebar(width);
+		}));
+		this._register(this.sessionsSash.onDidEnd(() => {
+			if (resizeStartWidth === undefined) {
+				return;
+			}
+			resizeStartWidth = undefined;
+			this.storage.store(sessionsSidebarWidthKey, this.sessionsSidebarWidth, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		}));
+		this._register(this.sessionsSash.onDidReset(() => {
+			this.sessionsSidebarWidth = defaultSessionsSidebarWidth;
+			this.storage.remove(sessionsSidebarWidthKey, StorageScope.WORKSPACE);
+			this.layoutSessionsSidebar(this.body.getBoundingClientRect().width);
+		}));
 		this.contentElement.append(this.body);
-		this.body.addEventListener("keydown", (event) => {
+		this._register(addDisposableListener(this.body, 'keydown', event => {
 			if (event.key !== 'Escape' || !this.sessionsSidebarVisible.get()) return;
 			event.preventDefault();
 			this.setSessionsSidebarVisible(false);
-		});
+		}));
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AGENT_SESSIONS_ORIENTATION_SETTING)) this.updateResponsiveLayout();
+		}));
 		const ResizeObserver = container.ownerDocument.defaultView?.ResizeObserver;
 		if (ResizeObserver) {
 			const observer = new ResizeObserver(() => this.updateResponsiveLayout());
@@ -162,7 +219,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	}
 
 	override focus(): void {
-		this.activePane?.focus();
+		if (this.sessionsSidebarVisible.get() && this.sessionsPresentation === 'list') this.sessionsControl.focus();
+		else this.activePane?.focus();
 	}
 
 	toggleSessionsSidebar(): void {
@@ -270,6 +328,9 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			// Keep retained Chat editors attached while Session details refresh.
 			if (this.paneHost.children[index] !== node) this.paneHost.insertBefore(node, this.paneHost.children[index] ?? null);
 		}
+		if (this.activePane !== activePane) {
+			this.activePaneListener.value = activePane?.model.onDidChange(() => this.updateResponsiveLayout());
+		}
 		this.activePane = activePane;
 		for (const entry of orderedEntries) entry.pane.setVisible(entry.pane === this.activePane);
 		this.empty.hidden = orderedEntries.length > 0;
@@ -279,6 +340,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			activeTabId,
 		);
 		for (const entry of orderedEntries) entry.pane.setTabId(tabIds.get(entry.tabId));
+		this.updateResponsiveLayout();
 		if (restoreFocus && activePane?.element.contains(focusedElement)) focusedElement.focus();
 	}
 
@@ -411,6 +473,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.sessionsSidebarVisible.set(visible);
 		this.body.classList.toggle('sessions-sidebar-visible', visible);
 		this.sessionsSidebar.hidden = !visible;
+		this.updateResponsiveLayout();
 		if (visible) this.sessionsControl.focus();
 		else {
 			this.focusReturn?.();
@@ -419,7 +482,64 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	}
 
 	private updateResponsiveLayout(): void {
-		this.body.classList.toggle("compact", this.body.getBoundingClientRect().width < 720);
+		const width = this.body.getBoundingClientRect().width;
+		const compact = width < 720;
+		const orientation = this.configuration.getValue<AgentSessionsOrientation>(AGENT_SESSIONS_ORIENTATION_SETTING);
+		this.sessionsOrientation.set(orientation);
+		const isNewChat = this.activePane?.untitledSessionId !== undefined && this.activePane.model.items.length === 0 && this.activePane.model.state !== 'submitting';
+		if (this.sessionsPresentation === 'stacked' && !isNewChat && this.sessionsSidebarVisible.get()) {
+			this.setSessionsSidebarVisible(false);
+			this.activePane?.focus();
+			return;
+		}
+		if (!compact && orientation !== AgentSessionsOrientation.Stacked) {
+			this.sessionsPresentation = 'sideBySide';
+		} else if (isNewChat && orientation !== AgentSessionsOrientation.SideBySide) {
+			this.sessionsPresentation = 'stacked';
+		} else {
+			this.sessionsPresentation = 'list';
+		}
+		this.body.classList.toggle('compact', compact);
+		this.body.classList.toggle('sessions-stacked', this.sessionsPresentation === 'stacked');
+		this.body.classList.toggle('sessions-list-only', this.sessionsPresentation === 'list');
+		const hideChat = this.sessionsSidebarVisible.get() === true && this.sessionsPresentation === 'list';
+		const restoreFocus = hideChat && this.paneHost.contains(this.paneHost.ownerDocument.activeElement);
+		const sashHadFocus = this.sessionsSash.element === this.body.ownerDocument.activeElement;
+		this.paneHost.hidden = hideChat;
+		this.layoutSessionsSidebar(width);
+		if (restoreFocus || (sashHadFocus && this.sessionsSash.element.hidden && this.sessionsSidebarVisible.get())) {
+			this.sessionsControl.focus();
+		}
+	}
+
+	private getSessionsSidebarWidth(width: number, requestedWidth = this.sessionsSidebarWidth): number {
+		return Math.max(minimumSessionsSidebarWidth, Math.min(requestedWidth, width - minimumChatWidth));
+	}
+
+	private layoutSessionsSidebar(width: number): void {
+		const visible = this.sessionsSidebarVisible.get() === true && this.sessionsPresentation === 'sideBySide';
+		this.sessionsSash.element.hidden = !visible;
+		if (!visible) {
+			this.sessionsSidebar.style.removeProperty('flex-basis');
+			this.sessionsSash.state = SashState.Disabled;
+			return;
+		}
+		// Window constraints change the effective width without overwriting the user's preferred width.
+		const sidebarWidth = this.getSessionsSidebarWidth(width);
+		const maximumWidth = width - minimumChatWidth;
+		this.sessionsSidebar.style.flexBasis = `${sidebarWidth}px`;
+		this.sessionsSash.element.style.left = `${width - sidebarWidth}px`;
+		if (sidebarWidth >= maximumWidth) {
+			this.sessionsSash.state = SashState.AtMinimum;
+		} else if (sidebarWidth <= minimumSessionsSidebarWidth) {
+			this.sessionsSash.state = SashState.AtMaximum;
+		} else {
+			this.sessionsSash.state = SashState.Enabled;
+		}
+		this.sessionsSash.element.setAttribute('aria-valuemin', String(minimumSessionsSidebarWidth));
+		this.sessionsSash.element.setAttribute('aria-valuemax', String(maximumWidth));
+		this.sessionsSash.element.setAttribute('aria-valuenow', String(sidebarWidth));
+		this.sessionsSash.element.setAttribute('aria-valuetext', localize('chat.sessions.resizeWidth', '{0} pixels', Math.round(sidebarWidth)));
 	}
 
 }

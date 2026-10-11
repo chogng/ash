@@ -32,7 +32,7 @@ export function registerAgentSessionsAccessibility(sidebar: HTMLElement, context
 			return new AccessibleContentProvider(
 				AccessibleViewProviderId.AgentSessions,
 				{ type: AccessibleViewType.Help },
-				() => localize('chat.sessions.help', 'Agent Sessions\nUse Tab and Shift+Tab to reach the New Session button, search field, and session rows. Type in Search sessions to filter the list; press Arrow Down to reach the first row. Use Arrow Up and Arrow Down to move between rows, and Enter or Space to open one. Press Escape to close the sidebar and return to Chat.'),
+				() => localize('chat.sessions.help', 'Agent Sessions\nUse Tab and Shift+Tab to reach the New Session button, search field, and session rows. Type in Search sessions to filter the list; press Arrow Down to reach the first row. Use Arrow Up and Arrow Down to move between rows, and Enter or Space to open one. Selecting a session returns to Chat unless the list is shown side by side. Press Escape to close the list and return to its toggle. In Chat More Actions, Sessions layout offers Automatic, Side by side, and Stacked. In side by side layout, drag the separator to resize the list, or focus it with Tab and use Arrow Left and Arrow Right; hold Alt for finer adjustments. Double-click the separator to restore its default width. Narrow panels can show the list in place of Chat. Stacked is only used above a new chat input.'),
 				() => focusTarget.focus(),
 				AccessibilityVerbositySettingId.AgentSessions,
 			);

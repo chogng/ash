@@ -284,6 +284,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			storageService,
 		);
 		browser.window.document.body.append(pane.element);
+		pane.setVisible(true);
 		assert.equal(
 			pane.element.querySelector(".ash-explorer-status")?.textContent,
 			"Loading files…",
@@ -409,6 +410,46 @@ test("ExplorerView opens workspace files on single click", async () => {
 		]);
 		await explorerService.select(URI.file('/project/README.md'), 'force');
 		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		pane.setVisible(false);
+		pane.collapseAll();
+		activeEditor = { resource: URI.file('/project/src/main.ts'), label: 'main.ts' };
+		activeEditorChanges.fire();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		assert.equal(sourceFolder.getAttribute('aria-expanded'), 'false');
+		const focusBeforeReveal = browser.window.document.activeElement;
+		pane.setVisible(true);
+		await waitFor(() => explorerService.getContext()[0]?.name === 'main.ts');
+		assert.equal(sourceFolder.getAttribute('aria-expanded'), 'true');
+		assert.equal(mainRow.getAttribute('aria-selected'), 'true');
+		assert.equal(browser.window.document.activeElement, focusBeforeReveal);
+		pane.setExpanded(false);
+		activeEditor = { resource: URI.file('/project/README.md'), label: 'README.md' };
+		activeEditorChanges.fire();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(explorerService.getContext()[0]?.name, 'main.ts');
+		pane.setExpanded(true);
+		await waitFor(() => explorerService.getContext()[0]?.name === 'README.md');
+		pane.setVisible(false);
+		pane.collapseAll();
+		await configurationService.updateValue('explorer.autoReveal', false);
+		activeEditor = { resource: URI.file('/project/src/main.ts'), label: 'main.ts' };
+		activeEditorChanges.fire();
+		pane.setVisible(true);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		assert.equal(sourceFolder.getAttribute('aria-expanded'), 'false');
+		pane.setVisible(false);
+		await configurationService.updateValue('explorer.autoRevealExclude', { '**/main.ts': true });
+		await configurationService.updateValue('explorer.autoReveal', true);
+		pane.setVisible(true);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		assert.equal(sourceFolder.getAttribute('aria-expanded'), 'false');
+		await configurationService.updateValue('explorer.autoRevealExclude', {});
+		await waitFor(() => explorerService.getContext()[0]?.name === 'main.ts');
+		activeEditor = undefined;
+		activeEditorChanges.fire();
 		await explorerService.select(URI.file('/project/src/main.ts'), 'force');
 		pane.focus();
 		assert.equal(explorerService.getContext()[0]?.name, 'main.ts');

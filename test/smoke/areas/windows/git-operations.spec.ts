@@ -13,6 +13,40 @@ test.describe('Git repository operations', () => {
 		test.skip(target.appServerMode !== 'required', 'Requires the Rust Git backend.');
 	});
 
+	test('Go to File reveals the staged file when returning to Explorer', async ({ testWorkspace, workbench }) => {
+		const cwd = testWorkspace.directory;
+		const path = 'z-source/inner/target.ts';
+		await mkdir(join(cwd, 'z-source', 'inner'), { recursive: true });
+		await Promise.all(Array.from({ length: 70 }, (_, index) => mkdir(join(cwd, `a-folder-${String(index).padStart(2, '0')}`))));
+		await writeFile(join(cwd, path), 'export const target = 1;\n');
+		await run('git', ['add', path], { cwd });
+		const page = workbench.page;
+		const explorerTab = page.getByRole('tab', { name: 'Explorer', exact: true });
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		if (await explorerTab.getAttribute('aria-selected') !== 'true') await explorerTab.click();
+		const explorer = page.locator('.ash-explorer');
+		await expect(explorer.getByRole('treeitem', { name: 'a-folder-00', exact: true })).toBeVisible();
+		await workbench.git.open();
+		await workbench.quickaccess.runCommand('git.refresh');
+		const change = page.locator('.ash-scm-changes').getByRole('treeitem').filter({ has: page.getByText('target.ts', { exact: true }) });
+		await change.click();
+		await expect(page.locator('.stanza-diff-editor-pane')).toBeVisible();
+		await change.getByRole('button', { name: `Open File: ${path}`, exact: true }).click();
+		await expect(page.locator('.stanza-diff-editor-pane')).not.toBeVisible();
+		await explorerTab.click();
+		const selected = explorer.locator('[role="treeitem"][aria-selected="true"]').filter({ has: page.getByText('target.ts', { exact: true }) });
+		await expect(selected).toBeInViewport();
+		await expect(explorer.getByRole('tree')).toHaveAttribute('aria-activedescendant', await selected.getAttribute('id') as string);
+		await explorer.getByRole('tree').hover();
+		await page.mouse.wheel(0, -5000);
+		await expect(explorer.getByRole('treeitem', { name: 'a-folder-00', exact: true })).toBeInViewport();
+		await workbench.git.open();
+		await change.getByRole('button', { name: `Open File: ${path}`, exact: true }).click();
+		await explorerTab.click();
+		await expect(selected).toBeInViewport();
+	});
+
 	test('Changes title menus rename branches, manage tags and remotes, stash, amend and undo', async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;

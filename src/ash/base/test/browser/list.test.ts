@@ -464,6 +464,30 @@ test("List restores its active descendant when a hidden managed viewport becomes
 	dom.window.close();
 });
 
+test('List reveals a row after its hidden viewport becomes visible before a resize notification', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using view = new ListView<number>(dom.window.document.body, {
+			scrolling: 'managed',
+			getHeight: () => 22,
+			renderItem: item => h(dom.window.document, 'span', undefined, String(item)),
+		});
+		const viewport = view.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		let isVisible = false;
+		Object.defineProperties(viewport, {
+			clientWidth: { get: () => isVisible ? 100 : 0 },
+			clientHeight: { get: () => isVisible ? 44 : 0 },
+			scrollHeight: { get: () => isVisible ? 2_200 : 0 },
+		});
+		view.items = Array.from({ length: 100 }, (_, index) => index);
+		assert.equal(view.row(50), undefined);
+		isVisible = true;
+		view.reveal(50, 0.5);
+		assert.equal(viewport.scrollTop, 1_089);
+		assert.equal(view.row(50)?.textContent, '50');
+	} finally { dom.window.close(); }
+});
+
 test('List Home and End reveal the focused row even when its focus and selection have not changed', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using list = new List<string>(dom.window.document.body, {
