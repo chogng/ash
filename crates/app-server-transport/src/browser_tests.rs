@@ -125,11 +125,12 @@ fn authenticates_browser_sessions_and_preserves_independent_connections() {
         )
         .await
         .unwrap();
-        let (mut second, _) = tokio_tungstenite::client_async(
+        let (mut second, _) = tokio_tungstenite::client_async_with_config(
             make_request(&origin, token),
             tokio::net::TcpStream::connect(listener.address)
                 .await
                 .unwrap(),
+            Some(crate::websocket::websocket_config()),
         )
         .await
         .unwrap();
@@ -144,6 +145,15 @@ fn authenticates_browser_sessions_and_preserves_independent_connections() {
             second.next().await.unwrap().unwrap().into_text().unwrap(),
             "second"
         );
+        let large = "x".repeat(17 * 1024 * 1024);
+        second
+            .send(Message::Text(large.clone().into()))
+            .await
+            .unwrap();
+        let echoed = tokio::time::timeout(Duration::from_secs(10), second.next())
+            .await
+            .unwrap();
+        assert_eq!(echoed.unwrap().unwrap().into_text().unwrap(), large);
         listener.shutdown().await.unwrap();
         let closed = tokio::time::timeout(Duration::from_secs(2), second.next())
             .await

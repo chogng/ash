@@ -2836,6 +2836,9 @@ impl AppServer {
                 self.backup_workspaces(connection, &request.params)
             }
             Some(ClientMethod::BackupList) => self.backup_list(connection, &request.params),
+            Some(ClientMethod::BackupListPage) => {
+                self.backup_list_page(connection, &request.params)
+            }
             Some(ClientMethod::BackupWrite) => self.backup_write(connection, &request.params),
             Some(ClientMethod::BackupDiscard) => self.backup_discard(connection, &request.params),
             Some(ClientMethod::FsReadBinaryFile) => {

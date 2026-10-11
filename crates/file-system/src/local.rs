@@ -33,12 +33,99 @@ pub struct LocalFileSystem {
     authority: Authority,
 }
 
+/// Immutable bytes and the host observation that guards a multi-request read.
+pub struct FileReadSnapshot {
+    content: FileContent,
+    stamp: FileReadStamp,
+}
+
+impl FileReadSnapshot {
+    pub fn content(&self) -> &FileContent {
+        &self.content
+    }
+}
+
+#[derive(PartialEq)]
+struct FileReadStamp {
+    identity: FileInformation,
+    length: u64,
+    modified: Option<std::time::SystemTime>,
+    created: Option<std::time::SystemTime>,
+}
+
+impl FileReadStamp {
+    fn observe(file: &std::fs::File) -> Result<Self, FileSystemError> {
+        let metadata = file.metadata().map_err(io_error)?;
+        Ok(Self {
+            identity: FileInformation::from_file(file).map_err(io_error)?,
+            length: metadata.len(),
+            modified: metadata.modified().ok(),
+            created: metadata.created().ok(),
+        })
+    }
+}
+
 enum Authority {
     Grant(Grant),
     Authorizations(Vec<Authorization>),
 }
 
 impl LocalFileSystem {
+    /// Reads and hashes one bounded snapshot under ReadFiles authorization.
+    pub fn read_file_snapshot(
+        &self,
+        path: &Path,
+        maximum_bytes: usize,
+    ) -> Result<FileReadSnapshot, FileSystemError> {
+        self.execute(Permission::ReadFiles, |files| {
+            let resolved = files.resolve_existing(path)?;
+            let mut file = files.handle().open(resolved).map_err(io_error)?.into_std();
+            if !file.metadata().map_err(io_error)?.is_file() {
+                return Err(FileSystemError::NotFile(path.to_path_buf()));
+            }
+            let stamp = FileReadStamp::observe(&file)?;
+            if maximum_bytes == 0 || stamp.length > maximum_bytes as u64 {
+                return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
+            }
+            let mut bytes = Vec::with_capacity(stamp.length as usize);
+            Read::by_ref(&mut file)
+                .take((maximum_bytes as u64).saturating_add(1))
+                .read_to_end(&mut bytes)
+                .map_err(io_error)?;
+            if maximum_bytes == 0 || bytes.len() > maximum_bytes {
+                return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
+            }
+            if stamp != FileReadStamp::observe(&file)? {
+                return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+            }
+            bytes.shrink_to_fit();
+            Ok(FileReadSnapshot {
+                content: FileContent {
+                    revision: file_revision(&bytes),
+                    bytes,
+                },
+                stamp,
+            })
+        })
+    }
+
+    /// Rechecks authorization, path confinement and host identity without reading content again.
+    /// Cached bytes remain coherent even if an external writer restores a file's timestamps.
+    pub fn validate_file_snapshot(
+        &self,
+        path: &Path,
+        snapshot: &FileReadSnapshot,
+    ) -> Result<(), FileSystemError> {
+        self.execute(Permission::ReadFiles, |files| {
+            let resolved = files.resolve_existing(path)?;
+            let file = files.handle().open(resolved).map_err(io_error)?.into_std();
+            if FileReadStamp::observe(&file)? != snapshot.stamp {
+                return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+            }
+            Ok(())
+        })
+    }
+
     pub fn new(grant: Grant) -> Self {
         Self {
             files: ScopedFiles::new(grant.dir().clone()),

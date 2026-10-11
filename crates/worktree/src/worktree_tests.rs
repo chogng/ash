@@ -1085,6 +1085,146 @@ async fn repository_identity_is_stable_across_different_selected_dirs() {
         .unwrap();
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn failed_directory_copy_is_removed_and_can_be_retried() {
+    let temporary = TempDir::new().unwrap();
+    let source = temporary.path().join("source");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("file"), "original").unwrap();
+    let socket = source.join("socket");
+    let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let settings = WorktreeSettings::defaults(&temporary.path().join("profile"));
+    let manager = WorktreeManager::new(settings.clone());
+    let request = ManagedDirProvisionRequest {
+        source: ManagedDirSource::CurrentDirectory {
+            source_directory: source.clone(),
+        },
+        target: ManagedDirTarget::SourceHead,
+        repository_targets: BTreeMap::new(),
+        source_dir_id: "source".into(),
+        owner: thread_owner("retry-copy"),
+    };
+    assert!(
+        manager
+            .provision(&request)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("unsupported managed directory entry")
+    );
+    let mut parents = fs::read_dir(&settings.root).unwrap();
+    let parent = parents.next().unwrap().unwrap().path();
+    assert!(parents.next().is_none());
+    assert_eq!(fs::read_dir(parent).unwrap().count(), 0);
+    drop(listener);
+    fs::remove_file(socket).unwrap();
+    let binding = manager.provision(&request).await.unwrap();
+    assert_eq!(
+        fs::read_to_string(binding.dir().join("file")).unwrap(),
+        "original"
+    );
+    assert_eq!(manager.provision(&request).await.unwrap(), binding);
+}
+
+#[tokio::test]
+async fn directory_copy_rejects_a_destination_inside_its_source_before_creating_it() {
+    let temporary = TempDir::new().unwrap();
+    let source = temporary.path().join("source");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("file"), "original").unwrap();
+    let mut roots = vec![source.join("worktrees")];
+    #[cfg(unix)]
+    {
+        let alias = temporary.path().join("alias");
+        std::os::unix::fs::symlink(&source, &alias).unwrap();
+        roots.push(alias.join("missing/worktrees"));
+        let cwd = std::env::current_dir().unwrap();
+        let mut relative = PathBuf::new();
+        for _ in cwd
+            .components()
+            .filter(|component| matches!(component, std::path::Component::Normal(_)))
+        {
+            relative.push("..");
+        }
+        roots.push(
+            relative
+                .join(source.strip_prefix("/").unwrap())
+                .join("worktrees"),
+        );
+    }
+    for root in roots {
+        let manager = WorktreeManager::new(WorktreeSettings {
+            root,
+            auto_cleanup_enabled: true,
+            keep_count: 15,
+        });
+        let error = manager
+            .provision(&ManagedDirProvisionRequest {
+                source: ManagedDirSource::CurrentDirectory {
+                    source_directory: source.clone(),
+                },
+                target: ManagedDirTarget::SourceHead,
+                repository_targets: BTreeMap::new(),
+                source_dir_id: "source".into(),
+                owner: thread_owner("nested-copy"),
+            })
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot be inside the source directory"),
+            "{error}"
+        );
+        assert_eq!(fs::read_dir(&source).unwrap().count(), 1);
+    }
+}
+
+#[tokio::test]
+async fn streamed_directory_copy_preserves_contents_permissions_and_baseline_digest() {
+    use sha2::Digest;
+    let temporary = TempDir::new().unwrap();
+    let source = temporary.path().join("source");
+    fs::create_dir(&source).unwrap();
+    let bytes = (0..1024 * 1024 + 3)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    fs::write(source.join("large.bin"), &bytes).unwrap();
+    let mut permissions = fs::metadata(source.join("large.bin"))
+        .unwrap()
+        .permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(source.join("large.bin"), permissions).unwrap();
+    let mut digest = sha2::Sha256::new();
+    digest.update(b"large.bin\0file");
+    digest.update(&bytes);
+    digest.update([0]);
+    let manager = WorktreeManager::new(WorktreeSettings::defaults(
+        &temporary.path().join("profile"),
+    ));
+    let binding = manager
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::CurrentDirectory {
+                source_directory: source,
+            },
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
+            source_dir_id: "source".into(),
+            owner: thread_owner("stream-copy"),
+        })
+        .await
+        .unwrap();
+    assert_eq!(fs::read(binding.dir().join("large.bin")).unwrap(), bytes);
+    assert_eq!(binding.baseline_tree(), format!("{:x}", digest.finalize()));
+    assert!(
+        fs::metadata(binding.dir().join("large.bin"))
+            .unwrap()
+            .permissions()
+            .readonly()
+    );
+}
+
 #[test]
 fn desktop_settings_match_codex_defaults_and_validate_overrides() {
     let fixture = RepositoryFixture::new();

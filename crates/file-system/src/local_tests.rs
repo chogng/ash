@@ -5,6 +5,51 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
 #[test]
+fn read_snapshots_keep_read_authorization_and_reject_replacement_or_size_changes() {
+    let directory = TestDir::new();
+    fs::write(directory.path.join("file"), "original").unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(&directory.path).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([Permission::ReadFiles]),
+    );
+    let files = LocalFileSystem::new(grant.clone());
+    let snapshot = files.read_file_snapshot(Path::new("file"), 100).unwrap();
+    assert_eq!(snapshot.content().bytes, b"original");
+    assert!(
+        files
+            .validate_file_snapshot(Path::new("file"), &snapshot)
+            .is_ok()
+    );
+    fs::write(directory.path.join("file"), "changed length").unwrap();
+    assert!(matches!(
+        files.validate_file_snapshot(Path::new("file"), &snapshot),
+        Err(FileSystemError::RevisionConflict(_))
+    ));
+    fs::write(directory.path.join("replacement"), "original").unwrap();
+    fs::remove_file(directory.path.join("file")).unwrap();
+    fs::rename(
+        directory.path.join("replacement"),
+        directory.path.join("file"),
+    )
+    .unwrap();
+    assert!(matches!(
+        files.validate_file_snapshot(Path::new("file"), &snapshot),
+        Err(FileSystemError::RevisionConflict(_))
+    ));
+    assert!(files.read_file_snapshot(Path::new("../file"), 100).is_err());
+    grant.revoke();
+    assert!(matches!(
+        files.validate_file_snapshot(Path::new("file"), &snapshot),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+    assert!(matches!(
+        files.read_file_snapshot(Path::new("file"), 100),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+}
+
+#[test]
 fn path_casing_queries_existing_ancestors_without_creating_missing_paths() {
     let directory = TestDir::new();
     fs::create_dir_all(directory.path.join("Parent/Child")).unwrap();

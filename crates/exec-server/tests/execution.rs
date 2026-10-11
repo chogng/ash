@@ -328,6 +328,12 @@ fn rejects_wrong_credential_version_and_incarnation_before_mutation() {
         ),
         (
             "a1".repeat(32),
+            exec_server_protocol::VERSION - 1,
+            info.incarnation.clone(),
+            ExecError::IncompatibleVersion,
+        ),
+        (
+            "a1".repeat(32),
             exec_server_protocol::VERSION,
             "previous-instance".into(),
             ExecError::StaleEnvironment,
@@ -359,6 +365,58 @@ fn rejects_wrong_credential_version_and_incarnation_before_mutation() {
         );
         assert!(!host.root.path().join("forbidden").exists());
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn multi_range_reads_and_explicit_release_use_the_authenticated_execution_host() {
+    let host = Host::start();
+    let client = host.client();
+    let bytes = (0..exec_server_protocol::MAX_FILE_CHUNK_BYTES * 3 + 1)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    std::fs::write(host.root.path().join("large"), &bytes).unwrap();
+    let content = client
+        .read_file("large", &ash_async_utils::CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(content.bytes, bytes);
+    let Response::File(first) = client
+        .request(Request::FileRead {
+            path: "large".into(),
+            offset: 0,
+            expected_revision: None,
+        })
+        .unwrap()
+    else {
+        panic!("expected range");
+    };
+    for _ in 0..2 {
+        assert!(matches!(
+            client
+                .request(Request::FileReadRelease {
+                    path: "large".into(),
+                    revision: first.revision.clone()
+                })
+                .unwrap(),
+            Response::FileReadReleased
+        ));
+    }
+    // A released snapshot can be reconstructed from the same revision without mixing bytes.
+    let Response::File(next) = client
+        .request(Request::FileRead {
+            path: "large".into(),
+            offset: first.bytes.len() as u64,
+            expected_revision: Some(first.revision),
+        })
+        .unwrap()
+    else {
+        panic!("expected range");
+    };
+    assert_eq!(
+        next.bytes,
+        bytes[exec_server_protocol::MAX_FILE_CHUNK_BYTES
+            ..exec_server_protocol::MAX_FILE_CHUNK_BYTES * 2]
+    );
 }
 
 #[cfg(unix)]

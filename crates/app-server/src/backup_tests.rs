@@ -112,3 +112,63 @@ fn initialize_product(server: &crate::AppServer, connection: &mut crate::Connect
     );
     assert!(response.get("result").is_some(), "{response}");
 }
+
+#[test]
+fn backup_rpc_pages_recovery_and_keeps_the_product_host_boundary() {
+    let directory = tempfile::tempdir().unwrap();
+    let store =
+        Arc::new(ash_state::SqliteBackupStore::open(&directory.path().join("state.db")).unwrap());
+    let workspace = ash_state::BackupWorkspace {
+        id: "workspace".into(),
+        folders: vec![],
+        configuration: None,
+        remote_authority: None,
+    };
+    for index in 0..3 {
+        store
+            .write(
+                "editor",
+                &workspace,
+                &ash_state::BackupContent {
+                    resource: format!("untitled:/note-{index}"),
+                    format: "text.v1".into(),
+                    content: "\0".repeat(4 * 1024 * 1024),
+                },
+                None,
+            )
+            .unwrap();
+    }
+    let server = server().with_backup_store(store);
+    let mut untrusted = server.connection();
+    initialize(&server, &mut untrusted);
+    let mut request = json!({"jsonrpc":"2.0", "id":2, "method":"backup/listPage", "params":{"clientId":"editor", "workspaceId":"workspace", "afterResource":null}});
+    let denied = call(&server, &mut untrusted, request.clone());
+    assert_eq!(denied["error"]["data"]["kind"], "PermissionRequired");
+    let mut trusted = server.product_host_connection();
+    initialize_product(&server, &mut trusted);
+    let mut resources = Vec::new();
+    loop {
+        let response = call(&server, &mut trusted, request.clone());
+        assert!(response.get("error").is_none(), "{response}");
+        assert!(serde_json::to_vec(&response).unwrap().len() < 50 * 1024 * 1024);
+        let backups = response["result"]["backups"].as_array().unwrap();
+        assert_eq!(backups.len(), 1);
+        resources.push(backups[0]["content"]["resource"].clone());
+        let cursor = response["result"]["nextResource"].clone();
+        if cursor.is_null() {
+            break;
+        }
+        request["params"]["afterResource"] = cursor;
+        request["id"] = json!(request["id"].as_u64().unwrap() + 1);
+    }
+    assert_eq!(
+        resources,
+        vec![
+            json!("untitled:/note-0"),
+            json!("untitled:/note-1"),
+            json!("untitled:/note-2")
+        ]
+    );
+    server.close_connection(trusted);
+    server.close_connection(untrusted);
+}

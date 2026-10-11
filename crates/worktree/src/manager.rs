@@ -1,3 +1,5 @@
+use std::io::Read;
+use std::io::Write;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -1153,41 +1155,54 @@ impl WorktreeManager {
         }
         request.owner.validate(&request.source_dir_id)?;
         let digest = request.owner.managed_dir_id();
-        let checkout_root = self.settings.root.join(&digest[..4]).join(&digest);
+        let managed_root = resolve_directory_destination(&self.settings.root)?;
+        if managed_root.starts_with(source_directory) {
+            bail!("managed directory root cannot be inside the source directory");
+        }
+        let checkout_root = managed_root.join(&digest[..4]).join(&digest);
         if checkout_root.exists() {
             return self.recover(&checkout_root, &request.owner).await;
         }
-        let dir = checkout_root.join("dir");
         if matches!(request.source, ManagedDirSource::ImmutableTree { .. }) {
             bail!("non-Git managed directories cannot be provisioned from a Git tree");
         }
-        std::fs::create_dir_all(&dir)?;
+        let parent = checkout_root
+            .parent()
+            .context("managed directory has no parent")?;
+        std::fs::create_dir_all(parent)?;
+        // Publish only a complete copy and binding. The staging owner removes every failed copy,
+        // and competing provisions cannot mistake a partial checkout for a recovered binding.
+        let staging = tempfile::Builder::new()
+            .prefix(".copy-")
+            .tempdir_in(parent)?;
+        let dir = staging.path().join("dir");
+        std::fs::create_dir(&dir)?;
         let baseline_tree = copy_directory(source_directory, &dir)?;
+        binding::write(
+            staging.path(),
+            &binding::BindingRecord::new(
+                digest.clone(),
+                request.owner.clone(),
+                request.source_dir_id.clone(),
+                source_directory.to_path_buf(),
+                PathBuf::from("dir"),
+                None,
+                baseline_tree.clone(),
+                false,
+                baseline_tree.clone(),
+                String::new(),
+                binding::BindingKind::Directory,
+            )
+            .with_repositories(Vec::new()),
+        )?;
+        if let Err(error) = std::fs::rename(staging.path(), &checkout_root) {
+            if checkout_root.exists() {
+                return self.recover(&checkout_root, &request.owner).await;
+            }
+            return Err(error.into());
+        }
         let checkout_root = dunce::canonicalize(&checkout_root)?;
         let dir = checkout_root.join("dir");
-        let result = (|| {
-            binding::write(
-                &checkout_root,
-                &binding::BindingRecord::new(
-                    digest.clone(),
-                    request.owner.clone(),
-                    request.source_dir_id.clone(),
-                    source_directory.to_path_buf(),
-                    PathBuf::from("dir"),
-                    None,
-                    baseline_tree.clone(),
-                    false,
-                    baseline_tree.clone(),
-                    String::new(),
-                    binding::BindingKind::Directory,
-                )
-                .with_repositories(Vec::new()),
-            )
-        })();
-        if let Err(error) = result {
-            let _ = std::fs::remove_dir_all(&checkout_root);
-            return Err(error);
-        }
         Ok(ManagedDirBinding {
             owner: request.owner.clone(),
             managed_worktree_id: digest,
@@ -1620,6 +1635,30 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<String> {
     Ok(format!("{:x}", digest.finalize()))
 }
 
+// Resolve aliases before making a destination that does not exist yet. Parent components
+// must apply after resolving symlinks, just as they do when the filesystem opens the path.
+fn resolve_directory_destination(path: &Path) -> Result<PathBuf> {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let mut resolved = PathBuf::new();
+    for component in path.components() {
+        if component == Component::ParentDir {
+            resolved.pop();
+            continue;
+        }
+        resolved.push(component);
+        match dunce::canonicalize(&resolved) {
+            Ok(path) => resolved = path,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(resolved)
+}
+
 fn copy_directory_entries(
     root: &Path,
     source: &Path,
@@ -1651,9 +1690,21 @@ fn copy_directory_entries(
             copy_symlink(&source_path, &target, &destination_path)?;
         } else if metadata.is_file() {
             digest.update(b"file");
-            let bytes = std::fs::read(&source_path)?;
-            digest.update(&bytes);
-            std::fs::write(&destination_path, bytes)?;
+            let mut source_file = std::fs::File::open(&source_path)?;
+            let mut destination_file = std::fs::File::create(&destination_path)?;
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let read = match source_file.read(&mut buffer) {
+                    Ok(read) => read,
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(error) => return Err(error.into()),
+                };
+                if read == 0 {
+                    break;
+                }
+                digest.update(&buffer[..read]);
+                destination_file.write_all(&buffer[..read])?;
+            }
             std::fs::set_permissions(&destination_path, metadata.permissions())?;
         } else {
             bail!(

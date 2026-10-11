@@ -5,7 +5,7 @@ pub mod terminal;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 pub const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_FILE_BYTES: usize = 10 * 1024 * 1024;
 pub const MAX_FILE_CHUNK_BYTES: usize = 256 * 1024;
@@ -211,6 +211,10 @@ pub enum Request {
         offset: u64,
         expected_revision: Option<String>,
     },
+    FileReadRelease {
+        path: String,
+        revision: String,
+    },
     FileWriteBegin {
         operation_id: String,
         path: String,
@@ -245,6 +249,7 @@ pub enum Response {
     Environment(EnvironmentInfo),
     Process(ProcessSnapshot),
     File(FileChunk),
+    FileReadReleased,
     FileWrite(FileWriteState),
     ProcessUpdated,
     Error(ExecError),

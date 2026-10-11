@@ -31,6 +31,82 @@ fn git(directory: &Path, arguments: &[&str]) -> String {
 }
 
 #[test]
+fn archiving_more_than_the_keep_count_preserves_non_git_edits_until_explicit_checkout_deletion() {
+    let profile = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    std::fs::write(source.path().join("note"), "source").unwrap();
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_dir_root(source.path()),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let mut id = 0;
+    let mut call = |method: &str, params: serde_json::Value| {
+        id += 1;
+        let response: serde_json::Value = serde_json::from_str(
+            &server.handle_json(
+                &mut connection,
+                &serde_json::json!({"jsonrpc":"2.0", "id":id, "method":method, "params":params})
+                    .to_string(),
+            ),
+        )
+        .unwrap();
+        assert!(response.get("error").is_none(), "{response}");
+        response["result"].clone()
+    };
+    call(
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"cleanup-test","version":"1"},"capabilities":{}}),
+    );
+    let runtime = server.git_turn_changes.as_ref().unwrap();
+    let mut copies = Vec::new();
+    for index in 0..=runtime.dirs.worktrees.settings().keep_count {
+        let result = call(
+            "session/create",
+            serde_json::json!({"commandId":format!("create-{index}"), "title":"Plain directory", "executionTarget":{"type":"local","root":source.path()}}),
+        );
+        let session = result["session"]["sessionId"].as_str().unwrap().to_owned();
+        let thread = ThreadId::new(
+            result["session"]["threads"][0]["threadId"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        let binding = runtime.binding(&thread).unwrap();
+        let edit = format!("session edit {index}");
+        std::fs::write(binding.dir().join("note"), &edit).unwrap();
+        call(
+            "session/request",
+            serde_json::json!({"commandId":format!("archive-{index}"), "sessionId":session, "request":{"type":"archive"}}),
+        );
+        copies.push((session, binding, edit));
+    }
+    for (_, binding, edit) in &copies {
+        assert_eq!(
+            std::fs::read_to_string(binding.dir().join("note")).unwrap(),
+            *edit
+        );
+    }
+    let (_, binding, _) = &copies[0];
+    let ManagedDirOwner::Thread { thread_id } = binding.owner();
+    server
+        .delete_worktree_session(thread_id, &CommandId::new("delete-first").unwrap())
+        .unwrap();
+    assert!(!binding.checkout_root().exists());
+    for (_, binding, edit) in copies.iter().skip(1) {
+        assert_eq!(
+            std::fs::read_to_string(binding.dir().join("note")).unwrap(),
+            *edit
+        );
+    }
+    server.close_connection(connection);
+}
+
+#[test]
 fn parallel_spawn_without_intent_fails_before_allocating_a_directory() {
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();

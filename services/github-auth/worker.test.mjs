@@ -12,6 +12,29 @@ const redirectUri = `http://127.0.0.1:58123/github-oauth/${'A'.repeat(43)}`;
 const clientState = 'B'.repeat(43);
 const challenge = 'C'.repeat(43);
 
+test('token exchange cancels an oversized stream before consuming the remaining body', async () => {
+	let reads = 0;
+	let cancelled = false;
+	const body = new ReadableStream({
+		pull(controller) {
+			reads++;
+			controller.enqueue(new Uint8Array(1024));
+		},
+		cancel() { cancelled = true; },
+	}, { highWaterMark: 0 });
+	const request = new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': '1' }, body, duplex: 'half' });
+	assert.equal((await worker.fetch(request, environment)).status, 413);
+	assert.equal(reads, 9);
+	assert.equal(cancelled, true);
+});
+
+test('token request limit counts UTF-8 bytes and accepts exactly the byte limit', async () => {
+	for (const [body, status] of [['x'.repeat(8192), 400], ['x'.repeat(8193), 413], ['é'.repeat(4097), 413]]) {
+		const request = new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+		assert.equal((await worker.fetch(request, environment)).status, status);
+	}
+});
+
 function authorizationRequest(overrides = {}) {
 	const url = new URL('/v1/oauth/github/authorize', origin);
 	for (const [key, value] of Object.entries({

@@ -63,6 +63,11 @@ impl Fixture {
                 .read(&self.files, &path, offset, expected_revision.as_deref())
                 .map(Response::File)
                 .map_err(Error::Remote),
+            Request::FileReadRelease { path, revision } => self
+                .transfers
+                .release_read(&path, &revision)
+                .map(|()| Response::FileReadReleased)
+                .map_err(Error::Remote),
             request => self
                 .transfers
                 .write(&self.files, request)
@@ -123,15 +128,18 @@ fn changing_a_file_between_ranges_fails_the_whole_read() {
     let calls = Cell::new(0);
     let result = read_file(
         |request| {
+            let is_range = matches!(request, Request::FileRead { .. });
             let response = fixture.request(request)?;
-            if calls.get() == 0 {
+            if is_range && calls.get() == 0 {
                 std::fs::write(
                     fixture.root.path().join("file"),
                     payload(MAX_FILE_CHUNK_BYTES + 2),
                 )
                 .unwrap();
             }
-            calls.set(calls.get() + 1);
+            if is_range {
+                calls.set(calls.get() + 1);
+            }
             Ok(response)
         },
         "file",
@@ -142,6 +150,89 @@ fn changing_a_file_between_ranges_fails_the_whole_read() {
         calls.get(),
         1,
         "a conflicting range does not return partial contents"
+    );
+}
+
+#[test]
+fn read_snapshot_is_reused_even_when_an_external_writer_restores_timestamps() {
+    let fixture = Fixture::new();
+    let path = fixture.root.path().join("file");
+    let original = payload(MAX_FILE_CHUNK_BYTES * 3);
+    std::fs::write(&path, &original).unwrap();
+    let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+    let changed = Cell::new(false);
+    let content = read_file(
+        |request| {
+            let response = fixture.request(request)?;
+            if !changed.replace(true) {
+                std::fs::write(&path, vec![0; original.len()]).unwrap();
+                std::fs::File::options()
+                    .write(true)
+                    .open(&path)
+                    .unwrap()
+                    .set_times(std::fs::FileTimes::new().set_modified(modified))
+                    .unwrap();
+            }
+            Ok(response)
+        },
+        "file",
+        &CancellationSource::new().token(),
+    )
+    .unwrap();
+    assert_eq!(content.bytes, original);
+    assert!(fixture.transfers.reads.lock().unwrap().is_empty());
+}
+
+#[test]
+fn cancellation_releases_a_read_snapshot_before_the_next_range() {
+    let fixture = Fixture::new();
+    std::fs::write(
+        fixture.root.path().join("file"),
+        payload(MAX_FILE_CHUNK_BYTES + 1),
+    )
+    .unwrap();
+    let cancellation = CancellationSource::new();
+    let releases = Cell::new(0);
+    let result = read_file(
+        |request| {
+            if matches!(request, Request::FileReadRelease { .. }) {
+                releases.set(releases.get() + 1);
+            }
+            let response = fixture.request(request)?;
+            cancellation.cancel();
+            Ok(response)
+        },
+        "file",
+        &cancellation.token(),
+    );
+    assert!(matches!(result, Err(Error::Cancelled(_))));
+    assert_eq!(releases.get(), 1);
+    assert!(fixture.transfers.reads.lock().unwrap().is_empty());
+}
+
+#[test]
+fn abandoned_read_snapshots_have_a_bounded_capacity_and_expire() {
+    let fixture = Fixture::new();
+    let bytes = payload(MAX_FILE_BYTES);
+    for index in 0..7 {
+        let path = format!("file-{index}");
+        std::fs::write(fixture.root.path().join(&path), &bytes).unwrap();
+        let result = fixture.transfers.read(&fixture.files, &path, 0, None);
+        if index < 6 {
+            assert!(result.is_ok());
+        } else {
+            assert_eq!(result.unwrap_err(), ExecError::Busy);
+        }
+    }
+    let mut reads = fixture.transfers.reads.lock().unwrap();
+    expire_reads(&mut reads, Instant::now() + READ_LIFETIME);
+    assert!(reads.is_empty());
+    drop(reads);
+    assert!(
+        fixture
+            .transfers
+            .read(&fixture.files, "file-6", 0, None)
+            .is_ok()
     );
 }
 

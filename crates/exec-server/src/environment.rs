@@ -128,6 +128,10 @@ impl LocalEnvironment {
                 .transfers
                 .read(&self.files, &path, offset, expected_revision.as_deref())
                 .map(Response::File),
+            Request::FileReadRelease { path, revision } => self
+                .transfers
+                .release_read(&path, &revision)
+                .map(|()| Response::FileReadReleased),
             request @ (Request::FileWriteBegin { .. }
             | Request::FileWriteChunk { .. }
             | Request::FileWriteCommit { .. }

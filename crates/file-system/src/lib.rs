@@ -14,6 +14,7 @@ pub use elevated::ELEVATED_FILE_WRITE_ARGUMENT;
 pub use elevated::run_elevated_file_helper;
 pub use error::FileSystemError;
 pub use find_up::{FindUpErrorPolicy, find_nearest_ancestor_with_markers};
+pub use local::FileReadSnapshot;
 pub use local::LocalFileSystem;
 pub use local::commit_file_mutations;
 pub use service::FileSystem;

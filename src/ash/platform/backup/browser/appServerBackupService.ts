@@ -1,7 +1,7 @@
 import { URI } from '../../../base/common/uri.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
-import { APP_SERVER_METHODS, type BackupRecordDto } from '../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, type BackupListPageResult, type BackupRecordDto } from '../../../../../.build/protocol/typescript/index.js';
 import { BackupError, type IBackupContent, type IBackupRecord, type IBackupService, type IBackupWorkspace } from '../common/backup.js';
 
 /** Uses the renderer's existing connection; backups survive that connection's lifetime. */
@@ -14,8 +14,24 @@ export class AppServerBackupService implements IBackupService {
 	}
 
 	async list(workspaceId: string): Promise<readonly IBackupRecord[]> {
-		const result = await this.client.request(APP_SERVER_METHODS['backup/list'], { clientId: this.clientId, workspaceId }).catch(explain);
-		return result.backups.map(revive);
+		const backups: IBackupRecord[] = [];
+		let afterResource: string | null = null;
+		do {
+			const result: BackupListPageResult = await this.client.request(APP_SERVER_METHODS['backup/listPage'], { clientId: this.clientId, workspaceId, afterResource }).catch(async error => {
+				// Older servers expose only the original list contract.
+				if (afterResource === null && error instanceof AppServerRemoteError && error.code === -32601) {
+					const legacy = await this.client.request(APP_SERVER_METHODS['backup/list'], { clientId: this.clientId, workspaceId }).catch(explain);
+					return { ...legacy, nextResource: null };
+				}
+				return explain(error);
+			});
+			backups.push(...result.backups.map(revive));
+			if (result.nextResource !== null && (result.nextResource === afterResource || result.backups.at(-1)?.content.resource !== result.nextResource)) {
+				throw new BackupError('failed');
+			}
+			afterResource = result.nextResource;
+		} while (afterResource !== null);
+		return backups;
 	}
 
 	async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {

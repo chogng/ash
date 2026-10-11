@@ -33,6 +33,23 @@ pub struct BackupListParams {
     pub workspace_id: String,
 }
 
+/// Pages are ordered by resource URI; continue strictly after the last returned resource.
+/// Each page bounds raw content to 8 MiB (one maximum-size record always fits).
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupListPageParams {
+    pub client_id: String,
+    pub workspace_id: String,
+    pub after_resource: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupListPageResult {
+    pub backups: Vec<BackupRecordDto>,
+    pub next_resource: Option<String>,
+}
+
 /// Opaque UTF-8 content is serialized and interpreted by its format owner.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

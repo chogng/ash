@@ -151,6 +151,42 @@ fn runtime() -> tokio::runtime::Runtime {
         .unwrap()
 }
 
+#[test]
+fn accepts_a_single_frame_larger_than_the_library_default() {
+    runtime().block_on(async {
+        let listener = start_websocket_acceptor(
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            token_digest(),
+            |reader, mut writer| {
+                for line in BufReader::new(reader).lines() {
+                    let Ok(line) = line else {
+                        break;
+                    };
+                    if writeln!(writer, "{}", line.len()).is_err() {
+                        break;
+                    }
+                }
+            },
+        )
+        .await
+        .unwrap();
+        let mut connection = connect(listener.address(), Some(TOKEN)).await.unwrap();
+        let size = 17 * 1024 * 1024;
+        connection
+            .send(Message::Text("x".repeat(size).into()))
+            .await
+            .unwrap();
+        let response = tokio::time::timeout(std::time::Duration::from_secs(10), connection.next())
+            .await
+            .unwrap();
+        assert_eq!(
+            response.unwrap().unwrap().into_text().unwrap(),
+            size.to_string()
+        );
+        listener.shutdown().await.unwrap();
+    });
+}
+
 fn token_digest() -> CapabilityTokenSha256 {
     let digest = Sha256::digest(TOKEN.as_bytes());
     CapabilityTokenSha256::from_hex(&format!("{digest:x}")).unwrap()

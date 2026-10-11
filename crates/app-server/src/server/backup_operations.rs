@@ -5,6 +5,8 @@ use super::decode;
 use super::result;
 use ash_app_server_protocol::protocol::backup::BackupContentDto;
 use ash_app_server_protocol::protocol::backup::BackupDiscardParams;
+use ash_app_server_protocol::protocol::backup::BackupListPageParams;
+use ash_app_server_protocol::protocol::backup::BackupListPageResult;
 use ash_app_server_protocol::protocol::backup::BackupListParams;
 use ash_app_server_protocol::protocol::backup::BackupListResult;
 use ash_app_server_protocol::protocol::backup::BackupRecordDto;
@@ -68,6 +70,27 @@ impl AppServer {
             .map_err(backup_error)?;
         result(&BackupListResult {
             backups: backups.into_iter().map(record).collect(),
+        })
+    }
+
+    pub(super) fn backup_list_page(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: BackupListPageParams = decode(params)?;
+        let page = self
+            .backup_store(connection)?
+            .list_page(
+                &params.client_id,
+                &params.workspace_id,
+                params.after_resource.as_deref(),
+                8 * 1024 * 1024,
+            )
+            .map_err(backup_error)?;
+        result(&BackupListPageResult {
+            backups: page.backups.into_iter().map(record).collect(),
+            next_resource: page.next_resource,
         })
     }
 

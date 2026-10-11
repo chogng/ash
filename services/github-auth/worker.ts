@@ -65,8 +65,32 @@ async function callback(url: URL, environment: Environment): Promise<Response> {
 
 async function exchange(request: Request, url: URL, environment: Environment): Promise<Response> {
 	if (request.headers.get('content-type')?.split(';', 1)[0] !== 'application/x-www-form-urlencoded') return response(415, 'Expected form data');
-	const body = await request.text();
-	if (body.length > 8192) return response(413, 'Request too large');
+	const reader = request.body?.getReader();
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	if (reader) {
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				length += value.byteLength;
+				if (length > 8192) {
+					await reader.cancel();
+					return response(413, 'Request too large');
+				}
+				chunks.push(value);
+			}
+		} finally {
+			reader.releaseLock();
+		}
+	}
+	const bytes = new Uint8Array(length);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	const body = new TextDecoder().decode(bytes);
 	const form = new URLSearchParams(body);
 	const grantType = single(form, 'grant_type');
 	const clientId = single(form, 'client_id');

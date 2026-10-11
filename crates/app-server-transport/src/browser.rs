@@ -460,7 +460,7 @@ where
                     let socket = WebSocketStream::from_raw_socket(
                         TokioIo::new(upgraded),
                         Role::Server,
-                        None,
+                        Some(crate::websocket::websocket_config()),
                     )
                     .await;
                     serve_websocket(socket, handler, stopping).await;

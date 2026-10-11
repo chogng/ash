@@ -84,6 +84,10 @@ fn file_ranges_and_upload_states_round_trip_without_extra_authority() {
             offset: 0,
             expected_revision: None,
         },
+        Request::FileReadRelease {
+            path: "file".into(),
+            revision: "ab".repeat(32),
+        },
         Request::FileWriteBegin {
             operation_id: "upload".into(),
             path: "file".into(),

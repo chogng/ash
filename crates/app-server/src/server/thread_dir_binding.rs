@@ -104,25 +104,27 @@ impl GitTurnChangesRuntime {
             .collect::<Vec<_>>();
         let mut eligible = Vec::new();
         for (thread_id, binding) in bindings {
+            // Non-Git copies have no ChangeSet or durable snapshot from which to recover edits.
+            // Only explicit deletion (or the workflow owner) may remove them.
+            if binding.kind() == ManagedDirKind::Directory {
+                continue;
+            }
             let Ok(thread) = self.threads.read_thread(&thread_id) else {
                 continue;
             };
             if thread.status == ash_protocol::ThreadStatus::Active {
                 continue;
             }
-            let settled = if binding.kind() == ManagedDirKind::Directory {
-                true
-            } else {
-                self.store
-                    .list_for_thread(&thread_id)
-                    .map_err(|error| error.to_string())?
-                    .iter()
-                    .all(|record| {
-                        record.files.is_empty()
-                            || record.capture_state == git_turn_changes::CaptureState::Discarded
-                            || matches!(record.commit_state, CommitState::Committed { .. })
-                    })
-            };
+            let settled = self
+                .store
+                .list_for_thread(&thread_id)
+                .map_err(|error| error.to_string())?
+                .iter()
+                .all(|record| {
+                    record.files.is_empty()
+                        || record.capture_state == git_turn_changes::CaptureState::Discarded
+                        || matches!(record.commit_state, CommitState::Committed { .. })
+                });
             if !settled {
                 continue;
             }

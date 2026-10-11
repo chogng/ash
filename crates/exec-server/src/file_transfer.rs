@@ -3,6 +3,7 @@
 use crate::Error;
 use ash_async_utils::CancellationToken;
 use ash_file_access::Permission;
+use ash_file_system::FileReadSnapshot;
 use ash_file_system::FileSystem;
 use ash_file_system::FileWriteCondition;
 use ash_file_system::LocalFileSystem;
@@ -25,6 +26,13 @@ const MAX_UPLOAD_BYTES: usize = 64 * 1024 * 1024;
 const MAX_RECORDS: usize = 1024;
 const UPLOAD_LIFETIME: Duration = Duration::from_secs(60);
 const RESULT_LIFETIME: Duration = Duration::from_secs(60 * 60);
+const MAX_READ_BYTES: usize = 64 * 1024 * 1024;
+const READ_LIFETIME: Duration = Duration::from_secs(60);
+
+struct ReadSnapshot {
+    file: FileReadSnapshot,
+    updated: Instant,
+}
 
 struct Upload {
     path: String,
@@ -39,6 +47,7 @@ struct Upload {
 #[derive(Default)]
 pub(super) struct FileTransfers {
     uploads: Mutex<BTreeMap<String, Upload>>,
+    reads: Mutex<BTreeMap<(String, String), ReadSnapshot>>,
 }
 
 impl FileTransfers {
@@ -53,9 +62,32 @@ impl FileTransfers {
         if offset > MAX_FILE_BYTES as u64 || (offset != 0 && expected_revision.is_none()) {
             return Err(ExecError::InvalidInput);
         }
-        let content = files
-            .read_file_with_revision(Path::new(path), MAX_FILE_BYTES)
-            .map_err(file_error)?;
+        let mut reads = self.reads.lock().map_err(|_| ExecError::Busy)?;
+        expire_reads(&mut reads, Instant::now());
+        let key = expected_revision.map(|revision| (path.to_owned(), revision.to_owned()));
+        let cached = key.as_ref().and_then(|key| reads.remove(key));
+        let mut snapshot = if let Some(snapshot) = cached {
+            // Validation holds the same ReadFiles lease and confinement checks as an uncached read.
+            files
+                .validate_file_snapshot(Path::new(path), &snapshot.file)
+                .map_err(file_error)?;
+            snapshot
+        } else {
+            let retained = reads
+                .values()
+                .map(|read| read.file.content().bytes.len())
+                .sum::<usize>();
+            if reads.len() >= MAX_RECORDS || retained + MAX_FILE_BYTES > MAX_READ_BYTES {
+                return Err(ExecError::Busy);
+            }
+            ReadSnapshot {
+                file: files
+                    .read_file_snapshot(Path::new(path), MAX_FILE_BYTES)
+                    .map_err(file_error)?,
+                updated: Instant::now(),
+            }
+        };
+        let content = snapshot.file.content();
         if expected_revision.is_some_and(|revision| revision != content.revision) {
             return Err(ExecError::Conflict);
         }
@@ -64,12 +96,28 @@ impl FileTransfers {
             return Err(ExecError::InvalidInput);
         }
         let end = (offset + MAX_FILE_CHUNK_BYTES).min(content.bytes.len());
-        Ok(FileChunk {
+        let chunk = FileChunk {
             bytes: content.bytes[offset..end].to_vec(),
-            revision: content.revision,
+            revision: content.revision.clone(),
             offset: offset as u64,
             total_bytes: content.bytes.len() as u64,
-        })
+        };
+        if end < content.bytes.len() {
+            snapshot.updated = Instant::now();
+            reads.insert((path.to_owned(), chunk.revision.clone()), snapshot);
+        }
+        Ok(chunk)
+    }
+
+    pub(super) fn release_read(&self, path: &str, revision: &str) -> Result<(), ExecError> {
+        exec_server_protocol::validate_path(path)?;
+        if !crate::transport::valid_token(revision) {
+            return Err(ExecError::InvalidInput);
+        }
+        let mut reads = self.reads.lock().map_err(|_| ExecError::Busy)?;
+        expire_reads(&mut reads, Instant::now());
+        reads.remove(&(path.to_owned(), revision.to_owned()));
+        Ok(())
     }
 
     pub(super) fn write(
@@ -91,7 +139,8 @@ impl FileTransfers {
             | Request::ProcessResize { .. }
             | Request::ProcessInterrupt { .. }
             | Request::ProcessCloseInput { .. }
-            | Request::FileRead { .. } => {
+            | Request::FileRead { .. }
+            | Request::FileReadRelease { .. } => {
                 unreachable!("only file upload requests enter this handler")
             }
         };
@@ -228,7 +277,8 @@ impl FileTransfers {
             | Request::ProcessResize { .. }
             | Request::ProcessInterrupt { .. }
             | Request::ProcessCloseInput { .. }
-            | Request::FileRead { .. } => {
+            | Request::FileRead { .. }
+            | Request::FileReadRelease { .. } => {
                 unreachable!("begin is handled before looking up an upload")
             }
         }
@@ -249,6 +299,10 @@ fn expire(uploads: &mut BTreeMap<String, Upload>, now: Instant) {
     uploads.retain(|_, upload| now.duration_since(upload.updated) < RESULT_LIFETIME);
 }
 
+fn expire_reads(reads: &mut BTreeMap<(String, String), ReadSnapshot>, now: Instant) {
+    reads.retain(|_, read| now.duration_since(read.updated) < READ_LIFETIME);
+}
+
 pub(super) fn read_file(
     request: impl Fn(Request) -> Result<Response, Error>,
     path: &str,
@@ -258,7 +312,7 @@ pub(super) fn read_file(
     let mut bytes = Vec::new();
     let mut revision = None;
     let mut size = None;
-    loop {
+    let result = (|| loop {
         check_cancelled(cancellation)?;
         let Response::File(chunk) = request(Request::FileRead {
             path: path.into(),
@@ -285,13 +339,24 @@ pub(super) fn read_file(
         revision = Some(chunk.revision);
         bytes.extend(chunk.bytes);
         if bytes.len() as u64 == chunk.total_bytes {
-            let revision = revision.expect("a completed read has a revision");
+            let revision = revision.clone().expect("a completed read has a revision");
             if ash_file_system::file_revision(&bytes) != revision {
                 return Err(Error::Protocol);
             }
             return Ok(FileContent { bytes, revision });
         }
+    })();
+    if result.is_err()
+        && let Some(revision) = revision
+    {
+        // Failed or cancelled clients release retained bytes; a lost first response is bounded
+        // by the host's read lease expiry and environment lifetime.
+        let _ = request(Request::FileReadRelease {
+            path: path.into(),
+            revision,
+        });
     }
+    result
 }
 
 pub(super) fn write_file(

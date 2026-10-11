@@ -37,6 +37,12 @@ pub struct BackupRecord {
     pub updated_at: i64,
 }
 
+/// Resource-ordered recovery pages bound content allocation independently of workspace size.
+pub struct BackupPage {
+    pub backups: Vec<BackupRecord>,
+    pub next_resource: Option<String>,
+}
+
 #[derive(Debug)]
 pub enum BackupError {
     Invalid,
@@ -121,20 +127,75 @@ impl SqliteBackupStore {
         client_id: &str,
         workspace_id: &str,
     ) -> Result<Vec<BackupRecord>, BackupError> {
+        // Legacy callers cannot follow pages. Fail explicitly rather than truncating recovery
+        // or producing a response that cannot fit after JSON escaping.
+        let page = self.list_page(client_id, workspace_id, None, 50 * 1024 * 1024)?;
+        if page.next_resource.is_some() {
+            return Err(BackupError::Storage(
+                "backup list requires pagination".into(),
+            ));
+        }
+        let mut backups = page.backups;
+        backups.sort_by(|left, right| {
+            (left.updated_at, &left.content.resource)
+                .cmp(&(right.updated_at, &right.content.resource))
+        });
+        Ok(backups)
+    }
+
+    pub fn list_page(
+        &self,
+        client_id: &str,
+        workspace_id: &str,
+        after_resource: Option<&str>,
+        maximum_bytes: usize,
+    ) -> Result<BackupPage, BackupError> {
         validate_id(client_id)?;
         validate_id(workspace_id)?;
+        if let Some(resource) = after_resource {
+            validate_id(resource)?;
+        }
+        if maximum_bytes < 8 * 1024 * 1024 || maximum_bytes > 50 * 1024 * 1024 {
+            return Err(BackupError::Invalid);
+        }
         let connection = self.connection.lock().map_err(storage_error)?;
         let mut statement = connection
             .prepare(
                 "SELECT resource, format, content, revision, updated_at FROM backup_contents
-            WHERE client_id = ?1 AND workspace_id = ?2 ORDER BY updated_at, resource",
+            WHERE client_id = ?1 AND workspace_id = ?2 AND (?3 IS NULL OR resource > ?3)
+            ORDER BY resource",
             )
             .map_err(storage_error)?;
-        statement
-            .query_map(params![client_id, workspace_id], read_record)
-            .map_err(storage_error)?
-            .map(|row| row.map_err(storage_error))
-            .collect()
+        let rows = statement
+            .query_map(
+                params![client_id, workspace_id, after_resource],
+                read_record,
+            )
+            .map_err(storage_error)?;
+        let mut backups = Vec::new();
+        let mut bytes = 0;
+        for row in rows {
+            let record = row.map_err(storage_error)?;
+            let size = record.content.content.len()
+                + record.content.resource.len()
+                + record.content.format.len()
+                + record.revision.len()
+                + 128;
+            if !backups.is_empty() && bytes + size > maximum_bytes {
+                return Ok(BackupPage {
+                    next_resource: backups
+                        .last()
+                        .map(|record: &BackupRecord| record.content.resource.clone()),
+                    backups,
+                });
+            }
+            bytes += size;
+            backups.push(record);
+        }
+        Ok(BackupPage {
+            backups,
+            next_resource: None,
+        })
     }
 
     /// None creates a record; updates must name the exact previously observed revision.

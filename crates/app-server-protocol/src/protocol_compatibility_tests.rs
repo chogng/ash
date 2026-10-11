@@ -13,6 +13,24 @@ use crate::protocol::initialize::ServerCapabilities;
 use crate::protocol::initialize::ensure_protocol_compatible;
 
 #[test]
+fn backup_page_and_legacy_list_contracts_round_trip() {
+    use crate::protocol::backup::BackupListPageParams;
+    use crate::protocol::backup::BackupListPageResult;
+    use crate::protocol::backup::BackupListParams;
+    let legacy = serde_json::json!({"clientId":"editor", "workspaceId":"workspace"});
+    let decoded: BackupListParams = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+    for after in [serde_json::Value::Null, serde_json::json!("untitled:note")] {
+        let page = serde_json::json!({"clientId":"editor", "workspaceId":"workspace", "afterResource":after});
+        let decoded: BackupListPageParams = serde_json::from_value(page.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), page);
+    }
+    let empty = serde_json::json!({"backups":[], "nextResource":null});
+    let decoded: BackupListPageResult = serde_json::from_value(empty.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), empty);
+}
+
+#[test]
 fn commit_options_preserve_legacy_requests_and_reject_unknown_intents() {
     let legacy = serde_json::json!({ "repositoryId": "repository", "message": "staged commit" });
     let decoded: GitCommitParams = serde_json::from_value(legacy.clone()).unwrap();

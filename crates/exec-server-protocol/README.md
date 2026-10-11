@@ -2,14 +2,15 @@
 
 执行环境的类型契约，与 App Server 的任务协议分开。
 
-- `Message` 包含版本、鉴权 token、服务实例 ID 和请求；当前版本为 3，版本必须严格匹配。
+- `Message` 包含版本、鉴权 token、服务实例 ID 和请求；当前版本为 4，版本必须严格匹配。旧版本客户端与服务端需要一起升级，否则返回版本错误。
 - `environmentInfo` 返回环境身份、目录和权限上限。
 - `processStart` 使用客户端生成的操作 ID，指定程序、参数、相对目录、超时和 `closed`/`open`/`terminal` 输入模式；`terminal` 附带 `rows`、`cols`。
 - `processRead` 按 stdout/stderr 字节游标读取；必填 `waitMillis` 范围为 0–1000，0 立即返回，其他值等待新输出或终态；`gap` 表示输出已被淘汰。
 - `processWrite`、`processCloseInput`、`processCancel` 控制已启动进程；启动尚未完成或进程已结束时，输入控制返回冲突。
 - `processResize` 调整 PTY 尺寸；`processInterrupt` 发送进程中断，`processCancel` 终止整个执行。PTY 的 stderr 合并到 stdout，不接受 `processCloseInput`。
 - `processInterrupt` 当前支持 Unix 进程组；Windows 终端使用 `processWrite` 发送 Ctrl-C 字节，独立信号请求返回冲突。
-- `fileRead` 按字节 offset 返回一个范围、完整文件长度和版本。后续范围必须提交首个范围的版本；文件变化返回冲突，客户端丢弃整个未完成的读取。
+- `fileRead` 按字节 offset 返回一个范围、完整文件长度和版本。后续范围必须提交首个范围的版本；宿主读取并计算摘要一次，后续范围复用不可变字节并重新验证读授权、路径、文件身份、长度和精确时间戳。观测到文件变化时返回冲突，客户端丢弃整个未完成的读取；即使外部写入恢复了时间戳，返回内容也不会混合版本。
+- 最后一个范围自动释放快照；取消或失败发送 `fileReadRelease`，携带路径和已观察到的 revision。共享同一路径和 revision 的快照可重建，释放不修改文件。
 - 文件写入使用 `fileWriteBegin` → `fileWriteChunk` → `fileWriteCommit`；Begin 固定操作 ID、路径、完整长度、内容摘要和覆盖条件。Chunk 只接受严格连续的 offset，上传不修改工作区文件。
 - Commit 校验完整长度和内容摘要，再按原版本匹配或不存在/为空的条件一次发布。成功、拒绝、取消和结果未知均保留终态；`fileWriteStatus` 只观察，`fileWriteAbort` 取消尚未提交的上传。
 - 文件系统发布过程中返回 IO 错误时，结果标记为 `outcomeUnknown`，不能声称文件未改动。
@@ -27,6 +28,7 @@
 - 错误区分鉴权、版本、实例变化、参数、权限、不存在、冲突、容量与 IO。
 - 传输失败不能证明操作未执行；调用方不得据此重发有副作用的请求。
 - 每个环境最多保留 1024 条上传/结果记录；上传在 Begin 时预留完整长度，总容量最多 64 MiB。60 秒没有收到上传块时转为取消并释放内容；终态保留一小时。清理在上传或结果请求进入时执行，环境退出同时释放所有记录。
+- 每个环境另有最多 1024 条、64 MiB 的读取快照容量。开始新读取时按单文件上限预留容量；60 秒未访问的快照在下次读取或释放请求进入时淘汰。环境退出释放全部快照；丢失首个响应时不能发送 revision，仍受该容量和保留期约束。
 - 连接关闭不取消上传，也不删除提交结果。实例重启后旧客户端仍被拒绝；结果记录不跨实例恢复。客户端取消在提交前发送 Abort；提交发出后的完成与取消竞争以宿主终态为准。
 
 服务启动、保留时间及宿主配置见 [exec-server](../exec-server/README.md)。

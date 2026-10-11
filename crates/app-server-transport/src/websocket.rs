@@ -19,13 +19,14 @@ use tokio::sync::oneshot;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::task::JoinSet;
-use tokio_tungstenite::accept_hdr_async;
+use tokio_tungstenite::accept_hdr_async_with_config;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::handshake::server::ErrorResponse;
 use tokio_tungstenite::tungstenite::handshake::server::Request;
 use tokio_tungstenite::tungstenite::handshake::server::Response as UpgradeResponse;
 use tokio_tungstenite::tungstenite::http::Response as HttpResponse;
 use tokio_tungstenite::tungstenite::http::StatusCode;
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 use crate::DEFAULT_MAX_MESSAGE_BYTES;
 
@@ -34,6 +35,12 @@ const ORIGIN: &str = "origin";
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 const INBOUND_QUEUE_CAPACITY: usize = 1;
 const OUTBOUND_QUEUE_CAPACITY: usize = 1;
+
+pub(crate) fn websocket_config() -> WebSocketConfig {
+    WebSocketConfig::default()
+        .max_message_size(Some(DEFAULT_MAX_MESSAGE_BYTES))
+        .max_frame_size(Some(DEFAULT_MAX_MESSAGE_BYTES))
+}
 
 /// A validated SHA-256 digest of one high-entropy WebSocket capability token.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -282,8 +289,11 @@ async fn run_connection<H>(
     let callback = move |request: &Request, response: UpgradeResponse| {
         authorize_upgrade(request, response, token_sha256)
     };
-    let Ok(Ok(websocket)) =
-        tokio::time::timeout(HANDSHAKE_TIMEOUT, accept_hdr_async(stream, callback)).await
+    let Ok(Ok(websocket)) = tokio::time::timeout(
+        HANDSHAKE_TIMEOUT,
+        accept_hdr_async_with_config(stream, callback, Some(websocket_config())),
+    )
+    .await
     else {
         return;
     };
