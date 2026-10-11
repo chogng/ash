@@ -5,6 +5,7 @@ import { type CancellationToken } from '../../../../base/common/cancellation.js'
 import { Event } from '../../../../base/common/event.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Range } from '../../../common/core/range.js';
+import { TokenizationRegistry, type IState } from '../../../common/languages.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../common/model.js';
@@ -118,12 +119,49 @@ test('DiffEditorWidget colors inline removed lines and refreshes their tokens wi
 	assert.equal(removedLine.querySelector('.changed-inline-decoration'), null);
 });
 
+test('inline token batches refresh only deleted rows in the changed range', async () => {
+	using services = createServices();
+	const state: IState = { clone: () => state, equals: other => other === state };
+	using registration = TokenizationRegistry.register('diff-ranges', {
+		getInitialState: () => state,
+		tokenize: (_line, _hasEOL, state) => ({ tokens: [{ offset: 0, type: 'keyword', language: 'diff-ranges' }], endState: state }),
+	});
+	using original = new TextModel(Array.from({ length: 200 }, (_, index) => `before ${index}`).join('\n'), { languageId: 'diff-ranges' });
+	using modified = new TextModel(Array.from({ length: 200 }, (_, index) => `after ${index}`).join('\n'));
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model, renderSideBySide: false });
+	editor.layout({ width: 400, height: 80 });
+	const lines = editor.element.querySelectorAll('.stanza-diff-inline-original-line');
+	assert.equal(lines.length, 200);
+	const retainedSpan = lines[10]!.firstElementChild;
+	const source = original.tokenization.renderedTokens;
+	const getLineTokens = source.getLineTokens.bind(source);
+	const queries: number[] = [];
+	source.getLineTokens = lineIndex => {
+		queries.push(lineIndex);
+		return getLineTokens(lineIndex);
+	};
+	try {
+		original.tokenization.setVisibleLines([{ startLineNumber: 100, endLineNumber: 104 }]);
+		assert.deepEqual(queries, [99, 100, 101, 102, 103]);
+		assert.strictEqual(lines[10]!.firstElementChild, retainedSpan);
+		for (let index = 99; index <= 103; index++) {
+			assert.equal([...lines[index]!.querySelectorAll('.token-keyword')].map(token => token.textContent).join(''), `before ${index}`);
+		}
+	} finally {
+		source.getLineTokens = getLineTokens;
+	}
+});
+
 test('inline removed lines follow semantic theme styles and coloring settings while retaining their difference marks', async () => {
 	using services = createServices();
 	using providers = new SyntaxProviderRegistry();
 	using syntax = providers.register({ id: 'test.diff-theme', languageIds: ['diff-theme'], provideTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: 'keyword', modifiers: [], presentation: { foreground: '#0000ff' } }] }) });
 	const features = services.get(ILanguageFeaturesService);
-	using semantic = features.documentSemanticTokensProvider.register('diff-theme', { provideSemanticTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: 'variable', modifiers: [] }] }) });
+	let semanticType = 'variable';
+	using semantic = features.documentSemanticTokensProvider.register('diff-theme', { provideSemanticTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: semanticType, modifiers: [] }] }) });
 	using original = new TextModel('before', { languageId: 'diff-theme', tokenization: { syntaxProviderRegistry: providers, documentSemanticTokensProvider: features.documentSemanticTokensProvider } });
 	using modified = new TextModel('after');
 	await original.tokenization.whenReady(new AbortController().signal);
@@ -142,6 +180,9 @@ test('inline removed lines follow semantic theme styles and coloring settings wh
 		return [token.style.getPropertyValue('--ash-editor-token-foreground'), token.style.fontWeight];
 	};
 	assert.deepEqual(style(), ['#ff0000', 'bold']);
+	semanticType = 'string';
+	await original.tokenization.semanticTokens!.requestTokens('diff-theme');
+	assert.equal(removedLine.querySelector<HTMLElement>('.stanza-editor-token')!.dataset.ashSemanticType, 'string');
 	themes.setColorTheme({ ...theme, tokenColorMap: ['', '#00ff00'] });
 	assert.strictEqual(editor.element.querySelector('.stanza-diff-inline-original-line'), removedLine);
 	assert.deepEqual(style(), ['#00ff00', 'bold']);

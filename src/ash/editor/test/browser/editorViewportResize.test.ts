@@ -196,6 +196,56 @@ test('scrolling leaves fixed overlay measurements clean while resize and zone ge
 	}
 });
 
+test('line-width measurement shares the layer scale and retains cached widths until content changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('first\nsecond\nthird');
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false }, disableMonospaceOptimizations: true });
+	const prototype = dom.window.HTMLElement.prototype;
+	const getBoundingClientRect = prototype.getBoundingClientRect;
+	const offsetWidth = Object.getOwnPropertyDescriptor(prototype, 'offsetWidth')!;
+	let scaleReads = 0;
+	let textReads = 0;
+	prototype.getBoundingClientRect = function () {
+		if (this.classList.contains('view-lines')) {
+			scaleReads++;
+			return new dom.window.DOMRect(0, 0, 800, 200);
+		}
+		if (this.classList.contains('view-line')) {
+			return new dom.window.DOMRect(0, 0, 800, 40);
+		}
+		if (this.classList.contains('stanza-editor-line-text')) {
+			textReads++;
+			return new dom.window.DOMRect(0, 0, 120, 40);
+		}
+		return getBoundingClientRect.call(this);
+	};
+	Object.defineProperty(prototype, 'offsetWidth', { configurable: true, get: () => 400 });
+	try {
+		view.layout({ width: 400, height: 300 });
+		view.resetLineWidthCaches();
+		view.render(true, false);
+		assert.equal(scaleReads, 1);
+		assert.equal(textReads, 3);
+		for (let line = 1; line <= 3; line++) {
+			assert.equal(view.getLineWidth(line), 60);
+		}
+		view.render(true, false);
+		assert.equal(scaleReads, 1);
+		assert.equal(textReads, 3);
+		model.setValue('changed first\nchanged second\nchanged third');
+		view.render(true, false);
+		assert.equal(scaleReads, 2);
+		assert.equal(textReads, 6);
+		assert.equal(view.getLineWidth(1), 60);
+	} finally {
+		prototype.getBoundingClientRect = getBoundingClientRect;
+		Object.defineProperty(prototype, 'offsetWidth', offsetWidth);
+		view.dispose();
+		dom.window.close();
+	}
+});
+
 test('selective scroll rendering updates minimap slider and visible text without changing ruler geometry', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

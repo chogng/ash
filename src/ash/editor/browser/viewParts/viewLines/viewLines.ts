@@ -305,7 +305,15 @@ export class ViewLines extends ViewPart implements IViewLines {
 			}
 			this.lineWidths.observeLines([...logicalLines]);
 		}
-		for (const line of this._visibleLines.renderedLines.values()) this._ensureMaxLineWidth(line.getWidth(readingContext(line)));
+		// Rows share their layer's transform. Read its scale once per pass instead
+		// of remeasuring a row rectangle for every newly visible text span.
+		let context: DomReadingContext | null = null;
+		for (const line of this._visibleLines.renderedLines.values()) {
+			if (!line.getWidthIsFast()) {
+				context ??= new DomReadingContext(this.domNode.domNode, this.domNode.domNode);
+			}
+			this._ensureMaxLineWidth(line.getWidth(context));
+		}
 		this.publishLineWidth();
 	}
 

@@ -76,7 +76,10 @@ export class DiffEditorViewZones extends Disposable {
 				return undefined;
 			},
 		}));
-		this._register(model.original.tokenization.renderedTokens.onDidChange(() => this.renderInlineOriginalLines()));
+		this._register(model.original.onDidChangeTokens(event => this.renderInlineOriginalLines(event.ranges)));
+		if (model.original.tokenization.semanticTokens) {
+			this._register(model.original.tokenization.semanticTokens.onDidChange(() => this.renderInlineOriginalLines()));
+		}
 		this._register(originalEditor.onDidChangeModelDecorations(() => {
 			// Token batches do not change decorations. Refresh this derived row data
 			// only when its editor owner publishes a decoration change.
@@ -216,7 +219,7 @@ export class DiffEditorViewZones extends Disposable {
 		});
 	}
 
-	private renderInlineOriginalLines(): void {
+	private renderInlineOriginalLines(ranges?: readonly { fromLineNumber: number; toLineNumber: number; }[]): void {
 		const snapshot = this.inlineOriginalLines;
 		// A text edit invalidates the old row bindings until the diff rebuilds its zones.
 		if (!snapshot || snapshot.version !== this.model.original.version) return;
@@ -226,6 +229,11 @@ export class DiffEditorViewZones extends Disposable {
 		const options = RenderOptions.fromEditor(this.originalEditor);
 		for (const line of snapshot.lines) {
 			const { element, lineNumber } = line;
+			// Lexical batches often concern newly visible lines, while most deleted
+			// rows already have current styling and source-column mappings.
+			if (ranges && !ranges.some(range => range.fromLineNumber <= lineNumber && lineNumber <= range.toLineNumber)) {
+				continue;
+			}
 			const inlineDecorations = line.inlineDecorations ??= (this.originalEditor.getLineDecorations(lineNumber) ?? []).flatMap(decoration => decoration.options.inlineClassName
 				? [new InlineDecoration(decoration.range, decoration.options.inlineClassName, InlineDecorationType.Regular)]
 				: []);
