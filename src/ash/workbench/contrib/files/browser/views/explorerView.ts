@@ -1,4 +1,5 @@
 import { isCancellationError } from '../../../../../base/common/errors.js';
+import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
 import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
 import { FileKind, IFileService } from "../../../../../platform/files/common/files.js";
@@ -30,7 +31,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { explorerFileContribRegistry } from '../explorerFileContrib.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { localize } from '../../../../../nls.js';
-import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
 import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { PASTE_FILE_COMMAND_ID } from '../fileActions.js';
@@ -50,6 +51,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private treeError = false;
 	private treeErrorElement: ExplorerItem | undefined;
 	private workspaceGeneration = 0;
+	private readonly selectionCancellation = this._register(new MutableDisposable<CancellationTokenSource>());
 	private initialization: Promise<void>;
 	private fileChangeProcessing: Promise<void> = Promise.resolve();
 	private readonly loadedNests = new Set<string>();
@@ -79,6 +81,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		@ILabelService labelService?: ILabelService,
 	) {
 		super(container, options);
+		this._register(toDisposable(() => this.selectionCancellation.value?.cancel()));
 		this._register(explorerService.registerView(this));
 		this.fileService = fileService;
 		this.workspaceContextService = workspaceContextService;
@@ -240,10 +243,11 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.render();
 		this.initialization = this.initialize();
 		const revealActiveEditor = (): void => {
+			const token = this.startSelection();
 			const resource = editorService.activeEditor?.resource;
 			if (!resource || !workspaceContextService.getWorkspaceFolder(resource)) return;
-			void this.autoReveal(resource).catch(error => {
-				if (!this.isDisposed && !isCancellationError(error)) console.error('Could not reveal the active editor', error);
+			void this.autoReveal(resource, token).catch(error => {
+				if (!this.isDisposed && !token.isCancellationRequested && !isCancellationError(error)) console.error('Could not reveal the active editor', error);
 			});
 		};
 		this._register(editorService.onDidActiveEditorChange(revealActiveEditor));
@@ -253,40 +257,83 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		revealActiveEditor();
 	}
 
-	private async autoReveal(resource: URI): Promise<void> {
-		await this.initialization;
-		if (this.isDisposed || !this.explorerService.shouldAutoReveal(resource)) return;
-		// The condition rule must see siblings even when the parent is still collapsed.
-		const siblings = await this.fileService.readDirectory(dirname(resource));
-		if (this.isDisposed || !this.editorService.activeEditor || !extUriBiasedIgnorePathCase.isEqual(this.editorService.activeEditor.resource, resource)) return;
-		if (this.explorerService.shouldAutoReveal(resource, name => siblings.some(sibling => sibling.name === name))) {
-			await this.selectResource(resource, false);
-		}
+	private startSelection(): CancellationToken {
+		this.selectionCancellation.value?.cancel();
+		const source = new CancellationTokenSource();
+		this.selectionCancellation.value = source;
+		return source.token;
 	}
 
-	public async selectResource(resource: URI | undefined, reveal: boolean | string = true): Promise<void> {
-		this.setExpanded(true);
+	private async autoReveal(resource: URI, token: CancellationToken): Promise<void> {
 		await this.initialization;
+		if (this.isDisposed || token.isCancellationRequested) return;
+		if (this.tree.focus && extUriBiasedIgnorePathCase.isEqual(this.tree.focus.resource, resource) && this.tree.selection.length === 1 && extUriBiasedIgnorePathCase.isEqual(this.tree.selection[0]!.resource, resource)) return;
+		let needsSiblings = false;
+		if (!this.explorerService.shouldAutoReveal(resource, () => { needsSiblings = true; return false; })) return;
+		if (needsSiblings) {
+			const siblings = await this.resolveSiblings(resource, token);
+			if (this.isDisposed || token.isCancellationRequested || !this.explorerService.shouldAutoReveal(resource, name => hasSibling(siblings, name))) return;
+		}
+		await this.doSelectResource(resource, token);
+	}
+
+	private async resolveSiblings(resource: URI, token: CancellationToken): Promise<readonly ExplorerItem[]> {
+		const generation = this.workspaceGeneration;
+		const parent = dirname(resource);
+		let item = this.tree.getVisibleElements().find(candidate => candidate.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqual(candidate.resource, parent)) ?? this.root;
+		while (item && !this.isDisposed && generation === this.workspaceGeneration && !token.isCancellationRequested) {
+			if (!containsResource(item, parent)) return [];
+			let children = this.tree.getNode(item).children;
+			if (children === undefined || this.tree.isLoading(item)) {
+				// Resolve directory data without expanding an excluded folder or refreshing cached siblings.
+				await this.tree.updateChildren(item, { recursive: false });
+				if (this.isDisposed || generation !== this.workspaceGeneration || token.isCancellationRequested) return [];
+				children = this.tree.getNode(item).children;
+			}
+			const siblings = children?.map(child => child.element) ?? [];
+			if (extUriBiasedIgnorePathCase.isEqual(item.resource, parent)) return siblings;
+			item = siblings.find(child => child.kind === FileKind.Directory && containsResource(child, parent));
+		}
+		return [];
+	}
+
+	public selectResource(resource: URI | undefined, reveal: boolean | string = true): Promise<void> {
+		if (reveal) this.setExpanded(true);
+		return this.doSelectResource(resource, this.startSelection());
+	}
+
+	private async doSelectResource(resource: URI | undefined, token: CancellationToken): Promise<void> {
+		const generation = this.workspaceGeneration;
+		await this.initialization;
+		if (this.isDisposed || generation !== this.workspaceGeneration || token.isCancellationRequested) return;
 		if (!resource) {
 			this.tree.setSelection([]);
 			return;
 		}
-		const generation = this.workspaceGeneration;
 		const expanded = new Set<string>();
+		let closestDirectory: ExplorerItem | undefined;
+		let refreshedMissingResource = false;
 		// Only load ancestors of the requested file; nested file groups may contain sibling paths.
-		while (!this.isDisposed && generation === this.workspaceGeneration) {
-			const item = this.tree.getVisibleElements().find(candidate =>
+		while (!this.isDisposed && generation === this.workspaceGeneration && !token.isCancellationRequested) {
+			const visibleItems = this.tree.getVisibleElements();
+			const item = visibleItems.find(candidate => extUriBiasedIgnorePathCase.isEqual(candidate.resource, resource)) ?? visibleItems.find(candidate =>
 				!expanded.has(extUriBiasedIgnorePathCase.getComparisonKey(candidate.resource)) && containsResource(candidate, resource));
-			if (!item) return;
+			if (!item) {
+				if (!closestDirectory || refreshedMissingResource) return;
+				// A newly created file can be selected before its watcher notification reaches the tree.
+				refreshedMissingResource = true;
+				await this.tree.updateChildren(closestDirectory, { recursive: false });
+				expanded.clear();
+				continue;
+			}
 			if (extUriBiasedIgnorePathCase.isEqual(item.resource, resource)) {
+				this.tree.setFocus(item);
 				this.tree.setSelection([item]);
-				if (reveal) this.tree.setFocus(item);
 				return;
 			}
+			if (item.kind === FileKind.Directory) closestDirectory = item;
 			expanded.add(extUriBiasedIgnorePathCase.getComparisonKey(item.resource));
-			await this.tree.updateChildren(item, { recursive: false });
-			if (this.isDisposed || generation !== this.workspaceGeneration) return;
-			this.tree.expand(item);
+			await this.tree.expand(item);
 		}
 	}
 
@@ -507,6 +554,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		if (this.tree.domNode.parentElement !== this.scrollContent) this.scrollContent.append(this.tree.domNode);
 	}
 
+}
+
+function hasSibling(items: readonly ExplorerItem[], name: string): boolean {
+	return items.some(item => item.name === name || item.kind === FileKind.File && hasSibling(item.children ?? [], name));
 }
 
 function containsResource(item: ExplorerItem, resource: URI): boolean {

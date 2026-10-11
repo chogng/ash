@@ -356,11 +356,17 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 			return label;
 		},
 	});
-	await tree.setInput(root);
+	const initialization = tree.setInput(root);
+	assert.equal(tree.isLoading(root), true);
+	await initialization;
+	assert.equal(tree.isLoading(root), false);
+	assert.deepEqual(tree.getNode().children?.map(node => node.element), [group, sibling]);
+	assert.equal(tree.getNode(group).children, undefined);
+	assert.equal(pending.length, 0);
 	twistieRenders.length = 0;
 	const siblingRow = tree.element.querySelector('[data-tree-id="sibling"]');
 	const groupRow = tree.element.querySelector('[data-tree-id="group"]');
-	assert.equal(tree.expand(group), true);
+	const expansion = tree.expand(group);
 	assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
 	assert.equal(tree.element.getAttribute("aria-busy"), "true");
@@ -373,14 +379,61 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 	assert.equal(pending.length, 1);
 	pending[0]!([child]);
 	await latest;
+	assert.equal(await expansion, true);
 	assert.equal(tree.element.getAttribute("aria-busy"), "false");
 	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child", "Sibling"]);
 	assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
 	assert.equal(tree.collapse(group), true);
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
 	assert.equal(groupRow?.getAttribute('aria-expanded'), 'false');
+	assert.deepEqual(tree.getNode(group).children?.map(node => node.element), [child]);
+	await tree.updateChildren(group, { deferIfCollapsed: true });
+	assert.equal(tree.getNode(group).children, undefined);
+	assert.equal(pending.length, 1);
 	tree.dispose();
 	dom.window.close();
+});
+
+test("AsyncDataTree discards an old child load when a branch becomes a leaf", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const folder: TestNode = { id: 'folder', label: 'Folder', expanded: false };
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const child: TestNode = { id: 'child', label: 'Child', expanded: false };
+	let hasGroupChildren = true;
+	let completeRead: ((children: readonly TestNode[]) => void) | undefined;
+	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+		hasChildren: element => element === root || element === folder || element === group && hasGroupChildren,
+		getChildren: element => element === root ? [folder] : element === folder ? [group] : new Promise<readonly TestNode[]>(resolve => { completeRead = resolve; }),
+	}, {
+		identityProvider: { getId: element => element.id },
+		reuseRows: true,
+		renderElement: element => {
+			const label = h(dom.window.document, 'span');
+			label.textContent = element.label;
+			return label;
+		},
+	});
+	try {
+		await tree.setInput(root);
+		await tree.expand(folder);
+		const oldExpansion = tree.expand(group);
+		await Promise.resolve();
+		assert.ok(completeRead);
+		assert.equal(tree.isLoading(group), true);
+		hasGroupChildren = false;
+		await tree.updateChildren(folder, { recursive: false });
+		completeRead([child]);
+		await oldExpansion;
+		assert.deepEqual(tree.getVisibleElements(), [folder, group]);
+		assert.equal(tree.getNode(group).collapsible, false);
+		assert.equal(tree.getNode(group).children, undefined);
+		assert.equal(tree.isLoading(group), false);
+		assert.throws(() => tree.getNode(child), /Unknown AsyncDataTree state/);
+	} finally {
+		tree.dispose();
+		dom.window.close();
+	}
 });
 
 test("AsyncDataTree does not restart a lazy load when a node is collapsed and expanded", async () => {
@@ -414,14 +467,19 @@ test("AsyncDataTree does not restart a lazy load when a node is collapsed and ex
 		});
 	});
 
-	assert.equal(tree.expand(group), true);
+	const firstExpansion = tree.expand(group);
 	assert.equal(tree.collapse(group), true);
-	assert.equal(tree.expand(group), true);
+	const secondExpansion = tree.expand(group);
 	await Promise.resolve();
 	assert.equal(reads, 1);
 	resolveChildren?.([child]);
 	await loaded;
+	assert.deepEqual(await Promise.all([firstExpansion, secondExpansion]), [true, true]);
 	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child"]);
+	tree.collapse(group);
+	assert.equal(await tree.expand(group), true);
+	assert.equal(reads, 1);
+	assert.equal(tree.element.getAttribute('aria-busy'), 'false');
 
 	tree.dispose();
 	dom.window.close();
@@ -533,7 +591,7 @@ test("AsyncDataTree collapses a failed expansion and can retry it", async () => 
 			resolve();
 		});
 	});
-	tree.expand(group);
+	await assert.rejects(tree.expand(group), /Directory unavailable/);
 	await failed;
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]')?.getAttribute("aria-expanded"), "false");
 	const loaded = new Promise<void>((resolve) => {
@@ -621,13 +679,11 @@ test("CompressibleAsyncDataTree lazily expands compressed branches", async () =>
 	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["First"]);
 	tree.element.querySelector<HTMLElement>(":scope > .ash-tree-row")?.click();
 	assert.deepEqual(pointers, ["first:first"]);
-	assert.equal(tree.expand(first), true);
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	assert.equal(await tree.expand(first), true);
 	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["First / Middle"]);
 	tree.element.querySelector<HTMLElement>(":scope > .ash-tree-row")?.click();
 	assert.deepEqual(pointers, ["first:first", "middle:first/middle"]);
-	assert.equal(tree.expand(middle), true);
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	assert.equal(await tree.expand(middle), true);
 	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["First / Middle", "Left", "Right"]);
 	tree.dispose();
 	dom.window.close();

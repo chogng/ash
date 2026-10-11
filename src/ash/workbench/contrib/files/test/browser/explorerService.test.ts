@@ -118,6 +118,11 @@ test('Explorer auto-reveal honors conditions and settings without changing manua
 	const resource = URI.file('/root/main.js');
 	await configuration.updateValue('explorer.autoRevealExclude', { '**/*.js': { when: '$(basename).ts' } });
 	assert.deepEqual([service.shouldAutoReveal(resource, name => name === 'main.ts'), service.shouldAutoReveal(resource, () => false)], [false, true]);
+	await configuration.updateValue('explorer.autoRevealExclude', { '**/hidden': true });
+	assert.deepEqual([service.shouldAutoReveal(URI.file('/root/hidden/nested/main.js')), service.shouldAutoReveal(URI.file('/root/visible/main.js'))], [false, true]);
+	await configuration.updateValue('explorer.autoRevealExclude', { '**/root': true });
+	assert.equal(service.shouldAutoReveal(resource), true);
+	await configuration.updateValue('explorer.autoRevealExclude', { '**/*.js': { when: '$(basename).ts' } });
 	let selected: string | undefined;
 	using registration = service.registerView({ selectResource: async resource => { selected = resource?.path; }, getContext: () => [], getAccessibleContent: () => '', focus() { } });
 	await service.select(resource, 'force');

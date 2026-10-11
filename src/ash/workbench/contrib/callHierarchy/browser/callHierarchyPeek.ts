@@ -93,6 +93,6 @@ export class CallHierarchyTreePeekWidget extends PeekViewWidget {
 	private async expandDirection(direction: CallHierarchyDirection): Promise<void> {
 		if (direction !== this.direction) { await this.updateDirection(direction); }
 		const root = this.tree.getVisibleElements()[0];
-		if (root) { this.tree.expand(root); }
+		if (root) { await this.tree.expand(root); }
 	}
 }

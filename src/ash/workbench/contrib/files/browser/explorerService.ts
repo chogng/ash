@@ -9,6 +9,7 @@ import { WorkspaceWatcher } from './workspaceWatcher.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IExpression } from '../../../../base/common/glob.js';
 import { ResourceGlobMatcher } from '../../../common/resources.js';
+import { dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import '../../../services/filesConfiguration/common/filesConfigurationService.js';
 
 /** Owns the Explorer model and exposes the active view to file commands. */
@@ -39,7 +40,14 @@ export class ExplorerService extends Disposable implements IExplorerService {
 	}
 
 	public shouldAutoReveal(resource: URI, hasSibling?: (name: string) => boolean): boolean {
-		return this.configuration.getValue<boolean>('explorer.autoReveal') && !this.revealExcludeMatcher.matches(resource, hasSibling);
+		if (!this.configuration.getValue<boolean>('explorer.autoReveal') || this.revealExcludeMatcher.matches(resource, hasSibling)) return false;
+		const root = this.model.root;
+		const folder = root?.children?.find(item => extUriBiasedIgnorePathCase.isEqualOrParent(resource, item.resource)) ?? root;
+		if (!folder || !extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.resource)) return true;
+		for (let parent = dirname(resource); extUriBiasedIgnorePathCase.isEqualOrParent(parent, folder.resource) && !extUriBiasedIgnorePathCase.isEqual(parent, folder.resource); parent = dirname(parent)) {
+			if (this.revealExcludeMatcher.matches(parent)) return false;
+		}
+		return true;
 	}
 
 	public getRoot(): ExplorerItem | undefined { return this.model.root; }

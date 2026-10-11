@@ -12,6 +12,10 @@ import { Emitter, Event } from "../../../../../base/common/event.js";
 import { DecorationsService } from '../../../../services/decorations/browser/decorationsService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
+import { ConfigurationRegistry, Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
+import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
+import '../../../../services/filesConfiguration/common/filesConfigurationService.js';
 import { FileKind, FileNotFoundError, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
@@ -44,6 +48,8 @@ test("ExplorerView opens workspace files on single click", async () => {
 	let addedRootFile = false;
 	let addedNestedFile = false;
 	let failNextRootRead = false;
+	let pauseSourceRead = false;
+	let completeSourceRead: (() => void) | undefined;
 	let openedInput: IResourceEditorInput | undefined;
 	let openedOptions: EditorOpenOptions | undefined;
 	let openedTarget: EditorOpenTarget | undefined;
@@ -65,6 +71,10 @@ test("ExplorerView opens workspace files on single click", async () => {
 		},
 		readDirectory: async (resource) => {
 			directoryReads.push(resource.toString());
+			if (resource.path === '/project/src' && pauseSourceRead) {
+				pauseSourceRead = false;
+				await new Promise<void>(resolve => { completeSourceRead = resolve; });
+			}
 			if (resource.toString() === root.toString()) {
 				if (failNextRootRead) {
 					failNextRootRead = false;
@@ -136,8 +146,12 @@ test("ExplorerView opens workspace files on single click", async () => {
 		id: "workspace",
 		uri: root,
 	});
+	using activeEditorChanges = new Emitter<void>();
+	let activeEditor: IResourceEditorInput | undefined;
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,
+		onDidActiveEditorChange: activeEditorChanges.event,
+		get activeEditor() { return activeEditor; },
 		openEditor: async (input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget) => {
 			openedInput = input;
 			openedOptions = options;
@@ -146,7 +160,13 @@ test("ExplorerView opens workspace files on single click", async () => {
 		},
 		focusActiveEditor() { editorFocusCount += 1; },
 	};
-	using configurationService = new InMemoryConfigurationService();
+	const configurationRegistry = new ConfigurationRegistry();
+	for (const registered of Registry.as<IConfigurationRegistry>(Extensions.Configuration).getRegisteredConfigurations()) {
+		configurationRegistry.registerConfiguration({ key: registered.key, defaultValue: registered.defaultValue, parse: registered.parse });
+	}
+	configurationRegistry.registerConfiguration({ key: ExplorerFileNestingSettingId.Enabled, defaultValue: false, parse: value => Boolean(value) });
+	configurationRegistry.registerConfiguration({ key: ExplorerFileNestingSettingId.Patterns, defaultValue: {}, parse: value => value as Record<string, string> });
+	using configurationService = new InMemoryConfigurationService(configurationRegistry);
 	await configurationService.updateValue(ListConfiguration.openMode, "doubleClick");
 	using iconChanges = new Emitter<void>();
 	let fileIconTheme = { ...noFileIconTheme, hasFileIcons: true };
@@ -282,6 +302,19 @@ test("ExplorerView opens workspace files on single click", async () => {
 			".ash-tree-row",
 		)].find((row) => rowLabel(row) === "src");
 		assert.ok(sourceFolder);
+		pauseSourceRead = true;
+		const oldSelection = explorerService.select(URI.file('/project/src/main.ts'), 'force');
+		await waitFor(() => completeSourceRead !== undefined);
+		activeEditor = { resource: URI.file('/project/README.md'), label: 'README.md' };
+		activeEditorChanges.fire();
+		await waitFor(() => explorerService.getContext()[0]?.name === 'README.md');
+		completeSourceRead!();
+		await oldSelection;
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		assert.ok(rowLabels(pane.element).includes('main.ts'));
+		sourceFolder.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
+		activeEditor = undefined;
+		activeEditorChanges.fire();
 		sourceFolder.click();
 		assert.equal(explorerService.getContext()[0]?.resource.toString(), URI.file('/project/src').toString());
 
@@ -352,6 +385,138 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.equal(explorerService.getContext()[0]?.name, 'main.ts');
 		assert.equal(pane.element.querySelector('.ash-tree')?.getAttribute('aria-activedescendant'), mainRow.id);
 		assert.equal(Boolean(openedInput), false);
+		const mainLabel = mainRow.querySelector('.ash-icon-label');
+		const folderArrow = sourceFolder.querySelector('.ash-tree-twistie .ash-icon');
+		const loadingStates: string[] = [];
+		const observer = new browser.window.MutationObserver(records => {
+			for (const record of records) {
+				for (const node of record.addedNodes) {
+					if (node instanceof browser.window.Element && node.classList.contains('ash-explorer-tree-loading')) loadingStates.push('loading');
+				}
+			}
+		});
+		observer.observe(pane.element, { childList: true, subtree: true });
+		const editorFocusTarget = browser.window.document.createElement('textarea');
+		browser.window.document.body.append(editorFocusTarget);
+		try {
+			editorFocusTarget.focus();
+			for (const resource of [URI.file('/project/README.md'), URI.file('/project/src/main.ts'), URI.file('/project/README.md'), URI.file('/project/src/main.ts')]) {
+				directoryReads.length = 0;
+				activeEditor = { resource, label: resource.path.split('/').at(-1)! };
+				activeEditorChanges.fire();
+				await waitFor(() => explorerService.getContext()[0]?.resource.toString() === resource.toString());
+				const selectedRow = pane.element.querySelector<HTMLElement>(`[data-tree-id="${resource.toString()}"]`);
+				assert.equal(pane.element.querySelector('.ash-tree')?.getAttribute('aria-activedescendant'), selectedRow?.id);
+				assert.deepEqual(directoryReads, []);
+				assert.equal(mainRow.querySelector('.ash-icon-label'), mainLabel);
+				assert.equal(sourceFolder.querySelector('.ash-tree-twistie .ash-icon'), folderArrow);
+				assert.equal(browser.window.document.activeElement, editorFocusTarget);
+			}
+			pane.focus();
+			pane.element.querySelector('.ash-tree')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+			assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+			assert.deepEqual(loadingStates, []);
+			sourceFolder.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
+			directoryReads.length = 0;
+			await explorerService.select(URI.file('/project/src/main.ts'), 'force');
+			assert.deepEqual(directoryReads, []);
+			assert.equal(sourceFolder.getAttribute('aria-expanded'), 'true');
+			assert.equal(mainRow.querySelector('.ash-icon-label'), mainLabel);
+			assert.deepEqual(loadingStates, []);
+		} finally {
+			editorFocusTarget.remove();
+			observer.disconnect();
+		}
+		await explorerService.select(URI.file('/project/README.md'), 'force');
+		activeEditor = undefined;
+		activeEditorChanges.fire();
+		await configurationService.updateValue('explorer.autoRevealExclude', { '**/*.ts': { when: 'main.ts' } });
+		sourceFolder.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
+		await explorerService.select(URI.file('/project/README.md'), 'force');
+		directoryReads.length = 0;
+		activeEditor = { resource: URI.file('/project/src/main.ts'), label: 'main.ts' };
+		activeEditorChanges.fire();
+		// All fixture reads resolve immediately; finish the event turn before checking a suppressed reveal.
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(directoryReads, []);
+		assert.equal(sourceFolder.getAttribute('aria-expanded'), 'false');
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		for (let attempt = 0; attempt < 2; attempt++) {
+			activeEditorChanges.fire();
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.deepEqual(directoryReads, []);
+			assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		}
+		{
+			let receivedChange = (): void => { };
+			const change = new Promise<void>(resolve => { receivedChange = resolve; });
+			using listener = explorerService.onDidChangeResources(() => receivedChange());
+			fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
+			await change;
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.deepEqual(directoryReads, []);
+			activeEditorChanges.fire();
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
+			assert.equal(sourceFolder.getAttribute('aria-expanded'), 'false');
+			assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		}
+		directoryReads.length = 0;
+		await configurationService.updateValue('explorer.autoRevealExclude', { '**/*.ts': { when: 'missing.ts' } });
+		await waitFor(() => explorerService.getContext()[0]?.name === 'main.ts');
+		assert.deepEqual(directoryReads, []);
+		await explorerService.select(URI.file('/project/README.md'), 'force');
+		activeEditor = undefined;
+		activeEditorChanges.fire();
+		await configurationService.updateValue('explorer.autoRevealExclude', { '**/*.js': { when: 'main.ts' } });
+		directoryReads.length = 0;
+		activeEditor = { resource: URI.file('/project/src/main.ts'), label: 'main.ts' };
+		activeEditorChanges.fire();
+		await waitFor(() => explorerService.getContext()[0]?.name === 'main.ts');
+		assert.deepEqual(directoryReads, []);
+		activeEditor = undefined;
+		activeEditorChanges.fire();
+		await configurationService.updateValue('explorer.autoRevealExclude', {});
+		addedNestedFile = true;
+		directoryReads.length = 0;
+		await explorerService.select(URI.file('/project/src/nested.ts'), 'force');
+		assert.equal(explorerService.getContext()[0]?.name, 'nested.ts');
+		assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
+		await configurationService.updateValue(ExplorerFileNestingSettingId.Patterns, { 'main.ts': 'nested.ts' });
+		await configurationService.updateValue(ExplorerFileNestingSettingId.Enabled, true);
+		await waitFor(() => pane.element.querySelector('[data-tree-id="file:///project/src/main.ts"]')?.getAttribute('aria-expanded') === 'true');
+		const nestedGroup = pane.element.querySelector<HTMLElement>('[data-tree-id="file:///project/src/main.ts"]');
+		assert.ok(nestedGroup);
+		nestedGroup.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
+		await explorerService.select(URI.file('/project/README.md'), 'force');
+		await configurationService.updateValue('explorer.autoRevealExclude', { '**/main.ts': { when: 'nested.ts' } });
+		directoryReads.length = 0;
+		activeEditor = { resource: URI.file('/project/src/main.ts'), label: 'main.ts' };
+		activeEditorChanges.fire();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(directoryReads, []);
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		assert.equal(nestedGroup.getAttribute('aria-expanded'), 'false');
+		activeEditor = undefined;
+		activeEditorChanges.fire();
+		await configurationService.updateValue('explorer.autoRevealExclude', {});
+		await explorerService.select(URI.file('/project/src/nested.ts'), 'force');
+		directoryReads.length = 0;
+		await explorerService.select(URI.file('/project/src/missing.ts'), 'force');
+		assert.equal(explorerService.getContext()[0]?.name, 'nested.ts');
+		assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
+		addedNestedFile = false;
+		{
+			let receivedChange = (): void => { };
+			const change = new Promise<void>(resolve => { receivedChange = resolve; });
+			using listener = explorerService.onDidChangeResources(() => receivedChange());
+			fileChanges.fire({ resources: [URI.file('/project/src')] });
+			await change;
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(rowLabels(pane.element).includes('nested.ts'), false, JSON.stringify({ rows: rowLabels(pane.element), reads: directoryReads, error: pane.element.querySelector('.ash-explorer-error')?.textContent }));
+		}
+		await configurationService.updateValue(ExplorerFileNestingSettingId.Enabled, false);
+		await new Promise<void>(resolve => setImmediate(resolve));
 		sourceFolder.click();
 		await configurationService.updateValue(ListConfiguration.treeExpandMode, "doubleClick");
 		sourceFolder.click();

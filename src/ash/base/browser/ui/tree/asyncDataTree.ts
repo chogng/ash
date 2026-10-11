@@ -4,7 +4,7 @@ import type { ListScrolling } from "../list/list.js";
 import { CompressibleObjectTree, ObjectTree, type CompressibleKeyboardNavigationLabelProvider, type CompressibleTreeAcceptEvent, type CompressibleTreeFocusChangeEvent, type CompressibleTreePointerEvent, type CompressibleTreeSelectionChangeEvent, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
 import type { CompressibleTreeElement, CompressedTreeNode } from "./compressedObjectTreeModel.js";
 import type { ObjectTreeIdentityProvider, ObjectTreeNode } from "./objectTreeModel.js";
-import type { AsyncTreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerTarget, TreeSorter, TreeTwistieState } from "./tree.js";
+import type { AsyncTreeDataSource, TreeDragAndDrop, TreeElement, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerTarget, TreeSorter, TreeTwistieState } from "./tree.js";
 
 export interface AsyncTreeTwistieState extends TreeTwistieState {
 	readonly loading: boolean;
@@ -182,6 +182,11 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	get focus(): T | undefined { return this.tree.focus; }
 	get selection(): readonly T[] { return this.tree.selection; }
 	getVisibleElements(): readonly T[] { return this.tree.getVisibleElements(); }
+	/** Reads cached children, including folded branches, without expanding or loading them. */
+	public getNode(element: TInput | T = this.requireInput()): TreeElement<TInput | T> {
+		if (element === this.input) return { element, children: this.rootChildren.map(id => this.toTreeElement(id)) };
+		return this.toTreeElement(this.getId(element as T));
+	}
 	setFocus(element: T, browserEvent?: UIEvent): void { this.tree.setFocus(element, browserEvent); }
 	setSelection(elements: readonly T[], browserEvent?: UIEvent): void { this.tree.setSelection(elements, browserEvent); }
 	domFocus(): void { this.tree.domFocus(); }
@@ -198,9 +203,14 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 			}
 		}
 	}
-	expand(element: T): boolean { return this.tree.expand(element); }
+	async expand(element: T): Promise<boolean> {
+		const expanded = this.tree.expand(element);
+		// Expansion starts a read only for unresolved children; callers must await that read before navigating them.
+		await this.requests.get(this.getId(element))?.promise;
+		return expanded;
+	}
 	expandTo(element: T): boolean { return this.tree.expandTo(element); }
-	isLoading(element: T): boolean { return this.requests.has(this.getId(element)); }
+	isLoading(element: T): boolean { return this.requests.has(element === this.input ? undefined : this.getId(element)); }
 
 	async setInput(input: TInput | undefined): Promise<void> {
 		const generation = ++this.generation;
@@ -327,6 +337,8 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		for (const id of oldChildren) if (!seen.has(id)) this.removeStateSubtree(id);
 		for (const child of nextChildren) {
 			if (!child.hasChildren) {
+				// A former branch's pending read must not repopulate children after it becomes a leaf.
+				this.requests.delete(child.id);
 				for (const id of this.states.get(child.id)?.children ?? []) this.removeStateSubtree(id);
 			}
 			this.states.set(child.id, child);

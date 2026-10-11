@@ -71,7 +71,7 @@ export class ApplicationService {
 	private async startDesktop(options: ApplicationLaunchOptions, videoDirectory: string): Promise<RunningApplication> {
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-scenario-'));
 		if (options.userSettings) {
-			const settingsPath = join(userDataDirectory, 'User', 'settings.json');
+			const settingsPath = join(userDataDirectory, 'profile', 'settings.json');
 			await mkdir(dirname(settingsPath), { recursive: true });
 			await writeFile(settingsPath, `${JSON.stringify(options.userSettings, undefined, 2)}\n`, 'utf8');
 		}
