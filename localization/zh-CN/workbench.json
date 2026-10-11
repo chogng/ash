@@ -1,5 +1,14 @@
 {
   "ash": {
+    "quickAccess.recentlyUsed": "最近使用",
+    "quickAccess.otherCommands": "其他命令",
+    "quickAccess.removeFromHistory": "从命令历史记录中移除",
+    "quickAccess.clearCommandHistory": "清空命令历史记录",
+    "quickAccess.confirmClearHistory": "是否清空最近使用的命令历史记录？",
+    "quickAccess.clearHistoryButton": "清空",
+    "quickAccess.historyInvalid": "命令历史记录条数必须是有限的非负数。",
+    "quickAccess.historyTitle": "工作台 › 命令面板：历史记录",
+    "quickAccess.historyDescription": "控制命令面板保留的最近使用命令条数。设为 0 可禁用命令历史记录。",
     "multiDiff.ariaLabel": "{0}，{1} 个文件",
     "multiDiff.empty": "此选择中没有更改。",
     "multiDiff.fileActions": "{0} 操作",

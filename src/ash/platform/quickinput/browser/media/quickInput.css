@@ -203,6 +203,36 @@
 	font-size: 11px;
 }
 
+.ash-quick-pick-row-action.icon-only {
+	display: grid;
+	flex: 0 0 auto;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	padding: 4px;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	color: inherit;
+	background: transparent;
+	opacity: 0;
+	cursor: pointer;
+}
+
+.ash-quick-pick-row-action.icon-only svg.ash-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+}
+
+.ash-quick-pick-list .ash-list-row:hover .ash-quick-pick-row-action.icon-only,
+.ash-quick-pick-list .ash-list-row.is-active .ash-quick-pick-row-action.icon-only,
+.ash-quick-pick-row-action.icon-only:focus-visible {
+	opacity: 1;
+}
+
+.ash-quick-pick-row-action.icon-only:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
 .ash-quick-pick-empty {
 	padding: 20px;
 	color: var(--ash-description-foreground);

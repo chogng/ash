@@ -43,6 +43,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	readonly onDidChangeValue = Event.None;
 	readonly onDidBlur = Event.None;
 	readonly onDidTriggerItemButton = Event.None;
+	sortByLabel = true;
 	items: readonly T[] = [];
 	ariaLabel = '';
 	placeholder = '';

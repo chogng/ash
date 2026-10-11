@@ -1,5 +1,14 @@
 {
   "ash": {
+    "quickAccess.recentlyUsed": "recently used",
+    "quickAccess.otherCommands": "other commands",
+    "quickAccess.removeFromHistory": "Remove from Command History",
+    "quickAccess.clearCommandHistory": "Clear Command History",
+    "quickAccess.confirmClearHistory": "Do you want to clear the history of recently used commands?",
+    "quickAccess.clearHistoryButton": "Clear",
+    "quickAccess.historyInvalid": "Command history length must be a finite non-negative number.",
+    "quickAccess.historyTitle": "Workbench › Command Palette: History",
+    "quickAccess.historyDescription": "Controls the number of recently used commands to keep in history for the command palette. Set to 0 to disable command history.",
     "multiDiff.ariaLabel": "{0}, {1} files",
     "multiDiff.empty": "No changes in this selection.",
     "multiDiff.fileActions": "{0} actions",

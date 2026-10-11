@@ -164,6 +164,7 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
+	sortByLabel = true;
 	private readonly acceptEmitter = new Emitter<TItem>();
 	private readonly valueEmitter = new Emitter<string>();
 	private readonly hideEmitter = new Emitter<void>();

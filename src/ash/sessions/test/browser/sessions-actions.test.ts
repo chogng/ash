@@ -175,6 +175,7 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	readonly onDidChangeValue = Event.None;
 	readonly onDidBlur = Event.None;
 	readonly onDidTriggerItemButton = Event.None;
+	sortByLabel = true;
 	items: readonly TItem[] = [];
 	ariaLabel = "";
 	placeholder = "";

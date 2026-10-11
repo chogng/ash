@@ -1,4 +1,8 @@
-import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { errorHandler } from '../../../../../base/common/errors.js';
@@ -176,6 +180,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	services.registerSingleton(IDialogService, () => new DialogService());
 	services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+	using historyResources = registerHistoryServices(services);
 	const contextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	const commands = new CommandService(services);
@@ -254,6 +259,7 @@ test('Command Palette releases its provider before an accepted command disposes 
 		services.registerSingleton(IDialogService, () => new DialogService());
 		services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+		using historyResources = registerHistoryServices(services);
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		using commands = new CommandService(services);
@@ -415,6 +421,7 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 		services.registerSingleton(IDialogService, () => new DialogService());
 		services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+		using historyResources = registerHistoryServices(services);
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		using commands = new CommandService(services);
@@ -696,6 +703,15 @@ function emptyKeybindingService(): KeybindingService {
 		lookupKeybindings: () => [],
 		lookupKeybinding: () => undefined,
 	};
+}
+
+function registerHistoryServices(services: InstantiationService): DisposableStore {
+	const resources = new DisposableStore();
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	resources.add(toDisposable(() => dom.window.close()));
+	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
+	services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'commands', flushInterval: 0 })));
+	return resources;
 }
 
 function installDomGlobals(dom: JSDOM): void {

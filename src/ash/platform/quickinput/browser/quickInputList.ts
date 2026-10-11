@@ -6,7 +6,7 @@ import type { IKeyMods, IQuickPickItem, IQuickPickItemButton, IQuickPickSeparato
 import { QuickPickFocus } from '../common/quickInput.js';
 import { h, stopEvent } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
-import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
+import { appendIcon, getRegisteredIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
@@ -30,6 +30,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private _visibleItems: readonly TItem[] = [];
 	private maxHeight = Number.POSITIVE_INFINITY;
 	private query = "";
+	private _sortByLabel = true;
 
 	readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
 	readonly onDidChangeActive:
@@ -86,6 +87,13 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 	get visibleItems(): readonly TItem[] {
 		return this._visibleItems;
+	}
+
+	public get sortByLabel(): boolean { return this._sortByLabel; }
+	public set sortByLabel(value: boolean) {
+		if (this._sortByLabel === value) return;
+		this._sortByLabel = value;
+		this.render();
 	}
 
 	get activeItem(): TItem | undefined {
@@ -163,6 +171,10 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			candidates,
 			this.query,
 		);
+		if (!this.sortByLabel) {
+			const matches = new Set(this._visibleItems);
+			this._visibleItems = candidates.filter(item => matches.has(item));
+		}
 		this.list.items = this._visibleItems;
 		const empty = this._visibleItems.length === 0;
 		this.list.domNode.hidden = empty;
@@ -231,6 +243,21 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			action.className = 'ash-quick-pick-row-action';
 			action.textContent = button.label;
 			action.setAttribute('aria-label', button.label);
+			if (button.iconClass) {
+				action.textContent = '';
+				action.title = button.label;
+				action.classList.add('icon-only');
+				const iconId = button.iconClass.split(/\s+/).find(name => name.startsWith('ash-icon-'))?.slice('ash-icon-'.length);
+				const icon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
+				if (icon) {
+					appendIcon(icon, action);
+				} else {
+					const artwork = h(ownerDocument, 'span');
+					artwork.className = button.iconClass;
+					artwork.setAttribute('aria-hidden', 'true');
+					action.append(artwork);
+				}
+			}
 			action.addEventListener('click', event => {
 				stopEvent(event);
 				this.buttonEmitter.fire({ item, button });

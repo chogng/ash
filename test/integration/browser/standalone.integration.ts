@@ -11,6 +11,8 @@ import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services
 import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
 import { ILanguageFeatureDebounceService } from '../../../src/ash/editor/common/services/languageFeatureDebounce.js';
 import { IInstantiationService } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IInlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
 import { InlineCompletionsController } from '../../../src/ash/editor/contrib/inlineCompletions/browser/controller/inlineCompletionsController.js';
 import type { ICodeEditor } from '../../../src/ash/editor/browser/editorBrowser.js';
@@ -3158,7 +3160,10 @@ window.ashStandaloneIntegration = {
 		scrollGeometryResources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: 'test.scrollGeometry.keepPosition', title: 'Keep editor position' } }));
 		const picker = scrollGeometryResources.add(inputs.createQuickPick<IQuickPickItem>());
 		const dialogs = scrollGeometryResources.add(new DialogService());
-		const provider = new CommandsQuickAccessProvider(commands, StandaloneServices.get(IMenuService), StandaloneServices.get(IKeybindingService), dialogs, StandaloneServices.get(ICodeEditorService));
+		const services = scrollGeometryResources.add(StandaloneServices.get(IInstantiationService).createChild());
+		services.registerInstance(IDialogService, dialogs);
+		services.registerInstance(IStorageService, scrollGeometryResources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'standalone', flushInterval: 0 })));
+		const provider = services.createInstance(CommandsQuickAccessProvider);
 		scrollGeometryResources.add(provider.provide(picker));
 		picker.value = 'Keep editor position';
 		picker.show();

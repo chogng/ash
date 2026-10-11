@@ -16,6 +16,7 @@ import { RUN_TASK_COMMAND_ID } from '../../common/tasks.js';
 interface TaskItem extends IQuickPickItem { readonly task: IWorkspaceTask; }
 
 class Picker extends Disposable implements IQuickPick<TaskItem> {
+	sortByLabel = true;
 	readonly accepted = this._register(new Emitter<TaskItem>());
 	readonly hidden = this._register(new Emitter<void>());
 	readonly onDidAccept = this.accepted.event;

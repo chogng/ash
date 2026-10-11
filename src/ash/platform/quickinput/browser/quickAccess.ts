@@ -37,6 +37,7 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 			provider.clear();
 			descriptor = next;
 			picker.items = [];
+			picker.sortByLabel = true;
 			if (!next) return;
 			picker.placeholder = options?.placeholder ?? next.placeholder;
 			picker.ariaLabel = picker.placeholder;

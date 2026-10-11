@@ -149,6 +149,7 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements IQuickPick<TItem> {
+	sortByLabel = true;
 	private readonly accepted = this._register(new Emitter<TItem>());
 	private readonly changed = this._register(new Emitter<string>());
 	private readonly hidden = this._register(new Emitter<void>());

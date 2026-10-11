@@ -129,6 +129,9 @@ export class QuickPick<TItem extends IQuickPickItem>
 		return this.list.items;
 	}
 
+	public get sortByLabel(): boolean { return this.list.sortByLabel; }
+	public set sortByLabel(value: boolean) { this.list.sortByLabel = value; }
+
 	get ariaLabel(): string {
 		return this._ariaLabel;
 	}

@@ -29,6 +29,7 @@ import { ExternalUriOpenerService, IExternalUriOpenerService, type IExternalUriO
 import '../../common/externalUriOpener.contribution.js';
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
+	sortByLabel = true;
 	private readonly accepted = this._register(new Emitter<T>());
 	private readonly hidden = this._register(new Emitter<void>());
 	public readonly onDidAccept = this.accepted.event;

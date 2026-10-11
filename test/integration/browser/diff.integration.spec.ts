@@ -11,6 +11,131 @@ async function openDiffPage(page: Page, locale: DiffTestLocale = 'en'): Promise<
 	await page.waitForFunction(() => !!window.ashDiffIntegration);
 }
 
+test('diff scrolling preserves overview markers and does not emit editor layout changes', async ({ page }) => {
+	await openDiffPage(page);
+	const original = Array.from({ length: 200 }, (_, index) => `line ${index + 1}`).join('\n');
+	const modified = Array.from({ length: 200 }, (_, index) => `changed line ${index + 1}`).join('\n');
+	await page.evaluate(([left, right]) => window.ashDiffIntegration.setComparisonText(left, right), [original, modified]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const result = await page.evaluate(async () => {
+		const marker = document.querySelector('#single .stanza-diff-overview-marker.modified')!;
+		const before = window.ashDiffIntegration.layoutEventCount;
+		window.ashDiffIntegration.scrollModified(100);
+		await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		return {
+			scrollTop: window.ashDiffIntegration.linePositions(1, 1).modifiedScrollTop,
+			layoutEvents: window.ashDiffIntegration.layoutEventCount - before,
+			markerRetained: marker === document.querySelector('#single .stanza-diff-overview-marker.modified'),
+		};
+	});
+	expect(result).toEqual({ scrollTop: 100, layoutEvents: 0, markerRetained: true });
+	const beforeResize = await page.evaluate(() => window.ashDiffIntegration.layoutEventCount);
+	await page.evaluate(() => window.ashDiffIntegration.setFontOptions({ lineHeight: 30 }));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.layoutEventCount)).toBeGreaterThan(beforeResize);
+});
+
+for (const theme of ['light', 'hc-black']) {
+	test(`diff scrolling retains unchanged overlay children and refreshes changed content in ${theme}`, async ({ page }) => {
+		await openDiffPage(page, 'zh-CN');
+		const original = Array.from({ length: 200 }, (_, index) => `line ${index + 1}`).join('\n');
+		const modified = Array.from({ length: 200 }, (_, index) => `changed line ${index + 1}`).join('\n');
+		await page.evaluate(([left, right, themeId]) => {
+			window.ashDiffIntegration.setTheme(themeId);
+			window.ashDiffIntegration.setViewMode(false, false, 900);
+			window.ashDiffIntegration.setComparisonText(left, right);
+		}, [original, modified, theme]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await expect(page.locator('#single .modified .view-overlays .cdr').first()).toBeAttached();
+		const result = await page.evaluate(async () => {
+			const host = document.querySelector('#single .modified')!;
+			const decoration = host.querySelector('.view-overlays .view-overlay-line[data-line-index="2"] .cdr')!;
+			const number = host.querySelector('.margin-view-overlays .view-overlay-line[data-line-index="2"] .line-numbers')!;
+			window.ashDiffIntegration.scrollModified(1);
+			await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			return {
+				hasDecoration: !!decoration,
+				hasNumber: !!number,
+				decorationRetained: decoration === host.querySelector('.view-overlays .view-overlay-line[data-line-index="2"] .cdr'),
+				numberRetained: number === host.querySelector('.margin-view-overlays .view-overlay-line[data-line-index="2"] .line-numbers'),
+			};
+		});
+		expect(result).toEqual({ hasDecoration: true, hasNumber: true, decorationRetained: true, numberRetained: true });
+		await page.evaluate(text => window.ashDiffIntegration.setComparisonText(text, text), original);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await expect(page.locator('#single .modified .view-overlays .stanza-diff-line-added')).toHaveCount(0);
+	});
+}
+
+test('diff scrolling keeps retained decorations stable during wheel input', async ({ page }, testInfo) => {
+	await openDiffPage(page);
+	const original = Array.from({ length: 1200 }, (_, index) => `export const entry${index} = ${index};`);
+	const modified = original.map((line, index) => index % 5 === 0 ? `${line} // changed` : line);
+	await page.evaluate(([left, right]) => {
+		window.ashDiffIntegration.setViewMode(false, false, 900);
+		window.ashDiffIntegration.setComparisonText(left, right);
+	}, [original.join('\n'), modified.join('\n')]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const samples = await page.evaluate(async () => {
+		const editor = document.querySelector<HTMLElement>('#single .modified .stanza-editor')!;
+		const diff = document.querySelector('#single .stanza-diff-editor')!;
+		const nextFrame = () => new Promise<number>(resolve => requestAnimationFrame(resolve));
+		// Warm the text and decorations before measuring an identical scroll range.
+		for (let frame = 0; frame < 20; frame++) {
+			editor.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true }));
+			await nextFrame();
+		}
+		const output = [];
+		for (let sample = 0; sample < 3; sample++) {
+			window.ashDiffIntegration.scrollModified(400);
+			await nextFrame();
+			await nextFrame();
+			let retainedOverlayReplacements = 0;
+			let overviewUpdates = 0;
+			const observer = new MutationObserver(records => {
+				for (const record of records) {
+					if (!(record.target instanceof Element)) continue;
+					if (record.target.matches('.view-overlay-line') && record.removedNodes.length > 0 && record.addedNodes.length > 0) retainedOverlayReplacements++;
+					if (record.target.matches('.stanza-diff-overview-lane')) overviewUpdates++;
+				}
+			});
+			const layoutEvents = window.ashDiffIntegration.layoutEventCount;
+			observer.observe(diff, { childList: true, subtree: true });
+			const intervals = [];
+			const wheelDurations = [];
+			let previous = await nextFrame();
+			try {
+				for (let frame = 0; frame < 90; frame++) {
+					const start = performance.now();
+					editor.dispatchEvent(new WheelEvent('wheel', { deltaY: frame < 45 ? 40 : -40, bubbles: true, cancelable: true }));
+					wheelDurations.push(performance.now() - start);
+					const now = await nextFrame();
+					intervals.push(now - previous);
+					previous = now;
+				}
+				await nextFrame();
+				output.push({
+					intervals,
+					wheelDurations,
+					retainedOverlayReplacements,
+					overviewUpdates,
+					layoutEvents: window.ashDiffIntegration.layoutEventCount - layoutEvents,
+					finalTop: window.ashDiffIntegration.linePositions(1, 1).modifiedScrollTop,
+				});
+			} finally {
+				observer.disconnect();
+			}
+		}
+		return output;
+	});
+	await testInfo.attach('diff-scroll-samples', { body: JSON.stringify(samples, null, 2), contentType: 'application/json' });
+	for (const sample of samples) {
+		expect(sample.finalTop).toBe(400);
+		expect(sample.layoutEvents).toBe(0);
+		expect(sample.overviewUpdates).toBe(0);
+		expect(sample.retainedOverlayReplacements).toBe(0);
+	}
+});
+
 test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.ashDiffIntegration?.dispose());
 });

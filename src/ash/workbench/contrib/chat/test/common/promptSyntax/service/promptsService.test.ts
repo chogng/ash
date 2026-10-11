@@ -103,6 +103,7 @@ for (const reason of ['token', 'catalog', 'window'] as const) {
 }
 
 class Picker extends Disposable implements IQuickPick<IQuickPickItem> {
+	sortByLabel = true;
 	readonly accepted = this._register(new Emitter<IQuickPickItem>());
 	readonly hidden = this._register(new Emitter<void>());
 	readonly onDidAccept = this.accepted.event;

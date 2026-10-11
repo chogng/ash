@@ -33,6 +33,7 @@ export interface IKeyMods {
 export interface IQuickPickItemButton {
 	readonly id: string;
 	readonly label: string;
+	readonly iconClass?: string;
 }
 
 export interface IQuickInputSelection {
@@ -60,6 +61,8 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>;
 
 	items: readonly (TItem | IQuickPickSeparator)[];
+	/** Disable search sorting when the provider owns item order and grouping. */
+	sortByLabel: boolean;
 	busy?: boolean;
 	canAcceptInBackground?: boolean;
 	readonly keyMods?: IKeyMods;

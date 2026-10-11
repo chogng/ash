@@ -113,6 +113,8 @@ const secondOriginal = resources.add(new TextModel('one\n'));
 const secondModified = resources.add(new TextModel('one'));
 const second = resources.add(new DiffModel({ original: secondOriginal, modified: secondModified, diffProvider: computation, diffOptions }));
 const single = resources.add(editorServices.createInstance(DiffEditorWidget, { container: document.getElementById('single')!, model }));
+let layoutEventCount = 0;
+resources.add(single.modifiedEditor.onDidLayoutChange(() => layoutEventCount++));
 const multi = resources.add(editorServices.createInstance(MultiDiffEditorWidget, {
 	container: document.getElementById('multi')!,
 	model: resources.add(new MultiDiffEditorModel([
@@ -449,6 +451,7 @@ const harness = {
 	},
 	undo(): void { modified.undo(); },
 	scrollModified(top: number): void { single.modifiedEditor.setScrollTop(top); },
+	get layoutEventCount(): number { return layoutEventCount; },
 	setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean, inlineBreakpoint: number): void {
 		single.setViewMode(renderSideBySide, useInlineViewWhenSpaceIsLimited, inlineBreakpoint);
 	},

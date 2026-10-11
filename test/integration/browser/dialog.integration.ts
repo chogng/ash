@@ -7,17 +7,23 @@ import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { MenuId, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
-import { CommandRegistry } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import type { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import type { IQuickPick, IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/quickaccess/browser/commandsQuickAccess.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
-import { DialogSeverity, type IDialogOutcome } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { DialogSeverity, IDialogService, type IDialogOutcome } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
 
 declare global {
@@ -116,9 +122,17 @@ window.ashDialogIntegration = {
 			onDidUpdateKeybindings: Event.None,
 		} as unknown as IKeybindingService;
 		const editors = commandResources.add(services.createInstance(StandaloneCodeEditorService));
-		const provider = new CommandsQuickAccessProvider(commands, new MenuService(commands, contexts), keybindings, dialogs, editors);
+		services.registerInstance(ICommandService, commands);
+		services.registerInstance(IMenuService, new MenuService(commands, contexts));
+		services.registerInstance(IKeybindingService, keybindings);
+		services.registerInstance(IDialogService, dialogs);
+		services.registerInstance(ICodeEditorService, editors);
+		services.registerInstance(IConfigurationService, commandResources.add(new InMemoryConfigurationService()));
+		services.registerInstance(IStorageService, commandResources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'dialog', flushInterval: 0 })));
+		const provider = services.createInstance(CommandsQuickAccessProvider);
 		const accept = commandResources.add(new Emitter<IQuickPickItem>());
 		const picker = {
+			value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
 			items: [] as readonly IQuickPickItem[],
 			onDidAccept: accept.event,
 			hide() { },

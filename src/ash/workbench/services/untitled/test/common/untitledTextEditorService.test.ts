@@ -327,6 +327,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	readonly onDidHide = this.hideEmitter.event;
 	readonly onDidBlur = Event.None;
 	readonly onDidTriggerItemButton = Event.None;
+	sortByLabel = true;
 	items: readonly TItem[] = [];
 	ariaLabel = '';
 	placeholder = "";

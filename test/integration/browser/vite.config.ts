@@ -11,6 +11,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				quickAccess: resolve(import.meta.dirname, 'quickAccess.html'),
 				appTools: resolve(import.meta.dirname, "appTools.html"),
 				browserView: resolve(import.meta.dirname, "browserView.html"),
 				composite: resolve(import.meta.dirname, 'composite.html'),
