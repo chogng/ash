@@ -3,6 +3,9 @@ import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/actionbar/actionbar.css';
 import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
 import '../../../src/ash/base/browser/ui/menu/menu.css';
+import '../../../src/ash/base/browser/ui/dialog/dialog.css';
+import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
+import '../../../src/ash/base/browser/ui/toggle/toggle.css';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import '../../../src/ash/workbench/contrib/scm/browser/quickDiff.contribution.js';
@@ -33,7 +36,7 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
-import { MenusRegistry, MenuId, IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { MenusRegistry, MenuId, IMenuService, registerAction2 } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
@@ -56,11 +59,24 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
+import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { isEditorPaneWithViewState } from '../../../src/ash/workbench/browser/parts/editor/editorWithViewState.js';
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { CodeEditorService } from '../../../src/ash/workbench/services/editor/browser/codeEditorService.js';
+import { IEditorPartsService } from '../../../src/ash/workbench/browser/parts/editor/editorParts.js';
+import { MultiDiffGoToFileAction } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorActions.js';
+import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
+import { IGitService, type GitStatus, type GitIndexDiff, type GitIndexSelection } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
+import { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
+import { TextFileContentSource } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { createGitMultiDiffEditorInput } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { createMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
@@ -135,6 +151,37 @@ const sessionChanges = resources.add(new Emitter<{ sessionId: string; threadId: 
 let sessionServices: ReturnType<typeof editorServices.createChild> | undefined;
 let titleEditor: EditorPart | undefined;
 let titleConfiguration: InMemoryConfigurationService | undefined;
+let titleServices: ReturnType<typeof createTestEditorServices> | undefined;
+const titleGitEvents = resources.add(new Emitter<GitStatus>());
+let titleGitStatus: GitStatus;
+let titleGitDelay = 0;
+const inspectedFiles: string[] = [];
+const gitGutterCalls: unknown[] = [];
+const titleGit = {
+	onDidChangeRepositoryStatus: titleGitEvents.event,
+	status: async () => titleGitStatus,
+	changeFile: async (path: string) => {
+		const revision = titleGitStatus.revision;
+		const delay = titleGitDelay;
+		if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+		return { original: { kind: 'text', text: 'before\nshared' }, modified: { kind: 'text', text: `${path} revision ${revision}\nshared` } };
+	},
+	indexDiff: async (path: string) => ({ original: 'before\nshared', modified: `${path} revision ${titleGitStatus.revision}\nshared`, hunks: [] }),
+	editIndex: async (path: string, comparison: string, reviewed: GitIndexDiff, selection: GitIndexSelection, repositoryId: string) => {
+		gitGutterCalls.push({ path, comparison, reviewed, selection, repositoryId });
+		return titleGitStatus;
+	},
+} as unknown as IGitService;
+function makeTitleGitStatus(paths: readonly string[], revision: number, repositoryId = 'repo'): GitStatus {
+	return {
+		repositoryId, streamInstanceId: 'stream', revision, historyRevision: 1, workspacePath: '/workspace',
+		head: { type: 'branch', name: 'main', objectId: 'abc', upstream: undefined },
+		changes: paths.map(path => ({
+			path, originalPath: undefined, indexStatus: 'unmodified', worktreeStatus: 'modified', conflicted: false,
+			submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false }
+		})),
+	};
+}
 let titleTheme: TestThemeService | undefined;
 let focusedHistoryView: string | undefined;
 
@@ -176,7 +223,7 @@ function createSessionChangesPane(): SessionChangesEditor {
 }
 
 const harness = {
-	async openTitleComparison(kind: 'diff' | 'history' = 'diff'): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' | 'git' = 'diff'): Promise<void> {
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
 		host.id = 'title-comparison';
@@ -184,12 +231,39 @@ const harness = {
 		resources.add(toDisposable(() => host.remove()));
 		titleConfiguration = resources.add(new InMemoryConfigurationService());
 		const services = resources.add(createTestEditorServices(titleConfiguration));
+		titleServices = services;
+		if (kind === 'git') {
+			await import('../../../src/ash/workbench/contrib/git/browser/git.contribution.js');
+			services.registerInstance(IGitService, titleGit);
+			services.registerInstance(INotificationService, { error: (message: string) => gitGutterCalls.push({ error: message }), info: () => { } } as unknown as INotificationService);
+			services.registerInstance(ITextFileService, {
+				onDidChangeFiles: Event.None, onDidSave: Event.None,
+				resolve: async request => ({ resource: request.resource, text: `src/first.ts revision ${titleGitStatus.revision}\nshared`, revision: 'file-revision', encoding: 'utf8', source: TextFileContentSource.FileSystem }),
+				save: async request => { gitGutterCalls.push({ save: request }); return { revision: 'saved' }; },
+			});
+		}
+		services.registerInstance(IEditorPartsService, {
+			get activePane() { return titleEditor?.activePane; },
+			openEditor: (input, options, target) => titleEditor!.openEditor(input, options, target),
+		} as IEditorPartsService);
+		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+		resources.add(registerAction2(MultiDiffGoToFileAction));
+		resources.add(CommandsRegistry.register('integration.inspectMultiDiffFile', (_accessor, input: unknown) => {
+			inspectedFiles.push((input as { resource: URI; }).resource.toString());
+		}));
+		resources.add(MenusRegistry.appendMenuItem(MenuId.MultiDiffEditorFileToolbar, {
+			command: { id: 'integration.inspectMultiDiffFile', title: 'Inspect File' },
+			when: ContextKeyExpr.equals('resource', 'file:///workspace/src/first.ts'),
+			group: 'navigation', order: 23,
+		}));
 		services.registerSingleton(ICommandService, () => resources.add(new CommandService(services)));
 		services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
 		services.registerSingleton(IEditorPart, () => titleEditor!);
 		services.registerSingleton(IEditorService, () => resources.add(new BrowserEditorService(titleEditor!)));
 		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(DiffEditorCommandsService));
-		services.registerInstance(IDialogService, resources.add(new DialogService()));
+		const dialogs = resources.add(new DialogService());
+		services.registerInstance(IDialogService, dialogs);
+		resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 		registerCodeEditorServices(services);
 		services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 		const contexts = services.get(IContextKeyService);
@@ -216,6 +290,7 @@ const harness = {
 				modelService: models,
 				createComputationService: () => service.createComputationService(),
 				editorService: services.get(IEditorService),
+				gitService: kind === 'git' ? titleGit : undefined,
 				viewsService: {
 					focusView: async (viewId: string) => { focusedHistoryView = viewId; return true; },
 				} as IViewsService,
@@ -229,6 +304,11 @@ const harness = {
 			titleActions: { menuService: services.get(IMenuService), contextMenuProvider: services.get(IContextMenuService) },
 		}));
 		titleEditor.layout({ width: 1000, height: 300 });
+		if (kind === 'git') {
+			titleGitStatus = makeTitleGitStatus(['src/first.ts', 'src/second.ts'], 1);
+			await titleEditor.openEditor(await createGitMultiDiffEditorInput(titleGit, 'unstaged'), { pinned: true });
+			return;
+		}
 		if (kind === 'history') {
 			await titleEditor.openEditor(createMultiDiffEditorInput(
 				URI.parse('ash-multi-diff:/scm-history/repo_internal/parent/98246c6'),
@@ -246,6 +326,30 @@ const harness = {
 			{ resource: URI.file('/title/before.ts'), label: 'before.ts', initialText: 'before\nshared ' },
 			{ resource: URI.file('/title/after.ts'), label: 'after.ts', initialText: 'after\nshared' },
 		), { pinned: true });
+	},
+	get gitGutterCalls() { return gitGutterCalls; },
+	expireGitGutterSnapshot(): void { titleGitStatus = { ...titleGitStatus, revision: titleGitStatus.revision + 1 }; },
+	async updateTitleEditorConfiguration(key: string, value: unknown): Promise<void> {
+		await titleConfiguration!.updateValue(key, value);
+	},
+	updateTitleGit(paths: string[], revision: number, delay = 0, repositoryId = 'repo'): void {
+		titleGitDelay = delay;
+		titleGitStatus = makeTitleGitStatus(paths, revision, repositoryId);
+		titleGitEvents.fire(titleGitStatus);
+	},
+	readMultiDiffFoundation(): { active: string | undefined; activeCodeEditor: boolean; contents: string[]; fonts: number[]; lines: number[]; inspected: string[]; state: unknown; } {
+		const pane = titleEditor?.activePane;
+		const service = titleServices!.get(ICodeEditorService);
+		const editors = service.listDiffEditors().map(editor => editor.getModifiedEditor());
+		return {
+			active: pane instanceof MultiDiffEditor ? pane.getActiveDiffItem()?.label : undefined,
+			activeCodeEditor: service.getActiveCodeEditor() !== null && pane instanceof MultiDiffEditor && service.getActiveCodeEditor() === pane.getControl()?.getModifiedEditor(),
+			contents: editors.map(editor => editor.getModel()!.getValue()),
+			fonts: editors.map(editor => editor.getOption(EditorOption.fontInfo).fontSize),
+			lines: editors.map(editor => editor.getOption(EditorOption.lineHeight)),
+			inspected: [...inspectedFiles],
+			state: pane instanceof MultiDiffEditor ? pane.saveViewState() : null,
+		};
 	},
 	setTitleTheme(themeId: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light'): void {
 		const themes = { vs: lightColorTheme, 'vs-dark': darkColorTheme, 'hc-black': highContrastDarkColorTheme, 'hc-light': highContrastLightColorTheme };

@@ -77,6 +77,7 @@ export interface IDisposableTracker {
 }
 
 let disposableTracker: IDisposableTracker | undefined;
+const singletonDisposables = new WeakSet<TrackableDisposable>();
 
 /** @internal */
 export function registerDisposableTracker(
@@ -135,7 +136,10 @@ export function markAsDisposed(disposable: TrackableDisposable): void {
 
 /** Excludes a process-lifetime root and its registered descendants from leak reports. */
 export function markAsSingleton<T extends IDisposable>(singleton: T): T {
-	if (!isNoneDisposable(singleton)) disposableTracker?.markAsSingleton(singleton);
+	if (!isNoneDisposable(singleton)) {
+		singletonDisposables.add(singleton);
+		disposableTracker?.markAsSingleton(singleton);
+	}
 	return singleton;
 }
 
@@ -180,7 +184,7 @@ export class DisposableTracker implements IDisposableTracker {
 			label,
 			createdAt: captureCreationStack(),
 			children: new Set(),
-			isSingleton: false,
+			isSingleton: singletonDisposables.has(disposable),
 		});
 	}
 

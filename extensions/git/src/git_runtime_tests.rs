@@ -125,13 +125,16 @@ fn failed_commit_preserves_original_error_with_poisoned_graph_cache() {
         std::fs::read_to_string(repository.root().join("tracked.txt")).unwrap(),
         "changed\n"
     );
-    // The owner accepts the snapshot before cache invalidation can prevent its notification.
+    // Index-only failure recovery does not touch the broken, unrelated history cache.
     let accepted =
         serde_json::to_value(owner.state.lock().unwrap().status.as_ref().unwrap()).unwrap();
     assert_eq!(accepted["revision"], initial.revision + 1);
     assert_eq!(accepted["changes"][0]["indexStatus"], "added");
     assert_eq!(accepted["changes"][1]["indexStatus"], "modified");
-    assert!(queue.drain().is_empty());
+    assert_eq!(accepted["historyRevision"], initial.history_revision);
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0]["params"]["status"], accepted);
     assert!(owner.graph_sessions.is_poisoned());
 }
 
@@ -149,6 +152,7 @@ fn successful_commit_reports_poisoned_graph_cache_invalidation() {
         Arc::new(UpdateBroker::default()),
     )
     .unwrap();
+    runtime.status().unwrap();
     let owner = runtime.repository(None).unwrap();
     poison_graph_cache(&owner);
 
@@ -651,7 +655,9 @@ fn worktree_and_index_changes_preserve_history_revision_and_graph_cursor() {
         let status = match mutation {
             0 => runtime.status().unwrap(),
             1 => runtime.stage(vec![PathBuf::from("tracked.txt")]).unwrap(),
-            2 => runtime.unstage(vec![PathBuf::from("tracked.txt")]).unwrap(),
+            2 => runtime
+                .unstage_for(None, vec![PathBuf::from("tracked.txt")])
+                .unwrap(),
             _ => unreachable!(),
         };
         assert!(status.revision > previous.revision);
@@ -659,17 +665,49 @@ fn worktree_and_index_changes_preserve_history_revision_and_graph_cursor() {
         assert_eq!(status.head, initial.head);
         let notifications = queue.drain();
         assert_eq!(notifications.len(), 1);
-        assert_eq!(notifications[0]["params"]["status"]["historyRevision"], initial.history_revision);
+        assert_eq!(
+            notifications[0]["params"]["status"]["historyRevision"],
+            initial.history_revision
+        );
         let cursor = page.next_cursor.unwrap();
         page = runtime.graph(1, limit, Some(&cursor)).unwrap();
         previous = status;
     }
     assert!(!page.has_more);
     let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    let fetched = runtime
+        .fetch(&ash_async_utils::CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(fetched.history_revision, initial.history_revision);
+    assert!(runtime.graph(1, limit, Some(&cursor)).is_ok());
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
     runtime.stage(vec![PathBuf::from("tracked.txt")]).unwrap();
-    let committed = runtime.commit_for(None, GitCommitRequest::new("fifth".into()).unwrap()).unwrap();
+    repository.git(&["config", "user.name", ""]);
+    repository.git(&["config", "user.email", ""]);
+    assert!(
+        runtime
+            .commit_for(None, GitCommitRequest::new("failed".into()).unwrap())
+            .is_err()
+    );
+    assert_eq!(
+        runtime.status().unwrap().history_revision,
+        initial.history_revision
+    );
+    assert!(
+        runtime.graph(1, limit, Some(&cursor)).is_ok(),
+        "A failed commit that only staged files preserves history"
+    );
+    repository.git(&["config", "user.name", "History Test"]);
+    repository.git(&["config", "user.email", "history@example.invalid"]);
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    let committed = runtime
+        .commit_for(None, GitCommitRequest::new("fifth".into()).unwrap())
+        .unwrap();
     assert!(committed.status.history_revision > initial.history_revision);
-    assert!(matches!(runtime.graph(1, limit, Some(&cursor)), Err(super::GitRuntimeError::InvalidGraphCursor)));
+    assert!(matches!(
+        runtime.graph(1, limit, Some(&cursor)),
+        Err(super::GitRuntimeError::InvalidGraphCursor)
+    ));
 }
 
 #[test]
@@ -759,7 +797,10 @@ fn external_ref_and_remote_changes_publish_without_head_or_file_changes() {
         assert_eq!(status.head, initial.head);
         assert_eq!(status.changes, initial.changes);
         assert_eq!(status.revision, initial.revision + index as u64 + 1);
-        assert_eq!(status.history_revision, initial.history_revision + index as u64 + 1);
+        assert_eq!(
+            status.history_revision,
+            initial.history_revision + index as u64 + 1
+        );
         let notifications = first.drain();
         assert_eq!(notifications, second.drain());
         assert_eq!(notifications.len(), 1);

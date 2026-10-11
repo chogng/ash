@@ -1,6 +1,8 @@
 import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 
 export namespace EditorContextKeys {
+	export const diffEditorOriginalUri = new RawContextKey<string>('diffEditorOriginalUri', '');
+	export const diffEditorModifiedUri = new RawContextKey<string>('diffEditorModifiedUri', '');
 	export const standaloneColorPickerVisible = new RawContextKey<boolean>('standaloneColorPickerVisible', false);
 	export const standaloneColorPickerFocused = new RawContextKey<boolean>('standaloneColorPickerFocused', false);
 	export const stickyScrollFocused = new RawContextKey<boolean>('stickyScrollFocused', false);

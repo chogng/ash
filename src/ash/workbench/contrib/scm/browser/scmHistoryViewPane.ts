@@ -184,8 +184,12 @@ export class SCMHistoryViewPane extends ViewPane {
 		try {
 			await operation?.();
 			if (this.isDisposed || this.titleOperation !== owner) return;
-			this.provider?.refresh();
-			await this.refresh();
+			// Operations publish effective history changes through the provider.
+			// Only an explicit refresh bypasses its cached history.
+			if (!operation) {
+				this.provider?.refresh();
+				await this.refresh();
+			}
 		} finally {
 			if (!this.isDisposed && this.titleOperation === owner) {
 				this.titleOperation = undefined;

@@ -381,13 +381,15 @@ impl GitRuntime {
         let _operation = lock_operation_for_request(&runtime.operation, cancellation)
             .map_err(GitRuntimeError::Service)?;
         let outcome = runtime.service.command(command, cancellation);
-        runtime.invalidate_graphs()?;
         // A failed or cancelled Git invocation may already have written index or refs. Publish
         // its actual state before returning the failure so every renderer can inspect it.
-        let (repository, snapshot) = runtime
-            .service
-            .snapshot()
-            .map_err(GitRuntimeError::Service)?;
+        let (repository, snapshot) = match runtime.service.snapshot() {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                let _ = runtime.invalidate_graphs();
+                return Err(GitRuntimeError::Service(error));
+            }
+        };
         let status = runtime.accept_status(repository, snapshot, StatusNotification::Always)?;
         let outcome = outcome.map_err(GitRuntimeError::Service)?;
         let operation = runtime
@@ -1219,16 +1221,17 @@ impl GitRepositoryRuntime {
             repository,
             snapshot,
         } = match committed {
-            Ok(committed) => {
-                self.invalidate_graphs()?;
-                committed
-            }
+            Ok(committed) => committed,
             Err(error) => {
-                // Staging can succeed before commit creation fails. Cache invalidation and
-                // actual status publication must not replace that original failure.
-                let _ = self.invalidate_graphs();
-                if let Ok((repository, snapshot)) = self.service.snapshot() {
-                    let _ = self.accept(repository, snapshot);
+                // Staging can succeed before commit creation fails. Publish its state
+                // without discarding history unless refs changed or cannot be observed.
+                match self.service.snapshot() {
+                    Ok((repository, snapshot)) => {
+                        let _ = self.accept(repository, snapshot);
+                    }
+                    Err(_) => {
+                        let _ = self.invalidate_graphs();
+                    }
                 }
                 return Err(GitRuntimeError::Service(error));
             }
@@ -1351,7 +1354,8 @@ impl GitRepositoryRuntime {
                 // preserving the original error even if recovery itself fails.
                 match self.service.snapshot() {
                     Ok((repository, snapshot)) => {
-                        let _ = self.accept_status(repository, snapshot, StatusNotification::Always);
+                        let _ =
+                            self.accept_status(repository, snapshot, StatusNotification::Always);
                     }
                     Err(_) => {
                         let _ = self.invalidate_graphs();

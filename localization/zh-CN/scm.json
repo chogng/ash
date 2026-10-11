@@ -359,7 +359,18 @@
     "git.committing": "正在提交选定的更改…",
     "git.commitCreated": "已创建提交 {0}。{1}",
     "git.undoMessageRestored": "已撤销上次提交。其信息已恢复到源代码管理输入框，可继续编辑。",
-    "git.undoDraftKept": "已撤销上次提交，并保留当前源代码管理草稿。"
+    "git.undoDraftKept": "已撤销上次提交，并保留当前源代码管理草稿。",
+    "git.diff.stageHunk": "暂存更改",
+    "git.diff.stageSelection": "暂存选中行",
+    "git.diff.unstageHunk": "取消暂存更改",
+    "git.diff.unstageSelection": "取消暂存选中行",
+    "git.diff.revertHunk": "还原更改",
+    "git.diff.revertSelection": "还原选中的更改",
+    "git.diff.noWorktree": "此更改没有可编辑的工作树文件。",
+    "git.diff.dirtyWorktree": "请先保存或还原已打开的文件，再还原此更改。",
+    "git.diff.revertConfirm": "是否还原 {0} 中选中的更改？",
+    "git.diff.revertButton": "还原更改",
+    "git.diff.contiguousSelection": "请选择一个连续的更改块来暂存或取消暂存选中行。"
   },
   "ash.workbench": {
     "command.scm.quickDiff.next": "转到下一个快速差异更改",

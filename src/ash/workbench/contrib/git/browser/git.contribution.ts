@@ -49,6 +49,13 @@ import { ActiveEditorContext, AppServerAvailableContext, BrowserLocalFolderSuppo
 import { IsNativeContext } from '../../../../platform/contextkey/common/contextkeys.js';
 import { IOutputService } from '../../../services/output/common/output.js';
 import { GitCloneCommandId } from '../common/gitCommands.js';
+import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
+import { DetailedLineRangeMapping } from '../../../../editor/common/diff/rangeMapping.js';
+import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+import type { DiffEditorSelectionHunkToolbarContext } from '../../../../editor/browser/widget/diffEditor/features/gutterFeature.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { ITextFileService } from '../../../services/textfile/common/textfiles.js';
+import { repositoryFileUri } from './gitChangeEditorInput.js';
 
 const noWorkspaceFolders = WorkspaceFolderCountContext.isEqualTo(0);
 ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
@@ -685,6 +692,128 @@ for (const definition of [
 			}
 		}
 	});
+}
+
+for (const definition of [
+	{ id: 'git.diff.stageHunk', title: localize2('git.diff.stageHunk', 'Stage Change'), comparison: 'unstaged', menu: MenuId.DiffEditorHunkToolbar, icon: Lxicon.add, revert: false },
+	{ id: 'git.diff.stageSelection', title: localize2('git.diff.stageSelection', 'Stage Selected Lines'), comparison: 'unstaged', menu: MenuId.DiffEditorSelectionToolbar, icon: Lxicon.add, revert: false },
+	{ id: 'git.diff.unstageHunk', title: localize2('git.diff.unstageHunk', 'Unstage Change'), comparison: 'staged', menu: MenuId.DiffEditorHunkToolbar, icon: Lxicon.remove, revert: false },
+	{ id: 'git.diff.unstageSelection', title: localize2('git.diff.unstageSelection', 'Unstage Selected Lines'), comparison: 'staged', menu: MenuId.DiffEditorSelectionToolbar, icon: Lxicon.remove, revert: false },
+	{ id: 'git.diff.revertHunk', title: localize2('git.diff.revertHunk', 'Revert Change'), comparison: 'unstaged', menu: MenuId.DiffEditorHunkToolbar, icon: Lxicon.arrowRight, revert: true },
+	{ id: 'git.diff.revertSelection', title: localize2('git.diff.revertSelection', 'Revert Selected Changes'), comparison: 'unstaged', menu: MenuId.DiffEditorSelectionToolbar, icon: Lxicon.arrowRight, revert: true },
+] as const) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			const resource = new RegExp(`^git-change:/${definition.comparison}/`);
+			super({
+				id: definition.id,
+				title: definition.title,
+				icon: definition.icon,
+				menu: {
+					id: definition.menu,
+					group: 'primary',
+					order: definition.revert ? 0 : 10,
+					when: ContextKeyExpr.and(ContextKeyExpr.regex(EditorContextKeys.diffEditorOriginalUri.key, resource), ContextKeyExpr.regex(EditorContextKeys.diffEditorModifiedUri.key, resource)),
+				},
+			});
+		}
+
+		public override async run(accessor: ServicesAccessor, rawContext: unknown): Promise<void> {
+			try {
+				await runDiffChange(accessor, rawContext, definition.comparison, definition.revert ? 'revert' : 'index');
+			} catch (error) {
+				accessor.get(INotificationService).error(localize('git.commandFailed', 'Git operation failed: {0}', gitErrorMessage(error)));
+			}
+		}
+	});
+}
+
+async function runDiffChange(accessor: ServicesAccessor, rawContext: unknown, comparison: GitChangeFileComparison, operation: 'revert' | 'index'): Promise<void> {
+	const context = rawContext as Partial<DiffEditorSelectionHunkToolbarContext> | undefined;
+	if (!(context?.originalUri instanceof URI) || !(context.modifiedUri instanceof URI) || !(context.mapping instanceof DetailedLineRangeMapping)) {
+		throw new TypeError('Git diff actions require a change toolbar context');
+	}
+	const originalUri = context.originalUri;
+	const modifiedUri = context.modifiedUri;
+	const mapping = context.mapping;
+	const query = new URLSearchParams(modifiedUri.query);
+	const originalQuery = new URLSearchParams(originalUri.query);
+	const repositoryId = query.get('repository');
+	if (!repositoryId || originalUri.scheme !== 'git-change' || modifiedUri.scheme !== 'git-change'
+		|| !originalUri.path.startsWith(`/${comparison}/`) || !modifiedUri.path.startsWith(`/${comparison}/`)
+		|| query.get('side') !== 'modified' || originalQuery.get('side') !== 'original'
+		|| originalQuery.get('repository') !== repositoryId || originalQuery.get('stream') !== query.get('stream') || originalQuery.get('revision') !== query.get('revision')) {
+		throw new Error(localize('git.reopenComparison', 'Open the current comparison from Source Control before selecting lines.'));
+	}
+	const editor = accessor.get(ICodeEditorService).listDiffEditors().find(candidate => candidate instanceof DiffEditorWidget
+		&& extUriBiasedIgnorePathCase.isEqual(candidate.originalEditor.getModel()?.uri, originalUri)
+		&& extUriBiasedIgnorePathCase.isEqual(candidate.modifiedEditor.getModel()?.uri, modifiedUri)) as DiffEditorWidget | undefined;
+	const changes = editor?.diff?.changes;
+	const isCurrentMapping = () => editor?.diff?.changes === changes && (changes?.includes(mapping)
+		|| (mapping.innerChanges && mapping.innerChanges.length > 0 && mapping.innerChanges.every(range => changes?.some(change => change.innerChanges?.includes(range)))));
+	if (!editor || !isCurrentMapping()) {
+		throw new Error(localize('git.reopenComparison', 'Open the current comparison from Source Control before selecting lines.'));
+	}
+	const original = editor.originalEditor.getModel()!;
+	const modified = editor.modifiedEditor.getModel()!;
+	const originalText = original.getValue();
+	const modifiedText = modified.getValue();
+	const git = accessor.get(IGitService);
+	const status = await git.status(repositoryId);
+	if (query.get('stream') !== status.streamInstanceId || query.get('revision') !== String(status.revision)) {
+		throw new Error(localize('git.reopenComparison', 'Open the current comparison from Source Control before selecting lines.'));
+	}
+	const path = modifiedUri.path.slice(comparison.length + 2).split('/').map(decodeURIComponent).join('/');
+	const reviewed = await git.indexDiff(path, comparison, repositoryId);
+	if (!isCurrentMapping() || (reviewed.original ?? '') !== originalText || (reviewed.modified ?? '') !== modifiedText) {
+		throw new Error(localize('git.reopenComparison', 'Open the current comparison from Source Control before selecting lines.'));
+	}
+	if (operation === 'revert') {
+		const resource = query.get('resource');
+		if (!resource || !mapping.innerChanges?.length) {
+			throw new Error(localize('git.diff.noWorktree', 'This change has no editable working tree file.'));
+		}
+		const target = URI.parse(resource);
+		if (!extUriBiasedIgnorePathCase.isEqual(target, repositoryFileUri(status.workspacePath, path))) {
+			throw new Error(localize('git.diff.noWorktree', 'This change has no editable working tree file.'));
+		}
+		const workingCopies = accessor.get(IWorkingCopyService);
+		const hasDirtyCopy = () => workingCopies.get(target).some(copy => copy.isDirty);
+		if (hasDirtyCopy()) {
+			throw new Error(localize('git.diff.dirtyWorktree', 'Save or revert the open file before reverting this change.'));
+		}
+		const files = accessor.get(ITextFileService);
+		const signal = new AbortController().signal;
+		const file = await files.resolve({ resource: target }, signal);
+		const answer = await accessor.get(IDialogService).confirm({ message: localize('git.diff.revertConfirm', 'Revert the selected changes in {0}?', path), primaryButton: localize('git.diff.revertButton', 'Revert Changes') });
+		if (!answer.confirmed) {
+			return;
+		}
+		if (file.text !== modifiedText || !file.revision || hasDirtyCopy() || !isCurrentMapping()) {
+			throw new Error(localize('git.reopenComparison', 'Open the current comparison from Source Control before selecting lines.'));
+		}
+		let text = modifiedText;
+		const edits = mapping.innerChanges.map(range => ({
+			start: modified.getOffsetAt(range.modifiedRange.getStartPosition()),
+			end: modified.getOffsetAt(range.modifiedRange.getEndPosition()),
+			text: original.getValueInRange(range.originalRange),
+		})).sort((left, right) => right.start - left.start);
+		for (const edit of edits) {
+			text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
+		}
+		await files.save({ resource: target, text, encoding: file.encoding, expectedRevision: file.revision }, signal);
+		await git.status(repositoryId);
+		return;
+	}
+	const lastLine = modified.getLineCount();
+	const start = Math.min(lastLine, mapping.modified.startLineNumber);
+	const end = Math.min(lastLine, Math.max(start, mapping.modified.endLineNumberExclusive - 1));
+	// The index service selects whole lines. Never fill gaps between disjoint selected changes.
+	if (!changes?.includes(mapping) && changes?.some(change => change.modified.startLineNumber <= end
+		&& change.modified.endLineNumberExclusive >= start && change.innerChanges?.some(range => !mapping.innerChanges?.includes(range)))) {
+		throw new Error(localize('git.diff.contiguousSelection', 'Select one continuous change block to stage or unstage selected lines.'));
+	}
+	await git.editIndex(path, comparison, reviewed, { kind: 'lines', start, end }, repositoryId);
 }
 
 async function runIndexSelection(accessor: ServicesAccessor, comparison: GitChangeFileComparison, mode: 'hunk' | 'lines'): Promise<void> {

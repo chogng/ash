@@ -143,7 +143,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.diffViewZones = this._register(instantiationService.createInstance(DiffEditorViewZones, this.originalEditor, this.modifiedEditor, this.model));
 		this.overviewRuler = this._register(new OverviewRulerFeature(this.element, this.originalEditor, this.modifiedEditor));
 		this.revertButtons = this._register(new RevertButtonsFeature(this.modifiedEditor, this.model, this));
-		this.gutter = this._register(instantiationService.createInstance(DiffEditorGutter, this.element, this.modifiedEditor, this.model,
+		this.gutter = this._register(instantiationService.createInstance(DiffEditorGutter, this.element, this.modifiedEditor, this.model, this,
 			() => { this.updateFeatures(); this.layout({ width: this.viewportWidth, height: this.viewportHeight }); }));
 		this.movedBlocks = this._register(new MovedBlocksLinesFeature(this.element, this.model, this.originalEditor, this.modifiedEditor, move => {
 			if (move) {
@@ -329,7 +329,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.modifiedEditor.announceAccessibilityStatus(localize('diffEditor.reverted', 'Change reverted'));
 	}
 
-	public revertRangeMappings(changes: RangeMapping[]): void {
+	public revertRangeMappings(changes: readonly RangeMapping[]): void {
 		const diff = this.model.diff;
 		if (!diff || this.movedTextToCompare || this.modifiedEditor.getOption(EditorOption.readOnly)) return;
 		const current = new Set(diff.changes.flatMap(change => change.innerChanges ?? []));
@@ -579,7 +579,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			this.diffDecorations.update(this.model.diff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 			this.overviewRuler.setRows(this.model.diff?.rows ?? []);
 		}
-		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare);
+		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare, { renderRevert: this.diffOptions.renderMarginRevertIcon && !this.inlineView });
 		const marginEnabled = this.diffOptions.renderMarginRevertIcon && this.gutter.width === 0 && !this.movedTextToCompare;
 		this.revertButtons.update(marginEnabled);
 		this.modifiedEditor.updateOptions({ glyphMargin: marginEnabled && !this.modifiedEditor.getOption(EditorOption.readOnly) });

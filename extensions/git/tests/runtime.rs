@@ -16,8 +16,12 @@ use host::GitProviderClient;
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
+
+// The recovery scenario counts this test process's executable children.
+static PROCESS_TEST: Mutex<()> = Mutex::new(());
 
 fn git(root: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
@@ -61,7 +65,91 @@ fn status(client: &GitProviderClient) -> GitStatusResult {
 }
 
 #[test]
+fn executable_keeps_history_pages_across_file_and_index_changes_and_observes_refs() {
+    let _process = PROCESS_TEST.lock().unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(temp.path()).unwrap();
+    git(&root, &["init", "--initial-branch=main"]);
+    git(&root, &["config", "user.name", "Ash Test"]);
+    git(&root, &["config", "user.email", "test@example.invalid"]);
+    git(&root, &["config", "commit.gpgsign", "false"]);
+    for message in ["first", "second", "third", "fourth"] {
+        std::fs::write(root.join("tracked.txt"), message).unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["-c", "core.hooksPath=", "commit", "-m", message]);
+    }
+    let (provider, _grant) = client(&root, Permission::MutateRepository);
+    let initial = status(&provider);
+    let graph = |cursor: Option<String>| {
+        let GitProviderResponse::Graph(page) = provider
+            .call(
+                GitProviderRequest::Graph {
+                    repository_id: None,
+                    connection_id: 1,
+                    limit: std::num::NonZeroUsize::new(1).unwrap(),
+                    cursor,
+                },
+                None,
+            )
+            .unwrap()
+        else {
+            panic!("graph expected")
+        };
+        page
+    };
+    let mut page = graph(None);
+    std::fs::write(root.join("tracked.txt"), "worktree edit\n").unwrap();
+    let edited = status(&provider);
+    assert!(edited.revision > initial.revision);
+    assert_eq!(edited.history_revision, initial.history_revision);
+    page = graph(page.next_cursor);
+    for request in [
+        GitProviderRequest::Stage {
+            repository_id: None,
+            paths: vec!["tracked.txt".into()],
+        },
+        GitProviderRequest::Unstage {
+            repository_id: None,
+            paths: vec!["tracked.txt".into()],
+        },
+    ] {
+        let GitProviderResponse::Status(changed) = provider.call(request, None).unwrap() else {
+            panic!("status expected")
+        };
+        assert_eq!(changed.history_revision, initial.history_revision);
+        assert_eq!(changed.head, initial.head);
+        page = graph(page.next_cursor);
+    }
+    assert!(!page.has_more);
+    let old_cursor = graph(None).next_cursor;
+    git(&root, &["tag", "external-tag"]);
+    let tagged = status(&provider);
+    assert_eq!(tagged.head, initial.head);
+    assert!(tagged.history_revision > initial.history_revision);
+    assert!(matches!(
+        provider.call(
+            GitProviderRequest::Graph {
+                repository_id: None,
+                connection_id: 1,
+                limit: std::num::NonZeroUsize::new(1).unwrap(),
+                cursor: old_cursor,
+            },
+            None
+        ),
+        Err(GitProviderError::InvalidGraphCursor)
+    ));
+    assert!(
+        graph(None)
+            .references
+            .iter()
+            .any(|reference| reference.name == "external-tag")
+    );
+    provider.shutdown();
+}
+
+#[test]
 fn executable_preserves_git_contracts_cancellation_recovery_and_revocation() {
+    let _process = PROCESS_TEST.lock().unwrap();
     let temp = tempfile::tempdir().unwrap();
     let root = dunce::canonicalize(temp.path()).unwrap();
     git(&root, &["init", "--initial-branch=main"]);

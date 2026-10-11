@@ -50,6 +50,7 @@ function changeEditorInput(content: GitCommitFileContent, resource: URI, label: 
 function changeFileUri(status: GitStatus, comparison: GitChangeFileComparison, path: string, side: 'original' | 'modified', workingResource: URI | undefined): URI {
 	const encodedPath = path.split('/').map(encodeURIComponent).join('/');
 	const query = new URLSearchParams({
+		repository: status.repositoryId,
 		side,
 		stream: status.streamInstanceId,
 		revision: String(status.revision),

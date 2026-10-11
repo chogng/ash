@@ -13,6 +13,50 @@ import { GitHistoryProvider } from '../../browser/gitHistoryProvider.js';
 import { GitConfiguration } from '../../common/gitConfiguration.js';
 import { GitWorkspaceError } from '../../common/gitService.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+
+test('Git history retires an obsolete query without clearing the replacement query', async () => {
+	let notify!: (event: ServerNotification) => void;
+	let status: GitStatusResult = { repositoryId: 'root', streamInstanceId: 'stream', revision: 1, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'current', upstream: null }, changes: [] };
+	const obsolete = new DeferredPromise<Awaited<ReturnType<IGitApi['graph']>>>();
+	const replacement = new DeferredPromise<Awaited<ReturnType<IGitApi['graph']>>>();
+	const started = [new DeferredPromise<void>(), new DeferredPromise<void>()];
+	let queries = 0;
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }] }),
+		status: async () => status,
+		branches: async () => ({ branches: [] }),
+		graph: () => {
+			started[queries]?.complete();
+			return ++queries === 1 ? obsolete.p : replacement.p;
+		},
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi: IServerEventApi = { subscribe: listener => { notify = listener; return toDisposable(() => undefined); } };
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	await service.listRepositories();
+	using history = new GitHistoryProvider(service, 'root');
+	const stale = history.provideHistoryItems({ limit: 1 }).then(() => assert.fail('The obsolete request should fail'), error => error);
+	await started[0].p;
+	assert.equal(queries, 1);
+	status = { ...status, revision: 2, historyRevision: 2 };
+	notify({ method: 'git/statusChanged', params: { status } });
+	const fresh = history.provideHistoryItems({ limit: 1 });
+	await started[1].p;
+	assert.equal(queries, 2, 'A replacement query starts before the obsolete one completes');
+	await obsolete.error(new Error('Invalidated history cursor'));
+	assert.match((await stale).message, /Invalidated history cursor/);
+	const shared = history.provideHistoryItems({ limit: 1 });
+	assert.equal(queries, 2, 'The obsolete query cannot clear the current in-flight query');
+	await replacement.complete({ commits: [{ objectId: 'current', parentObjectIds: [], timestampSeconds: 1, subject: 'Current' }], references: [], remotes: [], hasMore: false, nextCursor: undefined });
+	const [items, sharedItems] = await Promise.all([fresh, shared]);
+	assert.equal(items[0]?.id, 'current');
+	assert.deepEqual(sharedItems, items);
+	assert.deepEqual(await history.provideHistoryItems({ limit: 1 }), items);
+	assert.equal(queries, 2);
+});
 
 test('Git history retains cached pages for file edits and stage/unstage, and reloads only for history changes', async () => {
 	let notify: (event: ServerNotification) => void = () => { throw new Error('missing subscription'); };
@@ -55,6 +99,9 @@ test('Git history retains cached pages for file edits and stage/unstage, and rel
 	assert.equal(changes, 0);
 	assert.equal(queries.length, 3, 'File/index status does not requery loaded history');
 	assert.equal(branchQueries, 1);
+	await service.listRepositories();
+	await history.provideHistoryItems({ limit: 101 });
+	assert.equal(queries.length, 3, 'Rediscovering unchanged repositories does not reload their history');
 	assert.equal((await history.provideHistoryItems({ skip: 150, limit: 1 }))[0]?.id, 'commit-150');
 	assert.equal(queries.at(-1)?.cursor, '150', 'Pagination continues from the retained cache');
 	for (let revision = 2; revision <= 4; revision++) {

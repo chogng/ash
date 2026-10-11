@@ -75,6 +75,70 @@ for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light'] as const) {
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
+	test(`multi diff updates configuration and uses scoped file menus (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
+		const host = page.locator('#title-comparison');
+		const sections = host.locator('.stanza-multi-diff-editor-section');
+		await expect(sections).toHaveCount(2);
+		await sections.nth(1).locator('.stanza-multi-diff-editor-header-toggle').focus();
+		const files = host.getByRole('button', { name: localized(locale, 'Files', '文件'), exact: true });
+		await files.focus();
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().activeCodeEditor)).toBe(true);
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe('src/second.ts');
+		const inspect = sections.first().getByRole('button', { name: 'Inspect File', exact: true });
+		await expect(inspect).toBeVisible();
+		await expect(sections.nth(1).getByRole('button', { name: 'Inspect File', exact: true })).toHaveCount(0);
+		await inspect.focus();
+		await inspect.press('Enter');
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().inspected)).toEqual(['file:///workspace/src/first.ts']);
+		await page.evaluate(async () => {
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.fontSize', 18);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.lineHeight', 30);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.fontFamily', 'Courier New');
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.fontLigatures', true);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.showLineNumbers', false);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.showInlineChanges', false);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.loopChanges', false);
+		});
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().fonts)).toEqual([18, 18]);
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().lines)).toEqual([30, 30]);
+		await expect(host.locator('.stanza-multi-diff-editor')).toHaveClass(/hide-line-numbers/);
+		await expect(host.locator('.stanza-diff-inline-added, .stanza-diff-inline-removed')).toHaveCount(0);
+		await expect(sections.first().locator('.stanza-editor').first()).toHaveCSS('font-family', /Courier New/);
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/third.ts'], 2));
+		await expect(sections).toHaveCount(3);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().lines)).toEqual([30, 30, 30]);
+	});
+
+	test(`multi diff refreshes live Git without changing tabs or losing file state (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
+		const host = page.locator('#title-comparison');
+		const sections = host.locator('.stanza-multi-diff-editor-section');
+		await expect(sections).toHaveCount(2);
+		await sections.first().locator('.stanza-multi-diff-editor-header-toggle').click();
+		await sections.nth(1).locator('.stanza-multi-diff-editor-header-toggle').focus();
+		const tabs = host.getByRole('tab');
+		const originalTab = await tabs.first().textContent();
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/stale.ts'], 2, 150));
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/latest.ts'], 3));
+		await expect(sections).toHaveCount(3);
+		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText(['src/first.ts', 'src/second.ts', 'src/latest.ts']);
+		await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'false');
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe('src/second.ts');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/second.ts revision 3\nshared', 'src/latest.ts revision 3\nshared']);
+		await expect(tabs).toHaveCount(1);
+		await expect(tabs.first()).toHaveText(originalTab!);
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit([], 4));
+		await expect(sections).toHaveCount(0);
+		await expect(host.locator('.stanza-multi-diff-editor-empty')).toHaveText(localized(locale, 'No changes in this selection.', '此选择中没有更改。'));
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/returned.ts'], 5));
+		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText(['src/returned.ts']);
+		await expect(host.locator('.stanza-multi-diff-editor-empty')).toBeHidden();
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/returned.ts revision 5\nshared']);
+	});
+
 	test(`history multi-diff shows static commit information and preserves keyboard actions (${locale})`, async ({ page }, testInfo) => {
 		await page.setViewportSize({ width: 1200, height: 700 });
 		await openDiffPage(page, locale);
@@ -380,6 +444,74 @@ test('diff feature gutter menus receive hunk and selection edits and follow scro
 	await expect(page.locator('#single .ash-diff-gutter')).toBeHidden();
 	await expect(page.locator('#single .ash-diff-revert')).toHaveCount(1);
 });
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`diff center gutter retains revert alongside contributed actions (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.registerHunkAction());
+		const gutter = page.locator('#single .ash-diff-gutter');
+		const revert = gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true });
+		await expect(revert).toBeVisible();
+		await expect(gutter.getByRole('button', { name: 'Apply change', exact: true })).toBeVisible();
+		await revert.focus();
+		await page.keyboard.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('same\nbefore 😀 after\nlast');
+		await page.evaluate(() => window.ashDiffIntegration.undo());
+		await expect(revert).toBeVisible();
+		await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ renderGutterMenu: false }));
+		await expect(gutter).toBeHidden();
+		await expect(page.locator('#single .ash-diff-revert').getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true })).toBeVisible();
+	});
+
+	test(`Git diff center gutter stages its block and rejects an expired comparison (${locale})`, async ({ page }, testInfo) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
+		const first = page.locator('#title-comparison .stanza-multi-diff-editor-section').first();
+		const gutter = first.locator('.ash-diff-gutter');
+		const stage = gutter.getByRole('button', { name: localized(locale, 'Stage Change', '暂存更改'), exact: true });
+		const revert = gutter.getByRole('button', { name: localized(locale, 'Revert Change', '还原更改'), exact: true });
+		await expect(stage).toBeVisible();
+		await expect(revert).toBeVisible();
+		const bounds = await first.evaluate(node => {
+			const original = node.querySelector('.stanza-diff-editor-side.original')!.getBoundingClientRect();
+			const modified = node.querySelector('.stanza-diff-editor-side.modified')!.getBoundingClientRect();
+			const gutter = node.querySelector('.ash-diff-gutter')!.getBoundingClientRect();
+			return { leftGap: gutter.left - original.right, rightGap: modified.left - gutter.right, width: gutter.width };
+		});
+		expect(bounds).toEqual({ leftGap: 0, rightGap: 0, width: 36 });
+		await stage.focus();
+		await page.keyboard.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([{
+			path: 'src/first.ts', comparison: 'unstaged', repositoryId: 'repo',
+			reviewed: { original: 'before\nshared', modified: 'src/first.ts revision 1\nshared', hunks: [] },
+			selection: { kind: 'lines', start: 1, end: 1 },
+		}]);
+		await testInfo.attach('git-center-gutter', { body: await first.screenshot(), contentType: 'image/png' });
+		await page.evaluate(() => window.ashDiffIntegration.expireGitGutterSnapshot());
+		await stage.click();
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(2);
+		expect(await page.evaluate(() => window.ashDiffIntegration.gitGutterCalls[1])).toEqual({ error: localized(locale,
+			'Git operation failed: Open the current comparison from Source Control before selecting lines.',
+			'Git 操作失败：请从源代码管理打开当前比较，再选中行。') });
+	});
+
+	test(`Git diff center gutter reverts only the reviewed block after confirmation (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
+		const revert = page.locator('#title-comparison .stanza-multi-diff-editor-section').first().locator('.ash-diff-gutter').getByRole('button', { name: localized(locale, 'Revert Change', '还原更改'), exact: true });
+		await revert.click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByRole('button', { name: localized(locale, 'Cancel', '取消'), exact: true }).click();
+		expect(await page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([]);
+		await revert.click();
+		await dialog.getByRole('button', { name: localized(locale, 'Revert Changes', '还原更改'), exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(1);
+		expect(await page.evaluate(() => {
+			const call = window.ashDiffIntegration.gitGutterCalls[0] as { save: { text: string; encoding: string; expectedRevision: string; resource: { path: string; }; }; };
+			return { text: call.save.text, encoding: call.save.encoding, expectedRevision: call.save.expectedRevision, path: call.save.resource.path };
+		})).toEqual({ text: 'before\nshared', encoding: 'utf8', expectedRevision: 'file-revision', path: '/workspace/src/first.ts' });
+	});
+}
 
 for (const locale of ['en', 'zh-CN'] as const) {
 	test(`diff feature moved links follow editor geometry, options, locale and disposal (${locale})`, async ({ page }) => {

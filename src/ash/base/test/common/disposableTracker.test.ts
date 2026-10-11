@@ -56,6 +56,21 @@ test("markAsSingleton excludes a process-lifetime disposable from leak reports",
 	resource.dispose();
 });
 
+test("singleton marks survive a tracker installed after their owner was created", () => {
+	using store = markAsSingleton(new DisposableStore());
+	for (let index = 0; index < 2; index++) {
+		const tracker = new DisposableTracker();
+		using installation = installDisposableTracker(tracker);
+		store.add(toDisposable(() => { }));
+		tracker.assertNoLeaks();
+		const ordinary = toDisposable(() => { });
+		assert.throws(() => tracker.assertNoLeaks(), /1 undisposed disposable/);
+		ordinary.dispose();
+		store.clear();
+		tracker.assertNoLeaks();
+	}
+});
+
 test("DisposableTracker records ownership and closes the complete subtree", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);

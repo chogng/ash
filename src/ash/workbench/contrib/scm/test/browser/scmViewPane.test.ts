@@ -513,8 +513,9 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		const fetch = pane.element.querySelector<HTMLButtonElement>('[data-action-id="git.fetchAll"] > button');
 		assert.ok(fetch);
 		fetch.click();
-		await waitFor(() => remoteRepositoryIds.length === 1 && graphRequests.length === 3);
+		await waitFor(() => remoteRepositoryIds.length === 1);
 		assert.deepEqual(remoteRepositoryIds, ["repo-1"]);
+		assert.equal(graphRequests.length, 2, 'A fetch without ref changes does not requery history');
 		assert.equal(readySubscriptions, 1);
 
 		workspaceError = new GitWorkspaceError('noFolder');
@@ -538,7 +539,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		const delayedGraph = new DeferredPromise<GraphPage>();
 		pendingGraph = delayedGraph.p;
 		addedCommit = true;
-		status = { ...status, head: { type: 'branch', name: 'main', objectId: 'new-commit', upstream: undefined } };
+		status = { ...status, revision: status.revision + 1, historyRevision: status.historyRevision + 1, head: { type: 'branch', name: 'main', objectId: 'new-commit', upstream: undefined } };
 		const previousRequests = graphRequests.length;
 		readyChanges.fire();
 		await waitFor(() => graphRequests.length === previousRequests + 1);
@@ -557,22 +558,22 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit.current .ash-scm-graph-label.head')?.textContent, 'main');
 		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-label.head').length, 1);
 		pendingGraph = undefined;
-		status = { ...status, head: { type: 'branch', name: 'topic', objectId: 'abcdef1234567890', upstream: undefined } };
+		status = { ...status, revision: status.revision + 1, historyRevision: status.historyRevision + 1, head: { type: 'branch', name: 'topic', objectId: 'abcdef1234567890', upstream: undefined } };
 		readyChanges.fire();
 		await waitFor(() => oldRow.querySelector('.ash-scm-graph-label.head')?.textContent === 'topic' && pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false');
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit.current'), oldRow);
-		status = { ...status, head: { type: 'branch', name: 'main', objectId: 'new-commit', upstream: undefined } };
+		status = { ...status, revision: status.revision + 1, historyRevision: status.historyRevision + 1, head: { type: 'branch', name: 'main', objectId: 'new-commit', upstream: undefined } };
 		readyChanges.fire();
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-commit.current .ash-scm-graph-label.head')?.textContent === 'main' && pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false');
 		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-label.head').length, 1, 'Checkout updates HEAD badges even when the branch references are unchanged');
 		graphFailure = new Error('Temporary history read failure');
-		readyChanges.fire();
+		pane.element.querySelector<HTMLButtonElement>('[data-action-id="ash.git.graph.refresh"] > button')!.click();
 		await waitFor(() => pane.element.querySelector('[aria-label="Retry loading commit graph"]') !== null);
 		assert.equal(oldRow.isConnected, true, 'A failed refresh retains the last successful graph');
 		assert.equal(oldRow.getAttribute('aria-expanded'), 'true');
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		try {
-			readyChanges.fire();
+			pane.element.querySelector<HTMLButtonElement>('[data-action-id="ash.git.graph.refresh"] > button')!.click();
 			await waitFor(() => pane.element.querySelector('[aria-label="重试读取提交图"]') !== null);
 			const retry = pane.element.querySelector<HTMLButtonElement>('[aria-label="重试读取提交图"]')!;
 			assert.equal(retry.textContent, '重试');
@@ -643,8 +644,10 @@ test('SCM history title operations keep refresh and busy state with their starti
 		await secondOperation.complete();
 		await secondResult;
 		assert.deepEqual({ refreshed, loaded, busy: context.getValue('scmHistoryBusy') }, {
-			refreshed: ['second'], loaded: ['first', 'second', 'second'], busy: false,
+			refreshed: [], loaded: ['first', 'second'], busy: false,
 		});
+		await pane.runTitleOperation();
+		assert.deepEqual({ refreshed, loaded }, { refreshed: ['second'], loaded: ['first', 'second', 'second'] }, 'Explicit refresh still bypasses the provider cache');
 		const retiredOperation = new DeferredPromise<void>();
 		const retiredResult = pane.runTitleOperation(() => retiredOperation.p);
 		view.selectRepository(first.id);

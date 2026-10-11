@@ -228,6 +228,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.navigationGeneration++;
 		for (const section of this.sections.values()) {
 			section.setCollapsed(this.viewModel.isCollapsed(section.item.id));
+			section.domNode.classList.toggle('active', section.item.id === this.viewModel.activeItemId);
 			const itemState = this.viewModel.getItemViewState(section.item.id);
 			section.restoreViewState(itemState?.original ?? null, itemState?.modified ?? null);
 		}

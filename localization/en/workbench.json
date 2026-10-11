@@ -1,5 +1,6 @@
 {
   "ash": {
+    "multiDiff.ariaLabel": "{0}, {1} files",
     "multiDiff.empty": "No changes in this selection.",
     "multiDiff.fileActions": "{0} actions",
     "multiDiff.discardChanges": "Discard Changes",

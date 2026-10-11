@@ -1,6 +1,7 @@
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { StandardWheelEvent } from '../../../../../base/browser/mouseEvent.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
@@ -8,11 +9,13 @@ import { IMenuService, MenuId } from '../../../../../platform/actions/common/act
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
+import { EditorContextKeys } from '../../../../common/editorContextKeys.js';
 import { Range } from '../../../../common/core/range.js';
 import { LineRange } from '../../../../common/core/ranges/lineRange.js';
 import type { DiffModel } from '../../../../common/diff/diffModel.js';
 import { DetailedLineRangeMapping } from '../../../../common/diff/rangeMapping.js';
 import type { CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
+import type { DiffEditorWidget } from '../diffEditorWidget.js';
 
 export interface DiffEditorSelectionHunkToolbarContext {
 	mapping: DetailedLineRangeMapping;
@@ -28,6 +31,7 @@ export class DiffEditorGutter extends Disposable {
 	private readonly scope: IContextKeyService;
 	private readonly items: { domNode: HTMLElement; lineNumber: number; }[] = [];
 	private enabled = false;
+	private renderRevert = false;
 	private available = false;
 	private height = 0;
 
@@ -35,6 +39,7 @@ export class DiffEditorGutter extends Disposable {
 		container: HTMLElement,
 		private readonly editor: CodeEditorWidget,
 		private readonly model: DiffModel,
+		private readonly widget: DiffEditorWidget,
 		private readonly onDidChangeWidth: () => void,
 		@IMenuService private readonly menus: IMenuService,
 		@IContextMenuService private readonly contextMenu: IContextMenuService,
@@ -46,15 +51,17 @@ export class DiffEditorGutter extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.scope = this._register(contextKeys.createScoped(this.domNode));
+		EditorContextKeys.diffEditorOriginalUri.bindTo(this.scope).set(model.original.uri.toString());
+		EditorContextKeys.diffEditorModifiedUri.bindTo(this.scope).set(model.modified.uri.toString());
 		for (const id of [MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar]) {
 			const menu = this._register(menus.createMenu(id, this.scope));
 			this._register(menu.onDidChange(() => {
 				const width = this.width;
-				this.update(this.enabled);
+				this.update(this.enabled, { renderRevert: this.renderRevert });
 				if (this.width !== width) this.onDidChangeWidth();
 			}));
 		}
-		this._register(editor.onDidChangeCursorSelection(() => this.update(this.enabled)));
+		this._register(editor.onDidChangeCursorSelection(() => this.update(this.enabled, { renderRevert: this.renderRevert })));
 		this._register(editor.onDidScrollChange(() => this.positionItems()));
 		this._register(editor.onDidLayoutChange(() => this.positionItems()));
 		this._register(addDisposableListener(this.domNode, 'wheel', event => {
@@ -66,9 +73,10 @@ export class DiffEditorGutter extends Disposable {
 		return this.enabled && this.available ? 36 : 0;
 	}
 
-	public update(enabled: boolean): void {
+	public update(enabled: boolean, options: { renderRevert: boolean }): void {
 		this.enabled = enabled;
-		this.available = [MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar].some(id =>
+		this.renderRevert = options.renderRevert;
+		this.available = this.canRevert || [MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar].some(id =>
 			this.menus.getMenuActions(id, undefined, this.scope).some(([, actions]) => actions.length > 0));
 		this.domNode.hidden = this.width === 0;
 		const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
@@ -86,11 +94,16 @@ export class DiffEditorGutter extends Disposable {
 			const original = LineRange.join(ranges.map(range => LineRange.fromRangeInclusive(range.originalRange)));
 			const modified = LineRange.join(ranges.map(range => LineRange.fromRangeInclusive(range.modifiedRange)));
 			this.addToolbar(new DetailedLineRangeMapping(original, modified, ranges), MenuId.DiffEditorSelectionToolbar);
-		} else {
-			for (const change of diff.changes) this.addToolbar(change, MenuId.DiffEditorHunkToolbar);
+		}
+		for (const change of diff.changes) {
+			if (!ranges.some(range => change.innerChanges?.includes(range))) this.addToolbar(change, MenuId.DiffEditorHunkToolbar);
 		}
 		this.positionItems();
 		if (hadFocus) this.editor.focus();
+	}
+
+	private get canRevert(): boolean {
+		return this.renderRevert && !this.editor.getOption(EditorOption.readOnly);
 	}
 
 	public computeStagedValue(mapping: DetailedLineRangeMapping): string {
@@ -122,6 +135,7 @@ export class DiffEditorGutter extends Disposable {
 	private addToolbar(mapping: DetailedLineRangeMapping, menuId: MenuId): void {
 		const node = h(this.domNode.ownerDocument, 'div');
 		node.className = 'ash-diff-gutter-item';
+		node.classList.toggle('ash-diff-revert', this.canRevert);
 		this.domNode.append(node);
 		this.toolbars.add(toDisposable(() => node.remove()));
 		const context: DiffEditorSelectionHunkToolbarContext = {
@@ -130,7 +144,16 @@ export class DiffEditorGutter extends Disposable {
 			originalUri: this.model.original.uri,
 			modifiedUri: this.model.modified.uri,
 		};
+		const revertLabel = menuId === MenuId.DiffEditorSelectionToolbar ? localize('diffEditor.revertSelection', 'Revert selected changes') : localize('diffEditor.revertChange', 'Revert change');
 		this.toolbars.add(new MenuWorkbenchToolBar(node, this.menus, this.contextMenu, menuId, {
+			leadingActions: this.canRevert ? [{
+				id: 'diffEditor.revert',
+				label: revertLabel,
+				tooltip: revertLabel,
+				icon: Lxicon.arrowRight,
+				enabled: true,
+				run: () => menuId === MenuId.DiffEditorSelectionToolbar ? this.widget.revertRangeMappings(mapping.innerChanges ?? []) : this.widget.revert(mapping),
+			}] : [],
 			ariaLabel: localize('diffEditor.hunkActions', 'Change actions'),
 			orientation: 'vertical',
 			contextKeyService: this.scope,

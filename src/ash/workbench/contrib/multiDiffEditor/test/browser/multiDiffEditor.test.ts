@@ -1,12 +1,14 @@
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import type { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { MultiDiffEditorOptions } from '../../browser/multiDiffEditor.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test, suite, suiteSetup, suiteTeardown } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { JSDOM } from 'jsdom';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
@@ -17,8 +19,7 @@ import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProvi
 import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../../../editor/common/model.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import { registerAction2, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
-import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -41,7 +42,7 @@ import { type ITextModelResourceService, type TextModelInput, type TextModelRefe
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
 	observe(): void { }
@@ -70,6 +71,14 @@ await import('../../../../../editor/browser/widget/diffEditor/commands.js');
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorActions.js');
 const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDiffAction.js');
+
+function registerMultiDiffTestServices(services: InstantiationService): InstantiationService {
+	services.registerSingleton(IStorageService, () => new BrowserStorageService({
+		ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'multi-diff-tests',
+		backend: browserEnvironment.window.localStorage, flushInterval: 0,
+	}));
+	return services;
+}
 
 function registerDialogs(services: InstantiationService, sourceResolver?: IMultiDiffSourceResolver): void {
 	services.registerInstance(IDialogService, {
@@ -157,7 +166,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	const seenOptions: boolean[] = [];
 	const seenLimits: number[] = [];
-	const pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
+	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(options => {
 			seenOptions.push(options.ignoreTrimWhitespace);
@@ -167,6 +176,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		showLineNumbers: false,
 		gitService: {
 			onDidChangeRepositoryStatus: Event.None,
+			status: async () => ({ repositoryId: 'repo', streamInstanceId: 'stream', revision: 0, historyRevision: 0, changes: [], workspacePath: '/workspace', head: { type: 'unborn', name: 'main' } }),
 			stage: async (paths: readonly string[]) => { gitActions.push(`stage:${paths.join(',')}`); return {} as never; },
 			discardWorktree: async (paths: readonly string[]) => { gitActions.push(`discard:${paths.join(',')}`); return {} as never; },
 		} as unknown as IGitService,
@@ -332,7 +342,7 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 		dispose: () => models.dispose(),
 		[Symbol.dispose]: () => models.dispose(),
 	};
-	using pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
+	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 		modelService: trackedModels,
 		createComputationService: () => new PaneTestDiffComputationService(),
 	} satisfies MultiDiffEditorOptions);
@@ -383,7 +393,7 @@ test('Multi-diff pane keeps available files open when one comparison fails to lo
 		dispose: () => models.dispose(),
 		[Symbol.dispose]: () => models.dispose(),
 	};
-	using pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
+	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 		modelService: partialModels,
 		createComputationService: () => new PaneTestDiffComputationService(),
 	} satisfies MultiDiffEditorOptions);
@@ -433,7 +443,7 @@ for (const cancellation of ['signal', 'clear'] as const) {
 			dispose: () => models.dispose(),
 			[Symbol.dispose]: () => models.dispose(),
 		};
-		using pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
+		using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 			modelService: delayedModels,
 			createComputationService: () => new PaneTestDiffComputationService(),
 		} satisfies MultiDiffEditorOptions);
@@ -468,7 +478,7 @@ test('Multi-diff collapse command updates mounted and remounted comparisons and 
 	registerDialogs(services);
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled, true);
-	using pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
+	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
 	});
@@ -515,7 +525,7 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
-	const pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
+	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
 	} satisfies MultiDiffEditorOptions);
@@ -541,6 +551,15 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 	pane.dispose();
 	dom.window.close();
 });
+
+
+async function waitForPane(predicate: () => boolean): Promise<void> {
+	const deadline = Date.now() + 5_000;
+	while (!predicate()) {
+		if (Date.now() >= deadline) throw new Error('Multi-diff pane did not reach the expected state');
+		await new Promise(resolve => setTimeout(resolve, 0));
+	}
+}
 
 class BootstrapTextFiles implements ITextFileService {
 	readonly onDidSave = Event.None;
@@ -591,3 +610,110 @@ function requiredElement<T extends Element>(ownerDocument: ParentNode, selector:
 	if (!element) throw new Error(`Missing ${selector}`);
 	return element;
 }
+
+suite('Multi-diff Git lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	const dom = createTestDom();
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	registerDialogs(services);
+	const models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {});
+	const updates = new Emitter<GitStatus>();
+	let liveStatus: GitStatus = {
+		repositoryId: 'repo', streamInstanceId: 'stream', revision: 1, historyRevision: 1, workspacePath: '/workspace',
+		head: { type: 'unborn', name: 'main' },
+		changes: ['first.ts', 'second.ts'].map(path => ({ path, originalPath: undefined, indexStatus: 'unmodified', worktreeStatus: 'modified', conflicted: false,
+			submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } })),
+	};
+	let releaseSlow: (() => void) | undefined;
+	const slow = new Promise<void>(resolve => { releaseSlow = resolve; });
+	const git = {
+		onDidChangeRepositoryStatus: updates.event,
+		status: async (repositoryId: string) => { assert.equal(repositoryId, 'repo'); return liveStatus; },
+		changeFile: async (path: string) => {
+			const revision = liveStatus.revision;
+			if (revision === 2) await slow;
+			return { original: { kind: 'text', text: 'before' }, modified: { kind: 'text', text: `${path} revision ${revision}` } };
+		},
+	} as unknown as IGitService;
+	let acquired = 0;
+	let released = 0;
+	const tracked: ITextModelResourceService = {
+		async acquire(input, signal) {
+			const reference = await models.acquire(input, signal);
+			acquired++;
+			let disposed = false;
+			const dispose = (): void => {
+				if (disposed) return;
+				disposed = true;
+				released++;
+				reference.dispose();
+			};
+			return {
+				resource: reference.resource, model: reference.model,
+				get isDirty() { return reference.isDirty; }, onDidChangeDirty: reference.onDidChangeDirty,
+				get hasExternalChange() { return reference.hasExternalChange; }, onDidChangeExternalChange: reference.onDidChangeExternalChange,
+				save: (signal, options) => reference.save(signal, options),
+				saveAs: (resource, signal) => reference.saveAs(resource, signal),
+				revert: signal => reference.revert(signal),
+				dispose, [Symbol.dispose]: dispose,
+			};
+		},
+		dispose() { }, [Symbol.dispose]() { },
+	};
+	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
+		modelService: tracked, gitService: git, createComputationService: () => new PaneTestDiffComputationService(),
+	});
+	pane.create(parent);
+	pane.layout({ width: 600, height: 400 });
+	suiteSetup(async () => {
+		await pane.setInput(await createGitMultiDiffEditorInput(git, 'unstaged', liveStatus), new AbortController().signal);
+	});
+	suiteTeardown(() => {
+		pane.dispose();
+		models.dispose();
+		updates.dispose();
+		resources.dispose();
+		dom.window.close();
+	});
+
+	test('replaces revisions in place and releases retired text models', async () => {
+	const widget = requiredElement<HTMLElement>(parent, '.stanza-multi-diff-editor');
+	const firstHeader = requiredElement<HTMLButtonElement>(parent, '.stanza-multi-diff-editor-header-toggle');
+	firstHeader.click();
+	const secondHeader = parent.querySelectorAll<HTMLButtonElement>('.stanza-multi-diff-editor-header-toggle')[1]!;
+	secondHeader.focus();
+	const initialReleased = released;
+	liveStatus = { ...liveStatus, revision: 2 };
+	updates.fire(liveStatus);
+	await Promise.resolve();
+	liveStatus = { ...liveStatus, revision: 3 };
+	updates.fire(liveStatus);
+	await waitForPane(() => pane.getControl()?.modifiedEditor.getModel()?.getValue() === 'second.ts revision 3');
+	assert.equal(parent.querySelector('.stanza-multi-diff-editor'), widget);
+	assert.equal(pane.getActiveDiffItem()?.label, 'second.ts');
+	assert.equal(parent.querySelector('.stanza-multi-diff-editor-header-toggle')?.getAttribute('aria-expanded'), 'false');
+	assert.ok(released > initialReleased);
+	releaseSlow!();
+	await slow;
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(pane.getControl()?.modifiedEditor.getModel()?.getValue(), 'second.ts revision 3');
+	updates.fire({ ...liveStatus, repositoryId: 'other', revision: 4, changes: [] });
+	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-title').length, 2);
+	liveStatus = { ...liveStatus, revision: 4, changes: [] };
+	updates.fire(liveStatus);
+	await waitForPane(() => parent.querySelector('.stanza-multi-diff-editor-empty') !== null);
+	assert.equal(parent.querySelectorAll('.stanza-diff-editor').length, 0);
+	assert.equal(acquired, released);
+	pane.clearInput();
+	updates.fire({ ...liveStatus, revision: 5 });
+	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-session').length, 0);
+		pane.dispose();
+		models.dispose();
+		updates.dispose();
+		resources.dispose();
+	});
+});
+

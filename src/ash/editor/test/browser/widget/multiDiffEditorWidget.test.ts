@@ -10,6 +10,8 @@ import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProvi
 import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { DocumentDiffItem, MultiDiffEditorModel, type IDocumentDiffItem } from '../../../browser/widget/multiDiffEditor/model.js';
 import { installEditorTestDom } from '../editorTestGlobals.js';
 import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
@@ -152,8 +154,16 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	editor.domNode.scrollTop = 0;
 	editor.restoreViewState(viewState);
 	assert.equal(editor.domNode.scrollTop, 52);
+	assert.equal(editor.getActiveItem()?.id, 'second');
 	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every(header => header.getAttribute('aria-expanded') === 'true'));
+	editor.updateOptions({ fontSize: 18, lineHeight: 30, showLineNumbers: true, showInlineChanges: false, loopChanges: false });
+	assert.equal(editor.domNode.classList.contains('hide-line-numbers'), false);
+	for (const child of services.get(ICodeEditorService).listCodeEditors()) {
+		assert.equal(child.getOption(EditorOption.fontInfo).fontSize, 18);
+		assert.equal(child.getOption(EditorOption.lineHeight), 30);
+	}
 	assert.throws(() => editor.restoreViewState({ scrollTop: -1, collapsedItemIds: [], itemViewStates: [] }), TypeError);
+	assert.throws(() => editor.restoreViewState({ scrollTop: 0, activeItemId: 1, collapsedItemIds: [], itemViewStates: [] }), TypeError);
 	editor.dispose();
 	assert.equal(disposedItemActions, 2);
 	dom.window.close();

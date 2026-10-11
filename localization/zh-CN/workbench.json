@@ -1,5 +1,6 @@
 {
   "ash": {
+    "multiDiff.ariaLabel": "{0}，{1} 个文件",
     "multiDiff.empty": "此选择中没有更改。",
     "multiDiff.fileActions": "{0} 操作",
     "multiDiff.discardChanges": "放弃更改",
