@@ -1,0 +1,11 @@
+{
+	"name": "scm-fixture",
+	"publisher": "ash-test",
+	"version": "1.0.0",
+	"browser": "./extension.js",
+	"engines": { "ash": "1" },
+	"contributes": { "commands": [
+		{ "command": "ash.scm.fixture.activate", "title": "Activate independent SCM fixture" },
+		{ "command": "ash.scm.fixture.refresh", "title": "Refresh independent SCM fixture" }
+	] }
+}

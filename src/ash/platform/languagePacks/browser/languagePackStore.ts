@@ -1,19 +1,40 @@
-import { parseLanguagePackCatalog } from '../common/languagePackCatalog.js';
+import { parseLanguagePackCatalog, parseLanguagePackIndexEntry } from '../common/languagePackCatalog.js';
 import type { ILanguagePackStore } from '../common/languagePackStore.js';
 import type { LanguagePackCatalog } from '../common/languagePacksService.js';
+import type { LanguagePackIndexEntry } from '../common/languagePackContract.js';
 
 /** The browser profile owns these resources independently of App Server availability. */
 export class BrowserLanguagePackStore implements ILanguagePackStore {
 	public async read(locale: string): Promise<LanguagePackCatalog | undefined> {
 		const value = await this.transact('readonly', store => store.get(locale));
 		if (value === undefined) { return undefined; }
-		const catalog = parseLanguagePackCatalog(value);
+		const catalog = parseLanguagePackCatalog((value as { catalog?: unknown }).catalog ?? value);
 		if (!catalog || catalog.locale !== locale) { throw new Error(`Invalid display language resource: ${locale}`); }
 		return catalog;
 	}
 
 	public async write(catalog: LanguagePackCatalog): Promise<void> {
-		await this.transact('readwrite', store => store.put(catalog));
+		await this.transact('readwrite', store => {
+			const request = store.get(catalog.locale);
+			request.onsuccess = () => {
+				const indexed = parseLanguagePackIndexEntry(request.result);
+				store.put(indexed ? { ...indexed, catalog } : catalog);
+			};
+			return request;
+		});
+	}
+
+	public async readIndex(): Promise<readonly LanguagePackIndexEntry[]> {
+		const values = await this.transact('readonly', store => store.getAll()) as unknown[];
+		return values.map(parseLanguagePackIndexEntry).filter((entry): entry is LanguagePackIndexEntry => entry !== undefined);
+	}
+
+	public async replace(entries: readonly LanguagePackIndexEntry[]): Promise<void> {
+		await this.transact('readwrite', store => {
+			const cleared = store.clear();
+			for (const entry of entries) { store.put(entry); }
+			return cleared;
+		});
 	}
 
 	private async transact(mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest): Promise<unknown> {

@@ -1,3 +1,5 @@
+import { localizeManifest } from '../../../../platform/extensionManagement/common/extensionNls.js';
+import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacksService.js';
 import { MenusRegistry, type ISubmenuItem } from '../../../../platform/actions/common/actions.js';
 import { extensionMenuId } from '../common/extensionMenus.js';
 import { ViewsRegistry } from '../../../common/views.js';
@@ -113,7 +115,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	readonly onDidChange: Event<ExtensionCatalog> = this.changeEmitter.event;
 	readonly onDidFail: Event<ExtensionServiceFailure> = this.failureEmitter.event;
 
-	constructor(private readonly options: AppServerExtensionServiceOptions) {
+	constructor(private readonly options: AppServerExtensionServiceOptions, @ILanguagePackService private readonly languagePacks: ILanguagePackService) {
 		super();
 		if (options.api.onDidChange) {
 			this._register(options.api.onDidChange(() => { void this.reload().catch(error => console.error('Extension enablement refresh failed', error)); }));
@@ -289,7 +291,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						let name = editor.displayName;
 						const key = /^%(.+)%$/.exec(name)?.[1];
 						if (key) {
-							const locale = getNLSLanguage() === 'zh-CN' ? '.zh-CN' : '';
+							const locale = getNLSLanguage() === 'en' ? '' : '.' + getNLSLanguage();
 							const messages = parseJsonc(new TextDecoder().decode(await this.loadResource(resources, catalog.generation, extension.id, `package.nls${locale}.json`)), 'Editor labels') as Record<string, unknown>;
 							if (typeof messages[key] !== 'string') { throw new TypeError(`Missing editor label '${key}' in '${extension.id}'`); }
 							name = messages[key];
@@ -470,19 +472,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			}
 			Object.assign(messages, parseJsonc(new TextDecoder().decode(bytes), 'Extension messages'));
 		}
-		const visit = (value: unknown): unknown => {
-			if (typeof value === 'string') {
-				return value.replace(/%([^%]+)%/g, (match, key) => typeof messages[key] === 'string' ? messages[key] as string : match);
-			}
-			if (Array.isArray(value)) {
-				return value.map(visit);
-			}
-			if (value && typeof value === 'object') {
-				return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, visit(item)]));
-			}
-			return value;
-		};
-		return JSON.stringify(visit(JSON.parse(extension.manifestJson)));
+		const translationUri = await this.languagePacks.getBuiltInExtensionTranslationsUri(extension.id, language);
+		if (translationUri) {
+			const translation = JSON.parse(translationUri.path.slice('application/json,'.length));
+			Object.assign(messages, translation.contents.package);
+		}
+		return JSON.stringify(localizeManifest(JSON.parse(extension.manifestJson), messages));
 	}
 
 

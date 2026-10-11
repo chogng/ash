@@ -1,3 +1,4 @@
+import { createEmptyTestLanguagePacks } from '../../services/localization/test/common/localizationTestUtils.js';
 import type { DisposableStore } from '../../../base/common/lifecycle.js';
 import { ExtensionResourceLoaderService } from '../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import type { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
@@ -23,7 +24,7 @@ export class TestExtensionService extends AppServerExtensionService {
 					whenReady: async () => ({}),
 				},
 			} as unknown as ITextMateService
-		});
+		}, createEmptyTestLanguagePacks());
 		this._register(registry);
 	}
 }

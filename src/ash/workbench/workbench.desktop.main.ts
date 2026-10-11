@@ -24,7 +24,7 @@ import { NativeHostService } from './services/host/electron-browser/nativeHostSe
 import { IHostService } from './services/host/browser/host.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { ILanguagePackStore } from '../platform/languagePacks/common/languagePackStore.js';
-import { ElectronLanguagePackStore } from '../platform/languagePacks/electron-browser/languagePackStore.js';
+import { BrowserLanguagePackStore } from '../platform/languagePacks/browser/languagePackStore.js';
 import { IRemoteAuthorityResolverService } from '../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../platform/remote/electron-browser/remoteAuthorityResolverService.js';
 import { IIntegrityService } from './services/integrity/common/integrity.js';
@@ -38,7 +38,7 @@ import { ITunnelService } from '../platform/tunnel/common/tunnel.js';
 import { TunnelService } from './services/tunnel/electron-browser/tunnelService.js';
 
 registerSingleton(IHostService, NativeHostService, InstantiationType.Delayed);
-registerSingleton(ILanguagePackStore, ElectronLanguagePackStore, InstantiationType.Delayed);
+registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 registerSingleton(IIntegrityService, IntegrityService, InstantiationType.Delayed);
 
 registerSingleton(IElevatedFileService, ElectronElevatedFileService, InstantiationType.Delayed);

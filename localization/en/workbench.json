@@ -149,7 +149,7 @@
     "workbench.splitEditor": "Split Editor",
     "workbench.editor.closeEmptyGroups.invalid": "Close Empty Groups must be true or false.",
     "workbench.editor.closeEmptyGroups.title": "Workbench › Editor: Close Empty Groups",
-    "workbench.editor.closeEmptyGroups.description": "Close an editor group when its last tab closes. The last editor group stays open.",
+    "workbench.editor.closeEmptyGroups.description": "Close an editor group when its last tab closes and omit empty groups from saved sessions. The last editor group stays open.",
     "workbench.editor.openSideBySideDirection.invalid": "Editor split direction must be right or down.",
     "workbench.editor.openSideBySideDirection.title": "Workbench › Editor: Open Side by Side Direction",
     "workbench.editor.openSideBySideDirection.description": "Controls whether editors open side by side to the right or below.",

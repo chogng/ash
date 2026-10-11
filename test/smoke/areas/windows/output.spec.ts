@@ -15,7 +15,7 @@ test.describe('Git-backed ordinary Output', () => {
 	test('Git Output filters real repository status and preserves raw editor text through clearing', async ({ target, testWorkspace, workbench }, testInfo) => {
 		test.skip(target.appServerMode !== 'required', 'Requires the real Git backend and its isolated test profile.');
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const changes = page.locator('[data-view-id="ash.gitView"]');
 		await expect(changes).toBeVisible();
 		const refreshAndShow = async (): Promise<void> => {
@@ -246,7 +246,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 				await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
 				await workbench.quickaccess.select('App Server');
 				const otherBefore = await rawText('App Server connection');
-				await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+				await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 				await workbench.quickaccess.runCommand('git.showOutput');
 				await workbench.quickaccess.runCommand('workbench.action.output.clear');
 				for (let count = 1; count <= 3; count++) await appendStatus(count);

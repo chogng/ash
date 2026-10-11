@@ -1,3 +1,15 @@
+export interface ITranslation {
+	readonly id: string;
+	readonly path: string;
+}
+
+export interface ILocalizationContribution {
+	readonly languageId: string;
+	readonly languageName: string;
+	readonly localizedLanguageName: string;
+	readonly translations: readonly ITranslation[];
+}
+
 /** Case-insensitive extension identity with the original spelling retained for display. */
 export class ExtensionIdentifier {
 	public readonly _lower: string;

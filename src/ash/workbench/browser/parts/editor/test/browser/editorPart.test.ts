@@ -1846,6 +1846,89 @@ test('editor commands share group state for keep open, selected pins and close o
 	assert.deepEqual({ modal: editor.isModalEditorVisible, inputs: group.inputs }, { modal: false, inputs: [second] });
 });
 
+for (const closeEmptyGroups of [true, false]) {
+	test(`EditorParts session persistence ${closeEmptyGroups ? 'omits' : 'retains'} empty groups created by opening to the side`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+		try {
+			using configuration = new InMemoryConfigurationService();
+			await configuration.updateValue('workbench.editor.closeEmptyGroups', closeEmptyGroups);
+			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'startup-empty-groups', flushInterval: 0 });
+			using services = createTestEditorServices(configuration, undefined, dom.window.document, storage);
+			using registry = new EditorPaneRegistry();
+			using registration = registry.registerEditorPane(descriptor('test.sessionGroups', '.ts', () => new TestEditorPane('test.sessionGroups')));
+			using editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration }, services);
+			using windows = new TestAuxiliaryWindowService();
+			using accessibility = new AccessibilityService({ root: dom.window.document.body, contextKeyService: services.get(IContextKeyService), configurationService: configuration });
+			using parts = services.createInstance(EditorParts, editor, windows, (container: HTMLElement) => createAuxiliaryPart(container, registry), accessibility, storage);
+			await parts.restoreSavedState(true);
+			const file = input('/project/session.ts');
+			await parts.openEditor(file, { pinned: false }, 'sideGroup');
+			await parts.splitActiveGroup(Direction.Down);
+			editor.activeGroup.stickEditor(file);
+			const empty = editor.addGroup(editor.activeGroup.id, Direction.Down);
+			empty.focus();
+			const legacy = editor.saveWorkingSet('lastSession');
+			assert.deepEqual(editor.groups.map(group => group.inputs.length), [0, 1, 1, 0]);
+			const panes = editor.groups.flatMap(group => group.activePane ? [group.activePane] : []);
+			await storage.flush(WillSaveStateReason.SHUTDOWN);
+			const saved = JSON.parse(storage.get('editorparts.state', StorageScope.WORKSPACE)!);
+			assert.deepEqual(saved.parts[0].groups.map((group: { editors: unknown[]; }) => group.editors.length), closeEmptyGroups ? [1, 1] : [0, 1, 1, 0]);
+			assert.equal(editor.groups.length, 4);
+			assert.ok(panes.every(pane => !(pane as TestEditorPane).disposed));
+			// Old sessions are normalized on restore too, without a close-group command.
+			storage.store('editorparts.state', JSON.stringify({ version: 1, active: 0, parts: [legacy] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const restoredGroupCounts: number[] = [];
+			using listener = parts.onDidChangeEditors(event => {
+				if (event.kind === 'groupAdded') {
+					restoredGroupCounts.push(editor.groups.length);
+				}
+			});
+			await parts.restoreSavedState(true);
+			assert.deepEqual(editor.groups.map(group => group.inputs.length), closeEmptyGroups ? [1, 1] : [0, 1, 1, 0]);
+			assert.ok(restoredGroupCounts.length > 0);
+			assert.equal(Math.max(...restoredGroupCounts), closeEmptyGroups ? 2 : 4);
+			const populated = editor.groups.filter(group => group.inputs.length > 0);
+			assert.equal(populated[0]!.isPreview(populated[0]!.activeInput!), true);
+			assert.equal(populated[1]!.isSticky(populated[1]!.activeInput!), true);
+			if (closeEmptyGroups) {
+				const layout = editor.saveWorkingSet('normalized').layout!;
+				assert.equal(layout.type, 'branch');
+				assert.equal(layout.type === 'branch' && layout.orientation, 'vertical');
+			}
+			await storage.flush(WillSaveStateReason.SHUTDOWN);
+			await parts.restoreSavedState(true);
+			assert.deepEqual(editor.groups.map(group => group.inputs.length), closeEmptyGroups ? [1, 1] : [0, 1, 1, 0]);
+			assert.equal(editor.domNode.querySelectorAll('.ash-editor-group').length, editor.groups.length);
+			if (closeEmptyGroups) {
+				const unsupported = JSON.parse(JSON.stringify(legacy));
+				unsupported.groups[1].editors[0].input.typeId = 'workbench.removedSerializer';
+				await parts.restorePartsState({ version: 1, active: 0, parts: [unsupported] });
+				assert.equal(editor.groups.length, 1);
+				assert.equal(editor.activeGroup.isSticky(editor.activeInput!), true);
+			}
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
+test('EditorParts session persistence keeps one active group when every group is empty', async () => {
+	using services = createTestEditorServices();
+	using editor = createEditorPart(browserEnvironment.window.document.body, {}, services);
+	using windows = new TestAuxiliaryWindowService();
+	using accessibility = new AccessibilityService({ root: browserEnvironment.window.document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService) });
+	using parts = services.createInstance(EditorParts, editor, windows, () => { throw new Error('No auxiliary window expected'); }, accessibility, services.get(IStorageService));
+	const first = editor.activeGroup;
+	const second = editor.addGroup(first.id, Direction.Right);
+	const third = editor.addGroup(second.id, Direction.Down);
+	third.focus();
+	const legacy = editor.saveWorkingSet('lastSession');
+	assert.deepEqual(parts.savePartsState().parts[0]!.groups.map(group => group.id), [third.id]);
+	await parts.restorePartsState({ version: 1, active: 0, parts: [legacy] });
+	assert.deepEqual(editor.groups.map(group => group.id), [third.id]);
+	assert.equal(editor.activeGroup.id, third.id);
+});
+
 test('closing a restored empty editor group preserves files and persists one group', async () => {
 	const container = browserEnvironment.window.document.createElement('div');
 	browserEnvironment.window.document.body.append(container);

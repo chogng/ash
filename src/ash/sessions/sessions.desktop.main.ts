@@ -15,11 +15,11 @@ import { Menus } from './browser/menus.js';
 import { IHostService } from '../workbench/services/host/browser/host.js';
 import { NativeHostService } from '../workbench/services/host/electron-browser/nativeHostService.js';
 import { ILanguagePackStore } from '../platform/languagePacks/common/languagePackStore.js';
-import { ElectronLanguagePackStore } from '../platform/languagePacks/electron-browser/languagePackStore.js';
+import { BrowserLanguagePackStore } from '../platform/languagePacks/browser/languagePackStore.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 
 registerSingleton(IHostService, NativeHostService, InstantiationType.Delayed);
-registerSingleton(ILanguagePackStore, ElectronLanguagePackStore, InstantiationType.Delayed);
+registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 
 registerOpenAgentsWindowCommand();
 

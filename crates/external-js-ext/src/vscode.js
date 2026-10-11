@@ -4,6 +4,16 @@ import { languages as ashLanguages, workspace as ashWorkspace, window as ashWind
 // This is the public editor contract inside the confined process. Editor models and UI
 // remain with the initiating client; this module owns only extension callback lifetimes.
 export function createApi(configuration, initialization) {
+	const localization = initialization?.localization ?? configuration.localization;
+	if (localization?.package) {
+		const visit = value => {
+			if (typeof value === 'string') return value.replace(/^%(.+)%$/, (text, key) => localization.package[key] ?? text);
+			if (Array.isArray(value)) return value.map(visit);
+			if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, visit(entry)]));
+			return value;
+		};
+		configuration = { ...configuration, commands: visit(configuration.commands), manifest: visit(configuration.manifest) };
+	}
 	const titles = new Map();
 	if (!Array.isArray(configuration.commands)) throw new TypeError('Invalid command contributions');
 	for (const entry of configuration.commands) {
@@ -1189,7 +1199,7 @@ export function createApi(configuration, initialization) {
 			const comment = Array.isArray(messageOrOptions.comment) ? messageOrOptions.comment.join('') : messageOrOptions.comment;
 			if (comment) key += '/' + comment;
 		}
-		const bundle = configuration.localization?.bundle;
+		const bundle = localization?.bundle;
 		const translated = bundle && Object.hasOwn(bundle, key) ? bundle[key] : message;
 		return translated.replace(/\{([^}]+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? String(values[name]) : placeholder);
 	}
@@ -1228,8 +1238,8 @@ export function createApi(configuration, initialization) {
 		env: contract('env', { get language() { return windowFacts().language ?? 'en'; } }),
 		l10n: contract('l10n', {
 			t: localizeMessage,
-			bundle: configuration.localization?.bundle,
-			uri: configuration.localization?.uri ? Uri.parse(configuration.localization.uri) : undefined,
+			bundle: localization?.bundle,
+			uri: localization?.uri ? Uri.parse(localization.uri) : undefined,
 		}),
 		TreeItem, TreeItemCollapsibleState: Object.freeze({ None: 0, Collapsed: 1, Expanded: 2 }), TreeItemCheckboxState: Object.freeze({ Unchecked: 0, Checked: 1 }),
 		Task, TaskGroup, ProcessExecution, ShellExecution, CustomExecution, EventEmitter, CancellationTokenSource, DebugConsoleMode: Object.freeze({ Separate: 0, MergeWithParent: 1 }), DebugAdapterExecutable, DebugAdapterServer, DebugAdapterNamedPipeServer, DebugAdapterInlineImplementation,

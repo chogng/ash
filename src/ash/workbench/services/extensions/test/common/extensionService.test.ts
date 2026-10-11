@@ -1,3 +1,4 @@
+import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
 import { JSDOM } from 'jsdom';
 import { GlobalExtensionEnablementService } from '../../../../../platform/extensionManagement/common/extensionEnablementService.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
@@ -261,7 +262,7 @@ test("registers extension grammars transactionally and loads resources through t
 			whenReady: async () => ({}),
 		},
 	} as unknown as ITextMateService;
-	const service = new AppServerExtensionService({ api, textMateService });
+	const service = new AppServerExtensionService({ api, textMateService }, createEmptyTestLanguagePacks());
 	assert.equal("replace" in service.themes, false);
 	assert.equal("replace" in service.fileTemplates, false);
 	assert.equal("replace" in service.debugAdapters, false);
@@ -304,7 +305,7 @@ test("fails before registering when TextMate candidate preparation is unavailabl
 	} as unknown as ITextMateService;
 	const api: IExtensionApi = { list: async () => emptyCatalog(1), resources: new ExtensionResourceLoaderService(async () => new Uint8Array()) };
 
-	assert.throws(() => new AppServerExtensionService({ api, textMateService }), /requires a TextMate service/);
+	assert.throws(() => new AppServerExtensionService({ api, textMateService }, createEmptyTestLanguagePacks()), /requires a TextMate service/);
 	assert.equal(registrations, 0);
 });
 
@@ -313,7 +314,7 @@ test("disposes a TextMate service-owned grammar registration without taking dupl
 	using installation = installDisposableTracker(tracker);
 	{
 		using grammars = new TextMateGrammarService();
-		using service = new AppServerExtensionService({ api: { list: async () => emptyCatalog(1), resources: new ExtensionResourceLoaderService(async () => new Uint8Array()) }, textMateService: { grammars } as unknown as ITextMateService });
+		using service = new AppServerExtensionService({ api: { list: async () => emptyCatalog(1), resources: new ExtensionResourceLoaderService(async () => new Uint8Array()) }, textMateService: { grammars } as unknown as ITextMateService }, createEmptyTestLanguagePacks());
 	}
 	tracker.assertNoLeaks();
 });
@@ -335,7 +336,7 @@ test("reads each generation-scoped resource once while preparing one catalog", a
 		list: async () => Object.freeze({ generation: 7, extensions: Object.freeze([themedDescriptor]), diagnostics: Object.freeze([]) }),
 		resources: new ExtensionResourceLoaderService(async () => { reads += 1; return new TextEncoder().encode('{"colors":{},"tokenColors":[]}'); }),
 	};
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 
 	await service.start();
 
@@ -360,7 +361,7 @@ test('loads an extension theme include through its package resources', async () 
 			return new TextEncoder().encode(resources.get(request.path)!);
 		}),
 	};
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	const theme = service.themes.currentCatalog.themes[0]!;
 	assert.deepEqual(reads, ['themes/child.json', 'themes/base.json']);
@@ -382,7 +383,7 @@ test('loads an extension theme with a TextMate tokenColors resource', async () =
 		list: async () => ({ generation: 1, extensions: [themedDescriptor], diagnostics: [] }),
 		resources: new ExtensionResourceLoaderService(async request => new TextEncoder().encode(resources.get(request.path)!)),
 	};
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	assert.deepEqual(service.themes.currentCatalog.themes[0]?.tokenColors.map(rule => rule.scopes), [['comment']]);
 });
@@ -392,7 +393,7 @@ test("rejects a catalog whose canonical manifest digest does not match", async (
 		list: async () => Object.freeze({ generation: 1, extensions: Object.freeze([Object.freeze({ ...descriptor, manifestSha256: `sha256:${"0".repeat(64)}` })]), diagnostics: Object.freeze([]) }),
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 
 	await assert.rejects(service.start(), /manifest digest/);
 	assert.equal(service.currentCatalog.generation, 0);
@@ -408,7 +409,7 @@ test("coalesces concurrent reload requests into one queued follow-up refresh", a
 		},
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 
 	const starting = service.start();
 	const firstQueued = service.reload();
@@ -431,7 +432,7 @@ test('a superseded failed reload does not reject a caller after the latest catal
 		list: () => ++requests === 1 ? new Promise((_resolve, reject) => { rejectFirst = reject; }) : Promise.resolve(emptyCatalog(2)),
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	const failures: unknown[] = [];
 	using listener = service.onDidFail(failure => failures.push(failure.error));
 	const starting = service.start();
@@ -454,7 +455,7 @@ test('queued reloads report the final failure and retain the last committed cata
 		},
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	const failures: unknown[] = [];
 	using listener = service.onDidFail(failure => failures.push(failure.error));
@@ -478,7 +479,7 @@ test("reloads declarations for Plugin activation and Extensions installation cha
 		list: async () => emptyCatalog(++generation),
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
-	using service = new AppServerExtensionService({ api, eventApi, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, eventApi, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	const refreshed = deferred<WorkbenchExtensionCatalog>();
 	using changed = service.onDidChange(catalog => {
@@ -512,7 +513,7 @@ test("dispose suppresses a queued reload and ignores the in-flight result", asyn
 		},
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
-	const service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	const service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	const starting = service.start();
 	service.reload();
 	service.dispose();
@@ -529,7 +530,7 @@ test("preserves the last active catalog when refreshed grammar materialization f
 		resources: new ExtensionResourceLoaderService(async request => new TextEncoder().encode(request.generation === 1 ? '{"scopeName":"source.demo","patterns":[]}' : "not a grammar")),
 	};
 	using grammars = new TextMateGrammarService();
-	const service = new AppServerExtensionService({ api, textMateService: { grammars } as unknown as ITextMateService });
+	const service = new AppServerExtensionService({ api, textMateService: { grammars } as unknown as ITextMateService }, createEmptyTestLanguagePacks());
 	await service.start();
 	const previousCatalog = service.currentCatalog;
 
@@ -561,7 +562,7 @@ test("publishes one coherent contribution generation to registry listeners", asy
 	};
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages }, createEmptyTestLanguagePacks());
 	const observations: Array<{ readonly themeCount: number; readonly adapterCount: number; readonly generation: number; }> = [];
 	using listener = languageService.languages.onDidChange(() => observations.push({
 		themeCount: service.themes.currentCatalog.themes.length,
@@ -589,7 +590,7 @@ test("treats an in-flight load cancelled by disposal as normal shutdown", async 
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
 	const textMateService = { grammars: { registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }), prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void; }, definitions: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(definitions); return {}; } }), whenReady: async () => ({}) } } as unknown as ITextMateService;
-	const service = new AppServerExtensionService({ api, textMateService });
+	const service = new AppServerExtensionService({ api, textMateService }, createEmptyTestLanguagePacks());
 	const failures: unknown[] = [];
 	using listener = service.onDidFail(failure => failures.push(failure.error));
 
@@ -620,7 +621,7 @@ test('loads icon manifests and fonts through generation-bound resources and revo
 			return readFile('extensions/theme-seti/' + request.path);
 		}),
 	};
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	const theme = WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti');
 	assert.ok(theme?.resolveFileIcon(['file-icon', 'typescript-lang-file-icon'], ColorScheme.Dark)?.character);
@@ -680,7 +681,7 @@ test('extension theme contributions activate together, retain the last valid cat
 			icons: { 'test-extension-alias': { description: 'Extension icon', default: 'add' } },
 		}
 	});
-	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: contributed ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('Unexpected resource'); }) }, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: contributed ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('Unexpected resource'); }) }, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	for (const [type, expected] of [['hcDark', '#fedcba'], ['hcLight', '#aabbcc']]) {
 		const contrast = parseUserColorTheme(JSON.stringify({ name: 'Extension contrast', type, colors: {} }));
@@ -714,7 +715,7 @@ test('the packaged browser catalog activates Markdown grammar and configuration 
 	const bundle = JSON.parse(await readFile('src/ash/platform/extensions/common/generated/browser.json', 'utf8'));
 	using languages = new LanguageFeaturesService();
 	using languageService = new LanguageService();
-	using service = new AppServerExtensionService({ api: { list: async () => bundle.catalog, resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64'))) }, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages });
+	using service = new AppServerExtensionService({ api: { list: async () => bundle.catalog, resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64'))) }, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages }, createEmptyTestLanguagePacks());
 	await service.start();
 	assert.equal(languageService.guessLanguageIdByFilepathOrFirstLine(URI.file('/notes/draft.md')), 'markdown');
 	assert.equal(languageService.createByMimeType('text/markdown').languageId, 'markdown');
@@ -733,7 +734,7 @@ test('extension configuration activates in the canonical owner and rolls back ot
 	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 	const source = '{"extensionConfiguration.value":"user value"}';
 	using configuration = new WorkbenchConfigurationService({ initialSnapshot: { revision: 1, document: { version: 1, source } } });
-	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('No contribution resources'); }) }, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('No contribution resources'); }) }, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	assert.deepEqual({ value: configuration.getValue('extensionConfiguration.value'), count: configuration.getValue('extensionConfiguration.count') }, { value: 'user value', count: 1 });
 	using locale = toDisposable(resetNlsResolver);
@@ -765,7 +766,7 @@ test('declarative extension problem contributions activate, roll back failed rel
 			problemMatchers: [{ name: 'extension-service-matcher', owner: 'extension-service', pattern: invalid ? '$missing-pattern' : '$extension-service-pattern', background: { beginsPattern: '^BUILD$', endsPattern: '^READY$' } }],
 		},
 	});
-	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('Matcher declarations have no resources'); }) }, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('Matcher declarations have no resources'); }) }, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	using markers = new MarkerService();
 	using collector = new WatchingProblemCollector(parseProblemMatchers(['$extension-service-matcher']), URI.file('/workspace'), markers, 'extension-service', () => false);
@@ -810,7 +811,7 @@ for (const [targetPlatform, extensionLocation, selected, expectedProgram] of [
 		using service = new AppServerExtensionService({
 			api: { list: async () => normalizeExtensionCatalog({ generation, extensions: present ? [{ ...descriptor, extensionLocation, targetPlatform, manifestJson, manifestSha256: digestText(manifestJson) }] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw Error('Debugger metadata must not read a resource'); }) },
 			textMateService: emptyTextMateService(),
-		});
+		}, createEmptyTestLanguagePacks());
 		await service.reload();
 		assert.deepEqual(DebugAdapterFactoriesRegistry.get('standard')?.createDebugAdapter?.(), {
 			program: 'runtime-command', arguments: ['--runtime', '', '$HOME', expectedProgram, selected, '', '$HOME'],
@@ -840,7 +841,7 @@ test('catalog refresh preserves an unchanged declarative Debug owner and retires
 	let generation = 1;
 	let entry = descriptor;
 	let present = true;
-	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [entry] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode('{"scopeName":"source.demo","patterns":[]}')) }, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: present ? [entry] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode('{"scopeName":"source.demo","patterns":[]}')) }, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
 	await service.start();
 	const original = DebugAdapterFactoriesRegistry.get('demo');
 	assert.ok(original);
@@ -858,28 +859,30 @@ test('catalog refresh preserves an unchanged declarative Debug owner and retires
 });
 
 test('profile disablement retires declarative settings and welcome content without a catalog mutation', async () => {
- const dom = new JSDOM('', { url: 'https://ash.test' });
- try {
-  using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
-  using enablement = new GlobalExtensionEnablementService(storage);
-  const entry = descriptorWithManifest({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
-   configuration: { title: 'Provider', properties: { 'test.enablement.option': { type: 'boolean', default: false } } },
-   viewsWelcome: [{ view: 'test.enablement.scm', contents: 'Enablement welcome' }],
-  } });
-  const api = withEnabledBuiltInExtensions({ list: async () => ({ generation: 1, diagnostics: [], extensions: [entry] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('No contribution resource'); }) }, enablement);
-  using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
-  const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-  await service.start();
-  assert.ok(registry.getConfiguration('test.enablement.option'));
-  assert.deepEqual(ViewsRegistry.getViewWelcomeContent('test.enablement.scm').map(value => value.content), ['Enablement welcome']);
-  await enablement.disableExtension({ id: entry.id });
-  await service.reload();
-  assert.equal(service.currentCatalog.extensions.length, 0);
-  assert.equal(registry.getConfiguration('test.enablement.option'), undefined);
-  assert.deepEqual(ViewsRegistry.getViewWelcomeContent('test.enablement.scm'), []);
-  await enablement.enableExtension({ id: entry.id });
-  await service.reload();
-  assert.deepEqual(service.currentCatalog.extensions.map(value => value.id), [entry.id]);
-  assert.ok(registry.getConfiguration('test.enablement.option'));
- } finally { dom.window.close(); }
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
+		using enablement = new GlobalExtensionEnablementService(storage);
+		const entry = descriptorWithManifest({
+			name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
+				configuration: { title: 'Provider', properties: { 'test.enablement.option': { type: 'boolean', default: false } } },
+				viewsWelcome: [{ view: 'test.enablement.scm', contents: 'Enablement welcome' }],
+			}
+		});
+		const api = withEnabledBuiltInExtensions({ list: async () => ({ generation: 1, diagnostics: [], extensions: [entry] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('No contribution resource'); }) }, enablement);
+		using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() }, createEmptyTestLanguagePacks());
+		const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+		await service.start();
+		assert.ok(registry.getConfiguration('test.enablement.option'));
+		assert.deepEqual(ViewsRegistry.getViewWelcomeContent('test.enablement.scm').map(value => value.content), ['Enablement welcome']);
+		await enablement.disableExtension({ id: entry.id });
+		await service.reload();
+		assert.equal(service.currentCatalog.extensions.length, 0);
+		assert.equal(registry.getConfiguration('test.enablement.option'), undefined);
+		assert.deepEqual(ViewsRegistry.getViewWelcomeContent('test.enablement.scm'), []);
+		await enablement.enableExtension({ id: entry.id });
+		await service.reload();
+		assert.deepEqual(service.currentCatalog.extensions.map(value => value.id), [entry.id]);
+		assert.ok(registry.getConfiguration('test.enablement.option'));
+	} finally { dom.window.close(); }
 });

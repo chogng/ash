@@ -1,5 +1,6 @@
 import type { Event } from "../../../base/common/event.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import type { URI } from '../../../base/common/uri.js';
 
 import type { LanguagePackCatalog } from "./languagePackContract.js";
 export type { LanguagePackCatalog } from "./languagePackContract.js";
@@ -47,6 +48,7 @@ export interface ILanguagePackService {
 	readonly catalogs: readonly LanguagePackCatalog[];
 	readonly availableLocales: readonly LanguagePackInfo[];
 	readonly installedPackages: readonly LanguagePackPackage[];
+	getBuiltInExtensionTranslationsUri(id: string, language: string): Promise<URI | undefined>;
 
 	search(query: string, limit?: number): Promise<readonly LanguagePackPackage[]>;
 	install(packageId: string, version?: string): Promise<void>;

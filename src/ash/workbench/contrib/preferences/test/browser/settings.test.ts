@@ -1131,6 +1131,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const availableLocales: LanguagePackInfo[] = productLanguagePackCatalogs.map(catalog => ({ ...catalog, source: 'builtin' }));
 	const languagePacks: ILanguagePackService = {
 		onDidChange: languagePacksChanged.event,
+		getBuiltInExtensionTranslationsUri: async () => undefined,
 		whenReady: Promise.resolve(),
 		catalogs: [...productLanguagePackCatalogs, { ...productLanguagePackCatalogs[0], locale: "fr", languageName: "French", localizedLanguageName: "Français" }],
 		availableLocales,

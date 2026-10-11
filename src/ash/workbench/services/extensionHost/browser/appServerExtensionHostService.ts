@@ -1,3 +1,4 @@
+import { MainThreadLocalization } from '../../../api/browser/mainThreadLocalization.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { localize } from '../../../../nls.js';
@@ -46,7 +47,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		commands: CommandRegistry,
 		invocationTimeoutMillis: number,
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IOutputService output: IOutputService,
 		@IModelService private readonly models: IModelService,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
@@ -255,9 +256,9 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		const existing = this.pendingActivations.get(key);
 		if (existing) { return existing; }
 		const revision = this.authorityRevision;
-		const pending = this.api.activateByEvent({
-			extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event, initialization: createExtensionHostInitialization(this.workspace, this.configuration)
-		}).then(snapshot => {
+		const pending = this.instantiationService.createInstance(MainThreadLocalization).getLocalization(runtime.id).then(localization => this.api.activateByEvent({
+			extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event, initialization: { ...createExtensionHostInitialization(this.workspace, this.configuration), localization }
+		})).then(snapshot => {
 			if (!this.isDisposed && this.started && this.connectionReady && revision === this.authorityRevision && snapshot.generation >= this.snapshot.fleetGeneration) { this.acceptSnapshot(snapshot); }
 			const activated = snapshot.extensions.find(extension => extension.id === runtime.id && extension.activationGeneration === runtime.activationGeneration);
 			if (activated?.lifecycle !== 'ready') throw new Error(localize('extensionHost.activationFailed', "Extension '{0}' failed to activate: {1}", runtime.id, activated?.failure?.message ?? activated?.lifecycle ?? 'unavailable'));

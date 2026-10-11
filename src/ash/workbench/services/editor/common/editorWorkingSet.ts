@@ -80,6 +80,8 @@ export type EditorWorkingSetTarget = EditorWorkingSet | 'empty';
 
 export interface ApplyEditorWorkingSetOptions {
 	readonly preserveFocus?: boolean;
+	/** Session restoration omits empty groups before creating their Grid views. */
+	readonly excludeEmptyGroups?: boolean;
 	/** Retained groups stay alive while the remaining groups restore their document working set. */
 	readonly preserveGroups?: readonly string[];
 }

@@ -8,7 +8,7 @@ const run = promisify(execFile);
 const commitShortcut = process.platform === 'darwin' ? '⌘Enter' : 'Ctrl+Enter';
 
 test('SCM hides the commit form when no repository is available', async ({ workbench }) => {
-	await workbench.page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await workbench.page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const changes = workbench.page.locator('[data-view-id="ash.gitView"]');
 	await expect(changes.getByRole('region', { name: 'Welcome', exact: true })).toBeVisible();
 	await expect(changes.locator('.ash-scm-commit-form')).toBeHidden();
@@ -21,7 +21,7 @@ test.describe('SCM welcome', () => {
 
 	test('SCM welcome shows host actions and restores keyboard focus from help', async ({ target, workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const welcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: 'Welcome', exact: true });
 		await expect(welcome).toContainText('Open a folder containing a Git repository');
 		await expect(page.locator('.ash-scm-viewlet [data-view-id]')).toHaveAttribute('data-view-id', 'ash.gitView');
@@ -47,7 +47,7 @@ test.describe('SCM welcome', () => {
 
 	test('SCM welcome wraps in a narrow pane and uses theme colors and keyboard focus', async ({ workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const welcome = page.locator('[data-view-id="ash.gitView"] .ash-view-welcome');
 		const open = welcome.getByRole('button', { name: 'Open Folder', exact: true });
 		for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
@@ -87,7 +87,7 @@ test.describe('SCM welcome', () => {
 test('SCM welcome initializes a repository through the backend and returns to Changes', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Repository initialization requires a connected backend.');
 	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const changes = page.locator('[data-view-id="ash.gitView"]');
 	await expect(page.locator('.ash-scm-viewlet [data-view-id]')).toHaveAttribute('data-view-id', 'ash.gitView');
 	await expect(changes.locator('.ash-pane-view-header')).toBeHidden();
@@ -112,7 +112,7 @@ test.describe('SCM commit input', () => {
 
 	test('SCM commit input grows, wraps, shrinks and supports undo and redo', async ({ workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const input = page.locator('.ash-scm-input');
 		const editor = input.getByRole('textbox', { name: /^Commit message/u });
 		const placeholder = input.locator('.stanza-editor-placeholder-text');
@@ -146,7 +146,7 @@ test.describe('SCM commit input', () => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const editor = page.locator('.ash-scm-input').getByRole('textbox', { name: /^Commit message/u });
 		const commit = page.locator('.ash-scm-commit');
 		await expect(commit).toBeEnabled();
@@ -209,7 +209,7 @@ test.describe('SCM commit input', () => {
 
 	test('SCM commit input uses input colors and visible focus in all four themes', async ({ workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const input = page.locator('.ash-scm-input');
 		const editor = input.getByRole('textbox', { name: /^Commit message/u });
 		for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
@@ -236,7 +236,7 @@ test.describe('SCM commit input', () => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const input = page.locator('.ash-scm-input');
 		const editor = input.getByRole('textbox', { name: /^Commit message/u });
 		await expect(page.locator('.ash-scm-commit')).toBeEnabled();
@@ -257,7 +257,7 @@ test.describe('SCM commit input', () => {
 		await run('git', ['init', '-b', 'topic'], { cwd: nested });
 		await writeFile(join(nested, 'nested.txt'), 'nested repository\n');
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const repositories = page.getByRole('listbox', { name: 'Source control repositories', exact: true });
 		await expect(repositories.getByRole('option')).toHaveCount(2);
 		const primary = repositories.getByRole('option', { name: /, main,/u });

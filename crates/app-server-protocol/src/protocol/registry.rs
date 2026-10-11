@@ -218,6 +218,8 @@ use external_ext_protocol::ExtensionDocumentSnapshot;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionHostInitialization;
 #[cfg(any(test, feature = "export"))]
+use external_ext_protocol::ExtensionLocalization;
+#[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionMessageSeverity;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionStatusBarAlignment;
@@ -5553,6 +5555,7 @@ typescript_bindings! {
     ExtensionClientRequestParams,
     ExtensionClientResult,
     ExtensionHostInitialization,
+    ExtensionLocalization,
     ExtensionWorkspaceFolder,
     ExtensionConfigurationTarget,
     ExtensionDebugSessionOptions,

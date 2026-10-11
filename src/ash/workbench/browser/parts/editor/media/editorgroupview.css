@@ -8,6 +8,16 @@
 	flex-direction: column;
 }
 
+.ash-editor-group:focus {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+/* The only visible group needs no frame to distinguish it from another group. */
+.ash-workbench-editor.single-group .ash-editor-group:focus {
+	outline: none;
+}
+
 .ash-editor-group-content {
 	position: relative;
 	min-width: 0;

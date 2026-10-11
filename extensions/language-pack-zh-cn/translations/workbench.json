@@ -201,7 +201,7 @@
     "workbench.splitEditor": "拆分编辑器",
     "workbench.editor.closeEmptyGroups.invalid": "关闭空编辑器组必须为 true 或 false。",
     "workbench.editor.closeEmptyGroups.title": "工作台 › 编辑器：关闭空编辑器组",
-    "workbench.editor.closeEmptyGroups.description": "关闭组内最后一个标签页时关闭该编辑器组。保留最后一个编辑器组。",
+    "workbench.editor.closeEmptyGroups.description": "关闭组内最后一个标签页时关闭该编辑器组，并在保存会话时省略空分组。保留最后一个编辑器组。",
     "workbench.editor.openSideBySideDirection.invalid": "编辑器拆分方向必须为向右或向下。",
     "workbench.editor.openSideBySideDirection.title": "工作台 › 编辑器：侧边打开方向",
     "workbench.editor.openSideBySideDirection.description": "控制侧边编辑器在右侧还是下方打开。",

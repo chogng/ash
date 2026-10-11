@@ -6,7 +6,7 @@ import { resolveLanguagePackCatalog } from '../../../../platform/languagePacks/c
 import { productLanguagePackCatalogs } from '../common/localizationCatalogs.js';
 
 /** This module must not import contributions or the settings registry before NLS is ready. */
-export async function initializeBrowserLocalization(configuration: IConfigurationApi, store: ILanguagePackStore): Promise<void> {
+export async function initializeBrowserLocalization(configuration: IConfigurationApi, store: Pick<ILanguagePackStore, 'read' | 'write'>): Promise<void> {
 	const values = configurationValues(validateConfigurationSnapshot(await configuration.read()).document);
 	const preference = values['workbench.locale'];
 	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, store);

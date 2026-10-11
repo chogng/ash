@@ -114,6 +114,8 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 		}));
 	}
 
+	public async getBuiltInExtensionTranslationsUri(): Promise<undefined> { return undefined; }
+
 	public async search(): Promise<readonly LanguagePackPackage[]> {
 		return [{ id: 'fr-pack', version: '1', displayName: 'French pack', description: '', installed: false }];
 	}

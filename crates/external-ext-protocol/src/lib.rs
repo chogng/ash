@@ -172,11 +172,26 @@ pub struct ExtensionHostInitialization {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "export", ts(optional))]
     pub language: Option<String>,
+    /// Static translations selected by the initiating client, never shared server locale state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export", ts(optional))]
+    pub localization: Option<ExtensionLocalization>,
     pub workspace_folders: Vec<ExtensionWorkspaceFolder>,
     pub workspace_name: Option<String>,
     pub workspace_file: Option<String>,
     pub configuration_values: Value,
     pub configuration_data: Value,
+}
+
+/// Validated translation messages and their resource identity for one extension activation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionLocalization {
+    pub uri: String,
+    pub bundle: std::collections::BTreeMap<String, String>,
+    pub package: std::collections::BTreeMap<String, String>,
 }
 
 /// A workspace folder identity visible to one initiating editor window.
@@ -192,6 +207,16 @@ pub struct ExtensionWorkspaceFolder {
 
 impl ExtensionHostInitialization {
     pub fn validate(&self) -> Result<(), ProtocolError> {
+        if let Some(localization) = &self.localization {
+            if localization.uri.is_empty() || localization.uri.len() > 32768
+                || localization.uri.chars().any(char::is_control)
+                || localization.bundle.len() > 10000 || localization.package.len() > 10000
+                || localization.bundle.iter().chain(localization.package.iter()).any(|(key, value)| {
+                    key.is_empty() || key.len() > 1024 || value.len() > 64 * 1024
+                }) {
+                return Err(protocol_error("invalid extension localization snapshot"));
+            }
+        }
         if self.language.as_ref().is_some_and(|language| {
             language.is_empty()
                 || language.len() > 64

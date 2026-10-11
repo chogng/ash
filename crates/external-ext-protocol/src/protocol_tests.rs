@@ -872,6 +872,7 @@ fn activation_initialization_requires_bounded_window_facts_and_preserves_absence
     );
     let snapshot = super::ExtensionHostInitialization {
         language: Some("zh-cn".into()),
+        localization: None,
         workspace_folders: vec![super::ExtensionWorkspaceFolder {
             uri: "file:///workspace".into(),
             name: "Workspace".into(),

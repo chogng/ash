@@ -1,3 +1,4 @@
+import { MainThreadLocalization } from '../../../api/browser/mainThreadLocalization.js';
 import type { ExtensionHostReconcileMode, IExtensionHostApi, ExtensionHostClientHandler, ExtensionHostFleetSnapshot, ExtensionHostRuntime, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { decodeAppServerServerRequestParams } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
@@ -77,7 +78,8 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		const localIds = new Set(this.snapshot.extensions.map(runtime => runtime.id));
 		if (snapshot.extensions.some(runtime => localIds.has(runtime.id))) throw new Error('An extension cannot be active in two hosts');
 		this.remoteSnapshot = snapshot;
-		this.changes.fire(++this.snapshotGeneration);
+		// The queued catalog read may revoke a local runtime activated by the current pass.
+		if (!this.pendingMode) { this.changes.fire(++this.snapshotGeneration); }
 	}
 
 	public reconcile(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot> {
@@ -146,7 +148,8 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		for (const extension of catalog.extensions) {
 			const previous = this.snapshot.extensions.find(runtime => runtime.id === extension.id);
 			if (mode === 'restartFailed' && previous?.lifecycle === 'ready') { runtimes.push(previous); continue; }
-			const manifest = JSON.parse(extension.manifestJson);
+			const localization = this.instantiation.createInstance(MainThreadLocalization);
+			const manifest = JSON.parse(await localization.localizeManifest(extension.id, extension.manifestJson, catalog.generation));
 			if (typeof manifest.browser !== 'string') { continue; }
 			let worker: BrowserExtensionWorker | undefined;
 			try {

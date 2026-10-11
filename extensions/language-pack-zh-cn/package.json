@@ -5,15 +5,40 @@
   "displayName": "简体中文语言包",
   "description": "Chinese (Simplified) display language for Ash.",
   "license": "MIT",
-  "engines": { "ash": "*" },
-  "categories": ["Language Packs"],
+  "engines": {
+    "ash": "*"
+  },
+  "categories": [
+    "Language Packs"
+  ],
   "contributes": {
     "localizations": [
       {
         "languageId": "zh-CN",
         "languageName": "Chinese (Simplified)",
         "localizedLanguageName": "简体中文",
-        "translations": [{ "id": "ash", "path": "localization/package.json" }]
+        "translations": [
+          {
+            "id": "ash",
+            "path": "localization/package.json"
+          },
+          {
+            "id": "ash.git",
+            "path": "extension-translations/git.json"
+          },
+          {
+            "id": "ash.remote-ssh",
+            "path": "extension-translations/remote-ssh.json"
+          },
+          {
+            "id": "ash.media-preview",
+            "path": "extension-translations/media-preview.json"
+          },
+          {
+            "id": "ash.markdown-language-features",
+            "path": "extension-translations/markdown-language-features.json"
+          }
+        ]
       }
     ]
   }

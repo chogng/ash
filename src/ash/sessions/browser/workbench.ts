@@ -305,6 +305,10 @@ export abstract class Workbench extends Disposable {
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
 		services.registerInstance(IStorageService, storageService);
+		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
+		services.registerInstance(IExtensionManagementService, extensionManagementService);
+		const languagePacks = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		services.registerInstance(ILanguagePackService, languagePacks);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
 		const enabledExtensions = withEnabledBuiltInExtensions(options.api.extensions, enablement);
@@ -388,7 +392,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkingCopyService, workingCopies);
 		const textMate = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMate);
-		const extensionService = this._register(new AppServerExtensionService({ api: enabledExtensions, eventApi: options.api.events, textMateService: textMate, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), languageFeaturesService: services.get(ILanguageFeaturesService) }));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: options.api.events, textMateService: textMate, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), languageFeaturesService: services.get(ILanguageFeaturesService) }));
 		services.registerInstance(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logger.error('extensions', 'Declarative extension activation failed', error));
@@ -416,10 +420,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IHooksService, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
 		services.registerInstance(IExecutionSettingsService, options.api.executionSettings);
-		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
-		services.registerInstance(IExtensionManagementService, extensionManagementService);
-		const languagePacks = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
-		services.registerInstance(ILanguagePackService, languagePacks);
 		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);
 		services.registerInstance(IAppServerRemoteAgentService, this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: options.api.remote })));

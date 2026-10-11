@@ -3,6 +3,7 @@ import { isRecord } from "../../../base/common/types.js";
 import type { LanguagePackCatalog } from "./languagePacksService.js";
 import { ASH_LOCALIZATION_CATALOG_VERSION } from "./languagePackContract.js";
 import type { ILanguagePackStore } from "./languagePackStore.js";
+import type { LanguagePackIndexEntry } from "./languagePackContract.js";
 
 export function normalizeLocale(value: string): string {
 	const parts = value.trim().replaceAll("_", "-").split("-");
@@ -11,17 +12,18 @@ export function normalizeLocale(value: string): string {
 }
 
 /** Startup must remain usable when an optional language resource is missing or damaged. */
-export async function resolveLanguagePackCatalog(locale: string, startupCatalogs: readonly LanguagePackCatalog[], store: ILanguagePackStore): Promise<LanguagePackCatalog> {
+export async function resolveLanguagePackCatalog(locale: string, startupCatalogs: readonly LanguagePackCatalog[], store: Pick<ILanguagePackStore, 'read'>): Promise<LanguagePackCatalog> {
 	let candidate = normalizeLocale(locale);
 	while (candidate) {
-		const packaged = startupCatalogs.find(catalog => catalog.locale.toLowerCase() === candidate.toLowerCase());
-		if (packaged) { return packaged; }
+		if (candidate === "en") { break; }
 		try {
 			const catalog = await store.read(candidate);
 			if (catalog) { return catalog; }
 		} catch {
 			// Keep the preference so reinstalling the pack can restore it on a later startup.
 		}
+		const packaged = startupCatalogs.find(catalog => catalog.locale.toLowerCase() === candidate.toLowerCase());
+		if (packaged) { return packaged; }
 		const separator = candidate.lastIndexOf("-");
 		candidate = separator > 0 ? candidate.slice(0, separator) : "";
 	}
@@ -51,6 +53,17 @@ export function parseLanguagePackCatalog(value: unknown): LanguagePackCatalog | 
 		}
 		bundles[bundle] = normalizedMessages;
 	}
+	const extensionTranslations: Record<string, { package: Readonly<Record<string, string>>; bundle: Readonly<Record<string, string>>; }> = {};
+	if (candidate.extensionTranslations !== undefined) {
+		if (!isRecord(candidate.extensionTranslations) || Object.keys(candidate.extensionTranslations).length > 2048) { return undefined; }
+		for (const [id, translations] of Object.entries(candidate.extensionTranslations)) {
+			if (!/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/iu.test(id) || !isRecord(translations)) { return undefined; }
+			const packageMessages = parseTranslationMessages(translations.package);
+			const codeMessages = parseTranslationMessages(translations.bundle);
+			if (!packageMessages || !codeMessages || Object.hasOwn(extensionTranslations, id.toLowerCase())) { return undefined; }
+			extensionTranslations[id.toLowerCase()] = { package: packageMessages, bundle: codeMessages };
+		}
+	}
 	return {
 		schemaVersion: 1,
 		locale,
@@ -58,7 +71,27 @@ export function parseLanguagePackCatalog(value: unknown): LanguagePackCatalog | 
 		localizedLanguageName: candidate.localizedLanguageName,
 		catalogVersion: candidate.catalogVersion,
 		bundles,
+		...(candidate.extensionTranslations === undefined ? {} : { extensionTranslations }),
 	};
+}
+
+export function parseTranslationMessages(value: unknown): Readonly<Record<string, string>> | undefined {
+	if (!isRecord(value) || Object.keys(value).length > 10000) { return undefined; }
+	const messages: Record<string, string> = Object.create(null);
+	for (const [key, message] of Object.entries(value)) {
+		if (!key || key.length > 1024 || typeof message !== "string" || message.length > 64 * 1024) { return undefined; }
+		messages[key] = message;
+	}
+	return messages;
+}
+
+export function parseLanguagePackIndexEntry(value: unknown): LanguagePackIndexEntry | undefined {
+	if (!isRecord(value) || typeof value.extensionId !== "string" || !/^[a-z0-9][a-z0-9-]*[/.][a-z0-9][a-z0-9-]*$/iu.test(value.extensionId)
+		|| typeof value.version !== "string" || !value.version || value.version.length > 128
+		|| typeof value.digest !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(value.digest)) { return undefined; }
+	const catalog = parseLanguagePackCatalog(value.catalog);
+	if (!catalog || value.locale !== catalog.locale || catalog.locale === "en") { return undefined; }
+	return { locale: catalog.locale, extensionId: value.extensionId, version: value.version, digest: value.digest, catalog };
 }
 
 export function decodeBase64(encoded: string): string {

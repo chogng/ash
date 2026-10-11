@@ -1,3 +1,4 @@
+import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import javascript from '../../../extensions/javascript/package.json' with { type: 'json' };
 import typescript from '../../../extensions/typescript-basics/package.json' with { type: 'json' };
@@ -69,5 +70,5 @@ export async function createLanguageExtensions(options: Omit<AppServerExtensionS
 				return new Uint8Array(await response.arrayBuffer());
 			}),
 		},
-	});
+	}, createEmptyTestLanguagePacks());
 }

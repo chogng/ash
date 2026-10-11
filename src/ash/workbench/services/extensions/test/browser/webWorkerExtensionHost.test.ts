@@ -1,3 +1,6 @@
+import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
+import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacksService.js';
+import { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -35,6 +38,11 @@ test('extension backend routes decode parameters before using the protocol conne
 });
 
 class RemoteHost extends Disposable implements IExtensionHostApi {
+	constructor() {
+		super();
+		this.instantiation.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
+		this.instantiation.registerInstance(IExtensionApi, { list: async () => ({ generation: 1, extensions: [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => new Uint8Array()) });
+	}
 	readonly instantiation = this._register(new InstantiationService());
 	private readonly changes = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
@@ -136,6 +144,65 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 		if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
 		else Reflect.deleteProperty(globalThis, 'Worker');
 		for (const url of urls) URL.revokeObjectURL(url);
+	}
+});
+
+test('disablement during activation retires the Worker before publishing its contributions', async () => {
+	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+	const started = new DeferredPromise<void>();
+	let enabled = true;
+	let reads = 0;
+	let terminated = false;
+	let reply: (() => void) | undefined;
+	class WorkerFixture extends EventTarget {
+		postMessage(message: BrowserExtensionHostRequest): void {
+			assert.equal(message.type, 'activate');
+			reply = () => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: [] } }));
+			void started.complete();
+		}
+		terminate(): void { terminated = true; }
+	}
+	Object.defineProperty(globalThis, 'Worker', { configurable: true, value: WorkerFixture });
+	try {
+		using remote = new RemoteHost();
+		remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
+		remote.registerClientHandler = () => Disposable.None;
+		remote.instantiation.registerInstance(ICommandService, {} as ICommandService);
+		remote.instantiation.registerInstance(IFileService, {} as IFileService);
+		remote.instantiation.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
+		remote.instantiation.registerInstance(IAppServerApi, {} as IAppServerApi);
+		using changes = new Emitter<void>();
+		using api = new WebWorkerExtensionHost({
+			onDidChange: changes.event,
+			list: async () => {
+				reads++;
+				return {
+					generation: 1, diagnostics: [], extensions: enabled ? [{
+						id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn',
+						manifestJson: JSON.stringify({ browser: './browser.js' }), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+					}] : []
+				};
+			},
+			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+		}, remote, remote.instantiation);
+		const registration = api.registerClientHandler(async () => ({ result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }));
+		using handler = toDisposable(() => registration.dispose());
+		const published: Promise<ExtensionHostFleetSnapshot>[] = [];
+		const subscription = api.onDidChange(() => { published.push(api.list()); });
+		using listener = toDisposable(() => subscription.dispose());
+		const activation = api.reconcile('refresh');
+		await started.p;
+		enabled = false;
+		changes.fire();
+		assert.equal(api.reconcile('restartFailed'), activation);
+		reply!();
+		assert.deepEqual((await activation).extensions, []);
+		assert.equal(reads, 2, 'The enablement event queues a fresh catalog read');
+		assert.equal(terminated, true);
+		for (const fleet of await Promise.all(published)) { assert.deepEqual(fleet.extensions, []); }
+	} finally {
+		if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+		else Reflect.deleteProperty(globalThis, 'Worker');
 	}
 });
 

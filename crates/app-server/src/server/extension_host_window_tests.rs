@@ -62,6 +62,7 @@ impl EditorPeer {
                             ExtensionClientResult::Initialization {
                                 initialization: ExtensionHostInitialization {
                                     language: Some("en".into()),
+                                    localization: None,
                                     workspace_folders: Vec::new(),
                                     workspace_name: Some(name.clone()),
                                     workspace_file: None,

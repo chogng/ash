@@ -1,3 +1,4 @@
+import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
@@ -201,7 +202,7 @@ const extensions = resources.add(new AppServerExtensionService({
 		}),
 	},
 	textMateService: { grammars } as unknown as ITextMateService,
-}));
+}, createEmptyTestLanguagePacks()));
 await extensions.start();
 window.disposeThemeExtensions = () => extensions.dispose();
 render();

@@ -362,6 +362,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
         },
         initialization: Some(external_ext_protocol::ExtensionHostInitialization {
             language: None,
+            localization: None,
             workspace_folders: Vec::new(),
             workspace_name: None,
             workspace_file: None,
@@ -456,6 +457,7 @@ exports.activate = async context => {
         },
         initialization: Some(external_ext_protocol::ExtensionHostInitialization {
             language: None,
+            localization: None,
             workspace_folders: Vec::new(),
             workspace_name: None,
             workspace_file: None,
@@ -483,6 +485,7 @@ exports.activate = async context => {
     fn window_facts(value: u64) -> external_ext_protocol::ExtensionHostInitialization {
         external_ext_protocol::ExtensionHostInitialization {
             language: None,
+            localization: None,
             workspace_folders: vec![],
             workspace_name: None,
             workspace_file: None,

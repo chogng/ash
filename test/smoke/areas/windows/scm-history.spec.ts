@@ -13,7 +13,7 @@ test('SCM activation focuses its input or selected resource without outlining th
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	await writeFile(testWorkspace.file, 'const changed = true;\n');
 	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const pane = page.locator('[data-view-id="ash.gitView"]');
 	const input = pane.locator('.ash-scm-input .stanza-editor-input');
 	await expect(input).toBeFocused();
@@ -26,7 +26,7 @@ test('SCM activation focuses its input or selected resource without outlining th
 	const resource = await tree.getAttribute('aria-activedescendant');
 	expect(resource).toBeTruthy();
 	await page.getByRole('tab', { name: /^Explorer(?:,|$)/u }).click();
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await expect(tree).toBeFocused();
 	await expect(tree).toHaveAttribute('aria-activedescendant', resource!);
 	await expect(pane).toHaveCSS('outline-style', 'none');
@@ -46,7 +46,7 @@ test('SCM history retains the reading position, expanded files and row actions a
 		importer.stdin!.end(commits);
 	});
 	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();
 	await history.locator('[data-action-id="workbench.scm.action.graph.refresh"] > button').click();
@@ -98,7 +98,7 @@ test('SCM startup keeps commit hover targets stable in a large history', async (
 	});
 	const restarted = await reloadWorkbench();
 	const page = restarted.workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();
 	const graph = history.locator('.ash-scm-graph');
@@ -233,7 +233,7 @@ test('SCM history connects repeated merge parents back to the main lane', async 
 	await git('update-ref', 'refs/heads/main', tip);
 	const restarted = await reloadWorkbench();
 	const page = restarted.workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();
 	const inner = history.getByRole('treeitem').filter({ hasText: 'Inner merge commit' });
@@ -263,7 +263,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await settings.locator('.ash-modal-editor-close').click();
 	}
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history).toBeVisible();
 	await history.locator('.ash-pane-view-header').click();
@@ -378,7 +378,7 @@ test('SCM history reserves title width and reveals commit details on pointer and
 	const [hash, timestamp] = stdout.trim().split('\n');
 	const page = workbench.page;
 	if (target.kind === 'browser') { await page.context().grantPermissions(['clipboard-read', 'clipboard-write']); }
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	const header = history.locator('.ash-pane-view-header');
 	await header.click();
@@ -584,7 +584,7 @@ test('SCM history references and actions overlay long titles without changing ro
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await settings.locator('.ash-modal-editor-close').click();
 	}
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	const header = history.locator('.ash-pane-view-header');
 	await header.click();
@@ -686,7 +686,7 @@ test('SCM graph menus copy complete commit information and compare explicit remo
 		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
 	}
 	if (target.kind === 'browser') { await page.context().grantPermissions(['clipboard-read', 'clipboard-write']); }
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();
 	const commit = history.getByRole('treeitem', { name: /Graph comparison/u });
@@ -751,7 +751,7 @@ test('SCM graph menus create at an old commit, switch references, delete branche
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
 	}
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();
 	const initial = history.getByRole('treeitem', { name: /Initial/u });
@@ -813,7 +813,7 @@ test('SCM history pane opens without a connected repository', async ({ target, w
 	test.skip(target.appServerMode === 'required', 'Checks disconnected Workbench hosts.');
 
 	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const changes = page.locator('[data-view-id="ash.gitView"]');
 	await expect(changes.locator('.ash-scm-status')).toContainText('source control');
 	await expect(changes.locator('.ash-scm-status')).toBeVisible();
@@ -843,15 +843,15 @@ test.describe('SCM folding', () => {
 		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 		const page = workbench.page;
 		const cwd = testWorkspace.directory;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes' });
 		const working = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label', { hasText: /^Changes$/ }) });
 		const staged = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label', { hasText: /^Staged Changes$/ }) });
-		const workingFile = tree.getByRole('button', { name: 'Open changes for main.ts', exact: true });
-		const stagedFile = tree.getByRole('button', { name: 'Open staged changes for main.ts', exact: true });
+		const workingFile = tree.getByRole('button', { name: 'Open Changes for main.ts', exact: true });
+		const stagedFile = tree.getByRole('button', { name: 'Open Staged Changes for main.ts', exact: true });
 		await expect(workingFile).toBeVisible();
 		await expect(stagedFile).toBeVisible();
-		const workingRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open changes for main.ts', exact: true }) });
+		const workingRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }) });
 		const rowGeometry = await workingRow.evaluate(element => {
 			const row = element.getBoundingClientRect();
 			const content = element.querySelector('.ash-scm-change')!.getBoundingClientRect();
@@ -893,7 +893,7 @@ test.describe('SCM folding', () => {
 		await expect(working).toHaveAttribute('aria-expanded', 'true');
 		await workingFile.click();
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
-		const fileRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open changes for main.ts', exact: true }) });
+		const fileRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }) });
 		await expect(fileRow).toHaveAttribute('aria-selected', 'true');
 		await expect(fileRow).toHaveCSS('border-radius', '4px');
 		const selectedBackground = await fileRow.evaluate(element => getComputedStyle(element).backgroundColor);
@@ -907,7 +907,7 @@ test.describe('SCM folding', () => {
 		await staged.locator('.ash-tree-twistie').click();
 		await expect(staged).toHaveAttribute('aria-expanded', 'false');
 		await expect(stagedFile).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: 'Open changes for refreshed.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Changes for refreshed.ts', exact: true })).toBeVisible();
 		for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
 			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 			await page.locator('.ash-quick-pick').getByRole('combobox').fill(theme);
@@ -934,7 +934,7 @@ test.describe('SCM folding', () => {
 			await page.keyboard.press('ArrowRight');
 			await expect(staged).toHaveCSS('outline-style', 'solid');
 			await stagedFile.click();
-			const selected = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open staged changes for main.ts', exact: true }) });
+			const selected = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Staged Changes for main.ts', exact: true }) });
 			await expect(selected).toHaveAttribute('aria-selected', 'true');
 			await expect.poll(() => selected.evaluate(element => {
 				const style = getComputedStyle(element);
@@ -952,9 +952,9 @@ test.describe('SCM folding', () => {
 			await expect(selected.locator('.ash-scm-change-actions button').first()).toHaveCSS('color', foreground);
 			const bounds = await stagedFile.boundingBox();
 			expect(bounds?.width).toBeGreaterThan(0);
-			const nestedFile = tree.getByRole('button', { name: 'Open staged changes for src/details.ts', exact: true });
+			const nestedFile = tree.getByRole('button', { name: 'Open Staged Changes for src/details.ts', exact: true });
 			await nestedFile.click();
-			const nestedRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open staged changes for src/details.ts', exact: true }) });
+			const nestedRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Staged Changes for src/details.ts', exact: true }) });
 			await expect(nestedRow).toHaveAttribute('aria-selected', 'true');
 			const nestedForeground = await nestedRow.evaluate(element => getComputedStyle(element).color);
 			await expect(nestedFile.locator('.ash-icon-label-description')).toHaveText('src');

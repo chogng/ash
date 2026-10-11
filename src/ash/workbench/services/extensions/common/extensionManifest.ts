@@ -6,6 +6,7 @@ import { posix, win32 } from '../../../../base/common/path.js';
 import { validateTokenId, type ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
 import { getTokenClassificationRegistry, type TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import type { SemanticTokenScopeContribution } from '../../themes/common/tokenClassificationExtensionPoint.js';
+import type { ILocalizationContribution } from '../../../../platform/extensions/common/extensions.js';
 
 export interface ExtensionIconContribution { readonly id: string; readonly description: string; readonly defaults: string | { readonly fontPath: string; readonly fontCharacter: string; }; }
 export interface ExtensionGrammarContribution {
@@ -63,6 +64,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly localizations: readonly ILocalizationContribution[];
 		readonly configuration: readonly IConfigurationNode[];
 		readonly submenus: readonly { id: string; label: string; placements: readonly { menu: string; when?: string; group?: string; }[]; }[];
 		readonly viewsWelcome: readonly { view: string; contents: string; when?: string; precondition?: string; group?: string; order?: number; }[];
@@ -128,6 +130,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		version,
 		displayName,
 		contributes: Object.freeze({
+			localizations: parseLocalizations(contributes.localizations),
 			configuration: parseConfigurations(contributes.configuration),
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
 			viewsWelcome: parseViewsWelcome(contributes.viewsWelcome),
@@ -147,6 +150,28 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			problemPatterns: parseProblemContributions(contributes.problemPatterns, 'problemPatterns'),
 			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor)),
 		}),
+	});
+}
+
+function parseLocalizations(value: unknown): readonly ILocalizationContribution[] {
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 128) { throw new TypeError('Invalid localization contributions'); }
+	const locales = new Set<string>();
+	return value.map(item => {
+		const entry = record(item, 'Localization contribution');
+		const languageId = requiredString(entry.languageId, 'Localization language', 64);
+		if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu.test(languageId) || locales.has(languageId.toLowerCase())) { throw new TypeError('Invalid or duplicate localization language'); }
+		locales.add(languageId.toLowerCase());
+		if (!Array.isArray(entry.translations) || !entry.translations.length || entry.translations.length > 2048) { throw new TypeError('Invalid localization targets'); }
+		const targets = new Set<string>();
+		const translations = entry.translations.map(item => {
+			const translation = record(item, 'Localization translation');
+			const id = requiredString(translation.id, 'Localization target', 256).toLowerCase();
+			if ((id !== 'ash' && !/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/u.test(id)) || targets.has(id)) { throw new TypeError('Invalid or duplicate localization target'); }
+			targets.add(id);
+			return { id, path: normalizeResourcePath(translation.path, 'Localization translation path') };
+		});
+		return { languageId, languageName: requiredString(entry.languageName, 'Localization name', 128), localizedLanguageName: requiredString(entry.localizedLanguageName, 'Localized language name', 128), translations };
 	});
 }
 

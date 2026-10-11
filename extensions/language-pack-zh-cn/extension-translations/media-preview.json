@@ -1,0 +1,10 @@
+{
+  "contents": {
+    "package": {
+      "image.preview": "图片预览",
+      "audio.preview": "音频预览",
+      "video.preview": "视频预览"
+    },
+    "bundle": {}
+  }
+}

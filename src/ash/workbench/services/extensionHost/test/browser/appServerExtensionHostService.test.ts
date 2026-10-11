@@ -1,3 +1,5 @@
+import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
+import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacksService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IEditorService } from '../../../editor/common/editorService.js';
 import { IWorkspaceOpenService } from '../../../workspaces/browser/workspaceOpenService.js';
@@ -900,6 +902,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, debug = new ProviderSink<IDebugConfigurationProvider>(), remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
+	services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	services.registerInstance(IExtensionHostApi, api);

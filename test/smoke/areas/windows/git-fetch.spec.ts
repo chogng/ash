@@ -74,7 +74,7 @@ test.describe('Git Fetch', () => {
 			const secondHead = await publish('rev-parse', 'HEAD');
 			const page = workbench.page;
 			const graph = page.locator('[data-view-id="ash.gitGraph"]');
-			if (!await graph.isVisible()) await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			if (!await graph.isVisible()) await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 			const toggle = graph.getByRole('button', { name: 'Graph', exact: true });
 			// Windows in one browser profile share saved pane expansion state.
 			if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();

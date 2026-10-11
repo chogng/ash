@@ -13,6 +13,33 @@ interface SashMeasurements {
 	readonly rasters: { width: number; height: number; }[];
 }
 
+test('startup omits an empty source group created by Open to the Side and preserves unsaved content', async ({ target, application, workbench, reloadWorkbench }) => {
+	test.skip(target.appServerMode === 'disabled', 'Requires workspace files');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await workbench.openExplorer();
+	const file = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true });
+	await workbench.menus.select(application, () => file.click({ button: 'right' }), ['Open to the Side']);
+	await expect(workbench.editors.groups).toHaveCount(2);
+	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
+	const document = workbench.editors.groupAt(1);
+	await expect(document.tabs).toHaveCount(1);
+	await document.editor.input.focus();
+	await workbench.page.keyboard.press('ControlOrMeta+End');
+	await workbench.page.keyboard.insertText('// retained after restart');
+	await document.editor.waitForEditorContents(text => text === 'const value = 1;\n// retained after restart');
+	for (let restart = 0; restart < 2; restart++) {
+		({ workbench } = await reloadWorkbench());
+		await expect(workbench.editors.groups).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveAttribute('aria-label', 'main.ts, unsaved changes');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'const value = 1;\n// retained after restart');
+		await expect.poll(() => workbench.editors.groupAt(0).element.evaluate(element => {
+			const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
+			return Math.round(content.width - element.getBoundingClientRect().width);
+		})).toBe(0);
+	}
+});
+
 test('closing tabs removes empty editor groups and restores one full-width group', async ({ workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
@@ -78,9 +105,11 @@ test('editor group lifecycle keeps recent tabs and sticky editors and focuses em
 	await page.keyboard.press('ControlOrMeta+W');
 	await expect(group.tabs).toHaveCount(0);
 	await expect(group.element).toBeFocused();
+	await expect(group.element).toHaveCSS('outline-style', 'none');
 	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
 	await expect(workbench.editors.groups).toHaveCount(2);
 	await expect(workbench.editors.groupAt(1).element).toBeFocused();
+	await expect(workbench.editors.groupAt(1).element).toHaveCSS('outline-style', 'solid');
 	await expect(workbench.editors.groupAt(1).element).toHaveAttribute('aria-label', 'Empty editor group');
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await expect(workbench.editors.groups).toHaveCount(1);
@@ -129,7 +158,7 @@ test('editor group lifecycle preserves cursor and scrolling through split and ta
 
 test.describe('editor group lifecycle saved state', () => {
 	test.use({ openWorkspace: false });
-	test('closes a restored empty editor group with the keyboard and keeps one group after restart', async ({ target, application, workbench, reloadWorkbench }) => {
+	test('startup removes a previously saved empty group without a close command and keeps one group after restart', async ({ target, application, workbench, reloadWorkbench }) => {
 		const page = workbench.page;
 		const workspaceId = target.kind === 'electron'
 			? parseWorkspace(await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer.invoke('ash:workspace:context:read'))).id
@@ -146,16 +175,10 @@ test.describe('editor group lifecycle saved state', () => {
 		await seedStorageOnNextLoad(application, page, { scope: StorageScope.WORKSPACE, id: workspaceId! }, { 'editorparts.state': { value: JSON.stringify(state), target: StorageTarget.MACHINE } });
 		await page.reload();
 		await workbench.waitForReady();
-		await expect(workbench.editors.groups).toHaveCount(2);
-		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
-		await workbench.editors.groupAt(0).element.focus();
-		await expect(workbench.editors.groupAt(0).element).toBeFocused();
-		await page.keyboard.press('ControlOrMeta+W');
 		await expect(workbench.editors.groups).toHaveCount(1);
 		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
 		await expect(workbench.editors.groupAt(0).tabs).toHaveAttribute('aria-label', 'restored.json, unsaved changes');
 		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === '{ "restored": true }');
-		await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
 		await expect.poll(() => workbench.editors.groupAt(0).element.evaluate(element => {
 			const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
 			return Math.round(content.width - element.getBoundingClientRect().width);
@@ -355,7 +378,7 @@ test.describe('startup layout defaults', () => {
 
 	test('Git explains empty windows and folders without repositories', async ({ target, workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
 		await expect(page.locator('.ash-scm-status')).toHaveText(target.kind === 'browser' && target.appServerMode === 'required'
 			? 'No source control repository found in the open folder.' : 'Open a folder to use source control.');
@@ -402,7 +425,7 @@ test('new desktop workspace shows Explorer and Chat with Panel hidden', async ({
 test('Git explains when the open folder has no repository', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
 	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await expect(page.locator('.ash-scm-status')).toHaveText('No source control repository found in the open folder.');
 	await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 });

@@ -1,15 +1,18 @@
 import { AshWorkbenchName } from '../../common/application.js';
 import { showStartupError } from '../../../workbench/browser/startupError.js';
 import { invoke } from '../../../platform/ipc/electron-browser/rendererIpc.js';
-import { NLS_CONFIGURATION_CHANNEL } from '../../../platform/languagePacks/common/languagePackStore.js';
-import { parseLanguagePackCatalog } from '../../../platform/languagePacks/common/languagePackCatalog.js';
+import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../../platform/languagePacks/common/languagePackStore.js';
+import { resolveLanguagePackCatalog } from '../../../platform/languagePacks/common/languagePackCatalog.js';
 import { setNlsMessages } from '../../../nls.js';
+import { BrowserLanguagePackStore } from '../../../platform/languagePacks/browser/languagePackStore.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { createAppServerDebugAdapterCapability } from '../../../platform/debug/browser/appServerDebugAdapterProcessService.js';
 
 try {
-	const catalog = parseLanguagePackCatalog(await invoke<unknown>(NLS_CONFIGURATION_CHANNEL));
-	if (!catalog) { throw new Error('Invalid startup display language'); }
+	const preference = await invoke<unknown>(NLS_CONFIGURATION_CHANNEL);
+	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, new BrowserLanguagePackStore());
 	setNlsMessages(catalog.locale, catalog.bundles);
+	await invoke<void>(NLS_ACTIVATE_CHANNEL, catalog);
 	performance.mark('ash.desktop.contributions-start');
 	await import('../../../workbench/workbench.desktop.main.js');
 	await import('../../../sessions/common/configuration.js');

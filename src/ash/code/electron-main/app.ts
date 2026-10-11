@@ -10,6 +10,7 @@ import { hooksConfigurationIpcRoute, openHooksTextFile } from '../../platform/ho
 import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
 import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
 import { isRecord } from '../../base/common/types.js';
+import { Emitter } from '../../base/common/event.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
@@ -120,11 +121,9 @@ import { AuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/elec
 import { nodeWorkspacePathService } from '../../platform/workspaces/node/workspaces.js';
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
 import { productLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
-import { normalizeLocale, resolveLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePacksService.js';
-import { LanguagePackStore } from '../../platform/languagePacks/node/languagePackStore.js';
-import { LANGUAGE_PACK_READ_CHANNEL, LANGUAGE_PACK_WRITE_CHANNEL, NLS_CONFIGURATION_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
+import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL } from '../../platform/window/common/window.js';
 export type AppServerStartupMode = "required" | "disabled";
 
@@ -203,6 +202,7 @@ export class AshApplication extends Disposable {
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
 	private readonly profileRoot: string;
+	private readonly localizationChanged = this._register(new Emitter<void>());
 	private activeLanguagePack: LanguagePackCatalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
 	private restartRequested = false;
 	private readonly developmentAppServerReloader = this._register(new MutableDisposable<DevelopmentAppServerReloader>());
@@ -440,7 +440,7 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
 		this.mainProcessIpcServer.registerChannel('process', ProxyChannel.fromService(new ProcessMainService(), this._store));
 		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
-		const catalog = await resolveLanguagePackCatalog(typeof localeValue === 'string' ? localeValue : 'en', productLanguagePackCatalogs, new LanguagePackStore(this.profileRoot));
+		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === localeValue) ?? productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
 		throwIfCancelled(token);
 		this.activeLanguagePack = catalog;
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
@@ -620,6 +620,7 @@ export class AshApplication extends Disposable {
 		};
 		this._register(this.workspacesHistory.onDidChangeRecentlyOpened(updateMenu));
 		this._register(this.services.configuration.onDidChange(updateMenu));
+		this._register(this.localizationChanged.event(updateMenu));
 		updateMenu();
 		if (whiteIcon) {
 			const updateIcon = (): void => tray.setImage(nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
@@ -936,17 +937,16 @@ export class AshApplication extends Disposable {
 			{
 				channel: NLS_CONFIGURATION_CHANNEL,
 				validate: value => { if (value !== undefined) { throw new TypeError('Startup language takes no arguments'); } return undefined; },
-				invoke: () => this.activeLanguagePack,
+				invoke: () => configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale] ?? 'en',
 			},
 			{
-				channel: LANGUAGE_PACK_READ_CHANNEL,
-				validate: value => { if (typeof value !== 'string' || !value || normalizeLocale(value) !== value) { throw new TypeError('Invalid display language ID'); } return value; },
-				invoke: locale => new LanguagePackStore(this.profileRoot).read(locale as string),
-			},
-			{
-				channel: LANGUAGE_PACK_WRITE_CHANNEL,
+				channel: NLS_ACTIVATE_CHANNEL,
 				validate: value => { const catalog = parseLanguagePackCatalog(value); if (!catalog) { throw new TypeError('Invalid display language resource'); } return catalog; },
-				invoke: catalog => new LanguagePackStore(this.profileRoot).write(catalog as LanguagePackCatalog),
+				invoke: catalog => {
+					this.activeLanguagePack = catalog as LanguagePackCatalog;
+					this.localizationChanged.fire();
+					if (process.platform === 'win32') { this.configureWindowsTaskbar(); }
+				},
 			},
 			{
 				channel: HOST_RESTART_CHANNEL,

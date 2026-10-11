@@ -1,3 +1,4 @@
+import { MainThreadLocalization } from './mainThreadLocalization.js';
 import { extensionMenuId } from '../../services/extensions/common/extensionMenus.js';
 import { MainThreadSCM } from './mainThreadSCM.js';
 import { MainThreadExtensionBackend } from './mainThreadExtensionBackend.js';
@@ -274,8 +275,10 @@ export class MainThreadExtensionApi extends Disposable {
 				const result = await this.bulkEdits.apply(edits, { token: signal });
 				return { result: 'applied', applied: result.isApplied };
 			}
-			case 'readInitialization':
-				return { result: 'initialization', initialization: createExtensionHostInitialization(this.workspace, this.configuration) };
+			case 'readInitialization': {
+				const localization = await this.instantiation.createInstance(MainThreadLocalization).getLocalization(source.extensionId);
+				return { result: 'initialization', initialization: { ...createExtensionHostInitialization(this.workspace, this.configuration), ...(localization ? { localization } : {}) } };
+			}
 			case 'readConfiguration': {
 				const value = this.configuration.getValue(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
 				return { result: 'configuration', value: value === undefined ? null : normalizeExtensionHostPayload(value) };

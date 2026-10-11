@@ -190,7 +190,7 @@ test.describe('SCM external opening', () => {
 		await captureExternalOpening(electron);
 		try {
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 			const history = page.locator('[data-view-id="ash.gitGraph"]');
 			await expect(history).toBeVisible();
 			await history.locator('.ash-pane-view-header').click();

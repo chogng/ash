@@ -513,6 +513,10 @@ export class Workbench extends Disposable {
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
 		services.registerInstance(IStorageService, storageService);
+		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
+		services.registerInstance(IExtensionManagementService, extensionManagementService);
+		const languagePackService = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		services.registerInstance(ILanguagePackService, languagePackService);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
 		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement);
@@ -707,7 +711,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(new AppServerExtensionService({ api: enabledExtensions, eventApi: api.events, textMateService, languageService, languageConfigurationService, languageFeaturesService }));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, textMateService, languageService, languageConfigurationService, languageFeaturesService }));
 		services.registerInstance(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
@@ -724,8 +728,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IIssueReporterService, api.issueReporter);
 		services.registerInstance(IGitHubService, api.github);
 		services.registerInstance(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));
-		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
-		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		services.registerInstance(IAppServerSkillApi, api.skills);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IInstructionService, api.instructions);
@@ -739,8 +741,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
 
-		const languagePackService = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
-		services.registerInstance(ILanguagePackService, languagePackService);
 		const localizationService = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localizationService);
 		const ownerWindow = ownerDocument.defaultView;

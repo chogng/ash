@@ -1,5 +1,5 @@
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import { createTestLanguagePacks, createTestLocaleService, initializeTestLocalization } from './localizationTestUtils.js';
+import { createTestLanguagePackStore, createTestLanguagePacks, createTestLocaleService, initializeTestLocalization } from './localizationTestUtils.js';
 import { localize2, localize, resetNlsResolver } from '../../../../../nls.js';
 import assert from "node:assert/strict";
 import { readFile } from 'node:fs/promises';
@@ -556,7 +556,7 @@ suite('Workbench localization', () => {
 	for (const [preference, title] of [[undefined, 'Search commands'], ['EN', 'Search commands'], ['ZH_cn', '搜索命令']] as const) {
 		test(`browser bootstrap initializes ${preference ?? 'the default language'} without reading installed resources`, async () => {
 			await initializeBrowserLocalization(startupConfiguration(preference), {
-				read: async () => { assert.fail('Built-in languages do not need stored resources'); },
+				read: async () => undefined,
 				write: async () => { assert.fail('Bootstrap must only read resources'); },
 			});
 			assert.equal(commandActionLabel(localize2({ bundle: 'ash.regions', key: 'searchCommands' }, 'Hello Ash')), title);

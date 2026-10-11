@@ -1,3 +1,4 @@
+import { createTestLanguagePackStore } from '../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { ILanguagePackStore } from '../../common/languagePackStore.js';
 import assert from "node:assert/strict";
@@ -7,7 +8,7 @@ import { resolve } from 'node:path';
 import { Emitter } from "../../../../base/common/event.js";
 import { IExtensionManagementService } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
 import { ExtensionsLanguagePackService } from "../../browser/extensionsLanguagePackService.js";
-import { parseLanguagePackCatalog } from "../../common/languagePackCatalog.js";
+import { parseLanguagePackCatalog, resolveLanguagePackCatalog } from "../../common/languagePackCatalog.js";
 import type { LanguagePackCatalog } from "../../common/languagePacksService.js";
 import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from "../../../../workbench/services/localization/common/localizationCatalogs.js";
 
@@ -58,7 +59,7 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 	const changes = new Emitter<void>();
 	const installed = catalogs.map((catalog, index) => ({
 		installationId: `installation.localization.${index}`,
-		package: { id: `example.localization.${catalog.locale}${index === 0 ? '' : `.${index}`}`, version: "1.0.0", digest: `sha256:${"a".repeat(64)}` },
+		package: { id: `example/localization-${catalog.locale.toLowerCase()}-${index}`, version: "1.0.0", digest: `sha256:${"a".repeat(64)}` },
 		state: "installed" as const,
 		capabilities: [{
 			reference: { id: `capability.localization.${index}` },
@@ -77,7 +78,7 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 		cachedBrowse: () => undefined,
 		browse: () => Promise.reject(new Error("unused")),
 		refreshBrowse: () => Promise.reject(new Error("unused")),
-		search: async () => [{ id: "example.localization.fr", version: "1.0.0", packageType: "localization", displayName: "Français", description: "French" }],
+		search: async () => [{ id: "example/localization-fr-0", version: "1.0.0", packageType: "localization", displayName: "Français", description: "French" }],
 		get: () => Promise.reject(new Error("unused")),
 		download: () => Promise.reject(new Error("unused")),
 		install: async () => installed[0]!,
@@ -95,10 +96,10 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 	};
 }
 
-function createService(extensionManagement: IExtensionManagementService, store: ILanguagePackStore = { read: async () => undefined, write: async () => { } }): ExtensionsLanguagePackService {
+function createService(extensionManagement: IExtensionManagementService, store: Partial<ILanguagePackStore> = {}): ExtensionsLanguagePackService {
 	using services = new InstantiationService();
 	services.registerInstance(IExtensionManagementService, extensionManagement);
-	services.registerInstance(ILanguagePackStore, store);
+	services.registerInstance(ILanguagePackStore, createTestLanguagePackStore(store));
 	return services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
 }
 
@@ -150,7 +151,7 @@ test('conflicting locale providers cannot overwrite resources or hide other lang
 
 test('preinstalled catalogs cannot be replaced by an installed provider', async () => {
 	const catalog = { ...productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!, bundles: { ash: { hello: 'replacement' } } };
-	using service = createService(createExtensions([catalog]), { read: async () => undefined, write: async () => { assert.fail('Preinstalled catalogs must not be overwritten'); } });
+	using service = createService(createExtensions([catalog]), { read: async () => undefined, write: async () => { assert.fail('Foreign providers must not replace a preinstalled language'); } });
 	await service.whenReady;
 	assert.deepEqual(service.catalogs.find(value => value.locale === 'zh-CN'), productLanguagePackCatalogs.find(value => value.locale === 'zh-CN'));
 });
@@ -169,4 +170,64 @@ test('an unreadable provider releases its lease and does not hide another locale
 	await service.whenReady;
 	assert.deepEqual(service.availableLocales.map(value => value.locale), ['de', 'en', 'zh-CN']);
 	assert.deepEqual(released, ['capability.localization.0', 'capability.localization.1']);
+});
+
+test('the preinstalled Chinese extension can update independently and uninstall restores the bundled version', async () => {
+	const original = productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!;
+	const updated = { ...original, bundles: { ...original.bundles, ash: { ...original.bundles.ash, greeting: '更新后的语言包' } } };
+	const extensions = createExtensions([updated]);
+	const installed = await extensions.listInstalled();
+	let current = [{ ...installed[0], package: { ...installed[0].package, id: 'ash/language-pack-zh-cn', version: '1.1.0' } }];
+	extensions.listInstalled = async () => current;
+	const store = createTestLanguagePackStore();
+	using service = createService(extensions, store);
+	await service.whenReady;
+	assert.equal(service.installedPackages.find(pack => pack.id === 'ash/language-pack-zh-cn')?.version, '1.1.0');
+	assert.equal(service.availableLocales.find(pack => pack.locale === 'zh-CN')?.source, 'extensionManagement');
+	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles.ash.greeting, '更新后的语言包');
+	assert.deepEqual((await store.readIndex()).map(({ extensionId, version, locale }) => ({ extensionId, version, locale })), [{ extensionId: 'ash/language-pack-zh-cn', version: '1.1.0', locale: 'zh-CN' }]);
+	current = [];
+	await service.refresh();
+	assert.deepEqual(await store.readIndex(), []);
+	assert.deepEqual(await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store), original);
+});
+
+test('uninstall removes a language provider from startup resources and falls back to English', async () => {
+	const catalog: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } };
+	const extensions = createExtensions([catalog]);
+	let installed = await extensions.listInstalled();
+	extensions.listInstalled = async () => installed;
+	const store = createTestLanguagePackStore();
+	using service = createService(extensions, store);
+	await service.whenReady;
+	assert.equal((await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store)).locale, 'fr');
+	installed = [];
+	await service.refresh();
+	assert.equal((await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store)).locale, 'en');
+	assert.equal(service.availableLocales.some(pack => pack.locale === 'fr'), false);
+});
+
+test('English remains the fallback even when an installed provider declares English', async () => {
+	const catalog = { ...builtinLanguagePackCatalogs[0], bundles: { ash: { hello: 'replacement' } } };
+	const store = createTestLanguagePackStore();
+	using service = createService(createExtensions([catalog]), store);
+	await service.whenReady;
+	assert.deepEqual(await store.readIndex(), []);
+	assert.deepEqual(await resolveLanguagePackCatalog('en', productLanguagePackCatalogs, store), builtinLanguagePackCatalogs[0]);
+});
+
+test('extension translation resources stay pinned to the startup version until restart', async () => {
+	const original = productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!;
+	const store = createTestLanguagePackStore();
+	const updated = { ...original, extensionTranslations: { 'ash.git': { package: { 'git.menu.branch': '新版分支' }, bundle: { 'Hello {0}': '你好 {0}' } } } };
+	await store.replace([{ locale: 'zh-CN', extensionId: 'ash/language-pack-zh-cn', version: '2.0.0', digest: `sha256:${'a'.repeat(64)}`, catalog: updated }]);
+	const extensions = createExtensions([]);
+	extensions.listInstalled = async () => { throw new Error('offline'); };
+	using service = createService(extensions, store);
+	await service.whenReady;
+	const uri = await service.getBuiltInExtensionTranslationsUri('ASH.GIT', 'zh-CN');
+	assert.ok(uri);
+	assert.deepEqual(JSON.parse(uri.path.slice('application/json,'.length)).contents, updated.extensionTranslations['ash.git']);
+	assert.equal(await service.getBuiltInExtensionTranslationsUri('ash.git', 'en'), undefined);
+	assert.equal(await service.getBuiltInExtensionTranslationsUri('unknown.extension', 'zh-CN'), undefined);
 });

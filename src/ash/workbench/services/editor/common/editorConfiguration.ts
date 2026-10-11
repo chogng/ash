@@ -37,7 +37,7 @@ export const EditorCloseEmptyGroupsConfiguration = configurationRegistry.registe
 	},
 	setting: {
 		get title() { return localize('workbench.editor.closeEmptyGroups.title', 'Workbench › Editor: Close Empty Groups'); },
-		get description() { return localize('workbench.editor.closeEmptyGroups.description', 'Close an editor group when its last tab closes. The last editor group stays open.'); },
+		get description() { return localize('workbench.editor.closeEmptyGroups.description', 'Close an editor group when its last tab closes and omit empty groups from saved sessions. The last editor group stays open.'); },
 		valueType: 'boolean',
 	},
 });

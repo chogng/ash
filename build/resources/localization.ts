@@ -142,7 +142,15 @@ export async function generateLocalization(check = false): Promise<boolean> {
 			console.log(`Localization ${language.locale}: ${missing.length} missing locale entries; ${unchanged} entries unchanged from source.`);
 			if (process.argv.includes('--report-missing')) console.log(missing.join('\n'));
 		}
-		catalogs.push({ schemaVersion: 1, ...language, catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION, bundles: sortBundles(bundles) });
+		const extensionTranslations: Record<string, { package: Record<string, string>; bundle: Record<string, string>; }> = {};
+		for (const target of extension?.manifest.contributes.localizations[0].translations ?? []) {
+			if (target.id === 'ash') continue;
+			const translation = JSON.parse(await readFile(resolve(extension!.packageRoot, target.path), 'utf8'));
+			const contents = translation.contents;
+			if (!isRecord(contents) || ![contents.package, contents.bundle].every(messages => isRecord(messages) && Object.values(messages).every(message => typeof message === 'string'))) { throw new Error(`Invalid extension translation: ${target.path}`); }
+			extensionTranslations[target.id] = { package: contents.package as Record<string, string>, bundle: contents.bundle as Record<string, string> };
+		}
+		catalogs.push({ schemaVersion: 1, ...language, catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION, bundles: sortBundles(bundles), ...(extension && Object.keys(extensionTranslations).length ? { extensionTranslations } : {}) });
 	}
 	if (check) { return false; }
 	const directory = resolve(repository, '.build/desktop/localization');
@@ -168,6 +176,9 @@ export async function generateLocalization(check = false): Promise<boolean> {
 			version: manifest.version, displayName: manifest.displayName, description: manifest.description, license: manifest.license,
 			capabilities: [{ kind: 'asset', id: language.locale, path: 'localization' }], localizations: [language],
 		};
+		for (const target of manifest.contributes.localizations[0].translations) {
+			if (target.id !== 'ash') { outputs.push({ file: `${packageRoot}/${target.path}`, text: await readFile(resolve(extension.packageRoot, target.path), 'utf8') }); }
+		}
 		for (const [file, value] of [
 			['package.json', manifest],
 			['localization/package.json', catalogs.find(catalog => catalog.locale === language.locale)],
@@ -192,6 +203,7 @@ interface LanguageMetadata { readonly locale: string; readonly languageName: str
 interface LanguagePackManifest {
 	readonly name: string; readonly publisher: string; readonly version: string;
 	readonly displayName: string; readonly description: string; readonly license: string;
+	readonly contributes: { readonly localizations: readonly { readonly translations: readonly { readonly id: string; readonly path: string; }[]; }[]; };
 }
 interface LanguagePackSource {
 	readonly id: string; readonly packageRoot: string; readonly manifest: LanguagePackManifest; readonly language: LanguageMetadata;
@@ -208,8 +220,16 @@ function validateLanguagePackManifest(manifest: unknown, directory: string): Lan
 		|| manifest.main !== undefined || manifest.browser !== undefined || manifest.ashRuntime !== undefined
 		|| !isRecord(language) || typeof language.languageId !== 'string' || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/u.test(language.languageId)
 		|| typeof language.languageName !== 'string' || !language.languageName || typeof language.localizedLanguageName !== 'string' || !language.localizedLanguageName
-		|| !Array.isArray(language.translations) || language.translations.length !== 1 || !isRecord(language.translations[0])
-		|| language.translations[0].id !== 'ash' || language.translations[0].path !== 'localization/package.json') return invalid();
+		|| !Array.isArray(language.translations) || !language.translations.length || language.translations.length > 2048) return invalid();
+	const targets = new Set<string>();
+	for (const target of language.translations) {
+		if (!isRecord(target) || typeof target.id !== 'string' || (target.id !== 'ash' && !/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/u.test(target.id))
+			|| targets.has(target.id) || typeof target.path !== 'string' || !target.path.endsWith('.json')
+			|| target.path.includes('\\') || target.path.includes(':') || target.path.split('/').some(segment => !segment || segment === '.' || segment === '..')) return invalid();
+		targets.add(target.id);
+		if (target.id === 'ash' && target.path !== 'localization/package.json') return invalid();
+	}
+	if (!targets.has('ash')) return invalid();
 	return { locale: language.languageId, languageName: language.languageName, localizedLanguageName: language.localizedLanguageName };
 }
 

@@ -8,7 +8,7 @@ import { expect, test } from '../../../automation/test.js';
 const run = promisify(execFile);
 async function openGit(workbench: Workbench): Promise<void> {
 	const page = workbench.page;
-	const tab = page.getByRole('tab', { name: /^Git(?:,|$)/u });
+	const tab = page.getByRole('tab', { name: /^Source Control(?:,|$)/u });
 	if (await tab.getAttribute('aria-selected') !== 'true' || !await page.locator('[data-part="sidebar"]').isVisible()) await tab.click();
 	await expect(page.locator('[data-view-id="ash.gitView"]')).toBeVisible();
 }
@@ -41,11 +41,11 @@ test('Changes title menus switch and retain view and sort choices through regist
 	await workbench.menus.select(application, open, ['View as List']);
 	await expect(changes.locator('.ash-scm-folder')).toHaveCount(0);
 	await workbench.menus.select(application, open, ['View & Sort', 'Sort Changes by Path']);
-	await expect.poll(() => changes.locator('.ash-scm-change-open').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Open changes for a/z.ts', 'Open changes for b/a.ts', 'Open changes for main.ts']);
+	await expect.poll(() => changes.locator('.ash-scm-change-open').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Open Changes for a/z.ts', 'Open Changes for b/a.ts', 'Open Changes for main.ts']);
 	await workbench.menus.select(application, open, ['View & Sort', 'Sort Changes by Status']);
-	await expect.poll(() => changes.locator('.ash-scm-change-open').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Open changes for main.ts', 'Open changes for a/z.ts', 'Open changes for b/a.ts']);
+	await expect.poll(() => changes.locator('.ash-scm-change-open').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Open Changes for main.ts', 'Open Changes for a/z.ts', 'Open Changes for b/a.ts']);
 	await workbench.menus.select(application, open, ['View & Sort', 'Sort Changes by Name']);
-	await expect.poll(() => changes.locator('.ash-scm-change-open').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Open changes for b/a.ts', 'Open changes for main.ts', 'Open changes for a/z.ts']);
+	await expect.poll(() => changes.locator('.ash-scm-change-open').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Open Changes for b/a.ts', 'Open Changes for main.ts', 'Open Changes for a/z.ts']);
 	expect(await workbench.menus.inspect(application, open, ['View & Sort'])).toEqual(expect.arrayContaining([
 		expect.objectContaining({ label: 'View as List', checked: true }),
 		expect.objectContaining({ label: 'Sort Changes by Name', checked: true, enabled: true }),

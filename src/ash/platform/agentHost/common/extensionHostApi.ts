@@ -158,6 +158,7 @@ export type ExtensionHostRegistration = ExtensionHostSCMRegistration | Extension
 export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'taskType'; readonly taskType: string | null; } | { readonly type: 'debug'; readonly phase: 'start' | 'initialConfigurations' | 'dynamicConfigurations' | 'resolveConfiguration'; readonly debugType: string | null; } | { readonly type: 'startupFinished'; } | { readonly type: 'resolveAuthority'; readonly authorityPrefix: string; };
 export interface ExtensionHostInitialization {
 	readonly language?: string;
+	readonly localization?: { readonly uri: string; readonly bundle: Readonly<Record<string, string>>; readonly package: Readonly<Record<string, string>>; };
 	readonly workspaceFolders: readonly { readonly uri: string; readonly name: string; readonly index: number; }[];
 	readonly workspaceName: string | null;
 	readonly workspaceFile: string | null;

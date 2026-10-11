@@ -60,7 +60,7 @@ test.describe('SCM editor groups', () => {
 
 	test('SCM Changes reserves a file viewport when Graph expands and the commit draft grows', async ({ workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const changes = page.locator('[data-view-id="ash.gitView"]');
 		const graph = page.locator('[data-view-id="ash.gitGraph"]');
 		const changesHeader = changes.locator('.ash-pane-view-header-button');
@@ -190,12 +190,12 @@ test.describe('SCM editor groups', () => {
 	test('SCM group Collapse All folds only the target group recursively and survives Git refresh', async ({ application, testWorkspace, workbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const group = (label: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText(label, { exact: true }) });
 		const folder = (groupId: string, label: string) => tree.locator(`[role="treeitem"][data-tree-id*='${JSON.stringify(groupId)}']`).filter({ has: page.locator('.ash-scm-folder').getByText(label, { exact: true }) });
-		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toBeVisible();
-		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
 		await expect(group('Changes').locator('.ash-count-badge')).toHaveText('6');
 		await expect(group('Staged Changes').locator('.ash-count-badge')).toHaveText('4');
 		await tree.focus();
@@ -208,8 +208,8 @@ test.describe('SCM editor groups', () => {
 		await expect(folder('changes', 'src')).toHaveAttribute('aria-expanded', 'false');
 		await expect(folder('changes', 'other')).toHaveAttribute('aria-expanded', 'false');
 		await expect(folder('staged', 'src')).toHaveAttribute('aria-expanded', 'true');
-		await expect(tree.getByRole('button', { name: 'Open changes for root.ts', exact: true })).toBeVisible();
-		await expect(tree.getByRole('button', { name: 'Open staged changes for root.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Changes for root.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Staged Changes for root.ts', exact: true })).toBeVisible();
 		await expect(tree).toBeFocused();
 		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
 		expect(await tree.locator('[aria-selected="true"]').evaluateAll(rows => rows.map(row => row.id))).toEqual(selection);
@@ -220,9 +220,9 @@ test.describe('SCM editor groups', () => {
 		await expect(folder('changes', 'src')).toHaveAttribute('aria-expanded', 'false');
 		await folder('changes', 'src').locator('.ash-scm-folder').click();
 		await expect(folder('changes', 'nested')).toHaveAttribute('aria-expanded', 'false');
-		await expect(tree.getByRole('button', { name: 'Open changes for src/added.ts', exact: true })).toBeVisible();
-		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Changes for src/added.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/two.ts', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
 	});
 
 	test('SCM group Collapse All supports keyboard dismissal and stays out of list mode', async ({ application, testWorkspace, workbench }) => {
@@ -238,9 +238,9 @@ test.describe('SCM editor groups', () => {
 			await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
 			await expect.poll(() => workbench.menus.isSystemMenu(application)).toBe(false);
 		}
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
-		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
 		await tree.focus();
 		await tree.press('Home');
 		const focus = await tree.getAttribute('aria-activedescendant');
@@ -248,7 +248,7 @@ test.describe('SCM editor groups', () => {
 		if (process.platform === 'darwin') {
 			await tree.press('ContextMenu');
 			await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
-			await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+			await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(tree).toBeFocused();
 			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
@@ -260,12 +260,12 @@ test.describe('SCM editor groups', () => {
 			await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
 			await expect(tree).toBeFocused();
 			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
-			await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+			await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
 		}
 		await tree.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Collapse All', exact: true }).click();
-		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/two.ts', exact: true })).toBeVisible();
 		await expect(tree).toBeFocused();
 		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
@@ -288,16 +288,16 @@ test.describe('SCM editor groups', () => {
 		await picker.getByRole('combobox').press('Enter');
 		({ application, workbench } = await restartWorkbench());
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: '源代码管理更改', exact: true });
-		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
 		await expect(tree).toHaveAttribute('aria-description', /Shift\+F10.*全部折叠/u);
 		const before = await groupRepositoryState(testWorkspace.directory);
 		await tree.focus();
 		await tree.press('Home');
 		await workbench.menus.select(application, () => tree.press('Shift+F10'), ['全部折叠']);
-		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/two.ts', exact: true })).toBeVisible();
 		await expect(tree).toBeFocused();
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
@@ -307,13 +307,13 @@ test.describe('SCM editor groups', () => {
 		await writeFile(join(testWorkspace.directory, 'src/first.ts'), 'export const first = 1;\n');
 		await writeFile(join(testWorkspace.directory, 'src/nested/second.ts'), 'export const second = 2;\n');
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const folder = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-folder').filter({ has: page.getByText('src', { exact: true }) }) });
-		const first = tree.getByRole('button', { name: 'Open changes for src/first.ts', exact: true });
+		const first = tree.getByRole('button', { name: 'Open Changes for src/first.ts', exact: true });
 		await expect(first).toBeVisible();
 		await expect(first.locator('xpath=ancestor::*[@role="treeitem"][1]')).toHaveAttribute('aria-level', '3');
-		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/second.ts', exact: true }).locator('xpath=ancestor::*[@role="treeitem"][1]')).toHaveAttribute('aria-level', '4');
+		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/second.ts', exact: true }).locator('xpath=ancestor::*[@role="treeitem"][1]')).toHaveAttribute('aria-level', '4');
 		await tree.press('Home');
 		await tree.press('ArrowDown');
 		await expect(folder).toHaveAttribute('aria-expanded', 'true');
@@ -330,7 +330,7 @@ test.describe('SCM editor groups', () => {
 		await expect(folder).toHaveAttribute('aria-expanded', 'false');
 		await tree.press('Space');
 		await expect(folder).toHaveAttribute('aria-expanded', 'true');
-		await expect(tree.getByRole('button', { name: 'Open changes for src/third.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open Changes for src/third.ts', exact: true })).toBeVisible();
 		await first.click();
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'first.ts' })).toHaveCount(1);
 		await expect(tree).toBeFocused();
@@ -384,7 +384,7 @@ test.describe('SCM editor groups', () => {
 		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'Moved block baseline'], { cwd: testWorkspace.directory });
 		await writeFile(testWorkspace.file, ['head', ...stay, ...edited, 'tail'].join('\n'));
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 		const settingsEditor = workbench.editors.groupAt(0).editor;
 		await settingsEditor.waitForEditorFocus();
@@ -397,7 +397,7 @@ test.describe('SCM editor groups', () => {
 		await settingsEditor.waitForEditorContents(contents => contents === '{ "diffEditor.experimental.showMoves": true, "diffEditor.useInlineViewWhenSpaceIsLimited": false }');
 		await settingsEditor.input.press('ControlOrMeta+S');
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
-		await page.getByRole('button', { name: 'Open changes for main.ts', exact: true }).click();
+		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
 		const diff = page.locator('.stanza-diff-editor');
 		await diff.locator('.ash-diff-moved-links').getByRole('button').click();
 		const comparison = diff.getByRole('toolbar', { name: 'Moved code comparison' });
@@ -423,8 +423,8 @@ test.describe('SCM editor groups', () => {
 		const path = `${directory}/details.ts`;
 		await mkdir(join(testWorkspace.directory, directory), { recursive: true });
 		await writeFile(join(testWorkspace.directory, path), 'export const details = 1;\n');
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-		const open = page.getByRole('button', { name: `Open changes for ${path}`, exact: true });
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		const open = page.getByRole('button', { name: `Open Changes for ${path}`, exact: true });
 		await expect(open).toBeVisible();
 		await expect(open.locator('.ash-icon-label-text')).toHaveText('details.ts');
 		await expect(open.locator('.ash-icon-label-description')).toHaveText(directory);
@@ -488,9 +488,9 @@ test.describe('SCM editor groups', () => {
 				({ workbench } = await restartWorkbench());
 			}
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			const staged = tree.getByRole('button', { name: 'Open staged changes for main.ts', exact: true });
+			const staged = tree.getByRole('button', { name: 'Open Staged Changes for main.ts', exact: true });
 			await staged.click();
 			await expect(page.locator('.stanza-diff-editor')).toBeVisible();
 			const tabCount = await workbench.editors.groupAt(0).tabs.count();
@@ -542,9 +542,9 @@ test.describe('SCM editor groups', () => {
 				({ workbench } = await restartWorkbench());
 			}
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			await tree.getByRole('button', { name: 'Open changes for main.ts', exact: true }).click();
+			await tree.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
 			const group = workbench.editors.groupAt(0);
 			const diff = group.content.locator('.stanza-diff-editor:visible');
 			await expect(diff).toBeVisible();
@@ -562,7 +562,7 @@ test.describe('SCM editor groups', () => {
 			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true }).click();
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
-			await tree.getByRole('button', { name: 'Open changes for main.ts', exact: true }).click();
+			await tree.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await collapse.focus();
@@ -586,7 +586,7 @@ test.describe('SCM editor groups', () => {
 			await expect(next).toHaveCount(0);
 			await expect(collapse).toHaveCount(0);
 			const openWorkingFile = async (path: string): Promise<void> => {
-				const row = tree.getByRole('button', { name: `Open changes for ${path}`, exact: true });
+				const row = tree.getByRole('button', { name: `Open Changes for ${path}`, exact: true });
 				await row.hover();
 				await row.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? `打开文件：${path}` : `Open File: ${path}`, exact: true }).click();
 			};
@@ -610,10 +610,10 @@ test.describe('SCM editor groups', () => {
 	test('SCM Open File reveals an existing file in another editor group', async ({ testWorkspace, workbench }) => {
 		await writeFile(join(testWorkspace.directory, 'other.ts'), 'export const other = 1;\n');
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const openFile = async (path: string): Promise<void> => {
-			const row = tree.getByRole('button', { name: `Open changes for ${path}`, exact: true });
+			const row = tree.getByRole('button', { name: `Open Changes for ${path}`, exact: true });
 			await row.hover();
 			await row.locator('xpath=..').getByRole('button', { name: `Open File: ${path}`, exact: true }).click();
 		};
@@ -665,9 +665,9 @@ test.describe('SCM editor groups', () => {
 			const guide = element.querySelector('.ash-tree-indent-guide')!.getBoundingClientRect();
 			return { arrowWidth: twistie.width, contentOffset: contents.x - bounds.x, guideOffset: guide.x - bounds.x };
 		});
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
-		const row = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open changes for src/details.ts', exact: true }) });
+		const row = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Changes for src/details.ts', exact: true }) });
 		await expect(row).toBeVisible();
 		const retained = await row.elementHandle();
 		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 24 : 46, guideOffset: 16 });
@@ -696,7 +696,7 @@ test.describe('SCM editor groups', () => {
 			await page.locator('.ash-composite-bar-item[data-action-id="ash.sidebar"]').click();
 			await expect(explorer.getByRole('tree')).toHaveClass(/ash-tree-indent-guides-none/u);
 			await expect.poll(() => metrics(file)).toEqual({ ...expected, contentOffset: icons ? 24 : 46 });
-			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		}
 		const group = tree.getByRole('treeitem').filter({ has: page.getByText('Changes', { exact: true }) });
 		await group.locator('.ash-tree-twistie').click();
@@ -743,8 +743,8 @@ test.describe('SCM editor groups', () => {
 		const original = workbench.editors.groupAt(0);
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await original.editor.waitForEditorFocus();
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-		const open = page.getByRole('button', { name: 'Open changes for main.ts', exact: true });
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		const open = page.getByRole('button', { name: 'Open Changes for main.ts', exact: true });
 		await expect(open).toBeEnabled();
 		await open.click({ modifiers: ['Alt'] });
 		await expect(workbench.editors.groups).toHaveCount(2);
@@ -753,7 +753,7 @@ test.describe('SCM editor groups', () => {
 		await expect(side.content).toContainText('const value = 2;');
 		await expect(page.getByRole('tree', { name: 'Source control changes' })).toBeFocused();
 		await writeFile(join(testWorkspace.directory, 'refresh.ts'), 'export const refreshed = true;\n');
-		await expect(page.getByRole('button', { name: 'Open changes for refresh.ts', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Open Changes for refresh.ts', exact: true })).toBeVisible();
 		await expect(page.getByRole('tree', { name: 'Source control changes' })).toBeFocused();
 		await expect(original.content.locator('.stanza-diff-editor')).toHaveCount(0);
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
@@ -792,7 +792,7 @@ test.describe('SCM editor groups', () => {
 				({ workbench } = await reloadWorkbench());
 			}
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 			await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
 			const group = workbench.editors.groupAt(0);
 			const multi = group.content.locator('.stanza-multi-diff-editor');
@@ -833,7 +833,7 @@ test.describe('SCM editor groups', () => {
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
 			await expect(group.tabs).toHaveCount(count + 1);
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			await tree.getByRole('button', { name: 'Open changes for other.ts', exact: true }).click();
+			await tree.getByRole('button', { name: 'Open Changes for other.ts', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => group.content.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await collapse.focus();
@@ -855,8 +855,8 @@ test.describe('SCM editor groups', () => {
 		await writeFile(testWorkspace.file, `${lines.join('\n')}\n`);
 		({ workbench } = await reloadWorkbench());
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-		await page.getByRole('button', { name: 'Open changes for main.ts', exact: true }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
 		await runningApplication.driver.setWindowSize({ width: 1600, height: 1000 });
 		await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
 		const diff = workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible');
@@ -887,8 +887,8 @@ test.describe('SCM editor groups', () => {
 			await writeFile(testWorkspace.file, `${modified.join('\n')}\n`);
 			({ workbench } = await reloadWorkbench());
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-			await page.getByRole('button', { name: multiDiff ? 'View All Changes' : 'Open changes for main.ts', exact: true }).click();
+			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+			await page.getByRole('button', { name: multiDiff ? 'View All Changes' : 'Open Changes for main.ts', exact: true }).click();
 			await runningApplication.driver.setWindowSize({ width: 1600, height: 1000 });
 			await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
 			const group = workbench.editors.groupAt(0);
@@ -918,7 +918,7 @@ test.describe('SCM editor groups', () => {
 
 	test('SCM Multi Diff splits keep collapse state and closing independent', async ({ workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
 		const original = workbench.editors.groupAt(0);
 		await expect(original.content.locator('.stanza-multi-diff-editor-section')).toHaveCount(1);
@@ -948,8 +948,8 @@ test.describe('SCM editor groups', () => {
 		const fileIcon = group.tabs.filter({ hasText: filename }).locator('.ash-icon-label-icon');
 		await expect(fileIcon).toHaveClass(/typescript-lang-file-icon/u);
 		const appearance = await fileIcon.evaluate(element => ({ glyph: element.textContent, color: getComputedStyle(element).color }));
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
-		await page.getByRole('button', { name: `Open changes for ${filename}`, exact: true }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		await page.getByRole('button', { name: `Open Changes for ${filename}`, exact: true }).click();
 		const editor = group.content.locator('.stanza-diff-editor-side.modified .stanza-editor');
 		await expect(editor).toBeVisible();
 		const comparison = group.title.locator('.ash-tab.checked');
@@ -1000,7 +1000,7 @@ test.describe('SCM merge editor groups', () => {
 		const original = workbench.editors.groupAt(0);
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await original.editor.waitForEditorFocus();
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const open = page.getByRole('button', { name: 'Open merge conflict in main.ts', exact: true });
 		await expect(open).toBeEnabled();
 		await open.focus();

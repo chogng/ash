@@ -1,3 +1,4 @@
+import { createEmptyTestLanguagePacks } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -50,7 +51,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 			}),
 		},
 		textMateService: { grammars } as unknown as ITextMateService,
-	});
+	}, createEmptyTestLanguagePacks());
 	try {
 		await service.start();
 		const choices = ['PRODUCT.PNG', 'song.mp3', 'song.wav', 'song.ogg', 'movie.mp4', 'movie.webm'].map(name => EditorPanes.getEditorPane({ resource: URI.file('/media/' + name) })?.id);

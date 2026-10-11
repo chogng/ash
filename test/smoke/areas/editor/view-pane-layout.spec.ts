@@ -128,7 +128,7 @@ test('view commands reveal retained containers and focus the requested view', as
 
 test('multiple view panes resize independently and restore their layout after reload', async ({ workbench, reloadWorkbench }) => {
 	let page = workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	let container = page.locator('[data-view-container-id="ash.git"]');
 	let changes = container.locator('[data-view-id="ash.gitView"]');
 	let review = container.locator('[data-view-id="ash.gitAgentReview"]');
@@ -181,7 +181,7 @@ test('multiple view panes resize independently and restore their layout after re
 	await header(review).press('Home');
 	await expect(header(changes)).toBeFocused();
 	await page.getByRole('tab', { name: 'Search', exact: true }).first().click();
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await expect(header(graph)).toHaveAttribute('aria-expanded', 'false');
 	await header(graph).press('ArrowRight');
 	await expect.poll(() => height(graph)).toBeCloseTo(resizedHeight, 0);
@@ -213,7 +213,7 @@ test('multiple view panes resize independently and restore their layout after re
 test('SCM panes retain usable bodies when resized and scroll when the window is too short', async ({ driver, workbench }) => {
 	const page = workbench.page;
 	await page.emulateMedia({ reducedMotion: 'reduce' });
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const container = page.locator('[data-view-container-id="ash.git"]');
 	const changes = container.locator('[data-view-id="ash.gitView"]');
 	const review = container.locator('[data-view-id="ash.gitAgentReview"]');
@@ -258,7 +258,7 @@ test.describe('Pane motion', () => {
 	test('pane motion preserves content, resize handles and the final state when interrupted', async ({ target, workbench }) => {
 		const page = workbench.page;
 		await page.emulateMedia({ reducedMotion: 'no-preference' });
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const graph = page.locator('[data-view-id="ash.gitGraph"]');
 		const header = graph.locator('.ash-pane-view-header-button');
 		const body = graph.locator('.ash-pane-view-content');
@@ -322,7 +322,7 @@ test.describe('Pane motion', () => {
 		const page = workbench.page;
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await expect(page.locator('.ash-workbench')).toHaveClass(/ash-reduce-motion/u);
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const graph = page.locator('[data-view-id="ash.gitGraph"]');
 		const state = await graph.evaluate(element => {
 			const wrapper = element.parentElement!;
@@ -381,7 +381,7 @@ test('sidebar overflow registers view visibility and layout commands', async ({ 
 	await expect(sidebar.locator('.ash-composite-bar')).toBeHidden();
 	await workbench.quickaccess.runCommand('workbench.action.activityBarLocation.default');
 	await expect(activitybar).toBeVisible();
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const gitItems = await items();
 	expect(gitItems.some(item => item.label === 'Open Editors')).toBe(false);
 	expect(gitItems).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Changes', checked: true, enabled: false })]));
@@ -397,7 +397,7 @@ test.describe('Git sidebar visibility menus', () => {
 	test('Git sidebar overflow toggles panes and protects the last visible view', async ({ target, workbench, application }) => {
 		test.skip(target.appServerMode !== 'required', 'Git panes require the connected App Server');
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const open = () => sidebar.locator('.ash-pane-composite-title-part-actions').getByRole('button', { name: 'More Actions', exact: true }).click();
 		for (const [label, id] of [['Graph', 'ash.gitGraph'], ['Agent Review', 'ash.gitAgentReview']] as const) {

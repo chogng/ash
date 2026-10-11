@@ -8,11 +8,13 @@ import { onUnexpectedError } from "../../../../base/common/errors.js";
 import { DisposableMap, Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { IInstantiationService, createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
+import { EditorCloseEmptyGroupsConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 
 import { editorInputKey } from "./editorTabsControl.js";
@@ -69,6 +71,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		private readonly accessibility: IAccessibilityService,
 		private readonly storage: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 		this._activePart = mainPart;
@@ -101,7 +104,16 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	savePartsState(): EditorPartsState {
 		const parts = this.parts;
-		return { version: 1, active: parts.indexOf(this._activePart), parts: parts.map(part => part.saveWorkingSet('lastSession')) };
+		return { version: 1, active: parts.indexOf(this._activePart), parts: parts.map(part => part.saveWorkingSet('lastSession', this.getEmptySessionGroups(part).map(group => group.id))) };
+	}
+
+	private getEmptySessionGroups(part: IEditorPart): readonly IEditorGroupView[] {
+		if (this.configurationService.getValue<boolean>(EditorCloseEmptyGroupsConfiguration) === false) {
+			return [];
+		}
+		const hasEditors = part.groups.some(group => group.inputs.length > 0);
+		// An empty workbench still needs one group, using its saved active identity.
+		return part.groups.filter(group => group.inputs.length === 0 && (hasEditors || group !== part.activeGroup));
 	}
 
 	async restoreSavedState(shouldRestore: boolean): Promise<void> {
@@ -130,10 +142,11 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		if (state?.version !== 1 || !Array.isArray(state.parts) || state.parts.length === 0 || !Number.isInteger(state.active) || state.active < 0 || state.active >= state.parts.length) {
 			throw new TypeError('Invalid saved editor parts state');
 		}
-		await this.mainPart.applyWorkingSet(state.parts[0]!, { preserveFocus: true });
+		const options: ApplyEditorWorkingSetOptions = { preserveFocus: true, excludeEmptyGroups: this.configurationService.getValue<boolean>(EditorCloseEmptyGroupsConfiguration) !== false };
+		await this.mainPart.applyWorkingSet(state.parts[0]!, options);
 		for (const workingSet of state.parts.slice(1)) {
 			const part = await this.createAuxiliaryEditorPart();
-			await part.applyWorkingSet(workingSet, { preserveFocus: true });
+			await part.applyWorkingSet(workingSet, options);
 		}
 		this.setActivePart(this.parts[state.active]!);
 	}

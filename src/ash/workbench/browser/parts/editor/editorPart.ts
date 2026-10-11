@@ -795,6 +795,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		// A single group keeps its tabs across the shared column. Split groups reserve
 		// Details once at the grid boundary, rather than subtracting it from every pane.
 		const visibleGroups = this._groups.filter(host => this.editorGrid.isViewVisible(host.view));
+		this.domNode.classList.toggle('single-group', visibleGroups.length === 1);
 		const inset = Math.min(this.contentRightInset, this.dimension.width);
 		for (const host of this._groups) {
 			host.group.setContentRightInset(visibleGroups.length === 1 ? inset : 0);
@@ -1030,7 +1031,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
 		const target = workingSet === "empty" ? emptyWorkingSet() : validateWorkingSet(workingSet);
-		const groups = target.groups.map(group => {
+		const restoredGroups = target.groups.map(group => {
 			const restored = group.editors.flatMap((editor, index) => {
 				try { return [{ editor, index, input: this.inputSerializers.deserialize(editor.input) }]; }
 				catch (error) {
@@ -1045,6 +1046,15 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				activeEditorIndex: restored.length === 0 ? -1 : Math.max(0, restored.findIndex(entry => entry.index === group.activeEditorIndex)),
 			};
 		});
+		const savedActiveGroup = restoredGroups[target.activeGroupIndex]!;
+		const groups = options.excludeEmptyGroups ? restoredGroups.filter(group => group.inputs.length > 0) : restoredGroups;
+		if (groups.length === 0) {
+			groups.push(savedActiveGroup);
+		}
+		const activeGroupIndex = Math.max(0, groups.indexOf(savedActiveGroup));
+		const layout = target.layout && groups.length !== restoredGroups.length
+			? filterWorkingSetLayout(target.layout, new Set(groups.map(group => group.id!)))
+			: target.layout;
 		const hadEditorFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
 		if (!await this.closeActiveModalEditor()) throw new CancellationError('Applying the editor working set was cancelled');
 		const retained = (options.preserveGroups ?? []).map(id => this.groupHosts.get(id)!);
@@ -1058,7 +1068,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		for (const { group } of closing) {
 			for (const input of [...group.inputs]) await group.closeEditor(input, { reason: 'reset', skipConfirmation: true });
 		}
-		this.rebuildGroups(groups, target.layout, target.activeGroupIndex, retained, retainedLayout);
+		this.rebuildGroups(groups, layout, activeGroupIndex, retained, retainedLayout);
 		for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
 			const state = groups[groupIndex]!;
 			const group = this._groups[retained.length + groupIndex]!.group;
@@ -1076,7 +1086,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			if (activeInput) group.activateEditor(activeInput);
 			group.setLocked(state.locked === true);
 		}
-		const activeGroup = this._groups[retained.length + target.activeGroupIndex]!;
+		const activeGroup = this._groups[retained.length + activeGroupIndex]!;
 		this.setActiveGroup(activeGroup.group);
 		this.layoutEditorContent();
 		if (!options.preserveFocus && hadEditorFocus) this._activeGroup.focus();

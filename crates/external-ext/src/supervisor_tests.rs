@@ -489,6 +489,7 @@ fn initialization_is_bound_once_and_replayed_after_an_idle_crash() {
     let supervisor = supervisor(Arc::clone(&launcher), authority);
     let initial = external_ext_protocol::ExtensionHostInitialization {
         language: None,
+        localization: None,
         workspace_folders: Vec::new(),
         workspace_name: None,
         workspace_file: None,

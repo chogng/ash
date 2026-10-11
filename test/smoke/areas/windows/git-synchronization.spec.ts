@@ -10,7 +10,7 @@ const run = promisify(execFile);
 
 async function openHistoryGraph(page: Page): Promise<Locator> {
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
-	if (!await history.isVisible()) await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	if (!await history.isVisible()) await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const toggle = history.getByRole('button', { name: 'Graph', exact: true });
 	// Windows in one browser profile share saved pane expansion state.
 	if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
@@ -59,7 +59,7 @@ test('Deep tool worktrees keep Repositories hidden until a workspace child repos
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'Workspace baseline'], { cwd });
 	await writeFile(join(cwd, '.git/info/exclude'), '/.delta/\n');
 	await run('git', ['worktree', 'add', '-b', 'review', '.delta/worktrees/review/ash'], { cwd });
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('main');
 	const repositories = page.locator('[data-view-id="workbench.scm.repositories"]');
 	await expect(repositories).toBeHidden();
@@ -78,7 +78,7 @@ test('Deep tool worktrees keep Repositories hidden until a workspace child repos
 test('External nested repository creation and deletion update Repositories, Changes, Graph and status', async ({ testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toHaveCount(0);
 	await run('git', ['init', '-b', 'main'], { cwd });
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('main');
@@ -114,7 +114,7 @@ test('External nested repository creation and deletion update Repositories, Chan
 	await list.press('Enter');
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('nested');
 	await expect(list.getByRole('option', { name: /external-nested, nested,/u })).toHaveAttribute('aria-selected', 'true');
-	await expect(page.locator('.ash-scm').getByRole('button', { name: 'Open changes for nested-change.ts', exact: true })).toBeVisible();
+	await expect(page.locator('.ash-scm').getByRole('button', { name: 'Open Changes for nested-change.ts', exact: true })).toBeVisible();
 	const history = await openHistoryGraph(page);
 	await expect(history.getByRole('treeitem', { name: /Nested repository baseline/u })).toBeVisible();
 	await expect(history.getByRole('treeitem', { name: /Primary repository baseline/u })).toHaveCount(0);
@@ -125,7 +125,7 @@ test('External nested repository creation and deletion update Repositories, Chan
 	await expect(repositories).toBeHidden();
 	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('main');
 	await expect(history.getByRole('treeitem', { name: /Primary repository baseline/u })).toBeVisible();
-	await expect(page.locator('.ash-scm').getByRole('button', { name: 'Open changes for nested-change.ts', exact: true })).toHaveCount(0);
+	await expect(page.locator('.ash-scm').getByRole('button', { name: 'Open Changes for nested-change.ts', exact: true })).toHaveCount(0);
 });
 
 test('External Git refs refresh two Workbench windows sharing the backend', async ({ application, target, testWorkspace, workbench }) => {
