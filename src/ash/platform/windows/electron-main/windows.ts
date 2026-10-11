@@ -102,11 +102,13 @@ export function resolveBrowserWindowOptions({
 	if (titleBarStyle === 'system') return browserWindowOptions;
 
 	if (platform === "win32" || platform === "linux") {
+		// Without a supplied startup theme, match Electron's default window background.
+		const controlBackground = backgroundColor ?? Color.Format.CSS.formatHex(Color.white);
 		browserWindowOptions.frame = false;
 		browserWindowOptions.titleBarStyle = "hidden";
 		browserWindowOptions.titleBarOverlay = {
-			color: "#181818",
-			symbolColor: "#d6d6d6",
+			color: controlBackground,
+			symbolColor: Color.fromHex(controlBackground).isDarker() ? "#ffffff" : "#000000",
 			height: 35,
 		};
 	} else if (platform === "darwin") {

@@ -1,4 +1,5 @@
 const { app } = require('electron');
+if (process.env.ASH_STARTUP_THEME_CHECK_SOURCE) require('../../.build/window-theme-check/observe.cjs');
 
 // The product must not interpret this test-only preload path as an app entry or file to open.
 const preloadIndex = process.argv.findIndex((argument, index) => argument === '--require' && process.argv[index + 1] === __filename);

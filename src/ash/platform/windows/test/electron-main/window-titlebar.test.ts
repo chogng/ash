@@ -29,8 +29,8 @@ test("window options apply the custom titlebar host policy", () => {
 	assert.equal(customWindows.titleBarStyle, "hidden");
 	assert.equal(customWindows.frame, false);
 	assert.deepEqual(customWindows.titleBarOverlay, {
-		color: "#181818",
-		symbolColor: "#d6d6d6",
+		color: "#ffffff",
+		symbolColor: "#000000",
 		height: 35,
 	});
 
@@ -51,8 +51,8 @@ test("window options apply the custom titlebar host policy", () => {
 	assert.equal(customLinux.titleBarStyle, "hidden");
 	assert.equal(customLinux.frame, false);
 	assert.deepEqual(customLinux.titleBarOverlay, {
-		color: "#181818",
-		symbolColor: "#d6d6d6",
+		color: "#ffffff",
+		symbolColor: "#000000",
 		height: 35,
 	});
 	for (const platform of ['win32', 'linux', 'darwin'] as const) {
@@ -60,6 +60,18 @@ test("window options apply the custom titlebar host policy", () => {
 		assert.equal(systemTitleBar.titleBarStyle, undefined);
 		assert.equal(systemTitleBar.frame, undefined);
 		assert.equal(systemTitleBar.titleBarOverlay, undefined);
+	}
+});
+
+test('window controls use the startup background and contrasting symbols before the renderer loads', () => {
+	const state = defaultWindowState(WorkbenchState.FOLDER);
+	const webPreferences = { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] };
+	for (const platform of ['win32', 'linux'] as const) {
+		for (const [backgroundColor, symbolColor] of [['#ffffff', '#000000'], ['#123456', '#ffffff'], ['#000000', '#ffffff']] as const) {
+			const options = resolveBrowserWindowOptions({ state, webPreferences, platform, backgroundColor });
+			assert.equal(options.backgroundColor, backgroundColor);
+			assert.deepEqual(options.titleBarOverlay, { color: backgroundColor, symbolColor, height: 35 });
+		}
 	}
 });
 

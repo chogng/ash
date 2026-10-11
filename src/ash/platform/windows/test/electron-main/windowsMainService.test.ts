@@ -447,6 +447,27 @@ test('WindowsMainService owns an independent Sessions window after the Workbench
 	assert.deepEqual({ current: service.managedWindow('workspace'), released, closed }, { current: undefined, released: 1, closed: 1 });
 });
 
+test('managed Agents windows receive startup theme colors before initialization', async () => {
+	using service = createWindowsService(() => [], async () => undefined, 'win32');
+	let constructed = false;
+	await service.openManagedWindow('agents', options => {
+		assert.equal(options.backgroundColor, '#ffffff');
+		if (process.platform === 'win32' || process.platform === 'linux') {
+			assert.deepEqual(options.titleBarOverlay, { color: '#ffffff', symbolColor: '#000000', height: 35 });
+		}
+		constructed = true;
+		return new TestWindow(1, options.title);
+	}, {
+		title: 'Agents', backgroundColor: '#ffffff',
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		initialize: async window => {
+			assert.equal(constructed, true);
+			assert.equal(window.shown, 0);
+		},
+	}, () => { });
+});
+
 test('managed window handoffs are ordered, acknowledged once and rejected with their renderer document', async () => {
 	using service = createWindowsService(() => [], async () => undefined);
 	const options = {

@@ -3,6 +3,7 @@ import { test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { WindowMode, type IWindowBounds } from '../../../window/electron-main/window.js';
 import { CodeWindow, type ICodeWindowHandle } from '../../electron-main/windowImpl.js';
+import type { IWindowConstructorOptions } from '../../electron-main/windows.js';
 
 class TestWindow implements ICodeWindowHandle {
 	private readonly listeners = new Map<string, () => void>();
@@ -37,6 +38,29 @@ class TestWindow implements ICodeWindowHandle {
 		this.emit('closed');
 	}
 }
+
+test('CodeWindow supplies startup theme colors before showing workbench and Agents windows', () => {
+	for (const title of ['Workbench', 'Sessions']) {
+		const window = new TestWindow();
+		let received: IWindowConstructorOptions | undefined;
+		using host = new CodeWindow(options => {
+			received = options;
+			assert.equal(window.shown, 0);
+			return window;
+		}, {
+			state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+			webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+			title, backgroundColor: '#ffffff',
+		}, new DisposableStore());
+		assert.equal(received?.backgroundColor, '#ffffff');
+		if (process.platform === 'win32' || process.platform === 'linux') {
+			assert.deepEqual(received?.titleBarOverlay, { color: '#ffffff', symbolColor: '#000000', height: 35 });
+		}
+		assert.equal(window.shown, 0);
+		host.win.emit('ready-to-show');
+		assert.equal(window.shown, 1);
+	}
+});
 
 test('CodeWindow applies Windows startup bounds before tracking and showing every window mode', () => {
 	for (const mode of [WindowMode.Normal, WindowMode.Maximized, WindowMode.Fullscreen]) {

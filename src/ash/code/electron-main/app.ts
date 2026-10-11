@@ -1480,6 +1480,7 @@ export class AshApplication extends Disposable {
 			{
 				title: `${AshWorkbenchName} Sessions`,
 				titleBarStyle,
+				backgroundColor: this.themeMainService.getBackgroundColor(),
 				icon: this.windowIconPath,
 				state: this.windowsMainService.getNewWindowState(sessionsWindowState, configurationValues(this.services.configuration.read().document), this.lifecycleMainService.wasRestarted),
 				webPreferences: this.createSandboxWebPreferences(),
