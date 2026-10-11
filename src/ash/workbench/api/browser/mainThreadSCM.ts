@@ -4,6 +4,7 @@ import { isMultiDiffEditorInput, requireActions } from '../../contrib/multiDiffE
 import { parseExtensionEditorInput } from './mainThreadEditorInput.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
+import { structuralEquals } from '../../../base/common/equals.js';
 import { observableValue } from '../../../base/common/observable.js';
 import { URI } from '../../../base/common/uri.js';
 import { Icon } from '../../../base/common/icon.js';
@@ -367,7 +368,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		this.snapshot = value;
-		this.historyRef.set(value.historyRef);
+		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		this.changed.fire();
 		this.decorationChanged.fire([]);
 		if (historyChanged) { this.historyChanged.fire(); }

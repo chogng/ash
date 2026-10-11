@@ -19,6 +19,7 @@ import { ScrollType, type IContentSizeChangedEvent, type IEditorDecorationsColle
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { type ICodeEditor, type IDiffEditor } from '../../editorBrowser.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
+import { EditorExtensionsRegistry } from '../../editorExtensions.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../codeEditor/codeEditorWidget.js';
 import { AccessibleDiffViewer } from './components/accessibleDiffViewer.js';
 import { DiffEditorDecorations } from './components/diffEditorDecorations.js';
@@ -115,7 +116,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this._register(toDisposable(() => this.element.remove()));
 
 		const editorOptions: Pick<CodeEditorWidgetOptions, 'contributions' | 'isSimpleWidget' | 'minimap' | 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'lineNumbers' | 'wordWrap' | 'scrollBeyondLastLine'> = {
-			contributions: [],
+			// Diff owns its comparison UI; line navigation uses the shared editor controller.
+			contributions: EditorExtensionsRegistry.getEditorContributions().filter(contribution => contribution.id === 'editor.contrib.quickAccess'),
 			isSimpleWidget: true,
 			minimap: { enabled: false },
 			lineHeight: options.lineHeight,

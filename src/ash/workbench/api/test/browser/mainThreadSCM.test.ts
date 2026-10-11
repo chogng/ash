@@ -96,6 +96,8 @@ test('SCM bridge forwards reference-only HEAD moves once without invalidating hi
 	using cleanup = value.lifetime;
 	const history = value.scm.getRepository('repo')!.provider.historyProvider!;
 	let invalidations = 0;
+	let headChanges = 0;
+	using headChanged = history.historyItemRef.onDidChange(() => headChanges++);
 	const updates: Array<readonly import('../../../contrib/scm/common/history.js').ISCMHistoryItem[]> = [];
 	using full = history.onDidChange(() => invalidations++);
 	using refs = history.onDidChangeHistoryItemRefs!(items => {
@@ -112,6 +114,7 @@ test('SCM bridge forwards reference-only HEAD moves once without invalidating hi
 	value.bridge.set(source, 'ash.scm', 3, [changed]);
 	assert.equal(invalidations, 0);
 	assert.equal(updates.length, 1);
+	assert.equal(headChanges, 1, 'Unchanged HEAD in resource snapshots does not redraw history');
 	assert.equal(updates[0]?.[0]?.references?.[0]?.canDelete, false);
 	value.bridge.set(source, 'ash.scm', 4, [{ ...changed, historyRevision: 2, historyRefsRevision: 2, historyRefsItems: [] }]);
 	assert.equal(invalidations, 1, 'Commit-set changes take precedence over ref decoration snapshots');

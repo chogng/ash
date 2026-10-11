@@ -2178,6 +2178,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.keyboard.press('ArrowRight');
 		await expect(cursor).toHaveText(localized(locale, 'Ln 1, Col 3', '行 1，列 3'));
 		await expect(eol.getByRole('button')).toHaveAttribute('aria-disabled', 'true');
+		await cursor.getByRole('button').focus();
+		await page.keyboard.press('Enter');
+		const gotoInput = page.locator('#title-comparison .stanza-editor-goto-line-widget.visible input');
+		await expect(gotoInput).toBeFocused();
+		await gotoInput.fill('2:2');
+		await page.keyboard.press('Enter');
+		await expect(cursor).toHaveText(localized(locale, 'Ln 2, Col 2', '行 2，列 2'));
+		await expect(editorInputs.first()).toBeFocused();
 		await editorInputs.last().focus();
 		await expect(cursor).toHaveText(localized(locale, 'Ln 1, Col 2', '行 1，列 2'));
 		await eol.getByRole('button').focus();
@@ -2205,7 +2213,6 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(editorInputs.last()).toBeFocused();
 		await cursor.getByRole('button').focus();
 		await page.keyboard.press('Enter');
-		const gotoInput = page.locator('#title-comparison .stanza-editor-goto-line-widget.visible input');
 		await expect(gotoInput).toBeFocused();
 		await gotoInput.fill('2:3');
 		await page.keyboard.press('Enter');

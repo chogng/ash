@@ -410,8 +410,9 @@ test('Editor status actions update the real model and clear when the active edit
 	assert.equal(quickInput.currentQuickInput, undefined);
 	editor.updateOptions({ readOnly: false });
 	const staleChange = Promise.resolve(entry('eol').run!());
-	using replacement = new TextModel('replacement');
+	using replacement = new TextModel('\uFEFFreplacement');
 	editor.setModel(replacement);
+	assert.equal(entry('encoding').text, 'UTF-8 with BOM');
 	globalThis.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	await staleChange;
 	assert.equal(model.getEOL(), '\r\n');

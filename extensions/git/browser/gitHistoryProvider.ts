@@ -285,7 +285,8 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	}
 
 	private setHistoryItemRef(ref: ISCMHistoryItemRef | undefined): void {
-		if (ref === this.currentHistoryRef) return;
+		const previous = this.currentHistoryRef;
+		if (ref?.id === previous?.id && ref?.name === previous?.name && ref?.revision === previous?.revision && ref?.category === previous?.category && ref?.upstream === previous?.upstream) return;
 		this.currentHistoryRef = ref;
 		this.historyRefChanged.fire(ref);
 	}
