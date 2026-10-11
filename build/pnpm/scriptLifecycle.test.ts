@@ -48,10 +48,10 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	await mkdir(join(directory, 'build/builtin'), { recursive: true });
 	await writeFile(join(directory, 'build/builtin/extensions.ts'), `process.argv[2] = 'extensions'; await import('../../record.ts');`);
 	await mkdir(join(directory, 'node_modules/.bin'), { recursive: true });
-	const compiler = join(directory, 'node_modules/.bin/tsc');
-	await writeFile(compiler, `#!/usr/bin/env node\nprocess.exitCode = require('node:child_process').spawnSync(process.execPath, ['record.ts', 'automation'], { stdio: 'inherit' }).status;\n`);
-	await chmod(compiler, 0o755);
-	await writeFile(`${compiler}.cmd`, `@"${process.execPath}" "%~dp0../../record.ts" automation\r\n`);
+	const checker = join(directory, 'node_modules/.bin/bun');
+	await writeFile(checker, `#!/usr/bin/env node\nprocess.exitCode = require('node:child_process').spawnSync(process.execPath, ['record.ts', 'automation'], { stdio: 'inherit' }).status;\n`);
+	await chmod(checker, 0o755);
+	await writeFile(`${checker}.cmd`, `@"${process.execPath}" "%~dp0../../record.ts" automation\r\n`);
 	const pnpm = process.env.npm_execpath;
 	assert.ok(pnpm, "Run through the owning pnpm test script");
 	const script = /\.[cm]?js$/.test(pnpm);

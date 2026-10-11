@@ -87,10 +87,10 @@ jobs:
         run: pnpm run test:browser:integration --project=chromium
       - name: Prepare production browser UI smoke tests
         if: matrix.surface == 'browser'
-        # Both Web modes share the checked sources and automation compilation.
+        # Both Web modes share the checked sources and automation typecheck.
         run: |
           pnpm run typecheck:renderer
-          pnpm exec tsc -p test/automation/tsconfig.json
+          pnpm exec bun check -p test/automation/tsconfig.json --all
           pnpm run bundle:web
       - name: Test production browser UI
         if: matrix.surface == 'browser'

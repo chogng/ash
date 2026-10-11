@@ -226,7 +226,9 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 `scripts/cargo.py` 的普通 check、test、clippy 命令默认使用共享 `ci-test` profile，包括 `just check`、`just test` 和 `just rust-warnings`；显式 `--profile`、`--release` 或 `-r` 优先。`ci-test` 只是编译配置名，不执行 CI 流水线。产品开发程序和协议生成器继续复用 `dev-small`，发布使用 release；普通 build/run 保留 Cargo 默认配置及现有工具的产物路径，保留各自的体积与调试约束。`just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
-类型检查、Electron 主进程/preload 编译和开发 watch 使用 TypeScript 7.0.2。工作区将编译器固定在 `@ash/typescript-compiler` npm 别名下，`pnpm exec tsc` 和现有构建/测试脚本均调用 TS7。`typescript` 别名保留 `@typescript/typescript6@6.0.2` 兼容包提供的 TS6 JavaScript API，供本地化提取、热更新分析、格式化和架构测试使用；它提供独立的 `tsc6` 命令。升级时同步根目录和 `build/` 的编译器/API 依赖、`test/scenario/` 的编译器依赖及锁文件，并验证 host watch 的失败与恢复、preload 导入限制和 Web/Electron 启动。
+单次纯类型检查使用锁定的 Bun 1.4.3：Renderer、Common、Protocol、Extensions、Memories、Stanza、构建工具和单元测试运行器工具均通过 `bun check -p <config> --all` 检查。Browser integration、Smoke automation 和 Scenario 的配置也都是 `noEmit`，其准备阶段使用 Bun 检查类型。现有 pnpm 入口继续准备协议、本地化等生成输入；多个检查顺序执行，避免大型 Bun 进程同时争抢 CPU。共享机器可对直接检查添加 `--threads 4`。Bun 不生成 JavaScript 或 `.tsbuildinfo`；对照测量与工具职责见 [构建工具说明](../build/README.md)。
+
+Electron 主进程/preload、单元测试与扩展测试的 JavaScript 编译，以及开发 host watch 和 `typecheck:web:watch`，继续使用 TypeScript 7.0.2；Bun 1.4.3 尚不支持独立的 `bun check --watch`。工作区将编译器固定在 `@ash/typescript-compiler` npm 别名下，`pnpm exec tsc` 调用 TS7。Vite/Rolldown 和 Scenario 的 esbuild 继续打包，Node.js、Mocha 和 Playwright 继续执行测试，pnpm 管理依赖与锁文件。`typescript` 别名保留 `@typescript/typescript6@6.0.2` 兼容包提供的 TS6 JavaScript API，供本地化提取、热更新分析、格式化和架构测试使用；它提供独立的 `tsc6` 命令。升级时同步根目录和 `build/` 的编译器/API 依赖、`test/scenario/` 的编译器依赖及锁文件，并验证 host watch 的失败与恢复、preload 导入限制和 Web/Electron 启动。
 
 前端与构建工具直接消费 `.build/protocol/typescript/` 的共享生成协议，产物不提交到 Git。正常前端、Rust Just 和打包入口自动准备协议：优先复用本地缓存或源码匹配的后端包，缺少匹配产物时需要 Rust 工具链重新生成。修改后端协议后可运行 `just generate-protocol`，再运行 `pnpm typecheck:protocol`；直接 Cargo 构建前必须先准备。协议生成器与开发后端统一使用 `dev-small` profile，复用相同配置的依赖产物；生成器的 `export` feature 仍保留独立编译变体。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
 

@@ -21,7 +21,7 @@ the shared development package; `desktop/` owns incremental Desktop selection.
 Task entrypoints use the existing pnpm and Just commands, with Vite
 and Cargo retaining compilation. Gulp is not required for these tasks.
 
-Frontend CI checks Renderer sources and compiles smoke automation once before
+Frontend CI checks Renderer sources and smoke automation types once before
 running the two Web modes. `pnpm bundle:web` and `pnpm bundle:web:full` only run
 Vite against those prepared, checked sources; use `pnpm build:web` or
 `pnpm build:web:full` for a standalone build. The two bundles have different
@@ -29,6 +29,19 @@ App Server compile-time flags and share an output directory, so CI runs each
 mode's tests before replacing its bundle. Electron smoke preparation publishes
 the runtime required by startup's Tunnel services and builds Desktop once;
 UI and connected tests reuse those artifacts with separate test profiles.
+
+The pinned Bun 1.4.3 dependency owns single-run, no-emit type checking for
+Renderer, Common, Protocol, Extensions, Memories, Stanza, build tools, unit-runner
+tools, browser integration, smoke automation and scenario sources. Existing pnpm
+entrypoints retain their generated-input prehooks. Checks run sequentially;
+each Bun process uses all CPU cores by default. To limit contention on a shared
+machine, a direct check can use `pnpm exec bun check -p <config> --threads 4 --all`.
+Bun does not write JavaScript or `.tsbuildinfo` files. TS7 7.0.2 retains
+Main/Preload and unit/extension-test JavaScript compilation, host watch and
+`typecheck:web:watch` (Bun 1.4.3 has no standalone check watch mode). Vite/Rolldown
+and the scenario runner's esbuild retain bundling. Node, Mocha and Playwright
+retain test execution; pnpm retains dependency management. Build tools keep
+the TS6 JavaScript Compiler API provided by the `typescript` compatibility alias.
 
 Linux ARM64 Renderer checks were compared in the existing Debian 12 devcontainer
 on an Apple M5, with 10 Docker VM CPUs and about 8 GB VM memory. The source and
@@ -39,11 +52,21 @@ After one warmup, five alternating full checks per checker had median times of
 TS2322/TS2345 diagnostics matched in file, position, code and message. Raw data,
 resource limits and the input manifest are in
 `.build/benchmarks/bun-renderer-linux-arm64/`. These are warm-cache container
-measurements. Renderer checks (`pnpm typecheck:renderer`, its Web alias and the
-Desktop/Web build gate) now use the pinned Bun 1.4.3 dependency. Common checks,
-Main/Preload and test JavaScript compilation, and watch checks continue to use
-TS7; build tools retain the TS6 API. Node and pnpm remain the runtime and package
-manager for repository commands.
+measurements.
+
+The eleven no-emit projects were also compared on macOS/Apple M5 using the
+repository's pinned Bun and TS7 packages, prepared inputs, a first process start
+and five alternating repeated full checks per checker. Input hashes and file
+lists stayed stable within each project's measurement. Diagnostics matched in
+file, position, code and message, including existing source errors and isolated
+TS2322/TS2345 probes; the build-tools probe also verified `erasableSyntaxOnly`.
+Bun's repeated full checks were 1.8–3.8 times faster in this run. Raw commands,
+input manifests, diagnostics, timings and peak RSS are in
+`.build/benchmarks/bun-typechecks/results.json`. These measurements use a warm
+filesystem cache; the first process start does not establish OS cold-cache or
+installation performance. Common's unchanged incremental TS7 checks took a
+median 137 ms versus Bun's full-check 119 ms; those runs are recorded separately
+in `.build/benchmarks/bun-typechecks/common-incremental.json`.
 
 - [ ] TODO: Benchmark Bun 1.4.3 against TS7 7.0.2 for Renderer checks on the
       `ubuntu-24.04` and `windows-latest` x64 CI runners to measure the cross-platform
