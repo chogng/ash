@@ -41,7 +41,7 @@ test('Explorer service exposes the current view and releases it on disposal', ()
 	assert.deepEqual(service.getContext(), [selected]);
 });
 
-test('Explorer service owns roots and workspace file invalidations without a view', () => {
+test('Explorer service batches workspace file invalidations and discards pending changes on workspace switch', async () => {
 	const firstRoot = URI.file('/project');
 	const secondRoot = URI.file('/next');
 	using workspace = new WorkspaceContextService({ id: 'project', uri: firstRoot });
@@ -66,15 +66,35 @@ test('Explorer service owns roots and workspace file invalidations without a vie
 	assert.equal(files.hasProvider(firstRoot), true);
 	assert.deepEqual([...watches], [[firstRoot.toString(), { recursive: true, excludes: [] }]]);
 	const observed: string[] = [];
+	const batches: Array<readonly string[] | undefined> = [];
+	let resolveChange = (): void => { };
 	using rootListener = service.onDidChangeRoot(() => observed.push(service.getRoot()?.resource.toString() ?? 'empty'));
-	using fileListener = service.onDidChangeResources(resources => observed.push(resources?.[0]?.toString() ?? 'all'));
+	using fileListener = service.onDidChangeResources(resources => {
+		observed.push(resources?.[0]?.toString() ?? 'all');
+		batches.push(resources?.map(resource => resource.path));
+		resolveChange();
+	});
 
+	const firstChange = new Promise<void>(resolve => { resolveChange = resolve; });
 	changes.fire({ resources: [URI.file('/outside/file.txt'), URI.file('/project/main.ts')] });
+	changes.fire({ resources: [URI.file('/project/main.ts'), URI.file('/project/other.ts')] });
+	assert.deepEqual(observed, []);
+	await firstChange;
+	assert.deepEqual(batches, [['/project/main.ts', '/project/other.ts']]);
+	changes.fire({ resources: [URI.file('/project/stale.ts')] });
 	workspace.updateWorkspace({ id: 'next', uri: secondRoot });
+	const nextChange = new Promise<void>(resolve => { resolveChange = resolve; });
 	changes.fire({ resources: [URI.file('/project/main.ts'), URI.file('/next/other.ts')] });
+	await nextChange;
 
 	assert.deepEqual(observed, [URI.file('/project/main.ts').toString(), secondRoot.toString(), URI.file('/next/other.ts').toString()]);
 	assert.deepEqual([...watches], [[secondRoot.toString(), { recursive: true, excludes: [] }]]);
+	const rescan = new Promise<void>(resolve => { resolveChange = resolve; });
+	changes.fire({ resources: [URI.file('/next/other.ts')] });
+	changes.fire({ resources: undefined });
+	changes.fire({ resources: [URI.file('/next/another.ts')] });
+	await rescan;
+	assert.deepEqual(batches, [['/project/main.ts', '/project/other.ts'], ['/next/other.ts'], undefined]);
 
 	const unavailableRoot = URI.parse('unavailable:/project');
 	workspace.updateWorkspace({ id: 'unavailable', uri: unavailableRoot });

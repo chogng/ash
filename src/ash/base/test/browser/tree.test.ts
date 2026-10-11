@@ -216,6 +216,119 @@ test('AsyncDataTree collapses loaded descendants even when their parent is alrea
 	}
 });
 
+test('AsyncDataTree defers invalidated folded branches until expansion, including a recursive refresh', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const child: TestNode = { id: 'old', label: 'Old', expanded: false };
+	const replacement: TestNode = { id: 'new', label: 'New', expanded: false };
+	let children = [child];
+	const reads: string[] = [];
+	try {
+		using tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+			hasChildren: element => element === root || element === group,
+			getChildren: element => { reads.push(element.id); return element === root ? [group] : children; },
+		}, {
+			identityProvider: { getId: element => element.id },
+			collapseByDefault: () => true,
+			renderElement: element => h(dom.window.document, 'span', element.label),
+		});
+		await tree.setInput(root);
+		await tree.updateChildren(group);
+		const row = tree.element.querySelector('[data-tree-id="group"]');
+		children = [replacement];
+		await tree.updateChildren(group, { deferIfCollapsed: true });
+		assert.deepEqual(reads, ['root', 'group']);
+		tree.expand(group);
+		await tree.updateChildren(group);
+		assert.deepEqual(tree.getVisibleElements().map(element => element.id), ['group', 'new']);
+		assert.equal(tree.element.querySelector('[data-tree-id="group"]'), row);
+		tree.collapse(group);
+		children = [child];
+		await tree.updateChildren(root, { recursive: true, deferIfCollapsed: true });
+		assert.deepEqual(reads, ['root', 'group', 'group', 'root']);
+		tree.expand(group);
+		await tree.updateChildren(group);
+		assert.deepEqual(tree.getVisibleElements().map(element => element.id), ['group', 'old']);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('AsyncDataTree rereads after a change arrives during an expanded branch load', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const child: TestNode = { id: 'new', label: 'New', expanded: false };
+	let completeFirstRead: (children: readonly TestNode[]) => void = () => { };
+	let resolveSecondRead = (): void => { };
+	const secondRead = new Promise<void>(resolve => { resolveSecondRead = resolve; });
+	let reads = 0;
+	try {
+		using tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+			hasChildren: element => element === root || element === group,
+			getChildren: element => {
+				if (element === root) return [group];
+				if (++reads === 1) return new Promise<readonly TestNode[]>(resolve => { completeFirstRead = resolve; });
+				resolveSecondRead();
+				return [child];
+			},
+		}, {
+			identityProvider: { getId: element => element.id },
+			collapseByDefault: () => true,
+			renderElement: element => h(dom.window.document, 'span', element.label),
+		});
+		await tree.setInput(root);
+		tree.expand(group);
+		await Promise.resolve();
+		const refresh = tree.updateChildren(group, { deferIfCollapsed: true });
+		completeFirstRead([]);
+		await secondRead;
+		await refresh;
+		assert.deepEqual({ reads, visible: tree.getVisibleElements().map(element => element.id), busy: tree.element.getAttribute('aria-busy') }, { reads: 2, visible: ['group', 'new'], busy: 'false' });
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('AsyncDataTree discards a pending read invalidated while folded', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const oldChild: TestNode = { id: 'old', label: 'Old', expanded: false };
+	const newChild: TestNode = { id: 'new', label: 'New', expanded: false };
+	let completeRead: (children: readonly TestNode[]) => void = () => { };
+	let reads = 0;
+	try {
+		using tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+			hasChildren: element => element === root || element === group,
+			getChildren: element => {
+				if (element === root) return [group];
+				if (++reads === 1) return new Promise<readonly TestNode[]>(resolve => { completeRead = resolve; });
+				return [newChild];
+			},
+		}, {
+			identityProvider: { getId: element => element.id },
+			collapseByDefault: () => true,
+			renderElement: element => h(dom.window.document, 'span', element.label),
+		});
+		await tree.setInput(root);
+		tree.expand(group);
+		await Promise.resolve();
+		const firstRead = tree.updateChildren(group);
+		tree.collapse(group);
+		await tree.updateChildren(group, { deferIfCollapsed: true });
+		completeRead([oldChild]);
+		await firstRead;
+		assert.deepEqual({ reads, visible: tree.getVisibleElements().map(element => element.id), busy: tree.element.getAttribute('aria-busy') }, { reads: 1, visible: ['group'], busy: 'false' });
+		tree.expand(group);
+		await tree.updateChildren(group);
+		assert.deepEqual({ reads, visible: tree.getVisibleElements().map(element => element.id) }, { reads: 2, visible: ['group', 'new'] });
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("AsyncDataTree loads on expansion and coalesces refresh requests", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const root: TestNode = { id: "root", label: "Root", expanded: true };

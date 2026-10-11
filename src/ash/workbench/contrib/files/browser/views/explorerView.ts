@@ -51,6 +51,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private treeErrorElement: ExplorerItem | undefined;
 	private workspaceGeneration = 0;
 	private initialization: Promise<void>;
+	private fileChangeProcessing: Promise<void> = Promise.resolve();
 	private readonly loadedNests = new Set<string>();
 	private readonly scopedContext: IScopedContextKeyService;
 	private readonly hasContextResource: IContextKey<boolean>;
@@ -227,34 +228,14 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		}));
 		this._register(explorerService.onDidChangeRoot(() => { this.initialization = this.initialize(); }));
 		this._register(explorerService.onDidChangeResources(resources => {
-			const roots = this.root?.children ?? (this.root ? [this.root] : []);
-			for (const root of roots) {
-				const changed = resources?.filter(resource => extUriBiasedIgnorePathCase.isEqualOrParent(resource, root.resource));
-				if (changed && changed.length === 0) continue;
-				if (!changed || changed.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, root.resource))) {
-					void this.refreshItem(root, true);
-					continue;
-				}
-				const directories = new Map(
-					[root, ...this.tree.getVisibleElements().filter(item => item.kind === FileKind.Directory)]
-						.map(item => [extUriBiasedIgnorePathCase.getComparisonKey(item.resource), item] as const),
-				);
-				const targets = new Map<string, { item: ExplorerItem; recursive: boolean; }>();
-				for (const resource of changed) {
-					const parent = dirname(resource);
-					const directory = directories.get(extUriBiasedIgnorePathCase.getComparisonKey(parent));
-					if (!directory) {
-						void this.refreshItem(root, true);
-						targets.clear();
-						break;
-					}
-					targets.set(extUriBiasedIgnorePathCase.getComparisonKey(directory.resource), {
-						item: directory,
-						recursive: directories.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)),
-					});
-				}
-				for (const target of targets.values()) void this.refreshItem(target.item, target.recursive);
-			}
+			const generation = this.workspaceGeneration;
+			this.fileChangeProcessing = this.fileChangeProcessing.then(async () => {
+				await this.initialization;
+				if (this.isDisposed || generation !== this.workspaceGeneration) return;
+				await this.refreshChangedResources(resources, generation);
+			}).catch(error => {
+				if (!this.isDisposed && generation === this.workspaceGeneration) console.error('Could not process Explorer file changes', error);
+			});
 		}));
 		this.render();
 		this.initialization = this.initialize();
@@ -393,6 +374,66 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		}
 	}
 
+	private async refreshChangedResources(resources: readonly URI[] | undefined, generation: number): Promise<void> {
+		const roots = this.root?.children ?? (this.root ? [this.root] : []);
+		for (const root of roots) {
+			if (this.isDisposed || generation !== this.workspaceGeneration) return;
+			const changed = resources?.filter(resource => extUriBiasedIgnorePathCase.isEqualOrParent(resource, root.resource));
+			if (changed && changed.length === 0) continue;
+			if (!changed || changed.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, root.resource))) {
+				await this.refreshItem(root, true);
+				continue;
+			}
+			const items = new Map([root, ...this.tree.getVisibleElements()].map(item => [extUriBiasedIgnorePathCase.getComparisonKey(item.resource), item] as const));
+			const targets = new Map<string, { item: ExplorerItem; recursive: boolean; }>();
+			for (const resource of changed) {
+				const key = extUriBiasedIgnorePathCase.getComparisonKey(resource);
+				const item = items.get(key);
+				// Watcher paths are coarse hints. Verify the existing entry before treating a change as content-only.
+				// Exact spelling matters for case-only renames; the tree currently sorts by name, not metadata.
+				// Bursts reconcile each affected directory once instead of sending one stat per changed file.
+				if (changed.length === 1 && item?.kind === FileKind.File && item.resource.path === resource.path) {
+					try {
+						const stat = await this.fileService.stat(resource);
+						if (stat.kind === FileKind.File) continue;
+					} catch {
+						// Deletion or an unavailable stat requires a directory read to reconcile the entry.
+					}
+				}
+				if (this.isDisposed || generation !== this.workspaceGeneration) return;
+				let directory: ExplorerItem | undefined;
+				for (let ancestor = dirname(resource); ; ancestor = dirname(ancestor)) {
+					const candidate = items.get(extUriBiasedIgnorePathCase.getComparisonKey(ancestor));
+					if (candidate?.kind === FileKind.Directory) {
+						directory = candidate;
+						break;
+					}
+					if (extUriBiasedIgnorePathCase.isEqual(ancestor, root.resource)) break;
+				}
+				if (directory) {
+					const directoryKey = extUriBiasedIgnorePathCase.getComparisonKey(directory.resource);
+					if (!targets.has(directoryKey)) targets.set(directoryKey, { item: directory, recursive: false });
+				}
+				if (item?.kind === FileKind.Directory) targets.set(key, { item, recursive: true });
+			}
+			for (const target of targets.values()) {
+				if (this.isDisposed || generation !== this.workspaceGeneration) return;
+				let covered = false;
+				for (let ancestor = dirname(target.item.resource); !extUriBiasedIgnorePathCase.isEqual(ancestor, target.item.resource); ancestor = dirname(ancestor)) {
+					if (targets.get(extUriBiasedIgnorePathCase.getComparisonKey(ancestor))?.recursive) {
+						covered = true;
+						break;
+					}
+					if (extUriBiasedIgnorePathCase.isEqual(ancestor, root.resource) || extUriBiasedIgnorePathCase.isEqual(ancestor, dirname(ancestor))) break;
+				}
+				if (covered) continue;
+				// A parent refresh may remove or replace this directory before its own target is reached.
+				const item = target.item === this.root ? this.root : this.tree.getVisibleElements().find(candidate => extUriBiasedIgnorePathCase.isEqual(candidate.resource, target.item.resource));
+				if (item?.kind === FileKind.Directory) await this.refreshItem(item, target.recursive);
+			}
+		}
+	}
+
 	private async refreshRoot(root: ExplorerItem): Promise<void> {
 		await this.refreshItem(root, true);
 	}
@@ -401,7 +442,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		const generation = this.workspaceGeneration;
 		this.loadedNests.clear();
 		try {
-			await this.tree.updateChildren(item, { recursive });
+			await this.tree.updateChildren(item, { recursive, deferIfCollapsed: true });
 			if (generation !== this.workspaceGeneration || this.isDisposed) return;
 			this.error = undefined;
 			this.treeError = false;

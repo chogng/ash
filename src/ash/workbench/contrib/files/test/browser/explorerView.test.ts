@@ -12,7 +12,7 @@ import { Emitter, Event } from "../../../../../base/common/event.js";
 import { DecorationsService } from '../../../../services/decorations/browser/decorationsService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
-import { FileKind, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from "../../../../../platform/files/common/files.js";
+import { FileKind, FileNotFoundError, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
@@ -36,6 +36,10 @@ test("ExplorerView opens workspace files on single click", async () => {
 	const root = URI.file("/project");
 	const nextRoot = URI.file("/next-project");
 	const directoryReads: string[] = [];
+	const metadataChecks: string[] = [];
+	let mainExists = true;
+	let mainKind = FileKind.File;
+	let sourceExists = true;
 	using fileChanges = new Emitter<{ readonly resources: readonly URI[] | undefined; }>();
 	let addedRootFile = false;
 	let addedNestedFile = false;
@@ -53,7 +57,12 @@ test("ExplorerView opens workspace files on single click", async () => {
 		watch: (): IDisposable => Disposable.None,
 
 		onDidChangeFiles: fileChanges.event,
-		stat: async () => { throw new Error('Explorer must load the workspace root with one directory read'); },
+		stat: async resource => {
+			metadataChecks.push(resource.path);
+			assert.equal(resource.path, '/project/src/main.ts');
+			if (!mainExists) throw new FileNotFoundError(resource);
+			return { resource, kind: mainKind, sizeBytes: 1, readonly: false, modifiedAtMillis: undefined };
+		},
 		readDirectory: async (resource) => {
 			directoryReads.push(resource.toString());
 			if (resource.toString() === root.toString()) {
@@ -67,11 +76,11 @@ test("ExplorerView opens workspace files on single click", async () => {
 						name: "README.md",
 						kind: FileKind.File,
 					},
-					{
+					...(sourceExists ? [{
 						resource: URI.file("/project/src"),
 						name: "src",
 						kind: FileKind.Directory,
-					},
+					}] : []),
 					...(addedRootFile ? [{
 						resource: URI.file("/project/new.txt"),
 						name: "new.txt",
@@ -98,11 +107,11 @@ test("ExplorerView opens workspace files on single click", async () => {
 					},
 				];
 			}
-			return [{
+			return [...(mainExists ? [{
 				resource: URI.file("/project/src/main.ts"),
 				name: "main.ts",
-				kind: FileKind.File,
-			}, ...(addedNestedFile ? [{
+				kind: mainKind,
+			}] : []), ...(addedNestedFile ? [{
 				resource: URI.file('/project/src/nested.ts'),
 				name: 'nested.ts',
 				kind: FileKind.File,
@@ -405,6 +414,49 @@ test("ExplorerView opens workspace files on single click", async () => {
 		fileChanges.fire({ resources: [root] });
 		await waitFor(() => pane.element.querySelector(".ash-explorer-error") === null);
 		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'README.md', 'new.txt']);
+
+		directoryReads.length = 0;
+		fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
+		fileChanges.fire({ resources: [URI.file('/project/src/nested.ts')] });
+		await waitFor(() => directoryReads.length > 0);
+		assert.deepEqual({ reads: directoryReads, stats: metadataChecks }, { reads: [URI.file('/project/src').toString()], stats: [] });
+		directoryReads.length = 0;
+		fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
+		await waitFor(() => metadataChecks.length === 1);
+		assert.deepEqual(directoryReads, []);
+		assert.equal(browser.window.document.activeElement, treeElement);
+
+		pane.collapseAll();
+		addedNestedFile = false;
+		let receivedFoldedChange = (): void => { };
+		const foldedChange = new Promise<void>(resolve => { receivedFoldedChange = resolve; });
+		using foldedChangeListener = explorerService.onDidChangeResources(() => receivedFoldedChange());
+		fileChanges.fire({ resources: [URI.file('/project/src/nested.ts'), URI.file('/project/src/deep/hidden.ts')] });
+		await foldedChange;
+		await Promise.resolve();
+		assert.deepEqual(directoryReads, []);
+		expandedSourceFolder.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
+		await waitFor(() => rowLabels(pane.element).includes('main.ts'));
+		assert.deepEqual({ reads: directoryReads, labels: rowLabels(pane.element) }, {
+			reads: [URI.file('/project/src').toString()], labels: ['src', 'main.ts', 'README.md', 'new.txt'],
+		});
+
+		directoryReads.length = 0;
+		mainExists = false;
+		fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
+		await waitFor(() => !rowLabels(pane.element).includes('main.ts'));
+		assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
+		directoryReads.length = 0;
+		mainExists = true;
+		mainKind = FileKind.Directory;
+		fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
+		await waitFor(() => pane.element.querySelector('[data-tree-id="file:///project/src/main.ts"]')?.getAttribute('aria-expanded') === 'false');
+		assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
+		directoryReads.length = 0;
+		sourceExists = false;
+		fileChanges.fire({ resources: [URI.file('/project/src')] });
+		await waitFor(() => !rowLabels(pane.element).includes('src'));
+		assert.deepEqual({ reads: directoryReads, error: pane.element.querySelector('.ash-explorer-error') }, { reads: [root.toString()], error: null });
 
 		workspaceContextService.updateWorkspace({
 			id: "next-workspace",

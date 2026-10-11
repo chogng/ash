@@ -65,6 +65,8 @@ export interface AsyncDataTreeErrorEvent<T> {
 
 export interface AsyncDataTreeUpdateOptions {
 	readonly recursive?: boolean;
+	/** Invalidate folded branches without reading them until their next expansion. */
+	readonly deferIfCollapsed?: boolean;
 }
 
 interface AsyncTreePointerEvent<T> {
@@ -214,7 +216,33 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	async updateChildren(element: TInput | T = this.requireInput(), options: AsyncDataTreeUpdateOptions = {}): Promise<void> {
 		const parentId = element === this.input ? undefined : this.getId(element as T);
 		if (parentId !== undefined && !this.states.has(parentId)) throw new RangeError(`Unknown AsyncDataTree element: ${parentId}`);
-		await this.loadChildren(element, parentId, this.generation, options.recursive !== false);
+		if (options.deferIfCollapsed && parentId !== undefined && this.tree.isCollapsed(element as T) === true) {
+			this.invalidateChildren(parentId);
+			return;
+		}
+		const generation = this.generation;
+		const current = this.requests.get(parentId);
+		if (options.deferIfCollapsed && current) {
+			// A change arriving during a read must be resolved after that read, not lost to request coalescing.
+			await current.promise.catch(() => undefined);
+			if (this.isDisposed || generation !== this.generation || parentId !== undefined && !this.states.has(parentId)) return;
+			if (parentId !== undefined && this.tree.isCollapsed(element as T) === true) {
+				this.invalidateChildren(parentId);
+				return;
+			}
+		}
+		await this.loadChildren(element, parentId, this.generation, { ...options, recursive: options.recursive !== false });
+	}
+
+	private invalidateChildren(parentId: string): void {
+		const state = this.states.get(parentId);
+		if (!state) return;
+		for (const id of state.children ?? []) this.removeStateSubtree(id);
+		this.states.set(parentId, { ...state, children: undefined });
+		// Obsolete reads may finish, but cannot repopulate a branch that was invalidated while folded.
+		this.requests.delete(parentId);
+		this.tree.setNodeChildren(state.element, []);
+		this.updateAriaBusy();
 	}
 
 	protected getId(element: T): string {
@@ -228,7 +256,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		return id;
 	}
 
-	private async loadChildren(parent: TInput | T, parentId: string | undefined, generation: number, recursive = false): Promise<void> {
+	private async loadChildren(parent: TInput | T, parentId: string | undefined, generation: number, options: AsyncDataTreeUpdateOptions = {}): Promise<void> {
 		const requestKey = parentId;
 		const current = this.requests.get(requestKey);
 		if (current?.generation === generation) return current.promise;
@@ -242,13 +270,15 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 				this.replaceChildren(parentId, [...children]);
 				if (parentId === undefined) this.render();
 				else this.tree.setNodeChildren(parent as T, this.states.get(parentId)!.children!.map(id => this.toTreeElement(id)));
-				if (!recursive) return;
+				if (!options.recursive) return;
 				const childIds = parentId === undefined ? this.rootChildren : this.states.get(parentId)?.children ?? [];
 				await Promise.all(childIds.flatMap(id => {
 					const child = this.states.get(id);
-					return child?.children !== undefined && this.tree.isCollapsed(child.element) === false
-						? [this.loadChildren(child.element, id, generation, true)]
-						: [];
+					if (child?.children !== undefined && this.tree.isCollapsed(child.element) === false) {
+						return [this.loadChildren(child.element, id, generation, options)];
+					}
+					if (options.deferIfCollapsed && child?.children !== undefined) this.invalidateChildren(id);
+					return [];
 				}));
 			})
 			.catch(error => {
@@ -294,15 +324,23 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 			const hasChildren = this.dataSource.hasChildren(element);
 			nextChildren.push({ id, element, parentId, hasChildren, children: hasChildren ? previous?.children : undefined });
 		}
-		for (const id of oldChildren) if (!seen.has(id)) removeStateSubtree(id, this.states);
+		for (const id of oldChildren) if (!seen.has(id)) this.removeStateSubtree(id);
 		for (const child of nextChildren) {
 			if (!child.hasChildren) {
-				for (const id of this.states.get(child.id)?.children ?? []) removeStateSubtree(id, this.states);
+				for (const id of this.states.get(child.id)?.children ?? []) this.removeStateSubtree(id);
 			}
 			this.states.set(child.id, child);
 		}
 		if (parentId === undefined) this.rootChildren = childIds;
 		else this.states.set(parentId, { ...parent!, children: childIds });
+	}
+
+	private removeStateSubtree(id: string): void {
+		const state = this.states.get(id);
+		if (!state) return;
+		for (const child of state.children ?? []) this.removeStateSubtree(child);
+		this.requests.delete(id);
+		this.states.delete(id);
 	}
 
 	private render(): void { this.tree.setChildren(this.rootChildren.map((id) => this.toTreeElement(id))); }
@@ -471,13 +509,6 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		dispose: () => tree.dispose(),
 		[Symbol.dispose]: () => tree.dispose(),
 	};
-}
-
-function removeStateSubtree<T>(id: string, states: Map<string, AsyncNodeState<T>>): void {
-	const state = states.get(id);
-	if (!state) return;
-	for (const child of state.children ?? []) removeStateSubtree(child, states);
-	states.delete(id);
 }
 
 function last<T>(elements: readonly T[]): T {
