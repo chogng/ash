@@ -360,8 +360,8 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 	setting: {
 		valueType: 'boolean',
-		title: localize({ bundle: 'ash', key: 'git.mergeVerbosityTitle' }, 'Merge editor accessibility help'),
-		description: localize({ bundle: 'ash', key: 'git.mergeVerbosityDescription' }, 'Announce how to open merge editor accessibility help when the editor receives focus.'),
+		title: localize({ bundle: 'ash', key: 'mergeEditor.verbosityTitle' }, 'Merge editor accessibility help'),
+		description: localize({ bundle: 'ash', key: 'mergeEditor.verbosityDescription' }, 'Announce how to open merge editor accessibility help when the editor receives focus.'),
 	},
 });
 

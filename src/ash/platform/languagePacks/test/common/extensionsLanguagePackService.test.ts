@@ -9,15 +9,17 @@ import { IExtensionManagementService } from "../../../../platform/extensionManag
 import { ExtensionsLanguagePackService } from "../../browser/extensionsLanguagePackService.js";
 import { parseLanguagePackCatalog } from "../../common/languagePackCatalog.js";
 import type { LanguagePackCatalog } from "../../common/languagePacksService.js";
-import { builtinLanguagePackCatalogs } from "../../../../workbench/services/localization/common/localizationCatalogs.js";
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from "../../../../workbench/services/localization/common/localizationCatalogs.js";
 
-test("language packs keep built-ins available without Extensions", async () => {
+test("English and preinstalled language packs remain available without Extensions", async () => {
 	const extensionManagement = createExtensions([]);
+	extensionManagement.listInstalled = async () => { throw new Error('Extensions is offline'); };
 	using service = createService(extensionManagement);
 
 	await service.whenReady;
 	assert.deepEqual(service.availableLocales.map(locale => locale.locale), ["en", "zh-CN"]);
-	assert.deepEqual(service.installedPackages, []);
+	assert.deepEqual(service.availableLocales.map(locale => locale.source), ['builtin', 'preinstalled']);
+	assert.deepEqual(service.installedPackages.map(pack => pack.id), ['ash/language-pack-zh-cn']);
 });
 
 test("language pack catalogs are validated before projection", () => {
@@ -97,7 +99,7 @@ function createService(extensionManagement: IExtensionManagementService, store: 
 	using services = new InstantiationService();
 	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, store);
-	return services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs);
+	return services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
 }
 
 test('installed pack updates are saved for the next startup before they are advertised', async () => {
@@ -146,11 +148,11 @@ test('conflicting locale providers cannot overwrite resources or hide other lang
 	}
 });
 
-test('built-in catalogs cannot be replaced by an installed provider', async () => {
-	const catalog = { ...builtinLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!, bundles: { ash: { hello: 'replacement' } } };
-	using service = createService(createExtensions([catalog]), { read: async () => undefined, write: async () => { assert.fail('Built-in catalogs must not be overwritten'); } });
+test('preinstalled catalogs cannot be replaced by an installed provider', async () => {
+	const catalog = { ...productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!, bundles: { ash: { hello: 'replacement' } } };
+	using service = createService(createExtensions([catalog]), { read: async () => undefined, write: async () => { assert.fail('Preinstalled catalogs must not be overwritten'); } });
 	await service.whenReady;
-	assert.deepEqual(service.catalogs.find(value => value.locale === 'zh-CN'), builtinLanguagePackCatalogs.find(value => value.locale === 'zh-CN'));
+	assert.deepEqual(service.catalogs.find(value => value.locale === 'zh-CN'), productLanguagePackCatalogs.find(value => value.locale === 'zh-CN'));
 });
 
 test('an unreadable provider releases its lease and does not hide another locale', async () => {

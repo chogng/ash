@@ -47,7 +47,7 @@ import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { ExternalUriOpenerService } from '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpenerService.js';
 import { ExternalUriOpenerPriority } from '../../../src/ash/editor/common/languages.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 
@@ -179,7 +179,7 @@ window.ashLinkIntegration = {
 	},
 	installExternalOpeners: chinese => {
 		if (chinese) {
-			const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+			const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 			setNlsMessages(catalog.locale, catalog.bundles);
 		}
 		services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));

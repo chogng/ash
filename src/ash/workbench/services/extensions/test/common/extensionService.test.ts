@@ -1,3 +1,8 @@
+import { JSDOM } from 'jsdom';
+import { GlobalExtensionEnablementService } from '../../../../../platform/extensionManagement/common/extensionEnablementService.js';
+import { BrowserStorageService } from '../../../storage/browser/storageService.js';
+import { withEnabledBuiltInExtensions } from '../../../../../platform/extensions/browser/extensionApi.js';
+import { ViewsRegistry } from '../../../../common/views.js';
 import { normalizeExtensionCatalog } from '../../../../../platform/extensions/common/extensionApi.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
@@ -850,4 +855,31 @@ test('catalog refresh preserves an unchanged declarative Debug owner and retires
 	generation++;
 	await service.reload();
 	assert.equal(DebugAdapterFactoriesRegistry.get('demo'), undefined);
+});
+
+test('profile disablement retires declarative settings and welcome content without a catalog mutation', async () => {
+ const dom = new JSDOM('', { url: 'https://ash.test' });
+ try {
+  using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
+  using enablement = new GlobalExtensionEnablementService(storage);
+  const entry = descriptorWithManifest({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
+   configuration: { title: 'Provider', properties: { 'test.enablement.option': { type: 'boolean', default: false } } },
+   viewsWelcome: [{ view: 'test.enablement.scm', contents: 'Enablement welcome' }],
+  } });
+  const api = withEnabledBuiltInExtensions({ list: async () => ({ generation: 1, diagnostics: [], extensions: [entry] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('No contribution resource'); }) }, enablement);
+  using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+  const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+  await service.start();
+  assert.ok(registry.getConfiguration('test.enablement.option'));
+  assert.deepEqual(ViewsRegistry.getViewWelcomeContent('test.enablement.scm').map(value => value.content), ['Enablement welcome']);
+  await enablement.disableExtension({ id: entry.id });
+  await service.reload();
+  assert.equal(service.currentCatalog.extensions.length, 0);
+  assert.equal(registry.getConfiguration('test.enablement.option'), undefined);
+  assert.deepEqual(ViewsRegistry.getViewWelcomeContent('test.enablement.scm'), []);
+  await enablement.enableExtension({ id: entry.id });
+  await service.reload();
+  assert.deepEqual(service.currentCatalog.extensions.map(value => value.id), [entry.id]);
+  assert.ok(registry.getConfiguration('test.enablement.option'));
+ } finally { dom.window.close(); }
 });

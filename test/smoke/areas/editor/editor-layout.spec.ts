@@ -129,6 +129,44 @@ test('editor group lifecycle preserves cursor and scrolling through split and ta
 
 test.describe('editor group lifecycle saved state', () => {
 	test.use({ openWorkspace: false });
+	test('closes a restored empty editor group with the keyboard and keeps one group after restart', async ({ target, application, workbench, reloadWorkbench }) => {
+		const page = workbench.page;
+		const workspaceId = target.kind === 'electron'
+			? parseWorkspace(await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer.invoke('ash:workspace:context:read'))).id
+			: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
+		expect(workspaceId).toBeTruthy();
+		const state = {
+			version: 1, active: 0, parts: [{
+				id: 'lastSession', activeGroupIndex: 1, groups: [
+					{ id: 'editor-group-empty', size: 0.5, activeEditorIndex: -1, editors: [] },
+					{ id: 'editor-group-file', size: 0.5, activeEditorIndex: 0, editors: [{ input: { typeId: 'workbench.editorInput.resource', value: { resource: 'untitled:/restored.json', label: 'restored.json', initialText: '{ "restored": true }' } }, preview: false }] },
+				]
+			}],
+		};
+		await seedStorageOnNextLoad(application, page, { scope: StorageScope.WORKSPACE, id: workspaceId! }, { 'editorparts.state': { value: JSON.stringify(state), target: StorageTarget.MACHINE } });
+		await page.reload();
+		await workbench.waitForReady();
+		await expect(workbench.editors.groups).toHaveCount(2);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
+		await workbench.editors.groupAt(0).element.focus();
+		await expect(workbench.editors.groupAt(0).element).toBeFocused();
+		await page.keyboard.press('ControlOrMeta+W');
+		await expect(workbench.editors.groups).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveAttribute('aria-label', 'restored.json, unsaved changes');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === '{ "restored": true }');
+		await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+		await expect.poll(() => workbench.editors.groupAt(0).element.evaluate(element => {
+			const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
+			return Math.round(content.width - element.getBoundingClientRect().width);
+		})).toBe(0);
+		({ workbench } = await reloadWorkbench());
+		await expect(workbench.editors.groups).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveAttribute('aria-label', 'restored.json, unsaved changes');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === '{ "restored": true }');
+	});
+
 	test('restores supported tabs around a missing serializer and updates the window title after reload', async ({ target, application, workbench, reloadWorkbench }) => {
 		const page = workbench.page;
 		const workspaceId = target.kind === 'electron'

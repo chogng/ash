@@ -1,6 +1,6 @@
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { Event, Emitter } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
@@ -87,7 +87,7 @@ class GitHubTransport implements AppServerTransport {
 
 const resources = new DisposableStore();
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 const services = resources.add(new InstantiationService());
 const theme = resources.add(new TestThemeService(darkColorTheme));

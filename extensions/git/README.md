@@ -24,6 +24,15 @@ packaged and Desktop development hosts resolve their declared product layout.
 The browser entry runs in a window-owned Worker. The public `ash` module provides SCM
 registration, client editor operations and product-granted backend routes. The package manifest
 owns commands, menus, submenus, welcome content, colors, settings and English/Chinese NLS.
+Use **Manage built-in editor extensions** in either window's command palette to disable
+`ash.git` for the current profile. This removes its browser Worker, commands, declarative
+contributions and SCM providers, without restarting other active browser extensions. The choice
+survives window reloads. Core text models, dirty state, undo, saving, diff editors and other SCM
+providers retain their own lifetimes. Re-enabling starts a new Git activation.
+
+This editor enablement does not revoke the directory-scoped Rust capability used by independent
+worktree and Turn consumers; execution authorization remains owned by App Server.
+
 `git.getRepositoryContexts` and `git.executeRepositoryCommand` are optional command contracts
 for GitHub consumers; core consumers do not import this extension's implementation.
 

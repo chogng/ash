@@ -10,7 +10,7 @@ import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { isGettingStartedInput } from '../../browser/gettingStartedInput.js';
 import { StartupEditorConfigurationKey, StartupPageRunnerContribution } from '../../browser/startupPage.js';
 import '../../browser/gettingStarted.contribution.js';
@@ -20,7 +20,7 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 	const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(StartupEditorConfigurationKey);
 	assert.equal(setting?.defaultValue, 'welcomePage');
 	assert.deepEqual(setting?.setting?.valueType, 'select');
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		assert.equal(setting?.setting?.title, '启动时的编辑器');

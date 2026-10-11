@@ -12,7 +12,7 @@ import { QuickAccessController } from "../../../../../../platform/quickinput/bro
 import { IQuickAccessController } from "../../../../../../platform/quickinput/common/quickAccess.js";
 import { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../../../services/commands/common/commandService.js";
-import { builtinLanguagePackCatalogs } from "../../../../../services/localization/common/localizationCatalogs.js";
+import { productLanguagePackCatalogs } from "../../../../../services/localization/common/localizationCatalogs.js";
 import { WorkbenchQuickInputService } from "../../../../../services/quickinput/browser/quickInputService.js";
 import { IEditorPart, type IEditorPart as EditorPartContract } from "../../editorPart.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "../../editorQuickAccess.js";
@@ -36,7 +36,7 @@ test("Show All Editors opens the MRU quick access mode and activates the chosen 
 	}
 
 	try {
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === "zh-CN");
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === "zh-CN");
 		assert.ok(chinese);
 		setNlsResolver((bundle, key, fallback, parameters) =>
 			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));

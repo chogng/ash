@@ -14,7 +14,7 @@ import { LanguageFeaturesService } from '../../../../common/services/languageFea
 import type { ColorPickerController } from '../../browser/colorPickerController.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { builtinLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 
 await import('../../browser/colorPickerContribution.js');
@@ -244,7 +244,7 @@ test('color picker translates its shared controls and exposes help and current c
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeDom = toDisposable(() => dom.window.close());
 	using restoreLanguage = toDisposable(() => resetNlsResolver());
-	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('#f00');
 	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });

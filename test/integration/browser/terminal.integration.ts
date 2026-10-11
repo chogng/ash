@@ -35,10 +35,10 @@ import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/t
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
 import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
 

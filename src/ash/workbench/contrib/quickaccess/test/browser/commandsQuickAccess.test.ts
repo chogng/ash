@@ -23,7 +23,7 @@ import { IKeybindingService } from '../../../../../platform/keybinding/common/ke
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { CommandsQuickAccessProvider } from '../../browser/commandsQuickAccess.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../../../../services/editor/browser/codeEditorService.js';
@@ -39,7 +39,7 @@ function registerHistoryServices(services: InstantiationService, resources: Disp
 
 test('Command Palette finds localized commands by their English title and reports command errors', async () => {
 	using resources = new DisposableStore();
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.ok(chinese);
 	setNlsResolver((bundle, key, fallback, parameters) =>
 		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));

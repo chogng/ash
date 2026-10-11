@@ -148,7 +148,7 @@ const { ILocalizationService: LocalizationServiceId } = await import('../../../.
 const { createSettingWidget: instantiateSettingWidget } = await import('../../browser/settingsWidgets.js');
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../services/preferences/common/settingsModels.js');
 const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
-const { builtinLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
+const { productLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
 const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacksService.js');
 const { ILocaleService, LocalizationConfiguration } = await import('../../../../services/localization/common/locale.js');
 const { WorkbenchLocaleService } = await import('../../../../services/localization/browser/localeService.js');
@@ -167,7 +167,7 @@ const localizationService: ILocalizationService = {
 
 test('Sandbox diagnostics render Chinese readiness and preserve backend reasons as text', async () => {
 	const { AgentCapabilitiesSettings } = await import('../../browser/agentCapabilitiesSettings.js');
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const root = h(browserEnvironment.window.document, 'div');
 	using panel = new AgentCapabilitiesSettings(root, {
 		isAvailable: true,
@@ -190,7 +190,7 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	using resources = new DisposableStore();
 	const { SearchSettingsContent } = await import('../../../search/browser/searchSettingsContent.js');
 	const { ContextKeyService, IContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const root = h(browserEnvironment.window.document, 'div');
@@ -435,7 +435,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.replaceChildren(root);
 	resources.add(toDisposable(() => root.remove()));
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const contextView = resources.add(new BrowserContextViewService(root));
@@ -476,7 +476,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 test('Chinese setting actions, search filters and pending saves expose translated labels', async () => {
 	using resources = new DisposableStore();
 	const { SettingsSearchWidget } = await import('../../browser/settingsWidgets.js');
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const root = h(browserEnvironment.window.document, 'div');
@@ -554,7 +554,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 });
 
 test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
@@ -576,7 +576,7 @@ test('Activity Bar badges expose a translated profile setting with strict boolea
 });
 
 test('empty-editor tips expose translated settings metadata', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
@@ -589,7 +589,7 @@ test('empty-editor tips expose translated settings metadata', () => {
 });
 
 test('file opening preferences have a translated group and correctly typed controls', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
@@ -610,7 +610,7 @@ test('file opening preferences have a translated group and correctly typed contr
 });
 
 test('font preferences show translated labels and the actual platform defaults', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
@@ -712,7 +712,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, 'window.newWindowDimensions'), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.restoreFullscreen'), 'startup');
 	assert.equal(findSettingCategory(layout, 'workbench.editor.restoreEditors'), 'startup');
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
@@ -1128,11 +1128,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	};
 	const configuration = disposables.add(new WorkbenchConfigurationService());
 	const languagePacksChanged = disposables.add(new Emitter<void>());
-	const availableLocales: LanguagePackInfo[] = builtinLanguagePackCatalogs.map(catalog => ({ ...catalog, source: 'builtin' }));
+	const availableLocales: LanguagePackInfo[] = productLanguagePackCatalogs.map(catalog => ({ ...catalog, source: 'builtin' }));
 	const languagePacks: ILanguagePackService = {
 		onDidChange: languagePacksChanged.event,
 		whenReady: Promise.resolve(),
-		catalogs: [...builtinLanguagePackCatalogs, { ...builtinLanguagePackCatalogs[0], locale: "fr", languageName: "French", localizedLanguageName: "Français" }],
+		catalogs: [...productLanguagePackCatalogs, { ...productLanguagePackCatalogs[0], locale: "fr", languageName: "French", localizedLanguageName: "Français" }],
 		availableLocales,
 		installedPackages: [],
 		search: async () => [],
@@ -1825,7 +1825,7 @@ async function nextTurn(): Promise<void> {
 
 test('Local model controls share translated snapshots and keep preparation running when hidden', async () => {
 	using resources = new DisposableStore();
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const configuration = resources.add(new WorkbenchConfigurationService());
@@ -2024,7 +2024,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 });
 
 test('Custom provider fields and test states use the Chinese catalog', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		assert.equal(localize('models.catalog.search', 'Search models'), '搜索模型');

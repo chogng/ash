@@ -115,6 +115,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 
 	constructor(private readonly options: AppServerExtensionServiceOptions) {
 		super();
+		if (options.api.onDidChange) {
+			this._register(options.api.onDidChange(() => { void this.reload().catch(error => console.error('Extension enablement refresh failed', error)); }));
+		}
 		this._register(toDisposable(() => { this.reloadQueued = false; this.activationHandler = undefined; }));
 		this._register(toDisposable(() => {
 			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).updateConfigurations({ add: [], remove: this.activeConfigurations });

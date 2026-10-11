@@ -18,7 +18,7 @@ import { IEditorService } from '../../../../../../services/editor/common/editorS
 import { IPreferencesService } from '../../../../../../services/preferences/common/preferences.js';
 import { INotificationService } from '../../../../../../../platform/notification/common/notification.js';
 import type { IResourceEditorInput } from '../../../../../../common/editor.js';
-import { builtinLanguagePackCatalogs } from '../../../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../../../services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../../nls.js';
 
 const id = { source: 'user:review-source', name: 'review' };
@@ -132,7 +132,7 @@ registerSkillActions();
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Configure Skills opens the selected readonly document with ${locale} picker labels`, async () => {
-		setNlsMessages(locale, builtinLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
+		setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
 		try {
 			using backend = new Backend();
 			using prompts = new PromptsService(backend);

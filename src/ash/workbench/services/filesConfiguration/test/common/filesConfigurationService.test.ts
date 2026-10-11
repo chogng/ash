@@ -14,7 +14,7 @@ import { WorkspaceContextService } from '../../../workspaces/browser/workspaceCo
 import { TextFileService } from '../../../textfile/browser/textFileService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { Event } from '../../../../../base/common/event.js';
-import { builtinLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
 
 suite('Configured file policies', () => {
 	test('applies writable exceptions, retains filesystem read-only and announces changes', async () => {
@@ -73,7 +73,7 @@ suite('Configured file policies', () => {
 		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file('/root') });
 		using policy = new FilesConfigurationService(configuration, workspace);
 		await configuration.updateValue('files.readonlyInclude', { '**/*.ts': true });
-		setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+		setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 		try {
 			assert.equal(policy.isReadonly(URI.file('/root/main.ts')), '该文件匹配了只读路径规则，不能编辑或保存。');
 		} finally {

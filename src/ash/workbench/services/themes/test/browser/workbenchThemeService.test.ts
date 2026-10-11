@@ -523,9 +523,9 @@ test('theme settings expose structured schemas and localized labels', async () =
 	assert.equal(registry.getConfiguration('window.autoDetectColorScheme')?.scope, ConfigurationScope.APPLICATION);
 	using configuration = new WorkbenchConfigurationService();
 	await assert.rejects(configuration.updateValue('workbench.colorCustomizations', {}, { overrideIdentifiers: ['typescript'] }), /language|Language/u);
-	const { builtinLanguagePackCatalogs } = await import('../../../localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../localization/common/localizationCatalogs.js');
 	const { setNlsResolver, resetNlsResolver } = await import('../../../../../nls.js');
-	const chinese = builtinLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, original) => chinese.bundles[bundle]?.[key] ?? original);
 		assert.equal(registry.getConfiguration('editor.tokenColorCustomizations')?.setting?.title, '语法颜色');

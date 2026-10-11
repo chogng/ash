@@ -1,0 +1,44 @@
+.ash-notifications-center {
+	position: absolute;
+	z-index: 1001;
+	inset-inline-end: 12px;
+	inset-block-end: calc(var(--ash-feedback-statusbar-height, 0px) + 8px);
+	width: min(450px, calc(100% - 24px));
+	max-height: min(70vh, calc(100% - 48px));
+	display: flex;
+	flex-direction: column;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-foreground);
+	background: var(--ash-dialog-background);
+	box-shadow: 0 6px 24px var(--ash-widget-shadow);
+}
+.ash-notifications-center[hidden] {
+	display: none;
+}
+.ash-notifications-center-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+.ash-notifications-center-header h2 {
+	flex: 1;
+	margin: 0;
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-notifications-center:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+.ash-notifications-hide {
+	flex: 0 0 auto;
+}
+.ash-notifications-toggle {
+	position: absolute;
+	z-index: 1000;
+	inset-inline-end: 12px;
+	inset-block-end: 8px;
+}

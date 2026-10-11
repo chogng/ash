@@ -3,7 +3,8 @@ import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/t
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
-import '../../../src/ash/workbench/browser/parts/notifications/media/notifications.css';
+import '../../../src/ash/workbench/browser/parts/notifications/media/notificationsList.css';
+import '../../../src/ash/workbench/browser/parts/notifications/media/notificationsToasts.css';
 import { IHostColorSchemeService } from '../../../src/ash/workbench/services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/services/themes/browser/browserHostColorSchemeService.js';
 import type { TextModelReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';

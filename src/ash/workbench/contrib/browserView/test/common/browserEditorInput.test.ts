@@ -11,7 +11,7 @@ import { EditorInputSerializerRegistry } from '../../../../services/editor/commo
 import { BrowserEditorInput, BrowserEditorSerializer, type IBrowserEditorInputData } from '../../common/browserEditorInput.js';
 import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const data: IBrowserEditorInputData = { id, url: 'https://example.test/', title: 'Saved page', session: { scope: BrowserViewStorageScope.Workspace } };
@@ -106,7 +106,7 @@ suite('Browser editor page model and restoration', () => {
 
 	test('the blank browser tab uses the selected Chinese catalog', () => {
 		using f = fixture();
-		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages('zh-CN', catalog.bundles);
 		try { assert.equal(f.input({ ...data, url: 'about:blank', title: '' }).label, '浏览器'); }
 		finally { resetNlsResolver(); }

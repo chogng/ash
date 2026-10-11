@@ -17,7 +17,7 @@ import { AgentTraceNavigationView } from '../../../src/ash/workbench/contrib/tra
 import { type IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { ChangesViewPane } from '../../../src/ash/sessions/contrib/changes/browser/changesView.js';
 import { type ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { type IChatService, type TurnChangeDetails } from '../../../src/ash/workbench/services/chat/common/chatService.js';
@@ -46,7 +46,7 @@ import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
 
 const params = new URLSearchParams(location.search);
 if (params.get('locale') === 'zh-CN') {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
 const resources = new DisposableStore();

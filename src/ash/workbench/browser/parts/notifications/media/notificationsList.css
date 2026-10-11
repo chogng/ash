@@ -1,0 +1,46 @@
+.ash-notification,
+.ash-notifications-row {
+	display: flex;
+	min-width: 0;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 12px;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	color: var(--ash-foreground);
+	background: var(--ash-dialog-background);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+	line-height: 1.5;
+}
+.ash-notification-content {
+	min-width: 0;
+	flex: 1;
+}
+.ash-notification-message {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ash-notification-source {
+	margin-top: 4px;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-notifications-list {
+	display: flex;
+	min-height: 0;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px;
+	overflow-y: auto;
+}
+.ash-notifications-row {
+	flex-shrink: 0;
+	border-radius: var(--ash-cornerRadius-medium);
+}
+.ash-notifications-row:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+.ash-notifications-empty {
+	margin: 8px;
+}

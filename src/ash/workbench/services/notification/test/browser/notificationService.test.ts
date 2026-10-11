@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
+import { AccessibilityService } from "../../../../../platform/accessibility/browser/accessibilityService.js";
 import { INotificationService, NotificationSeverity, type NotificationAction } from "../../../../../platform/notification/common/notification.js";
 import { AccessibleViewRegistry } from "../../../../../platform/accessibility/browser/accessibleViewRegistry.js";
 import type { IAction, IRunEvent } from "../../../../../base/common/actions.js";
@@ -389,6 +391,21 @@ test("notification handle removes its record once", () => {
 	assert.equal(service.getNotifications().length, 0);
 });
 
+test('notification arrivals are announced once even while the center hides toasts', () => {
+	using fixture = new NotificationsFixture();
+	fixture.service.info('Initial information');
+	fixture.center.show();
+	fixture.service.warning('Warning while the center is open');
+	fixture.service.error('Error while the center is open');
+	assert.deepEqual(fixture.presentation.statuses, ['Initial information']);
+	assert.deepEqual(fixture.presentation.alerts, ['Warning while the center is open', 'Error while the center is open']);
+	assert.equal(fixture.document.querySelectorAll('.ash-notification').length, 0);
+	assert.equal(fixture.panel.querySelectorAll('[role="alert"], [role="status"]').length, 0);
+	fixture.center.dispose();
+	fixture.service.error('After disposal');
+	assert.deepEqual(fixture.presentation.alerts, ['Warning while the center is open', 'Error while the center is open']);
+});
+
 test("status bell reflects retained notification history", () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	try {
@@ -633,17 +650,26 @@ class NotificationsPresentation extends Disposable {
 	readonly menus: IContextMenuService;
 	readonly center: NotificationsCenter;
 	readonly writes: string[] = [];
+	readonly alerts: string[] = [];
+	readonly statuses: string[] = [];
 	writeText = async (text: string): Promise<void> => { this.writes.push(text); };
 
 	constructor(root: HTMLElement, toastContainer: HTMLElement, service: NotificationService, runner: NotificationActionRunner, statusbar?: StatusbarService, systemMenu?: INativeContextMenuApi) {
 		super();
 		const window = root.ownerDocument.defaultView!;
+		// Focus tests use immediate frames; the pending-toast suite drives cancellation explicitly.
+		window.requestAnimationFrame = callback => { callback(0); return 0; };
+		window.cancelAnimationFrame = () => { };
 		// jsdom lacks layout and scrolling; context-view focus restoration requires a painted anchor.
 		Object.defineProperty(window.Element.prototype, 'scrollTo', { configurable: true, value: () => { } });
 		Object.defineProperty(window.Element.prototype, 'getClientRects', { configurable: true, value: () => [new window.DOMRect(0, 0, 100, 20)] });
 		this.services = this._register(new InstantiationService());
 		this.services.registerInstance(INotificationService, service);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
+		const accessibility = this._register(new AccessibilityService({ root, contextKeyService: this.services.get(IContextKeyService), configurationService: this._register(new InMemoryConfigurationService(new ConfigurationRegistry())) }));
+		accessibility.alert = message => this.alerts.push(message);
+		accessibility.status = message => this.statuses.push(message);
+		this.services.registerInstance(IAccessibilityService, accessibility);
 		this.services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: text => this.writeText(text) } as Clipboard));
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(IMenuService, this.services.createInstance(MenuService));
@@ -1002,7 +1028,7 @@ for (const useCenter of [false, true]) {
 			});
 			assert.equal(service.getNotifications()[0], original.item);
 			assert.equal(statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === "ash.status.notifications")?.entry.icon, Lxicon.bellDot);
-			if (!useCenter) assert.equal(document.querySelector('[role="alert"] .ash-notification-message')?.textContent, "Visible action failure");
+			if (!useCenter) assert.equal(document.querySelector('.ash-notification-error .ash-notification-message')?.textContent, "Visible action failure");
 			center.show();
 			assert.deepEqual([...fixture.panel.querySelectorAll(".ash-notification-message")].map(element => element.textContent), ["Visible action failure", "Original notification"]);
 		});
@@ -1024,7 +1050,7 @@ for (const useCenter of [false, true]) {
 		assert.deepEqual(fixture.service.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
 			{ severity: NotificationSeverity.Error, message: "Failure after original removal" },
 		]);
-		assert.equal(fixture.document.querySelector('[role="alert"] .ash-notification-message')?.textContent, "Failure after original removal");
+		assert.equal(fixture.document.querySelector('.ash-notification-error .ash-notification-message')?.textContent, "Failure after original removal");
 	});
 	test(`${useCenter ? "center" : "toast"} successful actions let the producer close its notification without error feedback`, async () => {
 		using fixture = new NotificationsFixture();

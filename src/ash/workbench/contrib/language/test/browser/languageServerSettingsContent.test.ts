@@ -19,7 +19,7 @@ import type { RemoteConnectionState } from '../../../../../platform/remote/commo
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
 import { createSettingsEditorInput } from '../../../../services/preferences/common/settingsEditorInput.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
@@ -67,7 +67,7 @@ class SettingsFixture extends DisposableStore {
 		this.services.registerInstance(ILocalizationService, {
 			whenReady: Promise.resolve(),
 			translate: (bundle, key, text, parameters) => {
-				const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === this.locale)!;
+				const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === this.locale)!;
 				return (catalog.bundles[bundle]?.[key] ?? text).replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match));
 			},
 		});

@@ -95,7 +95,7 @@ test('Hook feedback stays collapsed, renders process text safely, and successful
 
 
 test('Hook summaries use the active Chinese locale', () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('localization/zh-CN/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
 	try {
 		using resources = new DisposableStore();
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));

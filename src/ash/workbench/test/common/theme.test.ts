@@ -7,10 +7,10 @@ import { createColorTheme, highContrastDarkColorTheme, highContrastLightColorThe
 import { ColorScheme } from "../../../platform/theme/common/theme.js";
 import { ColorRegistry, Colors } from '../../../platform/theme/common/colorRegistry.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
 import { WorkbenchThemeRegistry, WorkbenchThemesRegistry, getWorkbenchColorTheme, resolveWorkbenchColorTheme } from "../../common/theme.js";
 test('Activity Bar badge color descriptions appear in Chinese in the theme color catalog', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		using registry = new ColorRegistry();

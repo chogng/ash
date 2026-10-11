@@ -9,7 +9,7 @@ import { INotificationService } from '../../../platform/notification/common/noti
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import '../../browser/actions/approvalEnvironmentActions.js';
 import '../../browser/actions/sessionsChatActions.js';
@@ -57,7 +57,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 }
 
 test('Chinese environment preparation keeps scan scope explicit and saves only reviewed entries for its composer', async () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using services = new InstantiationService();
 	const choices = ['扫描项目…', '用当前任务模型整理资料', '包含项目近期会话', '会话上限：50', '每会话命令数：200', '时间范围：所有日期', '继续，生成草稿', 'curl', '接受为项目背景资料', '保存已接受的条目'];

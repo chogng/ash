@@ -2832,9 +2832,9 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 
 test('Chat mode accessibility help explains switch_mode in Chinese and restores input focus', async () => {
 	const { SessionsChatAccessibilityHelp } = await import('../../contrib/chat/browser/sessionsChatAccessibilityHelp.js');
-	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const container = document.createElement('div');
 	const input = document.createElement('textarea');
 	container.append(input);

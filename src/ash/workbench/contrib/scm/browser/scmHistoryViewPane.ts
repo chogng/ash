@@ -339,7 +339,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.list = list;
 			resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
 			list.domNode.classList.add('ash-scm-graph-viewport');
-			list.element.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a commit to expand its files. Press Shift+F10 or the Context Menu key for commit actions: view or compare changes, create a branch, cherry-pick, copy commit information, or add to Chat. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that commit. Press Enter on a reference badge for branch actions. Checkout includes detached commits; More includes creating a tag. Press Alt+Down Arrow to focus commit details and use its actions; Escape returns to the commit.'));
+			list.element.setAttribute('aria-description', localize('scm.history.help', 'Press Enter or Space on a history item to expand its files. Press Shift+F10 or the Context Menu key for actions supplied by the source control provider. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that item. Press Enter on a reference badge for provider actions. Press Alt+Down Arrow to focus history details and use its actions; Escape returns to the history item.'));
 			resources.add(list.onDidRenderRows(() => {
 				for (const [, row] of this.rowResources) {
 					if (!row.hover?.visible) continue;

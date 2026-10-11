@@ -11,7 +11,7 @@ import { ActivityService } from '../../browser/activityService.js';
 import { NumberBadge } from '../../common/activity.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
 import type { IAction } from '../../../../../base/common/actions.js';
-import { builtinLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -59,7 +59,7 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		const options = { ownerWindow: dom.window as unknown as Window, workspaceId: 'first', flushInterval: 0 };
 		using storage = new BrowserStorageService(options);
 		let actions: readonly IAction[] = [];
-		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		using bar = new CompositeBar(dom.window.document.body, {
 			openComposite: async () => null,
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,

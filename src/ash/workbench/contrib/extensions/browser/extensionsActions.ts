@@ -6,10 +6,41 @@ import { IExtensionManagementService, type ExtensionsEditorExtensionPolicy } fro
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IPluginService, type PluginPackageView, type PluginPermission } from '../../../../platform/plugins/common/pluginService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
+import { createBrowserExtensionApi } from '../../../../platform/extensions/browser/extensionApi.js';
 
 /** Both product windows use the same source, package and execution operations. */
 export function registerExtensionManagementActions(): DisposableStore {
 	const registrations = new DisposableStore();
+	registrations.add(registerAction2(class ManageBuiltInExtensions extends Action2 {
+		constructor() { super({ id: 'ash.extensions.manageBuiltIn', get title() { return localize2({ bundle: 'ash.extensions', key: 'manageBuiltInExtensions' }, 'Manage built-in editor extensions'); }, f1: true }); }
+		public override async run(accessor: ServicesAccessor): Promise<void> {
+			const enablement = accessor.get(IGlobalExtensionEnablementService);
+			const quickInput = accessor.get(IQuickInputService);
+			const catalog = await createBrowserExtensionApi().list('cached');
+			const disabled = new Set(enablement.getDisabledExtensions().map(extension => extension.id));
+			using resources = new DisposableStore();
+			const picker = resources.add(quickInput.createQuickPick<IQuickPickItem & { readonly extensionId: string; }>());
+			picker.ariaLabel = localize({ bundle: 'ash.extensions', key: 'manageBuiltInExtensions' }, 'Manage built-in editor extensions');
+			picker.placeholder = localize({ bundle: 'ash.extensions', key: 'chooseBuiltInExtension' }, 'Select an editor extension to enable or disable for this profile');
+			picker.items = catalog.extensions.filter(extension => typeof JSON.parse(extension.manifestJson).browser === 'string').map(extension => ({
+				label: extension.id,
+				description: extension.version,
+				detail: disabled.has(extension.id.toLowerCase()) ? localize({ bundle: 'ash.extensions', key: 'enableBuiltInExtension' }, 'Disabled · select to enable') : localize({ bundle: 'ash.extensions', key: 'disableBuiltInExtension' }, 'Enabled · select to disable'),
+				extensionId: extension.id,
+			}));
+			const selected = await new Promise<string | undefined>(resolve => {
+				resources.add(picker.onDidAccept(item => { resolve(item.extensionId); picker.hide(); }));
+				resources.add(picker.onDidHide(() => resolve(undefined)));
+				resources.add(picker.onDidBlur(() => picker.hide()));
+				picker.show();
+			});
+			if (!selected) { return; }
+			const extension = { id: selected };
+			if (disabled.has(selected.toLowerCase())) { await enablement.enableExtension(extension); }
+			else { await enablement.disableExtension(extension); }
+		}
+	}));
 	registrations.add(registerAction2(class ManageExtensionSources extends Action2 {
 		constructor() { super({ id: 'ash.extensions.manageSources', title: localize2({ bundle: 'ash.extensions', key: 'manageSources' }, 'Manage extension sources'), f1: true }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> {

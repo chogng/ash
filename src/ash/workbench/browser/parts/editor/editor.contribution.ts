@@ -16,8 +16,7 @@ import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widge
 import { DIFF_OPEN_SIDE, GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE, registerDiffEditorCommands } from "./diffEditorCommands.js";
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { ActiveEditorContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
+import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import { EditorAutoSave } from "./editorAutoSave.js";
 import { IEditorPart } from "./editorPart.js";
@@ -45,7 +44,7 @@ for (const [id, key, title, icon, order] of [
 ] as const) {
 	MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 		command: { id, title: localize({ bundle: 'ash.workbench', key }, title), icon },
-		when: id === DIFF_OPEN_SIDE ? ContextKeyExpr.and(diffEditorActive, ContextKeyExpr.notEquals(ResourceSchemeContext.key, 'git-change')) : diffEditorActive,
+		when: diffEditorActive,
 		group: 'navigation', order,
 	});
 }

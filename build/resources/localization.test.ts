@@ -97,12 +97,13 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'package.json': JSON.stringify({ type: 'module' }),
 		'src/ash/nls.ts': `export function localize(_key: string, message: string): string { return message; }`,
 		'src/ash/feature.ts': `import { localize } from './nls.js'; localize('hello', 'Hello');`,
-		'src/ash/platform/languagePacks/common/languagePackContract.ts': `export const ASH_LOCALIZATION_CATALOG_VERSION = 'ash-1';`,
-		'src/ash/platform/languagePacks/common/languagePacksService.ts': `export interface LanguagePackCatalog { readonly schemaVersion: 1; readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; readonly catalogVersion: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; }`,
+		'src/ash/platform/languagePacks/common/languagePackContract.ts': `export const ASH_LOCALIZATION_CATALOG_VERSION = 'ash-1'; export interface LanguagePackCatalog { readonly schemaVersion: 1; readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; readonly catalogVersion: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; }`,
+		'src/ash/platform/languagePacks/common/languagePacksService.ts': `export interface LanguagePackCatalog { readonly schemaVersion: 1; readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; readonly catalogVersion: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; } export interface PreinstalledLanguagePack { readonly id: string; readonly version: string; readonly displayName: string; readonly description: string; readonly catalog: LanguagePackCatalog; }`,
 		'.build/protocol/typescript/ApprovalModes.ts': `export const APPROVAL_MODE_DEFINITIONS = [];`,
-		'localization/languages.json': JSON.stringify(['en', 'zh-CN'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
+		'localization/languages.json': JSON.stringify(['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
 		'localization/en/messages.json': '{}',
-		'localization/zh-CN/messages.json': JSON.stringify({ ash: { hello: '你好' } }),
+		'extensions/language-pack-zh-cn/package.json': JSON.stringify({ name: 'language-pack-zh-cn', publisher: 'ash', version: '1.0.0', displayName: '简体中文', description: 'Chinese', license: 'MIT', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', languageName: 'Chinese', localizedLanguageName: '简体中文', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }),
+		'extensions/language-pack-zh-cn/translations/messages.json': JSON.stringify({ ash: { hello: '你好' } }),
 	};
 	for (const [name, text] of Object.entries(files)) {
 		await mkdir(dirname(join(root, name)), { recursive: true });
@@ -124,7 +125,15 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	run(['build/resources/localization.ts']);
 	const generated = join(root, '.build/desktop/localization');
 	const outputs = (await readdir(generated)).sort();
-	assert.deepEqual(outputs, ['localizationCatalog.en.ts', 'localizationCatalog.zh-CN.ts', 'localizationCatalogs.ts']);
+	assert.deepEqual(outputs, ['extensions', 'localizationCatalog.en.ts', 'localizationCatalog.zh-CN.ts', 'localizationCatalogs.ts']);
+	const extensionRoot = join(generated, 'extensions/ash.language-pack-zh-cn');
+	const packedCatalog = JSON.parse(await readFile(join(extensionRoot, 'localization/package.json'), 'utf8'));
+	assert.equal(packedCatalog.locale, 'zh-CN');
+	assert.equal(packedCatalog.bundles.ash.hello, '你好');
+	const manifest = JSON.parse(await readFile(join(extensionRoot, 'package.json'), 'utf8'));
+	assert.deepEqual(manifest.engines, { ash: '*' });
+	assert.equal(manifest.main, undefined);
+	assert.equal(manifest.browser, undefined);
 	assert.deepEqual(await readdir(dirname(join(root, entry))), ['localizationCatalogs.ts']);
 	const before = await Promise.all(outputs.map(async file => (await stat(join(generated, file), { bigint: true })).mtimeNs));
 	run(['build/resources/localization.ts']);
@@ -132,15 +141,17 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	for (const target of ['main', 'test']) {
 		const output = `.build/desktop/${target}`;
 		run([join(repository, 'node_modules/@ash/typescript-compiler/bin/tsc'), '--module', 'NodeNext', '--target', 'ES2022', '--rootDir', '.', '--outDir', output, '--types', 'node', '--skipLibCheck', entry]);
-		const catalogs = JSON.parse(run(['--input-type=module', '--eval', `import { builtinLanguagePackCatalogs } from './${output}/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify(builtinLanguagePackCatalogs.map(catalog => [catalog.locale, catalog.bundles.ash.hello])));`]));
+		const catalogs = JSON.parse(run(['--input-type=module', '--eval', `import { productLanguagePackCatalogs } from './${output}/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify(productLanguagePackCatalogs.map(catalog => [catalog.locale, catalog.bundles.ash.hello])));`]));
 		assert.deepEqual(catalogs, [['en', 'Hello'], ['zh-CN', '你好']]);
+		const provenance = JSON.parse(run(['--input-type=module', '--eval', `import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from './${output}/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify({ core: builtinLanguagePackCatalogs.map(catalog => catalog.locale), extensions: preinstalledLanguagePacks.map(pack => ({ id: pack.id, catalog: pack.catalog })) }));`]));
+		assert.deepEqual(provenance, { core: ['en'], extensions: [{ id: 'ash/language-pack-zh-cn', catalog: packedCatalog }] });
 	}
 	await writeFile(join(root, 'src/ash/feature.ts'), `import { localize } from './nls.js'; localize('hello', 'Hello again');`);
 	run(['build/resources/localization.ts', '--check']);
 	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Hello again/u);
 	run(['build/resources/localization.ts']);
 	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Hello again/u);
-	await writeFile(join(root, 'localization/zh-CN/messages.json'), JSON.stringify({ ash: { unknown: '未知' } }));
+	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/messages.json'), JSON.stringify({ ash: { unknown: '未知' } }));
 	const invalid = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
 	assert.equal(invalid.error, undefined);
 	assert.notEqual(invalid.status, 0);

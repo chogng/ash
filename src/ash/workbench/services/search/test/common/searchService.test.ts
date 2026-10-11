@@ -18,7 +18,7 @@ import { IFileSearchService } from '../../../../../platform/search/common/fileSe
 import { SearchService } from '../../common/searchService.js';
 import { QueryBuilder } from '../../common/queryBuilder.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import translatedWorkbench from '../../../../../../../localization/zh-CN/workbench.json' with { type: 'json' };
+import translatedWorkbench from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 const folders = [
 	{ id: 'first', name: 'first', index: 0, uri: URI.file('/workspace') },

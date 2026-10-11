@@ -19,7 +19,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { IPreferencesService, type IOpenSettingsOptions } from '../../../../services/preferences/common/preferences.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { DropOrPasteIntoCommands } from '../../browser/commands.js';
 import { DropOrPasteSchemaContribution } from '../../browser/configurationSchema.js';
@@ -73,7 +73,7 @@ for (const mode of ['paste', 'drop'] as const) {
 				getAsString: (callback: (text: string) => void) => callback('raw'), getAsFile: () => null,
 			}],
 		};
-		const zh = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const zh = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(zh.locale, zh.bundles);
 		using reset = toDisposable(resetNlsResolver);
 		// A new widget resolves the current language instead of retaining its construction-time label.

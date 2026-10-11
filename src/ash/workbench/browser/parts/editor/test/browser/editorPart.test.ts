@@ -34,7 +34,7 @@ import { IWorkspaceContextService } from '../../../../../../platform/workspace/c
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { OperatingSystem } from '../../../../../../base/common/platform.js';
 import { initializeTestLocalization } from '../../../../../services/localization/test/common/localizationTestUtils.js';
-import { resetNlsResolver } from '../../../../../../nls.js';
+import { localize, resetNlsResolver } from '../../../../../../nls.js';
 import { BreadcrumbsService } from "../../breadcrumbs.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicEditorConfigurations, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration } from "../../editorConfiguration.js";
 import { createDiffEditorInput } from "../../../../../common/editor/diffEditorInput.js";
@@ -1844,6 +1844,72 @@ test('editor commands share group state for keep open, selected pins and close o
 	assert.equal(editor.isModalEditorVisible, true);
 	await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
 	assert.deepEqual({ modal: editor.isModalEditorVisible, inputs: group.inputs }, { modal: false, inputs: [second] });
+});
+
+test('closing a restored empty editor group preserves files and persists one group', async () => {
+	const container = browserEnvironment.window.document.createElement('div');
+	browserEnvironment.window.document.body.append(container);
+	using cleanup = toDisposable(() => container.remove());
+	using services = createTestEditorServices();
+	using registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('test.closeGroup', '.ts', () => new TestEditorPane('test.closeGroup')));
+	using editor = createEditorPart(container, { registry }, services);
+	using groups = new BrowserEditorService(editor);
+	services.registerInstance(IEditorPart, editor);
+	services.registerInstance(IEditorGroupsService, groups);
+	using commands = new CommandService(services);
+	const { CLOSE_EDITOR_GROUP_COMMAND_ID } = await import('../../editorCommands.js');
+	const { resolveCommandsContext } = await import('../../editorCommandsContext.js');
+	using bindings = createTestWorkbenchContextKeysHandler(services.get(IContextKeyService), { editorService: groups, editorGroupsService: groups });
+	using localization = toDisposable(resetNlsResolver);
+	initializeTestLocalization('zh-CN');
+	const menus = new MenuService(commands, services.get(IContextKeyService));
+	const empty = editor.activeGroup;
+	const documentGroup = editor.addGroup(empty.id, Direction.Right);
+	const closeAction = menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).find(action => action.id === CLOSE_EDITOR_GROUP_COMMAND_ID)!;
+	assert.equal(closeAction.enabled, true);
+	assert.equal(localize('workbench.closeEditorGroup', 'Close Editor Group'), '关闭编辑器组');
+	const file = input('/project/restored.ts');
+	await editor.openEditor(file, { pinned: true }, { groupId: documentGroup.id });
+	const saved = JSON.parse(JSON.stringify(editor.saveWorkingSet('lastSession')));
+	await editor.applyWorkingSet(saved, { preserveFocus: true });
+	assert.deepEqual(editor.groups.map(group => group.inputs.map(input => input.resource.path)), [[], [file.resource.path]]);
+	const pane = editor.groups[1]!.activePane;
+	editor.groups[0]!.focus();
+	assert.deepEqual(resolveCommandsContext([], groups).groupedEditors.map(({ group, editors }) => ({ id: group.id, editors })), [{ id: editor.groups[0]!.id, editors: [] }]);
+	await commands.executeCommand(CLOSE_EDITOR_GROUP_COMMAND_ID);
+	assert.equal(editor.groups.length, 1);
+	assert.equal(editor.activePane, pane);
+	assert.equal((pane as TestEditorPane).disposed, false);
+	assert.equal(editor.domNode.querySelectorAll('.ash-editor-group').length, 1);
+	const restored = editor.saveWorkingSet('lastSession');
+	await editor.applyWorkingSet(restored, { preserveFocus: true });
+	assert.deepEqual(editor.groups.map(group => group.inputs.map(input => input.resource.path)), [[file.resource.path]]);
+	assert.equal(editor.domNode.querySelectorAll('.ash-editor-group').length, 1);
+});
+
+test('closing an explicitly targeted empty group preserves external focus and ignores an invalid editor index', async () => {
+	const container = browserEnvironment.window.document.createElement('div');
+	const button = browserEnvironment.window.document.createElement('button');
+	browserEnvironment.window.document.body.append(container, button);
+	using cleanup = toDisposable(() => { container.remove(); button.remove(); });
+	using services = createTestEditorServices();
+	using editor = createEditorPart(container, {}, services);
+	using groups = new BrowserEditorService(editor);
+	services.registerInstance(IEditorPart, editor);
+	services.registerInstance(IEditorGroupsService, groups);
+	using commands = new CommandService(services);
+	const { CLOSE_EDITOR_GROUP_COMMAND_ID } = await import('../../editorCommands.js');
+	const first = editor.activeGroup;
+	const second = editor.addGroup(first.id, Direction.Right);
+	button.focus();
+	await commands.executeCommand(CLOSE_EDITOR_GROUP_COMMAND_ID, { groupId: second.id, editorIndex: 0 });
+	assert.equal(editor.groups.length, 2);
+	await commands.executeCommand(CLOSE_EDITOR_GROUP_COMMAND_ID, { groupId: second.id, preserveFocus: true });
+	assert.deepEqual(editor.groups.map(group => group.id), [first.id]);
+	assert.equal(browserEnvironment.window.document.activeElement, button);
+	await commands.executeCommand(CLOSE_EDITOR_GROUP_COMMAND_ID, { groupId: first.id });
+	assert.equal(editor.groups.length, 1);
 });
 
 test('double-clicking a preview keeps the tab without making it sticky', async () => {

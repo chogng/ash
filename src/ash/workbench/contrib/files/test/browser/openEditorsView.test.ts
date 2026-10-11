@@ -20,7 +20,7 @@ import type { IWorkingCopy } from '../../../../services/workingCopy/common/worki
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { DirtyFilesIndicator } from '../../common/dirtyFilesIndicator.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -141,7 +141,7 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	secondIsDirty = true;
 	secondDirtyChanges.fire();
 	assert.equal(activeBadge?.number, 2);
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		assert.equal(activeBadge?.description, '2 unsaved files');

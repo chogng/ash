@@ -413,7 +413,7 @@ test('notification toast controls stay legible and fit the card in light, dark, 
 		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
 		await page.mouse.move(400, 180);
 		await expect(close).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(close).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+		await expect(close).toHaveCSS('border-top-width', '0px');
 		await expect(close.locator('svg')).toHaveCount(1);
 		await expect(toast).toHaveCSS('border-radius', '8px');
 		await expect(action).toHaveCSS('min-height', '28px');
@@ -434,8 +434,8 @@ test('notification toast controls stay legible and fit the card in light, dark, 
 			};
 		});
 		expect(geometry.width).toBeLessThanOrEqual(420);
-		expect(geometry.closeWidth).toBe(28);
-		expect(geometry.closeHeight).toBe(28);
+		expect(geometry.closeWidth).toBe(22);
+		expect(geometry.closeHeight).toBe(22);
 		expect(geometry.messageBeforeClose).toBe(true);
 		expect(geometry.closeInside).toBe(true);
 		expect(geometry.noOverflow).toBe(true);

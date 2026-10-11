@@ -22,7 +22,7 @@ import { LogService } from '../../../../../platform/log/common/logServiceImpl.js
 import { defaultExternalUriOpenerId, IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { IPreferencesService, type IOpenSettingsOptions } from '../../../../services/preferences/common/preferences.js';
 import { externalUriOpenersConfigurationNode, externalUriOpenersSettingId } from '../../common/configuration.js';
 import { ExternalUriOpenerService, IExternalUriOpenerService, type IExternalUriOpener } from '../../common/externalUriOpenerService.js';
@@ -227,7 +227,7 @@ suite('External URI opener production routing', () => {
 		for (const value of [null, [], { '*': 1 }, { '': 'viewer' }, { '*': '' }, { 'https://': 'viewer' }, { 'example.test:bad': 'viewer' }]) {
 			await assert.rejects(fixture.configuration.updateValue(externalUriOpenersSettingId, value), TypeError);
 		}
-		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(catalog.locale, catalog.bundles);
 		try {
 			assert.match(externalUriOpenersConfigurationNode.schema!.description!, /HTTP.*HTTPS.*模式/u);

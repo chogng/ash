@@ -14,7 +14,7 @@ import type { SshPortForward as Forward, SshPortForwardChange as ForwardChange }
 import { TunnelPrivacyId, type RemoteTunnel } from '../../../../../platform/tunnel/common/tunnel.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { TunnelService } from '../../electron-browser/tunnelService.js';
-import chinese from '../../../../../../../localization/zh-CN/workbench.json' with { type: 'json' };
+import chinese from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { ITunnelService } from '../../../../../platform/tunnel/common/tunnel.js';
 
 

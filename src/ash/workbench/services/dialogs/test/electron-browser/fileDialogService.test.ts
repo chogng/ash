@@ -9,7 +9,7 @@ import { INativeHostService } from '../../../../common/services.js';
 import { FileDialogService } from '../../electron-browser/fileDialogService.js';
 import { DialogService } from '../../common/dialogService.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import chineseMessages from '../../../../../../../localization/zh-CN/workbench.json' with { type: 'json' };
+import chineseMessages from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 test('Save As passes the suggested file name to the owning desktop window', async () => {
 	const calls: Array<{ readonly defaultPath?: string; } | undefined> = [];

@@ -12,7 +12,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { SCMRepositoriesViewPane, REPOSITORIES_VIEW_PANE_ID } from '../../browser/scmRepositoriesViewPane.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
 import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResourceGroup } from '../../common/scm.js';
@@ -49,7 +49,7 @@ suite('SCMRepositoriesViewPane', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('distinguishes same-name worktrees, preserves focus through status updates and localizes rows', async () => {
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		try {
 			using environment = fixture();

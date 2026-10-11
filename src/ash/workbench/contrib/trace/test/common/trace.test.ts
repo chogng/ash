@@ -32,7 +32,7 @@ suite('Execution Trace location', () => {
 		});
 	}
 	test('reports invalid locations in Chinese using the shipped catalog', () => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('localization/zh-CN/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
 		try { assert.throws(() => createAgentTraceResource({ sessionId: 's', eventId: 'event' }), /定位 Turn 或事件时必须提供所属 Thread ID/); }
 		finally { resetNlsResolver(); }
 	});

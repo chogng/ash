@@ -22,7 +22,7 @@ import { IEditorPartsService } from '../../../src/ash/workbench/browser/parts/ed
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { CodeEditorService } from '../../../src/ash/workbench/services/editor/browser/codeEditorService.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import '../../../src/ash/workbench/browser/media/style.css';
@@ -36,7 +36,7 @@ declare global {
 
 const parameters = new URLSearchParams(location.search);
 if (parameters.get('locale') === 'zh-CN') {
-	const catalog = builtinLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, values) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, values));
 }
 await import('../../../src/ash/workbench/contrib/quickaccess/browser/quickAccess.contribution.js');

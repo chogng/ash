@@ -20,6 +20,7 @@
     "icons:check": "node build/resources/icons/generate.ts --check",
     "protocol:generate": "node build/protocol/generate.ts",
     "prepare:generated": "pnpm run prepare:extensions && pnpm run typecheck:common && pnpm run icons:check",
+    "preprepare:extensions": "pnpm run localization:generate",
     "prepare:extensions": "node build/builtin/extensions.ts",
     "rebuild:native": "electron-rebuild -w native-keymap",
     "prepare:output": "node build/desktop/build.ts prepare",

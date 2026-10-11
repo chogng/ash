@@ -16,7 +16,7 @@ import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import messages from '../../../localization/zh-CN/github.json' with { type: 'json' };
+import messages from '../../../extensions/language-pack-zh-cn/translations/github.json' with { type: 'json' };
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IAccountService, type AccountState } from '../../../src/ash/platform/accounts/common/accountService.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';

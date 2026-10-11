@@ -12,7 +12,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ManageAccountsAction } from '../../browser/actions/manageAccountsAction.js';
 
 test('Manage Accounts command opens account actions and signs out only after a second choice', async () => {
@@ -139,7 +139,7 @@ test('Manage Accounts command reports a failed account read without opening a pi
 });
 
 test('Manage Accounts command and picker use the selected language', async () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const operations: string[] = [];

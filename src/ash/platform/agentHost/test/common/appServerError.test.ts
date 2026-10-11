@@ -7,7 +7,7 @@ import { decodeAppServerResponse } from '../../../../../../.build/protocol/types
 
 test('stopping initialization preserves the structured cause and localizes its explanation', () => {
 	try {
-		const bundles = JSON.parse(readFileSync('localization/zh-CN/workbench.json', 'utf8'));
+		const bundles = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
 		setNlsMessages('zh-CN', bundles);
 		const response = decodeAppServerResponse('initialize', { jsonrpc: '2.0', id: 42, error: { code: -32600, message: 'diagnostic changed', data: { kind: 'ServerShuttingDown' } } });
 		assert.ok('error' in response);

@@ -233,8 +233,8 @@ test('navigation order survives a new window and includes new menu contributions
 
 test('navigation and ordering labels use the Chinese language catalog', async () => {
 	const { setNlsResolver, resetNlsResolver, formatNlsMessage } = await import('../../../nls.js');
-	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, message, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? message, parameters));
 	try {
 		const ownerDocument = browser.window.document;

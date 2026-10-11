@@ -33,7 +33,7 @@ import { QuickDiffModelService } from '../../../src/ash/workbench/contrib/scm/br
 import { QuickDiffService } from '../../../src/ash/workbench/contrib/scm/common/quickDiffService.js';
 import { CodeEditorConfiguration } from '../../../src/ash/workbench/contrib/codeEditor/common/editorConfiguration.js';
 import { resetNlsResolver, setNlsMessages } from '../../../src/ash/nls.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
@@ -100,7 +100,7 @@ import { SessionChangesEditor } from '../../../src/ash/sessions/contrib/changes/
 
 // Display language is fixed before constructing widgets, as it is at product startup.
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
-	const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
 

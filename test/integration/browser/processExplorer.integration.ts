@@ -6,7 +6,7 @@ import { Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { ProxyChannel } from '../../../src/ash/base/parts/ipc/common/ipc.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import messages from '../../../localization/zh-CN/workbench.json' with { type: 'json' };
+import messages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IAccessibleViewService, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';

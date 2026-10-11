@@ -8,7 +8,7 @@ import { BrowserTextModelService } from '../../../src/ash/workbench/services/tex
 import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
 import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
 import { ILanguageFeatureDebounceService } from '../../../src/ash/editor/common/services/languageFeatureDebounce.js';
 import { IInstantiationService } from '../../../src/ash/platform/instantiation/common/instantiation.js';
@@ -2844,7 +2844,7 @@ window.ashStandaloneIntegration = {
 	readSelectionUndo,
 	setActionMenuTheme: theme => stanza.editor.setTheme(theme),
 	setActionMenuLanguage: locale => {
-		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
+		const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 		setNlsResolver((bundle, key, message, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? message, parameters));
 	},
 	enableCodeActions: (kind = 'single') => {

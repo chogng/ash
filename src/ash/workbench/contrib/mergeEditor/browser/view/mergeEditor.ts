@@ -91,38 +91,38 @@ export class MergeEditor extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		const navigation = h(document, 'nav');
 		navigation.className = 'ash-merge-navigation';
-		navigation.setAttribute('aria-label', localize({ bundle: 'ash', key: 'git.mergeConflictNavigation' }, 'Merge conflicts'));
+		navigation.setAttribute('aria-label', localize({ bundle: 'ash', key: 'mergeEditor.conflictNavigation' }, 'Merge conflicts'));
 		this.previousButton = this._register(new Button(navigation, {
-			label: localize({ bundle: 'ash', key: 'git.previousConflict' }, 'Previous Conflict'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.previousConflict' }, 'Previous Conflict'),
 			onClick: () => this.navigate(-1, false),
 		}));
 		this.nextButton = this._register(new Button(navigation, {
-			label: localize({ bundle: 'ash', key: 'git.nextConflict' }, 'Next Conflict'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.nextConflict' }, 'Next Conflict'),
 			onClick: () => this.navigate(1, false),
 		}));
 		this.previousUnresolvedButton = this._register(new Button(navigation, {
-			label: localize({ bundle: 'ash', key: 'git.previousUnresolvedConflict' }, 'Previous Unresolved'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.previousUnresolvedConflict' }, 'Previous Unresolved'),
 			onClick: () => this.navigate(-1, true),
 		}));
 		this.nextUnresolvedButton = this._register(new Button(navigation, {
-			label: localize({ bundle: 'ash', key: 'git.nextUnresolvedConflict' }, 'Next Unresolved'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.nextUnresolvedConflict' }, 'Next Unresolved'),
 			onClick: () => this.navigate(1, true),
 		}));
 		this.acceptRemainingCurrentButton = this._register(new Button(navigation, {
-			label: localize({ bundle: 'ash', key: 'git.acceptRemainingCurrent' }, 'Accept Remaining Current'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.acceptRemainingCurrent' }, 'Accept Remaining Current'),
 			onClick: () => this.acceptRemaining('current'),
 		}));
 		this.acceptRemainingIncomingButton = this._register(new Button(navigation, {
-			label: localize({ bundle: 'ash', key: 'git.acceptRemainingIncoming' }, 'Accept Remaining Incoming'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.acceptRemainingIncoming' }, 'Accept Remaining Incoming'),
 			onClick: () => this.acceptRemaining('incoming'),
 		}));
 		this.baseToggleButton = this._register(new Button(navigation, {
-			label: localize({ bundle: 'ash', key: 'git.showBase' }, 'Show Base'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.showBase' }, 'Show Base'),
 			checked: false,
 			onClick: () => { this.showBase = !this.showBase; this.updateLayout(); },
 		}));
 		this.layoutToggleButton = this._register(new Button(navigation, {
-			label: localize({ bundle: 'ash', key: 'git.useColumns' }, 'Use Columns'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.useColumns' }, 'Use Columns'),
 			checked: false,
 			onClick: () => { this.columnLayout = !this.columnLayout; this.updateLayout(); },
 		}));
@@ -163,7 +163,7 @@ export class MergeEditor extends Disposable {
 		const resultSection = h(document, 'section');
 		resultSection.className = 'ash-merge-result';
 		const resultTitle = h(document, 'h3');
-		resultTitle.textContent = localize({ bundle: 'ash', key: 'git.mergeResult' }, 'Result');
+		resultTitle.textContent = localize({ bundle: 'ash', key: 'mergeEditor.result' }, 'Result');
 		this.resultDomNode = h(document, 'div');
 		this.resultDomNode.className = 'ash-merge-result-editor';
 		this.resultPlaceholderDomNode = h(document, 'div');
@@ -246,12 +246,12 @@ export class MergeEditor extends Disposable {
 		this.domNode.classList.toggle('columns', this.columnLayout);
 		this.baseSection.hidden = !this.showBase;
 		this.baseToggleButton.label = this.showBase
-			? localize({ bundle: 'ash', key: 'git.hideBase' }, 'Hide Base')
-			: localize({ bundle: 'ash', key: 'git.showBase' }, 'Show Base');
+			? localize({ bundle: 'ash', key: 'mergeEditor.hideBase' }, 'Hide Base')
+			: localize({ bundle: 'ash', key: 'mergeEditor.showBase' }, 'Show Base');
 		this.baseToggleButton.checked = this.showBase;
 		this.layoutToggleButton.label = this.columnLayout
-			? localize({ bundle: 'ash', key: 'git.useStacked' }, 'Use Stacked Layout')
-			: localize({ bundle: 'ash', key: 'git.useColumns' }, 'Use Columns');
+			? localize({ bundle: 'ash', key: 'mergeEditor.useStacked' }, 'Use Stacked Layout')
+			: localize({ bundle: 'ash', key: 'mergeEditor.useColumns' }, 'Use Columns');
 		this.layoutToggleButton.checked = this.columnLayout;
 		this.layout({ width: this.domNode.clientWidth, height: this.domNode.clientHeight });
 		if (this.model?.isReady) {
@@ -283,7 +283,7 @@ export class MergeEditor extends Disposable {
 			`${sideLabel('base')}\n${model?.base.getValue() ?? this.sourceEditors.get('base')?.getModel()?.getValue() ?? ''}`,
 			`${sideLabel('current')}\n${model?.current.getValue() ?? this.sourceEditors.get('current')?.getModel()?.getValue() ?? ''}`,
 			`${sideLabel('incoming')}\n${model?.incoming.getValue() ?? this.sourceEditors.get('incoming')?.getModel()?.getValue() ?? ''}`,
-			`${localize({ bundle: 'ash', key: 'git.mergeResult' }, 'Result')}\n${model?.result.getValue() ?? this.resultEditor.getControl()?.getValue() ?? this.resultPlaceholderDomNode.textContent ?? ''}`,
+			`${localize({ bundle: 'ash', key: 'mergeEditor.result' }, 'Result')}\n${model?.result.getValue() ?? this.resultEditor.getControl()?.getValue() ?? this.resultPlaceholderDomNode.textContent ?? ''}`,
 		].join('\n\n');
 	}
 
@@ -324,7 +324,7 @@ export class MergeEditor extends Disposable {
 			row.className = 'ash-merge-hunk';
 			if (hunk.index === this.activeHunk) row.classList.add('active');
 			const select = this.hunkButtons.add(new Button(row, {
-				label: localize({ bundle: 'ash', key: 'git.mergeBlock' }, 'Conflict {0}', hunk.index + 1),
+				label: localize({ bundle: 'ash', key: 'mergeEditor.block' }, 'Conflict {0}', hunk.index + 1),
 				onClick: () => { this.activeHunk = hunk.index; this.revealHunk(hunk); },
 			}));
 			select.domNode.classList.add('ash-merge-hunk-select');
@@ -430,7 +430,7 @@ export class MergeEditor extends Disposable {
 
 	private renderZoneActions(node: HTMLElement, side: MergeEditorSide, hunk: MergeEditorHunk): Button | undefined {
 		node.setAttribute('role', 'group');
-		node.setAttribute('aria-label', `${localize({ bundle: 'ash', key: 'git.mergeBlock' }, 'Conflict {0}', hunk.index + 1)} — ${sideLabel(side)}`);
+		node.setAttribute('aria-label', `${localize({ bundle: 'ash', key: 'mergeEditor.block' }, 'Conflict {0}', hunk.index + 1)} — ${sideLabel(side)}`);
 		let focusButton: Button | undefined;
 		const addAction = (choice: MergeEditorChoice, label: string): void => {
 			const button = this.zoneButtons.add(new Button(node, { label, onClick: () => this.acceptHunk(hunk.index, choice) }));
@@ -438,26 +438,26 @@ export class MergeEditor extends Disposable {
 			if (this.pendingActionFocus?.index === hunk.index && this.pendingActionFocus.action === choice) focusButton = button;
 		};
 		switch (side) {
-			case 'base': addAction('base', localize({ bundle: 'ash', key: 'git.useBase' }, 'Use Base')); break;
-			case 'current': addAction('current', localize({ bundle: 'ash', key: 'git.acceptCurrent' }, 'Accept Current')); break;
-			case 'incoming': addAction('incoming', localize({ bundle: 'ash', key: 'git.acceptIncoming' }, 'Accept Incoming')); break;
+			case 'base': addAction('base', localize({ bundle: 'ash', key: 'mergeEditor.useBase' }, 'Use Base')); break;
+			case 'current': addAction('current', localize({ bundle: 'ash', key: 'mergeEditor.acceptCurrent' }, 'Accept Current')); break;
+			case 'incoming': addAction('incoming', localize({ bundle: 'ash', key: 'mergeEditor.acceptIncoming' }, 'Accept Incoming')); break;
 			case 'result': {
 				const state = h(this.domNode.ownerDocument, 'span');
 				state.className = 'ash-merge-inline-state';
 				state.textContent = hunk.unresolved ? resolutionLabel('unresolved') : resolutionLabel(hunk.resolution);
 				node.append(state);
-				if (!this.showBase) addAction('base', localize({ bundle: 'ash', key: 'git.useBase' }, 'Use Base'));
+				if (!this.showBase) addAction('base', localize({ bundle: 'ash', key: 'mergeEditor.useBase' }, 'Use Base'));
 				addAction('both', this.model!.canSmartCombine(hunk.index)
-					? localize({ bundle: 'ash', key: 'git.acceptCombination' }, 'Accept Combination')
-					: localize({ bundle: 'ash', key: 'git.acceptBoth' }, 'Accept Both'));
-				if (!this.model!.canSmartCombine(hunk.index)) addAction('bothReversed', localize({ bundle: 'ash', key: 'git.acceptIncomingFirst' }, 'Accept Both (Incoming First)'));
+					? localize({ bundle: 'ash', key: 'mergeEditor.acceptCombination' }, 'Accept Combination')
+					: localize({ bundle: 'ash', key: 'mergeEditor.acceptBoth' }, 'Accept Both'));
+				if (!this.model!.canSmartCombine(hunk.index)) addAction('bothReversed', localize({ bundle: 'ash', key: 'mergeEditor.acceptIncomingFirst' }, 'Accept Both (Incoming First)'));
 				if (hunk.resolution !== 'unresolved') {
 					const markHandled = !hunk.handled;
 					const action = markHandled ? 'markHandled' : 'markUnhandled';
 					const button = this.zoneButtons.add(new Button(node, {
 						label: markHandled
-							? localize({ bundle: 'ash', key: 'git.markHandled' }, 'Mark Handled')
-							: localize({ bundle: 'ash', key: 'git.markUnhandled' }, 'Mark Unhandled'),
+							? localize({ bundle: 'ash', key: 'mergeEditor.markHandled' }, 'Mark Handled')
+							: localize({ bundle: 'ash', key: 'mergeEditor.markUnhandled' }, 'Mark Unhandled'),
 						onClick: () => this.setHandled(hunk.index, markHandled),
 					}));
 					this.hunkActionButtons.push(button);
@@ -605,28 +605,28 @@ export class MergeEditor extends Disposable {
 		this.acceptRemainingIncomingButton.enabled = hasUnresolved;
 		const total = this.model?.isReady ? this.model.hunks.length : 0;
 		const resolved = total - (this.model?.unresolvedCount ?? 0);
-		this.progressNode.textContent = localize({ bundle: 'ash', key: 'git.mergeProgress' }, '{0} of {1} conflicts resolved', resolved, total);
+		this.progressNode.textContent = localize({ bundle: 'ash', key: 'mergeEditor.progress' }, '{0} of {1} conflicts resolved', resolved, total);
 	}
 }
 
 function sideLabel(side: MergeEditorSide): string {
 	switch (side) {
-		case 'base': return localize({ bundle: 'ash', key: 'git.mergeBase' }, 'Base');
-		case 'current': return localize({ bundle: 'ash', key: 'git.mergeCurrent' }, 'Current');
-		case 'incoming': return localize({ bundle: 'ash', key: 'git.mergeIncoming' }, 'Incoming');
-		case 'result': return localize({ bundle: 'ash', key: 'git.mergeResult' }, 'Result');
+		case 'base': return localize({ bundle: 'ash', key: 'mergeEditor.base' }, 'Base');
+		case 'current': return localize({ bundle: 'ash', key: 'mergeEditor.current' }, 'Current');
+		case 'incoming': return localize({ bundle: 'ash', key: 'mergeEditor.incoming' }, 'Incoming');
+		case 'result': return localize({ bundle: 'ash', key: 'mergeEditor.result' }, 'Result');
 	}
 }
 
 function resolutionLabel(resolution: MergeEditorHunk['resolution']): string {
 	switch (resolution) {
-		case 'unresolved': return localize({ bundle: 'ash', key: 'git.mergeUnresolvedState' }, 'Unresolved');
-		case 'base': return localize({ bundle: 'ash', key: 'git.mergeResolvedBase' }, 'Base');
-		case 'current': return localize({ bundle: 'ash', key: 'git.mergeResolvedCurrent' }, 'Current accepted');
-		case 'incoming': return localize({ bundle: 'ash', key: 'git.mergeResolvedIncoming' }, 'Incoming accepted');
-		case 'both': return localize({ bundle: 'ash', key: 'git.mergeResolvedBoth' }, 'Both accepted');
-		case 'bothReversed': return localize({ bundle: 'ash', key: 'git.mergeResolvedBothReversed' }, 'Both accepted, incoming first');
-		case 'manual': return localize({ bundle: 'ash', key: 'git.mergeManualResolution' }, 'Manual resolution');
+		case 'unresolved': return localize({ bundle: 'ash', key: 'mergeEditor.unresolvedState' }, 'Unresolved');
+		case 'base': return localize({ bundle: 'ash', key: 'mergeEditor.resolvedBase' }, 'Base');
+		case 'current': return localize({ bundle: 'ash', key: 'mergeEditor.resolvedCurrent' }, 'Current accepted');
+		case 'incoming': return localize({ bundle: 'ash', key: 'mergeEditor.resolvedIncoming' }, 'Incoming accepted');
+		case 'both': return localize({ bundle: 'ash', key: 'mergeEditor.resolvedBoth' }, 'Both accepted');
+		case 'bothReversed': return localize({ bundle: 'ash', key: 'mergeEditor.resolvedBothReversed' }, 'Both accepted, incoming first');
+		case 'manual': return localize({ bundle: 'ash', key: 'mergeEditor.manualResolution' }, 'Manual resolution');
 	}
 }
 

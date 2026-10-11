@@ -95,7 +95,11 @@
     "targetsUrl": "HTTPS 包地址",
     "trustedRoot": "受信任的根 JSON",
     "add": "添加",
-    "languageFilter": "{0} · {1}"
+    "languageFilter": "{0} · {1}",
+    "manageBuiltInExtensions": "管理内置编辑器扩展",
+    "chooseBuiltInExtension": "选择要为当前配置文件启用或禁用的编辑器扩展",
+    "enableBuiltInExtension": "已禁用 · 选择以启用",
+    "disableBuiltInExtension": "已启用 · 选择以禁用"
   },
   "ash.workbench": {
     "command.OpenExtensions": "打开扩展",

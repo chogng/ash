@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { setNlsResolver, resetNlsResolver, formatNlsMessage } from '../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { AppServerAssetService } from '../../browser/appServerAssetService.js';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
@@ -100,7 +100,7 @@ test('A failed upload is cancelled and a consumed invalid image reports translat
 		await assert.rejects(service.importImage(request), /AssetCapacity/);
 		assert.equal(transport.requests.at(-1)!.method, 'asset/import/cancel');
 		transport.failWrite = false; transport.invalidImage = true;
-		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 		await assert.rejects(service.importImage(request), /请选择有效的 PNG、JPEG 或 WebP 图片/);
 		assert.equal(transport.requests.at(-1)!.method, 'asset/import/finish');

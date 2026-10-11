@@ -1,0 +1,32 @@
+.ash-notification-host {
+	display: flex;
+	min-height: 0;
+	flex-direction: column;
+	gap: 8px;
+	/* Leave room for shadows inside the scrollport while retaining the anchor. */
+	padding: 12px;
+	margin: -12px;
+	overflow-y: auto;
+	pointer-events: auto;
+	order: -1;
+}
+.ash-notification-host:empty {
+	display: none;
+}
+.ash-notification {
+	flex-shrink: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+}
+.ash-sessions-window {
+	position: relative;
+}
+.ash-sessions-window .ash-feedback-host {
+	position: absolute;
+	z-index: 1000;
+	inset-inline-end: 12px;
+	inset-block-end: 40px;
+	width: min(420px, calc(100% - 24px));
+	max-height: calc(100% - 56px);
+	pointer-events: none;
+}

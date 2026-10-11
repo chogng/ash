@@ -61,7 +61,7 @@ suite('Extension resource loader', () => {
 	test('reports unsupported resources in Chinese and rejects invalid UTF-8', async () => {
 		const loader = new ExtensionResourceLoaderService(async () => Uint8Array.of(0xff));
 		await assert.rejects(loader.readExtensionResource(toExtensionResourceURI({ generation: 1, extensionId: 'publisher.sample', path: 'file' })), TypeError);
-		const bundles = JSON.parse(readFileSync(resolve(process.cwd(), 'localization/zh-CN/workbench.json'), 'utf8'));
+		const bundles = JSON.parse(readFileSync(resolve(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'));
 		setNlsMessages('zh-CN', bundles);
 		try {
 			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), { message: '此资源不属于已配置的扩展源。' });

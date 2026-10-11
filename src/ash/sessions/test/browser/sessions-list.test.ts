@@ -1,4 +1,4 @@
-import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { sessionManagementLabel } from '../../browser/sessionManagementLabels.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
@@ -108,7 +108,7 @@ test('SessionsList updates passive status without changing row identity or selec
 
 
 test('passive management labels use the installed Chinese catalog and retain unknown states', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const statuses = ['idle', 'needsInput', 'working', 'readyForReview', 'completed', 'failed', 'stopped'] as const;

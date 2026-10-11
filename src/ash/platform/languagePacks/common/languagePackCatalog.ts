@@ -11,11 +11,11 @@ export function normalizeLocale(value: string): string {
 }
 
 /** Startup must remain usable when an optional language resource is missing or damaged. */
-export async function resolveLanguagePackCatalog(locale: string, builtins: readonly LanguagePackCatalog[], store: ILanguagePackStore): Promise<LanguagePackCatalog> {
+export async function resolveLanguagePackCatalog(locale: string, startupCatalogs: readonly LanguagePackCatalog[], store: ILanguagePackStore): Promise<LanguagePackCatalog> {
 	let candidate = normalizeLocale(locale);
 	while (candidate) {
-		const builtin = builtins.find(catalog => catalog.locale.toLowerCase() === candidate.toLowerCase());
-		if (builtin) { return builtin; }
+		const packaged = startupCatalogs.find(catalog => catalog.locale.toLowerCase() === candidate.toLowerCase());
+		if (packaged) { return packaged; }
 		try {
 			const catalog = await store.read(candidate);
 			if (catalog) { return catalog; }
@@ -25,7 +25,7 @@ export async function resolveLanguagePackCatalog(locale: string, builtins: reado
 		const separator = candidate.lastIndexOf("-");
 		candidate = separator > 0 ? candidate.slice(0, separator) : "";
 	}
-	const english = builtins.find(catalog => catalog.locale === "en");
+	const english = startupCatalogs.find(catalog => catalog.locale === "en");
 	if (!english) { throw new Error("The built-in English catalog is required"); }
 	return english;
 }

@@ -356,9 +356,9 @@ test('Sessions Models switches control the model picker visibility preference', 
 	await configuration.updateValue('sessions.activityBar.compact', false);
 	assert.equal(window.document.querySelector('dialog'), null);
 	await configuration.updateValue('sessions.activityBar.compact', true);
-	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const reopened = preferences.open({ query: 'sessions.activityBar.compact' });

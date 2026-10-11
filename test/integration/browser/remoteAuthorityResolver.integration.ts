@@ -13,7 +13,7 @@ import { FileService } from '../../../src/ash/platform/files/common/fileService.
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import chinese from '../../../localization/zh-CN/workbench.json' with { type: 'json' };
+import chinese from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());

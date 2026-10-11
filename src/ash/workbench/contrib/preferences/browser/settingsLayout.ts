@@ -340,13 +340,13 @@ export const SettingsNavigation = [
 			{
 				id: 'source-control',
 				label: 'Source Control',
-				description: 'Configure Git fetching and Source Control diff decorations.',
+				description: 'Configure source control providers and diff decorations.',
 				presentation: 'general',
 				groups: [
 					{
 						id: 'source-control',
-						get label() { return localize('git.settings.group', 'Source Control'); },
-						get description() { return localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'); },
+						get label() { return localize('scm.settings.group', 'Source Control'); },
+						get description() { return localize('scm.settings.groupDescription', 'Configure source control providers and diff decorations.'); },
 						settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace'],
 					},
 				],

@@ -9,7 +9,7 @@ Electron Main 在创建窗口前读取语言资源，Workbench、Sessions 和系
 - 普通文案在功能代码中调用 `localize(key, 'English message')`。
 - 命令标题等同时需要英文原文和译文的地方调用 `localize2(key, 'English message')`；返回 `{ original, value }`，两者都在调用时确定。命令面板显示译文，并支持按英文原名、译文或命令 ID 搜索。
 - 跨 bundle 的文案使用 `{ bundle, key }`。已有 bundle/key 是稳定标识，不随文件移动改名。
-- `zh-CN/*.json` 按 Editor、Workbench、Settings、Sessions 等较大的领域维护译文。不要为每个组件建一个文件。
+- `extensions/language-pack-zh-cn/translations/*.json` 按 Editor、Workbench、Settings、Sessions 等较大的领域维护译文。不要为每个组件建一个文件。
 - `en/*.json` 只保存不能由静态调用提取的声明，例如以数据表或动态 key 调用的文案。可以静态提取的英文留在调用位置。
 - 主题颜色说明由主题注册代码声明。审批模式的英中说明由生成的 `ApprovalModes` 提供，不在这里重复维护。
 
@@ -33,11 +33,19 @@ pnpm localization:check --report-missing
 
 ## 本地语言资源
 
-内置语言随程序发布。安装或更新 Extensions 语言包后，客户端把完整目录保存到本地 UI profile：Electron 使用 `<profile>/languagepacks/<locale>.json`，Web 使用 IndexedDB `ash-language-packs`。
+英语是核心基础回退。简中由 [`extensions/language-pack-zh-cn`](../extensions/language-pack-zh-cn/package.json) 以静态语言包扩展随应用预装，断网也可使用。安装或更新 Extensions 语言包后，客户端把完整目录保存到本地 UI profile：Electron 使用 `<profile>/languagepacks/<locale>.json`，Web 使用 IndexedDB `ash-language-packs`。
 
 保存语言偏好之前必须先保存语言资源。启动读取本地资源，不等待 App Server 或 Extensions；先匹配指定语言，再逐级尝试基础语言（例如 `fr-CA` → `fr`），最后使用内置英语。缺失、损坏或契约版本不兼容的资源不阻止启动，也不改写语言偏好；重新安装有效语言包后，下次启动可恢复原来的语言。移除 Extensions 包不会删除已经保存的启动资源。
 
-内置语言优先于扩展提供的同语言目录。多个已安装扩展提供同一语言时，该语言不进入可选列表，也不写入本地资源；卸载重复的包后，剩下的包会重新加载。其他语言正常加载。
+核心英语和预装语言包优先于后安装扩展提供的同语言目录。多个已安装扩展提供同一语言时，该语言不进入可选列表，也不写入本地资源；卸载重复的包后，剩下的包会重新加载。其他语言正常加载。
+
+## 预装简中语言包
+
+简中的扩展清单使用 `engines.ash` 和 `contributes.localizations`，声明 `localization/package.json` 目录资源；不声明可执行入口。`localization/languages.json` 仅保留英语。
+
+`pnpm localization:generate` 从扩展的领域译文生成完整目录，并在 `.build/desktop/localization/extensions/ash.language-pack-zh-cn/` 输出可分发包，包括 `package.json`、`manifest.json` 和 `localization/package.json`。正常扩展打包将同一目录加入预装扩展资源；启动时的快照也由这份扩展译文生成。
+
+生成后可在该目录运行 `zip -r ../../ash-language-pack-zh-cn.zip package.json manifest.json localization`。后安装语言包仍走现有 Extensions 签名分发流程。
 
 ## Ash 语言包示例
 

@@ -122,7 +122,9 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 			return { result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } };
 		});
 		using handler = toDisposable(() => registration.dispose());
-		assert.equal((await api.reconcile('refresh')).extensions[0]?.lifecycle, 'ready');
+		const activation = api.reconcile('refresh');
+		assert.equal(api.reconcile('refresh'), activation, 'Concurrent reads share the existing activation');
+		assert.equal((await activation).extensions[0]?.lifecycle, 'ready');
 		assert.equal(await (await fetch(urls[0]!)).text(), 'style');
 		assert.equal((await api.reconcile('refresh')).extensions[0]?.lifecycle, 'ready');
 		assert.deepEqual(order, ['activate', 'deactivate', 'terminate', 'activate']);

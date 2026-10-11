@@ -10,10 +10,10 @@ import { IHostService } from '../../../host/browser/host.js';
 import { WorkbenchLocaleService } from '../../browser/localeService.js';
 import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePacksService.js';
 import { setNlsMessages } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../common/localizationCatalogs.js';
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../common/localizationCatalogs.js';
 
 export function initializeTestLocalization(locale: string): void {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === locale)!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
 
@@ -32,5 +32,5 @@ export function createTestLanguagePacks(extensionManagement: IExtensionManagemen
 	using services = new InstantiationService();
 	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, { read: async () => undefined, write: async () => { } });
-	return services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs);
+	return services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
 }

@@ -160,7 +160,7 @@ test('client composition preserves gallery URL and read contracts', async () => 
 
 
 test('resource composition reports duplicate packages and retired resources in Chinese', async () => {
-	const messages = JSON.parse(await readFile('localization/zh-CN/workbench.json', 'utf8'));
+	const messages = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
 	setNlsMessages('zh-CN', messages);
 	try {
 		const api = withBuiltInExtensions(packageApi(() => packageSnapshot(1, 'ash.builtIn'), async () => new Uint8Array()), packageApi(() => packageSnapshot(1, 'ash.builtIn', 'builtIn'), async () => new Uint8Array()));

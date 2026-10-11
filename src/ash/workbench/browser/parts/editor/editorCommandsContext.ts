@@ -35,7 +35,7 @@ export function resolveCommandsContext(commandArgs: readonly unknown[], editorGr
 		}
 		preserveFocus ||= target.preserveFocus;
 		const editors = grouped.get(target.group) ?? [];
-		const selected = target.group.selectedInputs.includes(target.editor) ? target.group.selectedInputs : [target.editor];
+		const selected = target.editor ? (target.group.selectedInputs.includes(target.editor) ? target.group.selectedInputs : [target.editor]) : [];
 		for (const editor of selected) {
 			if (!editors.some(candidate => extUri.isEqual(candidate.resource, editor.resource))) {
 				editors.push(editor);
@@ -49,7 +49,7 @@ export function resolveCommandsContext(commandArgs: readonly unknown[], editorGr
 	};
 }
 
-function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: IResourceEditorInput; preserveFocus: boolean; } | undefined {
+function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: IResourceEditorInput | undefined; preserveFocus: boolean; } | undefined {
 	if (argument instanceof URI) {
 		for (const group of editorGroups.groups) {
 			const editor = group.inputs.find(input => extUri.isEqual(input.resource, argument));
@@ -67,7 +67,8 @@ function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): {
 		return undefined;
 	}
 	const editor = argument.editorIndex === undefined ? group.activeInput : group.editors[argument.editorIndex]?.input;
-	return editor ? { group, editor, preserveFocus: argument.preserveFocus === true } : undefined;
+	if (!editor && (group.inputs.length > 0 || argument.editorIndex !== undefined)) return undefined;
+	return { group, editor, preserveFocus: argument.preserveFocus === true };
 }
 
 function isEditorCommandsContext(value: unknown): value is IEditorCommandsContext {

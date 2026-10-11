@@ -82,7 +82,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		const header = h(document, 'header');
 		header.className = 'ash-scm-merge-header';
 		const title = h(document, 'h2');
-		title.textContent = localize({ bundle: 'ash', key: 'git.mergeTitle' }, 'Resolve merge conflict');
+		title.textContent = localize({ bundle: 'ash', key: 'mergeEditor.title' }, 'Resolve merge conflict');
 		this.statusDomNode = h(document, 'div');
 		this.statusDomNode.className = 'ash-scm-merge-status';
 		this.statusDomNode.setAttribute('role', 'status');
@@ -90,7 +90,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		const actions = h(document, 'div');
 		actions.className = 'ash-scm-merge-actions';
 		this.finishButton = this._register(new Button(actions, {
-			label: localize({ bundle: 'ash', key: 'git.completeMerge' }, 'Complete Merge'),
+			label: localize({ bundle: 'ash', key: 'mergeEditor.completeMerge' }, 'Complete Merge'),
 			presentation: 'primary',
 			onClick: () => void this.completeMerge(),
 		}));
@@ -151,7 +151,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		} else {
 			this.resultLoaded = false;
 			this.finishButton.enabled = false;
-			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeNonText' }, 'Choose which file version to keep. This also stages the choice.'));
+			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.nonText' }, 'Choose which file version to keep, then complete the resolution.'));
 		}
 	}
 
@@ -198,8 +198,8 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 
 	private sourceText(content: ISCMConflictFile['base']): string {
 		return content.kind === 'text' ? content.text : content.kind === 'binary'
-			? localize({ bundle: 'ash', key: 'git.mergeBinary' }, 'Binary file')
-			: localize({ bundle: 'ash', key: 'git.mergeDeleted' }, 'File deleted');
+			? localize({ bundle: 'ash', key: 'mergeEditor.binary' }, 'Binary file')
+			: localize({ bundle: 'ash', key: 'mergeEditor.deleted' }, 'File deleted');
 	}
 
 	private createModel(file: ISCMConflictFile, result: TextModel): MergeEditorModel {
@@ -251,8 +251,8 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		const unresolved = model?.isReady ? model.hunks.filter(hunk => hunk.unresolved).length : parseMergeConflictBlocks(text).length;
 		if (this.lastBlockCount !== unresolved) {
 			this.setStatus(unresolved === 0
-				? localize({ bundle: 'ash', key: 'git.mergeNoBlocks' }, 'All conflicts are handled. Review the result, then complete the merge.')
-				: localize({ bundle: 'ash', key: 'git.mergeBlockCount' }, '{0} conflicts remain.', unresolved));
+				? localize({ bundle: 'ash', key: 'mergeEditor.noBlocks' }, 'All conflicts are handled. Review the result, then complete the merge.')
+				: localize({ bundle: 'ash', key: 'mergeEditor.blockCount' }, '{0} conflicts remain.', unresolved));
 			this.lastBlockCount = unresolved;
 		}
 	}
@@ -265,14 +265,14 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		actions.className = 'ash-scm-merge-file-choices';
 		this.fileChoiceButtons.push(this.fileChoiceStore.add(new Button(actions, {
 			label: file.current.kind === 'missing'
-				? localize({ bundle: 'ash', key: 'git.keepCurrentDeletion' }, 'Keep Current Deletion')
-				: localize({ bundle: 'ash', key: 'git.useCurrentFile' }, 'Use Current File'),
+				? localize({ bundle: 'ash', key: 'mergeEditor.keepCurrentDeletion' }, 'Keep Current Deletion')
+				: localize({ bundle: 'ash', key: 'mergeEditor.useCurrentFile' }, 'Use Current File'),
 			onClick: () => void this.chooseFile({ kind: 'current' }),
 		})));
 		this.fileChoiceButtons.push(this.fileChoiceStore.add(new Button(actions, {
 			label: file.incoming.kind === 'missing'
-				? localize({ bundle: 'ash', key: 'git.keepIncomingDeletion' }, 'Keep Incoming Deletion')
-				: localize({ bundle: 'ash', key: 'git.useIncomingFile' }, 'Use Incoming File'),
+				? localize({ bundle: 'ash', key: 'mergeEditor.keepIncomingDeletion' }, 'Keep Incoming Deletion')
+				: localize({ bundle: 'ash', key: 'mergeEditor.useIncomingFile' }, 'Use Incoming File'),
 			onClick: () => void this.chooseFile({ kind: 'incoming' }),
 		})));
 		this.fileChoicesDomNode.append(actions);
@@ -289,8 +289,8 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		try {
 			if (this.resultEditor.isDirty) {
 				const decision = await this.dialogs.confirm({
-					message: localize({ bundle: 'ash', key: 'git.replaceUnsavedMergeResult' }, 'Replace your unsaved result edits with the selected file version?'),
-					primaryButton: localize({ bundle: 'ash', key: 'git.replaceMergeResult' }, 'Replace Result'),
+					message: localize({ bundle: 'ash', key: 'mergeEditor.replaceUnsavedMergeResult' }, 'Replace your unsaved result edits with the selected file version?'),
+					primaryButton: localize({ bundle: 'ash', key: 'mergeEditor.replaceMergeResult' }, 'Replace Result'),
 				});
 				if (!decision.confirmed) return;
 			}
@@ -303,7 +303,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 			this.modelSlot.clear();
 			this.resultLoaded = false;
 			this.finishButton.enabled = false;
-			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeCompleted' }, 'Merge completed and result staged.'));
+			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.completed' }, 'Merge completed.'));
 		} catch (error) {
 			const message = provider.errorMessage(error);
 			this.setStatus(message);
@@ -322,7 +322,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		if (!input || !provider || !stageIds || !control || this.busy || this.resolved) return;
 		const model = this.modelSlot.value;
 		if (hasMergeConflictMarkers(control.getValue()) || (model && (!model.isReady || model.unresolvedCount > 0))) {
-			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeUnresolved' }, 'Review or resolve every conflict before completing the merge.'));
+			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.unresolved' }, 'Review or resolve every conflict before completing the merge.'));
 			this.focus();
 			return;
 		}
@@ -330,7 +330,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		this.finishButton.enabled = false;
 		control.updateOptions({ readOnly: true });
 		try {
-			if (this.resultEditor.hasExternalChange) throw new Error(localize({ bundle: 'ash', key: 'git.mergeFileChanged' }, 'The result file changed outside this editor. Review it before completing the merge.'));
+			if (this.resultEditor.hasExternalChange) throw new Error(localize({ bundle: 'ash', key: 'mergeEditor.fileChanged' }, 'The result file changed outside this editor. Review it before completing the merge.'));
 			if (this.resultEditor.isDirty) await this.resultEditor.save();
 			const saved = await provider.resolve(input.path);
 			if (JSON.stringify(saved.stageIds) !== JSON.stringify(stageIds) || saved.result.kind !== 'text' || saved.result.text !== control.getValue()) {
@@ -339,7 +339,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 			await provider.complete(input.path, stageIds, saved.resultObjectId, { kind: 'edited', text: control.getValue() });
 			if (this.mergeStateKey) this.storageService.remove(this.mergeStateKey, StorageScope.WORKSPACE);
 			this.resolved = true;
-			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeCompleted' }, 'Merge completed and result staged.'));
+			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.completed' }, 'Merge completed.'));
 		} catch (error) {
 			const message = provider.errorMessage(error);
 			this.setStatus(message);
@@ -354,7 +354,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 	private setStatus(message: string): void { this.statusDomNode.textContent = message; }
 
 	private updateAriaLabel(): void {
-		const title = localize({ bundle: 'ash', key: 'git.mergeTitle' }, 'Resolve merge conflict');
+		const title = localize({ bundle: 'ash', key: 'mergeEditor.title' }, 'Resolve merge conflict');
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ScmMerge);
 		this.domNode.setAttribute('aria-label', hint ? `${title}. ${hint}` : title);
 	}

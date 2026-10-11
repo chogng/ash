@@ -11,7 +11,7 @@ import type { IConfigurationApi } from '../../../../../platform/configuration/co
 import { initializeBrowserLocalization } from '../../browser/localizationBootstrap.js';
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import type { IExtensionManagementService } from "../../../../../platform/extensionManagement/common/extensionManagementService.js";
-import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.js";
+import { productLanguagePackCatalogs } from "../../common/localizationCatalogs.js";
 import { normalizeLocale, parseLanguagePackCatalog } from "../../../../../platform/languagePacks/common/languagePackCatalog.js";
 import { LocalizationConfiguration } from "../../common/locale.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
@@ -169,9 +169,9 @@ suite('Workbench localization', () => {
 			localization.translate('ash', 'scm.history.actions', 'History actions'),
 			localization.translate('ash', 'scm.history.references', 'History references'),
 		], ['历史记录操作', '历史记录引用']);
-		assert.equal(localization.translate('ash', 'git.completeMerge', 'Complete Merge'), '完成合并');
-		assert.equal(localization.translate('ash', 'git.mergeUnresolved', 'Review or resolve every conflict before completing the merge.'), '请先检查或处理所有冲突，再完成合并。');
-		assert.equal(localization.translate('ash', 'git.markHandled', 'Mark Handled'), '标记为已处理');
+		assert.equal(localization.translate('ash', 'mergeEditor.completeMerge', 'Complete Merge'), '完成合并');
+		assert.equal(localization.translate('ash', 'mergeEditor.unresolved', 'Review or resolve every conflict before completing the merge.'), '请先检查或处理所有冲突，再完成合并。');
+		assert.equal(localization.translate('ash', 'mergeEditor.markHandled', 'Mark Handled'), '标记为已处理');
 		assert.equal(localization.translate('ash', 'chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'), 'Agents 窗口中的这个聊天已有未发送的草稿。');
 		assert.deepEqual([
 			localization.translate('ash', 'workbench.startupError.title', 'Unable to start Ash'),
@@ -474,15 +474,15 @@ suite('Workbench localization', () => {
 	test('Source Control settings use the selected Chinese language catalog', () => {
 		initializeTestLocalization('zh-CN');
 		assert.deepEqual([
-			localize('git.keepCurrentDeletion', 'Keep Current Deletion'),
-			localize('git.keepIncomingDeletion', 'Keep Incoming Deletion'),
-			localize('git.previousConflict', 'Previous Conflict'),
-			localize('git.nextConflict', 'Next Conflict'),
-			localize('git.nextUnresolvedConflict', 'Next Unresolved'),
-			localize('git.acceptCombination', 'Accept Combination'),
-			localize('git.showBase', 'Show Base'),
-			localize('git.useColumns', 'Use Columns'),
-			localize('git.acceptRemainingIncoming', 'Accept Remaining Incoming'),
+			localize('mergeEditor.keepCurrentDeletion', 'Keep Current Deletion'),
+			localize('mergeEditor.keepIncomingDeletion', 'Keep Incoming Deletion'),
+			localize('mergeEditor.previousConflict', 'Previous Conflict'),
+			localize('mergeEditor.nextConflict', 'Next Conflict'),
+			localize('mergeEditor.nextUnresolvedConflict', 'Next Unresolved'),
+			localize('mergeEditor.acceptCombination', 'Accept Combination'),
+			localize('mergeEditor.showBase', 'Show Base'),
+			localize('mergeEditor.useColumns', 'Use Columns'),
+			localize('mergeEditor.acceptRemainingIncoming', 'Accept Remaining Incoming'),
 		], [
 			'保留当前删除结果',
 			'保留传入删除结果',
@@ -533,7 +533,7 @@ suite('Workbench localization', () => {
 	});
 
 	test('browser bootstrap reads the selected local pack before command titles are constructed', async () => {
-		const catalog = { ...builtinLanguagePackCatalogs[0], locale: 'fr', bundles: { ash: { command: 'Bonjour {0}' } } };
+		const catalog = { ...productLanguagePackCatalogs[0], locale: 'fr', bundles: { ash: { command: 'Bonjour {0}' } } };
 		await initializeBrowserLocalization(startupConfiguration('fr'), { read: async locale => { assert.equal(locale, 'fr'); return catalog; }, write: async () => { assert.fail('Bootstrap must only read resources'); } });
 		const title = localize2('command', 'Hello {0}', 'Ash');
 		assert.deepEqual(title, { original: 'Hello Ash', value: 'Bonjour Ash' });
@@ -581,7 +581,7 @@ suite('Workbench localization', () => {
 				read: async locale => {
 					reads.push(locale);
 					if (locale === 'fr-CA' && !exactMatch) { throw new Error('Invalid JSON'); }
-					return { ...builtinLanguagePackCatalogs[0], locale, bundles: { ash: { greeting: locale === 'fr-CA' ? 'Allô' : 'Bonjour' } } };
+					return { ...productLanguagePackCatalogs[0], locale, bundles: { ash: { greeting: locale === 'fr-CA' ? 'Allô' : 'Bonjour' } } };
 				},
 				write: async () => { assert.fail('Bootstrap must only read resources'); },
 			});

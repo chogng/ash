@@ -23,7 +23,7 @@ import { type TextModel } from '../../../src/ash/editor/common/model/textModel.j
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { IDebugService, type IDebugVariable, type IDataBreakpointInfoResponse } from '../../../src/ash/workbench/services/debug/common/debugService.js';
 import { IEditorService, type EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { DebugViewPane } from '../../../src/ash/workbench/contrib/debug/browser/debugViewPane.js';
 import { BreakpointEditorContribution } from '../../../src/ash/workbench/contrib/debug/browser/breakpointEditorContribution.js';
 import { DebugViewTestServices, MockDebugService, MockDebugSession } from '../../../src/ash/workbench/contrib/debug/test/common/mockDebug.js';
@@ -31,7 +31,7 @@ import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
 import '../../../src/ash/base/browser/ui/styles.css';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 }
 

@@ -15,7 +15,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IEditorOptions } from '../../../../../platform/editor/common/editor.js';
@@ -175,13 +175,13 @@ test("Git contribution registers Repositories before Changes and hides it for a 
 
 	try {
 		const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import("../../../../../workbench/common/views.js");
-		const { GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID, registerSCMViews } = await import("../../../../../workbench/contrib/scm/browser/scm.contribution.js");
+		const { SCM_AGENT_REVIEW_VIEW_ID, SCM_HISTORY_VIEW_ID, registerSCMViews } = await import("../../../../../workbench/contrib/scm/browser/scm.contribution.js");
 		using registry = new WorkbenchViewRegistry();
 
 		registerSCMViews(registry);
 
 		const views = registry.getViews(WorkbenchViewContainerId.SourceControl);
-		assert.deepEqual(views.map((view) => view.id), ['workbench.scm.repositories', VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
+		assert.deepEqual(views.map((view) => view.id), ['workbench.scm.repositories', VIEW_PANE_ID, SCM_AGENT_REVIEW_VIEW_ID, SCM_HISTORY_VIEW_ID]);
 		assert.deepEqual(views.map((view) => view.title), ['Repositories', "Changes", "Agent Review", "Graph"]);
 		assert.deepEqual(views.map((view) => view.collapsed === true), [false, false, true, true]);
 		const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
@@ -206,7 +206,7 @@ test('SCM panes follow repository and history availability through the window co
 		const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
 		const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import('../../../../common/views.js');
 		const { ViewContainerModel } = await import('../../../../services/views/common/viewContainerModel.js');
-		const { GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID, registerSCMViews } = await import('../../browser/scm.contribution.js');
+		const { SCM_AGENT_REVIEW_VIEW_ID, SCM_HISTORY_VIEW_ID, registerSCMViews } = await import('../../browser/scm.contribution.js');
 		using context = new ContextKeyService();
 		using scm = new SCMService();
 		using services = new InstantiationService();
@@ -221,18 +221,18 @@ test('SCM panes follow repository and history availability through the window co
 		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID]);
 
 		using repository = scm.registerSCMProvider(testSCMProvider('resources', 'Resources'));
-		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID]);
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, SCM_AGENT_REVIEW_VIEW_ID]);
 		using history = new GitHistoryProvider({ onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None } as unknown as IGitService, 'history');
 		using historyRepository = scm.registerSCMProvider(testSCMProvider('history', 'History', history));
-		assert.deepEqual(visiblePanes(), ['workbench.scm.repositories', VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
+		assert.deepEqual(visiblePanes(), ['workbench.scm.repositories', VIEW_PANE_ID, SCM_AGENT_REVIEW_VIEW_ID, SCM_HISTORY_VIEW_ID]);
 
 		historyRepository.dispose();
-		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID]);
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, SCM_AGENT_REVIEW_VIEW_ID]);
 		repository.dispose();
 		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID]);
 
 		using restoredRepository = scm.registerSCMProvider(testSCMProvider('restored', 'Restored', history));
-		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, SCM_AGENT_REVIEW_VIEW_ID, SCM_HISTORY_VIEW_ID]);
 		host.dispose();
 		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID]);
 		using afterDisposal = scm.registerSCMProvider(testSCMProvider('after-disposal', 'After disposal', history));
@@ -780,7 +780,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 			};
 		},
 	} as unknown as IGitService;
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using history = createHistoryViewFixture(git);
@@ -1130,7 +1130,7 @@ test('SCM resource group navigation help reuses tree instructions and restores o
 });
 
 test('SCM resource group navigation help preserves welcome content and Chinese instructions', async () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using fixture = await createResourceGroupMenuFixture(true);
@@ -1398,7 +1398,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 			changes.fire();
 		},
 	};
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 	try {
 		const { ScmViewPane } = await import('../../browser/scmViewPane.js');

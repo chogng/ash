@@ -45,7 +45,7 @@ import {
 import {
 	WorkbenchQuickInputService,
 } from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
-import { builtinLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import {
 	InQuickInputContext,
 	ShowAllCommandsCommandId,
@@ -460,7 +460,7 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 		assert.equal(dom.window.document.activeElement, button);
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 		assert.ok(chinese);
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		try {

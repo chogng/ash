@@ -1,6 +1,9 @@
 import type { Event } from "../../../base/common/event.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
+import type { LanguagePackCatalog } from "./languagePackContract.js";
+export type { LanguagePackCatalog } from "./languagePackContract.js";
+
 export type LocaleId = string;
 
 export interface ILanguagePackItem {
@@ -8,20 +11,19 @@ export interface ILanguagePackItem {
 	readonly label: string;
 }
 
-export interface LanguagePackCatalog {
-	readonly schemaVersion: 1;
-	readonly locale: LocaleId;
-	readonly languageName: string;
-	readonly localizedLanguageName: string;
-	readonly catalogVersion: string;
-	readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
-}
-
 export interface LanguagePackInfo {
 	readonly locale: LocaleId;
 	readonly languageName: string;
 	readonly localizedLanguageName: string;
-	readonly source: "builtin" | "extensionManagement";
+	readonly source: "builtin" | "preinstalled" | "extensionManagement";
+}
+
+export interface PreinstalledLanguagePack {
+	readonly id: string;
+	readonly version: string;
+	readonly displayName: string;
+	readonly description: string;
+	readonly catalog: LanguagePackCatalog;
 }
 
 export interface LanguagePackPackage {

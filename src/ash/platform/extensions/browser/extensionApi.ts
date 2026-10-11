@@ -1,4 +1,6 @@
 import { URI } from '../../../base/common/uri.js';
+import { Event } from '../../../base/common/event.js';
+import type { IGlobalExtensionEnablementService } from '../../extensionManagement/common/extensionManagement.js';
 import { extensionResourceRequest } from '../../extensionResourceLoader/common/extensionResourceLoader.js';
 import { decodeBase64 } from "../../../base/common/buffer.js";
 import type { ExtensionCatalog, ExtensionCatalogReload, ExtensionResourceRequest, IExtensionApi } from "../common/extensionApi.js";
@@ -34,6 +36,19 @@ export function createBrowserExtensionApi(fetchResource: typeof fetch = fetch): 
 			if (bytes.byteLength > MAX_EXTENSION_RESOURCE_BYTES) { throw new RangeError(localize('extensions.browser.resourceTooLarge', 'Browser extension resource exceeds its byte limit.')); }
 			return bytes;
 		}),
+	};
+}
+
+/** Both executable and declarative consumers read the same profile enablement. */
+export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement: IGlobalExtensionEnablementService): IExtensionApi {
+	return {
+		onDidChange: Event.any(packages.onDidChange ?? Event.None, Event.map(enablement.onDidChangeEnablement, () => undefined)),
+		list: async reload => {
+			const catalog = await packages.list(reload);
+			const disabled = new Set(enablement.getDisabledExtensions().map(extension => extension.id));
+			return { ...catalog, extensions: catalog.extensions.filter(extension => extension.sourceKind !== 'builtIn' || !disabled.has(extension.id.toLowerCase())) };
+		},
+		resources: packages.resources,
 	};
 }
 

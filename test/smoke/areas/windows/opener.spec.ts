@@ -194,7 +194,7 @@ test.describe('SCM external opening', () => {
 			const history = page.locator('[data-view-id="ash.gitGraph"]');
 			await expect(history).toBeVisible();
 			await history.locator('.ash-pane-view-header').click();
-			await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
+			await history.locator('[data-action-id="workbench.scm.action.graph.refresh"] > button').click();
 			const commit = history.getByRole('treeitem', { name: /Initial/ });
 			await expect(commit).toBeVisible();
 			await commit.focus();

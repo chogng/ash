@@ -20,7 +20,7 @@ import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '..
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { IExtensionService, type ExtensionCatalog } from '../../../../services/extensions/common/extensionService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { createJsonCompletionProvider } from '../../../../services/language/common/jsonLanguageFeatures.js';
 import '../../browser/folding.contribution.js';
 
@@ -164,7 +164,7 @@ test('folding candidates follow providers and extension labels and use Chinese c
 	registration.dispose();
 	assert.deepEqual(choices.enum, [null]);
 	assert.deepEqual(await complete(), ['null']);
-	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 	try {
 		assert.match(definition.schema!.description!, /折叠范围提供者/);
 		assert.deepEqual(choices.enumDescriptions, ['所有当前启用的折叠范围提供者']);

@@ -5,7 +5,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { AgentSessionsControl } from '../../browser/agentSessions/agentSessionsControl.js';
 import type { IAgentSessionListItem, IAgentSessionsModel } from '../../browser/agentSessions/agentSessionsModel.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 
 test('Agent Sessions keeps visible rows through catalog updates and translates its search and groups', () => {
 	const document = new JSDOM('<!doctype html><body></body>');
@@ -21,7 +21,7 @@ test('Agent Sessions keeps visible rows through catalog updates and translates i
 		state: 'ready',
 		error: undefined,
 	};
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.ok(chinese);
 	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 	try {

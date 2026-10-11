@@ -52,7 +52,7 @@ import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/
 import { SkillsSettingsContent } from '../../../src/ash/workbench/contrib/skills/browser/skillsSettingsContent.js';
 import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import chineseMessages from '../../../localization/zh-CN/extensions.json' with { type: 'json' };
+import chineseMessages from '../../../extensions/language-pack-zh-cn/translations/extensions.json' with { type: 'json' };
 
 if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', chineseMessages);

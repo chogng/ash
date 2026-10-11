@@ -26,6 +26,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	private generation = 0;
 	private snapshot: ExtensionHostFleetSnapshot = { generation: 1, extensions: [] };
 	private refreshing: Promise<ExtensionHostFleetSnapshot> | undefined;
+	private pendingMode: ExtensionHostReconcileMode | undefined;
 	private remoteSnapshot: ExtensionHostFleetSnapshot = { generation: 1, extensions: [] };
 	private remoteRevision = 0;
 	private remoteConnectionRevision = 0;
@@ -33,6 +34,12 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	constructor(private readonly extensions: IExtensionApi, private readonly remote: IExtensionHostApi,
 		@IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
+		if (extensions.onDidChange) {
+			this._register(extensions.onDidChange(() => {
+				this.pendingMode ??= 'restartFailed';
+				void this.reconcile('restartFailed').catch(error => console.error('Browser extension enablement refresh failed', error));
+			}));
+		}
 		const changes = remote.onDidChange(() => { void this.refreshRemote().catch(error => console.error('Extension Host refresh failed', error)); });
 		this._register(toDisposable(() => changes.dispose()));
 		const connection = remote.onConnectionState(state => {
@@ -76,10 +83,20 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	public reconcile(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot> {
 		this.assertNotDisposed();
 		if (!this.refreshing) {
-			this.refreshing = this.activate(mode);
+			this.pendingMode = mode;
+			this.refreshing = this.drainReconciles();
 			void this.refreshing.finally(() => { this.refreshing = undefined; }).catch(() => undefined);
 		}
 		return this.refreshing;
+	}
+
+	private async drainReconciles(): Promise<ExtensionHostFleetSnapshot> {
+		while (this.pendingMode) {
+			const mode = this.pendingMode;
+			this.pendingMode = undefined;
+			await this.activate(mode);
+		}
+		return this.list();
 	}
 
 	public async activateByEvent(request: Parameters<IExtensionHostApi['activateByEvent']>[0]): Promise<ExtensionHostFleetSnapshot> {
@@ -115,6 +132,16 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 			this.assertNotDisposed();
 		}
 		const catalog = await this.extensions.list('refresh');
+		this.assertNotDisposed();
+		const ids = new Set(catalog.extensions.map(extension => extension.id));
+		for (const [id] of this.workers) {
+			if (!ids.has(id)) { this.workers.deleteAndDispose(id); }
+		}
+		const retained = this.snapshot.extensions.filter(extension => ids.has(extension.id));
+		if (retained.length !== this.snapshot.extensions.length) {
+			this.snapshot = { ...this.snapshot, extensions: retained };
+			this.changes.fire(++this.snapshotGeneration);
+		}
 		const runtimes: ExtensionHostRuntime[] = [];
 		for (const extension of catalog.extensions) {
 			const previous = this.snapshot.extensions.find(runtime => runtime.id === extension.id);
@@ -168,6 +195,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		this.snapshot = Object.freeze({ generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes) });
 		this.snapshotGeneration++;
 		await this.refreshRemote(mode);
+		if (!this.pendingMode) { this.changes.fire(++this.snapshotGeneration); }
 		return this.list();
 	}
 

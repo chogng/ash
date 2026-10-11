@@ -1,4 +1,5 @@
 import { URI } from '../../../base/common/uri.js';
+import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IExtensionResourceLoaderService } from '../../extensionResourceLoader/common/extensionResourceLoader.js';
 
@@ -44,6 +45,7 @@ export const MAX_EXTENSION_RESOURCE_BYTES = 16 * 1024 * 1024;
 
 /** Client package metadata and resources, with host validation for installed external packages. */
 export interface IExtensionApi {
+	readonly onDidChange?: Event<void>;
 	list(reload: ExtensionCatalogReload): Promise<ExtensionCatalog>;
 	readonly resources: IExtensionResourceLoaderService;
 }

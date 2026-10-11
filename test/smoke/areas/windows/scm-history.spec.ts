@@ -49,7 +49,7 @@ test('SCM history retains the reading position, expanded files and row actions a
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();
-	await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
+	await history.locator('[data-action-id="workbench.scm.action.graph.refresh"] > button').click();
 	const graph = history.locator('.ash-scm-graph');
 	const viewport = graph.locator('.ash-scrollbar-viewport');
 	await expect(graph.getByRole('treeitem').first()).toContainText('Retained history 79');
@@ -267,7 +267,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await expect(history).toBeVisible();
 	await history.locator('.ash-pane-view-header').click();
-	await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
+	await history.locator('[data-action-id="workbench.scm.action.graph.refresh"] > button').click();
 	const commit = history.getByRole('treeitem', { name: /Initial/ });
 	await expect(commit).toBeVisible();
 	await expect(history.locator('.ash-scm-graph-remotes')).toHaveCount(0);
@@ -313,7 +313,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await run('git', ['update-ref', '-d', 'refs/remotes/origin/release'], { cwd });
 	const branchName = 'work/a-long-current-branch-name';
 	await run('git', ['branch', '-m', branchName], { cwd });
-	await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
+	await history.locator('[data-action-id="workbench.scm.action.graph.refresh"] > button').click();
 	await expect(head).toHaveText(branchName);
 	await expect(head).toHaveAttribute('aria-label', branchName);
 	await expect(head.locator('.ash-scm-graph-label-name')).toHaveCSS('width', '100px');
@@ -348,7 +348,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await writeFile(join(cwd, 'other.ts'), 'export const other = true;\n');
 	await run('git', ['add', 'main.ts', 'other.ts'], { cwd });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Review all files'], { cwd });
-	await history.locator('[data-action-id="ash.git.graph.refresh"] > button').click();
+	await history.locator('[data-action-id="workbench.scm.action.graph.refresh"] > button').click();
 	const latest = history.getByRole('treeitem', { name: /Review all files/ });
 	await expect(latest).toBeVisible();
 	await latest.hover();

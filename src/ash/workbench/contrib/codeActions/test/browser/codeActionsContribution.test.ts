@@ -20,7 +20,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../comm
 import { BrowserKeyboardLayoutService } from '../../../../services/keybinding/browser/keyboardLayoutService.js';
 import { WorkbenchKeybindingService } from '../../../../services/keybinding/browser/keybindingService.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { CodeActionsContribution } from '../../browser/codeActionsContribution.js';
 import '../../browser/codeActions.contribution.js';
@@ -100,7 +100,7 @@ test('Code Action settings validate save modes, normalize old values and resolve
 });
 
 test('Code Action save mode descriptions use the Chinese language pack', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(chinese.locale, chinese.bundles);
 	using reset = toDisposable(resetNlsResolver);
 	const schema = createConfigurationSchema().properties!['editor.codeActionsOnSave'];

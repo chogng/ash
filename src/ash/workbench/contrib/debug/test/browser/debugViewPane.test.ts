@@ -8,7 +8,7 @@ import { ServiceCollection } from "../../../../../platform/instantiation/common/
 import { Event as CommonEvent } from "../../../../../base/common/event.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from "../../../../../nls.js";
-import { builtinLanguagePackCatalogs } from "../../../../services/localization/common/localizationCatalogs.js";
+import { productLanguagePackCatalogs } from "../../../../services/localization/common/localizationCatalogs.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
@@ -132,7 +132,7 @@ test("Debug view initializes Chinese labels and retains its draft and collapsed 
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
-		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === "zh-CN")!;
+		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === "zh-CN")!;
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));

@@ -4,7 +4,7 @@ import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/c
 import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
-import { ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext } from "../../../common/contextkeys.js";
+import { ActiveEditorGroupEmptyContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from "../../../common/contextkeys.js";
 import { IEditorPart } from "./editorPart.js";
 import { IEditorGroupsService } from "../../../services/editor/common/editorGroupsService.js";
 import { resolveCommandsContext } from "./editorCommandsContext.js";
@@ -14,6 +14,7 @@ import { URI, type UriComponents } from '../../../../base/common/uri.js';
 import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export const CLOSE_EDITOR_COMMAND_ID = "workbench.action.closeActiveEditor";
+export const CLOSE_EDITOR_GROUP_COMMAND_ID = 'workbench.action.closeGroup';
 
 registerAction2(class CloseActiveEditorAction extends Action2 {
 	constructor() {
@@ -44,6 +45,29 @@ registerAction2(class CloseActiveEditorAction extends Action2 {
 				}
 			}
 		}
+	}
+});
+
+registerAction2(class CloseEditorGroupAction extends Action2 {
+	constructor() {
+		super({
+			id: CLOSE_EDITOR_GROUP_COMMAND_ID,
+			title: localize2({ bundle: 'ash', key: 'workbench.closeEditorGroup' }, 'Close Editor Group'),
+			f1: true,
+			precondition: ContextKeyExpr.and(MultipleEditorGroupsContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false)),
+			keybinding: {
+				primary: Keybinding.single(logicalKey('w', { primaryKey: true })),
+				when: ActiveEditorGroupEmptyContext.isEqualTo(true),
+			},
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+		const part = accessor.get(IEditorPart);
+		const context = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+		const group = context.groupedEditors[0]?.group;
+		if (!group || !await part.removeGroup(group.id)) return;
+		if (!context.preserveFocus) part.focus();
 	}
 });
 

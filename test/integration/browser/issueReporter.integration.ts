@@ -4,7 +4,7 @@ import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { Event, Emitter } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import messages from '../../../localization/zh-CN/workbench.json' with { type: 'json' };
+import messages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAccountService, type AccountState } from '../../../src/ash/platform/accounts/common/accountService.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';

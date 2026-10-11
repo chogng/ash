@@ -188,6 +188,10 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	public addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView {
 		return this.parts.find(part => part.groups.some(group => group.id === reference))!.addGroup(reference, direction);
 	}
+	public removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
+		const id = typeof group === 'string' ? group : group.id;
+		return this.parts.find(part => part.groups.some(group => group.id === id))?.removeGroup(id) ?? Promise.resolve(true);
+	}
 	public activateGroup(id: EditorGroupId): void {
 		const part = this.parts.find(part => part.groups.some(group => group.id === id))!;
 		this.setActivePart(part);

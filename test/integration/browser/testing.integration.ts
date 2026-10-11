@@ -1,6 +1,6 @@
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../src/ash/base/browser/ui/splitview/paneview.css';
@@ -28,7 +28,7 @@ import { NotificationService } from '../../../src/ash/workbench/services/notific
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 }
 

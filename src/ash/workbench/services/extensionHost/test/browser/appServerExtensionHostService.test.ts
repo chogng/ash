@@ -1341,7 +1341,7 @@ test('Remote extension resolves a saved target and connects only after host conf
 	});
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	await service.start();
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('localization/zh-CN/workbench.json', 'utf8')));
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 	using restoreLocale = toDisposable(resetNlsResolver);
 	const result = await api.clientHandler!({ operation: 'openRemoteConnection', authority: 'team+linux' }, new AbortController().signal, { extensionId: 'acme.demo', incarnation: 3, activationGeneration: 11 });
 	assert.deepEqual(result, { result: 'done' });

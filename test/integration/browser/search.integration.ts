@@ -16,7 +16,7 @@ import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContra
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { ViewContainerLocation, WorkbenchViewContainerId, IViewDescriptorService, WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
 import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerSearchViews } from '../../../src/ash/workbench/contrib/search/browser/search.contribution.js';
 import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { SearchView } from '../../../src/ash/workbench/contrib/search/browser/searchView.js';
@@ -79,7 +79,7 @@ import { IUserDataProfileService } from '../../../src/ash/workbench/services/use
 import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 
 const store = new DisposableStore();

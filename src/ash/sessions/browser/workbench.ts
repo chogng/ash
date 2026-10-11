@@ -1,5 +1,7 @@
+import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
+import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
 import { IWorkspaceOpenService, WorkspaceOpenService } from '../../workbench/services/workspaces/browser/workspaceOpenService.js';
-import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
+import { createBrowserExtensionApi, withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
 import { WebWorkerExtensionHost } from '../../workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
@@ -48,7 +50,7 @@ import { ILocaleService } from '../../workbench/services/localization/common/loc
 import { WorkbenchLocaleService } from '../../workbench/services/localization/browser/localeService.js';
 import { ILocalizationService } from '../../workbench/services/localization/common/localizationService.js';
 import { WorkbenchLocalizationService } from '../../workbench/services/localization/browser/workbenchLocalizationService.js';
-import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
@@ -302,12 +304,16 @@ export abstract class Workbench extends Disposable {
 			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		services.registerInstance(IStorageService, storageService);
+		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
+		services.registerInstance(IGlobalExtensionEnablementService, enablement);
+		const enabledExtensions = withEnabledBuiltInExtensions(options.api.extensions, enablement);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
 		const serviceContributionReady: Promise<void>[] = [];
 		if (options.browserViewService) { services.registerInstance(IBrowserViewService, options.browserViewService); }
 		services.registerInstance(IAssetService, options.api.assets);
-		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, createBrowserExtensionApi(), options.api.extensionHost)));
+		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), options.api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
@@ -334,8 +340,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		services.registerInstance(AppServerApiId, options.api.appServer);
 		services.registerInstance(IRendererHostService, options.api);
-		services.registerInstance(IExtensionResourceLoaderService, options.api.extensions.resources);
-		services.registerInstance(IExtensionApi, options.api.extensions);
+		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
+		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, options.api.extensionBackend);
 		services.registerInstance(ModelApiId, options.api.model);
 		services.registerInstance(ISessionApi, options.api.session);
@@ -353,7 +359,6 @@ export abstract class Workbench extends Disposable {
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
 		const storage = this._register(storageService);
-		services.registerInstance(IStorageService, storage);
 		services.registerInstance(ISessionsManagementService, sessions);
 		const view = this.sessionsView = this._register(services.createInstance(SessionsService));
 		const chat = this._register(services.createInstance(ChatService));
@@ -383,7 +388,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkingCopyService, workingCopies);
 		const textMate = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMate);
-		const extensionService = this._register(new AppServerExtensionService({ api: options.api.extensions, eventApi: options.api.events, textMateService: textMate, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), languageFeaturesService: services.get(ILanguageFeaturesService) }));
+		const extensionService = this._register(new AppServerExtensionService({ api: enabledExtensions, eventApi: options.api.events, textMateService: textMate, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), languageFeaturesService: services.get(ILanguageFeaturesService) }));
 		services.registerInstance(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logger.error('extensions', 'Declarative extension activation failed', error));
@@ -413,7 +418,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IExecutionSettingsService, options.api.executionSettings);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
-		const languagePacks = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs));
+		const languagePacks = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePacks);
 		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);

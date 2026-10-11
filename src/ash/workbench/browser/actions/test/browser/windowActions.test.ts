@@ -6,7 +6,7 @@ import { DialogResult, IDialogService } from '../../../../../platform/dialogs/co
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ShowAboutDialogAction } from '../../windowActions.js';
 
 test('About Ash command opens the version dialog', async () => {
@@ -26,7 +26,7 @@ test('About Ash command opens the version dialog', async () => {
 });
 
 test('About Ash command and dialog use the selected language', async () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using registration = registerAction2(ShowAboutDialogAction);

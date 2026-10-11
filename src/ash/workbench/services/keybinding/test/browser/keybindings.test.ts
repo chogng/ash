@@ -5,7 +5,7 @@ import { Position } from '../../../../../editor/common/core/position.js';
 import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';
 import '../../../../contrib/commands/common/commands.contribution.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
 import { KeybindingTestServices } from './keybindingTestServices.js';
 import { suiteTeardown } from 'mocha';
 const profileFixture = new KeybindingTestServices();
@@ -1045,7 +1045,7 @@ test('keybinding schema registration updates conditional command arguments and r
 
 
 test('registered command metadata drives nested batch validation, completion and live replacement', async () => {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 	using resetLocale = toDisposable(() => resetNlsResolver());
 	const dom = new JSDOM('<body></body>');

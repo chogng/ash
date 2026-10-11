@@ -45,7 +45,7 @@ import { OpenerService } from '../../../src/ash/editor/browser/services/openerSe
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import messages from '../../../localization/zh-CN/workbench.json' with { type: 'json' };
+import messages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 interface AcademicIntegrationHarness {
 	readonly apiDocumentType: string;

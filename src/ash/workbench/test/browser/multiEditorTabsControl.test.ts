@@ -29,7 +29,7 @@ import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, Brea
 import { WorkbenchConfiguration } from '../../common/configuration.js';
 import { EditorBreadcrumbsControl } from '../../browser/parts/editor/breadcrumbsControl.js';
 import { setNlsResolver, resetNlsResolver } from '../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
 import { EditorGroupModel } from '../../common/editor/editorGroupModel.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
@@ -40,7 +40,7 @@ test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		using services = createTestEditorServices();
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body, undefined, undefined);
 		control.setInput(input('folder/file.ts'));
@@ -135,7 +135,7 @@ test('Pinned editor action preserves its target and keyboard focus across state 
 	try {
 		const unpinned: IResourceEditorInput[] = [];
 		using services = createTestEditorServices();
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
 			...inertDelegate,
@@ -526,7 +526,7 @@ suite('Editor tab label format', () => {
 			assert.equal(configuration.getValue(EditorLabelFormatConfiguration), 'medium');
 			workspace.updateWorkspace({ id: 'new-root', uri: URI.file('/work') });
 			assert.equal(tab.textContent?.replaceAll('\\', '/'), 'index.tsash/client/src');
-			const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+			const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 			setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 			const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorLabelFormatConfiguration)!;
 			assert.equal(setting.setting?.valueType, 'select');

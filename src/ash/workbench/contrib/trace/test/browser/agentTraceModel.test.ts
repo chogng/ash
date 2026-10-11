@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { AgentTraceViewModel, evidenceLabel, hookStatusLabel, recordingLabel, relationLabel } from '../../browser/agentTraceModel.js';
 import type { AgentTrace } from '../../../../services/trace/common/agentTrace.js';
 
@@ -33,7 +33,7 @@ suite('Execution Trace saved execution flow', () => {
 	});
 
 	test('reports pending evidence, accounting relations and Hook outcomes using the shipped Chinese catalog', () => {
-		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(catalog.locale, catalog.bundles);
 		try {
 			assert.equal(recordingLabel({ formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [], diagnostics: { formatVersion: 2, captureId: 'c', recordingStatus: 'incomplete', droppedRecords: 2, pendingRecords: 3, events: [] } }), '诊断证据不完整 · 已省略 2 条记录 · 3 条记录待写入。');

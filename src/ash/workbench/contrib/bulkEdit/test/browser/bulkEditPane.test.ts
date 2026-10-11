@@ -20,7 +20,7 @@ import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languag
 import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import '../../../../contrib/accessibility/browser/accessibilityConfiguration.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -266,7 +266,7 @@ test('Escape cancels the preview and restores the previously focused control', a
 });
 
 test('Chinese preview labels and accessibility verbosity follow the registered language and setting', async () => {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', catalog.bundles);
 	try {
 		await withPane(async (pane, _browser, configuration) => {

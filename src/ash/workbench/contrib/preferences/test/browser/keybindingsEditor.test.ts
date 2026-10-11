@@ -32,7 +32,7 @@ const { DisposableStore, toDisposable } = await import('../../../../../base/comm
 const { DeferredPromise } = await import('../../../../../base/common/async.js');
 const { CancellationError } = await import('../../../../../base/common/errors.js');
 const { resetNlsResolver, setNlsMessages } = await import('../../../../../nls.js');
-const { builtinLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
+const { productLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
 const { OperatingSystem } = await import('../../../../../base/common/platform.js');
 const { CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
@@ -559,7 +559,7 @@ for (const retirement of ['clear', 'hide', 'dispose', 'focus another editor'] as
 
 test('recorder help and restart announcements use the Chinese catalog', async () => {
 	using disposables = new DisposableStore();
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', chinese.bundles);
 	disposables.add(toDisposable(resetNlsResolver));
 	const { document, input, root, open } = await createRecorderFixture(disposables);

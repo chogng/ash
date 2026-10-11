@@ -31,11 +31,11 @@ import { isMultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEdit
 import { ISessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import { ChangesViewPane } from '../../contrib/changes/browser/changesView.js';
 import { setNlsMessages, resetNlsResolver } from '../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
 
 for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and immutable review across refresh and ownership changes (${locale})`, async () => {
-	setNlsMessages(locale, builtinLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
+	setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://changes.test' });
 	try {
 		using services = new InstantiationService();

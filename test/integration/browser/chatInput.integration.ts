@@ -53,7 +53,7 @@ import { IDictationService } from '../../../src/ash/platform/dictation/common/di
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -72,7 +72,7 @@ declare global {
 
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
-	const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
+	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 }
 const resources = new DisposableStore();

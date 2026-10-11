@@ -21,7 +21,7 @@ import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbenc
 import { FileEditorInput } from '../../../../../workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { NotificationService } from '../../../../../workbench/services/notification/common/notificationService.js';
-import { builtinLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { DownloadRemoteFileAction, SESSIONS_FILES_CONTAINER_ID } from '../../browser/files.contribution.js';
@@ -53,7 +53,7 @@ test('Sessions Files selects one view from the current folder state and creates 
 	});
 	const message = host.element.querySelector('[role="status"]');
 	assert.equal(message?.textContent, 'Folders and files will appear here.');
-	const catalog = builtinLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
 		assert.equal(message?.textContent, 'Folders and files will appear here.');

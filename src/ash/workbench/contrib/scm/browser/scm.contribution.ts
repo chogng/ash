@@ -225,17 +225,17 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	});
 }
 
-export const GIT_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
-export const GIT_GRAPH_VIEW_ID = 'ash.gitGraph';
+export const SCM_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
+export const SCM_HISTORY_VIEW_ID = 'ash.gitGraph';
 
 registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController));
 
 registerAction2(class SCMHistoryRefreshAction extends Action2 {
 	constructor() {
 		super({
-			id: 'ash.git.graph.refresh',
+			id: 'workbench.scm.action.graph.refresh',
 			title: localize2({ bundle: 'ash', key: 'library.refresh' }, 'Refresh'),
-			tooltip: 'Refresh SCM history',
+			tooltip: localize('scm.history.refresh', 'Refresh source control history'),
 			icon: Lxicon.refresh,
 			precondition: SCMHistoryBusyContext.isEqualTo(false),
 			menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 4 },
@@ -249,7 +249,7 @@ registerAction2(class SCMHistoryRefreshAction extends Action2 {
 
 registerEditorPane({
 	id: SCM_MERGE_EDITOR_ID,
-	name: localize({ bundle: 'ash', key: 'git.mergeTitle' }, 'Resolve merge conflict'),
+	name: localize({ bundle: 'ash', key: 'mergeEditor.title' }, 'Resolve merge conflict'),
 	canOpen: matchScmMergeEditor,
 	create: options => {
 		if (!options.textFileService || !options.instantiationService) throw new Error('SCM merge editor requires the text file and instantiation services');
@@ -277,7 +277,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.ScmMerge,
 			{ type: AccessibleViewType.Help },
-			() => localize({ bundle: 'ash', key: 'git.mergeHelp' }, 'Merge editor. Review aligned Current, Incoming, and Result editors. Show Base reveals the common ancestor; Use Columns changes the layout. Actions beside each conflict accept Base, Current, Incoming, or a combination. Mark Handled confirms a result that was already edited; Mark Unhandled returns it to the review list. Navigate all conflicts or only unresolved conflicts with the buttons above, or accept all remaining conflicts from one side. You can also edit Result directly. For deleted or binary versions, choose the whole file. Save with Ctrl+S or Command+S. Complete Merge saves and stages the result after every conflict is handled and all conflict markers are removed. Press <keybinding:editor.action.accessibleView> to read all four versions.'),
+			() => localize({ bundle: 'ash', key: 'mergeEditor.help' }, 'Merge editor. Review aligned Current, Incoming, and Result editors. Show Base reveals the common ancestor; Use Columns changes the layout. Actions beside each conflict accept Base, Current, Incoming, or a combination. Mark Handled confirms a result that was already edited; Mark Unhandled returns it to the review list. Navigate all conflicts or only unresolved conflicts with the buttons above, or accept all remaining conflicts from one side. You can also edit Result directly. For deleted or binary versions, choose the whole file. Save with Ctrl+S or Command+S. Complete Merge saves the result and asks the source control provider to complete the resolution after every conflict is handled and all conflict markers are removed. Press <keybinding:editor.action.accessibleView> to read all four versions.'),
 			() => pane.focus(),
 			AccessibilityVerbositySettingId.ScmMerge,
 		);
@@ -334,7 +334,7 @@ export function registerSCMViews(
 			ctorDescriptor: new SyncDescriptor(ScmViewPane),
 		},
 		{
-			id: GIT_AGENT_REVIEW_VIEW_ID,
+			id: SCM_AGENT_REVIEW_VIEW_ID,
 			title: "Agent Review",
 			localizationKey: { bundle: "ash.views", key: "agentReview" },
 			order: 2,
@@ -344,7 +344,7 @@ export function registerSCMViews(
 			ctorDescriptor: new SyncDescriptor(ScmAgentReviewViewPane),
 		},
 		{
-			id: GIT_GRAPH_VIEW_ID,
+			id: SCM_HISTORY_VIEW_ID,
 			title: "Graph",
 			localizationKey: { bundle: "ash.views", key: "graph" },
 			order: 3,

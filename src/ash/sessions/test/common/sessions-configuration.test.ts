@@ -6,10 +6,10 @@ import { Registry } from '../../../platform/registry/common/platform.js';
 import { SessionsConfiguration } from '../../common/configuration.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../workbench/common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
-import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 
 test('Sessions settings keep their values while their labels belong to the Sessions page', () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.ok(chinese);
 	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 	try {

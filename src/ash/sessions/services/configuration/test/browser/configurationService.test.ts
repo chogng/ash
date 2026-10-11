@@ -10,7 +10,7 @@ import { ConfigurationMainService } from '../../../../../platform/configuration/
 import { WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/browser/configurationService.js';
 import { configurationSettingBinding, SettingModel } from '../../../../../workbench/services/preferences/common/settingsModels.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../../../workbench/common/configuration.js';
-import { builtinLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { ConfigurationService } from '../../browser/configurationService.js';
 
@@ -113,7 +113,7 @@ test('Production window settings keep Workbench values and report a localized Se
 		sessions.getValue(WorkbenchConfiguration.windowTitle), sessions.getValue(WorkbenchConfiguration.sideBarLocation), sessions.getValue(WorkbenchConfiguration.activityBarLocation), sessions.getValue(WorkbenchConfiguration.activityBarCompact),
 		workbench.getValue(WorkbenchConfiguration.windowTitle), workbench.getValue(WorkbenchConfiguration.sideBarLocation), workbench.getValue(WorkbenchConfiguration.activityBarLocation), workbench.getValue(WorkbenchConfiguration.activityBarCompact),
 	], ['${appName}', 'left', ActivityBarPosition.DEFAULT, false, 'Custom', 'right', ActivityBarPosition.TOP, true]);
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', chinese.bundles);
 	try {
 		await assert.rejects(sessions.updateValue(WorkbenchConfiguration.sideBarLocation, 'right'), { message: '设置 workbench.sideBar.location 在此窗口中为只读。' });

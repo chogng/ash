@@ -8,7 +8,7 @@ import { Event } from '../../../../../base/common/event.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandsRegistry, type ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { GettingStarted } from '../../browser/gettingStartedContent.js';
 import { GettingStartedPage } from '../../browser/gettingStarted.js';
 import { GitCloneCommandId } from '../../../../../../../extensions/git/browser/commandIds.js';
@@ -62,7 +62,7 @@ suite('Welcome page', () => {
 		assert.equal(openFolderCount, 1);
 		assert.equal(connectGitHubCount, 1);
 
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		try {
 			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 			using translated = new GettingStarted(dom.window.document.body, { recentProjects: [{ name: 'ash', path: '~/Desktop' }] });

@@ -3,7 +3,7 @@ import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ModelCard } from '../../browser/widget/input/modelPicker/modelPickerCard.js';
 import { ModelPickerDetailsMenu } from '../../browser/widget/input/modelPicker/modelPickerHover.js';
 
@@ -17,7 +17,7 @@ const entry: ModelCatalogEntry = {
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Model card displays the catalog description verbatim and exposes it to keyboard users in ${locale}`, () => {
-		const catalog = builtinLanguagePackCatalogs.find(item => item.locale === locale)!;
+		const catalog = productLanguagePackCatalogs.find(item => item.locale === locale)!;
 		setNlsMessages(locale, catalog.bundles);
 		try {
 			using card = new ModelCard(environment.window.document);

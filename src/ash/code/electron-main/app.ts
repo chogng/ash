@@ -119,7 +119,7 @@ import { IAuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/ele
 import { AuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/electron-main/auxiliaryWindowsMainService.js';
 import { nodeWorkspacePathService } from '../../platform/workspaces/node/workspaces.js';
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
-import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { normalizeLocale, resolveLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePacksService.js';
@@ -203,7 +203,7 @@ export class AshApplication extends Disposable {
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
 	private readonly profileRoot: string;
-	private activeLanguagePack: LanguagePackCatalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
+	private activeLanguagePack: LanguagePackCatalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
 	private restartRequested = false;
 	private readonly developmentAppServerReloader = this._register(new MutableDisposable<DevelopmentAppServerReloader>());
 	private readonly windowIconPath: string | undefined;
@@ -440,7 +440,7 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
 		this.mainProcessIpcServer.registerChannel('process', ProxyChannel.fromService(new ProcessMainService(), this._store));
 		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
-		const catalog = await resolveLanguagePackCatalog(typeof localeValue === 'string' ? localeValue : 'en', builtinLanguagePackCatalogs, new LanguagePackStore(this.profileRoot));
+		const catalog = await resolveLanguagePackCatalog(typeof localeValue === 'string' ? localeValue : 'en', productLanguagePackCatalogs, new LanguagePackStore(this.profileRoot));
 		throwIfCancelled(token);
 		this.activeLanguagePack = catalog;
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
@@ -802,7 +802,7 @@ export class AshApplication extends Disposable {
 	}
 
 	private mainLocalizationMessages(): Readonly<Record<string, string>> {
-		return { ...builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash, ...this.activeLanguagePack.bundles.ash };
+		return { ...productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash, ...this.activeLanguagePack.bundles.ash };
 	}
 
 	/** Focuses a live window, or recreates an empty Workbench when none remains. */

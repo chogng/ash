@@ -15,7 +15,7 @@ import type { LanguagePackPackage } from '../../../../../platform/languagePacks/
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../../services/localization/common/locale.js';
 import { WorkbenchLocaleService } from '../../../../services/localization/browser/localeService.js';
 import { WorkbenchLocalizationService } from '../../../../services/localization/browser/workbenchLocalizationService.js';
@@ -95,7 +95,7 @@ class LanguageActionEnvironment extends Disposable {
 
 class TestLanguagePacks extends Disposable implements ILanguagePackService {
 	private readonly changed = this._register(new Emitter<void>());
-	private readonly installedCatalogs: LanguagePackCatalog[] = [...builtinLanguagePackCatalogs];
+	private readonly installedCatalogs: LanguagePackCatalog[] = [...productLanguagePackCatalogs];
 	public readonly onDidChange = this.changed.event;
 	public readonly whenReady = Promise.resolve();
 	public readonly installs: Array<[string, string | undefined]> = [];
@@ -125,7 +125,7 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 			locale: 'fr',
 			languageName: 'French',
 			localizedLanguageName: 'Français',
-			catalogVersion: builtinLanguagePackCatalogs[0]!.catalogVersion,
+			catalogVersion: productLanguagePackCatalogs[0]!.catalogVersion,
 			bundles: { 'ash.settings': { 'displayLanguage.title': 'Langue d’affichage' } },
 		});
 		this.changed.fire();

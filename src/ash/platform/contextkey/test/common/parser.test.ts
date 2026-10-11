@@ -94,7 +94,7 @@ test('deserialization distinguishes absent, malformed and false conditions', () 
 });
 
 test('parser and scanner report translated diagnostics with token locations', () => {
-	const catalog = JSON.parse(readFileSync('localization/zh-CN/workbench.json', 'utf8'));
+	const catalog = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
 	setNlsMessages('zh-CN', catalog);
 	try {
 		const parser = new Parser();

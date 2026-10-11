@@ -1,3 +1,5 @@
+import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
+import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { ITraceService } from '../services/trace/common/traceService.js';
@@ -77,7 +79,7 @@ import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAd
 import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
 import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { WebWorkerExtensionHost } from '../services/extensions/browser/webWorkerExtensionHost.js';
-import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
+import { createBrowserExtensionApi, withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
@@ -258,7 +260,7 @@ import { ILocaleService } from "../services/localization/common/locale.js";
 import { WorkbenchLocaleService } from "../services/localization/browser/localeService.js";
 import { ILocalizationService } from "../services/localization/common/localizationService.js";
 import { WorkbenchLocalizationService } from "../services/localization/browser/workbenchLocalizationService.js";
-import { builtinLanguagePackCatalogs } from "../services/localization/common/localizationCatalogs.js";
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from "../services/localization/common/localizationCatalogs.js";
 import { AppServerToolSearchService } from "../services/toolSearch/browser/appServerToolSearchService.js";
 import { ICodebaseSymbolsApi } from "../../platform/codebaseSymbols/common/codebaseSymbolsApi.js";
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
@@ -510,6 +512,10 @@ export class Workbench extends Disposable {
 			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		services.registerInstance(IStorageService, storageService);
+		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
+		services.registerInstance(IGlobalExtensionEnablementService, enablement);
+		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement);
 		services.registerInstance(IWorkbenchEnvironmentService, environmentService);
 		const embedderTerminals = services.get(IEmbedderTerminalService);
 		this.window = {
@@ -528,8 +534,8 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IRendererHostService, api);
-		services.registerInstance(IExtensionResourceLoaderService, api.extensions.resources);
-		services.registerInstance(IExtensionApi, api.extensions);
+		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
+		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, api.extensionBackend);
 		const workspaceContext = this._register(new WorkspaceContextService(workspace));
 		this.workspaceContext = workspaceContext;
@@ -546,7 +552,7 @@ export class Workbench extends Disposable {
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
 		// Browser packages always execute in Workers; server executable packages keep their process host.
-		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, createBrowserExtensionApi(), api.extensionHost)));
+		services.registerInstance(IExtensionHostApi, this._register(services.createInstance(WebWorkerExtensionHost, withEnabledBuiltInExtensions(createBrowserExtensionApi(), enablement), api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
@@ -701,7 +707,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageService, languageConfigurationService, languageFeaturesService }));
+		const extensionService = this._register(new AppServerExtensionService({ api: enabledExtensions, eventApi: api.events, textMateService, languageService, languageConfigurationService, languageFeaturesService }));
 		services.registerInstance(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
@@ -733,7 +739,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
 
-		const languagePackService = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs));
+		const languagePackService = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const localizationService = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localizationService);
@@ -769,7 +775,6 @@ export class Workbench extends Disposable {
 		const storage = this._register(storageService);
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
-		services.registerInstance(IStorageService, storage);
 		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
 		services.registerInstance(ILifecycleService, lifecycleService);
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
@@ -914,8 +919,6 @@ export class Workbench extends Disposable {
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);
-		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
-		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const hoverService = this._register(new HoverService(configuration, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
@@ -928,6 +931,8 @@ export class Workbench extends Disposable {
 				configurationService: configuration,
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
+		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		services.registerInstance(INotificationsCenter, notificationsCenter);
 		// Document hosts resolve Chat editing, whose signals use the window accessibility policy.
 		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));

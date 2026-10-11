@@ -15,7 +15,7 @@ import { IFileService, FileKind, type IFileChangeEvent, FileSystemProviderCapabi
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { inspectImage } from '../../../../../platform/media/browser/image.js';
 import { getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { IMAGE_PREVIEW_ID, ImagePreview } from '../../browser/imagePreview.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
@@ -140,7 +140,7 @@ test('Image preview closes a decoder that finishes after disposal', async () => 
 });
 
 test('Image preview initializes its visible and accessible text in Chinese', async () => {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 	using fixture = new ImageFixture();
 	await fixture.preview.setInput({ resource }, new AbortController().signal);

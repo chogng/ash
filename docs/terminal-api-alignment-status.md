@@ -8,7 +8,7 @@
 
 允许路径：双方同路径的 `terminal/browser/{terminal.ts,terminalInstance.ts,terminal.contribution.ts,xterm/xtermTerminal.ts}`、`terminal/common/terminalContextKey.ts` 与平台 `accessibility/browser/accessibleView.ts` 只补贡献挂载、搜索端口、焦点上下文和帮助标识。上游同路径缺失文件 `terminal/browser/terminalExtensions.ts`、`terminalContrib/find/{common/terminal.find.ts,browser/terminal.find.contribution.ts,browser/terminalFindWidget.ts,browser/terminalFindAccessibilityHelp.ts,browser/media/terminalFind.css}` 承接实际调用链。注册上下文只传当前实例，不预建尚无消费者的进程／布局管理器。
 
-配套允许路径：`package.json` / `pnpm-lock.yaml` 仅增加与 xterm 6 配套的 SearchAddon；`localization/zh-CN/workbench.json` 增加可见文案；`test/integration/browser/{terminal.integration.ts,terminal.integration.spec.ts,chatInput.integration.ts}`、`terminal/test/browser/terminalTabsLayout.test.ts`、`services/tasks/test/browser/taskService.test.ts` 同步真实链验证和实例 fixtures；`test/smoke/areas/windows/terminal.spec.ts` 验证真实 PTY 查找、实例隔离、关闭释放。本文与两个 Terminal README 同步职责和结果。未列路径只读；旧迁移和用户改动已保存于本批基线之外，不回退。
+配套允许路径：`package.json` / `pnpm-lock.yaml` 仅增加与 xterm 6 配套的 SearchAddon；`extensions/language-pack-zh-cn/translations/workbench.json` 增加可见文案；`test/integration/browser/{terminal.integration.ts,terminal.integration.spec.ts,chatInput.integration.ts}`、`terminal/test/browser/terminalTabsLayout.test.ts`、`services/tasks/test/browser/taskService.test.ts` 同步真实链验证和实例 fixtures；`test/smoke/areas/windows/terminal.spec.ts` 验证真实 PTY 查找、实例隔离、关闭释放。本文与两个 Terminal README 同步职责和结果。未列路径只读；旧迁移和用户改动已保存于本批基线之外，不回退。
 
 本批验证：正常 `pnpm test:unit` 执行 Terminal 实例／Tabs、Tasks、Debug launcher 与两项架构检查，共 82 项通过；Chromium Terminal 全量 35 项通过。正常 `test:smoke:desktop` 与 `test:smoke:browser:full` 均完成构建与准备，Terminal / Tasks / Debug 的真实 App Server 场景各 7 项通过。`typecheck:renderer` 通过，17 个触及 TS 文件 formatter 通过，新 Find CSS 的 stylelint 通过，本批本地化缺词为零。
 
@@ -141,7 +141,7 @@ Terminal 输出专属无障碍帮助、输出 Accessible View、terminal verbosi
 | `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts`                  | 双方都有；在已有生命周期 suite 增加回归测试，复用可控创建与读取边界              | 正常单测入口和 disposable tracker                     |
 | `src/ash/workbench/contrib/terminal/README.md`、本台账、`docs/ash-desktop-architecture.md` | 已有职责文档；同步列表通知与晚到创建的连接语义                                   | 文档链接和 diff 检查                                  |
 
-重新准入：从列表事件和连接状态继续向真实命令消费者追踪，发现 Tasks / DAP 在创建返回后不检查实例状态便写入命令，可能错报启动并一直等待。这是本切片的必要调用方闭合，因此增加以下准确路径：`src/ash/workbench/contrib/tasks/browser/taskService.ts`、`src/ash/workbench/contrib/debug/browser/debugService.ts`（双方都有；写入前检查终端 running，失败时关闭自己创建的实例，不发布 TaskRun / DAP success）；既有 `src/ash/workbench/services/tasks/test/browser/taskService.test.ts`、`src/ash/workbench/services/debug/test/browser/debugTerminalLauncher.test.ts`（保留已确认测试归属；从真实 DI 服务和 DAP reverse request 链路观察未发送命令、未启动任务与关闭）；`src/ash/workbench/services/tasks/README.md`、`src/ash/workbench/services/debug/README.md`（更新失败语义）；`localization/zh-CN/workbench.json`（已有词条 owner；新增错误接入 NLS 并验证中文）。实现不等待恢复后重放命令，用户可以重新运行。
+重新准入：从列表事件和连接状态继续向真实命令消费者追踪，发现 Tasks / DAP 在创建返回后不检查实例状态便写入命令，可能错报启动并一直等待。这是本切片的必要调用方闭合，因此增加以下准确路径：`src/ash/workbench/contrib/tasks/browser/taskService.ts`、`src/ash/workbench/contrib/debug/browser/debugService.ts`（双方都有；写入前检查终端 running，失败时关闭自己创建的实例，不发布 TaskRun / DAP success）；既有 `src/ash/workbench/services/tasks/test/browser/taskService.test.ts`、`src/ash/workbench/services/debug/test/browser/debugTerminalLauncher.test.ts`（保留已确认测试归属；从真实 DI 服务和 DAP reverse request 链路观察未发送命令、未启动任务与关闭）；`src/ash/workbench/services/tasks/README.md`、`src/ash/workbench/services/debug/README.md`（更新失败语义）；`extensions/language-pack-zh-cn/translations/workbench.json`（已有词条 owner；新增错误接入 NLS 并验证中文）。实现不等待恢复后重放命令，用户可以重新运行。
 
 词条更新由现有 `localization:generate` 生成 `src/ash/workbench/services/localization/common/localizationCatalogs.ts`，该已有生成文件也列入准确范围，只允许生成器写入。
 
@@ -220,7 +220,7 @@ Chromium Terminal Playwright 22 项通过，新增 3 项经过生产服务注册
 
 批准的准确旧路径为 `browser/instance/alternateScroll.ts`、`browser/instance/terminalInstanceWidget.ts`、`browser/instance/terminalTheme.ts`、`browser/view/media/terminal.css`、`browser/view/terminalProfileIcon.ts`、`browser/view/terminalTabsLayout.ts`、`browser/view/terminalTitleActions.ts`，以及 `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.css`。旧文件均由 Git 跟踪；同批迁移全部生产与测试引用，不保留另一套实现。
 
-必要调用方/验证范围为 `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.ts`、`src/ash/workbench/contrib/chat/browser/attachments/chatAttachmentWidgets.ts`，既有 Terminal 四个 UI 单测和 `terminalService.test.ts`，`test/integration/browser/terminal.integration.ts`、`.spec.ts`、`chatInput.integration.ts`、`test/architecture/ui-styling-ownership.test.ts`，Terminal 与 terminalContrib README、`docs/ash-desktop-architecture.md` 与本台账；`localization/zh-CN/workbench.json` 同步迁移 Tab 标签与命令失败提示。浏览器编译另需在 `test/integration/browser/files.integration.ts` 的离线 API fixture 补现有必填 `connectionGeneration`；不改文件夹产品实现。实际 Electron trace 另证明 `test/automation/terminal.ts` 与 `test/smoke/areas/windows/terminal.spec.ts` 使用了旧 Panel 标签；同步为现有生产按钮的 “Toggle Panel Visibility” 与 “Close Panel”，保留所有执行、焦点和输出断言。其他来源不明的 Rust 与脚本变化保留，不属于本批。
+必要调用方/验证范围为 `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.ts`、`src/ash/workbench/contrib/chat/browser/attachments/chatAttachmentWidgets.ts`，既有 Terminal 四个 UI 单测和 `terminalService.test.ts`，`test/integration/browser/terminal.integration.ts`、`.spec.ts`、`chatInput.integration.ts`、`test/architecture/ui-styling-ownership.test.ts`，Terminal 与 terminalContrib README、`docs/ash-desktop-architecture.md` 与本台账；`extensions/language-pack-zh-cn/translations/workbench.json` 同步迁移 Tab 标签与命令失败提示。浏览器编译另需在 `test/integration/browser/files.integration.ts` 的离线 API fixture 补现有必填 `connectionGeneration`；不改文件夹产品实现。实际 Electron trace 另证明 `test/automation/terminal.ts` 与 `test/smoke/areas/windows/terminal.spec.ts` 使用了旧 Panel 标签；同步为现有生产按钮的 “Toggle Panel Visibility” 与 “Close Panel”，保留所有执行、焦点和输出断言。其他来源不明的 Rust 与脚本变化保留，不属于本批。
 
 实现依照 Ash 当前生命周期：屏幕保留延迟加载与隐藏解析；Tab 组件只订阅服务状态，释放时取消订阅；命令从调用窗口的 accessor 取 View，不保存某个窗口的回调。完整 child process/backend、group、profile/configuration、编辑区终端、服务器 ACK 与 Agent 会话接管仍待后续闭合。
 
@@ -314,7 +314,7 @@ Desktop 正常构建、完整 Web 构建和 automation 编译通过，Renderer �
 
 构建失败追加准入：`test/automation/tsconfig.json` 仅将仓库已有 `src/typings/css.d.ts` 纳入 include。实例公开 xterm 类型使 automation 的类型图到达屏幕动态 CSS import；正常 Renderer 构建成功后 automation 的 tsc 报 TS2307，须使用测试/Renderer 已有 CSS 声明，不新增宽泛类型或更改编译规则。
 
-文案追加准入：`localization/zh-CN/workbench.json` 仅补 Task 输入发送失败及清理失败两条消息。Output 是用户可见入口，新的失败日志必须使用现有 localize 并覆盖中文；不改已有其他词条。
+文案追加准入：`extensions/language-pack-zh-cn/translations/workbench.json` 仅补 Task 输入发送失败及清理失败两条消息。Output 是用户可见入口，新的失败日志必须使用现有 localize 并覆盖中文；不改已有其他词条。
 
 本轮输入确认与 sendText 的当前结果：旧实例 stdin write 已移除，所有生产消费者与 fixture 已同步。程序输入使用标准 sendText 签名；原始键盘/鼠标及终端应答由实例直连唯一管理器，不做换行转换。管理器文本拆批、二进制顺序与合并尺寸返回实际 RPC 确认；断线、关闭、退出取消待发送和进行中的等待，重连不被旧 transport 的未完成写入阻塞，旧结果不污染状态。实例拥有唯一屏幕与输入监听，View detach 不销毁输出；重新 attach 不重复绑定。
 

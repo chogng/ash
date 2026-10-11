@@ -72,7 +72,7 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 		failClose = true;
 		await assert.rejects(service.close(second), /injected close failure/);
 		await assert.rejects(service.send(second, {}), /no longer available/);
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('localization/zh-CN/workbench.json', 'utf8')));
+		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 		try {
 			await assert.rejects(service.read(second, 0, 20), { message: '调试适配器会话已不可用。' });
 		} finally {

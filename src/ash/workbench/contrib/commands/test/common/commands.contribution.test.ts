@@ -8,7 +8,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { INotificationService, NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import '../../common/commands.contribution.js';
 
@@ -99,7 +99,7 @@ suite('runCommands', () => {
 
 	test('reports invalid and empty arguments in Chinese', async () => {
 		using environment = new CommandEnvironment();
-		const catalog = builtinLanguagePackCatalogs.find(item => item.locale === 'zh-CN')!;
+		const catalog = productLanguagePackCatalogs.find(item => item.locale === 'zh-CN')!;
 		try {
 			setNlsMessages(catalog.locale, catalog.bundles);
 			await environment.commands.executeCommand('runCommands', null);

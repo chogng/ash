@@ -54,6 +54,9 @@ export async function prepareBrowserExtensions(): Promise<void> {
 			}
 		}
 		await collect(packageRoot);
+		if (index < builtInCount && manifest.engines?.ash && manifest.contributes?.localizations) {
+			packageResources['localization/package.json'] = (await readPackageFile(resolve(root, '.build/desktop/localization/extensions', id, 'localization/package.json'))).toString('base64');
+		}
 		if (typeof manifest.browser === 'string') {
 			// Each Worker imports one immutable module. Package dependencies stay inside that module.
 			const entry = manifest.browser.replace(/^\.\//, '');

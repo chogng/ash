@@ -28,7 +28,7 @@ import { BrowserEditorInput } from '../../../src/ash/workbench/contrib/browserVi
 import { BrowserEditor } from '../../../src/ash/workbench/contrib/browserView/electron-browser/browserEditor.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import '../../../src/ash/base/browser/ui/styles.css';
@@ -41,7 +41,7 @@ declare global {
 
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
-	const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
+	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
 const resources = new DisposableStore();

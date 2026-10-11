@@ -8,7 +8,7 @@ import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
@@ -106,7 +106,7 @@ const resources = new DisposableStore();
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
-	const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
+	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

@@ -12,14 +12,14 @@ import type { ISession } from "../../../sessions/services/sessions/common/sessio
 import { ISessionsManagementService } from "../../../sessions/services/sessions/common/sessionsManagement.js";
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ApprovalReviewModelSelection } from '../../../platform/sessions/common/sessionApi.js';
-import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, localize, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/sessions/common/approvalModes.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 
 test('permission commands use shared Chinese copy and require confirmation only for Bypass', async () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using services = new InstantiationService();
 	let confirmed = false;
@@ -122,7 +122,7 @@ test("Sessions History opens the selected active chat", async () => {
 });
 
 test('Session History shows each branch management state in Chinese before opening details', async () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using services = new InstantiationService();
 	const quickInput = new TestQuickInputService();
@@ -198,7 +198,7 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 }
 
 test('Review settings select an independent connection, model and effort through the Chinese picker', async () => {
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using services = new InstantiationService();
 	const selections: ApprovalReviewModelSelection[] = [];

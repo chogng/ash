@@ -19,7 +19,7 @@ import { EditorPanes, getBuiltinEditorPaneFactory } from '../../../../browser/ed
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
 import { AppServerExtensionService } from '../../../../services/extensions/browser/appServerExtensionService.js';
 import type { ITextMateService } from '../../../../services/textMate/common/textMateService.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, MediaPreview } from '../../browser/mediaPreview.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
@@ -64,7 +64,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 		await assert.rejects(service.reload(), /Editor labels unavailable/);
 		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/song.mp3') }), oldAudio);
 		fail = false;
-		setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+		setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 		await service.reload();
 		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/movie.mp4') })?.name, '视频预览');
 		sourceKind = 'user';
@@ -232,7 +232,7 @@ test('Cancelling a media load cannot replace a newer resource or allocate a URL'
 });
 
 test('Playback failure and accessible metadata are translated into Chinese', async () => {
-	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', catalog.bundles);
 	using fixture = new MediaFixture();
 	await fixture.preview.setInput({ resource: URI.file('/song.wav') }, new AbortController().signal);

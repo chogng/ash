@@ -4,7 +4,7 @@ Ash treats UI localization as a data catalog capability, separate from programmi
 packages. The product owns the catalog contract it consumes; the remote Extensions only validates,
 signs, and distributes product-independent static locale payloads.
 
-Built-in catalogs are generated into `.build/desktop/localization/` and are not tracked by Git.
+English and preinstalled extension catalogs are generated into `.build/desktop/localization/` and are not tracked by Git.
 The source `localizationCatalogs.ts` is a stable loading entrypoint. Build and test preparation
 generate the data before compilation; Vite emits one shared chunk per language, and TypeScript
 includes the data modules in the host and test outputs. `pnpm localization:check` validates the
@@ -14,7 +14,8 @@ source declarations and translations without requiring or writing generated cata
 
 | Surface                                                              | Owner                                                                           | Contract                                                          |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Built-in English and Simplified Chinese                              | `workbench/services/localization/common/localizationCatalogs.ts`                | Always available without Extensions access                       |
+| Core English fallback | `localization/en` + feature NLS declarations | Always available |
+| Preinstalled Simplified Chinese extension | `extensions/language-pack-zh-cn` | Static Ash extension, available offline |
 | Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks`                                                        | `ILanguagePackService`; Extensions `packageType: "localization"` |
 | Locale selection and persistence                                     | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale`                |
 | Message lookup and NLS resolution                                    | `workbench/services/localization` + `src/ash/nls.ts`                            | Selected catalog → caller's English source message                |
@@ -25,6 +26,32 @@ The Extensions does not know Ash bundle IDs, does not execute localization packa
 install them into the renderer. The App Server/Extensions Manager acquires and leases the validated
 capability resource. Each client window's `platform/languagePacks` adapter reads that path-free
 resource, validates the Ash catalog contract, and projects the result to its own Workbench services.
+
+## Preinstalled language packs
+
+Simplified Chinese is owned by [`extensions/language-pack-zh-cn`](../extensions/language-pack-zh-cn/package.json),
+not the core localization directory. Its `package.json` uses `engines.ash` and
+`contributes.localizations`, declaring the Ash catalog at `localization/package.json`.
+It has no executable entrypoint. Domain translations live under the extension's `translations/`.
+English source messages remain in feature declarations and `localization/en` as the core fallback.
+
+`pnpm localization:generate` validates the manifest and translations and produces the standalone
+package under `.build/desktop/localization/extensions/ash.language-pack-zh-cn/`. It contains
+`package.json`, the generated catalog, and the generic Extensions distribution `manifest.json`.
+Normal extension preparation also includes that catalog in the application's bundled extension
+resources. Main and browser startup consume a generated snapshot of the same extension catalog;
+loading the preinstalled pack does not require an Extension Host or an App Server connection.
+
+To create a distributable archive after generation:
+
+```sh
+cd .build/desktop/localization/extensions/ash.language-pack-zh-cn
+zip -r ../../ash-language-pack-zh-cn.zip package.json manifest.json localization
+```
+
+The bundled extension ID is `ash.language-pack-zh-cn`; distribution uses
+`ash/language-pack-zh-cn`. Remote installation follows the existing signed Extensions flow.
+The generated archive is a local package, not a published registry release.
 
 ## Catalog shape
 
@@ -52,8 +79,9 @@ catalog contract can reject a catalog without changing the generic Extensions sc
 
 ## Runtime behavior
 
-`ExtensionsLanguagePackService` starts with the built-in catalogs and loads installed Extensions
-catalogs through the normal capability lease. Built-in locales take precedence. When multiple
+`ExtensionsLanguagePackService` starts with core English and the preinstalled language-pack extensions,
+and loads additional installed Extensions catalogs through the normal capability lease. Core and
+preinstalled locales take precedence. Their provenance remains distinct in the language-pack service. When multiple
 installed providers supply the same normalized locale, that locale is excluded from discovery and
 does not overwrite saved resources; other locales remain available. Removing the duplicate provider
 allows the remaining catalog to load. Unreadable resources release their leases and do not prevent
@@ -81,7 +109,7 @@ is [localization/package.json](../localization/examples/fr/localization/package.
 not published; installation uses the existing signed Extensions distribution flow. It does not adapt
 VS Code language-pack payloads.
 
-The current built-in catalog is consumed by the Workbench menu/action layer, core View Container and
+The selected catalog is consumed by the Workbench menu/action layer, core View Container and
 ViewPane titles, CompositeBar overflow labels, region accessibility labels, Settings navigation,
 and Extensions discovery chrome. Domain-specific editor welcome text, chat content, terminal
 profile names, diagnostics, and arbitrary server/user data remain English or source-provided until

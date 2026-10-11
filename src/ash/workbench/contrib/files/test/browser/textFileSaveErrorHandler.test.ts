@@ -7,7 +7,7 @@ import { DialogSeverity, type IDialogService, type IMessageDialogOptions } from 
 import { TextModelConflictError, TextModelSaveCompletionError } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { TextFileSaveErrorHandler } from '../../browser/editors/textFileSaveErrorHandler.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 
 test('File save errors distinguish disk conflicts and retain the user edits', async () => {
 	const messages: IMessageDialogOptions[] = [];
@@ -37,7 +37,7 @@ test('File save errors distinguish disk conflicts and retain the user edits', as
 	assert.match(messages[2]?.message ?? '', /notes\.txt.*was saved.*backup transaction aborted.*retry/u);
 	assert.doesNotMatch(messages[2]?.message ?? '', /Could not save/u);
 	try {
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(chinese.locale, chinese.bundles);
 		await handler.onSaveError(new TextModelSaveCompletionError(resource, new Error('事务已中止')), resource);
 		assert.equal(messages[3]?.title, '文件已保存，恢复备份尚未完成');
@@ -62,7 +62,7 @@ test('only a supported system permission error offers an explicit elevated retry
 	const handler = new TextFileSaveErrorHandler(dialogs, { isSupported: () => true, writeFileElevated: async () => { throw new Error('Handler must use the model save callback'); } });
 	const resource = URI.file('/project/notes.txt');
 	const permission = createFileSystemProviderError('localized by provider', FileSystemProviderErrorCode.NoPermissions);
-	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 	try {
 		assert.equal(await handler.onSaveError(permission, resource, async () => { retries++; }), true);
 		assert.deepEqual({ retries, messages, confirmation: confirmations[0] }, {

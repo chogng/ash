@@ -79,6 +79,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly groups: readonly IEditorGroupView[];
 	readonly activeGroup: IEditorGroupView;
 	addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView;
+	removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean>;
 	activateGroup(id: EditorGroupId): void;
 	findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined;
 	isGroupVisible(id: EditorGroupId): boolean;
@@ -379,7 +380,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	public async removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
 		const host = this.groupHosts.get(typeof group === 'string' ? group : group.id);
-		if (!host) return true;
+		if (!host || this._groups.length === 1) return true;
 		// Layout-only owners can replace this group synchronously in the same turn.
 		if (!this.beforeCloseEditor && host.group.editors.every(editor => !editor.isDirty)) {
 			this.removeGroupHost(host);
