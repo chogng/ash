@@ -12,7 +12,7 @@ import type { ExtensionLog } from './support.js';
 import { getRemoteWorkspacePath, isRemoteResource } from './support.js';
 import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitConflictFile, type GitConflictResolution, type GitCommitChanges, type GitComparisonChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "./types.js";
 import { GitConfiguration, type GitAutofetch } from './configuration.js';
-import type { GitWorktree } from './types.js';
+import type { GitHistoryRefs, GitWorktree } from './types.js';
 
 export interface GitServiceOptions {
 	readonly canCloneRepository: boolean;
@@ -288,10 +288,22 @@ export class GitService extends Disposable implements IGitService {
 		return (await this.api.resolveWorktree({ repositoryId: repository.id, checkoutRoot })).path;
 	}
 
+	public async historyRefs(repositoryId?: string): Promise<GitHistoryRefs> {
+		const repository = await this.getRepository(repositoryId);
+		const result = await this.api.historyRefs({ repositoryId: repository.id });
+		return {
+			status: toGitStatus(result.status, repository), graphRevision: result.graphRevision,
+			references: result.references.map(reference => ({ ...reference, remoteName: reference.remoteName ?? undefined })),
+			branches: result.branches.map(branch => ({ ...branch, upstream: branch.upstream ?? undefined })),
+			remotes: result.remotes.map(remote => ({ name: remote.name, identity: remote.identity ? { ...remote.identity } : undefined })),
+		};
+	}
+
 	async graph(query: GraphQuery, repositoryId?: string): Promise<GraphPage> {
 		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.graph({ repositoryId: repository.id, limit: query.limit, ...(query.cursor ? { cursor: query.cursor } : {}) });
 		return {
+			streamInstanceId: result.streamInstanceId, historyRevision: result.historyRevision, graphRevision: result.graphRevision,
 			commits: result.commits.map(commit => ({ ...commit, repositoryId: repository.id, parentObjectIds: [...commit.parentObjectIds] })),
 			references: result.references.map(reference => ({ ...reference, remoteName: reference.remoteName ?? undefined })),
 			remotes: result.remotes.map(remote => ({ name: remote.name, identity: remote.identity ? { ...remote.identity } : undefined })),

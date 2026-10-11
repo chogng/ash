@@ -29,7 +29,7 @@ import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 
-import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput, isEditorPaneWithStatus, type IEditorPane } from '../../../common/editor.js';
+import { getEditorWorkingCopies, EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput, isEditorPaneWithStatus, type IEditorPane } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
@@ -114,8 +114,8 @@ class EditorGroupEntry extends Disposable implements EditorTabDescriptor {
 	public get sticky(): boolean { return this.state.sticky; }
 	public get panelId(): string { return this.paneInstance.panelId; }
 	public get tabId(): string { return this.paneInstance.tabId; }
-	public get isDirty(): boolean { return this.paneInstance.pane.workingCopy?.isDirty ?? false; }
-	public get hasExternalChange(): boolean { return this.paneInstance.pane.workingCopy?.hasExternalChange ?? false; }
+	public get isDirty(): boolean { return getEditorWorkingCopies(this.paneInstance.pane).some(copy => copy.isDirty); }
+	public get hasExternalChange(): boolean { return getEditorWorkingCopies(this.paneInstance.pane).some(copy => copy.hasExternalChange); }
 }
 
 /**
@@ -617,7 +617,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private commitEditorPane(input: IResourceEditorInput, options: EditorOpenOptions, paneInstance: EditorPaneInstance, existing: EditorGroupEntry | undefined, instanceId?: EditorInstanceId): IEditorPane {
 		const pane = paneInstance.pane;
 		// Completed panes and error pages can commit; cancelled loads retain the previous tab.
-		const pinned = options.pinned !== false || pane.workingCopy?.isDirty === true;
+		const pinned = options.pinned !== false || getEditorWorkingCopies(pane).some(copy => copy.isDirty);
 		const preview = this.model.previewEditor;
 		const replacement = existing ?? (this.model.editorLimit === 1 ? this.entries[0] : !pinned && preview ? this.entry(preview) : undefined);
 		const closedState = replacement ? this.editorState(replacement) : undefined;
@@ -643,7 +643,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			});
 		}
 		paneInstance.observeWorkingCopy(() => {
-			if (entry.preview && entry.paneInstance.pane.workingCopy?.isDirty) this.model.pin(entry.input);
+			if (entry.preview && getEditorWorkingCopies(entry.paneInstance.pane).some(copy => copy.isDirty)) this.model.pin(entry.input);
 			this.publishEditorState(entry);
 		});
 		this.ordinaryContent = undefined;
@@ -683,6 +683,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		return entry.paneInstance.pane;
 	}
 
+	getEditorPane(input: IResourceEditorInput): IEditorPane | undefined {
+		return this.entry(input)?.paneInstance.pane;
+	}
+
 	async saveEditor(input: IResourceEditorInput, options: ISaveEditorsOptions = {}): Promise<IResourceEditorInput | undefined> {
 		const entry = this.entry(input);
 		if (!entry || this.isDisposed) { return undefined; }
@@ -690,11 +694,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (options.saveAs || input.resource.scheme === Schemas.untitled) {
 			return this.onSave?.(this, entry.input, pane);
 		}
-		if (!pane.workingCopy?.isDirty) { return entry.input; }
+		if (!getEditorWorkingCopies(pane).some(copy => copy.isDirty)) { return entry.input; }
 		if (!pane.save) { return undefined; }
 		const { saveAs, ...saveOptions } = options;
 		await pane.save(saveOptions);
-		return !this.isDisposed && this.entry(input) === entry && !pane.workingCopy.isDirty ? entry.input : undefined;
+		return !this.isDisposed && this.entry(input) === entry && !getEditorWorkingCopies(pane).some(copy => copy.isDirty) ? entry.input : undefined;
 	}
 
 	async confirmCloseEditor(input: IResourceEditorInput, closingGroups?: readonly EditorGroupId[]): Promise<boolean> {
@@ -702,7 +706,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (!entry) return true;
 		// A clean file can still have unresolved save recovery; let the resource owner settle first.
 		if (this.onWillCloseEditor) return this.onWillCloseEditor(this, entry.input, entry.paneInstance.pane, closingGroups);
-		return !entry.paneInstance.pane.workingCopy?.isDirty;
+		return !getEditorWorkingCopies(entry.paneInstance.pane).some(copy => copy.isDirty);
 	}
 
 	async closeEditor(input: IResourceEditorInput, options: EditorCloseOptions = {}): Promise<boolean> {
@@ -916,7 +920,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	private editorState(entry: EditorGroupEntry, index = this.model.indexOf(entry.input)): EditorInstanceState {
-		const workingCopy = entry.paneInstance.pane.workingCopy;
+		const workingCopies = getEditorWorkingCopies(entry.paneInstance.pane);
 		return Object.freeze({
 			groupId: this.id,
 			instanceId: entry.instanceId,
@@ -926,9 +930,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			isActive: this.activeEntry === entry,
 			isPreview: entry.preview,
 			isSticky: entry.sticky,
-			isDirty: workingCopy?.isDirty ?? false,
-			canRevert: workingCopy !== undefined,
-			hasExternalChange: workingCopy?.hasExternalChange ?? false,
+			isDirty: workingCopies.some(copy => copy.isDirty),
+			canRevert: workingCopies.length > 0,
+			hasExternalChange: workingCopies.some(copy => copy.hasExternalChange),
 		});
 	}
 

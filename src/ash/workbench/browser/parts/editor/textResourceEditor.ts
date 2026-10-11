@@ -488,7 +488,7 @@ function reportSaveError(error: unknown): void {
 	console.error("Code editor save failed", error);
 }
 
-class EditorWorkingCopy extends Disposable implements IWorkingCopy {
+export class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	readonly resource: URI;
 	readonly backupKind = "text" as const;
 	readonly backupLanguageId: string | undefined;

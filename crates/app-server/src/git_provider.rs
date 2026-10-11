@@ -169,7 +169,7 @@ impl GitProviderClient {
                 let bound = self.invoke(
                     incarnation,
                     GitProviderRequest::Bind {
-                        version: 1,
+                        version: GIT_PROVIDER_VERSION,
                         directories: self.directories.clone(),
                     },
                     cancellation,

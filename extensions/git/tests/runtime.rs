@@ -126,18 +126,27 @@ fn executable_keeps_history_pages_across_file_and_index_changes_and_observes_ref
     let tagged = status(&provider);
     assert_eq!(tagged.head, initial.head);
     assert!(tagged.history_revision > initial.history_revision);
-    assert!(matches!(
-        provider.call(
+    let retained = match provider
+        .call(
             GitProviderRequest::Graph {
                 repository_id: None,
                 connection_id: 1,
                 limit: std::num::NonZeroUsize::new(1).unwrap(),
                 cursor: old_cursor,
             },
-            None
-        ),
-        Err(GitProviderError::InvalidGraphCursor)
-    ));
+            None,
+        )
+        .unwrap()
+    {
+        GitProviderResponse::Graph(page) => page,
+        response => panic!("unexpected graph response: {response:?}"),
+    };
+    assert!(
+        retained
+            .references
+            .iter()
+            .any(|reference| reference.name == "external-tag")
+    );
     assert!(
         graph(None)
             .references

@@ -2,6 +2,8 @@ import { localize } from '../../../nls.js';
 import { URI } from '../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import type { ICodeEditorService } from '../../../editor/browser/services/codeEditorService.js';
+import type { DiffEditorWidget } from '../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+import { EndOfLinePreference } from '../../../editor/common/model.js';
 import { Range } from '../../../editor/common/core/range.js';
 import type { ITextFileService } from '../../services/textfile/common/textfiles.js';
 import type { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
@@ -33,15 +35,13 @@ export class MainThreadEditorChanges {
 			default: throw new TypeError('Unsupported editor change operation');
 		}
 	}
-	private async captureDiffChange(value: JsonValue): Promise<JsonValue> {
-		const { DiffEditorWidget } = await import('../../../editor/browser/widget/diffEditor/diffEditorWidget.js');
+
+	private captureDiffChange(value: JsonValue): JsonValue {
 		const context = record(value);
 		const originalUri = URI.parse(text(context.originalUri));
 		const modifiedUri = URI.parse(text(context.modifiedUri));
-		const editor = this.codeEditors.listDiffEditors().find(candidate => candidate instanceof DiffEditorWidget && extUriBiasedIgnorePathCase.isEqual(candidate.originalEditor.getModel()?.uri, originalUri) && extUriBiasedIgnorePathCase.isEqual(candidate.modifiedEditor.getModel()?.uri, modifiedUri));
-		if (!(editor instanceof DiffEditorWidget)) {
-			return null;
-		}
+		const editor = this.codeEditors.listDiffEditors().find((candidate): candidate is DiffEditorWidget => 'originalEditor' in candidate && 'diff' in candidate && extUriBiasedIgnorePathCase.isEqual(candidate.getModifiedEditor().getModel()?.uri, modifiedUri));
+		if (!editor || editor.isDisposed || !extUriBiasedIgnorePathCase.isEqual(editor.originalEditor.getModel()?.uri, originalUri)) { return null; }
 		const changes = editor.diff?.changes;
 		const mapping = record(context.mapping);
 		const signature = (value: unknown) => JSON.stringify(JSON.parse(JSON.stringify(value)), (_, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
@@ -58,10 +58,18 @@ export class MainThreadEditorChanges {
 			return { start: modified.getOffsetAt(modifiedRange.getStartPosition()), end: modified.getOffsetAt(modifiedRange.getEndPosition()), text: original.getValueInRange(originalRange) };
 		});
 		const lines = record(mapping.modified);
-		const start = Math.min(modified.getLineCount(), positiveInteger(lines.startLineNumber));
-		const end = Math.min(modified.getLineCount(), Math.max(start, positiveInteger(lines.endLineNumberExclusive) - 1));
-		const contiguous = Boolean(whole) || !changes?.some(change => change.modified.startLineNumber <= end && change.modified.endLineNumberExclusive >= start && change.innerChanges?.some(range => !selected.some(item => signature(item) === signature(range))));
-		return { originalText: original.getValue(), modifiedText: modified.getValue(), originalVersion: original.getVersionId(), modifiedVersion: modified.getVersionId(), start, end, contiguous, edits: innerChanges };
+		const lastLine = modified.getLineCount();
+		const selectedLines = selected.map(value => {
+			const range = parseRange(record(value).modifiedRange);
+			return { start: Math.min(lastLine, range.startLineNumber), end: Math.min(lastLine, range.endColumn === 1 && range.endLineNumber > range.startLineNumber ? range.endLineNumber - 1 : range.endLineNumber) };
+		});
+		const start = whole ? Math.min(lastLine, positiveInteger(lines.startLineNumber)) : Math.min(...selectedLines.map(range => range.start));
+		const end = whole ? Math.min(lastLine, Math.max(start, positiveInteger(lines.endLineNumberExclusive) - 1)) : Math.max(...selectedLines.map(range => range.end));
+		const contiguous = Boolean(whole) || !changes?.some(change => change.innerChanges?.some(range => {
+			const line = Math.min(lastLine, range.modifiedRange.startLineNumber);
+			return line >= start && line <= end && !selectedLines.some(selected => line >= selected.start && line <= selected.end);
+		}));
+		return { originalText: original.getValue(), modifiedText: modified.getValue(), originalFileText: original.getValue(EndOfLinePreference.TextDefined, true), modifiedFileText: modified.getValue(EndOfLinePreference.TextDefined, true), originalVersion: original.getVersionId(), modifiedVersion: modified.getVersionId(), start, end, contiguous, edits: innerChanges };
 	}
 }
 function record(value: JsonValue): Record<string, JsonValue> {

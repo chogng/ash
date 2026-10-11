@@ -13,6 +13,7 @@ import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/p
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { IChatService, type TurnChangeFile, type TurnChangeSetSummary, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
 import { createDiffEditorInput } from '../../../../workbench/common/editor/diffEditorInput.js';
+import { createMultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -152,7 +153,7 @@ export class ChangesViewPane extends ViewPane {
 			this.tree.setSelection(selectedIds.filter(id => this.rows.some(row => `${row.summary.changeSetId}:${row.file.path}` === id)));
 			this.updatePreviewSelection();
 			if (focused) { this.tree.setFocus(`${focused.summary.changeSetId}:${focused.file.path}`); }
-			this.review.enabled = this.rows.some(row => !row.file.binary);
+			this.review.enabled = this.rows.length > 0;
 			this.statusDomNode.textContent = this.rows.length ? localize('sessions.changes.count', '{0} changed files', this.rows.length) : localize('sessions.changes.empty', 'No changes in this conversation.');
 		} catch (error) {
 			if (this.isDisposed || request !== this.request) { return; }
@@ -191,15 +192,19 @@ export class ChangesViewPane extends ViewPane {
 
 	private async openFile(row: ChangeRow, options: IEditorOptions, sideBySide: boolean): Promise<void> {
 		const owner = this.owner;
-		if (row.file.binary) {
-			this.notifications.info(localize('sessions.changes.binary', 'This is a binary file; text comparison is unavailable.'));
-			return;
-		}
 		const summary = row.summary;
 		const contents = await this.chat.readTurnChangeFile(summary.sessionId, summary.threadId, summary.changeSetId, row.file.path);
 		if (this.isDisposed || owner !== this.owner) { return; }
-		if (contents.truncated) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
+		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 		const resource = URI.from({ scheme: 'ash-turn-diff', path: `/${summary.changeSetId}/${row.file.path}` });
+		if (contents.binary) {
+			await this.editors.openEditor(createMultiDiffEditorInput(resource.with({ scheme: 'ash-multi-diff' }), [{
+				label: row.file.path, binary: true,
+				original: { resource: resource.with({ query: 'before' }), readOnly: true },
+				modified: { resource: resource.with({ query: 'after' }), readOnly: true },
+			}], row.file.path), options, sideBySide ? 'sideGroup' : 'activeGroup');
+			return;
+		}
 		await this.editors.openEditor(createDiffEditorInput(
 			{ resource: resource.with({ query: 'before' }), initialText: contents.before ?? '', readOnly: true },
 			{ resource: resource.with({ query: 'after' }), initialText: contents.after ?? '', readOnly: true },

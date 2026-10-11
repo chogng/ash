@@ -1,6 +1,6 @@
 {
   "ash": {
-    "diffEditor.toolbar.help": "使用编辑器工具栏的“更多操作”菜单可选择行内、并排或自动差异布局，显示首尾空白差异，或交换原始侧与修改侧。使用方向键浏览菜单，按 Enter 执行操作，按 Escape 关闭菜单。 中间栏提供更改操作。在源代码管理比较中，使用“暂存更改”或“取消暂存更改”仅更新对应的更改块。选择更改行后可使用选区操作。在工作树比较中，“还原更改”会在保存文件前请求确认。",
+    "diffEditor.toolbar.help": "使用编辑器工具栏的“更多操作”菜单可选择行内、并排或自动差异布局，显示首尾空白差异，或交换原始侧与修改侧。使用方向键浏览菜单，按 Enter 执行操作，按 Escape 关闭菜单。 中间栏提供更改操作。在源代码管理比较中，使用“暂存更改”或“取消暂存更改”仅更新对应的更改块。选择更改行后可使用选区操作。在工作树比较中，“还原更改”会在保存文件前请求确认。在多文件差异中，可使用编辑器标题工具栏折叠或展开所有文件，或切换未修改区域的显示。文件默认展开，未修改代码默认隐藏。使用隐藏区域的按钮可显示更多行。",
     "accessibility.editorSaveRecovery": "保存失败时，对话框提供恢复操作。用 Tab 选择可用的覆盖、使用管理员权限重试、另存为或还原，按 Enter 执行。Escape 取消并保留未保存的修改。覆盖使只读文件可写；还原放弃未保存的修改。",
     "actions.pasteSelectionClipboard": "粘贴选区剪贴板",
     "diffEditor.lineHeight.invalid": "差异编辑器行高必须是非负有限数值。",
@@ -802,7 +802,8 @@
     "skills.selectFile": "选择要打开的技能文件",
     "skills.manageEnablement": "管理技能启停…",
     "skills.discoveryFailed": "无法加载技能文件。请尝试刷新目录。",
-    "skills.openFailed": "无法打开技能 {0}。请刷新目录后重试。"
+    "skills.openFailed": "无法打开技能 {0}。请刷新目录后重试。",
+    "multiDiffEditor.binary": "二进制文件已更改，无法进行文本比较。"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

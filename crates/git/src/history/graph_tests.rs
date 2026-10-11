@@ -209,3 +209,41 @@ async fn graph_tags_point_to_commits_for_lightweight_and_annotated_tags() {
     assert_eq!(graph.commits()[0].object_id(), head);
     assert!(!graph.has_more());
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn graph_roots_compare_ancestry_across_non_monotonic_commit_dates() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "fixture\n");
+    repository.commit_all("first");
+    let first = repository.git(&["rev-parse", "HEAD"]);
+    let tree = repository.git(&["rev-parse", "HEAD^{tree}"]);
+    let mut parent = first.clone();
+    for date in std::iter::repeat_n("1700000000 +0000", 12).chain(["1900000000 +0000"]) {
+        let result = std::process::Command::new("git")
+            .current_dir(repository.root())
+            .args(["commit-tree", &tree, "-p", &parent, "-m", "skewed clock"])
+            .env("GIT_AUTHOR_DATE", date)
+            .env("GIT_COMMITTER_DATE", date)
+            .output()
+            .unwrap();
+        assert!(result.status.success());
+        parent = String::from_utf8(result.stdout).unwrap().trim().to_owned();
+    }
+    repository.git(&["update-ref", "refs/heads/main", &parent]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let before = vec![parent.clone()];
+    let after = vec![parent, first];
+    assert!(
+        client
+            .same_graph_roots(&opened, &before, &after)
+            .await
+            .unwrap()
+    );
+    assert!(
+        client
+            .same_graph_roots(&opened, &after, &before)
+            .await
+            .unwrap()
+    );
+}

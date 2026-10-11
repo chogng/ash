@@ -17,14 +17,14 @@ const provider = (value = 'draft', inputRevision = 0): JsonValue => ({ id: 'repo
 function fleet(providers: JsonValue[] = [provider()]): ExtensionHostFleetSnapshot {
 	return { generation: 1, extensions: [{ id: 'ash.git', version: '1.0.0', packageDigest: 'sha256:' + 'a'.repeat(64), runtimeApiVersion: 1, ...source, lifecycle: 'ready', failure: undefined, registrations: [{ kind: 'sourceControl', registrationId: 'ash.scm', revision: 1, providers }], stderr: '', outputEvents: [] }] };
 }
-function fixture(invoke: IExtensionHostApi['invoke']) {
+function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[]) {
 	const lifetime = new DisposableStore();
 	const scm = lifetime.add(new SCMService()); const view = lifetime.add(new SCMViewService(scm));
 	const quickDiff = lifetime.add(new QuickDiffService()); const resolvers = lifetime.add(new MultiDiffSourceResolverService());
 	const decorationProviders = new Set<IDecorationsProvider>(); const errors: unknown[] = [];
 	const decorations = { registerDecorationsProvider(value: IDecorationsProvider) { decorationProviders.add(value); return { dispose: () => decorationProviders.delete(value) }; } } as unknown as IDecorationsService;
 	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), { invoke } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations));
-	bridge.update(fleet());
+	bridge.update(fleet(providers));
 	return { lifetime, scm, view, bridge, decorationProviders, errors };
 }
 
@@ -47,7 +47,7 @@ test('SCM extension receives captured repository and history arguments and the c
 
 test('SCM input completion preserves a draft edited while the command was running', async () => {
 	const completion = new DeferredPromise<JsonValue>();
-	const value = fixture(async request => (request.payload as { method: string }).method === 'acceptInput' ? completion.p : null); using cleanup = value.lifetime;
+	const value = fixture(async request => (request.payload as { method: string; }).method === 'acceptInput' ? completion.p : null); using cleanup = value.lifetime;
 	const input = value.scm.getRepository('repo')!.provider.input;
 	const accepting = input.accept(); input.value = 'next commit'; completion.complete({ result: 'committed', value: '' });
 	assert.equal(await accepting, 'committed'); assert.equal(input.value, 'next commit');
@@ -55,7 +55,7 @@ test('SCM input completion preserves a draft edited while the command was runnin
 
 test('SCM retirement revokes callbacks and unregisters its repositories and decorations', async () => {
 	const pending = new DeferredPromise<JsonValue>(); let signal: AbortSignal | undefined;
-	const value = fixture(async (request, requestSignal) => { if ((request.payload as { method: string }).method === 'refresh') { signal = requestSignal; return pending.p; } return null; }); using cleanup = value.lifetime;
+	const value = fixture(async (request, requestSignal) => { if ((request.payload as { method: string; }).method === 'refresh') { signal = requestSignal; return pending.p; } return null; }); using cleanup = value.lifetime;
 	const refresh = value.scm.getRepository('repo')!.provider.refresh();
 	value.bridge.update({ generation: 2, extensions: [] });
 	assert.equal(signal?.aborted, true); assert.deepEqual([...value.scm.repositories], []); assert.equal(value.decorationProviders.size, 0);
@@ -88,4 +88,33 @@ test('SCM cannot take over another extension repository or change its registered
 	assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [{ ...(provider() as Record<string, JsonValue>), rootUri: 'file:///other' }]), /identity cannot change/);
 	assert.equal(value.scm.getRepository('repo'), repository);
 	assert.equal(value.scm.getRepository('other'), otherRepository);
+});
+
+test('SCM bridge forwards reference-only HEAD moves once without invalidating history', () => {
+	const initial = { ...(provider() as Record<string, JsonValue>), hasHistory: true };
+	const value = fixture(async () => null, [initial]);
+	using cleanup = value.lifetime;
+	const history = value.scm.getRepository('repo')!.provider.historyProvider!;
+	let invalidations = 0;
+	const updates: Array<readonly import('../../../contrib/scm/common/history.js').ISCMHistoryItem[]> = [];
+	using full = history.onDidChange(() => invalidations++);
+	using refs = history.onDidChangeHistoryItemRefs!(items => {
+		assert.equal(history.historyItemRef.get()?.revision, 'older');
+		updates.push(items);
+	});
+	const changed = {
+		...initial,
+		historyRef: { id: 'localBranch:topic', name: 'topic', revision: 'older', category: 'localBranch' },
+		historyRefsRevision: 1,
+		historyRefsItems: [{ id: 'older', parentIds: [], subject: 'Older commit', message: 'Older commit', references: [{ id: 'localBranch:topic', name: 'topic', revision: 'older', category: 'localBranch', canDelete: false }] }],
+	};
+	value.bridge.set(source, 'ash.scm', 2, [changed]);
+	value.bridge.set(source, 'ash.scm', 3, [changed]);
+	assert.equal(invalidations, 0);
+	assert.equal(updates.length, 1);
+	assert.equal(updates[0]?.[0]?.references?.[0]?.canDelete, false);
+	value.bridge.set(source, 'ash.scm', 4, [{ ...changed, historyRevision: 2, historyRefsRevision: 2, historyRefsItems: [] }]);
+	assert.equal(invalidations, 1, 'Commit-set changes take precedence over ref decoration snapshots');
+	assert.equal(updates.length, 1);
+	assert.throws(() => value.bridge.set(source, 'ash.scm', 5, [{ ...changed, historyRefsRevision: -1 }]), /history refs revision/);
 });

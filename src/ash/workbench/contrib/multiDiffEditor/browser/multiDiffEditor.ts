@@ -3,7 +3,11 @@ import { Icon } from "../../../../base/common/icon.js";
 import { IMultiDiffSourceResolverService } from "./multiDiffSourceResolverService.js";
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { IWorkingCopyService, type IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
+import { EditorWorkingCopy } from '../../../browser/parts/editor/textResourceEditor.js';
+import { TextFileBinaryError } from '../../../services/textfile/common/textFileService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import './media/multiDiffEditorPane.css';
@@ -37,7 +41,11 @@ import { MultiDiffEditorToolbar } from './multiDiffEditorToolbar.js';
 import { localize } from '../../../../nls.js';
 import { extname } from '../../../../base/common/path.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
-import { ActiveEditorContext, ActiveEditorReadonlyContext, ResourceContext, ResourceSchemeContext, ResourcePathContext, ResourceFilenameContext, ResourceDirnameContext, ResourceExtensionContext, ResourceLanguageIdContext, ResourceSetContext } from '../../../common/contextkeys.js';
+import {
+	ActiveEditorContext, ActiveEditorReadonlyContext, ResourceContext, ResourceSchemeContext,
+	ResourcePathContext, ResourceFilenameContext, ResourceDirnameContext, ResourceExtensionContext,
+	ResourceLanguageIdContext, ResourceSetContext,
+} from '../../../common/contextkeys.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 
@@ -68,6 +76,21 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	private readonly pendingSession = this._register(new MutableDisposable<MultiDiffEditorSession>());
 	private editorContainerDomNode: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
+	private readonly workingCopiesEmitter = this._register(new Emitter<void>());
+	private readonly workingCopiesListener = this._register(new MutableDisposable<IDisposable>());
+	public readonly onDidChangeWorkingCopies = this.workingCopiesEmitter.event;
+
+	public getWorkingCopies(): readonly IWorkingCopy[] {
+		return this.session.value?.workingCopies ?? [];
+	}
+
+	public get workingCopy(): IWorkingCopy | undefined {
+		return this.session.value?.getActiveWorkingCopy();
+	}
+
+	public async save(options?: ISaveOptions): Promise<void> {
+		await this.session.value?.save(options);
+	}
 
 	constructor(
 		private readonly options: MultiDiffEditorOptions,
@@ -120,13 +143,17 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 			throw error;
 		}
 		this.session.value = this.pendingSession.clearAndLeak();
+		this.workingCopiesListener.value = this.session.value?.onDidChangeWorkingCopies(() => this.workingCopiesEmitter.fire());
+		this.workingCopiesEmitter.fire();
 		this.session.value?.show();
 		await this.options.viewsService?.focusView(VIEW_PANE_ID);
 	}
 
 	public override clearInput(): void {
+		this.workingCopiesListener.clear();
 		this.pendingSession.clear();
 		this.session.clear();
+		this.workingCopiesEmitter.fire();
 	}
 
 	public override layout(dimension: IDimension): void {
@@ -181,6 +208,10 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.session.value?.editor?.expandAll();
 	}
 
+	public toggleCollapseUnchangedRegions(): void {
+		this.session.value?.editor?.toggleCollapseUnchangedRegions();
+	}
+
 	private requireContainer(): HTMLDivElement {
 		assertDefined(this.editorContainerDomNode, new ReferenceError('Multi-diff editor pane has not been created'));
 		return this.editorContainerDomNode;
@@ -188,6 +219,10 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 }
 
 class MultiDiffEditorSession extends Disposable {
+	private readonly copies = new Map<string, IWorkingCopy>();
+	private readonly copiesEmitter = this._register(new Emitter<void>());
+	public readonly onDidChangeWorkingCopies = this.copiesEmitter.event;
+	public get workingCopies(): readonly IWorkingCopy[] { return [...this.copies.values()]; }
 	public readonly editor: MultiDiffEditorWidget | undefined;
 	private readonly models = new Set<DiffModel>();
 	private readonly itemResources = this._register(new MutableDisposable<DisposableStore>());
@@ -212,6 +247,7 @@ class MultiDiffEditorSession extends Disposable {
 		@IDialogService private readonly dialogs: IDialogService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService,
+		@IWorkingCopyService private readonly workingCopyService: IWorkingCopyService,
 	) {
 		super();
 		try {
@@ -298,7 +334,7 @@ class MultiDiffEditorSession extends Disposable {
 		this.domNode.classList.remove('pending');
 	}
 
-	private async loadItem(input: MultiDiffEditorInputItem, modelService: ITextModelResourceService, computationService: IDocumentDiffProvider, configuration: IConfigurationService, owner: DisposableStore, signal: AbortSignal): Promise<DiffModel> {
+	private async loadItem(input: MultiDiffEditorInputItem, modelService: ITextModelResourceService, computationService: IDocumentDiffProvider, configuration: IConfigurationService, owner: DisposableStore, signal: AbortSignal): Promise<DiffModel | undefined> {
 		const resources = owner.add(new DisposableStore());
 		try {
 			const original = await modelService.acquire(input.original, signal);
@@ -312,7 +348,20 @@ class MultiDiffEditorSession extends Disposable {
 				modified.dispose();
 				throw new Error('Multi-diff editor input loading was cancelled');
 			}
-			resources.add(modified);
+			if (input.modified.readOnly === true) {
+				resources.add(modified);
+			} else {
+				const copy = resources.add(new EditorWorkingCopy(modified, input.modified, this.workingCopyService, undefined));
+				const id = multiDiffEditorItemKey(input);
+				this.copies.set(id, copy);
+				resources.add(toDisposable(() => {
+					if (this.copies.get(id) === copy) {
+						this.copies.delete(id);
+						if (!this.isDisposed) this.copiesEmitter.fire();
+					}
+				}));
+				this.copiesEmitter.fire();
+			}
 			const model = resources.add(new DiffModel({
 				original: original.model,
 				modified: modified.model,
@@ -327,12 +376,27 @@ class MultiDiffEditorSession extends Disposable {
 			return model;
 		} catch (error) {
 			resources.dispose();
+			if (error instanceof TextFileBinaryError) return undefined;
 			throw error;
 		}
 	}
 
 	public focus(): void {
 		this.editor?.focus();
+	}
+
+	public getActiveWorkingCopy(): IWorkingCopy | undefined {
+		const item = this.editor?.getActiveItem();
+		return item ? this.copies.get(item.id) : undefined;
+	}
+
+	public async save(options?: ISaveOptions): Promise<void> {
+		// Collapsing or virtualizing a file must not exclude it from an explicit Save.
+		await Promise.all(this.model.items.filter(item => !item.binary && !item.readOnly).map(item => item.resolve()));
+		throwIfCancelled(this.abortController.signal, 'Multi-diff save was cancelled');
+		for (const copy of this.workingCopies) {
+			if (copy.isDirty) await copy.save(this.abortController.signal, options);
+		}
 	}
 
 	public getActiveDiffItem(): MultiDiffEditorInputItem | undefined {
@@ -343,8 +407,8 @@ class MultiDiffEditorSession extends Disposable {
 	private createFileActions(container: HTMLElement, item: IDocumentDiffItem, input: MultiDiffEditorInputItem, options: MultiDiffEditorOptions, contextMenuProvider: IContextMenuProvider): IDisposable {
 		const actions: IAction[] = [];
 		for (const action of input.actions ?? []) {
-   actions.push(new PaneAction(action.id, action.label, action.tooltip, action.icon ? Icon.fromId(action.icon) : undefined, action.enabled !== false, () => this.commandService.executeCommand(action.command, ...action.arguments)));
-  }
+			actions.push(new PaneAction(action.id, action.label, action.tooltip, action.icon ? Icon.fromId(action.icon) : undefined, action.enabled !== false, () => this.commandService.executeCommand(action.command, ...action.arguments)));
+		}
 		const resources = new DisposableStore();
 		const scoped = resources.add(options.fileActions!.contextKeyService.createScoped(container));
 		ActiveEditorContext.bindTo(scoped).set(MULTI_DIFF_EDITOR_ID);
@@ -398,15 +462,13 @@ class MultiDiffEditorSession extends Disposable {
 	}
 
 	private createToolbar(): void {
-		if (!this.options.fileActions) return;
+		if (!this.options.fileActions || !this.paneInput.source || this.paneInput.source.kind === 'snapshot') return;
 		this.toolbar.value = this.instantiationService.createInstance(MultiDiffEditorToolbar, {
 			container: this.domNode,
 			input: this.paneInput,
 			contextMenuProvider: this.options.fileActions.contextMenuProvider,
 			editorService: this.options.editorService,
 			viewsService: this.options.viewsService,
-			collapseAll: () => this.editor?.collapseAll(),
-			expandAll: () => this.editor?.expandAll(),
 		});
 		this.domNode.prepend(this.toolbar.value.domNode);
 	}
@@ -422,10 +484,10 @@ class MultiDiffEditorSession extends Disposable {
 			const id = multiDiffEditorItemKey(item);
 			this.inputsById.set(id, item);
 			return resources.add(new DocumentDiffItem({
-				id, label: item.label,
+				id, label: item.label, binary: item.binary,
 				originalLabel: item.original.label, modifiedLabel: item.modified.label,
 				readOnly: item.modified.readOnly,
-			}, () => this.loadItem(item, this.options.modelService, this.computationService, this.configuration, resources, abort.signal)));
+			}, item.binary ? undefined : () => this.loadItem(item, this.options.modelService, this.computationService, this.configuration, resources, abort.signal)));
 		});
 	}
 

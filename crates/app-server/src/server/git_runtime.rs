@@ -318,6 +318,20 @@ impl GitRuntime {
             _ => Err(GitRuntimeError::Service(GitServiceError::Runtime)),
         }
     }
+    pub(super) fn history_refs_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<ash_app_server_protocol::protocol::git::GitHistoryRefsResult, GitRuntimeError> {
+        match self.call(
+            GitProviderRequest::HistoryRefs {
+                repository_id: repository_id.map(str::to_owned),
+            },
+            None,
+        )? {
+            GitProviderResponse::HistoryRefs(value) => Ok(value),
+            _ => Err(GitRuntimeError::Service(GitServiceError::Runtime)),
+        }
+    }
     pub(super) fn graph_for(
         &self,
         repository_id: Option<&str>,

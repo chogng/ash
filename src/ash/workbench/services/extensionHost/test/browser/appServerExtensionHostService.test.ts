@@ -1,3 +1,4 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { ExtensionClientHandler } from '../../../../api/common/extHost.protocol.js';
@@ -43,6 +44,15 @@ import { ITaskService, type TaskProvider, type TaskProviderRegistration } from "
 import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
 import { AppServerExtensionHostService } from "../../browser/appServerExtensionHostService.js";
 import { MainThreadExtensionApi } from '../../../../api/browser/mainThreadExtensionApi.js';
+import { ISCMService, ISCMViewService } from '../../../../contrib/scm/common/scm.js';
+import { SCMService } from '../../../../contrib/scm/common/scmService.js';
+import { SCMViewService } from '../../../../contrib/scm/browser/scmViewService.js';
+import { IQuickDiffService } from '../../../../contrib/scm/common/quickDiff.js';
+import { QuickDiffService } from '../../../../contrib/scm/common/quickDiffService.js';
+import { IDecorationsService } from '../../../decorations/common/decorations.js';
+import { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
+import { IExtensionBackendApi } from '../../../../../platform/agentHost/common/extensionBackendApi.js';
+import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../statusbar/browser/statusbar.js';
 import { createExtensionHostLanguageProviderBatch } from '../../../../api/browser/extensionHostLanguageBridge.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
@@ -62,16 +72,7 @@ import { ILifecycleService, LifecyclePhase } from '../../../lifecycle/common/lif
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
-import { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import { IExtensionBackendApi } from '../../../../../platform/agentHost/common/extensionBackendApi.js';
-import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { ISCMService, ISCMViewService } from '../../../../contrib/scm/common/scm.js';
-import { SCMService } from '../../../../contrib/scm/common/scmService.js';
-import { SCMViewService } from '../../../../contrib/scm/browser/scmViewService.js';
-import { IQuickDiffService } from '../../../../contrib/scm/common/quickDiff.js';
-import { QuickDiffService } from '../../../../contrib/scm/common/quickDiffService.js';
-import { IDecorationsService } from '../../../decorations/common/decorations.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
@@ -121,6 +122,46 @@ test('SCM registrations dispatch updates and Quick Diff, and retire before a res
 	await host.stop();
 	assert.equal(scm.getRepository('repository'), undefined);
 	assert.equal(quickDiff.providers.length, 0);
+});
+
+test('SCM registrations reach their owner, preserve history on resource updates and retire with the host', async () => {
+	const provider = { id: 'extension-repo', providerId: 'acme', label: 'Synthetic SCM', selected: true, groups: [], input: { value: '', placeholder: '', buttonLabel: '', buttonTooltip: '' }, statusMessage: '', statusBarCommands: [], historyRevision: 1, hasHistory: true, hasMerge: false };
+	const initial = snapshot(1, 'unused');
+	const api = new FakeExtensionHostApi({ ...initial, extensions: initial.extensions.map(runtime => ({ ...runtime, registrations: [{ kind: 'sourceControl', registrationId: 'scm', revision: 1, providers: [provider] }] })) });
+	api.invocationResult = Promise.resolve(null);
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	assert.equal(host.state, 'ready');
+	assert.deepEqual(host.currentSnapshot.extensions[0]!.registrations, [{ id: 'scm', kind: 'sourceControl' }]);
+	const scm = services.get(ISCMService);
+	const repository = scm.getRepository(provider.id)!;
+	assert.equal(repository.provider.label, provider.label);
+	const quickDiff = services.get(IQuickDiffService);
+	assert.equal(quickDiff.providers.length, 1);
+	let historyChanges = 0;
+	using historyListener = repository.provider.historyProvider!.onDidChange(() => historyChanges++);
+	const invalidations: Array<URI | undefined> = [];
+	using diffListener = quickDiff.onDidChange(resource => invalidations.push(resource));
+	const source = { extensionId: 'acme.demo', activationGeneration: 11, incarnation: 3 };
+	const signal = new AbortController().signal;
+	assert.deepEqual(await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 2, providers: [provider] }, signal, source), { result: 'done' });
+	assert.equal(historyChanges, 0);
+	assert.deepEqual(invalidations, [undefined], 'Resource invalidation refreshes all quick diffs through their typed contract');
+	await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 3, providers: [{ ...provider, historyRevision: 2 }] }, signal, source);
+	assert.equal(historyChanges, 1);
+	api.invocationResult = Promise.resolve({ resource: 'git-original:/file.txt', text: 'base' });
+	assert.deepEqual(await quickDiff.getQuickDiffs(URI.file('/workspace/file.txt'), signal), [{ providerId: 'acme.demo:extension-repo', providerLabel: provider.label, label: provider.label, originalResource: URI.parse('git-original:/file.txt'), revision: 3, text: 'base' }]);
+	const cancelled = new AbortController();
+	cancelled.abort();
+	const count = api.invocations.length;
+	await assert.rejects(quickDiff.getQuickDiffs(URI.file('/workspace/file.txt'), cancelled.signal));
+	assert.equal(api.invocations.length, count);
+	api.emitConnection('stopped');
+	assert.equal(scm.getRepository(provider.id), undefined);
+	assert.equal(quickDiff.providers.length, 0);
+	await assert.rejects(api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 4, providers: [provider] }, signal, source), /retired registration/);
 });
 
 test('extension backend client operations reach the admitted capability owner', async () => {

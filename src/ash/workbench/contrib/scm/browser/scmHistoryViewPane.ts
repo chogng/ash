@@ -50,22 +50,15 @@ registerAction2(class extends Action2 {
 		const historyItem = historyItemViewModel.historyItem;
 		const changes = await provider.provideHistoryItemChanges(historyItem.id, comparison?.baseId ?? historyItem.parentIds[0]);
 		const items: MultiDiffEditorInputItem[] = [];
-		let binaryFiles = 0;
 		for (const change of changes ?? []) {
 			const file = await provider.resolveHistoryItemChangeContents(historyItem.id, change);
-			if (file.original.kind === 'binary' || file.modified.kind === 'binary') {
-				binaryFiles += 1;
-				continue;
-			}
 			// Missing sides represent additions and deletions; their revision URIs keep empty models distinct.
 			items.push({
+				binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
 				label: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
 				original: { resource: change.originalUri ?? change.uri, readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : '' },
 				modified: { resource: change.modifiedUri ?? change.uri, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : '' },
 			});
-		}
-		if (binaryFiles > 0) {
-			accessor.get(INotificationService).info(localize('scm.history.binaryFiles', '{0} binary files cannot be shown in the text comparison.', binaryFiles));
 		}
 		if (items.length === 0) {
 			if (changes?.length === 0) { accessor.get(INotificationService).info(localize('scm.history.noChanges', 'There are no changes between these versions.')); }
@@ -223,7 +216,20 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.busyContext.set(false);
 			this.clearGraph();
 			this.provider = provider;
-			this.providerListener.value = provider?.onDidChange(() => void this.refresh());
+			const listeners = new DisposableStore();
+			this.providerListener.value = listeners;
+			if (provider) {
+				listeners.add(provider.onDidChange(() => void this.refresh()));
+				if (provider.onDidChangeHistoryItemRefs) {
+					listeners.add(provider.onDidChangeHistoryItemRefs(items => {
+						if (!this.page) { return; }
+						const byId = new Map(items.map(item => [item.id, item]));
+						this.page = { ...this.page, items: this.page.items.map(item => byId.get(item.id) ?? item) };
+						this.head = provider.historyItemRef.get();
+						this.renderGraph(this.page);
+					}));
+				}
+			}
 			this.graphRepositoryId = repository?.id;
 		}
 		const previousPage = this.page;

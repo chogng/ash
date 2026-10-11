@@ -1041,6 +1041,8 @@ use crate::protocol::git::GitGraphResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitHeadDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitHistoryRefsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitHistoryResult;
 use crate::protocol::git::GitIgnoreChanged;
 #[cfg(any(test, feature = "export"))]
@@ -4604,6 +4606,11 @@ client_methods! {
         response: GitHistoryResult,
         serialization: RepositoryExclusive,
     },
+    GitHistoryRefs => "git/history/refs" {
+        params: GitRepositoryParams,
+        response: GitHistoryRefsResult,
+        serialization: RepositoryExclusive,
+    },
     GitGraph => "git/graph" {
         params: GitGraphParams,
         response: GitGraphResult,
@@ -6517,6 +6524,7 @@ typescript_bindings! {
     GitWorktreeResolveResult,
     GitBranchListResult,
     GitCommitSummaryDto,
+    GitHistoryRefsResult,
     GitHistoryResult,
     GitRemoteProviderDto,
     GitRepositoryIdentityDto,

@@ -105,7 +105,18 @@ export interface GitReference {
 	readonly current: boolean;
 }
 
+export interface GitHistoryRefs {
+	readonly status: GitStatus;
+	readonly graphRevision: number;
+	readonly references: readonly GitReference[];
+	readonly branches: readonly GitBranch[];
+	readonly remotes: readonly GitRemote[];
+}
+
 export interface GraphPage {
+	readonly streamInstanceId: string;
+	readonly historyRevision: number;
+	readonly graphRevision: number;
 	readonly commits: readonly GitCommitSummary[];
 	readonly references: readonly GitReference[];
 	readonly remotes: readonly GitRemote[];
@@ -273,6 +284,7 @@ export interface IGitService {
 	/** Removes a clean, unbound linked checkout; session-owned checkouts use their session lifecycle. */
 	deleteWorktree(checkoutRoot: string, repositoryId?: string): Promise<void>;
 	resolveWorktree(checkoutRoot: string, repositoryId?: string): Promise<string>;
+	historyRefs(repositoryId?: string): Promise<GitHistoryRefs>;
 	graph(query: GraphQuery, repositoryId?: string): Promise<GraphPage>;
 	compareChanges(objectId: string, baseReference: string, mode: 'direct' | 'mergeBase', repositoryId?: string): Promise<GitComparisonChanges>;
 	commitMessage(objectId: string, repositoryId?: string): Promise<string>;

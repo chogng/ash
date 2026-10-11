@@ -413,7 +413,8 @@
     "remote.resolver.missing": "No Remote resolver for '{0}'",
     "remote.authorityResolver.missing": "No enabled local extension can resolve '{0}'.",
     "remote.resolver.targetMissing": "Remote connection '{0}' no longer exists",
-    "remote.resolver.duplicate": "More than one extension resolves '{0}'. Disable the duplicate resolver."
+    "remote.resolver.duplicate": "More than one extension resolves '{0}'. Disable the duplicate resolver.",
+    "accessibility.multiDiffFiles": "In a multi-file comparison, file headers expand and collapse each comparison. Arrow keys move between headers. Binary files show a text-comparison-unavailable message and retain their file actions. Save saves modified writable files, including collapsed files. Closing the last view of an unsaved file offers Save, Discard, or Cancel."
   },
   "ash.views": {
     "explorer": "Explorer",

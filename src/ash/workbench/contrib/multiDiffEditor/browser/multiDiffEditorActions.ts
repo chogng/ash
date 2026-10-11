@@ -16,6 +16,7 @@ export const MultiDiffGoToPreviousChangeCommandId = 'multiDiffEditor.goToPreviou
 export const MultiDiffCollapseAllCommandId = 'multiDiffEditor.collapseAll';
 export const MultiDiffExpandAllCommandId = 'multiDiffEditor.expandAll';
 export const MultiDiffGoToFileCommandId = 'multiDiffEditor.goToFile';
+export const MultiDiffToggleCollapseUnchangedRegionsCommandId = 'multiDiffEditor.toggleCollapseUnchangedRegions';
 
 const MultiDiffEditorActive = ActiveEditorContext.isEqualTo(MULTI_DIFF_EDITOR_ID);
 
@@ -90,7 +91,7 @@ export class MultiDiffCollapseAllAction extends Action2 {
 			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffCollapseAllAction' }, 'Collapse All Diffs'),
 			icon: Lxicon.fold,
 			precondition: MultiDiffEditorActive,
-			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: '4_collapse', order: 1 },
+			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 100 },
 			f1: true,
 		});
 	}
@@ -107,13 +108,29 @@ export class MultiDiffExpandAllAction extends Action2 {
 			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffExpandAllAction' }, 'Expand All Diffs'),
 			icon: Lxicon.unfold,
 			precondition: MultiDiffEditorActive,
-			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: '4_collapse', order: 2 },
+			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 101 },
 			f1: true,
 		});
 	}
 
 	public override run(accessor: ServicesAccessor, context?: unknown): void {
 		activeMultiDiffPane(accessor, context)?.expandAll();
+	}
+}
+
+export class MultiDiffToggleCollapseUnchangedRegionsAction extends Action2 {
+	constructor() {
+		super({
+			id: MultiDiffToggleCollapseUnchangedRegionsCommandId,
+			title: localize2({ bundle: 'ash', key: 'toggleCollapseUnchangedRegions' }, 'Toggle Collapse Unchanged Regions'),
+			icon: Lxicon.map,
+			precondition: MultiDiffEditorActive,
+			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 21 },
+		});
+	}
+
+	public override run(accessor: ServicesAccessor, context?: unknown): void {
+		activeMultiDiffPane(accessor, context)?.toggleCollapseUnchangedRegions();
 	}
 }
 

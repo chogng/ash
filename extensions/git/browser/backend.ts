@@ -2,7 +2,7 @@ import { backend } from 'ash';
 import { CancellationToken, CancellationError, AppServerRemoteError } from './support.js';
 import type { GitCompareChangesParams, GitCompareChangesResult, GitCommitMessageResult, GitCommitDetailsResult } from '../../../.build/protocol/typescript/index.js';
 import type { GitInitParams, GitCatalogResult, GitCommandParams, GitCommandResult, GitIndexDiffResult, GitIndexEditParams } from '../../../.build/protocol/typescript/index.js';
-import type { ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitConflictFileParams, GitConflictFileResult, GitCompleteConflictParams, GitCloneParams, GitCloneResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../../.build/protocol/typescript/index.js";
+import type { ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitConflictFileParams, GitConflictFileResult, GitCompleteConflictParams, GitCloneParams, GitCloneResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryRefsResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../../.build/protocol/typescript/index.js";
 import type { GitCheckIgnoreParams, GitCheckIgnoreResult } from '../../../.build/protocol/typescript/index.js';
 import type { GitBranchCreateParams, GitBranchDeleteParams, GitWorktreeCreateParams, GitWorktreeCreateResult, GitWorktreeDeleteParams, GitWorktreeListResult, GitWorktreeResolveParams, GitWorktreeResolveResult } from '../../../.build/protocol/typescript/index.js';
 
@@ -18,6 +18,7 @@ export interface IGitApi {
 	repositories(): Promise<GitRepositoriesResult>;
 	status(params: GitRepositoryParams): Promise<GitStatusResult>;
 	checkIgnore(params: Omit<GitCheckIgnoreParams, 'operationId'>, token?: CancellationToken): Promise<GitCheckIgnoreResult>;
+	historyRefs(params: GitRepositoryParams): Promise<GitHistoryRefsResult>;
 	history(params: GitRepositoryParams): Promise<GitHistoryResult>;
 	branches(params: GitRepositoryParams): Promise<GitBranchListResult>;
 	createBranch(params: GitBranchCreateParams): Promise<GitBranchListResult>;
@@ -86,6 +87,7 @@ export function createGitApi(): IGitApi {
 				await cancellation;
 			}
 		},
+		historyRefs: params => call('historyRefs', params),
 		history: (params) => call('history', params),
 		branches: (params) => call('branches', params),
 		createBranch: params => call('createBranch', params),

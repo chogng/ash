@@ -20,6 +20,7 @@ use ash_app_server_protocol::protocol::git::GitDiffStatisticsDto;
 use ash_app_server_protocol::protocol::git::GitFetchModeDto;
 use ash_app_server_protocol::protocol::git::GitGraphResult;
 use ash_app_server_protocol::protocol::git::GitHeadDto;
+use ash_app_server_protocol::protocol::git::GitHistoryRefsResult;
 use ash_app_server_protocol::protocol::git::GitIgnoreChanged;
 use ash_app_server_protocol::protocol::git::GitReferenceDto;
 use ash_app_server_protocol::protocol::git::GitReferenceKindDto;
@@ -113,6 +114,8 @@ pub(super) struct GitWatcher {
 struct GitRuntimeState {
     revision: u64,
     history_revision: u64,
+    graph_revision: u64,
+    graph_roots: Vec<String>,
     repository: Option<GitRepository>,
     status: Option<GitStatusResult>,
     references: Option<ash_git::GitReferenceState>,
@@ -479,6 +482,13 @@ impl GitRuntime {
         self.recent_commits_for(None)
     }
 
+    pub(super) fn history_refs_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitHistoryRefsResult, GitRuntimeError> {
+        self.repository(repository_id)?.history_refs()
+    }
+
     pub(super) fn graph_for(
         &self,
         repository_id: Option<&str>,
@@ -843,6 +853,8 @@ impl GitRepositoryRuntime {
             state: Mutex::new(GitRuntimeState {
                 revision: 0,
                 history_revision: 0,
+                graph_revision: 0,
+                graph_roots: Vec::new(),
                 repository: None,
                 status: None,
                 references: None,
@@ -928,6 +940,26 @@ impl GitRepositoryRuntime {
             .map_err(GitRuntimeError::Service)
     }
 
+    fn history_refs(&self) -> Result<GitHistoryRefsResult, GitRuntimeError> {
+        let _operation = lock_current_operation(&self.operation)
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let (repository, snapshot) = self.service.snapshot().map_err(GitRuntimeError::Service)?;
+        let status = self.accept(repository, snapshot)?;
+        let branches = self.local_branches_locked()?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let references = state.references.as_ref().expect("accepted ref snapshot");
+        Ok(GitHistoryRefsResult {
+            status,
+            graph_revision: state.graph_revision,
+            references: project_references(&references.references),
+            remotes: project_remotes(&references.remotes),
+            branches,
+        })
+    }
+
     pub(super) fn graph(
         &self,
         connection_id: u64,
@@ -992,7 +1024,17 @@ impl GitRepositoryRuntime {
                 }
             }
         };
-        Ok(project_graph(graph, next_cursor))
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let status = state.status.as_ref().expect("accepted graph status");
+        let references = state.references.as_ref().expect("accepted graph refs");
+        let mut result = project_graph(graph, next_cursor, status, state.graph_revision);
+        // A retained traversal owns commits, while decorations always come from the current snapshot.
+        result.references = project_references(&references.references);
+        result.remotes = project_remotes(&references.remotes);
+        Ok(result)
     }
 
     pub(super) fn close_connection(&self, connection_id: u64) {
@@ -1403,6 +1445,25 @@ impl GitRepositoryRuntime {
                 .status
                 .as_ref()
                 .is_none_or(|current| current.head != projected.head);
+        let mut graph_roots = references
+            .references
+            .iter()
+            .map(|reference| reference.object_id().to_owned())
+            .collect::<Vec<_>>();
+        match &projected.head {
+            GitHeadDto::Branch { object_id, .. } | GitHeadDto::Detached { object_id } => {
+                graph_roots.push(object_id.clone())
+            }
+            GitHeadDto::Unborn { .. } => {}
+        }
+        graph_roots.sort();
+        graph_roots.dedup();
+        // Pruned or non-commit objects cannot prove equivalence; invalidate conservatively.
+        let graph_changed = state.repository.as_ref() != Some(&repository)
+            || !self
+                .service
+                .same_graph_roots(&repository, &state.graph_roots, &graph_roots)
+                .unwrap_or(false);
         let unchanged = !history_changed
             && state
                 .status
@@ -1425,11 +1486,18 @@ impl GitRepositoryRuntime {
                 .expect("Git history revision overflowed");
         }
         projected.history_revision = state.history_revision;
+        if graph_changed {
+            state.graph_revision = state
+                .graph_revision
+                .checked_add(1)
+                .expect("Git graph revision overflowed");
+        }
+        state.graph_roots = graph_roots;
         state.repository = Some(repository);
         state.references = Some(references);
         state.status = Some(projected.clone());
         drop(state);
-        if had_state && history_changed {
+        if had_state && graph_changed {
             self.invalidate_graphs()?
         }
         self.updates.publish_git_status_changed(projected.clone());
@@ -1974,8 +2042,16 @@ fn repository_descriptor(
     })
 }
 
-fn project_graph(graph: GitGraph, next_cursor: Option<String>) -> GitGraphResult {
+fn project_graph(
+    graph: GitGraph,
+    next_cursor: Option<String>,
+    status: &GitStatusResult,
+    graph_revision: u64,
+) -> GitGraphResult {
     GitGraphResult {
+        stream_instance_id: status.stream_instance_id.clone(),
+        history_revision: status.history_revision,
+        graph_revision,
         commits: graph
             .commits()
             .iter()
@@ -1986,42 +2062,48 @@ fn project_graph(graph: GitGraph, next_cursor: Option<String>) -> GitGraphResult
                 subject: commit.subject().into(),
             })
             .collect(),
-        references: graph
-            .references()
-            .iter()
-            .map(|reference| GitReferenceDto {
-                name: reference.name().into(),
-                object_id: reference.object_id().into(),
-                kind: match reference.kind() {
-                    GitReferenceKind::LocalBranch => GitReferenceKindDto::LocalBranch,
-                    GitReferenceKind::RemoteBranch => GitReferenceKindDto::RemoteBranch,
-                    GitReferenceKind::Tag => GitReferenceKindDto::Tag,
-                },
-                remote_name: reference.remote_name().map(Into::into),
-                current: reference.is_current(),
-            })
-            .collect(),
-        remotes: graph
-            .remotes()
-            .iter()
-            .map(|remote| GitRemoteDto {
-                name: remote.name().into(),
-                identity: remote.identity().map(|identity| GitRepositoryIdentityDto {
-                    provider: match identity.provider() {
-                        GitRemoteProvider::Github => GitRemoteProviderDto::Github,
-                        GitRemoteProvider::Gitlab => GitRemoteProviderDto::Gitlab,
-                        GitRemoteProvider::Bitbucket => GitRemoteProviderDto::Bitbucket,
-                        GitRemoteProvider::Other => GitRemoteProviderDto::Other,
-                    },
-                    host: identity.host().into(),
-                    owner: identity.owner().into(),
-                    repository: identity.repository().into(),
-                }),
-            })
-            .collect(),
+        references: project_references(graph.references()),
+        remotes: project_remotes(graph.remotes()),
         has_more: graph.has_more(),
         next_cursor,
     }
+}
+
+fn project_references(references: &[ash_git::GitReference]) -> Vec<GitReferenceDto> {
+    references
+        .iter()
+        .map(|reference| GitReferenceDto {
+            name: reference.name().into(),
+            object_id: reference.object_id().into(),
+            kind: match reference.kind() {
+                GitReferenceKind::LocalBranch => GitReferenceKindDto::LocalBranch,
+                GitReferenceKind::RemoteBranch => GitReferenceKindDto::RemoteBranch,
+                GitReferenceKind::Tag => GitReferenceKindDto::Tag,
+            },
+            remote_name: reference.remote_name().map(Into::into),
+            current: reference.is_current(),
+        })
+        .collect()
+}
+
+fn project_remotes(remotes: &[ash_git::GitRemote]) -> Vec<GitRemoteDto> {
+    remotes
+        .iter()
+        .map(|remote| GitRemoteDto {
+            name: remote.name().into(),
+            identity: remote.identity().map(|identity| GitRepositoryIdentityDto {
+                provider: match identity.provider() {
+                    GitRemoteProvider::Github => GitRemoteProviderDto::Github,
+                    GitRemoteProvider::Gitlab => GitRemoteProviderDto::Gitlab,
+                    GitRemoteProvider::Bitbucket => GitRemoteProviderDto::Bitbucket,
+                    GitRemoteProvider::Other => GitRemoteProviderDto::Other,
+                },
+                host: identity.host().into(),
+                owner: identity.owner().into(),
+                repository: identity.repository().into(),
+            }),
+        })
+        .collect()
 }
 
 fn project_status(

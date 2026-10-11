@@ -168,6 +168,57 @@ impl GitGraphCursor {
 }
 
 impl GitClient {
+    /// Compares reachable commits without enumerating either history to the caller.
+    pub async fn same_graph_roots(
+        &self,
+        repository: &GitRepository,
+        previous: &[String],
+        current: &[String],
+    ) -> GitResult<bool> {
+        if previous == current {
+            return Ok(true);
+        }
+        // A union is unchanged exactly when every root is reachable from the other union.
+        // Compare only changed roots. Limited rev-list walks can misclassify ancestors when
+        // commit dates go backwards; merge-base performs an ancestry check instead.
+        for (roots, candidates) in [(previous, current), (current, previous)] {
+            let known = candidates
+                .iter()
+                .map(String::as_str)
+                .collect::<std::collections::HashSet<_>>();
+            for root in roots {
+                if known.contains(root.as_str()) {
+                    continue;
+                }
+                let mut covered = false;
+                for candidate in candidates {
+                    let output = self
+                        .run_query_unchecked(
+                            repository.worktree_root(),
+                            [
+                                "merge-base",
+                                "--is-ancestor",
+                                root.as_str(),
+                                candidate.as_str(),
+                            ],
+                        )
+                        .await?;
+                    if output.status.success() {
+                        covered = true;
+                        break;
+                    }
+                    if output.status.code() != Some(1) {
+                        output.require_success()?;
+                    }
+                }
+                if !covered {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+
     /// Starts one repository graph traversal with refs and remotes captured once.
     pub async fn start_graph(&self, repository: &GitRepository) -> GitResult<GitGraphCursor> {
         let references = self.references(repository).await?;

@@ -15,6 +15,25 @@ import { IAppServerApi } from '../../../../../platform/agentHost/common/appServe
 import { normalizeExtensionHostSnapshot } from '../../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type IExtensionHostApi, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 
+import { createExtensionBackendApi } from '../../../../../platform/agentHost/browser/extensionBackendApi.js';
+import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
+
+test('extension backend routes decode parameters before using the protocol connection', async () => {
+	const requests: unknown[] = [];
+	const connection = { request: async (definition: unknown, params: unknown) => { requests.push({ definition, params }); return null; } } as unknown as AppServerProtocolClient;
+	const backend = createExtensionBackendApi(connection);
+	const signal = new AbortController().signal;
+	await assert.rejects(backend.request('not/a/method', {}, signal), /Unknown extension backend route/);
+	await assert.rejects(backend.request('git/status', 'not an object', signal));
+	assert.deepEqual(requests, []);
+	assert.equal(await backend.request('git/status', { repositoryId: null }, signal), null);
+	assert.deepEqual(requests, [{ definition: { method: 'git/status' }, params: { repositoryId: null } }]);
+	const cancelled = new AbortController();
+	cancelled.abort();
+	await assert.rejects(backend.request('git/status', { repositoryId: null }, cancelled.signal));
+	assert.equal(requests.length, 1);
+});
+
 class RemoteHost extends Disposable implements IExtensionHostApi {
 	readonly instantiation = this._register(new InstantiationService());
 	private readonly changes = this._register(new Emitter<number>());

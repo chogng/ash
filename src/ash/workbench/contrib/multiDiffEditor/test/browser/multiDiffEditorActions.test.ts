@@ -17,6 +17,9 @@ import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
+import { commandActionLabel } from '../../../../../platform/action/common/action.js';
+import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 
 test('MultiDiff Action2 contributions use active-editor context and route to the active pane', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -34,6 +37,8 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 			MultiDiffGoToNextChangeCommandId,
 			MultiDiffGoToPreviousChangeAction,
 			MultiDiffGoToPreviousChangeCommandId,
+			MultiDiffToggleCollapseUnchangedRegionsAction,
+			MultiDiffToggleCollapseUnchangedRegionsCommandId,
 		} = await import('../../browser/multiDiffEditorActions.js');
 		const { MULTI_DIFF_EDITOR_ID } = await import('../../browser/multiDiffEditorInput.js');
 		const { MultiDiffEditor } = await import('../../browser/multiDiffEditor.js');
@@ -77,6 +82,10 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 			public override expandAll(): void {
 				this.calls.push('expand');
 			}
+
+			public override toggleCollapseUnchangedRegions(): void {
+				this.calls.push('toggleUnchanged');
+			}
 		}
 
 		using registrations = new DisposableStore();
@@ -85,6 +94,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		registrations.add(registerAction2(MultiDiffCollapseAllAction));
 		registrations.add(registerAction2(MultiDiffExpandAllAction));
 		registrations.add(registerAction2(MultiDiffGoToFileAction));
+		registrations.add(registerAction2(MultiDiffToggleCollapseUnchangedRegionsAction));
 		const services = registrations.add(createTestComponentServices(undefined, undefined, browser.window.document));
 		const pane = services.createInstance(TrackingMultiDiffEditor);
 		registrations.add(pane);
@@ -104,8 +114,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		assert.deepEqual(
 			menus.getMenuActions(MenuId.EditorTitle).map(([group, actions]) => [group, actions.map((action) => action.id)]),
 			[
-				['navigation', [MultiDiffGoToPreviousChangeCommandId, MultiDiffGoToNextChangeCommandId, MultiDiffGoToFileCommandId]],
-				['4_collapse', [MultiDiffCollapseAllCommandId, MultiDiffExpandAllCommandId]],
+				['navigation', [MultiDiffGoToPreviousChangeCommandId, MultiDiffGoToNextChangeCommandId, MultiDiffToggleCollapseUnchangedRegionsCommandId, MultiDiffGoToFileCommandId, MultiDiffCollapseAllCommandId, MultiDiffExpandAllCommandId]],
 			],
 		);
 		const targetInput = { resource: URI.parse('file:///workspace/src/first.ts') };
@@ -120,8 +129,15 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		await commands.executeCommand(MultiDiffGoToPreviousChangeCommandId);
 		await commands.executeCommand(MultiDiffCollapseAllCommandId);
 		await commands.executeCommand(MultiDiffExpandAllCommandId);
-		assert.deepEqual(pane.calls, ['next', 'previous', 'collapse', 'expand']);
+		await commands.executeCommand(MultiDiffToggleCollapseUnchangedRegionsCommandId);
+		assert.deepEqual(pane.calls, ['next', 'previous', 'collapse', 'expand', 'toggleUnchanged']);
+		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		setNlsMessages(chinese.locale, chinese.bundles);
+		assert.deepEqual([
+			new MultiDiffCollapseAllAction(), new MultiDiffExpandAllAction(), new MultiDiffToggleCollapseUnchangedRegionsAction(),
+		].map(action => commandActionLabel(action.desc.title)), ['折叠所有差异', '展开所有差异', '切换折叠未变更区域']);
 	} finally {
+		resetNlsResolver();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
 		browser.window.close();
 	}

@@ -745,11 +745,13 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 			{ label: 'added.ts', before: '', after: 'after\n', readOnly: [true, true] },
 			{ label: 'deleted.ts', before: 'before\n', after: '', readOnly: [true, true] },
 			{ label: 'old.ts → renamed.ts', before: 'before\n', after: 'after\n', readOnly: [true, true] },
+			{ label: 'image.png', before: '', after: '', readOnly: [true, true] },
 		]);
 		assert.ok(input.items[3].original.resource.path.endsWith('/old.ts'));
 		assert.ok(input.items[0].original.resource.path.includes(parentId));
 		assert.deepEqual(opened[0].options, { pinned: true });
-		assert.equal(notifications.getNotifications()[0].message, '1 个二进制文件无法在文本比较中显示。');
+		assert.equal(input.items[4].binary, true);
+		assert.deepEqual(notifications.getNotifications(), []);
 		assert.equal(requests.length, 6);
 		assert.ok(requests.every(request => request.id === objectId && request.repository === 'repo-1'));
 		const historyItem = (await history.viewService.activeRepository!.provider.historyProvider!.provideHistoryItems({ limit: 1 }))![0];

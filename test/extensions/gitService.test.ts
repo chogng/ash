@@ -7,7 +7,7 @@ import { test, suiteTeardown } from "mocha";
 import { toDisposable } from "../../src/ash/base/common/lifecycle.js";
 import { URI } from "../../src/ash/base/common/uri.js";
 import type { IAppServerApi, IServerEventApi } from "../../src/ash/platform/agentHost/common/appServerApi.js";
-import type { GitRepositoriesResult, GitStatusResult, ServerNotification } from '../../.build/protocol/typescript/index.js';
+import type { GitRepositoriesResult, GitStatusResult, GitHistoryRefsResult, ServerNotification } from '../../.build/protocol/typescript/index.js';
 import { NullLoggerService } from '../../src/ash/platform/log/common/log.js';
 import type { IGitApi } from "../../extensions/git/browser/backend.js";
 import { WorkbenchConfigurationService } from '../../src/ash/workbench/services/configuration/browser/configurationService.js';
@@ -59,7 +59,7 @@ test('Git history retires an obsolete query without clearing the replacement que
 	assert.match((await stale).message, /Invalidated history cursor/);
 	const shared = history.provideHistoryItems({ limit: 1 });
 	assert.equal(queries, 2, 'The obsolete query cannot clear the current in-flight query');
-	await replacement.complete({ commits: [{ objectId: 'current', parentObjectIds: [], timestampSeconds: 1, subject: 'Current' }], references: [], remotes: [], hasMore: false, nextCursor: undefined });
+	await replacement.complete({ streamInstanceId: 'stream', historyRevision: 2, graphRevision: 1, commits: [{ objectId: 'current', parentObjectIds: [], timestampSeconds: 1, subject: 'Current' }], references: [], remotes: [], hasMore: false, nextCursor: undefined });
 	const [items, sharedItems] = await Promise.all([fresh, shared]);
 	assert.equal(items[0]?.id, 'current');
 	assert.deepEqual(sharedItems, items);
@@ -67,7 +67,7 @@ test('Git history retires an obsolete query without clearing the replacement que
 	assert.equal(queries, 2);
 });
 
-test('Git history retains cached pages for file edits and stage/unstage, and reloads only for history changes', async () => {
+test('Git history retains cached pages for file edits and stage/unstage, and reloads only for commit-set changes', async () => {
 	let notify: (event: ServerNotification) => void = () => { throw new Error('missing subscription'); };
 	let status: GitStatusResult = { repositoryId: 'root', streamInstanceId: 'stream', revision: 1, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'commit-0', upstream: null }, changes: [] };
 	const queries: Array<{ limit: number; cursor?: string; }> = [];
@@ -76,11 +76,13 @@ test('Git history retains cached pages for file edits and stage/unstage, and rel
 		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }] }),
 		status: async () => status,
 		branches: async () => { branchQueries++; return { branches: [] }; },
+		historyRefs: async () => ({ status, graphRevision: status.historyRevision, references: [], remotes: [], branches: [] }),
 		graph: async (query: { limit: number; cursor?: string; }) => {
 			queries.push(query);
 			const start = Number(query.cursor ?? 0);
 			const end = Math.min(160, start + query.limit);
 			return {
+				streamInstanceId: status.streamInstanceId, historyRevision: status.historyRevision, graphRevision: status.historyRevision,
 				commits: Array.from({ length: end - start }, (_, offset) => ({ objectId: `commit-${start + offset}`, parentObjectIds: [`commit-${start + offset + 1}`], timestampSeconds: 1, subject: `Commit ${start + offset}` })),
 				references: [], remotes: [], hasMore: end < 160, nextCursor: end < 160 ? String(end) : null,
 			};
@@ -115,9 +117,12 @@ test('Git history retains cached pages for file edits and stage/unstage, and rel
 	assert.equal(queries.at(-1)?.cursor, '150', 'Pagination continues from the retained cache');
 	for (let revision = 2; revision <= 4; revision++) {
 		status = { ...status, revision: status.revision + 1, historyRevision: revision };
+		const changed = new DeferredPromise<void>();
+		using changedListener = history.onDidChange(() => changed.complete());
 		notify({ method: 'git/statusChanged', params: { status } });
+		await changed.p;
 		await history.provideHistoryItems({ limit: 101 });
-		assert.equal(changes, revision - 1, 'Ref changes reload history even with an unchanged HEAD');
+		assert.equal(changes, revision - 1, 'Changed reachable commits reload history even with an unchanged HEAD');
 		assert.equal(queries.length, 4 + 3 * (revision - 1));
 	}
 	const beforeRestart = queries.length;
@@ -131,6 +136,119 @@ test('Git history retains cached pages for file edits and stage/unstage, and rel
 	history.refresh();
 	await history.provideHistoryItems({ limit: 101 });
 	assert.equal(queries.length, beforeRestart + 6, 'Explicit refresh still rereads history');
+});
+
+test('Git history updates refs without traversing cached pages and fences stale pagination and ref responses', async () => {
+	let notify!: (event: ServerNotification) => void;
+	let status: GitStatusResult = { repositoryId: 'root', streamInstanceId: 'stream', revision: 1, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'commit-0', upstream: null }, changes: [] };
+	const queries: Array<{ limit: number; cursor?: string; }> = [];
+	let branchQueries = 0;
+	let refsQueries = 0;
+	let graphRevision = 1;
+	let obsoleteStatus: GitStatusResult | undefined;
+	let pendingPage: DeferredPromise<Awaited<ReturnType<IGitApi['graph']>>> | undefined;
+	let pendingRefs: DeferredPromise<GitHistoryRefsResult> | undefined;
+	let tagTarget = 'commit-75';
+	const paginationStarted = new DeferredPromise<void>();
+	const referencesStarted = new DeferredPromise<void>();
+	const snapshot = (): GitHistoryRefsResult => ({
+		status, graphRevision, branches: [],
+		references: [{ name: 'reviewed', objectId: tagTarget, kind: 'tag', remoteName: null, current: false }],
+		remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'fixture', repository: `revision-${status.historyRevision}` } }],
+	});
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }] }),
+		status: async () => obsoleteStatus ?? status,
+		branches: async () => { branchQueries++; return { branches: [] }; },
+		historyRefs: async () => { refsQueries++; if (pendingRefs) { referencesStarted.complete(); return pendingRefs.p; } return snapshot(); },
+		graph: async (query: { limit: number; cursor?: string; }) => {
+			queries.push(query);
+			if (pendingPage) { paginationStarted.complete(); return pendingPage.p; }
+			const start = Number(query.cursor ?? 0);
+			const end = Math.min(160, start + query.limit);
+			return {
+				streamInstanceId: status.streamInstanceId, historyRevision: status.historyRevision, graphRevision,
+				commits: Array.from({ length: end - start }, (_, offset) => ({ objectId: `commit-${start + offset}`, parentObjectIds: [`commit-${start + offset + 1}`], timestampSeconds: 1, subject: `Commit ${start + offset}` })),
+				references: snapshot().references, remotes: snapshot().remotes, hasMore: end < 160, nextCursor: end < 160 ? String(end) : null,
+			};
+		},
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi: IServerEventApi = { subscribe: listener => { notify = listener; return toDisposable(() => undefined); } };
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	await service.listRepositories();
+	using history = new GitHistoryProvider(service, 'root');
+	let changes = 0;
+	using listener = history.onDidChange(() => changes++);
+	await history.provideHistoryItems({ limit: 51 });
+	assert.equal(queries.length, 2);
+	const decorated = new DeferredPromise<readonly import('../../src/ash/workbench/contrib/scm/common/history.js').ISCMHistoryItem[]>();
+	using refsListener = history.onDidChangeHistoryItemRefs(items => decorated.complete(items));
+	status = { ...status, revision: 2, historyRevision: 2 };
+	notify({ method: 'git/statusChanged', params: { status } });
+	const items = await decorated.p;
+	assert.equal(items.length, 100);
+	assert.equal(items[75]?.references?.[0]?.name, 'reviewed');
+	assert.match(items[75]?.remoteLinks?.[0]?.uri.toString() ?? '', /revision-2\/commit\/commit-75/);
+	assert.deepEqual([queries.length, branchQueries, refsQueries, changes], [2, 1, 1, 0]);
+
+	pendingPage = new DeferredPromise();
+	const pagination = history.provideHistoryItems({ skip: 100, limit: 50 });
+	await paginationStarted.p;
+	assert.equal(queries.at(-1)?.cursor, '100');
+	const old = snapshot();
+	pendingRefs = new DeferredPromise();
+	status = { ...status, revision: 3, historyRevision: 3, head: { type: 'detached', objectId: 'commit-130' } };
+	tagTarget = 'commit-130';
+	notify({ method: 'git/statusChanged', params: { status } });
+	const stale = snapshot();
+	await referencesStarted.p;
+	status = { ...status, revision: 4, historyRevision: 4, head: { type: 'branch', name: 'topic', objectId: 'commit-140', upstream: null } };
+	tagTarget = 'commit-140';
+	notify({ method: 'git/statusChanged', params: { status } });
+	const latest = new DeferredPromise<readonly import('../../src/ash/workbench/contrib/scm/common/history.js').ISCMHistoryItem[]>();
+	let decorationEvents = 0;
+	using latestListener = history.onDidChangeHistoryItemRefs(items => { decorationEvents++; latest.complete(items); });
+	const staleReply = pendingRefs;
+	pendingRefs = undefined;
+	await staleReply.complete(stale);
+	await latest.p;
+	assert.deepEqual(history.historyItemRef.get(), { id: 'localBranch:topic', name: 'topic', revision: 'commit-140', category: 'localBranch', upstream: undefined });
+	assert.equal(refsQueries, 3, 'Coalesced notifications reread a stale snapshot once');
+	assert.equal(decorationEvents, 1, 'A stale refs reply never decorates the graph');
+	assert.equal(changes, 0);
+	obsoleteStatus = old.status;
+	await pendingPage.complete({
+		streamInstanceId: 'stream', historyRevision: 2, graphRevision: 1,
+		commits: Array.from({ length: 50 }, (_, offset) => ({ objectId: `commit-${100 + offset}`, parentObjectIds: [`commit-${101 + offset}`], timestampSeconds: 1, subject: `Commit ${100 + offset}` })),
+		references: old.references, remotes: old.remotes, hasMore: true, nextCursor: '150',
+	});
+	pendingPage = undefined;
+	const page = await pagination;
+	assert.equal(history.historyItemRef.get()?.revision, 'commit-140', 'A pre-checkout status and page cannot restore detached HEAD');
+	obsoleteStatus = undefined;
+	assert.equal(page[40]?.references?.[0]?.name, 'reviewed', 'Late pagination uses the latest reference snapshot');
+	assert.equal(page[30]?.references?.length, 0, 'Moved refs disappear from their previous commit');
+	assert.match(page[40]?.remoteLinks?.[0]?.uri.toString() ?? '', /revision-4\/commit\/commit-140/);
+	const all = await history.provideHistoryItems({ limit: 160 });
+	assert.equal(queries.at(-1)?.cursor, '150');
+	assert.equal(new Set(all.map(item => item.id)).size, 160);
+	assert.deepEqual(all.map(item => item.id), Array.from({ length: 160 }, (_, index) => `commit-${index}`));
+	assert.equal(all[75]?.references?.length, 0);
+	assert.equal(branchQueries, 1);
+
+	graphRevision = 2;
+	status = { ...status, revision: 5, historyRevision: 5 };
+	const invalidated = new DeferredPromise<void>();
+	using invalidationListener = history.onDidChange(() => invalidated.complete());
+	notify({ method: 'git/statusChanged', params: { status } });
+	await invalidated.p;
+	await history.provideHistoryItems({ limit: 1 });
+	assert.equal(changes, 1, 'A changed commit set retires the retained traversal');
+	assert.equal(queries.at(-1)?.cursor, undefined);
+	assert.equal(branchQueries, 2);
 });
 
 test('GitService preserves legacy commit parameters and forwards explicit commit options to the captured repository', async () => {

@@ -1,14 +1,12 @@
 import { getBrowserTextModelService } from '../../../services/textmodelResolver/browser/browserTextModelService.js';
-import { MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widget/diffEditor/commands.js';
-import { ActiveEditorContext } from '../../../common/contextkeys.js';
+import { registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
-import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';
+import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction, MultiDiffToggleCollapseUnchangedRegionsAction } from './multiDiffEditorActions.js';
 import { MultiDiffEditor } from './multiDiffEditor.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
 
@@ -19,13 +17,7 @@ registerAction2(MultiDiffGoToPreviousChangeAction);
 registerAction2(MultiDiffCollapseAllAction);
 registerAction2(MultiDiffExpandAllAction);
 registerAction2(MultiDiffGoToFileAction);
-
-
-MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
-	command: new ToggleCollapseUnchangedRegions().desc,
-	when: ActiveEditorContext.isEqualTo(MULTI_DIFF_EDITOR_ID),
-	group: 'navigation', order: 21,
-});
+registerAction2(MultiDiffToggleCollapseUnchangedRegionsAction);
 
 registerEditorPane({
 	id: MULTI_DIFF_EDITOR_ID,

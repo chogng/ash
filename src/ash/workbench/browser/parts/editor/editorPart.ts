@@ -4,7 +4,7 @@ import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uri
 import type { IAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
-import { createEditorOpenError, isEditorOpenError, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
+import { getEditorWorkingCopies, createEditorOpenError, isEditorOpenError, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 import "./media/editorpart.css";
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { basename } from "../../../../base/common/resources.js";
@@ -835,27 +835,34 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private async confirmEditorClose(group: IEditorGroupView | undefined, input: IResourceEditorInput, pane: IEditorPane, closingGroups: readonly EditorGroupId[] = []): Promise<boolean> {
-		if (this.beforeCloseEditor && !await this.beforeCloseEditor(pane.workingCopy?.resource ?? input.resource)) return false;
-		const workingCopy = pane.workingCopy;
-		if (!workingCopy?.isDirty) return true;
-		// Another open view still owns this dirty document, including a custom view in the same group.
-		if (this._groups.some(host => !closingGroups.includes(host.group.id) && host.group.editors.some(other => other.canRevert && (host.group !== group || other.input !== input) && this.uriIdentity.extUri.isEqual(other.input.resource, input.resource)))) {
-			return true;
+		const copies = getEditorWorkingCopies(pane);
+		if (this.beforeCloseEditor) {
+			for (const resource of copies.length ? copies.map(copy => copy.resource) : [input.resource]) {
+				if (!await this.beforeCloseEditor(resource)) return false;
+			}
 		}
+		// Prompt only for files that lose their last retained editor, including files in other multi-diffs.
+		const dirty = copies.filter(copy => copy.isDirty && !this._groups.some(host =>
+			!closingGroups.includes(host.group.id) && host.group.editors.some(other => {
+				if (host.group === group && other.input === input) return false;
+				const otherPane = host.group.getEditorPane(other.input);
+				return otherPane && getEditorWorkingCopies(otherPane).some(candidate => this.uriIdentity.extUri.isEqual(candidate.resource, copy.resource));
+			})));
+		if (!dirty.length) return true;
 		if (!this.fileDialogService) return false;
-		const label = editorInputLabel(input);
-		const decision = await this.fileDialogService.showSaveConfirm([label], workingCopy.hasExternalChange
+		const labels = [...new Set(dirty.map(copy => editorInputLabel({ resource: copy.resource, label: copy.backupLabel })))];
+		const decision = await this.fileDialogService.showSaveConfirm(labels, dirty.some(copy => copy.hasExternalChange)
 			? "The file has also changed on disk. Saving may require resolving a conflict." : undefined);
 		if (decision === ConfirmResult.CANCEL) return false;
 		const controller = new AbortController();
 		if (decision === ConfirmResult.DONT_SAVE) {
-			await workingCopy.revert(controller.signal);
-			return !workingCopy.isDirty;
+			for (const copy of dirty) await copy.revert(controller.signal);
+			return dirty.every(copy => !copy.isDirty);
 		}
 		if (group && input.resource.scheme === 'untitled') return !!await this.saveEditor(group, input, pane);
-		await workingCopy.save(controller.signal);
+		for (const copy of dirty) await copy.save(controller.signal);
 		if (group && !group.inputs.some(candidate => this.isSameEditor(candidate, input))) return true;
-		return !workingCopy.isDirty;
+		return dirty.every(copy => !copy.isDirty);
 	}
 
 	private async saveEditor(group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane): Promise<IResourceEditorInput | undefined> {
@@ -864,7 +871,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const target = await this.saveAsResource(editorInputLabel(input));
 		if (!target || this.isDisposed || !group.inputs.includes(input)) return undefined;
 		await pane.saveAs(target);
-		if (this.isDisposed || !group.inputs.includes(input) || pane.workingCopy?.isDirty) return undefined;
+		if (this.isDisposed || !group.inputs.includes(input) || getEditorWorkingCopies(pane).some(copy => copy.isDirty)) return undefined;
 		const replacement: IResourceEditorInput = {
 			resource: target,
 			label: editorInputLabel({ resource: target }),

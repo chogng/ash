@@ -3013,6 +3013,7 @@ impl AppServer {
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(&request.params),
             Some(ClientMethod::GitBranchList) => self.git_branch_list(&request.params),
             Some(ClientMethod::GitHistory) => self.git_history(&request.params),
+            Some(ClientMethod::GitHistoryRefs) => self.git_history_refs(&request.params),
             Some(ClientMethod::GitGraph) => {
                 self.git_graph(connection.connection_id, &request.params)
             }

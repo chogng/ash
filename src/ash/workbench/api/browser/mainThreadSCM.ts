@@ -252,6 +252,8 @@ interface ProviderSnapshot {
 	readonly statusBarCommands: readonly Record<string, JsonValue>[];
 	readonly historyRef: ISCMHistoryItemRef | undefined;
 	readonly historyRevision: number;
+	readonly historyRefsRevision: number;
+	readonly historyRefsItems: readonly ISCMHistoryItem[];
 	readonly hasHistory: boolean;
 	readonly hasMerge: boolean;
 	readonly inputRevision: number;
@@ -263,6 +265,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private readonly decorationChanged = this._register(new Emitter<readonly URI[]>());
 	public readonly onDidChangeDecorations = this.decorationChanged.event;
 	private readonly historyChanged = this._register(new Emitter<void>());
+	private readonly historyRefsChanged = this._register(new Emitter<readonly ISCMHistoryItem[]>());
 	private readonly historyRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
 	private draft: string;
 	private draftRevision = 0;
@@ -276,6 +279,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		if (snapshot.hasHistory) {
 			this.historyProvider = {
 				onDidChange: this.historyChanged.event, historyItemRef: this.historyRef,
+				onDidChangeHistoryItemRefs: this.historyRefsChanged.event,
 				refresh: () => { void this.call('history', { methodName: 'refresh', arguments: [] }).catch(this.reportError); },
 				provideHistoryItems: async (options) => array(await this.call('history', { methodName: 'provideHistoryItems', arguments: [options] })).map(parseHistoryItem),
 				resolveHistoryItemDetails: async (id) => parseDetails(await this.call('history', { methodName: 'resolveHistoryItemDetails', arguments: [id] })),
@@ -361,13 +365,13 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			this.draft = string(value.input.value);
 		}
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
+		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		this.snapshot = value;
 		this.historyRef.set(value.historyRef);
 		this.changed.fire();
 		this.decorationChanged.fire([]);
-		if (historyChanged) {
-			this.historyChanged.fire();
-		}
+		if (historyChanged) { this.historyChanged.fire(); }
+		else if (historyRefsChanged) { this.historyRefsChanged.fire(value.historyRefsItems); }
 	}
 }
 function registrationKey(source: ExtensionClientSource, id: string): string { return JSON.stringify([source.extensionId, source.activationGeneration, source.incarnation, id]); }
@@ -431,19 +435,12 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 		}
 	}
 	const statusBarCommands = array(entry.statusBarCommands).map(object);
-	for (const command of statusBarCommands) {
-		string(command.id);
-		string(command.text);
-		string(command.ariaLabel);
-		string(command.tooltip);
-		number(command.priority);
-		optionalString(command.icon);
-		optionalString(command.compactGroup);
-	}
-	if (entry.rootUri != null) {
-		URI.parse(string(entry.rootUri));
-	}
-	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRevision: number(entry.historyRevision), hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
+	for (const command of statusBarCommands) { string(command.id); string(command.text); string(command.ariaLabel); string(command.tooltip); number(command.priority); optionalString(command.icon); optionalString(command.compactGroup); }
+	if (entry.rootUri != null) { URI.parse(string(entry.rootUri)); }
+	const historyRefsRevision = entry.historyRefsRevision == null ? 0 : number(entry.historyRefsRevision);
+	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) { throw new TypeError('Invalid SCM history refs revision'); }
+	const historyRefsItems = entry.historyRefsItems == null ? [] : array(entry.historyRefsItems).map(parseHistoryItem);
+	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }

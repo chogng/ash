@@ -32,7 +32,7 @@ import { ISessionsService, type SessionsViewSelection } from '../../services/ses
 import { ChangesViewPane } from '../../contrib/changes/browser/changesView.js';
 import { setNlsMessages, resetNlsResolver } from '../../../nls.js';
 import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
-import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
+import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
 
 for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and immutable review across refresh and ownership changes (${locale})`, async () => {
 	setNlsMessages(locale, builtinLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
@@ -159,3 +159,22 @@ function changes(id: string): TurnChangesReadResult {
 }
 
 async function settle(): Promise<void> { await new Promise<void>(resolve => setImmediate(resolve)); }
+
+
+test('Turn review and commit preview retain binary-only files without text placeholders', async () => {
+	const details = changes('session');
+	const summary = details.summary;
+	const file = { ...details.files[0], path: 'image.bin', binary: true };
+	const chat = {
+		listTurnChanges: async () => [summary],
+		readTurnChange: async () => ({ summary, files: [file] }),
+		readTurnChangeFile: async () => ({ path: file.path, binary: true, truncated: false, before: undefined, after: undefined }),
+		readTurnCommitFile: async () => ({ path: file.path, binary: true, truncated: false, before: undefined, after: undefined }),
+	} as unknown as IChatService;
+	const review = await createTurnMultiDiffEditorInput(chat, { session: { sessionId: 'session' }, threadId: 'thread' } as never, 'currentTurn');
+	const preview = await createTurnCommitPreviewInput(chat, 'session', 'thread', { commitId: 'commit', targetBranch: 'main', message: 'Binary changes', files: [file], warnings: [] } as never);
+	for (const input of [review, preview]) {
+		assert.deepEqual(input.items.map(item => ({ binary: item.binary, before: item.original.initialText, after: item.modified.initialText })), [{ binary: true, before: '', after: '' }]);
+		assert.equal(input.readOnly, true);
+	}
+});

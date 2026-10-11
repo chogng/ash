@@ -253,6 +253,24 @@ for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light'] as const) {
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
+	test(`diff center gutter aligns deleted blocks and retains other hunks during selection (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => {
+			const shared = 'shared\n'.repeat(20);
+			window.ashDiffIntegration.setComparisonText(`first\ndeleted\n${shared}before\nlast`, `first\n${shared}after\nlast`);
+		});
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const items = page.locator('#single .ash-diff-gutter-item');
+		await expect(items).toHaveCount(2);
+		const positions = await page.evaluate(() => window.ashDiffIntegration.linePositions(2, 2));
+		const top = await items.first().evaluate(node => Number.parseFloat((node as HTMLElement).style.top));
+		expect(top).toBe(positions.originalTop);
+		expect(top).toBeLessThan(positions.modifiedTop);
+		await page.evaluate(() => window.ashDiffIntegration.selectModified([22, 1, 22, 6]));
+		await expect(items).toHaveCount(2);
+		await expect(page.locator('#single .ash-diff-gutter').getByRole('button', { name: localized(locale, 'Revert selected changes', '还原选中的更改'), exact: true, includeHidden: true })).toHaveCount(1);
+	});
+
 	test(`multi diff updates configuration and uses scoped file menus (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
@@ -317,47 +335,53 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/returned.ts revision 5\nshared']);
 	});
 
-	test(`history multi-diff shows static commit information and preserves keyboard actions (${locale})`, async ({ page }, testInfo) => {
+	test(`history multi-diff uses the editor title toolbar and preserves keyboard actions (${locale})`, async ({ page }, testInfo) => {
 		await page.setViewportSize({ width: 1200, height: 700 });
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('history'));
 		const host = page.locator('#title-comparison');
-		const label = host.locator('.ash-multi-diff-editor-source-label');
-		const toolbar = host.locator('.stanza-multi-diff-editor-toolbar');
 		await expect(host.locator('.ash-editor-breadcrumbs')).toBeHidden();
-		await expect(label).toHaveText('98246c6 · Simplify diff editor update method and improve accessibility');
-		await expect(toolbar.locator('.stanza-multi-diff-editor-source-toolbar')).toHaveCount(0);
-		await expect(toolbar.getByRole('button', { name: /98246c6/ })).toHaveCount(0);
-		const files = toolbar.getByRole('button', { name: localized(locale, 'Files', '文件'), exact: true });
-		await files.focus();
-		await files.press('Enter');
-		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.focusedHistoryView())).toBe('ash.explorer');
-		const more = toolbar.locator('.ash-toolbar-more-actions button');
-		await more.focus();
-		await more.press('Enter');
-		await page.getByRole('menuitem', { name: localized(locale, 'Collapse All', '全部折叠'), exact: true }).press('Enter');
+		await expect(host.getByRole('tab')).toContainText('98246c6 · Simplify diff editor update method and improve accessibility');
+		await expect(host.locator('.stanza-multi-diff-editor-toolbar')).toHaveCount(0);
+		const collapse = host.getByRole('button', { name: localized(locale, 'Collapse All Diffs', '折叠所有差异'), exact: true });
+		const expand = host.getByRole('button', { name: localized(locale, 'Expand All Diffs', '展开所有差异'), exact: true });
 		const section = host.locator('.stanza-multi-diff-editor-header-toggle');
-		await expect(section).toHaveAttribute('aria-expanded', 'false');
-		await more.press('Enter');
-		await page.getByRole('menuitem', { name: localized(locale, 'Expand All', '全部展开'), exact: true }).press('Enter');
 		await expect(section).toHaveAttribute('aria-expanded', 'true');
-		await more.press('Enter');
-		await page.keyboard.press('Escape');
-		await expect(more).toBeFocused();
+		const file = host.locator('.stanza-multi-diff-editor-section');
+		expect(await collapse.evaluate(element => element.getBoundingClientRect().bottom)).toBeLessThanOrEqual(await file.evaluate(element => element.getBoundingClientRect().top));
+		await collapse.focus();
+		await collapse.press('Enter');
+		await expect(section).toHaveAttribute('aria-expanded', 'false');
+		await expand.focus();
+		await expand.press('Enter');
+		await expect(section).toHaveAttribute('aria-expanded', 'true');
+		await expect(expand).toBeFocused();
 		for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light'] as const) {
 			await page.evaluate(themeId => window.ashDiffIntegration.setTitleTheme(themeId), theme);
-			await expect(label).toBeVisible();
-			await expect(label).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+			await expect(collapse).toBeVisible();
+			await expect(collapse).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
 			await testInfo.attach(`history-toolbar-${locale}-${theme}`, { body: await host.screenshot(), contentType: 'image/png' });
 		}
 		await page.evaluate(() => window.ashDiffIntegration.resizeTitleComparison(320));
-		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
-		expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-		await expect(files).toBeVisible();
-		await expect(more).toBeVisible();
-		await label.hover();
-		await expect(page.locator('.ash-hover').filter({ hasText: '98246c6 · Simplify diff editor' })).toBeVisible();
+		await expect(collapse).toBeVisible();
+		await expect(expand).toBeVisible();
+		await expect(host.locator('.stanza-multi-diff-editor-toolbar')).toHaveCount(0);
 		await testInfo.attach(`history-toolbar-${locale}-narrow`, { body: await host.screenshot(), contentType: 'image/png' });
+	});
+
+	test(`multi diff opens files expanded and reveals unchanged code on demand (${locale})`, async ({ page }, testInfo) => {
+		await openDiffPage(page, locale);
+		const shared = Array.from({ length: 36 }, (_, index) => `shared ${index + 1}`);
+		await page.evaluate(([original, modified]) => window.ashDiffIntegration.setComparisonText(original, modified), [shared.join('\n'), [...shared.slice(0, -1), 'changed'].join('\n')]);
+		const section = page.locator('#multi .stanza-multi-diff-editor-section').first();
+		await expect(section.locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'true');
+		const regions = section.locator('.ash-diff-hidden-region');
+		await expect(regions).toHaveCount(2);
+		await expect(section.locator('.stanza-diff-inline-added')).toHaveText('changed');
+		await section.locator('.stanza-diff-editor-side.modified .ash-diff-hidden-region').first().getByRole('button', { name: localized(locale, 'Show all unchanged lines', '显示全部未修改的行'), exact: true }).click();
+		await expect(regions).toHaveCount(0);
+		await expect.poll(() => section.locator('.stanza-diff-editor-side.modified .stanza-editor').evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+		await testInfo.attach(`multi-diff-revealed-${locale}`, { body: await section.screenshot(), contentType: 'image/png' });
 	});
 
 	test(`diff title More Actions runs layout, whitespace and swap commands by keyboard (${locale})`, async ({ page }, testInfo) => {
@@ -516,6 +540,53 @@ for (const bracketPairs of [false, true]) {
 	});
 }
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`multi diff displays binary-only files without code editors (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('binary'));
+		const pane = page.locator('#title-comparison .stanza-multi-diff-editor-pane');
+		const binary = pane.locator('.stanza-multi-diff-editor-item-editor.binary');
+		await expect(binary).toHaveText(localized(locale, 'Binary file changed. Text comparison is unavailable.', '二进制文件已更改，无法进行文本比较。'));
+		await expect(pane.locator('.stanza-editor-input')).toHaveCount(0);
+		await expect(pane.getByRole('button', { name: localized(locale, 'Open File', '打开文件'), exact: true })).toBeVisible();
+		await binary.focus();
+		await expect(binary).toBeFocused();
+		await expect(binary).toHaveCSS('outline-style', 'solid');
+		const header = pane.getByRole('button', { name: /image.bin/ }).first();
+		await header.click();
+		await expect(header).toHaveAttribute('aria-expanded', 'false');
+		await header.click();
+		await expect(binary).toBeVisible();
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toMatchObject({ dirty: false, copies: 0, writes: [], tabs: 1 });
+	});
+
+	test(`multi diff saves collapsed writable files from an inactive tab and retains failed edits (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('writable'));
+		const pane = page.locator('#title-comparison .stanza-multi-diff-editor-pane');
+		for (const name of ['first', 'second']) {
+			const section = pane.locator('.stanza-multi-diff-editor-section').filter({ has: page.getByRole('button', { name: new RegExp(`${name}\\.ts`) }) });
+			const input = section.locator('.stanza-diff-editor-side.modified .stanza-editor-input');
+			await input.focus();
+			await page.keyboard.press('ControlOrMeta+End');
+			await page.keyboard.type(` ${name} edit`);
+			await section.getByRole('button', { name: new RegExp(`${name}\\.ts`) }).click();
+		}
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().dirty)).toBe(true);
+		expect(await page.evaluate(() => window.ashDiffIntegration.closeWritableTitle())).toBe(false);
+		expect(await page.evaluate(() => window.ashDiffIntegration.saveTitleFiles(true))).toBe('Save rejected');
+		expect((await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).dirty).toBe(true);
+		await page.evaluate(() => window.ashDiffIntegration.openOtherTitleFile());
+		const active = (await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).active;
+		expect(await page.evaluate(() => window.ashDiffIntegration.saveTitleFiles())).toBeUndefined();
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toMatchObject({
+			dirty: false, tabs: 2, active, writes: [{ resource: '/workspace/first.ts', text: 'after first edit' }, { resource: '/workspace/second.ts', text: 'after second edit' }],
+		});
+		expect(await page.evaluate(() => window.ashDiffIntegration.closeWritableTitle())).toBe(true);
+		expect((await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).copies).toBe(0);
+	});
+}
+
 test('session Changes retains collapse and scroll through hiding, refresh and deferred restoration', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
@@ -595,6 +666,22 @@ test('diff feature selection reverts only the selected character change', async 
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('first OLD middle NEW last');
 });
 
+test('Git diff center gutter preserves BOM encoding while staging and reverting', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git', 'unstaged', 'utf8bom'));
+	const gutter = page.locator('#title-comparison .stanza-multi-diff-editor-section').first().locator('.ash-diff-gutter');
+	await gutter.getByRole('button', { name: 'Stage change', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([{
+		path: 'src/first.ts', comparison: 'unstaged', repositoryId: 'repo',
+		reviewed: { original: '\uFEFFbefore\nshared', modified: '\uFEFFsrc/first.ts revision 1\nshared', hunks: [] },
+		selection: { kind: 'lines', start: 1, end: 1 },
+	}]);
+	await gutter.getByRole('button', { name: 'Revert change', exact: true }).click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Revert changes', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(2);
+	expect(await page.evaluate(() => (window.ashDiffIntegration.gitGutterCalls[1] as { save: { text: string; encoding: string; }; }).save)).toMatchObject({ text: 'before\nshared', encoding: 'utf8bom' });
+});
+
 test('diff feature gutter menus receive hunk and selection edits and follow scroll', async ({ page }) => {
 	await openDiffPage(page);
 	const lines = Array.from({ length: 60 }, (_, index) => `line ${index}`);
@@ -646,17 +733,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
 		const first = page.locator('#title-comparison .stanza-multi-diff-editor-section').first();
 		const gutter = first.locator('.ash-diff-gutter');
-		const stage = gutter.getByRole('button', { name: localized(locale, 'Stage Change', '暂存更改'), exact: true });
-		const revert = gutter.getByRole('button', { name: localized(locale, 'Revert Change', '还原更改'), exact: true });
+		const stage = gutter.getByRole('button', { name: localized(locale, 'Stage change', '暂存更改'), exact: true });
+		const revert = gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true });
 		await expect(stage).toBeVisible();
 		await expect(revert).toBeVisible();
 		const bounds = await first.evaluate(node => {
 			const original = node.querySelector('.stanza-diff-editor-side.original')!.getBoundingClientRect();
 			const modified = node.querySelector('.stanza-diff-editor-side.modified')!.getBoundingClientRect();
 			const gutter = node.querySelector('.ash-diff-gutter')!.getBoundingClientRect();
-			return { leftGap: gutter.left - original.right, rightGap: modified.left - gutter.right, width: gutter.width };
+			const controls = [...node.querySelectorAll('.ash-diff-gutter button')].map(button => button.getBoundingClientRect());
+			return { leftGap: gutter.left - original.right, rightGap: modified.left - gutter.right, width: gutter.width, controlsFit: controls.every(button => button.top >= gutter.top && button.bottom <= gutter.bottom) };
 		});
-		expect(bounds).toEqual({ leftGap: 0, rightGap: 0, width: 36 });
+		expect(bounds).toEqual({ leftGap: 0, rightGap: 0, width: 36, controlsFit: true });
 		await stage.focus();
 		await page.keyboard.press('Space');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([{
@@ -668,26 +756,48 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.evaluate(() => window.ashDiffIntegration.expireGitGutterSnapshot());
 		await stage.click();
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(2);
-		expect(await page.evaluate(() => window.ashDiffIntegration.gitGutterCalls[1])).toEqual({ error: localized(locale,
-			'Git operation failed: Open the current comparison from Source Control before selecting lines.',
-			'Git 操作失败：请从源代码管理打开当前比较，再选中行。') });
+		expect(await page.evaluate(() => window.ashDiffIntegration.gitGutterCalls[1])).toEqual({
+			error: localized(locale,
+				'Git operation failed: Open the current comparison from Source Control before selecting lines.',
+				'Git 操作失败：请从源代码管理打开当前比较，再选中行。')
+		});
 	});
 
 	test(`Git diff center gutter reverts only the reviewed block after confirmation (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
-		const revert = page.locator('#title-comparison .stanza-multi-diff-editor-section').first().locator('.ash-diff-gutter').getByRole('button', { name: localized(locale, 'Revert Change', '还原更改'), exact: true });
+		const revert = page.locator('#title-comparison .stanza-multi-diff-editor-section').first().locator('.ash-diff-gutter').getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true });
 		await revert.click();
 		const dialog = page.getByRole('dialog');
 		await dialog.getByRole('button', { name: localized(locale, 'Cancel', '取消'), exact: true }).click();
 		expect(await page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([]);
 		await revert.click();
-		await dialog.getByRole('button', { name: localized(locale, 'Revert Changes', '还原更改'), exact: true }).click();
+		await dialog.getByRole('button', { name: localized(locale, 'Revert changes', '还原更改'), exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(1);
 		expect(await page.evaluate(() => {
 			const call = window.ashDiffIntegration.gitGutterCalls[0] as { save: { text: string; encoding: string; expectedRevision: string; resource: { path: string; }; }; };
 			return { text: call.save.text, encoding: call.save.encoding, expectedRevision: call.save.expectedRevision, path: call.save.resource.path };
 		})).toEqual({ text: 'before\nshared', encoding: 'utf8', expectedRevision: 'file-revision', path: '/workspace/src/first.ts' });
+	});
+
+	test(`Git diff center gutter unstages selected lines with per-editor menus (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git', 'staged'));
+		const gutter = page.locator('#title-comparison .stanza-multi-diff-editor-section').first().locator('.ash-diff-gutter');
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Unstage change', '取消暂存更改'), exact: true })).toBeVisible();
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Stage change', '暂存更改'), exact: true })).toHaveCount(0);
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true })).toHaveCount(0);
+		await expect(page.locator('#single .ash-diff-gutter').getByRole('button', { name: localized(locale, 'Unstage change', '取消暂存更改'), exact: true })).toHaveCount(0);
+		await page.evaluate(() => window.ashDiffIntegration.selectTitleModified([1, 1, 1, 27]));
+		const unstage = gutter.getByRole('button', { name: localized(locale, 'Unstage selected lines', '取消暂存选中行'), exact: true });
+		await expect(unstage).toBeVisible();
+		await unstage.focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([{
+			path: 'src/first.ts', comparison: 'staged', repositoryId: 'repo',
+			reviewed: { original: 'before\nshared', modified: 'src/first.ts revision 1\nshared', hunks: [] },
+			selection: { kind: 'lines', start: 1, end: 1 },
+		}]);
 	});
 }
 
@@ -1627,6 +1737,7 @@ test('multi diff wraps editable columns and repositions sections through resize 
 
 test('multi diff keeps one outer scroll and remounts only visible file editors', async ({ page }) => {
 	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.toggleMultiUnchangedRegions());
 	const lines = Array.from({ length: 180 }, (_, index) => `line ${index}`);
 	const changed = [...lines];
 	changed[90] = 'changed line 90';

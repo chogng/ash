@@ -100,7 +100,7 @@ fn dispatch(
         directories,
     } = request
     {
-        if version != 1 || directories.len() > 128 {
+        if version != GIT_PROVIDER_VERSION || directories.len() > 128 {
             return Err(GitRuntimeError::Boundary);
         }
         let mut state = state.lock().map_err(|_| unavailable())?;
@@ -262,6 +262,9 @@ fn dispatch(
         GitProviderRequest::RecentCommits { repository_id } => runtime
             .recent_commits_for(repository_id.as_deref())
             .map(GitProviderResponse::History),
+        GitProviderRequest::HistoryRefs { repository_id } => runtime
+            .history_refs_for(repository_id.as_deref())
+            .map(GitProviderResponse::HistoryRefs),
         GitProviderRequest::Graph {
             repository_id,
             connection_id,

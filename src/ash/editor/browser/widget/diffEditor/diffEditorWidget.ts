@@ -2,6 +2,7 @@ import './style.css';
 import { addDisposableListener, getClientArea, h, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -14,7 +15,7 @@ import { LineRangeMapping, type RangeMapping } from '../../../common/diff/rangeM
 import type { MovedText } from '../../../common/diff/linesDiffComputer.js';
 import { LineRange } from '../../../common/core/ranges/lineRange.js';
 import { EditorOption, type IDiffEditorOptions } from '../../../common/config/editorOptions.js';
-import { ScrollType, type IEditorDecorationsCollection } from '../../../common/editorCommon.js';
+import { ScrollType, type IContentSizeChangedEvent, type IEditorDecorationsCollection } from '../../../common/editorCommon.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { type ICodeEditor, type IDiffEditor } from '../../editorBrowser.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
@@ -36,6 +37,10 @@ let diffEditorId = 0;
 
 /** Owns two editor views over caller-owned source models and one versioned diff. */
 export class DiffEditorWidget extends Disposable implements IDiffEditor {
+	private readonly contentSizeEmitter = this._register(new Emitter<IContentSizeChangedEvent>());
+	public readonly onDidContentSizeChange = this.contentSizeEmitter.event;
+	private reportedContentWidth = 0;
+	private reportedContentHeight = 0;
 	public readonly element: HTMLDivElement;
 	public readonly originalEditor: CodeEditorWidget;
 	public readonly modifiedEditor: CodeEditorWidget;
@@ -177,6 +182,9 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		// Synchronize committed editor positions; a captured DOM scroll precedes the editor's own update.
 		this._register(this.originalEditor.onDidScrollChange(() => this.synchronizeScroll(this.originalEditor, this.modifiedEditor)));
 		this._register(this.modifiedEditor.onDidScrollChange(() => this.synchronizeScroll(this.modifiedEditor, this.originalEditor)));
+		this._register(this.gutter.onDidChangeContentHeight(() => this.updateContentSize()));
+		this._register(this.originalEditor.onDidLayoutChange(() => this.updateContentSize()));
+		this._register(this.modifiedEditor.onDidLayoutChange(() => this.updateContentSize()));
 		this._register(addDisposableListener(this.element, 'keydown', event => this.handleKeydown(event), true));
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			if (event.key === 'Escape' && !event.defaultPrevented && this.movedTextToCompare && !this.accessibleDiffViewer.isVisible) {
@@ -302,6 +310,21 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.modifiedEditor.focus();
 	}
 
+	public getContentHeight(): number {
+		return this.movedBlocks.headerHeight + Math.max(this.originalEditor.getContentHeight(), this.modifiedEditor.getContentHeight(), this.gutter.getContentHeight());
+	}
+
+	private updateContentSize(): void {
+		const contentHeight = this.getContentHeight();
+		const contentWidth = (this.inlineView ? 0 : this.originalEditor.getContentWidth()) + this.modifiedEditor.getContentWidth() + this.gutter.width + this.movedBlocks.width;
+		const contentHeightChanged = contentHeight !== this.reportedContentHeight;
+		const contentWidthChanged = contentWidth !== this.reportedContentWidth;
+		if (!contentHeightChanged && !contentWidthChanged) return;
+		this.reportedContentHeight = contentHeight;
+		this.reportedContentWidth = contentWidth;
+		this.contentSizeEmitter.fire({ contentHeight, contentWidth, contentHeightChanged, contentWidthChanged });
+	}
+
 	/** A control may outlive its result; only the current mapping can authorize an edit. */
 	public revert(change: LineRangeMapping): void {
 		if (!this.model.diff?.changes.some(current => current === change)
@@ -371,6 +394,10 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	public setHideUnchangedRegionsOptions(options: HideUnchangedRegionsOptions): void {
 		this.hiddenRegions.setOptions(options);
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
+	}
+
+	public getOriginalEditor(): ICodeEditor {
+		return this.originalEditor;
 	}
 
 	public getModifiedEditor(): ICodeEditor {
@@ -455,6 +482,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.movedBlocks.layout(originalWidth + this.gutter.width, editorHeight);
 		this.overviewRuler.layout({ width: size.width, height: editorHeight });
 		this.updateOverview();
+		this.updateContentSize();
 	}
 
 	public revealOriginalLine(lineIndex: number): void {
@@ -509,11 +537,14 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		if (row.modifiedLineIndex !== undefined) {
 			const lineNumber = row.modifiedLineIndex + 1;
 			const column = (row.modifiedChanges[0]?.startColumn ?? 0) + 1;
-			this.modifiedEditor.revealRange(new Range(lineNumber, column, lineNumber, column), ScrollType.Immediate);
+			// A point on a wrap boundary can resolve to the preceding visual line.
+			const endColumn = (row.modifiedChanges[0]?.endColumn ?? column - 1) + 1;
+			this.modifiedEditor.revealRangeInCenter(new Range(lineNumber, column, lineNumber, endColumn), ScrollType.Immediate);
 		} else if (row.originalLineIndex !== undefined && !this.inlineView) {
 			const lineNumber = row.originalLineIndex + 1;
 			const column = (row.originalChanges[0]?.startColumn ?? 0) + 1;
-			this.originalEditor.revealRange(new Range(lineNumber, column, lineNumber, column), ScrollType.Immediate);
+			const endColumn = (row.originalChanges[0]?.endColumn ?? column - 1) + 1;
+			this.originalEditor.revealRangeInCenter(new Range(lineNumber, column, lineNumber, endColumn), ScrollType.Immediate);
 		} else if (this.inlineView) {
 			// A removed line lives in a zone after its preceding modified line, not at its original line number.
 			let precedingRow = rowIndex - 1;

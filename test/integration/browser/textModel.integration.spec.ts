@@ -1296,7 +1296,7 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(100);
 	const box = await vertical.boundingBox();
 	assertBox(box, 'vertical scrollbar');
-	await page.mouse.click(box.x + box.width / 2, box.y + box.height - 3);
+	await vertical.click({ position: { x: box.width / 2, y: box.height - 3 } });
 	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(520);
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ scrollByPage: false }));
 	await page.locator('.decorationsOverviewRuler').dispatchEvent('pointerdown', {

@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../sdk/browser/index.js';
 import type { IAction } from '../../../sdk/browser/index.js';
 import { Emitter } from './support.js';
 import { Lxicon } from './support.js';
@@ -407,7 +408,9 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			}
 			const comparison: GitChangeFileComparison = side === 'index' ? 'staged' : 'unstaged';
 			const inputs = await resolveGitChangeInputs(this.gitService, status, change, comparison);
-			if (inputs.original && inputs.modified) await this.services.editorService.openEditor(createDiffEditorInput(inputs.original, inputs.modified, `${inputs.original.label} ↔ ${inputs.modified.label}`), options, target);
+			if (inputs.binary && inputs.original && inputs.modified) {
+				await this.services.editorService.openEditor({ kind: 'multiDiff', resource: URI.from({ scheme: 'ash-multi-diff', path: `/scm/${comparison}/${change.path}` }), items: [{ label: change.path, original: inputs.original, modified: inputs.modified, binary: true, goToFile: inputs.goToFile }], label: change.path, readOnly: true } as IResourceEditorInput, options, target);
+			} else if (inputs.original && inputs.modified) await this.services.editorService.openEditor(createDiffEditorInput(inputs.original, inputs.modified, `${inputs.original.label} ↔ ${inputs.modified.label}`), options, target);
 			else if (inputs.modified) await this.services.editorService.openEditor(inputs.modified, options, target);
 			else if (inputs.original) await this.services.editorService.openEditor(inputs.original, options, target);
 		} catch (error) { this.showError(error); }

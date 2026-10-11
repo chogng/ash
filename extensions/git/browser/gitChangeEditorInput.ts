@@ -3,6 +3,7 @@ import { URI } from './support.js';
 import type { GitChangeFileComparison, GitChangeStatus, GitCommitFileContent, GitRepositoryChange, GitStatus, IGitService } from './types.js';
 
 export interface ResolvedGitChangeInputs {
+	readonly binary?: boolean;
 	readonly original: IResourceEditorInput | undefined;
 	readonly modified: IResourceEditorInput | undefined;
 	readonly goToFile: IResourceEditorInput | undefined;
@@ -20,6 +21,7 @@ export async function resolveGitChangeInputs(gitService: IGitService, status: Gi
 	const original = changeEditorInput(file.original, changeFileUri(status, comparison, originalPath, 'original', workingResource), `${basename(originalPath)} (${originalState})`);
 	const modified = changeEditorInput(file.modified, changeFileUri(status, comparison, change.path, 'modified', workingResource), `${basename(change.path)} (${modifiedState})`);
 	return {
+		binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
 		original,
 		modified,
 		goToFile: comparisonStatus(change, comparison) === 'deleted'
@@ -38,12 +40,11 @@ function changeOriginalPath(change: GitRepositoryChange, comparison: GitChangeFi
 }
 
 function changeEditorInput(content: GitCommitFileContent, resource: URI, label: string): IResourceEditorInput | undefined {
-	if (content.kind === 'binary') return undefined;
 	return {
 		resource,
 		label,
 		readOnly: true,
-		initialText: content.kind === 'missing' ? '' : content.text,
+		...(content.kind === 'binary' ? { contentType: 'application/octet-stream' } : { initialText: content.kind === 'missing' ? '' : content.text }),
 	};
 }
 

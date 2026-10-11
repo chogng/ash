@@ -167,3 +167,19 @@
 	clip-path: inset(50%);
 	white-space: nowrap;
 }
+
+.stanza-multi-diff-editor-item-editor.binary {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	padding: 16px;
+	color: var(--ash-description-foreground);
+	font-family: var(--ash-font-family);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.stanza-multi-diff-editor-item-editor.binary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

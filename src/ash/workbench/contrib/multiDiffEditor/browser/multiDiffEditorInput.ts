@@ -19,6 +19,7 @@ EditorInputSerializers.registerStatic({
 				...(item.id === undefined ? {} : { id: item.id }),
 				original: registry.serialize(item.original),
 				modified: registry.serialize(item.modified),
+				...(item.binary === undefined ? {} : { binary: item.binary }),
 				...(item.goToFile === undefined ? {} : { goToFile: registry.serialize(item.goToFile) }),
 				...(item.actions === undefined ? {} : { actions: item.actions }),
 			}))),
@@ -35,6 +36,7 @@ EditorInputSerializers.registerStatic({
 				id: entry.id === undefined ? undefined : requireString(entry.id, 'multi-diff item identity'),
 				original: registry.deserialize(requireSerializedEditorInput(entry.original, 'serialized multi-diff original input')),
 				modified: registry.deserialize(requireSerializedEditorInput(entry.modified, 'serialized multi-diff modified input')),
+				...(entry.binary === undefined ? {} : { binary: requireBinary(entry.binary) }),
 				...(entry.goToFile === undefined ? {} : { goToFile: registry.deserialize(requireSerializedEditorInput(entry.goToFile, 'serialized multi-diff Open File input')) }),
 				...(entry.actions === undefined ? {} : { actions: requireActions(entry.actions) }),
 			};
@@ -49,17 +51,18 @@ EditorInputSerializers.registerStatic({
 });
 
 export type MultiDiffEditorSource =
- | { readonly kind: 'snapshot'; readonly label: string; readonly repositoryId?: string; }
- | { readonly kind: 'external'; readonly providerId: string; readonly label: string; readonly repositoryId?: string; readonly branchName?: string; };
+	| { readonly kind: 'snapshot'; readonly label: string; readonly repositoryId?: string; }
+	| { readonly kind: 'external'; readonly providerId: string; readonly label: string; readonly repositoryId?: string; readonly branchName?: string; };
 
 export interface MultiDiffCommandAction {
- readonly id: string; readonly label: string; readonly tooltip: string; readonly icon?: string;
- readonly command: string; readonly arguments: readonly unknown[]; readonly enabled?: boolean;
+	readonly id: string; readonly label: string; readonly tooltip: string; readonly icon?: string;
+	readonly command: string; readonly arguments: readonly unknown[]; readonly enabled?: boolean;
 }
 
 export interface MultiDiffEditorInputItem {
 	readonly id?: string;
 	readonly label: string;
+	readonly binary?: boolean;
 	readonly original: IResourceEditorInput;
 	readonly modified: IResourceEditorInput;
 	/** Resource opened by the per-file Open File action. Defaults to the modified side. */
@@ -89,11 +92,13 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 		assertTextResourceInput(item.modified, 'Multi-diff modified input');
 		if (item.goToFile !== undefined) assertTextResourceInput(item.goToFile, 'Multi-diff Open File input');
 		if (item.actions !== undefined) requireActions(item.actions);
+		if (item.binary !== undefined) requireBinary(item.binary);
 		const normalized = Object.freeze({
 			label: item.label.trim(),
 			...(item.id === undefined ? {} : { id: requireString(item.id, 'multi-diff item identity') }),
 			original: item.original,
 			modified: item.modified,
+			...(item.binary === undefined ? {} : { binary: item.binary }),
 			...(item.goToFile ? { goToFile: item.goToFile } : {}),
 			...(item.actions ? { actions: requireActions(item.actions) } : {}),
 		});
@@ -107,7 +112,7 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 		contentType: MULTI_DIFF_EDITOR_CONTENT_TYPE,
 		items: Object.freeze(normalizedItems),
 		label: label.trim(),
-		readOnly: true,
+		readOnly: normalizedItems.every(item => item.binary || item.modified.readOnly === true),
 		showBreadcrumbs: false,
 		...(source ? { source: freezeMultiDiffSource(source) } : {}),
 	});
@@ -135,23 +140,29 @@ function isMultiDiffEditorInputItem(value: unknown): value is MultiDiffEditorInp
 		'original' in value && isTextResourceInput(value.original) &&
 		'modified' in value && isTextResourceInput(value.modified) &&
 		(!('goToFile' in value) || value.goToFile === undefined || isTextResourceInput(value.goToFile)) &&
-		(!('actions' in value) || value.actions === undefined || Array.isArray(value.actions));
+		(!('actions' in value) || value.actions === undefined || Array.isArray(value.actions)) &&
+		(!('binary' in value) || value.binary === undefined || typeof value.binary === 'boolean');
+}
+
+function requireBinary(value: unknown): boolean {
+	if (typeof value !== 'boolean') throw new TypeError('Multi-diff binary state must be boolean');
+	return value;
 }
 
 export function requireActions(value: unknown): readonly MultiDiffCommandAction[] {
- if (!Array.isArray(value) || value.length > 64) throw new TypeError('Invalid multi-diff actions');
- return Object.freeze(value.map(value => {
-  const entry = requireRecord(value, 'multi-diff action');
-  if (!Array.isArray(entry.arguments) || entry.arguments.length > 64 || (entry.enabled !== undefined && typeof entry.enabled !== 'boolean')) throw new TypeError('Invalid multi-diff action arguments');
-  return Object.freeze({ id: requireString(entry.id, 'action id'), label: requireString(entry.label, 'action label'), tooltip: requireString(entry.tooltip, 'action tooltip'), command: requireString(entry.command, 'action command'), arguments: Object.freeze([...entry.arguments]), ...(entry.icon === undefined ? {} : { icon: requireString(entry.icon, 'action icon') }), ...(entry.enabled === undefined ? {} : { enabled: entry.enabled }) });
- }));
+	if (!Array.isArray(value) || value.length > 64) throw new TypeError('Invalid multi-diff actions');
+	return Object.freeze(value.map(value => {
+		const entry = requireRecord(value, 'multi-diff action');
+		if (!Array.isArray(entry.arguments) || entry.arguments.length > 64 || (entry.enabled !== undefined && typeof entry.enabled !== 'boolean')) throw new TypeError('Invalid multi-diff action arguments');
+		return Object.freeze({ id: requireString(entry.id, 'action id'), label: requireString(entry.label, 'action label'), tooltip: requireString(entry.tooltip, 'action tooltip'), command: requireString(entry.command, 'action command'), arguments: Object.freeze([...entry.arguments]), ...(entry.icon === undefined ? {} : { icon: requireString(entry.icon, 'action icon') }), ...(entry.enabled === undefined ? {} : { enabled: entry.enabled }) });
+	}));
 }
 
 function requireMultiDiffSource(value: unknown): MultiDiffEditorSource {
 	if (!value || typeof value !== 'object' || !('kind' in value)) throw new TypeError('Multi-diff source is invalid');
 	const source = value as Partial<MultiDiffEditorSource>;
 	// Persisted inputs from the former built-in provider reopen as captured comparisons.
- if ((value as { kind: string }).kind === 'git' && 'scope' in value && typeof value.scope === 'string') return { kind: 'snapshot', label: value.scope };
+	if ((value as { kind: string; }).kind === 'git' && 'scope' in value && typeof value.scope === 'string') return { kind: 'snapshot', label: value.scope };
 	if (source.kind === 'snapshot' && typeof source.label === 'string' && source.label.length > 0 && (source.repositoryId === undefined || typeof source.repositoryId === 'string')) {
 		return freezeMultiDiffSource(source as MultiDiffEditorSource);
 	}

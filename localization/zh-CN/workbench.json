@@ -14,10 +14,6 @@
     "multiDiff.fileActions": "{0} 操作",
     "multiDiff.files": "文件",
     "multiDiff.openFiles": "打开文件视图",
-    "multiDiff.collapseAll": "全部折叠",
-    "multiDiff.collapseAllTooltip": "折叠所有差异",
-    "multiDiff.expandAll": "全部展开",
-    "multiDiff.expandAllTooltip": "展开所有差异",
     "multiDiff.repositoryActions": "多文件差异仓库操作",
     "workbench.editorGroup.lockedLabel": "编辑器组，已锁定",
     "workbench.editorGroup.label": "编辑器组",
@@ -1324,7 +1320,8 @@
     "files.invalidDropURI": "拖入的文件 URI 无效。",
     "accessibility.explorerSearchComplete": "已完成工作区文件名搜索。",
     "accessibility.explorerDropComplete": "已完成文件传输。",
-    "accessibility.explorerFolderSegment": "{0}，第 {1} 个文件夹，共 {2} 个"
+    "accessibility.explorerFolderSegment": "{0}，第 {1} 个文件夹，共 {2} 个",
+    "accessibility.multiDiffFiles": "在多文件比较中，文件标题可展开或折叠各项比较，方向键可在标题之间移动。二进制文件会显示无法进行文本比较的提示，并保留文件操作。保存会写入已修改的可写文件，包括折叠的文件。关闭未保存文件的最后一个视图时，可选择保存、放弃或取消。"
   },
   "ash.menu": {
     "file": "文件",

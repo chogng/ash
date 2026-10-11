@@ -827,15 +827,59 @@ test("EditorPart requires an explicit dirty-close decision", async () => {
 	dom.window.close();
 });
 
+test('multi-resource editors track late working copies, save inactive files and confirm only their last views', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using registry = new EditorPaneRegistry();
+	using first = new TestWorkingCopy(URI.file('C:/project/first.ts'));
+	using second = new TestWorkingCopy(URI.file('C:/project/second.ts'));
+	class MultiCopyPane extends TestEditorPane {
+		private readonly copiesChanged = this._register(new Emitter<void>());
+		readonly onDidChangeWorkingCopies = this.copiesChanged.event;
+		private readonly copies = [first];
+		getWorkingCopies(): readonly IWorkingCopy[] { return this.copies; }
+		addSecond(): void { this.copies.push(second); this.copiesChanged.fire(); }
+		override async save(): Promise<void> { for (const copy of this.copies) if (copy.isDirty) await copy.save(); }
+	}
+	const multi = new MultiCopyPane('test.multi', first);
+	using multiRegistration = registry.registerEditorPane(descriptor('test.multi', '.review', () => multi));
+	using fileRegistration = registry.registerEditorPane(descriptor('test.file', '.ts', () => new TestEditorPane('test.file', second)));
+	const dialogs = new TestFileDialogService(ConfirmResult.CANCEL, ConfirmResult.DONT_SAVE, ConfirmResult.SAVE);
+	using editor = createEditorPart(dom.window.document.body, { registry, fileDialogService: dialogs });
+	const review = input('C:/project/files.review');
+	const file = input('C:/project/second.ts');
+	try {
+		await editor.openEditor(review, { pinned: false });
+		multi.addSecond();
+		second.markDirty();
+		assert.deepEqual(editor.activeGroup.editors.map(entry => ({ dirty: entry.isDirty, preview: entry.isPreview })), [{ dirty: true, preview: false }]);
+		first.markDirty();
+		await editor.openEditor(file, { pinned: true });
+		assert.equal(await editor.activeGroup.saveEditor(review), review);
+		assert.deepEqual([first.isDirty, second.isDirty, first.saveCount, second.saveCount, editor.activeInput], [false, false, 1, 1, file]);
+		first.markDirty();
+		second.markDirty();
+		assert.equal(await editor.closeEditor(review), false);
+		assert.equal(await editor.closeEditor(review), true);
+		assert.deepEqual([first.isDirty, second.isDirty, first.revertCount, second.revertCount], [false, true, 1, 0]);
+		assert.equal(await editor.closeEditor(file), true);
+		assert.deepEqual(dialogs.prompts, [['first.ts'], ['first.ts'], ['second.ts']]);
+		assert.equal(second.saveCount, 2);
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
 test("EditorPart saves before closing and pins a dirty preview", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const copies = new Map<string, TestWorkingCopy>();
+	let openedCount = 0;
 	registry.registerEditorPane(descriptor(
 		"stanza.editor.code",
 		".ts",
 		() => {
-			const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\current.ts"));
+			const workingCopy = new TestWorkingCopy(URI.file(openedCount++ === 0 ? "C:\\project\\current.ts" : "C:\\project\\next.ts"));
 			copies.set("current", workingCopy);
 			return new TestEditorPane("stanza.editor.code", workingCopy);
 		},
@@ -3223,10 +3267,12 @@ test('saveAll returns the saved untitled replacement and reports a cancelled Sav
 		const copy = resources.add(new TestWorkingCopy(untitled.resource));
 		copy.markDirty();
 		let target: URI | undefined;
-		registry.registerEditorPane({ id: 'test.save-as', name: 'Save As', canOpen: () => EditorPaneMatch.Default,
+		registry.registerEditorPane({
+			id: 'test.save-as', name: 'Save As', canOpen: () => EditorPaneMatch.Default,
 			create: () => Object.assign(new TestEditorPane('test.save-as', copy), { saveAs: async () => { await copy.saveAs(); } }),
 		});
-		const part = resources.add(createEditorPart(dom.window.document.body, { registry,
+		const part = resources.add(createEditorPart(dom.window.document.body, {
+			registry,
 			saveAsResource: async () => target,
 			replaceEditorResource: async (group, input, replacement) => { await group.replaceEditor(input, replacement); },
 		}));

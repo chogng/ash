@@ -94,6 +94,8 @@ export interface ISCMHistoryItemChangeContents {
 /** Repository-owned history capability consumed by the SCM view. */
 export interface ISCMHistoryProvider {
 	readonly onDidChange: Event<void>;
+	/** Updated decorations for cached items; their identities and commit traversal remain unchanged. */
+	readonly onDidChangeHistoryItemRefs?: Event<readonly ISCMHistoryItem[]>;
 	readonly historyItemRef: IObservable<ISCMHistoryItemRef | undefined>;
 	refresh(): void;
 	provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[] | undefined>;

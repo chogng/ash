@@ -181,13 +181,14 @@ test('DiffEditorWidget applies the split ratio and disables its separator when r
 		container, model, splitViewDefaultRatio: 0.3, enableSplitViewResizing: false,
 	});
 	editor.layout({ width: 530, height: 80 });
-	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '150px');
+	assert.equal(editor.element.style.getPropertyValue('--ash-diff-center-width'), '36px');
+	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '139px');
 	const sash = editor.element.querySelector('.stanza-diff-sash');
 	assert.equal(sash?.getAttribute('aria-disabled'), 'true');
 	assert.equal(sash?.getAttribute('aria-valuenow'), '30');
 	assert.equal((sash as HTMLElement).hidden, true);
 	editor.setSplitViewOptions(true, 0.4);
-	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '200px');
+	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '186px');
 	assert.equal(sash?.getAttribute('aria-disabled'), 'false');
 	assert.throws(() => editor.setSplitViewOptions(true, 1), /between 0.1 and 0.9/);
 });

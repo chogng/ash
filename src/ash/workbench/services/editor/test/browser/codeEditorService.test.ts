@@ -55,7 +55,7 @@ test('active code editor follows the pane control when two editors share a model
 	assert.equal(service.getActiveCodeEditor()?.getId(), first.getId());
 	control = second;
 	assert.equal(service.getActiveCodeEditor()?.getId(), second.getId());
-	const diff = { getId: () => 'diff', getModifiedEditor: () => second };
+	const diff = { getId: () => 'diff', getOriginalEditor: () => first, getModifiedEditor: () => second };
 	service.addDiffEditor(diff);
 	control = diff;
 	assert.equal(service.getActiveCodeEditor(), second);

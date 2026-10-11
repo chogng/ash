@@ -329,6 +329,16 @@ impl AppServer {
         result(&GitHistoryResult { commits })
     }
 
+    pub(super) fn git_history_refs(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        result(
+            &self
+                .git_runtime_service()?
+                .history_refs_for(params.repository_id.as_deref())
+                .map_err(git_error)?,
+        )
+    }
+
     pub(super) fn git_graph(&self, connection_id: u64, value: &Value) -> Result<Value, RpcError> {
         let params: GitGraphParams = decode(value)?;
         if params.limit == 0 || params.limit > MAX_GIT_GRAPH_PAGE_SIZE {

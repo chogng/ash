@@ -353,7 +353,7 @@ fn ignore_changes_keep_directory_scope_and_do_not_cross_authorized_connections()
 }
 
 #[test]
-fn branch_mutations_refresh_all_connections_and_invalidate_history_cursors() {
+fn branch_labels_refresh_all_connections_and_preserve_history_cursors() {
     let repository = TestRepository::init();
     for value in ["initial", "updated"] {
         repository.write("tracked.txt", value);
@@ -370,11 +370,12 @@ fn branch_mutations_refresh_all_connections_and_invalidate_history_cursors() {
     first.drain();
     second.drain();
     let limit = std::num::NonZeroUsize::new(1).unwrap();
-    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
 
     for (created, expected_revision) in
         [(true, initial.revision + 1), (false, initial.revision + 2)]
     {
+        let initial_graph = runtime.graph(1, limit, None).unwrap();
+        let cursor = initial_graph.next_cursor.unwrap();
         let branches = if created {
             runtime.create_branch_for(None, "topic").unwrap()
         } else {
@@ -393,10 +394,14 @@ fn branch_mutations_refresh_all_connections_and_invalidate_history_cursors() {
             notifications[0]["params"]["status"]["revision"],
             expected_revision
         );
-        assert!(matches!(
-            runtime.graph(1, limit, Some(&cursor)),
-            Err(super::GitRuntimeError::InvalidGraphCursor)
-        ));
+        let next = runtime.graph(1, limit, Some(&cursor)).unwrap();
+        assert_eq!(next.graph_revision, initial_graph.graph_revision);
+        assert_eq!(
+            next.references
+                .iter()
+                .any(|reference| reference.name == "topic"),
+            created
+        );
     }
 
     assert!(runtime.delete_branch_for(None, "main").is_err());
@@ -804,10 +809,11 @@ fn external_ref_and_remote_changes_publish_without_head_or_file_changes() {
         let notifications = first.drain();
         assert_eq!(notifications, second.drain());
         assert_eq!(notifications.len(), 1);
-        assert!(matches!(
-            runtime.graph(1, limit, Some(&cursor)),
-            Err(super::GitRuntimeError::InvalidGraphCursor)
-        ));
+        let next = runtime.graph(1, limit, Some(&cursor)).unwrap();
+        assert_eq!(
+            next.graph_revision, 1,
+            "Label and remote metadata changes preserve the traversal"
+        );
     }
     let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
     repository.git(&["pack-refs", "--all", "--prune"]);
@@ -815,6 +821,81 @@ fn external_ref_and_remote_changes_publish_without_head_or_file_changes() {
     assert!(first.drain().is_empty());
     assert!(second.drain().is_empty());
     assert!(runtime.graph(1, limit, Some(&cursor)).is_ok());
+}
+
+#[test]
+fn ref_snapshots_preserve_ancestor_labels_but_invalidate_added_and_removed_histories() {
+    let repository = TestRepository::init();
+    for value in ["first", "second", "third"] {
+        repository.write("tracked.txt", value);
+        repository.git(&["add", "tracked.txt"]);
+        repository.git(&["commit", "-m", value]);
+    }
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let limit = std::num::NonZeroUsize::new(1).unwrap();
+    let first = runtime.graph(1, limit, None).unwrap();
+    let cursor = first.next_cursor.as_deref().unwrap();
+    let original_head = runtime.status().unwrap().head;
+    for command in [
+        &["tag", "label", "HEAD~1"][..],
+        &["branch", "ancestor", "HEAD~2"][..],
+        &["tag", "-f", "label", "HEAD~2"][..],
+        &["tag", "-d", "label"][..],
+        &["branch", "-D", "ancestor"][..],
+    ] {
+        repository.git(command);
+        let refs = runtime.history_refs_for(None).unwrap();
+        assert_eq!(refs.graph_revision, first.graph_revision);
+        assert_eq!(refs.status.head, original_head);
+    }
+    assert_eq!(
+        runtime.graph(1, limit, Some(cursor)).unwrap().commits[0].subject,
+        "second"
+    );
+    assert_eq!(
+        runtime.graph(1, limit, Some(cursor)).unwrap().commits[0].subject,
+        "first"
+    );
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    let separate = repository.git_output(&["commit-tree", "HEAD^{tree}", "-m", "separate history"]);
+    repository.git(&["update-ref", "refs/heads/separate", &separate]);
+    let added = runtime.history_refs_for(None).unwrap();
+    assert!(added.graph_revision > first.graph_revision);
+    assert_eq!(added.status.head, original_head);
+    assert!(matches!(
+        runtime.graph(1, limit, Some(&cursor)),
+        Err(super::GitRuntimeError::InvalidGraphCursor)
+    ));
+    let all = runtime
+        .graph(1, std::num::NonZeroUsize::new(10).unwrap(), None)
+        .unwrap();
+    assert!(
+        all.commits
+            .iter()
+            .any(|commit| commit.object_id == separate)
+    );
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    repository.git(&["branch", "-D", "separate"]);
+    let removed = runtime.history_refs_for(None).unwrap();
+    assert!(removed.graph_revision > added.graph_revision);
+    assert!(matches!(
+        runtime.graph(1, limit, Some(&cursor)),
+        Err(super::GitRuntimeError::InvalidGraphCursor)
+    ));
+    let all = runtime
+        .graph(1, std::num::NonZeroUsize::new(10).unwrap(), None)
+        .unwrap();
+    assert_eq!(
+        all.commits
+            .iter()
+            .map(|commit| commit.subject.as_str())
+            .collect::<Vec<_>>(),
+        ["third", "second", "first"]
+    );
 }
 
 #[test]

@@ -22,16 +22,17 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 		const details = await chatService.readTurnChange(active.session.sessionId, active.threadId, changeSet.changeSetId);
 		for (const file of details.files) {
 			const contents = await chatService.readTurnChangeFile(active.session.sessionId, active.threadId, changeSet.changeSetId, file.path);
-			if (contents.binary) continue;
-			if (contents.truncated) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
+			if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
 			const existing = composed.get(file.path);
 			if (existing) {
 				existing.after = contents.after ?? '';
+				existing.binary ||= contents.binary;
 				existing.latestChangeSetId = changeSet.changeSetId;
 				continue;
 			}
 			composed.set(file.path, {
 				file,
+				binary: contents.binary,
 				before: contents.before ?? '',
 				after: contents.after ?? '',
 				firstChangeSetId: changeSet.changeSetId,
@@ -53,6 +54,7 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 
 interface ComposedTurnFile {
 	readonly file: TurnChangeFile;
+	binary: boolean;
 	readonly before: string;
 	after: string;
 	readonly firstChangeSetId: string;
@@ -82,6 +84,7 @@ function turnFileInput(file: ComposedTurnFile): MultiDiffEditorInputItem {
 		initialText: file.after,
 	};
 	return {
+		binary: file.binary,
 		label: file.file.previousPath ? `${file.file.previousPath} → ${file.file.path}` : file.file.path,
 		original,
 		modified,
@@ -103,16 +106,15 @@ function basename(path: string): string {
 export async function createTurnCommitPreviewInput(chat: IChatService, sessionId: string, threadId: string, preview: TurnCommitPreview): Promise<MultiDiffEditorInput> {
 	const items = await Promise.all(preview.files.map(async file => {
 		const contents = await chat.readTurnCommitFile(sessionId, threadId, preview.commitId, file.path);
-		if (contents.truncated) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
-		const binary = contents.binary ? localize('sessions.changes.binaryPreview', 'Binary file. Contents are not shown.') : undefined;
+		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 		const path = file.path.split('/').map(encodeURIComponent).join('/');
 		const resource = URI.parse(`ash-turn-commit:/${encodeURIComponent(preview.commitId)}/${path}`);
-		const original = { resource: resource.with({ query: 'target' }), initialText: binary ?? contents.before ?? '', readOnly: true };
-		const modified = { resource: resource.with({ query: 'commit' }), initialText: binary ?? contents.after ?? '', readOnly: true };
+		const original = { resource: resource.with({ query: 'target' }), initialText: contents.before ?? '', readOnly: true };
+		const modified = { resource: resource.with({ query: 'commit' }), initialText: contents.after ?? '', readOnly: true };
 		let label = file.previousPath ? `${file.previousPath} → ${file.path}` : file.path;
 		if (contents.binary) { label = localize('sessions.changes.binaryLabel', '{0} (binary)', label); }
 		if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) { label = localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, file.beforeMode, file.afterMode); }
-		return { label, original, modified, goToFile: modified };
+		return { label, original, modified, binary: contents.binary, goToFile: modified };
 	}));
 	const resource = URI.parse(`ash-multi-diff:/turn-commit/${encodeURIComponent(preview.commitId)}?session=${encodeURIComponent(sessionId)}&thread=${encodeURIComponent(threadId)}`);
 	const title = localize('sessions.changes.commitPreview', '{0} files to commit to {1}: {2}', preview.files.length, preview.targetBranch, preview.message);

@@ -1,6 +1,8 @@
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { observeResize } from '../../../../../base/browser/observer.js';
 import { StandardWheelEvent } from '../../../../../base/browser/mouseEvent.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../../base/common/event.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
@@ -24,16 +26,18 @@ export interface DiffEditorSelectionHunkToolbarContext {
 	originalUri: URI;
 }
 
-/** Owns menu-backed hunk controls; coordinates come from the modified editor. */
+/** Owns hunk controls positioned through the paired editors' line geometry. */
 export class DiffEditorGutter extends Disposable {
 	private readonly domNode: HTMLDivElement;
 	private readonly toolbars = this._register(new DisposableStore());
 	private readonly scope: IContextKeyService;
-	private readonly items: { domNode: HTMLElement; lineNumber: number; }[] = [];
+	private readonly items: { domNode: HTMLElement; mapping: DetailedLineRangeMapping; height: number; }[] = [];
 	private enabled = false;
 	private renderRevert = false;
 	private available = false;
 	private height = 0;
+	private readonly contentHeightEmitter = this._register(new Emitter<void>());
+	public readonly onDidChangeContentHeight = this.contentHeightEmitter.event;
 
 	constructor(
 		container: HTMLElement,
@@ -73,7 +77,8 @@ export class DiffEditorGutter extends Disposable {
 		return this.enabled && this.available ? 36 : 0;
 	}
 
-	public update(enabled: boolean, options: { renderRevert: boolean }): void {
+	public update(enabled: boolean, options: { renderRevert: boolean; }): void {
+		const previousHeight = this.getContentHeight();
 		this.enabled = enabled;
 		this.renderRevert = options.renderRevert;
 		this.available = this.canRevert || [MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar].some(id =>
@@ -84,6 +89,7 @@ export class DiffEditorGutter extends Disposable {
 		this.items.length = 0;
 		const diff = this.model.diff;
 		if (this.width === 0 || !diff) {
+			if (previousHeight !== 0) this.contentHeightEmitter.fire();
 			if (hadFocus) this.editor.focus();
 			return;
 		}
@@ -98,7 +104,11 @@ export class DiffEditorGutter extends Disposable {
 		for (const change of diff.changes) {
 			if (!ranges.some(range => change.innerChanges?.includes(range))) this.addToolbar(change, MenuId.DiffEditorHunkToolbar);
 		}
+		for (const item of this.items) {
+			item.height = item.domNode.offsetHeight;
+		}
 		this.positionItems();
+		if (previousHeight !== this.getContentHeight()) this.contentHeightEmitter.fire();
 		if (hadFocus) this.editor.focus();
 	}
 
@@ -132,6 +142,10 @@ export class DiffEditorGutter extends Disposable {
 		this.positionItems();
 	}
 
+	public getContentHeight(): number {
+		return this.items.reduce((height, item) => Math.max(height, this.getTop(item.mapping) + item.height), 0);
+	}
+
 	private addToolbar(mapping: DetailedLineRangeMapping, menuId: MenuId): void {
 		const node = h(this.domNode.ownerDocument, 'div');
 		node.className = 'ash-diff-gutter-item';
@@ -160,13 +174,29 @@ export class DiffEditorGutter extends Disposable {
 			menuOptions: { arg: context, shouldForwardArgs: true },
 			toolbarOptions: { primaryGroup: group => group.startsWith('primary') || group === 'navigation' },
 		}));
-		this.items.push({ domNode: node, lineNumber: Math.min(this.model.modified.getLineCount(), mapping.modified.startLineNumber) });
+		const item = { domNode: node, mapping, height: 0 };
+		this.items.push(item);
+		this.toolbars.add(observeResize(node, () => {
+			if (node.hidden) return;
+			const height = node.offsetHeight;
+			if (height === item.height) return;
+			item.height = height;
+			this.contentHeightEmitter.fire();
+		}));
+	}
+
+	private getTop(mapping: DetailedLineRangeMapping): number {
+		// A deletion occupies an alignment zone, before the next modified-model line.
+		const source = mapping.modified.isEmpty ? this.widget.originalEditor : this.editor;
+		const range = mapping.modified.isEmpty ? mapping.original : mapping.modified;
+		const lineNumber = Math.min(source.getModel()!.getLineCount(), range.startLineNumber);
+		return source.getTopForLineNumber(lineNumber);
 	}
 
 	private positionItems(): void {
 		const scrollTop = this.editor.getScrollTop();
 		for (const item of this.items) {
-			const top = this.editor.getTopForLineNumber(item.lineNumber) - scrollTop;
+			const top = this.getTop(item.mapping) - scrollTop;
 			item.domNode.hidden = top < -36 || top >= this.height;
 			item.domNode.style.top = `${top}px`;
 		}

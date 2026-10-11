@@ -41,6 +41,7 @@ import { DOMLineBreaksComputerFactory } from '../../view/domLineBreaksComputer.j
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
 import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { OutgoingViewModelEventKind } from '../../../common/viewModelEventDispatcher.js';
+import { EditorViewportChangeReason } from '../../../common/viewLayout/viewLayout.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -421,6 +422,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				},
 			}));
 			this.modelState = { model, view, viewModel, contributions };
+			modelStore.add(view.onDidChangeLayout(event => {
+				if (event.reason !== EditorViewportChangeReason.Scroll) this.layoutChangeEmitter.fire(this.getLayoutInfo());
+			}));
 			for (const widget of this.contentWidgets.values()) this.view.addContentWidget(widget);
 			for (const widget of this.overlayWidgets.values()) this.view.addOverlayWidget(widget);
 			for (const widget of this.glyphWidgets.values()) this.view.addGlyphMarginWidget(widget);

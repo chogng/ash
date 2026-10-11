@@ -216,6 +216,21 @@ impl GitService {
         run(&runtime, self.client.reference_state(repository)).map_err(GitServiceError::Git)
     }
 
+    pub(crate) fn same_graph_roots(
+        &self,
+        repository: &GitRepository,
+        previous: &[String],
+        current: &[String],
+    ) -> Result<bool, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
+        run(
+            &runtime,
+            self.client.same_graph_roots(repository, previous, current),
+        )
+        .map_err(GitServiceError::Git)
+    }
+
     pub(crate) fn check_ignore(
         &self,
         paths: &[PathBuf],

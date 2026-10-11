@@ -181,7 +181,7 @@ suite('Session GitHub associations', () => {
 			},
 			readPullRequest: async () => ({ ...pullRequest, url: 'https://ghe.example/team/repo/pull/7' }),
 		}, {
-			graph: async () => ({ commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'other', host: 'ghe.example', owner: 'team', repository: 'repo' } }], hasMore: false, nextCursor: undefined }),
+			graph: async () => ({ streamInstanceId: 'stream', historyRevision: 1, graphRevision: 1, commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'other', host: 'ghe.example', owner: 'team', repository: 'repo' } }], hasMore: false, nextCursor: undefined }),
 		});
 		assert.deepEqual((await context.load()).map(request => request.uri.toString()), ['https://ghe.example/team/repo/pull/7']);
 	});

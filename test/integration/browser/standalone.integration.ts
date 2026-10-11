@@ -1,6 +1,7 @@
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
+import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import '../../../src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.contribution.js';
 import '../../../src/ash/workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -352,7 +353,8 @@ interface StandaloneHarness {
 	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string; }>;
 	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose', fromOutside: boolean): Promise<{ value: string; finishedBeforeTransfer: boolean; }>;
 	runActiveClipboard(command: 'copy' | 'cut' | 'paste', target: 'outside' | 'readonly' | 'find'): Promise<{ values: string[]; written: string; reads: number; focused: boolean; documentCommands: string[]; }>;
-	runFilePaste(): { value: string; handled: boolean; fileReads: number; };
+	runFilePaste(): Promise<{ value: string; handled: boolean; fileReads: number; }>;
+	finishPaste(): Promise<void>;
 	runFileDrop(): { value: string; dragOverHandled: boolean; dropHandled: boolean; fileReads: number; };
 	runTextDrop(enabled: boolean): Promise<{ value: string; dragOverHandled: boolean; dropHandled: boolean; }>;
 	runUriPaste(enabled: boolean): Promise<{ value: string; handled: boolean; }>;
@@ -2308,7 +2310,8 @@ window.ashStandaloneIntegration = {
 			document.execCommand = execCommand;
 		}
 	},
-	runFilePaste: () => {
+	finishPaste: async () => { await CopyPasteController.get(callerEditor)?.finishedPaste(); },
+	runFilePaste: async () => {
 		callerEditor.setValue('alpha');
 		callerEditor.setPosition(new stanza.Position(1, 6));
 		callerEditor.focus();
@@ -2325,6 +2328,7 @@ window.ashStandaloneIntegration = {
 		const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
 
 		document.activeElement!.dispatchEvent(paste);
+		await CopyPasteController.get(callerEditor)?.finishedPaste();
 
 		return { value: callerEditor.getValue(), handled: paste.defaultPrevented, fileReads };
 	},

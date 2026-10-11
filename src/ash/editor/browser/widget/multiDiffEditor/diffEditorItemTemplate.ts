@@ -130,19 +130,15 @@ export class DiffEditorItemTemplate extends Disposable {
 		this.editorSlot.value = editor;
 		if (this.onLayoutChange) {
 			// Hidden-region reveal controls change content height without changing the file model.
-			let originalHeight = editor.originalEditor.getContentHeight();
-			let modifiedHeight = editor.modifiedEditor.getContentHeight();
+			let contentHeight = editor.getContentHeight();
 			const updateContentHeight = () => {
-				const nextOriginalHeight = editor.originalEditor.getContentHeight();
-				const nextModifiedHeight = editor.modifiedEditor.getContentHeight();
-				const changed = originalHeight !== nextOriginalHeight || modifiedHeight !== nextModifiedHeight;
-				originalHeight = nextOriginalHeight;
-				modifiedHeight = nextModifiedHeight;
+				const nextHeight = editor.getContentHeight();
+				const changed = contentHeight !== nextHeight;
+				contentHeight = nextHeight;
 				// The outer viewport owns editor dimensions; its own layout must not schedule another pass.
 				if (changed && !this.layingOutEditor) this.onLayoutChange?.();
 			};
-			this.editorListeners.add(editor.originalEditor.onDidLayoutChange(updateContentHeight));
-			this.editorListeners.add(editor.modifiedEditor.onDidLayoutChange(updateContentHeight));
+			this.editorListeners.add(editor.onDidContentSizeChange(updateContentHeight));
 		}
 		// Resetting to the default cursor would reveal a hidden leading region on every mount.
 		if (this.originalState) {
@@ -184,6 +180,13 @@ export class DiffEditorItemTemplate extends Disposable {
 	}
 
 	public updateStatus(): void {
+		if (this.item.binary && !this.editorHostDomNode.classList.contains('binary')) {
+			this.editorHostDomNode.classList.add('binary');
+			this.editorHostDomNode.tabIndex = 0;
+			this.editorHostDomNode.setAttribute('role', 'group');
+			this.editorHostDomNode.setAttribute('aria-label', this.item.label);
+			this.editorHostDomNode.textContent = localize('multiDiffEditor.binary', 'Binary file changed. Text comparison is unavailable.');
+		}
 		this.updateToggleLabel(this.domNode.classList.contains('collapsed'));
 		const model = this.item.model;
 		if (this.item.state === 'error') {

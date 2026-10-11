@@ -1,7 +1,7 @@
-import type { IEditorPane } from '../../../common/editor.js';
+import { getEditorWorkingCopies, type IEditorPane } from '../../../common/editor.js';
 import type { EditorPane } from './editorPane.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
-import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 
 /** Owns the pane hosts, active pane, and pane lifetimes within one editor group. */
 export class EditorPanes extends Disposable {
@@ -109,9 +109,17 @@ export class EditorPaneInstance extends Disposable {
 	}
 
 	observeWorkingCopy(listener: () => void): void {
-		const workingCopy = this.pane.workingCopy;
-		if (!workingCopy) return;
-		this._register(workingCopy.onDidChangeDirty(listener));
-		this._register(workingCopy.onDidChangeExternalChange(listener));
+		const subscriptions = this._register(new DisposableStore());
+		const observe = (): void => {
+			subscriptions.clear();
+			for (const copy of getEditorWorkingCopies(this.pane)) {
+				subscriptions.add(copy.onDidChangeDirty(listener));
+				subscriptions.add(copy.onDidChangeExternalChange(listener));
+			}
+		};
+		observe();
+		if (this.pane.onDidChangeWorkingCopies) {
+			this._register(this.pane.onDidChangeWorkingCopies(() => { observe(); listener(); }));
+		}
 	}
 }

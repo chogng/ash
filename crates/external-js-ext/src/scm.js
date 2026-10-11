@@ -21,15 +21,18 @@ export function createSCMApi(runtime, request, invoke) {
 			const actions = values => values.map(value => { entry.actions.set(value.id, value); return action(value); });
 			return serial({
 				id: value.id, providerId: value.providerId, label: value.label, rootUri: value.rootUri?.toString(), selected: entry.selected,
-				groups: value.groups.map(group => ({ id: group.id, label: group.label, actions: actions(group.actions), resources: group.resources.map(resource => {
-					const id = `${group.id}:${resource.path}`;
-					entry.resources.set(id, resource);
-					return { id, sourceUri: resource.sourceUri.toString(), path: resource.path, originalPath: resource.originalPath, decorations: resource.decorations, openLabel: resource.openLabel, actions: actions(resource.actions) };
-				}) })),
+				groups: value.groups.map(group => ({
+					id: group.id, label: group.label, actions: actions(group.actions), resources: group.resources.map(resource => {
+						const id = `${group.id}:${resource.path}`;
+						entry.resources.set(id, resource);
+						return { id, sourceUri: resource.sourceUri.toString(), path: resource.path, originalPath: resource.originalPath, decorations: resource.decorations, openLabel: resource.openLabel, actions: actions(resource.actions) };
+					})
+				})),
 				input: { value: value.input.value, placeholder: value.input.placeholder, enabled: value.input.enabled, canAccept: value.input.canAccept, buttonLabel: value.input.buttonLabel, buttonTooltip: value.input.buttonTooltip },
 				activeRepositoryName: value.activeRepositoryName, statusMessage: value.statusMessage, isBusy: value.isBusy,
 				statusBarCommands: value.statusBarCommands.map(command => ({ id: command.id, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, priority: command.priority, compactGroup: command.compactGroup, icon: command.icon?.id })),
 				hasHistory: !!value.historyProvider, historyRef: value.historyProvider?.historyItemRef.get(), historyRevision: entry.historyRevision,
+				historyRefsRevision: entry.historyRefsRevision, historyRefsItems: entry.historyRefsItems,
 				hasMerge: !!value.mergeProvider, multiDiff: entry.multiDiff?.metadata ?? null, inputRevision: entry.inputRevision,
 			});
 		});
@@ -87,10 +90,19 @@ export function createSCMApi(runtime, request, invoke) {
 		registerSCMProvider(provider, options = {}) {
 			if (disposed || !provider || typeof provider.id !== 'string' || !provider.id || providers.has(provider.id)) throw new TypeError('SCM provider needs a unique identity');
 			ensureRegistration();
-			const entry = { provider, selected: false, actions: new Map(), resources: new Map(), historyRevision: 1, inputRevision: 0, ...options };
+			const entry = { provider, selected: false, actions: new Map(), resources: new Map(), historyRevision: 1, historyRefsRevision: 0, historyRefsItems: [], inputRevision: 0, ...options };
 			providers.set(provider.id, entry);
 			const listeners = [provider.onDidChangeResources(publish)];
-			if (provider.historyProvider) listeners.push(provider.historyProvider.onDidChange(() => { ++entry.historyRevision; publish(); }));
+			if (provider.historyProvider) {
+				listeners.push(provider.historyProvider.onDidChange(() => { ++entry.historyRevision; entry.historyRefsItems = []; publish(); }));
+				if (provider.historyProvider.onDidChangeHistoryItemRefs) {
+					listeners.push(provider.historyProvider.onDidChangeHistoryItemRefs(items => {
+						++entry.historyRefsRevision;
+						entry.historyRefsItems = items;
+						publish();
+					}));
+				}
+			}
 			if (options.decorations?.onDidChange) listeners.push(options.decorations.onDidChange(publish));
 			publish();
 			let removed = false;

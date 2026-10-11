@@ -30,6 +30,7 @@ const installedGlobals = installEditorTestDom(browserEnvironment, [
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
 const { MultiDiffEditorWidget } = await import('../../../browser/widget/multiDiffEditor/multiDiffEditorWidget.js');
 const { createCodeEditorServices } = await import('../testCodeEditor.js');
+await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();
@@ -65,7 +66,15 @@ for (const restore of [false, true]) {
 			} else {
 				assert.deepEqual(editor.currentChange, { itemId: 'first', rowIndex: 59 });
 				assert.equal(editor.getActiveControl()?.modifiedEditor.getPosition()?.lineNumber, 60);
-				assert.ok(editor.saveViewState().scrollTop > 0);
+				assert.ok(container.querySelectorAll('.ash-diff-hidden-region').length > 0);
+				const changeTop = editor.getActiveControl()!.modifiedEditor.getTopForLineNumber(60);
+				assert.ok(changeTop >= 0 && changeTop < 300);
+				editor.collapseAll();
+				editor.toggleCollapseUnchangedRegions();
+				editor.expandAll();
+				assert.equal(container.querySelectorAll('.ash-diff-hidden-region').length, 0);
+				editor.toggleCollapseUnchangedRegions();
+				assert.ok(container.querySelectorAll('.ash-diff-hidden-region').length > 0);
 			}
 		} finally {
 			dom.window.close();

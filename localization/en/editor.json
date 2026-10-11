@@ -34,7 +34,8 @@
     "skills.selectFile": "Select a skill file to open",
     "skills.manageEnablement": "Manage skill enablement…",
     "skills.discoveryFailed": "Unable to load skill files. Try refreshing the catalog.",
-    "skills.openFailed": "Unable to open skill {0}. Refresh the catalog and try again."
+    "skills.openFailed": "Unable to open skill {0}. Refresh the catalog and try again.",
+    "multiDiffEditor.binary": "Binary file changed. Text comparison is unavailable."
   },
   "ash.editor.clipboard": {
     "selection.title": "Selection clipboard",

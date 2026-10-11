@@ -147,6 +147,12 @@
           },
           "cancelIgnore": {
             "route": "git/checkIgnore/cancel"
+          },
+          "historyRefs": {
+            "route": "git/history/refs",
+            "fields": [
+              "repositoryId"
+            ]
           }
         },
         "notifications": [

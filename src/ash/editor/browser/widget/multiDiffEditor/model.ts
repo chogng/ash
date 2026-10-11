@@ -8,11 +8,12 @@ export interface IDocumentDiffItem {
 	readonly originalLabel?: string;
 	readonly modifiedLabel?: string;
 	readonly readOnly?: boolean;
+	readonly binary?: boolean;
 	readonly model: DiffModel | undefined;
 	readonly state: 'unresolved' | 'loading' | 'ready' | 'error';
 	readonly error: Error | undefined;
 	readonly onDidChange: Event<void>;
-	resolve(): Promise<DiffModel>;
+	resolve(): Promise<DiffModel | undefined>;
 }
 
 export interface IMultiDiffEditorModel {
@@ -64,23 +65,26 @@ export interface DocumentDiffItemDescriptor {
 	readonly originalLabel?: string;
 	readonly modifiedLabel?: string;
 	readonly readOnly?: boolean;
+	readonly binary?: boolean;
 }
 
 /** Resolves one comparison once; the caller retains ownership of its DiffModel. */
 export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 	private readonly changeEmitter = this._register(new Emitter<void>());
-	private readonly load: () => Promise<DiffModel>;
+	private readonly load: () => Promise<DiffModel | undefined>;
 	private resolvedModel: DiffModel | undefined;
-	private pending: Promise<DiffModel> | undefined;
+	private pending: Promise<DiffModel | undefined> | undefined;
 	private currentState: IDocumentDiffItem['state'];
 	private loadError: Error | undefined;
+	private resolvedBinary = false;
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(
 		private readonly descriptor: DocumentDiffItemDescriptor,
-		model: DiffModel | (() => Promise<DiffModel>),
+		model: DiffModel | (() => Promise<DiffModel | undefined>) | undefined,
 	) {
 		super();
+		if (!model && !descriptor.binary) throw new TypeError('Text comparisons require a model loader');
 		if (typeof model === 'function') {
 			this.load = model;
 			this.currentState = 'unresolved';
@@ -96,12 +100,14 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 	public get originalLabel(): string | undefined { return this.descriptor.originalLabel; }
 	public get modifiedLabel(): string | undefined { return this.descriptor.modifiedLabel; }
 	public get readOnly(): boolean | undefined { return this.descriptor.readOnly; }
+	public get binary(): boolean { return this.descriptor.binary === true || this.resolvedBinary; }
 	public get model(): DiffModel | undefined { return this.resolvedModel; }
 	public get state(): IDocumentDiffItem['state'] { return this.currentState; }
 	public get error(): Error | undefined { return this.loadError; }
 
-	public resolve(): Promise<DiffModel> {
+	public resolve(): Promise<DiffModel | undefined> {
 		if (this.isDisposed) return Promise.reject(new Error(`Comparison '${this.id}' has been disposed`));
+		if (this.binary) return Promise.resolve(undefined);
 		if (this.resolvedModel) return Promise.resolve(this.resolvedModel);
 		if (this.pending) return this.pending;
 		this.currentState = 'loading';
@@ -110,13 +116,14 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 		return this.pending;
 	}
 
-	private async loadOnce(): Promise<DiffModel> {
+	private async loadOnce(): Promise<DiffModel | undefined> {
 		try {
 			// Let resolve() publish the pending promise before the loader can change state.
 			await Promise.resolve();
 			const model = await this.load();
 			if (this.isDisposed) throw new Error(`Comparison '${this.id}' was disposed while loading`);
 			this.resolvedModel = model;
+			this.resolvedBinary = model === undefined;
 			this.currentState = 'ready';
 			this.changeEmitter.fire();
 			return model;

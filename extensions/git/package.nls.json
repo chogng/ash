@@ -307,12 +307,12 @@
   "color.gitDecoration.untrackedResourceForeground": "Foreground color for untracked files in Git.",
   "color.gitDecoration.conflictingResourceForeground": "Foreground color for files with Git conflicts.",
   "color.gitDecoration.ignoredResourceForeground": "Foreground color for files ignored by Git.",
-  "git.diff.stageHunk": "Stage Change",
-  "git.diff.stageSelection": "Stage Selected Lines",
-  "git.diff.unstageHunk": "Unstage Change",
-  "git.diff.unstageSelection": "Unstage Selected Lines",
-  "git.diff.revertHunk": "Revert Change",
-  "git.diff.revertSelection": "Revert Selected Changes",
+  "git.diff.stageHunk": "Stage change",
+  "git.diff.stageSelection": "Stage selected lines",
+  "git.diff.unstageHunk": "Unstage change",
+  "git.diff.unstageSelection": "Unstage selected lines",
+  "git.diff.revertHunk": "Revert change",
+  "git.diff.revertSelection": "Revert selected changes",
   "git.readingStatus": "Reading Git status…",
   "git.mergeChanges": "Merge Changes",
   "git.switchingRepository": "Switching repository…",
@@ -347,5 +347,6 @@
   "git.autofetch.default": "Default remote",
   "git.autofetch.all": "All remotes",
   "git.autofetchPeriod.title": "Auto Fetch Period",
-  "git.autofetchPeriod.description": "Seconds between automatic fetches for each repository."
+  "git.autofetchPeriod.description": "Seconds between automatic fetches for each repository.",
+  "git.diff.invalidContext": "Open a change toolbar to run this Git action."
 }

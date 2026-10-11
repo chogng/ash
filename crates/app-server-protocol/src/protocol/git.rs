@@ -324,6 +324,12 @@ pub struct GitGraphParams {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct GitGraphResult {
+    pub stream_instance_id: StreamInstanceId,
+    #[ts(type = "number")]
+    pub history_revision: u64,
+    /// Changes when the reachable commit set or repository identity changes, not ref labels.
+    #[ts(type = "number")]
+    pub graph_revision: u64,
     pub commits: Vec<GitCommitSummaryDto>,
     pub references: Vec<GitReferenceDto>,
     pub remotes: Vec<GitRemoteDto>,
@@ -331,6 +337,18 @@ pub struct GitGraphResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub next_cursor: Option<String>,
+}
+
+/// Current graph decorations, independently of the retained commit traversal.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHistoryRefsResult {
+    pub status: GitStatusResult,
+    #[ts(type = "number")]
+    pub graph_revision: u64,
+    pub references: Vec<GitReferenceDto>,
+    pub remotes: Vec<GitRemoteDto>,
+    pub branches: Vec<GitBranchDto>,
 }
 
 /// Identifies one commit whose changed paths should be expanded in repository history.

@@ -18,6 +18,9 @@ export interface IEditorControl extends ICompositeControl { }
 export interface IEditorPane extends IComposite, IDisposable {
 	readonly id: string;
 	readonly workingCopy?: IWorkingCopy;
+	/** File-owned copies retained by an editor that displays multiple resources. */
+	getWorkingCopies?(): readonly IWorkingCopy[];
+	readonly onDidChangeWorkingCopies?: Event<void>;
 	getControl(): IEditorControl | undefined;
 	setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
 	clearInput(): void;
@@ -27,6 +30,10 @@ export interface IEditorPane extends IComposite, IDisposable {
 	revealRange?(range: Range): void;
 	save?(options?: ISaveOptions): Promise<void>;
 	saveAs?(resource: URI): Promise<void>;
+}
+
+export function getEditorWorkingCopies(pane: IEditorPane): readonly IWorkingCopy[] {
+	return pane.getWorkingCopies?.() ?? (pane.workingCopy ? [pane.workingCopy] : []);
 }
 
 export interface EditorPaneStatus {

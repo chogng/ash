@@ -1664,7 +1664,7 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 					written: handled && command !== 'paste' ? 'alpha' : '',
 					reads: handled && command === 'paste' ? 1 : 0,
 					focused: handled,
-					documentCommands: target === 'find' || handled && command !== 'paste' ? [command] : [],
+					documentCommands: target === 'find' || handled ? [command] : [],
 				});
 				if (edited) {
 					await page.keyboard.press('ControlOrMeta+z');
@@ -4598,6 +4598,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 			return event.defaultPrevented;
 		}, copied);
 		expect(pastePrevented).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishPaste());
 		const pasted = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
 		expect({ value: pasted.value, version: pasted.version, selection: pasted.selection }).toEqual({
 			value: 'alphaalpha beta',

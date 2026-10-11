@@ -23,7 +23,6 @@
     "scm.history.references": "历史记录引用",
     "scm.history.openChanges": "打开更改",
     "scm.history.commitActions": "提交操作",
-    "scm.history.binaryFiles": "{0} 个二进制文件无法在文本比较中显示。",
     "scm.history.help": "在提交上按 Enter 或空格展开文件。按 Shift+F10 或菜单键使用提交操作：查看或比较改动、创建分支、拣选、复制提交信息或添加到聊天。使用 Tab 移动到引用标签和“打开改动”。在“打开改动”上按 Enter 可比较该提交的所有文本文件。在引用标签上按 Enter 打开分支操作。“检出”包含分离 HEAD 操作，“更多”包含创建标签。 按 Alt+向下箭头聚焦提交详情并使用其中的操作；按 Escape 返回提交。",
     "git.completeMerge": "完成合并",
     "git.mergeResult": "结果",

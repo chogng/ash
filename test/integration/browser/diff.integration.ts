@@ -71,7 +71,8 @@ import { isEditorPaneWithViewState } from '../../../src/ash/workbench/browser/pa
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../../../src/ash/workbench/services/editor/browser/codeEditorService.js';
 import { IEditorPartsService } from '../../../src/ash/workbench/browser/parts/editor/editorParts.js';
-import { MultiDiffGoToFileAction } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorActions.js';
+import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffToggleCollapseUnchangedRegionsAction } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorActions.js';
+import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { IGitService, type GitStatus, type GitIndexDiff, type GitIndexSelection } from '../../../extensions/git/browser/types.js';
 import { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
@@ -91,6 +92,8 @@ async function createGitMultiDiffEditorInput(...args: Parameters<typeof gitMulti
 function wireReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown { return this[key] instanceof URI ? this[key].toString() : value; }
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../src/ash/workbench/services/chat/common/chatService.js';
@@ -106,6 +109,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 const resources = new DisposableStore();
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const editorServices = StandaloneServices.initialize();
+editorServices.registerInstance(IWorkingCopyService, resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)));
 resources.add(toDisposable(resetNlsResolver));
 const symbolProvider = resources.add(editorServices.languageFeaturesService.documentSymbolProvider.register('*', {
 	provideDocumentSymbols: request => request.model.getLineCount() < 36 ? [] : [{
@@ -169,8 +173,12 @@ let titleServices: ReturnType<typeof createTestEditorServices> | undefined;
 const titleGitEvents = resources.add(new Emitter<GitStatus>());
 let titleGitStatus: GitStatus;
 let titleGitDelay = 0;
+let titleGitEncoding: 'utf8' | 'utf8bom' = 'utf8';
 const inspectedFiles: string[] = [];
 const gitGutterCalls: unknown[] = [];
+const titleWrites: { resource: string; text: string; }[] = [];
+let titleSaveFailure = false;
+let writableTitleInput: import('../../../src/ash/workbench/common/editor.js').IResourceEditorInput | undefined;
 const titleGit = {
 	onDidChangeRepositoryStatus: titleGitEvents.event,
 	status: async () => titleGitStatus,
@@ -178,9 +186,13 @@ const titleGit = {
 		const revision = titleGitStatus.revision;
 		const delay = titleGitDelay;
 		if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-		return { original: { kind: 'text', text: 'before\nshared' }, modified: { kind: 'text', text: `${path} revision ${revision}\nshared` } };
+		const bom = titleGitEncoding === 'utf8bom' ? '\uFEFF' : '';
+		return { original: { kind: 'text', text: `${bom}before\nshared` }, modified: { kind: 'text', text: `${bom}${path} revision ${revision}\nshared` } };
 	},
-	indexDiff: async (path: string) => ({ original: 'before\nshared', modified: `${path} revision ${titleGitStatus.revision}\nshared`, hunks: [] }),
+	indexDiff: async (path: string) => {
+		const bom = titleGitEncoding === 'utf8bom' ? '\uFEFF' : '';
+		return { original: `${bom}before\nshared`, modified: `${bom}${path} revision ${titleGitStatus.revision}\nshared`, hunks: [] };
+	},
 	editIndex: async (path: string, comparison: string, reviewed: GitIndexDiff, selection: GitIndexSelection, repositoryId: string) => {
 		gitGutterCalls.push({ path, comparison, reviewed, selection, repositoryId });
 		return titleGitStatus;
@@ -237,7 +249,8 @@ function createSessionChangesPane(): SessionChangesEditor {
 }
 
 const harness = {
-	async openTitleComparison(kind: 'diff' | 'history' | 'git' = 'diff'): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8'): Promise<void> {
+		titleGitEncoding = encoding;
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
 		host.id = 'title-comparison';
@@ -250,7 +263,7 @@ const harness = {
 			services.registerInstance(INotificationService, { error: (message: string) => gitGutterCalls.push({ error: message }), info: () => { } } as unknown as INotificationService);
 			services.registerInstance(ITextFileService, {
 				onDidChangeFiles: Event.None, onDidSave: Event.None,
-				resolve: async request => ({ resource: request.resource, text: `src/first.ts revision ${titleGitStatus.revision}\nshared`, revision: 'file-revision', encoding: 'utf8', source: TextFileContentSource.FileSystem }),
+				resolve: async request => ({ resource: request.resource, text: `src/first.ts revision ${titleGitStatus.revision}\nshared`, revision: 'file-revision', encoding: titleGitEncoding, source: TextFileContentSource.FileSystem }),
 				save: async request => { gitGutterCalls.push({ save: request }); return { revision: 'saved' }; },
 			});
 		}
@@ -260,6 +273,9 @@ const harness = {
 		} as IEditorPartsService);
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 		resources.add(registerAction2(MultiDiffGoToFileAction));
+		resources.add(registerAction2(MultiDiffCollapseAllAction));
+		resources.add(registerAction2(MultiDiffExpandAllAction));
+		resources.add(registerAction2(MultiDiffToggleCollapseUnchangedRegionsAction));
 		resources.add(CommandsRegistry.register('integration.inspectMultiDiffFile', (_accessor, input: unknown) => {
 			inspectedFiles.push((input as { resource: URI; }).resource.toString());
 		}));
@@ -312,7 +328,7 @@ const harness = {
 		const store: ITextResourceStore = {
 			onDidChange: Event.None,
 			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
-			save: async () => ({ revision: undefined }),
+			save: async request => { if (titleSaveFailure) throw new Error('Save rejected'); titleWrites.push({ resource: request.resource.path, text: request.text }); return { revision: undefined }; },
 		};
 		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, store, {}));
 		const registry = new EditorPaneRegistry();
@@ -347,7 +363,18 @@ const harness = {
 		titleEditor.layout({ width: 1000, height: 300 });
 		if (kind === 'git') {
 			titleGitStatus = makeTitleGitStatus(['src/first.ts', 'src/second.ts'], 1);
-			await titleEditor.openEditor(await createGitMultiDiffEditorInput(titleGit, 'unstaged'), { pinned: true });
+			if (gitComparison === 'staged') {
+				titleGitStatus = { ...titleGitStatus, changes: titleGitStatus.changes.map(change => ({ ...change, indexStatus: 'modified', worktreeStatus: 'unmodified' })) };
+			}
+			await titleEditor.openEditor(await createGitMultiDiffEditorInput(titleGit, gitComparison), { pinned: true });
+			return;
+		}
+		if (kind === 'writable' || kind === 'binary') {
+			writableTitleInput = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/binary-writable'), [
+				{ label: 'image.bin', binary: true, original: { resource: URI.parse('snapshot:/image.bin'), readOnly: true }, modified: { resource: URI.file('/workspace/image.bin') } },
+				...(kind === 'writable' ? ['first', 'second'].map(name => ({ label: `${name}.ts`, original: { resource: URI.parse(`snapshot:/${name}.ts`), initialText: 'before', readOnly: true }, modified: { resource: URI.file(`/workspace/${name}.ts`), initialText: 'after' } })) : []),
+			], 'File review');
+			await titleEditor.openEditor(writableTitleInput, { pinned: true });
 			return;
 		}
 		if (kind === 'history') {
@@ -368,8 +395,25 @@ const harness = {
 			{ resource: URI.file('/title/after.ts'), label: 'after.ts', initialText: 'after\nshared' },
 		), { pinned: true });
 	},
+	readTitlePersistence(): { dirty: boolean; copies: number; writes: { resource: string; text: string; }[]; tabs: number; active: string | undefined; } {
+		return { dirty: titleEditor!.activeGroup.editors.some(editor => editor.isDirty), copies: titleServices!.get(IWorkingCopyService).getAll().length, writes: [...titleWrites], tabs: titleEditor!.activeGroup.inputs.length, active: titleEditor!.activeInput?.resource.toString() };
+	},
+	async saveTitleFiles(fail = false): Promise<string | undefined> {
+		titleSaveFailure = fail;
+		try { await titleServices!.get(IEditorService).saveAll(); return undefined; }
+		catch (error) { return (error as Error).message; }
+		finally { titleSaveFailure = false; }
+	},
+	async openOtherTitleFile(): Promise<void> {
+		await titleEditor!.openEditor(createDiffEditorInput({ resource: URI.parse('snapshot:/other/before'), initialText: 'old', readOnly: true }, { resource: URI.parse('snapshot:/other/after'), initialText: 'new', readOnly: true }), { pinned: true });
+	},
+	closeWritableTitle(): Promise<boolean> { return titleEditor!.closeEditor(writableTitleInput!); },
 	get gitGutterCalls() { return gitGutterCalls; },
 	expireGitGutterSnapshot(): void { titleGitStatus = { ...titleGitStatus, revision: titleGitStatus.revision + 1 }; },
+	selectTitleModified(range: [number, number, number, number]): void {
+		const editor = titleServices!.get(ICodeEditorService).listDiffEditors().find(candidate => candidate instanceof DiffEditorWidget) as DiffEditorWidget;
+		editor.modifiedEditor.setSelection(new Range(...range));
+	},
 	async updateTitleEditorConfiguration(key: string, value: unknown): Promise<void> {
 		await titleConfiguration!.updateValue(key, value);
 	},
@@ -434,6 +478,7 @@ const harness = {
 		return multi.getActiveControl()?.modifiedEditor.getModel()?.getText();
 	},
 	focusMulti(): void { multi.focus(); },
+	toggleMultiUnchangedRegions(): void { multi.toggleCollapseUnchangedRegions(); },
 	readIndicatorSetting(): { title: string; description: string; } {
 		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration('diffEditor.renderIndicators')!.setting!;
 		return { title: setting.title, description: setting.description };

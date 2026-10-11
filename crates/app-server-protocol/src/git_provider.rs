@@ -5,6 +5,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 
+/// The host and bundled provider must agree on required graph revision stamps.
+pub const GIT_PROVIDER_VERSION: u16 = 2;
+
 pub const GIT_PROVIDER_CHANNEL: &str = "git.repository";
 pub const GIT_PROVIDER_ID: &str = "ash.git";
 pub const GIT_PROVIDER_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
@@ -100,6 +103,9 @@ pub enum GitProviderRequest {
         repository_id: Option<String>,
     },
     RecentCommits {
+        repository_id: Option<String>,
+    },
+    HistoryRefs {
         repository_id: Option<String>,
     },
     Graph {
@@ -212,6 +218,7 @@ pub enum GitProviderResponse {
     },
     Path(PathBuf),
     History(Vec<GitCommitSummaryDto>),
+    HistoryRefs(crate::protocol::git::GitHistoryRefsResult),
     Graph(GitGraphResult),
     TextDiff(GitTextDiffResult),
     CommitChanges(GitCommitChangesResult),
