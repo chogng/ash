@@ -109,7 +109,6 @@ class PackageTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-external-js-ext",
                 "ash-github-authentication",
-                "ash-git-extension",
                 "ash-remote-ssh-extension",
                 "ash-voice-host",
                 "ash-collaboration-server",
@@ -372,9 +371,6 @@ class PackageTests(unittest.TestCase):
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
                 ),
-                git_extension_binary=executable_file(
-                    root / "git-extension", b"git-extension"
-                ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
                 ),
@@ -472,17 +468,12 @@ class PackageTests(unittest.TestCase):
                 (output / "bin" / "ash-github-authentication").read_bytes(),
             )
             git_extension = output / "ash-resources" / "extensions" / "git"
-            self.assertEqual(
-                "ash-git-extension",
-                json.loads((git_extension / "package.json").read_text())["ashRuntime"][
-                    "entrypoint"
-                ],
-            )
+            git_manifest = json.loads((git_extension / "package.json").read_text())
+            self.assertNotIn("ashRuntime", git_manifest)
+            self.assertEqual("./browser/extension.ts", git_manifest["browser"])
             self.assertFalse((git_extension / "src").exists())
             self.assertFalse((git_extension / "Cargo.toml").exists())
-            self.assertEqual(
-                b"git-extension", (output / "bin" / "ash-git-extension").read_bytes()
-            )
+            self.assertFalse((output / "bin" / "ash-git-extension").exists())
             self.assertIn(
                 "仓库",
                 json.loads((git_extension / "package.nls.zh-CN.json").read_text())[
@@ -624,9 +615,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
-                ),
-                git_extension_binary=executable_file(
-                    root / "git-extension", b"git-extension"
                 ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
@@ -890,9 +878,6 @@ class PackageTests(unittest.TestCase):
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
                 ),
-                git_extension_binary=executable_file(
-                    root / "git-extension", b"git-extension"
-                ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"
                 ),
@@ -976,9 +961,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 github_authentication_binary=executable_file(
                     root / "github-authentication", b"github-authentication"
-                ),
-                git_extension_binary=executable_file(
-                    root / "git-extension", b"git-extension"
                 ),
                 remote_host_binary=executable_file(
                     root / "remote-host", b"remote-host"

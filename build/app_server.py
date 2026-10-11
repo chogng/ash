@@ -87,11 +87,6 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         help="Prebuilt Rust Remote SSH extension.",
     )
     parser.add_argument(
-        "--git-extension-bin",
-        type=Path,
-        help="Prebuilt Rust Git extension.",
-    )
-    parser.add_argument(
         "--github-authentication-bin",
         type=Path,
         help="Prebuilt Rust GitHub authentication extension.",
@@ -204,7 +199,6 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-code-mode-host": args.code_mode_host_bin,
         "ash-external-js-ext": args.external_js_ext_bin,
         "ash-github-authentication": args.github_authentication_bin,
-        "ash-git-extension": args.git_extension_bin,
         "ash-remote-ssh-extension": args.remote_ssh_extension_bin,
         "ash-remote": args.remote_bin,
         "ash-remote-host": None,
@@ -277,7 +271,6 @@ def build_package(args: argparse.Namespace) -> int:
         bubblewrap,
         livekit=livekit,
         github_authentication_binary=binaries["ash-github-authentication"],
-        git_extension_binary=binaries["ash-git-extension"],
         remote_ssh_extension_binary=binaries["ash-remote-ssh-extension"],
         remote_host_binary=binaries["ash-remote-host"],
         voice_host_binary=binaries["ash-voice-host"],

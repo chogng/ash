@@ -110,6 +110,7 @@ ash-mcp-extension = { workspace = true }
 ash-file-system = { workspace = true }
 ash-file-watcher = { workspace = true }
 ash-git = { workspace = true }
+ignore = { workspace = true }
 github = { workspace = true }
 ash-http-client = { workspace = true }
 ash-websocket-client = { workspace = true }

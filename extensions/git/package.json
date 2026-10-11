@@ -7,18 +7,6 @@
   "engines": {
     "vscode": "*"
   },
-  "ashRuntime": {
-    "kind": "rust",
-    "entrypoint": "ash-git-extension",
-    "scope": "directory",
-    "clients": [
-      "app",
-      "tui"
-    ],
-    "capabilities": [
-      "git.repository"
-    ]
-  },
   "browser": "./browser/extension.ts",
   "ashFrontend": {
     "capabilities": {

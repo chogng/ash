@@ -13,7 +13,6 @@ mod dynamic_tools;
 mod execution_environments;
 mod extension_packages_editor_extensions;
 mod extension_tools;
-mod git_provider;
 mod git_service;
 mod local;
 mod local_tools;

@@ -2781,10 +2781,7 @@ impl AppServer {
         )
         .map_err(super::git_operations::git_error)?;
         git.reconcile().map_err(super::git_operations::git_error)?;
-        super::result(
-            &git.repositories()
-                .map_err(super::git_operations::git_error)?,
-        )
+        super::result(&git.repositories())
     }
 
     pub(super) fn git_runtime_service(&self) -> Result<Arc<GitRuntime>, RpcError> {

@@ -91,15 +91,12 @@ def build_package_directory(
     remote_runtime_release: Optional[Dict[str, str]] = None,
     symbols_dir: Optional[Path] = None,
     github_authentication_binary: Optional[Path] = None,
-    git_extension_binary: Optional[Path] = None,
     remote_ssh_extension_binary: Optional[Path] = None,
 ) -> None:
     if remote_ssh_extension_binary is None:
         raise RuntimeError(
             "Remote SSH extension executable is required in product packages"
         )
-    if git_extension_binary is None:
-        raise RuntimeError("Git extension executable is required in product packages")
     if github_authentication_binary is None:
         raise RuntimeError(
             "GitHub authentication extension executable is required in product packages"
@@ -145,7 +142,6 @@ def build_package_directory(
             "codeModeHost": str(code_mode_host_binary),
             "jsExtensionHost": str(js_extension_host_binary),
             "githubAuthentication": str(github_authentication_binary),
-            "gitExtension": str(git_extension_binary),
             "remoteSshExtension": str(remote_ssh_extension_binary),
             "voiceHost": str(voice_host_binary),
             "collaborationServer": str(collaboration_server_binary),
@@ -670,9 +666,6 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
         "jsExtensionHost": package / "bin" / spec.js_extension_host_name,
-        "gitExtension": package
-        / "bin"
-        / ("ash-git-extension" + spec.executable_suffix),
         "githubAuthentication": package
         / "bin"
         / ("ash-github-authentication" + spec.executable_suffix),
@@ -749,7 +742,6 @@ def record_system_signing(
             "codeModeHost",
             "jsExtensionHost",
             "githubAuthentication",
-            "gitExtension",
             "remoteSshExtension",
             "voiceHost",
             "collaborationServer",

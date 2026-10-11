@@ -32,7 +32,6 @@ BINARY_PACKAGES = {
     "ash-app-server": "ash-app-server",
     "ash-code-mode-host": "ash-code-mode-host",
     "ash-voice-host": "ash-voice-host",
-    "ash-git-extension": "ash-git-extension",
     "bwrap": "ash-bwrap",
 }
 
@@ -44,7 +43,6 @@ def development_binaries(*, platform_name: str | None = None) -> list[str]:
         "ash-app-server",
         "ash-code-mode-host",
         "ash-voice-host",
-        "ash-git-extension",
     ]
     if platform_name.startswith("linux"):
         binaries.append("bwrap")

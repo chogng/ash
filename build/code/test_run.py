@@ -384,7 +384,6 @@ class SourceRunnerTests(unittest.TestCase):
             "ash-app-server": root / "ash-app-server.exe",
             "ash-code-mode-host": root / "ash-code-mode-host.exe",
             "ash-voice-host": root / "ash-voice-host.exe",
-            "ash-git-extension": root / "ash-git-extension.exe",
             "tgrep": root / "tgrep.exe",
         }
 
