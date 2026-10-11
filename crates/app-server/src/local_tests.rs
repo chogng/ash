@@ -2202,17 +2202,17 @@ fn shared_profile_runtime_rejects_a_second_secret_store_authority() {
 }
 
 #[test]
-fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
+fn shared_profile_runtime_owns_exactly_one_extension_packages_authority() {
     let profile = tempfile::tempdir().unwrap();
     let runtime = LocalProfileRuntime::open(profile.path()).unwrap();
-    let first_config = ash_core_plugins::RemoteMarketplaceConfig::new(
+    let first_config = ash_core_plugins::RemoteExtensionsConfig::new(
         "https://marketplace.example/metadata/".parse().unwrap(),
         "https://marketplace.example/targets/".parse().unwrap(),
         vec![1],
         profile.path().join("cache-a"),
     )
     .unwrap();
-    let vendor = ash_core_plugins::RemoteMarketplaceConfig::new(
+    let vendor = ash_core_plugins::RemoteExtensionsConfig::new(
         "https://vendor.example/metadata/".parse().unwrap(),
         "https://vendor.example/targets/".parse().unwrap(),
         vec![3],
@@ -2221,17 +2221,20 @@ fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
     .unwrap();
     let first_config = BTreeMap::from([
         (
-            ash_plugin::MarketplaceName::new("ash").unwrap(),
+            ash_plugin::ExtensionSourceId::new("ash").unwrap(),
             first_config,
         ),
-        (ash_plugin::MarketplaceName::new("vendor").unwrap(), vendor),
+        (
+            ash_plugin::ExtensionSourceId::new("vendor").unwrap(),
+            vendor,
+        ),
     ]);
     let first = runtime.plugins_manager(first_config.clone(), None).unwrap();
     let reused = runtime.plugins_manager(first_config, None).unwrap();
     assert!(Arc::ptr_eq(&first, &reused));
     assert!(!profile.path().join("vendor-cache").exists());
 
-    let second_config = ash_core_plugins::RemoteMarketplaceConfig::new(
+    let second_config = ash_core_plugins::RemoteExtensionsConfig::new(
         "https://other.example/metadata/".parse().unwrap(),
         "https://other.example/targets/".parse().unwrap(),
         vec![2],
@@ -2239,16 +2242,16 @@ fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
     )
     .unwrap();
     let second_config = BTreeMap::from([(
-        ash_plugin::MarketplaceName::new("ash").unwrap(),
+        ash_plugin::ExtensionSourceId::new("ash").unwrap(),
         second_config,
     )]);
     let error = match runtime.plugins_manager(second_config, None) {
-        Ok(_) => panic!("a second Marketplace authority must be rejected"),
+        Ok(_) => panic!("a second Extensions authority must be rejected"),
         Err(error) => error,
     };
     assert_eq!(
         error.0,
-        "one profile runtime cannot use multiple Marketplace authorities"
+        "one profile runtime cannot use multiple Extensions authorities"
     );
 }
 

@@ -150,19 +150,19 @@ where
                 .into(),
             );
         }
-        TuiSlashCommandAction::Marketplace | TuiSlashCommandAction::Plugins => {
+        TuiSlashCommandAction::Extensions | TuiSlashCommandAction::Plugins => {
             let request = if command == TuiSlashCommandAction::Plugins {
-                crate::marketplace::Command::Plugins
+                crate::extension_packages::Command::Plugins
             } else {
-                crate::marketplace::Command::Browse(
-                    ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams {
+                crate::extension_packages::Command::Browse(
+                    ash_app_server_protocol::protocol::extension_packages::ExtensionsSearchParams {
                         query: arguments,
                         ..Default::default()
                     },
                 )
             };
             output.events.push(
-                crate::marketplace::execute(client, request)
+                crate::extension_packages::execute(client, request)
                     .map_err(CommandExecutionError)?
                     .into(),
             );

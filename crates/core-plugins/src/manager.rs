@@ -1,3 +1,8 @@
+use crate::AshExtensionSourceConfig;
+use crate::ExtensionSourceDescription;
+use crate::ExtensionSourcesSnapshot;
+use crate::sources::source_provider;
+use ash_plugin::ExtensionSourceId;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -15,19 +20,19 @@ use crate::CapabilityKind;
 use crate::CapabilityLease;
 use crate::CapabilityRef;
 use crate::DownloadPackageRequest;
+use crate::ExtensionPackagePayload;
+use crate::ExtensionPackageService;
+use crate::ExtensionSources;
+use crate::ExtensionsClientError;
+use crate::ExtensionsErrorCode;
 use crate::GetPackageRequest;
 use crate::InstallPackageRequest;
 use crate::InstallationState;
 use crate::InstalledPackage;
 use crate::ListInstalledRequest;
-use crate::MarketplaceClientError;
-use crate::MarketplaceErrorCode;
 use crate::OpenResourceRequest;
 use crate::PackageDetails;
 use crate::PackageRef;
-use crate::PluginPackagePayload;
-use crate::PluginPackageService;
-use crate::PluginProviders;
 use crate::ReleaseCapabilityRequest;
 use crate::ResourceContent;
 use crate::SearchPackagesRequest;
@@ -38,17 +43,17 @@ use crate::UpdatePackageRequest;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::marketplace_activation as activation;
-use crate::marketplace_store::Store;
-use crate::marketplace_store::opaque_id;
+use crate::extension_packages_activation as activation;
+use crate::extension_packages_store::Store;
+use crate::extension_packages_store::opaque_id;
 
 /// Ash's local owner for installed Plugin packages and capability leases.
 ///
 /// The manager receives named providers for source discovery and verified packages. All
 /// artifact storage, installation state, update/uninstall behavior, resource access, and leases
 /// remain local to the Ash profile.
-pub struct PluginsManager {
-    providers: PluginProviders,
+pub struct ExtensionPackageManager {
+    providers: Mutex<ExtensionSources>,
     store: Store,
     runtime: Mutex<RuntimeState>,
     lease_sequence: AtomicU64,
@@ -57,6 +62,10 @@ pub struct PluginsManager {
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 struct DurableState {
+    #[serde(default)]
+    sources: BTreeMap<ash_plugin::ExtensionSourceId, crate::AshExtensionSourceConfig>,
+    #[serde(default)]
+    source_revision: u64,
     installations: BTreeMap<String, InstallationRecord>,
 }
 
@@ -150,12 +159,19 @@ struct LeaseRecord {
     lease: CapabilityLease,
 }
 
-impl PluginsManager {
+impl ExtensionPackageManager {
+    fn source_providers(&self) -> Result<ExtensionSources, ExtensionsClientError> {
+        self.providers
+            .lock()
+            .map(|sources| sources.clone())
+            .map_err(|_| ExtensionsClientError::storage())
+    }
+
     pub fn extension_gallery_resource_url_template(
         &self,
-    ) -> Result<Option<String>, MarketplaceClientError> {
+    ) -> Result<Option<String>, ExtensionsClientError> {
         Ok(self
-            .providers
+            .source_providers()?
             .extension_gallery()?
             .map(|(_, _, template)| template))
     }
@@ -167,7 +183,7 @@ impl PluginsManager {
         name: &str,
         version: &str,
         path: &str,
-    ) -> Result<Vec<u8>, MarketplaceClientError> {
+    ) -> Result<Vec<u8>, ExtensionsClientError> {
         if path.is_empty()
             || path.len() > 1024
             || path.contains(['\\', ':', '\0'])
@@ -175,18 +191,20 @@ impl PluginsManager {
                 .split('/')
                 .any(|part| part.is_empty() || part == "." || part == "..")
         {
-            return Err(MarketplaceClientError::invalid_request(
+            return Err(ExtensionsClientError::invalid_request(
                 "invalid extension resource path",
             ));
         }
-        let (marketplace, _, _) = self.providers.extension_gallery()?.ok_or_else(|| {
-            MarketplaceClientError::invalid_request("no extension resource gallery is configured")
+        let providers = self.source_providers()?;
+        let (extension_packages, _, _) = providers.extension_gallery()?.ok_or_else(|| {
+            ExtensionsClientError::invalid_request("no extension resource gallery is configured")
         })?;
         let package_id =
-            ash_plugin::PluginId::new(format!("{publisher}.{name}"), marketplace.clone()).map_err(
-                |_| MarketplaceClientError::invalid_request("invalid extension identity"),
-            )?;
-        let downloaded = self.providers.download(DownloadPackageRequest {
+            ash_plugin::PluginId::new(format!("{publisher}.{name}"), extension_packages.clone())
+                .map_err(|_| {
+                    ExtensionsClientError::invalid_request("invalid extension identity")
+                })?;
+        let downloaded = self.source_providers()?.download(DownloadPackageRequest {
             package_id: package_id.to_string(),
             version: Some(version.to_owned()),
         })?;
@@ -197,7 +215,7 @@ impl PluginsManager {
             .find(|capability| {
                 capability.kind == CapabilityKind::EditorExtension && capability.id == extension_id
             })
-            .ok_or_else(MarketplaceClientError::package_untrusted)?;
+            .ok_or_else(ExtensionsClientError::package_untrusted)?;
         let relative = format!("{}/{path}", capability.path);
         let artifact = self.store.materialize(downloaded.as_ref())?;
         // Validate the complete artifact and containment before reading; no live package root is exposed.
@@ -211,7 +229,7 @@ impl PluginsManager {
     pub fn acquire_local_source(
         &self,
         source: &LocalCapabilitySource,
-    ) -> Result<CapabilityLease, MarketplaceClientError> {
+    ) -> Result<CapabilityLease, ExtensionsClientError> {
         let mut runtime = self.lock_runtime()?;
         let (installation, capability) = find_capability(&runtime.durable, &source.capability)?;
         if installation.state != InstallationState::Installed
@@ -251,10 +269,11 @@ impl PluginsManager {
     /// Opens one profile-owned installation store over its explicitly registered sources.
     pub fn open(
         state_root: impl Into<PathBuf>,
-        providers: PluginProviders,
-    ) -> Result<Self, MarketplaceClientError> {
+        mut providers: ExtensionSources,
+    ) -> Result<Self, ExtensionsClientError> {
         let store = Store::open(state_root.into())?;
         let mut durable: DurableState = store.read_state()?;
+        crate::sources::restore_sources(&mut providers, &durable.sources, &store)?;
         durable
             .installations
             .retain(|_, installation| installation.state == InstallationState::Installed);
@@ -265,7 +284,7 @@ impl PluginsManager {
                 || crate::PluginVersion::new(&installation.package.version).is_err()
                 || crate::PluginPackageDigest::new(&installation.package.digest).is_err()
             {
-                return Err(MarketplaceClientError::storage());
+                return Err(ExtensionsClientError::storage());
             }
             if !installation.package.id.contains('@') {
                 installation.package.id =
@@ -273,13 +292,13 @@ impl PluginsManager {
                 installation.installation_id = installation_id(&installation.package);
             } else {
                 ash_plugin::PluginId::parse(&installation.package.id)
-                    .map_err(|_| MarketplaceClientError::storage())?;
+                    .map_err(|_| ExtensionsClientError::storage())?;
             }
             if installations
                 .insert(installation.installation_id.clone(), installation)
                 .is_some()
             {
-                return Err(MarketplaceClientError::storage());
+                return Err(ExtensionsClientError::storage());
             }
         }
         durable.installations = installations;
@@ -295,11 +314,11 @@ impl PluginsManager {
         store.write_state(&durable)?;
         let session_nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| MarketplaceClientError::storage())?
+            .map_err(|_| ExtensionsClientError::storage())?
             .as_nanos()
             .to_string();
         Ok(Self {
-            providers,
+            providers: Mutex::new(providers),
             store,
             runtime: Mutex::new(RuntimeState {
                 durable,
@@ -313,14 +332,14 @@ impl PluginsManager {
     }
 
     /// Subscribes to committed installation-state changes for local domain adapters.
-    pub fn subscribe(&self) -> Result<mpsc::Receiver<u64>, MarketplaceClientError> {
+    pub fn subscribe(&self) -> Result<mpsc::Receiver<u64>, ExtensionsClientError> {
         let (sender, receiver) = mpsc::channel();
         self.lock_runtime()?.subscribers.push(sender);
         Ok(receiver)
     }
 
     /// Returns the current process-local installation generation.
-    pub fn generation(&self) -> Result<u64, MarketplaceClientError> {
+    pub fn generation(&self) -> Result<u64, ExtensionsClientError> {
         Ok(self.lock_runtime()?.generation)
     }
 
@@ -331,17 +350,17 @@ impl PluginsManager {
 
     /// Returns verified sources of one capability kind for trusted local runtime composition.
     ///
-    /// The ordinary Marketplace service contract intentionally exposes no filesystem paths. This
+    /// The ordinary Extensions service contract intentionally exposes no filesystem paths. This
     /// local-only adapter revalidates the complete immutable artifact before returning a host
     /// handle and must not be used by transports or Renderer code.
     pub fn local_capability_sources(
         &self,
         kind: CapabilityKind,
-    ) -> Result<Vec<LocalCapabilitySource>, MarketplaceClientError> {
+    ) -> Result<Vec<LocalCapabilitySource>, ExtensionsClientError> {
         let durable = self
             .runtime
             .lock()
-            .map_err(|_| MarketplaceClientError::storage())?
+            .map_err(|_| ExtensionsClientError::storage())?
             .durable
             .clone();
         let mut sources = Vec::new();
@@ -389,8 +408,8 @@ impl PluginsManager {
 
     fn install_downloaded(
         &self,
-        downloaded: &dyn PluginPackagePayload,
-    ) -> Result<InstalledPackage, MarketplaceClientError> {
+        downloaded: &dyn ExtensionPackagePayload,
+    ) -> Result<InstalledPackage, ExtensionsClientError> {
         let artifact = self.store.materialize(downloaded)?;
         let installation_id = installation_id(&artifact.package);
         let capabilities = downloaded
@@ -438,42 +457,141 @@ impl PluginsManager {
 
     fn lock_runtime(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, RuntimeState>, MarketplaceClientError> {
+    ) -> Result<std::sync::MutexGuard<'_, RuntimeState>, ExtensionsClientError> {
         self.runtime.lock().map_err(|_| {
-            MarketplaceClientError::business(
-                MarketplaceErrorCode::ServiceUnavailable,
-                "Marketplace Manager is unavailable",
+            ExtensionsClientError::business(
+                ExtensionsErrorCode::ServiceUnavailable,
+                "Extensions Manager is unavailable",
                 true,
             )
         })
     }
 }
 
-impl PluginPackageService for PluginsManager {
+impl ExtensionPackageManager {
+    pub fn sources(&self) -> Result<ExtensionSourcesSnapshot, ExtensionsClientError> {
+        let runtime = self.lock_runtime()?;
+        let providers = self.source_providers()?;
+        Ok(ExtensionSourcesSnapshot {
+            revision: runtime.durable.source_revision,
+            sources: providers
+                .providers
+                .iter()
+                .map(|(id, provider)| ExtensionSourceDescription {
+                    id: id.clone(),
+                    kind: provider.registry_kind(),
+                    enabled: !providers.disabled.contains(id),
+                    product_owned: !runtime.durable.sources.contains_key(id),
+                })
+                .collect(),
+        })
+    }
+
+    /// Adds a new immutable source identity. Reusing an ID cannot replace its trust root.
+    pub fn add_source(
+        &self,
+        config: AshExtensionSourceConfig,
+        expected_revision: u64,
+    ) -> Result<ExtensionSourcesSnapshot, ExtensionsClientError> {
+        let provider = source_provider(&config, &self.store.source_cache_root(&config.id))?;
+        {
+            let mut runtime = self.lock_runtime()?;
+            let mut providers = self
+                .providers
+                .lock()
+                .map_err(|_| ExtensionsClientError::storage())?;
+            if runtime.durable.source_revision != expected_revision
+                || providers.providers.contains_key(&config.id)
+                || providers.providers.len() >= 32
+            {
+                return Err(ExtensionsClientError::invalid_request(
+                    "extension source revision or identity conflict",
+                ));
+            }
+            let mut durable = runtime.durable.clone();
+            durable.source_revision = durable
+                .source_revision
+                .checked_add(1)
+                .ok_or_else(ExtensionsClientError::storage)?;
+            durable.sources.insert(config.id.clone(), config.clone());
+            self.store.write_state(&durable)?;
+            if !config.enabled {
+                providers.disabled.insert(config.id.clone());
+            }
+            providers.providers.insert(config.id, provider);
+            runtime.durable = durable;
+            publish_change(&mut runtime)?;
+        }
+        self.sources()
+    }
+
+    /// Pausing discovery leaves exact installed packages and their domain policies intact.
+    pub fn set_source_enabled(
+        &self,
+        id: &ExtensionSourceId,
+        enabled: bool,
+        expected_revision: u64,
+    ) -> Result<ExtensionSourcesSnapshot, ExtensionsClientError> {
+        {
+            let mut runtime = self.lock_runtime()?;
+            let mut providers = self
+                .providers
+                .lock()
+                .map_err(|_| ExtensionsClientError::storage())?;
+            if runtime.durable.source_revision != expected_revision {
+                return Err(ExtensionsClientError::invalid_request(
+                    "extension source revision conflict",
+                ));
+            }
+            let mut durable = runtime.durable.clone();
+            let source = durable.sources.get_mut(id).ok_or_else(|| {
+                ExtensionsClientError::invalid_request(
+                    "product extension sources cannot be changed",
+                )
+            })?;
+            source.enabled = enabled;
+            durable.source_revision = durable
+                .source_revision
+                .checked_add(1)
+                .ok_or_else(ExtensionsClientError::storage)?;
+            self.store.write_state(&durable)?;
+            if enabled {
+                providers.disabled.remove(id);
+            } else {
+                providers.disabled.insert(id.clone());
+            }
+            runtime.durable = durable;
+            publish_change(&mut runtime)?;
+        }
+        self.sources()
+    }
+}
+
+impl ExtensionPackageService for ExtensionPackageManager {
     fn search(
         &self,
         request: SearchPackagesRequest,
-    ) -> Result<SearchPackagesResult, MarketplaceClientError> {
-        self.providers.search(request)
+    ) -> Result<SearchPackagesResult, ExtensionsClientError> {
+        self.source_providers()?.search(request)
     }
 
-    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, MarketplaceClientError> {
-        self.providers.get(request)
+    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
+        self.source_providers()?.get(request)
     }
 
     fn download(
         &self,
         request: DownloadPackageRequest,
-    ) -> Result<ArtifactHandle, MarketplaceClientError> {
-        let downloaded = self.providers.download(request)?;
+    ) -> Result<ArtifactHandle, ExtensionsClientError> {
+        let downloaded = self.source_providers()?.download(request)?;
         self.store.materialize(downloaded.as_ref())
     }
 
     fn install(
         &self,
         request: InstallPackageRequest,
-    ) -> Result<InstalledPackage, MarketplaceClientError> {
-        let downloaded = self.providers.download(DownloadPackageRequest {
+    ) -> Result<InstalledPackage, ExtensionsClientError> {
+        let downloaded = self.source_providers()?.download(DownloadPackageRequest {
             package_id: request.package_id,
             version: request.version,
         })?;
@@ -483,7 +601,7 @@ impl PluginPackageService for PluginsManager {
     fn update(
         &self,
         request: UpdatePackageRequest,
-    ) -> Result<InstalledPackage, MarketplaceClientError> {
+    ) -> Result<InstalledPackage, ExtensionsClientError> {
         let package_id = {
             let runtime = self.lock_runtime()?;
             runtime
@@ -495,7 +613,7 @@ impl PluginPackageService for PluginsManager {
                 .id
                 .clone()
         };
-        let downloaded = self.providers.download(DownloadPackageRequest {
+        let downloaded = self.source_providers()?.download(DownloadPackageRequest {
             package_id,
             version: request.version,
         })?;
@@ -509,7 +627,7 @@ impl PluginPackageService for PluginsManager {
         Ok(installed)
     }
 
-    fn uninstall(&self, request: UninstallPackageRequest) -> Result<(), MarketplaceClientError> {
+    fn uninstall(&self, request: UninstallPackageRequest) -> Result<(), ExtensionsClientError> {
         let mut runtime = self.lock_runtime()?;
         if !runtime
             .durable
@@ -546,7 +664,7 @@ impl PluginPackageService for PluginsManager {
     fn list_installed(
         &self,
         _: ListInstalledRequest,
-    ) -> Result<Vec<InstalledPackage>, MarketplaceClientError> {
+    ) -> Result<Vec<InstalledPackage>, ExtensionsClientError> {
         let runtime = self.lock_runtime()?;
         Ok(runtime
             .durable
@@ -559,7 +677,7 @@ impl PluginPackageService for PluginsManager {
     fn acquire_capability(
         &self,
         request: AcquireCapabilityRequest,
-    ) -> Result<AcquiredCapability, MarketplaceClientError> {
+    ) -> Result<AcquiredCapability, ExtensionsClientError> {
         let mut runtime = self.lock_runtime()?;
         let (installation, capability) = find_capability(&runtime.durable, &request.capability)?;
         let installation = installation.clone();
@@ -579,7 +697,7 @@ impl PluginPackageService for PluginsManager {
     fn release_capability(
         &self,
         request: ReleaseCapabilityRequest,
-    ) -> Result<crate::ReleaseCapabilityOutcome, MarketplaceClientError> {
+    ) -> Result<crate::ReleaseCapabilityOutcome, ExtensionsClientError> {
         let mut runtime = self.lock_runtime()?;
         let lease = runtime
             .leases
@@ -611,7 +729,7 @@ impl PluginPackageService for PluginsManager {
     fn open_resource(
         &self,
         request: OpenResourceRequest,
-    ) -> Result<ResourceContent, MarketplaceClientError> {
+    ) -> Result<ResourceContent, ExtensionsClientError> {
         let runtime = self.lock_runtime()?;
         let lease = runtime
             .leases
@@ -649,7 +767,7 @@ impl InstallationRecord {
 fn find_capability<'a>(
     state: &'a DurableState,
     reference: &CapabilityRef,
-) -> Result<(&'a InstallationRecord, &'a CapabilityRecord), MarketplaceClientError> {
+) -> Result<(&'a InstallationRecord, &'a CapabilityRecord), ExtensionsClientError> {
     state
         .installations
         .values()
@@ -694,19 +812,19 @@ fn capability_kind_tag(kind: CapabilityKind) -> &'static str {
     }
 }
 
-fn installation_not_found() -> MarketplaceClientError {
-    MarketplaceClientError::business(
-        MarketplaceErrorCode::InstallationNotFound,
-        "Marketplace installation was not found",
+fn installation_not_found() -> ExtensionsClientError {
+    ExtensionsClientError::business(
+        ExtensionsErrorCode::InstallationNotFound,
+        "Extensions installation was not found",
         false,
     )
 }
 
-fn publish_change(runtime: &mut RuntimeState) -> Result<(), MarketplaceClientError> {
+fn publish_change(runtime: &mut RuntimeState) -> Result<(), ExtensionsClientError> {
     runtime.generation = runtime
         .generation
         .checked_add(1)
-        .ok_or_else(MarketplaceClientError::storage)?;
+        .ok_or_else(ExtensionsClientError::storage)?;
     let generation = runtime.generation;
     runtime
         .subscribers
@@ -714,26 +832,26 @@ fn publish_change(runtime: &mut RuntimeState) -> Result<(), MarketplaceClientErr
     Ok(())
 }
 
-fn installation_in_use() -> MarketplaceClientError {
-    MarketplaceClientError::business(
-        MarketplaceErrorCode::InstallationInUse,
-        "Marketplace installation is in use",
+fn installation_in_use() -> ExtensionsClientError {
+    ExtensionsClientError::business(
+        ExtensionsErrorCode::InstallationInUse,
+        "Extensions installation is in use",
         false,
     )
 }
 
-fn capability_not_found() -> MarketplaceClientError {
-    MarketplaceClientError::business(
-        MarketplaceErrorCode::CapabilityNotFound,
-        "Marketplace capability was not found",
+fn capability_not_found() -> ExtensionsClientError {
+    ExtensionsClientError::business(
+        ExtensionsErrorCode::CapabilityNotFound,
+        "Extensions capability was not found",
         false,
     )
 }
 
-fn lease_not_found() -> MarketplaceClientError {
-    MarketplaceClientError::business(
-        MarketplaceErrorCode::LeaseNotFound,
-        "Marketplace capability lease was not found",
+fn lease_not_found() -> ExtensionsClientError {
+    ExtensionsClientError::business(
+        ExtensionsErrorCode::LeaseNotFound,
+        "Extensions capability lease was not found",
         false,
     )
 }

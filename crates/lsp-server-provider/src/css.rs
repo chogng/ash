@@ -13,7 +13,7 @@ use crate::provider::canonical_regular_file;
 
 const CSS_LANGUAGE_IDS: &[&str] = &["css", "less", "scss"];
 
-/// Provider for the verified Marketplace CSS package executed by Ash's managed Node runtime.
+/// Provider for the verified Extensions CSS package executed by Ash's managed Node runtime.
 pub struct CssLanguageServerProvider {
     entrypoint: std::path::PathBuf,
     node: ManagedNodeRuntime,

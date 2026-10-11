@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ash_core_plugins::CapabilityKind;
+use ash_core_plugins::ExtensionPackageManager;
+use ash_core_plugins::ExtensionPackageService;
+use ash_core_plugins::ExtensionsRemoteClient;
 use ash_core_plugins::InstallPackageRequest;
-use ash_core_plugins::MarketplaceRemoteClient;
-use ash_core_plugins::PluginPackageService;
-use ash_core_plugins::PluginsManager;
-use ash_core_plugins::RemoteMarketplaceConfig;
+use ash_core_plugins::RemoteExtensionsConfig;
 use ash_core_plugins::SearchPackagesRequest;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -24,23 +24,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     };
-    let config = RemoteMarketplaceConfig::from_directory(
+    let config = RemoteExtensionsConfig::from_directory(
         distribution,
         std::fs::read(trusted_root)?,
         state_root.join("remote-cache"),
     )?;
-    let registry = Arc::new(MarketplaceRemoteClient::new(config));
-    let providers = ash_core_plugins::PluginProviders::new([(
-        ash_plugin::MarketplaceName::new("local")?,
-        registry as Arc<dyn ash_core_plugins::PluginProvider>,
+    let registry = Arc::new(ExtensionsRemoteClient::new(config));
+    let providers = ash_core_plugins::ExtensionSources::new([(
+        ash_plugin::ExtensionSourceId::new("local")?,
+        registry as Arc<dyn ash_core_plugins::ExtensionSource>,
     )])?;
-    let manager = PluginsManager::open(state_root.join("manager"), providers)?;
+    let manager = ExtensionPackageManager::open(state_root.join("manager"), providers)?;
     for (package_type, package_id) in [
-        ("plugin", "marketplace/github"),
-        ("skill", "marketplace/commit"),
-        ("language", "marketplace/css"),
-        ("mcp", "marketplace/playwright-mcp"),
-        ("theme", "marketplace/aurora-theme"),
+        ("plugin", "extensions/github"),
+        ("skill", "extensions/commit"),
+        ("language", "extensions/css"),
+        ("mcp", "extensions/playwright-mcp"),
+        ("theme", "extensions/aurora-theme"),
     ] {
         let source_id = format!("{}@local", package_id.replace('/', "."));
         let search = manager.search(SearchPackagesRequest {

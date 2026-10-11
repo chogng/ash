@@ -27,7 +27,7 @@ import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSe
 import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
 import { createDisconnectedPluginApi } from "../../plugins/browser/pluginApi.js";
 import { createDisconnectedExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
-import { createDisconnectedMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
+import { createDisconnectedExtensionsApi } from "../../extensionManagement/browser/extensionManagementApi.js";
 import { createDisconnectedDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createDisconnectedAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
 import { createDisconnectedTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
@@ -82,7 +82,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		codebaseSymbols: createDisconnectedCodebaseSymbolsApi(unavailableOperation),
 		connectors: createDisconnectedConnectorApi(unavailableOperation),
 		plugins: createDisconnectedPluginApi(unavailableOperation),
-		marketplace: createDisconnectedMarketplaceApi(unavailableOperation),
+		extensionManagement: createDisconnectedExtensionsApi(unavailableOperation),
 		toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
 		dirPermissions: createDisconnectedDirPermissionsApi(unavailableOperation),
 		networkDiagnostics: createDisconnectedNetworkDiagnosticsApi(unavailableOperation),

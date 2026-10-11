@@ -59,7 +59,7 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
         ServerNotification::ConnectorsChanged(_) => Some(ClientEvent::ConnectorsChanged),
         ServerNotification::QueueChanged(_) => Some(ClientEvent::QueueChanged),
         ServerNotification::ConfigChanged(_) => Some(ClientEvent::ConfigChanged),
-        ServerNotification::MarketplaceChanged(_) | ServerNotification::PluginsChanged(_) => {
+        ServerNotification::ExtensionsChanged(_) | ServerNotification::PluginsChanged(_) => {
             Some(ClientEvent::PackageSourcesChanged)
         }
         ServerNotification::MemoryChanged(changed) => Some(ClientEvent::MemoriesChanged(changed)),

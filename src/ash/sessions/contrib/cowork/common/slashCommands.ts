@@ -3,7 +3,7 @@ import { localize } from "../../../../nls.js";
 import { ProductSlashCommands, type SlashCommandDefinition } from "../../../../workbench/services/chat/common/chatService.js";
 import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from "./chat.js";
 
-import { OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID } from "../../../../platform/marketplace/common/marketplaceService.js";
+import { OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
 
 const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -178,8 +178,8 @@ export function matchedCharacterIndices(text: string, query: string): readonly n
 }
 
 const productActions: Record<keyof typeof ProductSlashCommands, string> = {
-	marketplace: OPEN_MARKETPLACE_COMMAND_ID,
-	plugins: OPEN_PLUGINS_COMMAND_ID,
+	extensions: OPEN_EXTENSIONS_COMMAND_ID,
+	plugins: OPEN_INSTALLED_EXTENSIONS_COMMAND_ID,
 	skills: 'workbench.action.chat.configure.skills',
 	lsp: OPEN_LANGUAGE_SERVERS_COMMAND_ID,
 	permission: OPEN_CHAT_PERMISSIONS_COMMAND_ID,

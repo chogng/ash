@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "reportIssueUrl": "https://github.com/chogng/ash/issues",
   "githubAccount": {
     "clientId": "Ov23linTZCPimNOTyngv",
@@ -10,12 +10,12 @@
     "apiUrl": "https://open-vsx.org/api/",
     "downloadOrigins": ["https://openvsx.eclipsecontent.org/"]
   },
-  "marketplaces": [
+  "extensionSources": [
     {
       "name": "ash",
       "metadataBaseUrl": "https://chogng.github.io/ash-marketplace/metadata/",
       "targetsBaseUrl": "https://chogng.github.io/ash-marketplace/targets/",
-      "trustedRoot": "marketplace-root.json",
+      "trustedRoot": "extensions-root.json",
       "catalogRefreshIntervalSeconds": 300
     }
   ]

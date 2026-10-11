@@ -93,7 +93,7 @@ test('command palette saves and clears a pending display language without changi
 	await expect(settings.getByRole('combobox', { name: 'Interface language', exact: true })).toHaveText('English');
 });
 
-test('display language picker opens Marketplace with language packs selected', async ({ workbench }) => {
+test('display language picker opens Extensions with language packs selected', async ({ workbench }) => {
 	const page = workbench.page;
 	await expect(page.getByRole('button', { name: 'Search commands', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Manage', exact: true })).toBeVisible();
@@ -103,10 +103,10 @@ test('display language picker opens Marketplace with language packs selected', a
 	await picker.getByRole('combobox').press('Enter');
 
 	picker = page.getByRole('dialog', { name: 'Select Display Language' });
-	await picker.getByRole('combobox').fill('Install more languages from Marketplace');
+	await picker.getByRole('combobox').fill('Install more languages from Extensions');
 	await picker.getByRole('combobox').press('Enter');
 	await expect(picker).toHaveCount(0);
-	await expect(page.locator('.ash-marketplace').getByLabel('Capability')).toHaveValue('localization');
+	await expect(page.locator('.ash-extensions').getByRole('button', { name: 'Language packs', exact: true })).toBeVisible();
 });
 
 

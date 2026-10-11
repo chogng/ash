@@ -46,7 +46,7 @@ class Transport implements AppServerTransport {
 				extensionHost: true,
 				connectors: true,
 				plugins: true,
-				marketplace: true,
+				extensionManagement: true,
 				mcp: true,
 				mcpOAuth: true,
 			} satisfies Omit<ServerCapabilities, 'contracts'>;

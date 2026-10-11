@@ -200,7 +200,7 @@ fn skill_list_result(snapshot: &SkillRuntimeSnapshot) -> SkillListResult {
                         SkillSourceKind::User => SkillSourceKindDto::User,
                         SkillSourceKind::Directory => SkillSourceKindDto::Directory,
                         SkillSourceKind::Plugin => SkillSourceKindDto::Plugin,
-                        SkillSourceKind::Marketplace => SkillSourceKindDto::Marketplace,
+                        SkillSourceKind::Registry => SkillSourceKindDto::Extensions,
                     },
                     content_digest: catalog.content_digest().clone(),
                     enablement: enablement_dto(entry.enablement),

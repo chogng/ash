@@ -859,8 +859,8 @@ fn plugins_inline_marks_disabled_items_and_restores_draft_after_close() {
             revoked: false,
         }],
     };
-    app.update(crate::marketplace::Event(
-        crate::marketplace::Page::Plugins(plugins),
+    app.update(crate::extension_packages::Event(
+        crate::extension_packages::Page::Plugins(plugins),
     ));
     let buffer = render(&app, 80, 24);
     let marker = buffer

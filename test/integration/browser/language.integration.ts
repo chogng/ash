@@ -45,7 +45,7 @@ store.add(new AppServerLanguageProviders(features, api, workspace, { events: { s
 for (const [id, value] of [['install', true], ['uninstall', false]] as const) {
 	store.add(addDisposableListener(document.getElementById(id)!, 'click', () => {
 		installed = value;
-		changes.fire({ method: 'marketplace/changed', params: { instanceId: 'browser-test', generation: ++generation } });
+		changes.fire({ method: 'extensions/changed', params: { instanceId: 'browser-test', generation: ++generation } });
 	}));
 }
 

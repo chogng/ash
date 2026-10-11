@@ -21,7 +21,7 @@ export interface LanguagePackInfo {
 	readonly locale: LocaleId;
 	readonly languageName: string;
 	readonly localizedLanguageName: string;
-	readonly source: "builtin" | "marketplace";
+	readonly source: "builtin" | "extensionManagement";
 }
 
 export interface LanguagePackPackage {
@@ -37,7 +37,7 @@ export interface LanguagePackPackage {
  *
  * Implementations own package discovery, capability leases, resource decoding,
  * and catalog validation. Locale selection and message lookup consume this
- * contract without depending on Marketplace transport details.
+ * contract without depending on Extensions transport details.
  */
 export interface ILanguagePackService {
 	readonly onDidChange: Event<void>;

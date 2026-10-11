@@ -29,7 +29,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, typ
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import type { MarketplaceOpenOptions } from '../../../../platform/marketplace/common/marketplaceService.js';
+import type { ExtensionsOpenOptions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
@@ -85,7 +85,7 @@ interface SettingsSection {
 export class SessionsPreferences extends Disposable {
 	private readonly activeDialog = this._register(new MutableDisposable<DisposableStore>());
 	private dialog: Dialog | undefined;
-	private navigate: ((categoryId: string, marketplaceOptions?: MarketplaceOpenOptions) => void) | undefined;
+	private navigate: ((categoryId: string, extensionManagementOptions?: ExtensionsOpenOptions) => void) | undefined;
 	private applyQuery: ((query: string) => void) | undefined;
 
 	constructor(
@@ -111,7 +111,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Extensions, Skills, and Hooks tabs. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -119,11 +119,11 @@ export class SessionsPreferences extends Disposable {
 		}));
 	}
 
-	public async open(options: IOpenSettingsOptions = {}, marketplaceOptions?: MarketplaceOpenOptions): Promise<void> {
+	public async open(options: IOpenSettingsOptions = {}, extensionManagementOptions?: ExtensionsOpenOptions): Promise<void> {
 		const validated = validateSettingsEditorOptions(options);
 		const categoryId = validated.section;
 		if (this.dialog?.element.open) {
-			if (categoryId) { this.navigate?.(categoryId, marketplaceOptions); }
+			if (categoryId) { this.navigate?.(categoryId, extensionManagementOptions); }
 			if (validated.query !== undefined) this.applyQuery?.(validated.query);
 			else this.dialog.element.focus();
 			return;
@@ -318,7 +318,7 @@ export class SessionsPreferences extends Disposable {
 		resources.add(this.configurationService.onDidChangeConfiguration(() => {
 			if (new SettingsSearchQuery(searchInput.value).hasModifiedFilter) render();
 		}));
-		this.navigate = (categoryId, marketplaceOptions) => {
+		this.navigate = (categoryId, extensionManagementOptions) => {
 			if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 			activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 				: categoryId === 'execution-permissions' ? categories.findIndex(category => category.content === executionContent)
@@ -328,7 +328,7 @@ export class SessionsPreferences extends Disposable {
 								: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : categories.findIndex(category => category.content === dictationContent);
 			searchInput.value = '';
 			render();
-			if (marketplaceOptions) void customizeContent.openPlugins(marketplaceOptions);
+			if (extensionManagementOptions) void customizeContent.openExtensions(extensionManagementOptions);
 		};
 		resources.add(searchInput.onDidChange(() => {
 			render();
@@ -359,7 +359,7 @@ export class SessionsPreferences extends Disposable {
 		try {
 			const shown = dialog.show();
 			if (validated.query !== undefined) searchInput.focus();
-			if (marketplaceOptions) void customizeContent.openPlugins(marketplaceOptions);
+			if (extensionManagementOptions) void customizeContent.openExtensions(extensionManagementOptions);
 			await shown;
 		} finally {
 			this.navigate = undefined;

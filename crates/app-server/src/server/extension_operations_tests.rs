@@ -40,11 +40,11 @@ fn a_changed_gallery_is_rejected_before_provider_io() {
     use ash_model_provider::EchoModel;
     use std::sync::Arc;
     let root = tempfile::tempdir().unwrap();
-    let manager = ash_core_plugins::PluginsManager::open(
+    let manager = ash_core_plugins::ExtensionPackageManager::open(
         root.path(),
-        ash_core_plugins::PluginProviders::new([(
-            ash_plugin::MarketplaceName::new("configured-source").unwrap(),
-            Arc::new(GalleryWithoutIo) as Arc<dyn ash_core_plugins::PluginProvider>,
+        ash_core_plugins::ExtensionSources::new([(
+            ash_plugin::ExtensionSourceId::new("configured-source").unwrap(),
+            Arc::new(GalleryWithoutIo) as Arc<dyn ash_core_plugins::ExtensionSource>,
         )])
         .unwrap(),
     )
@@ -82,7 +82,7 @@ fn a_changed_gallery_is_rejected_before_provider_io() {
 
 struct GalleryWithoutIo;
 
-impl ash_core_plugins::PluginProvider for GalleryWithoutIo {
+impl ash_core_plugins::ExtensionSource for GalleryWithoutIo {
     fn extension_gallery_resource_url_template(&self) -> Option<String> {
         Some(
             "https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}"
@@ -92,22 +92,22 @@ impl ash_core_plugins::PluginProvider for GalleryWithoutIo {
     fn search(
         &self,
         _: ash_core_plugins::SearchPackagesRequest,
-    ) -> Result<ash_core_plugins::SearchPackagesResult, ash_core_plugins::MarketplaceClientError>
+    ) -> Result<ash_core_plugins::SearchPackagesResult, ash_core_plugins::ExtensionsClientError>
     {
         panic!("Gallery resolution must not search packages");
     }
     fn get(
         &self,
         _: ash_core_plugins::GetPackageRequest,
-    ) -> Result<ash_core_plugins::PackageDetails, ash_core_plugins::MarketplaceClientError> {
+    ) -> Result<ash_core_plugins::PackageDetails, ash_core_plugins::ExtensionsClientError> {
         panic!("A stale gallery must not resolve packages");
     }
     fn download(
         &self,
         _: ash_core_plugins::DownloadPackageRequest,
     ) -> Result<
-        Box<dyn ash_core_plugins::PluginPackagePayload>,
-        ash_core_plugins::MarketplaceClientError,
+        Box<dyn ash_core_plugins::ExtensionPackagePayload>,
+        ash_core_plugins::ExtensionsClientError,
     > {
         panic!("A stale gallery must not download packages");
     }

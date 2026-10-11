@@ -36,7 +36,7 @@ import type { IExtensionHostApi } from "../../extensionHost/common/extensionHost
 import type { ICodebaseSymbolsApi } from "../../codebaseSymbols/common/codebaseSymbolsApi.js";
 import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
 import type { IRemoteConnectionApi } from "../../remote/common/remoteConnectionService.js";
-import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js";
+import type { IExtensionManagementApi } from "../../extensionManagement/common/extensionManagementApi.js";
 import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
 import type { IHooksService } from '../../hooks/common/hooksService.js';
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
@@ -119,7 +119,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly codebaseSymbols: ICodebaseSymbolsApi;
 	readonly connectors: IConnectorApi;
 	readonly plugins: IPluginApi;
-	readonly marketplace: IMarketplaceApi;
+	readonly extensionManagement: IExtensionManagementApi;
 	readonly toolSearch: IToolSearchApi;
 	readonly dirPermissions: IDirPermissionsApi;
 	readonly agentCapabilities: IAgentCapabilitiesService;

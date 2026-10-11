@@ -460,7 +460,7 @@ test('queued reloads report the final failure and retain the last committed cata
 	assert.deepEqual({ requests, generation: service.currentCatalog.generation, failures }, { requests: 3, generation: 1, failures: [finalFailure] });
 });
 
-test("reloads declarations for Plugin activation and Marketplace installation changes", async () => {
+test("reloads declarations for Plugin activation and Extensions installation changes", async () => {
 	let generation = 0;
 	let listener: ((event: ServerNotification) => void) | undefined;
 	const eventApi: IServerEventApi = {
@@ -486,14 +486,14 @@ test("reloads declarations for Plugin activation and Marketplace installation ch
 	assert.equal(catalog.generation, 2);
 	const installed = deferred<WorkbenchExtensionCatalog>();
 	using installedChange = service.onDidChange(next => { if (next.generation === 3) installed.resolve(next); });
-	listener?.({ method: 'marketplace/changed', params: { instanceId: 'manager-1', generation: 2 } });
+	listener?.({ method: 'extensions/changed', params: { instanceId: 'manager-1', generation: 2 } });
 	assert.equal((await installed.promise).generation, 3);
-	listener?.({ method: 'marketplace/changed', params: { instanceId: 'manager-1', generation: 2 } });
-	listener?.({ method: 'marketplace/changed', params: { instanceId: 'manager-1', generation: 1 } });
+	listener?.({ method: 'extensions/changed', params: { instanceId: 'manager-1', generation: 2 } });
+	listener?.({ method: 'extensions/changed', params: { instanceId: 'manager-1', generation: 1 } });
 	assert.equal(generation, 3, 'replayed or older generations do not reinstall contributions');
 	const restarted = deferred<WorkbenchExtensionCatalog>();
 	using restartChange = service.onDidChange(next => { if (next.generation === 4) restarted.resolve(next); });
-	listener?.({ method: 'marketplace/changed', params: { instanceId: 'manager-2', generation: 1 } });
+	listener?.({ method: 'extensions/changed', params: { instanceId: 'manager-2', generation: 1 } });
 	assert.equal((await restarted.promise).generation, 4, 'a new manager instance can start at a lower generation');
 });
 

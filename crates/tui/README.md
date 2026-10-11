@@ -326,19 +326,19 @@ Issue 场景运行真实 CLI/TUI，通过私有 SSH 传输连接同一 App Serve
 
 状态、请求和副作用断言与终端文本 snapshot 分别验证行为和显示；执行与基线审阅见 [test-tui](../../.agents/skills/test-tui/SKILL.md)。两种模式的定向场景与终端兼容范围见 [LAYOUT.md](LAYOUT.md#验证入口与支持范围)。
 
-## Marketplace 与语言服务器
+## Extensions 与语言服务器
 
-- `/skills`、`/marketplace [query]`、`/mcp`、`/hooks`、`/plugins` 打开同一个扩展面板的对应页签。Skills、MCP、Plugins 的停用项在标题后显示红色 `[disable]`，用 Enter 切换启停；Hooks 按事件显示配置数量，在详情显示声明的启用状态。
-- Marketplace 按包身份中的来源分组，Enter 或左右键展开收起来源；来源下用技能、插件、MCP、连接器、可执行程序、编程语言、主题、语言包和资源作为分类行标题。安装前审阅整个包的版本、能力和权限。
-- Plugins 展示已安装插件的启停状态，按准确版本、摘要和配置版本提交 Enable / Disable；包的更新与卸载仍由 Marketplace 提供，使用中的包等待消费方释放后删除。
+- `/skills`、`/extensions [query]`、`/mcp`、`/hooks`、`/plugins` 打开同一个扩展面板的对应页签。Skills、MCP、Plugins 的停用项在标题后显示红色 `[disable]`，用 Enter 切换启停；Hooks 按事件显示配置数量，在详情显示声明的启用状态。
+- Extensions 按包身份中的来源分组，Enter 或左右键展开收起来源；来源下用技能、插件、MCP、连接器、可执行程序、编程语言、主题、语言包和资源作为分类行标题。安装前审阅整个包的版本、能力和权限。
+- Plugins 展示已安装插件的启停状态，按准确版本、摘要和配置版本提交 Enable / Disable；包的更新与卸载仍由 Extensions 提供，使用中的包等待消费方释放后删除。
 - `/lsp [language-id]` 查看当前目录可用服务器，修改启用状态、程序路径或恢复配置默认值。
-- `/skills` 管理已发现的技能，`/marketplace` 搜索可安装包；`/mcp`、`/connectors`、`/lsp` 的获取入口共用包管理服务，Config 不重复提供语言服务器页签。
-- Marketplace 展示返回包的来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
-- `marketplace.rs`、`lsp.rs` 和 `guardian.rs` 拥有终端状态与交互，后端继续拥有业务和存储。
+- `/skills` 管理已发现的技能，`/extensions` 搜索可安装包；`/mcp`、`/connectors`、`/lsp` 的获取入口共用包管理服务，Config 不重复提供语言服务器页签。
+- Extensions 展示返回包的来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
+- `extensions.rs`、`lsp.rs` 和 `guardian.rs` 拥有终端状态与交互，后端继续拥有业务和存储。
   `/guardian setup` 扫描当前项目、逐项审核并保存背景资料；`/permission` 选择权限模式，`/init`
   生成的 `ASH.md` 同时作为 Guardian 的项目说明。面板可选择读取此目录的项目会话，
-  默认 50 个会话、每会话 200 条命令、不限定天数；可以调整范围，查看聚合事实的频次、来源样本与扫描覆盖量；历史资料不会授予权限。共享契约见 [Slash Commands](../../docs/slash-commands.md#marketplace-与领域管理入口)。
-- 定向验证：`just test ash-tui marketplace`；真实终端流程：`just test-tui actual_tui_marketplace_and_lsp_commands`。
+  默认 50 个会话、每会话 200 条命令、不限定天数；可以调整范围，查看聚合事实的频次、来源样本与扫描覆盖量；历史资料不会授予权限。共享契约见 [Slash Commands](../../docs/slash-commands.md#extensions-与领域管理入口)。
+- 定向验证：`just test ash-tui extensions`；真实终端流程：`just test-tui actual_tui_extensions_and_lsp_commands`。
 
 ## Hooks
 

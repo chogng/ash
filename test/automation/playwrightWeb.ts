@@ -51,7 +51,7 @@ export async function launchWeb(workspaceDirectory: string, options: { readonly 
 		}
 	};
 	try {
-		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 2, reportIssueUrl: options.reportIssueUrl, githubAccount: options.githubAccount }) + '\n');
+		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 3, reportIssueUrl: options.reportIssueUrl, githubAccount: options.githubAccount }) + '\n');
 		if (options.backendConfiguration) { await writeFile(join(profileDirectory, 'config.toml'), options.backendConfiguration); }
 		const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
 		if (languageServer) {

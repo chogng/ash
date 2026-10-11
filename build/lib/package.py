@@ -914,7 +914,7 @@ def validate_product_services(product_services_directory: Path) -> None:
     ):
         raise RuntimeError("Package is missing product services")
     config_path = product_services_directory / "product-services.json"
-    root_path = product_services_directory / "marketplace-root.json"
+    root_path = product_services_directory / "extensions-root.json"
     for path in (config_path, root_path):
         if path.is_symlink() or not path.is_file():
             raise RuntimeError(
@@ -927,11 +927,11 @@ def validate_product_services(product_services_directory: Path) -> None:
     document = json.loads(config_path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
         raise RuntimeError("Package product services configuration is invalid")
-    marketplaces = document.get("marketplaces")
-    if document.get("schemaVersion") != 2 or not isinstance(marketplaces, list):
+    extensionSources = document.get("extensionSources")
+    if document.get("schemaVersion") != 3 or not isinstance(extensionSources, list):
         raise RuntimeError("Package product services configuration is invalid")
     names = set()
-    for source in marketplaces:
+    for source in extensionSources:
         if not isinstance(source, dict):
             raise RuntimeError("Package product services configuration is invalid")
         name = source.get("name")
@@ -940,12 +940,12 @@ def validate_product_services(product_services_directory: Path) -> None:
             or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", name) is None
             or name in names
         ):
-            raise RuntimeError("Package Marketplace names must be valid and unique")
+            raise RuntimeError("Package Extensions names must be valid and unique")
         names.add(name)
         relative = source.get("trustedRoot")
-        if name == "ash" and relative != "marketplace-root.json":
+        if name == "ash" and relative != "extensions-root.json":
             raise RuntimeError(
-                "Package product services does not pin the Ash Marketplace root"
+                "Package product services does not pin the Ash Extensions root"
             )
         if not isinstance(relative, str) or "\\" in relative or ":" in relative:
             raise RuntimeError("Package trust root must be a contained relative file")
@@ -970,7 +970,7 @@ def validate_product_services(product_services_directory: Path) -> None:
                 )
     if "ash" not in names:
         raise RuntimeError(
-            "Package product services does not pin the Ash Marketplace root"
+            "Package product services does not pin the Ash Extensions root"
         )
 
 

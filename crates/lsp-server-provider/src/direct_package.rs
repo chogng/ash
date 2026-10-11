@@ -9,7 +9,7 @@ use crate::LanguageServerProviderError;
 use crate::LspServerLaunch;
 use crate::provider::canonical_executable;
 
-/// A Marketplace-verified self-launching language-server capability.
+/// A Extensions-verified self-launching language-server capability.
 pub struct DirectPackageLanguageServerProvider {
     id: String,
     languages: Vec<String>,
@@ -38,7 +38,7 @@ impl DirectPackageLanguageServerProvider {
             languages,
             executable: canonical_executable(
                 executable.as_ref(),
-                "Marketplace language-server executable",
+                "Extensions language-server executable",
             )?,
         })
     }

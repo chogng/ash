@@ -6,7 +6,7 @@ expression: "render(&app, 80, 20)"
                                                                                 
         ┌── Extensions ────────────────────────────────────────────[✗]─┐        
         │                                                              │        
-        │   Skills    Marketplace    MCP    Hooks    Plugins           │        
+        │   Skills    Extensions    MCP    Hooks    Plugins            │        
         │                                                              │        
         │  Configure Hooks                                             │        
         │                                                              │        

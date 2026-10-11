@@ -12,13 +12,13 @@ const MAX_PLUGIN_ID_BYTES: usize = 160;
 /// Configured source identity, independent of its transport and publishers.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
-pub struct MarketplaceName(String);
+pub struct ExtensionSourceId(String);
 
-impl MarketplaceName {
+impl ExtensionSourceId {
     pub fn new(value: impl Into<String>) -> Result<Self, InvalidPluginId> {
         let value = value.into();
-        if !valid_segment(&value, Segment::Marketplace) {
-            return Err(InvalidPluginId::Marketplace);
+        if !valid_segment(&value, Segment::Extensions) {
+            return Err(InvalidPluginId::Extensions);
         }
         Ok(Self(value))
     }
@@ -28,13 +28,13 @@ impl MarketplaceName {
     }
 }
 
-impl fmt::Display for MarketplaceName {
+impl fmt::Display for ExtensionSourceId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
 
-impl<'de> Deserialize<'de> for MarketplaceName {
+impl<'de> Deserialize<'de> for ExtensionSourceId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -43,50 +43,50 @@ impl<'de> Deserialize<'de> for MarketplaceName {
     }
 }
 
-/// Stable, source-qualified plugin identity: `name@marketplace`.
+/// Stable, source-qualified plugin identity: `name@source_id`.
 ///
 /// Names are independent of publisher conventions. Source providers own their package-format
 /// mapping and trust checks; this type only validates identity and safe path segments.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PluginId {
     plugin_name: String,
-    marketplace: MarketplaceName,
+    source_id: ExtensionSourceId,
 }
 
 impl PluginId {
     pub fn new(
         plugin_name: impl Into<String>,
-        marketplace: MarketplaceName,
+        source_id: ExtensionSourceId,
     ) -> Result<Self, InvalidPluginId> {
         let plugin_name = plugin_name.into();
         if !valid_segment(&plugin_name, Segment::Plugin) {
             return Err(InvalidPluginId::Name);
         }
-        if plugin_name.len() + 1 + marketplace.as_str().len() > MAX_PLUGIN_ID_BYTES {
+        if plugin_name.len() + 1 + source_id.as_str().len() > MAX_PLUGIN_ID_BYTES {
             return Err(InvalidPluginId::TooLong);
         }
         Ok(Self {
             plugin_name,
-            marketplace,
+            source_id,
         })
     }
 
     pub fn parse(value: &str) -> Result<Self, InvalidPluginId> {
-        let (plugin, marketplace) = value.rsplit_once('@').ok_or(InvalidPluginId::Shape)?;
-        Self::new(plugin, MarketplaceName::new(marketplace)?)
+        let (plugin, source_id) = value.rsplit_once('@').ok_or(InvalidPluginId::Shape)?;
+        Self::new(plugin, ExtensionSourceId::new(source_id)?)
     }
 
     pub fn plugin_name(&self) -> &str {
         &self.plugin_name
     }
-    pub fn marketplace(&self) -> &MarketplaceName {
-        &self.marketplace
+    pub fn source_id(&self) -> &ExtensionSourceId {
+        &self.source_id
     }
 }
 
 impl fmt::Display for PluginId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}@{}", self.plugin_name, self.marketplace)
+        write!(formatter, "{}@{}", self.plugin_name, self.source_id)
     }
 }
 
@@ -108,22 +108,22 @@ impl<'de> Deserialize<'de> for PluginId {
     }
 }
 
-/// Invalid plugin identity or configured marketplace name.
+/// Invalid plugin identity or configured source_id name.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvalidPluginId {
     Shape,
     Name,
-    Marketplace,
+    Extensions,
     TooLong,
 }
 
 impl fmt::Display for InvalidPluginId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::Shape => "plugin id must use '<name>@<marketplace>'",
+            Self::Shape => "plugin id must use '<name>@<source_id>'",
             Self::Name => "plugin name must use at most 128 ASCII letters, digits, '_', '-' or dots between non-empty segments",
-            Self::Marketplace => "marketplace name must use 1–128 ASCII letters, digits, '_' or '-'",
-            Self::TooLong => "plugin id including marketplace must not exceed 160 bytes",
+            Self::Extensions => "source_id name must use 1–128 ASCII letters, digits, '_' or '-'",
+            Self::TooLong => "plugin id including source_id must not exceed 160 bytes",
         })
     }
 }
@@ -132,7 +132,7 @@ impl std::error::Error for InvalidPluginId {}
 
 enum Segment {
     Plugin,
-    Marketplace,
+    Extensions,
 }
 
 fn valid_segment(value: &str, segment: Segment) -> bool {

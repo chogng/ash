@@ -8,7 +8,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { IConfigurationApi } from '../../../../../platform/configuration/common/configurationIpc.js';
 import { initializeBrowserLocalization } from '../../browser/localizationBootstrap.js';
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
-import type { IMarketplaceService } from "../../../../../platform/marketplace/common/marketplaceService.js";
+import type { IExtensionManagementService } from "../../../../../platform/extensionManagement/common/extensionManagementService.js";
 import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.js";
 import { normalizeLocale } from "../../../../../platform/languagePacks/common/languagePackCatalog.js";
 import { LocalizationConfiguration } from "../../common/locale.js";
@@ -103,7 +103,7 @@ suite('Workbench localization', () => {
 
 	test('language preference changes leave the active startup language unchanged', async () => {
 		using configuration = new InMemoryConfigurationService();
-		using languagePacks = createTestLanguagePacks(createMarketplace());
+		using languagePacks = createTestLanguagePacks(createExtensions());
 		let restarted = false;
 		using localeService = createTestLocaleService(configuration, languagePacks, async () => { restarted = true; });
 		await localeService.setLocale({ id: 'zh_cn', label: 'Chinese' });
@@ -116,7 +116,7 @@ suite('Workbench localization', () => {
 
 	test('confirmed language changes request the host restart after saving the preference', async () => {
 		using configuration = new InMemoryConfigurationService();
-		using languagePacks = createTestLanguagePacks(createMarketplace());
+		using languagePacks = createTestLanguagePacks(createExtensions());
 		const writing = new DeferredPromise<void>();
 		const saved = new DeferredPromise<void>();
 		const events: string[] = [];
@@ -151,7 +151,7 @@ suite('Workbench localization', () => {
 			initializeTestLocalization('zh-CN');
 			using configuration = new InMemoryConfigurationService();
 			await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
-			using packs = createTestLanguagePacks(createMarketplace());
+			using packs = createTestLanguagePacks(createExtensions());
 			const events: string[] = [];
 			using listener = configuration.onDidChangeConfiguration(() => events.push('preference'));
 			using locale = createTestLocaleService(configuration, packs, async () => { events.push('restart'); }, async () => {
@@ -166,7 +166,7 @@ suite('Workbench localization', () => {
 	test('selecting the running language saves the preference without prompting or restarting', async () => {
 		initializeTestLocalization('zh-CN');
 		using configuration = new InMemoryConfigurationService();
-		using packs = createTestLanguagePacks(createMarketplace());
+		using packs = createTestLanguagePacks(createExtensions());
 		using locale = createTestLocaleService(configuration, packs, async () => { assert.fail('No restart is needed'); }, async () => { assert.fail('No restart prompt is needed'); });
 		await locale.setLocale({ id: 'ZH_cn', label: 'Chinese' });
 		assert.deepEqual([configuration.inspect(LocalizationConfiguration.locale).memoryValue, locale.locale], ['zh-CN', 'zh-CN']);
@@ -345,7 +345,7 @@ suite('Workbench localization', () => {
 
 	test('registered theme descriptions retain the startup language when a preference is saved', async () => {
 		using configuration = new InMemoryConfigurationService();
-		using languagePacks = createTestLanguagePacks(createMarketplace());
+		using languagePacks = createTestLanguagePacks(createExtensions());
 		using localeService = createTestLocaleService(configuration, languagePacks);
 		using schemaRegistration = registerColorThemeSchemas();
 		const schema = jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]!;
@@ -534,9 +534,12 @@ suite('Workbench localization', () => {
 		]);
 	});
 
-	function createMarketplace(): IMarketplaceService {
+	function createExtensions(): IExtensionManagementService {
 		return {
 			onDidChangeInstalled: Event.None,
+			sources: async () => ({ revision: 0, sources: [] }),
+			addSource: async () => { throw new Error("unused"); },
+			setSourceEnabled: async () => { throw new Error("unused"); },
 			cachedBrowse: () => undefined,
 			browse: () => Promise.reject(new Error("unused")),
 			refreshBrowse: () => Promise.reject(new Error("unused")),
@@ -557,7 +560,7 @@ suite('Workbench localization', () => {
 
 	test('a failed language-resource write leaves the preference and running language unchanged', async () => {
 		using configuration = new InMemoryConfigurationService();
-		using packs = createTestLanguagePacks(createMarketplace());
+		using packs = createTestLanguagePacks(createExtensions());
 		let prompted = false;
 		using locale = createTestLocaleService(configuration, packs, async () => { }, async () => { prompted = true; return { confirmed: true }; }, {
 			read: async () => undefined,

@@ -30,8 +30,8 @@ pub use path::{InvalidPluginPath, PluginPath};
 
 pub use package_id::InvalidPluginPackageId;
 pub use package_id::PluginPackageId;
+pub use plugin_id::ExtensionSourceId;
 pub use plugin_id::InvalidPluginId;
-pub use plugin_id::MarketplaceName;
 pub use plugin_id::PluginId;
 
 pub use manifest::EditorExtensionApi;

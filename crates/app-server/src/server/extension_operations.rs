@@ -2,7 +2,7 @@ use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
 use super::decode;
-use super::marketplace_operations::marketplace_error;
+use super::extension_packages_operations::extension_packages_error;
 use super::operations::resource_rpc_error;
 use super::result;
 use ash_app_server_protocol::protocol::common::EmptyParams;
@@ -36,7 +36,7 @@ impl AppServer {
             .as_ref()
             .map(|manager| manager.extension_gallery_resource_url_template())
             .transpose()
-            .map_err(marketplace_error)?
+            .map_err(extension_packages_error)?
             .flatten();
         result(&ExtensionGalleryResult {
             resource_url_template: template,
@@ -55,7 +55,7 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
         if manager
             .extension_gallery_resource_url_template()
-            .map_err(marketplace_error)?
+            .map_err(extension_packages_error)?
             .as_deref()
             != Some(params.resource_url_template.as_str())
         {
@@ -68,7 +68,7 @@ impl AppServer {
                 &params.version,
                 &params.path,
             )
-            .map_err(marketplace_error)?;
+            .map_err(extension_packages_error)?;
         let metadata = self
             .resources
             .lock()
@@ -178,7 +178,7 @@ fn extension_descriptor(value: ExtensionDescriptor) -> ExtensionDto {
         source_kind: match value.source_kind {
             ExtensionSourceKind::BuiltIn => ExtensionSourceKindDto::BuiltIn,
             ExtensionSourceKind::Plugin => ExtensionSourceKindDto::Plugin,
-            ExtensionSourceKind::Marketplace => ExtensionSourceKindDto::Marketplace,
+            ExtensionSourceKind::Registry => ExtensionSourceKindDto::Registry,
             ExtensionSourceKind::User => ExtensionSourceKindDto::User,
         },
         manifest_json: value.manifest_json,

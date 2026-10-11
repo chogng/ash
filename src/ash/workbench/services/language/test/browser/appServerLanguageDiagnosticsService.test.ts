@@ -372,12 +372,12 @@ test("installing a language server synchronizes an already open document and uni
 	await tick();
 	assert.equal(api.synchronized.length, 0);
 	api.availableServers = [{ id: "pyright", languageIds: ["python"] }];
-	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 2 } });
+	events.fire({ method: "extensions/changed", params: { instanceId: "test", generation: 2 } });
 	await tick();
 	assert.equal(api.synchronized.length, 1);
 	assert.equal(api.synchronized[0]!.document.languageId, "python");
 	api.availableServers = [];
-	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 3 } });
+	events.fire({ method: "extensions/changed", params: { instanceId: "test", generation: 3 } });
 	await tick();
 	model.applyEdits([{ range: new Range(1, 1, 1, 1), text: "# comment\n" }]);
 	await new Promise(resolve => setTimeout(resolve, 200));
@@ -395,7 +395,7 @@ test("uninstall discards pending workspace diagnostic reports and late server no
 	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
 	await tick();
 	api.availableServers = [];
-	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 2 } });
+	events.fire({ method: "extensions/changed", params: { instanceId: "test", generation: 2 } });
 	await tick();
 	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: "error" as const, message: "removed server", code: null, source: "pyright" };
 	complete({ supported: true, snapshots: [{ path: "main.py", diagnostics: [diagnostic] }] });

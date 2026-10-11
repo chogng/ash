@@ -1751,7 +1751,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "没有匹配的命令",
         "Aucune commande correspondante",
     ),
-    translation("Marketplace", "マーケットプレイス", "扩展市场", "Catalogue"),
+    translation("Extensions", "拡張機能", "扩展", "Extensions"),
     translation("Installed", "インストール済み", "已安装", "Installés"),
     translation("Not installed", "未インストール", "未安装", "Non installés"),
     translation("installed", "インストール済み", "已安装", "installé"),
@@ -1786,7 +1786,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("user", "ユーザー", "用户", "utilisateur"),
     translation("directory", "ディレクトリ", "目录", "répertoire"),
     translation("plugin", "プラグイン", "插件", "plugin"),
-    translation("marketplace", "マーケットプレイス", "扩展市场", "catalogue"),
+    translation("extensions", "拡張機能", "扩展", "extensions"),
     translation(
         "Get connectors",
         "コネクターを入手",
@@ -1806,7 +1806,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Reads local installations; no catalog connection required",
         "ローカルのインストールを表示、カタログ接続は不要",
         "读取本地安装记录，无需连接目录",
-        "Lit les installations locales, sans connexion au catalogue",
+        "Lit les installations locales, sans connexion au extensions",
     ),
     translation(
         "waiting for consumers to release",
@@ -1881,10 +1881,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Aucun paquet dans cette vue",
     ),
     translation(
-        "Search Marketplace; Enter to search",
-        "マーケットプレイスを検索、Enter で実行",
-        "搜索扩展市场，按 Enter 搜索",
-        "Rechercher dans le catalogue, puis Entrée",
+        "Search Extensions; Enter to search",
+        "拡張機能を検索、Enter で実行",
+        "搜索扩展，按 Enter 搜索",
+        "Rechercher dans le extensions, puis Entrée",
     ),
     translation(
         "Back to installed packages",
@@ -1954,10 +1954,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Paquet installé",
     ),
     translation(
-        "Find language servers in Marketplace",
-        "マーケットプレイスで言語サーバーを探す",
-        "在扩展市场查找语言服务器",
-        "Rechercher des serveurs de langage dans le catalogue",
+        "Find language servers in Extensions",
+        "拡張機能で言語サーバーを探す",
+        "在扩展查找语言服务器",
+        "Rechercher des serveurs de langage dans le extensions",
     ),
     translation(
         "Match the exact language route in the package manifest",
@@ -2129,10 +2129,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Serveur de langage · {0}",
     ),
     translation(
-        "find and install Marketplace packages",
-        "マーケットプレイスのパッケージを検索・インストール",
-        "查找和安装扩展市场中的包",
-        "rechercher et installer des paquets du catalogue",
+        "find and install Extensions packages",
+        "拡張機能のパッケージを検索・インストール",
+        "查找和安装扩展中的包",
+        "rechercher et installer des paquets du extensions",
     ),
     translation(
         "manage installed packages and exact versions",

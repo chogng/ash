@@ -15,7 +15,7 @@ fn product_report_target_rejects_arbitrary_hosts_and_non_issue_urls() {
     ] {
         fs::write(
             &path,
-            serde_json::json!({"schemaVersion":2,"reportIssueUrl":target}).to_string(),
+            serde_json::json!({"schemaVersion":3,"reportIssueUrl":target}).to_string(),
         )
         .unwrap();
         assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
@@ -23,14 +23,14 @@ fn product_report_target_rejects_arbitrary_hosts_and_non_issue_urls() {
 }
 
 #[test]
-fn product_services_loads_public_oauth_and_pins_marketplace_root() {
+fn product_services_loads_public_oauth_and_pins_extension_packages_root() {
     let root = TempDir::new().unwrap();
     fs::write(root.path().join("root.json"), br#"{"signed":{}}"#).unwrap();
     fs::write(
         root.path().join("product-services.json"),
         r#"{
-          "schemaVersion": 2,
-          "marketplaces": [{
+          "schemaVersion": 3,
+          "extensionSources": [{
             "name": "ash",
             "metadataBaseUrl": "https://marketplace.ash.example/metadata/",
             "targetsBaseUrl": "https://marketplace.ash.example/targets/",
@@ -54,7 +54,7 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     )
     .unwrap();
 
-    assert_eq!(config.marketplaces().len(), 1);
+    assert_eq!(config.extension_sources().len(), 1);
     assert_eq!(
         config
             .github_account
@@ -64,7 +64,7 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     );
     assert_eq!(
         config
-            .marketplaces()
+            .extension_sources()
             .values()
             .next()
             .unwrap()
@@ -98,7 +98,7 @@ fn production_product_services_delegates_to_the_plugins_manager() {
         Some("Ov23linTZCPimNOTyngv")
     );
 
-    let registry = config.marketplaces().values().next().unwrap();
+    let registry = config.extension_sources().values().next().unwrap();
     assert_eq!(
         registry.metadata_base_url().as_str(),
         "https://chogng.github.io/ash-marketplace/metadata/"
@@ -121,7 +121,7 @@ fn product_services_rejects_invalid_github_account_client_id() {
         fs::write(
             &path,
             serde_json::json!({
-                "schemaVersion": 2,
+                "schemaVersion": 3,
                 "githubAccount": { "clientId": client_id, "brokerBaseUrl": "https://broker.example/" }
             })
             .to_string(),
@@ -143,7 +143,7 @@ fn product_services_rejects_non_https_github_broker() {
         fs::write(
             &path,
             serde_json::json!({
-                "schemaVersion": 2,
+                "schemaVersion": 3,
                 "githubAccount": { "clientId": "Iv23publicclient", "brokerBaseUrl": broker_base_url }
             }).to_string(),
         ).unwrap();
@@ -152,14 +152,14 @@ fn product_services_rejects_non_https_github_broker() {
 }
 
 #[test]
-fn product_services_rejects_out_of_range_marketplace_refresh_intervals() {
+fn product_services_rejects_out_of_range_extension_packages_refresh_intervals() {
     let root = TempDir::new().unwrap();
     fs::write(root.path().join("root.json"), br#"{"signed":{}}"#).unwrap();
     fs::write(
         root.path().join("product-services.json"),
         r#"{
-          "schemaVersion": 2,
-          "marketplaces": [{
+          "schemaVersion": 3,
+          "extensionSources": [{
             "name": "ash",
             "metadataBaseUrl": "https://marketplace.ash.example/metadata/",
             "targetsBaseUrl": "https://marketplace.ash.example/targets/",
@@ -187,7 +187,7 @@ fn product_services_rejects_symlinked_trust_inputs() {
     let root = TempDir::new().unwrap();
     fs::write(
         root.path().join("actual.json"),
-        br#"{"schemaVersion":2,"marketplaces":[]}"#,
+        br#"{"schemaVersion":3,"extensionSources":[]}"#,
     )
     .unwrap();
     LocalProductServicesConfig::load(root.path().join("actual.json"), root.path().join("profile"))
@@ -216,8 +216,8 @@ fn product_services_rejects_trust_roots_outside_its_directory() {
     fs::write(
         product.join("product-services.json"),
         r#"{
-          "schemaVersion": 2,
-          "marketplaces": [{
+          "schemaVersion": 3,
+          "extensionSources": [{
             "name": "ash",
             "metadataBaseUrl": "https://marketplace.ash.example/metadata/",
             "targetsBaseUrl": "https://marketplace.ash.example/targets/",
@@ -237,14 +237,14 @@ fn product_services_rejects_trust_roots_outside_its_directory() {
 }
 
 #[test]
-fn marketplace_sources_keep_independent_roots_and_reject_duplicate_or_unsafe_names() {
+fn extension_packages_sources_keep_independent_roots_and_reject_duplicate_or_unsafe_names() {
     let root = TempDir::new().unwrap();
     fs::write(root.path().join("team.json"), b"team trust root").unwrap();
     fs::write(root.path().join("vendor.json"), b"vendor trust root").unwrap();
     let path = root.path().join("product-services.json");
     let mut document = serde_json::json!({
-        "schemaVersion": 2,
-        "marketplaces": [
+        "schemaVersion": 3,
+        "extensionSources": [
             {"name": "team", "metadataBaseUrl": "https://team.example/metadata/", "targetsBaseUrl": "https://team.example/targets/", "trustedRoot": "team.json"},
             {"name": "vendor", "metadataBaseUrl": "https://vendor.example/metadata/", "targetsBaseUrl": "https://vendor.example/targets/", "trustedRoot": "vendor.json", "allowedPublishers": ["vendor"]}
         ]
@@ -253,14 +253,14 @@ fn marketplace_sources_keep_independent_roots_and_reject_duplicate_or_unsafe_nam
     let config = LocalProductServicesConfig::load(&path, root.path().join("profile")).unwrap();
     assert_eq!(
         config
-            .marketplaces()
+            .extension_sources()
             .keys()
-            .map(MarketplaceName::as_str)
+            .map(ExtensionSourceId::as_str)
             .collect::<Vec<_>>(),
         ["team", "vendor"]
     );
     assert_eq!(
-        config.marketplaces()[&MarketplaceName::new("vendor").unwrap()]
+        config.extension_sources()[&ExtensionSourceId::new("vendor").unwrap()]
             .metadata_base_url()
             .as_str(),
         "https://vendor.example/metadata/"
@@ -273,37 +273,37 @@ fn marketplace_sources_keep_independent_roots_and_reject_duplicate_or_unsafe_nam
     let changed = LocalProductServicesConfig::load(&path, root.path().join("profile")).unwrap();
     assert_ne!(changed.authority_identity(), config.authority_identity());
     for name in ["team", "../vendor", "vendor.name", ""] {
-        document["marketplaces"][1]["name"] = name.into();
+        document["extensionSources"][1]["name"] = name.into();
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         assert!(
             LocalProductServicesConfig::load(&path, root.path().join("profile")).is_err(),
             "{name}"
         );
     }
-    document["marketplaces"][1] = document["marketplaces"][0].clone();
-    document["marketplaces"][1]["name"] = "TEAM".into();
+    document["extensionSources"][1] = document["extensionSources"][0].clone();
+    document["extensionSources"][1]["name"] = "TEAM".into();
     fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
     let config = LocalProductServicesConfig::load(&path, root.path().join("profile")).unwrap();
     assert_ne!(
-        config.marketplaces()[&MarketplaceName::new("team").unwrap()],
-        config.marketplaces()[&MarketplaceName::new("TEAM").unwrap()],
+        config.extension_sources()[&ExtensionSourceId::new("team").unwrap()],
+        config.extension_sources()[&ExtensionSourceId::new("TEAM").unwrap()],
         "separate source names must never share a cache, including on case-insensitive filesystems"
     );
 }
 
 #[test]
-fn marketplace_publisher_policy_rejects_explicitly_empty_duplicate_or_invalid_lists() {
+fn extension_packages_publisher_policy_rejects_explicitly_empty_duplicate_or_invalid_lists() {
     let root = TempDir::new().unwrap();
     fs::write(root.path().join("root.json"), b"pinned trust root").unwrap();
     let path = root.path().join("product-services.json");
     let mut document = serde_json::json!({
-        "schemaVersion": 2,
-        "marketplaces": [{"name": "team", "metadataBaseUrl": "https://team.example/metadata/", "targetsBaseUrl": "https://team.example/targets/", "trustedRoot": "root.json"}]
+        "schemaVersion": 3,
+        "extensionSources": [{"name": "team", "metadataBaseUrl": "https://team.example/metadata/", "targetsBaseUrl": "https://team.example/targets/", "trustedRoot": "root.json"}]
     });
     fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
     LocalProductServicesConfig::load(&path, root.path().join("profile")).unwrap();
     for publishers in [vec![], vec!["team", "team"], vec!["../team"]] {
-        document["marketplaces"][0]["allowedPublishers"] = serde_json::json!(publishers);
+        document["extensionSources"][0]["allowedPublishers"] = serde_json::json!(publishers);
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         assert!(LocalProductServicesConfig::load(&path, root.path().join("profile")).is_err());
     }
@@ -313,7 +313,7 @@ fn marketplace_publisher_policy_rejects_explicitly_empty_duplicate_or_invalid_li
 fn product_services_binds_image_endpoint_and_git_policy_to_the_product_authority() {
     let root = TempDir::new().unwrap();
     let path = root.path().join("product.json");
-    let mut document = serde_json::json!({"schemaVersion":2,"imageGeneration":{"serviceName":"images","endpoint":"https://images.example.test/generate","credentialReference":"images-key"},"gitAttribution":{"coAuthor":"Agent <agent@example.test>","pullRequestNotice":"Assisted by Agent"}});
+    let mut document = serde_json::json!({"schemaVersion":3,"imageGeneration":{"serviceName":"images","endpoint":"https://images.example.test/generate","credentialReference":"images-key"},"gitAttribution":{"coAuthor":"Agent <agent@example.test>","pullRequestNotice":"Assisted by Agent"}});
     fs::write(&path, document.to_string()).unwrap();
     let first = LocalProductServicesConfig::load(&path, root.path()).unwrap();
     assert_eq!(
@@ -335,13 +335,13 @@ fn product_services_binds_image_endpoint_and_git_policy_to_the_product_authority
 fn open_vsx_is_an_independent_source_with_explicit_download_origins() {
     let root = TempDir::new().unwrap();
     let path = root.path().join("product-services.json");
-    let source = serde_json::json!({"schemaVersion":2,"openVsx":{
+    let source = serde_json::json!({"schemaVersion":3,"openVsx":{
         "name":"open-vsx", "apiUrl":"https://open-vsx.org/api/",
         "downloadOrigins":["https://openvsx.eclipsecontent.org/"]
     }});
     fs::write(&path, source.to_string()).unwrap();
     let config = LocalProductServicesConfig::load(&path, root.path()).unwrap();
-    assert!(config.marketplaces().is_empty());
+    assert!(config.extension_sources().is_empty());
     assert_eq!(config.open_vsx.as_ref().unwrap().0.as_str(), "open-vsx");
     for endpoint in [
         "http://open-vsx.org/api/",
@@ -356,14 +356,14 @@ fn open_vsx_is_an_independent_source_with_explicit_download_origins() {
 }
 
 #[test]
-fn open_vsx_cannot_replace_a_pinned_marketplace_identity() {
+fn open_vsx_cannot_replace_a_pinned_extension_packages_identity() {
     let root = TempDir::new().unwrap();
     fs::write(root.path().join("root.json"), b"{}").unwrap();
     let path = root.path().join("product-services.json");
     fs::write(
         &path,
-        serde_json::json!({"schemaVersion":2,
-            "marketplaces":[{"name":"shared", "metadataBaseUrl":"https://signed.example/metadata/",
+        serde_json::json!({"schemaVersion":3,
+            "extensionSources":[{"name":"shared", "metadataBaseUrl":"https://signed.example/metadata/",
                 "targetsBaseUrl":"https://signed.example/targets/", "trustedRoot":"root.json"}],
             "openVsx":{"name":"shared", "apiUrl":"https://open-vsx.org/api/", "downloadOrigins":[]}
         })
@@ -380,7 +380,7 @@ fn github_enterprise_browser_configuration_has_distinct_host_and_rejects_ambiguo
     let valid = serde_json::json!({"host":"git.example.com","clientId":"EnterprisePublic","brokerBaseUrl":"https://git-auth.example.com/"});
     fs::write(
         &path,
-        serde_json::json!({"schemaVersion":2,"githubEnterpriseAccounts":[valid.clone()]})
+        serde_json::json!({"schemaVersion":3,"githubEnterpriseAccounts":[valid.clone()]})
             .to_string(),
     )
     .unwrap();
@@ -401,14 +401,14 @@ fn github_enterprise_browser_configuration_has_distinct_host_and_rejects_ambiguo
         invalid["host"] = serde_json::json!(host);
         fs::write(
             &path,
-            serde_json::json!({"schemaVersion":2,"githubEnterpriseAccounts":[invalid]}).to_string(),
+            serde_json::json!({"schemaVersion":3,"githubEnterpriseAccounts":[invalid]}).to_string(),
         )
         .unwrap();
         assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
     }
     fs::write(
         &path,
-        serde_json::json!({"schemaVersion":2,"githubEnterpriseAccounts":[valid.clone(),valid]})
+        serde_json::json!({"schemaVersion":3,"githubEnterpriseAccounts":[valid.clone(),valid]})
             .to_string(),
     )
     .unwrap();

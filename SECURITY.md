@@ -25,4 +25,4 @@ Security-sensitive areas include, but are not limited to:
 - credentials, OAuth and provider authentication;
 - MCP, plugins, connectors and external capability execution;
 - workspace trust and permission handling;
-- update, package and Marketplace trust boundaries.
+- update, package and Extensions trust boundaries.

@@ -64,7 +64,7 @@ suite('Extension resource loader', () => {
 		const bundles = JSON.parse(readFileSync(resolve(process.cwd(), 'localization/zh-CN/workbench.json'), 'utf8'));
 		setNlsMessages('zh-CN', bundles);
 		try {
-			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), { message: '此资源不属于已配置的扩展市场。' });
+			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), { message: '此资源不属于已配置的扩展源。' });
 		} finally {
 			resetNlsResolver();
 		}

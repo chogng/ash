@@ -21,7 +21,7 @@ fn source_label(kind: &ExtensionRootKind) -> &'static str {
     match kind {
         ExtensionRootKind::BuiltIn => "builtIn",
         ExtensionRootKind::Plugin => "plugin",
-        ExtensionRootKind::Marketplace => "marketplace",
+        ExtensionRootKind::Registry => "extensions",
         ExtensionRootKind::User => "user",
     }
 }

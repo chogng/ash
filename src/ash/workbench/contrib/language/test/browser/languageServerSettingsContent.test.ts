@@ -14,7 +14,7 @@ import { IContextViewService } from '../../../../../platform/contextview/browser
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILanguageServerService, OPEN_LANGUAGE_SERVERS_COMMAND_ID, type LanguageServerConfiguration, type LanguageServerSnapshot } from '../../../../../platform/language/common/languageServerService.js';
-import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID } from '../../../../../platform/marketplace/common/marketplaceService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -61,7 +61,7 @@ class SettingsFixture extends DisposableStore {
 				this.snapshot = { ...this.snapshot, revision: revision + 1, configurations: {} };
 			},
 		});
-		this.services.registerInstance(IMarketplaceService, { onDidChangeInstalled: this.installed.event } as IMarketplaceService);
+		this.services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: this.installed.event } as IExtensionManagementService);
 		this.services.registerInstance(ICommandService, { executeCommand: async (id: string, ...args: unknown[]) => { this.commands.push([id, ...args]); } } as unknown as ICommandService);
 		this.services.registerInstance(IWorkspaceContextService, this.add(new WorkspaceContextService({ id: 'test', folders: [] })));
 		this.services.registerInstance(ILocalizationService, {
@@ -191,12 +191,12 @@ test('Language server Settings searches server metadata, localizes Chinese, and 
 	assert.equal(AccessibleViewRegistry.getImplementations().includes(implementation), false);
 });
 
-test('Finding language servers opens Marketplace with an exact executable route and closes Settings', async () => {
+test('Finding language servers opens Extensions with an exact executable route and closes Settings', async () => {
 	using fixture = new SettingsFixture();
 	fixture.edit('Language ID', 'python');
-	fixture.button('Find language servers in Marketplace').click();
+	fixture.button('Find language servers in Extensions').click();
 	await settle();
-	assert.deepEqual(fixture.commands, [['workbench.action.closeActiveEditor'], [OPEN_MARKETPLACE_COMMAND_ID, { languageId: 'python', capabilityKind: 'executable' }]]);
+	assert.deepEqual(fixture.commands, [['workbench.action.closeActiveEditor'], [OPEN_EXTENSIONS_COMMAND_ID, { languageId: 'python', capabilityKind: 'executable' }]]);
 });
 
 test('A save finishing after Settings is hidden does not move keyboard focus back to the form', async () => {

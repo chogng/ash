@@ -144,7 +144,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		};
 		try {
 			if (options.productServicesPath) {
-				await writeFile(options.productServicesPath, JSON.stringify({ schemaVersion: 2, githubAccount }) + '\n');
+				await writeFile(options.productServicesPath, JSON.stringify({ schemaVersion: 3, githubAccount }) + '\n');
 			}
 			// Startup-only backend options must be present before the daemon is composed.
 			if (backendConfiguration) {

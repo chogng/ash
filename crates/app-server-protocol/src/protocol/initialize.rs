@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt;
 
-pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
+pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 8;
 // Same-product clients bind to the generated schema fingerprint, not a shared
 // counter for unrelated capability domains.
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
@@ -206,7 +206,7 @@ pub struct ServerCapabilities {
     pub extension_host: bool,
     pub connectors: bool,
     pub plugins: bool,
-    pub marketplace: bool,
+    pub extension_management: bool,
     pub mcp: bool,
     #[serde(rename = "mcpOAuth")]
     #[ts(rename = "mcpOAuth")]
@@ -241,7 +241,7 @@ impl ServerCapabilities {
             "extensionHost" => Some(self.extension_host),
             "connectors" => Some(self.connectors),
             "plugins" => Some(self.plugins),
-            "marketplace" => Some(self.marketplace),
+            "extensionManagement" => Some(self.extension_management),
             "mcp" => Some(self.mcp),
             "mcpOAuth" => Some(self.mcp_oauth),
             _ => None,
@@ -255,15 +255,15 @@ impl ServerCapabilities {
             self.contracts
                 .insert("github".into(), CapabilityContract { version: 1 });
         }
-        if self.marketplace {
+        if self.extensions {
             self.contracts.insert(
                 "extensionGalleryResources".into(),
                 CapabilityContract { version: 1 },
             );
-            self.contracts.insert(
-                "marketplaceSearch".into(),
-                CapabilityContract { version: 1 },
-            );
+        }
+        if self.extension_management {
+            self.contracts
+                .insert("extensionsSearch".into(), CapabilityContract { version: 1 });
         }
     }
 }

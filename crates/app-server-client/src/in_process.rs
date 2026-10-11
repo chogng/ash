@@ -100,7 +100,7 @@ impl InProcessClientOptions {
         self
     }
 
-    /// Installs product-pinned Marketplace roots and public Connector OAuth adapters.
+    /// Installs product-pinned Extensions roots and public Connector OAuth adapters.
     pub fn with_product_services(mut self, services: LocalProductServicesConfig) -> Self {
         self.product_services = Some(services);
         self
@@ -108,7 +108,7 @@ impl InProcessClientOptions {
 
     /// Loads the distribution-owned product services document selected for this process.
     ///
-    /// Product hosts call this explicitly while composing an embedded App Server so Marketplace
+    /// Product hosts call this explicitly while composing an embedded App Server so Extensions
     /// trust roots and public Connector adapters remain host inputs rather than hidden defaults.
     pub fn with_discovered_product_services(
         self,

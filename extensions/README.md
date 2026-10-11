@@ -29,7 +29,7 @@ copied into `ash-resources/extensions/` during development and production packag
 packages also build an independent executable in `bin/`; the runtime does not compile their sources. TS builds and loads the built-in editor assets directly. App Server validates installed external
 package resources through `ash-external-ext::packages`. A running application does not authenticate to a Git repository to load built-in extensions.
 
-Marketplace language packages are maintained in the separate `ash-marketplace` repository. That
+Extensions language packages are maintained in the separate `ash-extensions` repository. That
 repository owns versioned sources, server entrypoints, dependency locks, build recipes, licenses,
 and signed releases. Node server dependencies are assembled during publication and included in the
 signed language ZIP; Ash downloads that package when the user installs it. Ash owns installation,
@@ -44,7 +44,7 @@ with their licenses included inside those packages. The canonical VS Code MIT li
 development packaging place it at `ash-resources/licenses/vscode/LICENSE.txt` alongside the
 extension packages.
 
-User-installed extensions are a separate profile-level root. Marketplace packages use the signed registry and remain separate from these built-in resources.
+User-installed extensions are a separate profile-level root. Extensions packages use the signed registry and remain separate from these built-in resources.
 
 ## Bundled packages
 
@@ -108,7 +108,7 @@ Supported declarative fields are deliberately narrower than a VS Code extension 
 | `debuggers`                                                              | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API                                                | Extension registry / Debug service                       |
 | `configurationDefaults`, `semanticTokenScopes`                           | 尚未接入；bundled manifest 中的字段不会被投影                                                                            | 后续领域 adapter                                         |
 | extension JavaScript                                                     | 声明式扫描不执行；可信 `browser` 包由独立 Worker 路径执行                                                                | TS 扩展宿主                                              |
-| Marketplace LSP executable                                               | 由已验证 catalog 映射并运行                                                                                              | App Server / LSP manager                                 |
+| Extensions LSP executable                                               | 由已验证 catalog 映射并运行                                                                                              | App Server / LSP manager                                 |
 
 User packages are read from the host-selected profile extension root, but the current Editor
 Extension system has no registry, download, enable/disable, signature, or grant authority. Built-in

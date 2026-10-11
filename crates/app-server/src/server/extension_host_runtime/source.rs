@@ -4,10 +4,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
+use ash_core_plugins::ExtensionPackageManager;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginInvocationFence;
 use ash_core_plugins::PluginInvocationLease;
-use ash_core_plugins::PluginsManager;
 use ash_external_ext::ActivateParams;
 use ash_external_ext::ActivationAuthority;
 use ash_external_ext::ActivationLease;
@@ -20,14 +20,14 @@ use ash_plugin::EditorExtensionApi;
 use ash_plugin::EditorExtensionCapability;
 
 use super::ExtensionHostRuntimeError;
-use crate::MarketplaceEditorExtensionAdmission;
-use crate::marketplace_editor_extensions;
+use crate::ExtensionsEditorExtensionAdmission;
+use crate::extension_packages_editor_extensions;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct EditorExtensionSourceRevision {
     pub(crate) plugin: u64,
-    pub(crate) marketplace: u64,
-    pub(crate) marketplace_admission: u64,
+    pub(crate) extension_packages: u64,
+    pub(crate) extension_packages_admission: u64,
 }
 
 pub(crate) struct EditorExtensionSourceSnapshot {
@@ -290,7 +290,7 @@ pub(super) fn plugin_deployments(
             .map_err(ExtensionHostRuntimeError::Host)?;
             let (activation, activation_failure) = match contribution.runtime {
                 ash_plugin::EditorExtensionRuntime::JavaScript => {
-                    match marketplace_editor_extensions::javascript_activation_plan(
+                    match extension_packages_editor_extensions::javascript_activation_plan(
                         package.package_root(),
                     ) {
                         Ok(plan) => (Some(plan), None),
@@ -367,8 +367,8 @@ pub(super) fn plugin_deployments(
     Ok(EditorExtensionSourceSnapshot {
         revision: EditorExtensionSourceRevision {
             plugin: activation.generation(),
-            marketplace: 0,
-            marketplace_admission: 0,
+            extension_packages: 0,
+            extension_packages_admission: 0,
         },
         deployments,
     })
@@ -376,8 +376,8 @@ pub(super) fn plugin_deployments(
 
 pub(super) fn combined_deployments(
     plugin: Option<&PluginActivationAuthority>,
-    marketplace: Option<&Arc<PluginsManager>>,
-    marketplace_admission: Option<&Arc<dyn MarketplaceEditorExtensionAdmission>>,
+    extension_packages: Option<&Arc<ExtensionPackageManager>>,
+    extension_packages_admission: Option<&Arc<dyn ExtensionsEditorExtensionAdmission>>,
 ) -> Result<EditorExtensionSourceSnapshot, ExtensionHostRuntimeError> {
     let mut snapshot = match plugin {
         Some(plugin) => plugin_deployments(plugin)?,
@@ -386,13 +386,13 @@ pub(super) fn combined_deployments(
             deployments: Vec::new(),
         },
     };
-    if let (Some(manager), Some(admission)) = (marketplace, marketplace_admission) {
-        snapshot.revision.marketplace = manager
+    if let (Some(manager), Some(admission)) = (extension_packages, extension_packages_admission) {
+        snapshot.revision.extension_packages = manager
             .generation()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
-        snapshot.revision.marketplace_admission = admission.generation();
+        snapshot.revision.extension_packages_admission = admission.generation();
         snapshot.deployments.extend(
-            marketplace_editor_extensions::deployments(manager, admission)
+            extension_packages_editor_extensions::deployments(manager, admission)
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?,
         );
     }

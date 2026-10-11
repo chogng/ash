@@ -40,7 +40,7 @@ pub struct SlashCommandDefinition {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProductSlashCommand {
-    Marketplace,
+    Extensions,
     Plugins,
     Skills,
     Lsp,
@@ -50,7 +50,7 @@ pub enum ProductSlashCommand {
 
 impl ProductSlashCommand {
     pub const ALL: [Self; 6] = [
-        Self::Marketplace,
+        Self::Extensions,
         Self::Plugins,
         Self::Skills,
         Self::Lsp,
@@ -60,9 +60,9 @@ impl ProductSlashCommand {
 
     pub fn definition(self) -> SlashCommandDefinition {
         let (name, description, argument_hint) = match self {
-            Self::Marketplace => (
-                "marketplace",
-                "find and install Marketplace packages",
+            Self::Extensions => (
+                "extensions",
+                "find and install Extensions packages",
                 Some("<query>"),
             ),
             Self::Plugins => (
@@ -91,7 +91,7 @@ impl ProductSlashCommand {
             name: name.into(),
             description: description.into(),
             argument_mode: match self {
-                Self::Marketplace | Self::Lsp | Self::Permission | Self::Guardian => {
+                Self::Extensions | Self::Lsp | Self::Permission | Self::Guardian => {
                     SlashCommandArgumentMode::Optional
                 }
                 Self::Plugins | Self::Skills => SlashCommandArgumentMode::None,

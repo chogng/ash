@@ -448,7 +448,7 @@ function displayLanguageSetting(setting: ISetting, locale: ILocaleService, langu
 		get options() {
 			const options = languagePacks.availableLocales.map(locale => ({ value: locale.locale, label: locale.localizedLanguageName }));
 			const preference = configuration.getValue<string>(LocalizationConfiguration.locale);
-			// A selected local resource remains valid after its Marketplace package is removed.
+			// A selected local resource remains valid after its Extensions package is removed.
 			if (!options.some(option => option.value === preference)) options.push({ value: preference, label: preference });
 			return options;
 		},

@@ -25,7 +25,7 @@ import { NotificationService } from '../../../../services/notification/common/no
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import { IAppServerSkillApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IMarketplaceService } from '../../../../../platform/marketplace/common/marketplaceService.js';
+import { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ILanguageServerService } from '../../../../../platform/language/common/languageServerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { createTestFileService, createTestEditorServices } from '../../../../test/common/testEditorServices.js';
@@ -1196,7 +1196,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		read: async sessionId => { skillScopes.push(sessionId); return { revision: 7, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', contentDigest: 'sha256:review', enabled: skillEnabled, compatible: true }] }, diagnostics: [] }; },
 		setEnabled: async (...args) => { skillMutations.push(args); skillEnabled = args[1]; },
 	});
-	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None } as IMarketplaceService);
+	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None } as IExtensionManagementService);
 	services.registerInstance(ILanguageServerService, { read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
 	services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => null } as ICodeEditorService);
 	services.registerInstance(IDialogService, disposables.add(new DialogService()));
@@ -1397,7 +1397,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
 	assert.ok(languageControl);
 	assert.equal(languageControl.textContent, 'English');
-	availableLocales.push({ locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', source: 'marketplace' });
+	availableLocales.push({ locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', source: 'extensionManagement' });
 	languagePacksChanged.fire();
 	languageControl.click();
 	const languageListId = languageControl.getAttribute('aria-controls')!;

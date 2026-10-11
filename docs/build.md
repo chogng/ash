@@ -236,7 +236,7 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 ## 发布调试符号与离线崩溃解析
 
-第一阶段已接入 Cargo 发布组包、符号归档和离线工具。release 仅增加 `line-tables-only`、`split-debuginfo = off`、`strip = false`；macOS 发布入口覆盖为 `packed`。优化、LTO、codegen units、开发和测试 profile 保持不变。本机已验证 macOS arm64 的真实 release 程序、内联源码行和受控 abort core；Linux/Windows 与正式签名、上传流程须由发布 CI 验证。统一 panic 采集、Electron 和 JavaScript 符号属于后续阶段。
+第一阶段已接入 Cargo 发布组包、符号归档和离线工具。release 仅增加 `line-tables-only`、`split-debuginfo = off`、`strip = false`；macOS 发布入口覆盖为 `packed`。优化、LTO、codegen units、开发和测试 profile 保持不变。本机已验证 macOS arm64 的真实 release 程序、内联源码行、离线 Mach-O core 加载及栈展开；Linux/Windows 与正式签名、上传流程须由发布 CI 验证。统一 panic 采集、Electron 和 JavaScript 符号属于后续阶段。
 
 ### 第一阶段使用
 
@@ -265,6 +265,8 @@ python -B build/release/symbolicate.py \
 ```
 
 core/minidump 还需 `--images <最终解压产品根目录>` 和 `--executable <该包的主程序>`。输入按魔数识别，原始报告和 dump 不会改写；输出 JSON 和同名 `.txt`，退出码 0 表示帧全部解析，2 表示仍有未解析帧，其他非零表示输入或工具失败。外部模块缺少供应方符号时保留原始 PC 和原因。ELF core 必须包含模块身份所在的文件映射页；缺页时不会借用用户提供程序的 build-id。LLDB 的 Mach-O stack core 可从 `all image infos` 元数据获取 UUID。
+
+LLDB 初始化先关闭符号预加载和符号文件脚本，再创建不自动加载宿主依赖的目标，只添加校验后的产品映像；独立目标的用法见 [LLDB 离线符号解析](https://lldb.llvm.org/use/symbolication.html#using-python-api-to-symbolicate)。Mach-O 回归测试使用真实优化、剥离后的程序及其 dSYM，构造确定的寄存器和栈快照，经真实 LLDB 加载和展开后检查源码行及未解析的外部返回帧；此测试覆盖 core 导入，不依赖运行中进程的捕获。
 
 具有模块 ID 的 JSON 也可输入：`schemaVersion: 1`，`modules` 每项含 `format`（`macho`/`elf`/`pe`）、`arch`（`aarch64`/`x86_64`）、`id` 和加载 `base`；`frames` 每项含 `module` 索引、`pc` 和可选 `thread`。ELF 还需按 PT_LOAD 得到的 `loadBias`，或帧中的 `fileAddress`。UUID/build-id 使用无连字符的小写十六进制，PDB ID 为小写 GUID 加十进制 Age，例如 `<guid>-1`。`addressKind: returnAddress` 明确标记原始返回 PC，解析器按架构回退到调用指令；OS 已处理的地址不重复回退。
 
@@ -410,7 +412,7 @@ just dependency-security
 
 BM25 的同分候选由上游 HashSet 顺序决定。Ash 在自己的搜索入口按原始分数和工具名称排序，再截断候选并转换 reciprocal rank，保证重建索引、单条结果和排除项不会受到哈希遍历顺序影响；无需修改或复制 BM25 源码。
 
-2026-10-11 在 Windows 恢复发布版后，CLI 的 40 项、Code Mode runtime 的 19 项及 tokenizer 的 12 项库测试首轮通过；搜索同分排序修复后，`just test ash-tools -p ash-typst -p ash-v8-poc --features ash-v8-poc/sandbox --profile ci-test --lib` 通过 tools 的 39 项、Typst 的 11 项和 V8 sandbox 的 7 项测试。`just test-tui-unit render::highlight::tests` 的 4 项与 `just test-tui-unit app::marketplace_tests` 的 24 项通过，合计 156 项消费者测试。已移除随序列化补丁及字体回补一起撤掉的专用测试和资源，保留真实高亮、排版、搜索及 XML 边界覆盖。
+2026-10-11 在 Windows 恢复发布版后，CLI 的 40 项、Code Mode runtime 的 19 项及 tokenizer 的 12 项库测试首轮通过；搜索同分排序修复后，`just test ash-tools -p ash-typst -p ash-v8-poc --features ash-v8-poc/sandbox --profile ci-test --lib` 通过 tools 的 39 项、Typst 的 11 项和 V8 sandbox 的 7 项测试。`just test-tui-unit render::highlight::tests` 的 4 项与 `just test-tui-unit app::extensions_tests` 的 24 项通过，合计 156 项消费者测试。已移除随序列化补丁及字体回补一起撤掉的专用测试和资源，保留真实高亮、排版、搜索及 XML 边界覆盖。
 
 `just check ash-tools -p ash-model-tokenizer -p ash-typst -p ash-tui -p ash-v8-poc -p ash-code-mode-runtime --profile ci-test` 的正常编译检查通过；相同六个包加 `ash-cli` 的 `just rust-warnings ... --profile ci-test` 全部目标检查通过。`just dependencies`、使用锁定 cargo-deny 0.20.2 的 `just dependency-security` 通过；`just test-python scripts` 运行 162 项，7 项按平台条件跳过，其余通过。Bazel 的 `build @crates//:bm25 @crates//:syntect` 实际编译通过并更新 lockfile；改动文件的 Rust、Python、JSON/Markdown 格式及 `git diff --check` 通过。未运行完整 workspace 回归或 Web/Electron UI，本轮未修改 UI 行为；Linux/macOS 的消费者编译由 `rust-warnings.yml` 的对应 warnings 作业覆盖，本机无法执行这些系统上的运行验证。
 

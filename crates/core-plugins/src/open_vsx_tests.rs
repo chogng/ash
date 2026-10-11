@@ -1,5 +1,5 @@
 use super::*;
-use crate::PluginPackageService;
+use crate::ExtensionPackageService;
 use ash_http_client::HttpClientError;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpResponse;
@@ -121,9 +121,9 @@ fn search_uses_open_vsx_without_downloading_packages_and_preserves_named_source(
     let http = Arc::new(FixtureHttp::default());
     let search = "https://registry.example/api/-/search?query=sample+language&size=50&targetPlatform=universal";
     http.responses.lock().unwrap().insert(search.into(), HttpResponse::new(200, Vec::new(), br#"{"extensions":[{"namespace":"publisher","name":"sample","version":"1.0.0","displayName":"Sample","description":"Fixture"}]}"#.to_vec()));
-    let providers = crate::PluginProviders::new([(
-        ash_plugin::MarketplaceName::new("open-vsx").unwrap(),
-        client(Arc::clone(&http)) as Arc<dyn PluginProvider>,
+    let providers = crate::ExtensionSources::new([(
+        ash_plugin::ExtensionSourceId::new("open-vsx").unwrap(),
+        client(Arc::clone(&http)) as Arc<dyn ExtensionSource>,
     )])
     .unwrap();
     let results = providers
@@ -160,11 +160,11 @@ fn gallery_reads_verified_resources_without_installing_or_activating_the_package
     let http = Arc::new(FixtureHttp::default());
     release(&http, "1.0.0", vsix("1.0.0", None));
     let root = tempfile::tempdir().unwrap();
-    let manager = crate::PluginsManager::open(
+    let manager = crate::ExtensionPackageManager::open(
         root.path(),
-        crate::PluginProviders::new([(
-            ash_plugin::MarketplaceName::new("custom-source").unwrap(),
-            client(Arc::clone(&http)) as Arc<dyn PluginProvider>,
+        crate::ExtensionSources::new([(
+            ash_plugin::ExtensionSourceId::new("custom-source").unwrap(),
+            client(Arc::clone(&http)) as Arc<dyn ExtensionSource>,
         )])
         .unwrap(),
     )
@@ -232,13 +232,13 @@ fn install_update_reopen_and_uninstall_use_the_existing_manager_without_running_
     let client = client(Arc::clone(&http));
     let root = tempfile::tempdir().unwrap();
     let providers = || {
-        crate::PluginProviders::new([(
-            ash_plugin::MarketplaceName::new("open-vsx").unwrap(),
-            Arc::clone(&client) as Arc<dyn PluginProvider>,
+        crate::ExtensionSources::new([(
+            ash_plugin::ExtensionSourceId::new("open-vsx").unwrap(),
+            Arc::clone(&client) as Arc<dyn ExtensionSource>,
         )])
         .unwrap()
     };
-    let manager = crate::PluginsManager::open(root.path(), providers()).unwrap();
+    let manager = crate::ExtensionPackageManager::open(root.path(), providers()).unwrap();
     let details = manager
         .get(GetPackageRequest {
             package_id: "publisher.sample@open-vsx".into(),
@@ -265,9 +265,7 @@ fn install_update_reopen_and_uninstall_use_the_existing_manager_without_running_
             })
             .unwrap_err()
             .kind(),
-        crate::MarketplaceClientErrorKind::Remote(
-            crate::MarketplaceErrorCode::CapabilityUnsupported
-        )
+        crate::ExtensionsClientErrorKind::Remote(crate::ExtensionsErrorCode::CapabilityUnsupported)
     );
     // Details and installation share the exact verified payload; a second metadata/checksum read
     // still runs so a stale cache cannot hide a changed release.
@@ -289,7 +287,7 @@ fn install_update_reopen_and_uninstall_use_the_existing_manager_without_running_
         .unwrap();
     assert_eq!(updated.package.version, "2.0.0");
     drop(manager);
-    let manager = crate::PluginsManager::open(root.path(), providers()).unwrap();
+    let manager = crate::ExtensionPackageManager::open(root.path(), providers()).unwrap();
     assert_eq!(
         manager
             .list_installed(crate::ListInstalledRequest {})
@@ -337,9 +335,7 @@ fn untrusted_archive_and_escape_paths_do_not_install() {
             .unwrap_err();
         assert_eq!(
             error.kind(),
-            crate::MarketplaceClientErrorKind::Remote(
-                crate::MarketplaceErrorCode::PackageUntrusted
-            ),
+            crate::ExtensionsClientErrorKind::Remote(crate::ExtensionsErrorCode::PackageUntrusted),
             "{case}"
         );
     }
@@ -423,11 +419,11 @@ fn live_open_vsx_installs_and_removes_a_universal_vsix() {
         .unwrap(),
     );
     let root = tempfile::tempdir().unwrap();
-    let manager = crate::PluginsManager::open(
+    let manager = crate::ExtensionPackageManager::open(
         root.path(),
-        crate::PluginProviders::new([(
-            ash_plugin::MarketplaceName::new("open-vsx").unwrap(),
-            client as Arc<dyn PluginProvider>,
+        crate::ExtensionSources::new([(
+            ash_plugin::ExtensionSourceId::new("open-vsx").unwrap(),
+            client as Arc<dyn ExtensionSource>,
         )])
         .unwrap(),
     )

@@ -23,7 +23,7 @@ directory capability。
 | `LanguageServerDefinition`                                                  | 冻结唯一 route、canonical executable command 和 initialize options                                                                                | 在 runtime 内重新查询 PATH                             |
 | `LanguageServerProvider` / `LspServerProviders`                             | 把已验证、已安装的 server 包和运行时绑定为稳定 language route 与 definition                                                                       | 下载、验签、启动进程或监督重启                         |
 | `ManagedNodeRuntime`                                                        | 冻结 canonical Node-compatible executable；Desktop 使用 Electron run-as-Node，其他 package 使用 standalone Node，并生成 clean-environment command | 回退 host `PATH` 或允许 language pack 携带 Node        |
-| `CssLanguageServerProvider`                                                 | 用共享 Node-compatible runtime 运行 verified CSS package 入口，route `css`/`less`/`scss`                                                          | 复制 LSP client/supervisor 或解释 Marketplace metadata |
+| `CssLanguageServerProvider`                                                 | 用共享 Node-compatible runtime 运行 verified CSS package 入口，route `css`/`less`/`scss`                                                          | 复制 LSP client/supervisor 或解释 Extensions metadata |
 | `NodePackageLanguageServerProvider` / `DirectPackageLanguageServerProvider` | 把 Manager-verified entrypoint 和 signed language route 绑定为 packaged provider                                                                  | 下载、安装、解析远端 catalog 或持有 live process       |
 
 当前内置项包括 `rust-analyzer → rust`、`vscode-json-language-server --stdio → json/jsonc` 和
@@ -48,8 +48,8 @@ Product composition
       → LanguageServerDefinition
       → ash-lsp-manager
 
-verified Marketplace package composition
-├─ PluginsManager::local_capability_sources
+verified Extensions package composition
+├─ ExtensionPackageManager::local_capability_sources
 ├─ signed executable runtime + language route
 ├─ Desktop: ASH_ELECTRON_RUN_AS_NODE_PATH → exact Electron executable
 ├─ other packaged hosts: InstallContext::bundled_resource("node/bin/node[.exe]")
@@ -99,6 +99,6 @@ environment、host override 和 duplicate provider gate。
 - ✅ JSON/JSONC、Shell server definitions 与持久化 mode/path 映射；
 - ✅ 通用 `ash-core-plugins` 提供整包 digest 复核、immutable artifact、安装/update/uninstall 和 lease；
 - ✅ verified CSS package provider、managed Node-compatible runtime 启动命令、App Server provider 组合点与 host override；
-- ✅ Marketplace Language target 的通用 TUF 下载/解压 adapter、Settings 安装 UI，以及从 verified
+- ✅ Extensions Language target 的通用 TUF 下载/解压 adapter、Settings 安装 UI，以及从 verified
   Language/Executable capability 自动构建 `node`/`direct` provider collection；
 - 尚未完成：组织策略或更细的 per-server executable grant。

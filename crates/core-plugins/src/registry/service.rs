@@ -2,11 +2,11 @@ use crate::AcquireCapabilityRequest;
 use crate::AcquiredCapability;
 use crate::ArtifactHandle;
 use crate::DownloadPackageRequest;
+use crate::ExtensionsClientError;
 use crate::GetPackageRequest;
 use crate::InstallPackageRequest;
 use crate::InstalledPackage;
 use crate::ListInstalledRequest;
-use crate::MarketplaceClientError;
 use crate::OpenResourceRequest;
 use crate::PackageDetails;
 use crate::ReleaseCapabilityOutcome;
@@ -17,52 +17,52 @@ use crate::SearchPackagesResult;
 use crate::UninstallPackageRequest;
 use crate::UpdatePackageRequest;
 
-/// Plugin package service implemented by [`crate::PluginsManager`].
+/// Plugin package service implemented by [`crate::ExtensionPackageManager`].
 ///
 /// Core Plugins uses this interface for remote discovery and local lifecycle operations.
 /// Implementations must keep remote protocol, cache, package paths, and filesystem layout private.
-pub trait PluginPackageService: Send + Sync {
+pub trait ExtensionPackageService: Send + Sync {
     fn search(
         &self,
         request: SearchPackagesRequest,
-    ) -> Result<SearchPackagesResult, MarketplaceClientError>;
+    ) -> Result<SearchPackagesResult, ExtensionsClientError>;
 
-    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, MarketplaceClientError>;
+    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError>;
 
     fn download(
         &self,
         request: DownloadPackageRequest,
-    ) -> Result<ArtifactHandle, MarketplaceClientError>;
+    ) -> Result<ArtifactHandle, ExtensionsClientError>;
 
     fn install(
         &self,
         request: InstallPackageRequest,
-    ) -> Result<InstalledPackage, MarketplaceClientError>;
+    ) -> Result<InstalledPackage, ExtensionsClientError>;
 
     fn update(
         &self,
         request: UpdatePackageRequest,
-    ) -> Result<InstalledPackage, MarketplaceClientError>;
+    ) -> Result<InstalledPackage, ExtensionsClientError>;
 
-    fn uninstall(&self, request: UninstallPackageRequest) -> Result<(), MarketplaceClientError>;
+    fn uninstall(&self, request: UninstallPackageRequest) -> Result<(), ExtensionsClientError>;
 
     fn list_installed(
         &self,
         request: ListInstalledRequest,
-    ) -> Result<Vec<InstalledPackage>, MarketplaceClientError>;
+    ) -> Result<Vec<InstalledPackage>, ExtensionsClientError>;
 
     fn acquire_capability(
         &self,
         request: AcquireCapabilityRequest,
-    ) -> Result<AcquiredCapability, MarketplaceClientError>;
+    ) -> Result<AcquiredCapability, ExtensionsClientError>;
 
     fn release_capability(
         &self,
         request: ReleaseCapabilityRequest,
-    ) -> Result<ReleaseCapabilityOutcome, MarketplaceClientError>;
+    ) -> Result<ReleaseCapabilityOutcome, ExtensionsClientError>;
 
     fn open_resource(
         &self,
         request: OpenResourceRequest,
-    ) -> Result<ResourceContent, MarketplaceClientError>;
+    ) -> Result<ResourceContent, ExtensionsClientError>;
 }

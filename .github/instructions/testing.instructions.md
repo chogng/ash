@@ -22,6 +22,7 @@ Commands: [Rust development](../../.agents/skills/rust-development/SKILL.md#vali
 
 ## 验证选择
 
+- 测试和诊断不得触发系统密码、Touch ID 或 Developer Tools Access 授权弹窗；使用离线 fixtures，不启动需要系统授权的调试附加，也不请求用户解锁或修改安全策略。
 - 交付、提交或推送前，完成当前平台可执行且覆盖受影响行为的最小 check、test、build 或运行验证。测试通过不能代替正常构建；纯编译修复必须验证原先失败的非测试构建。
 - 本地根据改动的所属包、测试目标与受影响消费者选择验证；Rust 使用共享 `ci-test` 配置，前端过滤测试文件或场景。完整 workspace 回归和跨平台 CI 矩阵由远端工作流执行，不作为日常本地验证；用户明确要求全量复现时例外。
 - 优先复用现有诊断。每个目标默认运行一次，通过后停止；代码、相关依赖、工具链及验证配置未变时复用结果。修复失败后先重跑失败目标，仅在变更或新证据要求时扩大范围。Web、Electron UI 与 App Server 连接是不同覆盖。

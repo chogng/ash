@@ -433,7 +433,7 @@ fn failed_initialize_cleans_the_published_backend_before_retry() {
     assert!(!endpoint.with_extension("pid.json").exists());
     assert!(!endpoint.exists());
 
-    std::fs::write(&services, r#"{"schemaVersion":2}"#).unwrap();
+    std::fs::write(&services, r#"{"schemaVersion":3}"#).unwrap();
     let cleanup = StopOnDrop {
         options: options.clone(),
         executable,

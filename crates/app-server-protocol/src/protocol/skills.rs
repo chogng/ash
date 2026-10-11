@@ -29,7 +29,7 @@ pub enum SkillSourceKindDto {
     User,
     Directory,
     Plugin,
-    Marketplace,
+    Extensions,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

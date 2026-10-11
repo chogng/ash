@@ -16,7 +16,7 @@ pub(crate) enum AppCommand {
     Host(crate::host::Command),
     Issues(crate::issues::Command),
     Keymap(crate::keymap_setup::Command),
-    Marketplace(crate::marketplace::Command),
+    Extensions(crate::extension_packages::Command),
     Lsp(crate::lsp::Command),
     Mcp(crate::mcp::Command),
     Hooks(crate::hooks::Command),
@@ -56,7 +56,7 @@ impl AppCommand {
                     .parse::<TuiSlashCommandAction>()
                     .ok()?
                 {
-                    TuiSlashCommandAction::Marketplace => Some("Marketplace"),
+                    TuiSlashCommandAction::Extensions => Some("Extensions"),
                     TuiSlashCommandAction::Plugins => Some("Plugins"),
                     TuiSlashCommandAction::Lsp => Some("Language servers"),
                     _ if !invocation.arguments.is_empty() => None,
@@ -98,7 +98,7 @@ app_command_from!(crate::dirs::Command, Dirs);
 app_command_from!(crate::git::Command, Git);
 app_command_from!(crate::host::Command, Host);
 app_command_from!(crate::keymap_setup::Command, Keymap);
-app_command_from!(crate::marketplace::Command, Marketplace);
+app_command_from!(crate::extension_packages::Command, Extensions);
 app_command_from!(crate::lsp::Command, Lsp);
 app_command_from!(crate::mcp::Command, Mcp);
 app_command_from!(crate::hooks::Command, Hooks);

@@ -19,7 +19,7 @@ expression: text(&buffer)
                                                                                 
 ─ Extensions ───────────────────────────────────────────────────────────────────
                                                                                 
-   Skills    Marketplace    MCP    Hooks    Plugins                             
+   Skills    Extensions    MCP    Hooks    Plugins                              
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ Search installed plugins                                                 │  
   ╰──────────────────────────────────────────────────────────────────────────╯  

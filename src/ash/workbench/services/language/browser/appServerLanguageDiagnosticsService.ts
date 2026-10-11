@@ -64,7 +64,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
-			if (event.method === "config/changed" || event.method === "marketplace/changed") this.queuePermissionRefresh();
+			if (event.method === "config/changed" || event.method === "extensions/changed") this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(workspace.onDidChangeWorkspace(() => {

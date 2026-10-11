@@ -18,19 +18,19 @@ pub enum PluginPackageSource {
 /// Normalized digest algorithm used to identify one exact package payload.
 ///
 /// Local development keeps the historical Ash algorithm for existing object-store compatibility.
-/// Product-independent Marketplace distributions explicitly select `MarketplaceV1`; the selected
+/// Product-independent Extensions distributions explicitly select `ExtensionsV1`; the selected
 /// algorithm is preserved while Plugin authority copies and revalidates the package.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginPackageDigestAlgorithm {
     LegacyAshV1,
-    MarketplaceV1,
+    ExtensionsV1,
 }
 
 impl PluginPackageDigestAlgorithm {
     pub(super) const fn domain(self) -> &'static [u8] {
         match self {
             Self::LegacyAshV1 => b"ash-plugin-package-v1\0",
-            Self::MarketplaceV1 => b"marketplace-package-v1\0",
+            Self::ExtensionsV1 => b"marketplace-package-v1\0",
         }
     }
 }

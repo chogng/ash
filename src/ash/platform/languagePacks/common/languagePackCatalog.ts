@@ -9,7 +9,7 @@ export function normalizeLocale(value: string): string {
 	return parts.map((part, index) => index === 0 ? part.toLowerCase() : part.length === 2 || part.length === 3 ? part.toUpperCase() : part).join("-");
 }
 
-/** Validates the product-specific static resource after Marketplace acquisition. */
+/** Validates the product-specific static resource after Extensions acquisition. */
 export function parseLanguagePackCatalog(value: unknown): LanguagePackCatalog | undefined {
 	if (!isRecord(value)) return undefined;
 	const candidate = value;

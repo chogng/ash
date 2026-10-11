@@ -717,7 +717,7 @@ fn expandable_source_groups_hide_children_and_search_finds_collapsed_packages() 
     let parent = ListSelectionItemId::new("source:ash");
     let mut state = ListSelectionState::new(
         ListSelectionModel::new(
-            "Marketplace",
+            "Extensions",
             vec![ListSelectionGroup::new(
                 "",
                 vec![

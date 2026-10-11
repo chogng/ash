@@ -179,14 +179,14 @@ class PackageTests(unittest.TestCase):
     def test_product_services_requires_every_sources_regular_trust_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            official = {"name": "ash", "trustedRoot": "marketplace-root.json"}
+            official = {"name": "ash", "trustedRoot": "extensions-root.json"}
             vendor = {"name": "vendor", "trustedRoot": "vendor/root.json"}
-            (root / "marketplace-root.json").write_text("official root")
+            (root / "extensions-root.json").write_text("official root")
             (root / "vendor").mkdir()
             (root / "vendor/root.json").write_text("vendor root")
             config = root / "product-services.json"
             config.write_text(
-                json.dumps({"schemaVersion": 2, "marketplaces": [official, vendor]})
+                json.dumps({"schemaVersion": 3, "extensionSources": [official, vendor]})
             )
             validate_product_services(root)
             (root / "vendor/root.json").unlink()
@@ -195,7 +195,7 @@ class PackageTests(unittest.TestCase):
             (root / "empty.json").write_text("")
             for source in [
                 official,
-                {"name": "vendor\n", "trustedRoot": "marketplace-root.json"},
+                {"name": "vendor\n", "trustedRoot": "extensions-root.json"},
                 {"name": "vendor", "trustedRoot": "../root.json"},
                 {"name": "vendor", "trustedRoot": "/root.json"},
                 {"name": "vendor", "trustedRoot": "C:\\root.json"},
@@ -204,7 +204,7 @@ class PackageTests(unittest.TestCase):
                 with self.subTest(source=source):
                     config.write_text(
                         json.dumps(
-                            {"schemaVersion": 2, "marketplaces": [official, source]}
+                            {"schemaVersion": 3, "extensionSources": [official, source]}
                         )
                     )
                     with self.assertRaises(RuntimeError):
@@ -216,15 +216,15 @@ class PackageTests(unittest.TestCase):
             parent = Path(temporary)
             root = parent / "product"
             root.mkdir()
-            (root / "marketplace-root.json").write_text("official root")
+            (root / "extensions-root.json").write_text("official root")
             (parent / "root.json").write_text("outside root")
             (root / "linked").symlink_to(parent, target_is_directory=True)
             (root / "product-services.json").write_text(
                 json.dumps(
                     {
-                        "schemaVersion": 2,
-                        "marketplaces": [
-                            {"name": "ash", "trustedRoot": "marketplace-root.json"},
+                        "schemaVersion": 3,
+                        "extensionSources": [
+                            {"name": "ash", "trustedRoot": "extensions-root.json"},
                             {"name": "vendor", "trustedRoot": "linked/root.json"},
                         ],
                     }
@@ -474,10 +474,10 @@ class PackageTests(unittest.TestCase):
                 ).read_text(encoding="utf-8")
             )
             self.assertEqual(
-                "marketplace-root.json",
+                "extensions-root.json",
                 next(
                     source
-                    for source in product_services["marketplaces"]
+                    for source in product_services["extensionSources"]
                     if source["name"] == "ash"
                 )["trustedRoot"],
             )
@@ -486,13 +486,13 @@ class PackageTests(unittest.TestCase):
                     REPOSITORY_ROOT
                     / "resources"
                     / "product-services"
-                    / "marketplace-root.json"
+                    / "extensions-root.json"
                 ).read_bytes(),
                 (
                     output
                     / "ash-resources"
                     / "product-services"
-                    / "marketplace-root.json"
+                    / "extensions-root.json"
                 ).read_bytes(),
             )
             self.assertEqual(

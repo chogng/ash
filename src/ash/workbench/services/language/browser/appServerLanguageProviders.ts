@@ -38,7 +38,7 @@ export class AppServerLanguageProviders extends Disposable {
 		if (options.dirPermissions && !options.events) throw new Error("Permission-aware App Server language providers require the App Server event stream");
 		if (options.events) {
 			const subscription = options.events.subscribe(event => {
-				if (event.method === "config/changed" || event.method === "marketplace/changed") this.queueRefresh();
+				if (event.method === "config/changed" || event.method === "extensions/changed") this.queueRefresh();
 			});
 			this._register(toDisposable(() => subscription.dispose()));
 		}

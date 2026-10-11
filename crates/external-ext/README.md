@@ -7,7 +7,7 @@
 > 本 README 记录当前可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复。
 > JS 使用标准 VS Code API，由[独立 JS 宿主](../external-js-ext/README.md)适配到同一 Host RPC；本 crate 承担共用监管。
 > [`Rust 作者 SDK`](../../sdk/rust/README.md) 已被 GitHub 认证的独立程序复用；产品 Rust launcher 已接通，通用第三方 Rust 安装与隔离仍待完成。
-> 共享 wire 定义属于 `ash-external-ext-protocol`。跨 Marketplace/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
+> 共享 wire 定义属于 `ash-external-ext-protocol`。跨 Extensions/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
 > [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；统一远端 package 身份由
 > [`crates/core-plugins/README.md`](../core-plugins/README.md) 维护。
 
@@ -46,7 +46,7 @@ GitHub 认证试点已复用本 Host 的独立进程监管与 Host RPC v1。`Pro
 | Provider invocation  | 路由到精确 registration、deadline、并发取消和结果校验                                    | Command、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 定义 payload 与消费结果 |
 | Diagnostics / Output | 返回 typed `ExtensionHostError`，保留有界 stderr，并接收受配额约束的扩展命名 Output 事件 | App Server 清洗故障并把 Output 事件投影到 Workbench Output 服务                                 |
 
-出现以下代码表示 ownership 漂移：本 crate 扫描 Marketplace/Plugin registry、持久化 enable/grant、解释
+出现以下代码表示 ownership 漂移：本 crate 扫描 Extensions/Plugin registry、持久化 enable/grant、解释
 编辑器贡献、注册 Workbench provider、决定工作区信任，或自行把一个普通 Node/WASM 脚本当成
 entrypoint 加载。
 
@@ -250,7 +250,7 @@ crash recovery 已实现。
 - activation-event matching 和 lazy activation 属于上层 composition，监管器只接收 activation facts；
 - 空闲崩溃检测依赖上层 health loop；
 - v1 的 extension-originated event 目前只覆盖命名 Output channel；其他事件必须先明确领域 owner 与背压语义；
-- 本 crate 不实现 Node/WASM 模块加载、VS Code API 或 Marketplace 兼容解析；产品 Node 宿主与 source adapter 负责这些工作，仍为每扩展一个进程；
+- 本 crate 不实现 Node/WASM 模块加载、VS Code API 或 Extensions 兼容解析；产品 Node 宿主与 source adapter 负责这些工作，仍为每扩展一个进程；
 - 没有 publisher signature、revocation feed、跨平台 artifact selector 或 binary ABI 检查；这些属于 package
   supply-chain 与平台 launchability 演进，不应加入协议解析器。
 

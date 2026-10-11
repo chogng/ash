@@ -149,14 +149,14 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
-			let marketplaceRevision: { readonly instanceId: string; readonly generation: number; } | undefined;
+			let extensionManagementRevision: { readonly instanceId: string; readonly generation: number; } | undefined;
 			const subscription = options.eventApi.subscribe(event => {
 				if (event.method === 'plugin/changed') {
 					if (event.params.activationGeneration === activationGeneration) return;
 					activationGeneration = event.params.activationGeneration;
-				} else if (event.method === 'marketplace/changed') {
-					if (marketplaceRevision?.instanceId === event.params.instanceId && event.params.generation <= marketplaceRevision.generation) return;
-					marketplaceRevision = event.params;
+				} else if (event.method === 'extensions/changed') {
+					if (extensionManagementRevision?.instanceId === event.params.instanceId && event.params.generation <= extensionManagementRevision.generation) return;
+					extensionManagementRevision = event.params;
 				} else {
 					return;
 				}

@@ -424,7 +424,7 @@ impl AppServer {
             extension_host: self.extension_hosts.is_some(),
             connectors: self.connectors.is_some(),
             plugins: self.plugins.is_some(),
-            marketplace: self.plugin_package_service.is_some(),
+            extension_management: self.plugin_package_service.is_some(),
             mcp: self.config.is_some(),
             mcp_oauth: self.mcp_oauth.is_some(),
             contracts: Default::default(),

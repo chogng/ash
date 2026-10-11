@@ -96,7 +96,7 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 		const removed = new Promise<void>(resolve => {
 			const subscription = WorkbenchThemesRegistry.onDidChange(() => { subscription.dispose(); resolve(); });
 		});
-		listener?.({ method: 'marketplace/changed', params: { instanceId: 'manager', generation } });
+		listener?.({ method: 'extensions/changed', params: { instanceId: 'manager', generation } });
 		await removed;
 		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId), undefined);
 	}
@@ -105,11 +105,11 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 });
 
 
-test('the renderer loads a portable Marketplace theme and rejects invalid declarations before replacing it', async () => {
+test('the renderer loads a portable Extensions theme and rejects invalid declarations before replacing it', async () => {
 	const portable = { schemaVersion: 1, themes: [{ id: 'portable', displayName: 'Portable', appearance: 'dark', path: 'themes/portable.json' }] };
 	let contents: unknown = portable;
 	let generation = 1;
-	const descriptor = { id: 'marketplace.example', name: 'example', publisher: 'marketplace', version: '1.0.0', displayName: 'Example', sourceKind: 'marketplace' as const, packageSha256: `sha256:${'a'.repeat(64)}` };
+	const descriptor = { id: 'registry.example', name: 'example', publisher: 'registry', version: '1.0.0', displayName: 'Example', sourceKind: 'registry' as const, packageSha256: `sha256:${'a'.repeat(64)}` };
 	const api: IExtensionApi = {
 		list: async () => {
 			const manifestJson = JSON.stringify({ ...contents as object, name: descriptor.name, publisher: descriptor.publisher, version: descriptor.version });
@@ -120,7 +120,7 @@ test('the renderer loads a portable Marketplace theme and rejects invalid declar
 			return new TextEncoder().encode('{"colors":{"editor.background":"#123456"}}');
 		}),
 	};
-	const themeId = 'extension-marketplace-example-portable';
+	const themeId = 'extension-registry-example-portable';
 	{
 		using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) });
 		await service.start();

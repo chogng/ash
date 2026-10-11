@@ -33,7 +33,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | 关闭一个 Session Tab         | 前端通过 `session/request` 提交 `request.type = stop`                                                 | 枚举同一 `session_id` 的 Thread，持久化各 Thread 的停止事实并中断活动 Turn；不创建 Session 状态 |
 | 持续显示执行进度             | 读取 Thread 正文快照并订阅语义条目更新                                                                | 后端整理条目内容和顺序；客户端决定排版，发现缺口时重新读取快照                                  |
 | 修改配置或资源               | 调用类型化方法并携带命令身份                                                                          | 重复命令可重放结果，冲突载荷会被拒绝                                                            |
-| 同步 Marketplace 安装状态    | 同一 profile daemon 写入，收到 generation 失效提示后重新 list                                         | Desktop、Ash Code 与 app 不建立第二份安装 authority                                             |
+| 同步 Extensions 安装状态    | 同一 profile daemon 写入，收到 generation 失效提示后重新 list                                         | Desktop、Ash Code 与 app 不建立第二份安装 authority                                             |
 | 响应批准或用户输入           | 回复等待中的类型化请求                                                                                | 回复绑定精确请求和当前 Thread                                                                   |
 | 让 Agent 操作 Desktop 浏览器 | Desktop 初始化时声明 browser host                                                                     | Rust 保留批准和目标 owner，Electron Main 只执行语义动作                                         |
 | 连接本地 App Server          | 先初始化并校验能力和模式哈希                                                                          | 初始化前不能调用产品方法                                                                        |
@@ -165,7 +165,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 7 },
+  "protocolVersion": { "major": 8 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -200,7 +200,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 
 本地打包、开发启动、远程连接与后端更新统一要求相同的 protocol major 和 `schemaHash`。指纹由 Rust 协议生成器根据完整 JSON Schema 自动计算；协议字段、方法或返回类型变化后运行 `just generate-protocol`，无需维护 revision 或所有能力共用的版本计数。主版本只用于明确的破坏性协议语义变化。前端与后端随同一次构建交付，启动入口先准备对应后端产物。
 
-每条连接在进入 Ready 前还必须验证 server identity、响应形状以及必需能力的布尔值。`sessions`、`threads`、`turns` 只表达是否可用；`contracts` 仅保留 `taskDelivery`、`marketplaceSearch` 等独立可选能力自己的契约版本。指纹不同必须拒绝连接，并报告客户端与后端的指纹；不得忽略字段差异后继续发送请求。远程后端也必须使用匹配的生成协议，当前不提供跨指纹版本范围协商。
+每条连接在进入 Ready 前还必须验证 server identity、响应形状以及必需能力的布尔值。`sessions`、`threads`、`turns` 只表达是否可用；`contracts` 仅保留 `taskDelivery`、`extensionsSearch` 等独立可选能力自己的契约版本。指纹不同必须拒绝连接，并报告客户端与后端的指纹；不得忽略字段差异后继续发送请求。远程后端也必须使用匹配的生成协议，当前不提供跨指纹版本范围协商。
 
 权限 ID 使用 `manual / auto / bypassPermissions`。名称、说明、翻译 key 与确认标记由共享 Rust 定义生成到 `ApprovalModes.ts`，界面通过领域适配层渲染，不需要新增一次菜单查询 RPC。旧权限字段、模型选择、Guardian 观察或时间策略的协议变化由生成指纹校验覆盖。
 
@@ -325,8 +325,9 @@ Server → Client `app/request`，不增加 Main 中的业务分发。
 | `connector/credential/cleanup`                                                           | Connector credential owner                | 重试 durable post-disconnect secret 删除义务                                                                                                                                                              |
 | `plugin/list`                                                                            | Plugin authority                          | 分别投影 installed/enabled/granted/effective package 状态                                                                                                                                                 |
 | `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall`                      | Plugin authority                          | exact-package CAS lifecycle mutation                                                                                                                                                                      |
-| `marketplace/search` / `get` / `install` / `update` / `uninstall`                        | Marketplace Manager                       | 通用 package discovery 与唯一安装状态；不自动授权或激活 capability                                                                                                                                        |
-| `marketplace/listInstalled` / `acquireCapability` / `releaseCapability` / `openResource` | Marketplace Manager                       | 返回当前 profile generation 与唯一安装状态，并通过 lease + opaque resource 完成 path-free capability handoff；本地可信 runtime adapter 不经过 Renderer                                                    |
+| `extensions/search` / `get` / `install` / `update` / `uninstall`                        | Extensions Manager                       | 通用 package discovery 与唯一安装状态；不自动授权或激活 capability                                                                                                                                        |
+| `extensions/sources/list` / `add` / `setEnabled`                                          | profile Extensions Manager                | 列出来源；认证 Desktop/Web 客户端以 source revision 添加或暂停第三方 Ash 源，产品固定来源不可修改                                                                                                        |
+| `extensions/listInstalled` / `acquireCapability` / `releaseCapability` / `openResource` | Extensions Manager                       | 返回当前 profile generation 与唯一安装状态，并通过 lease + opaque resource 完成 path-free capability handoff；本地可信 runtime adapter 不经过 Renderer                                                    |
 | `config/update`                                                                          | config                                    | typed command 更新配置                                                                                                                                                                                    |
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove`                                      | config + local policy runtime             | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot                                                                                                                       |
 | `toolSearch/configure`                                                                   | config + semantic model runtime           | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search                                                                                                                                           |
@@ -415,10 +416,12 @@ Server → Client `app/request`，不增加 Main 中的业务分发。
 | `terminal/read`                                                                          | connection + Terminal                     | 按 sequence 拉取有界 Base64 输出                                                                                                                                                                          |
 | `terminal/close`                                                                         | connection + Terminal                     | 终止并释放 PTY                                                                                                                                                                                            |
 
-`marketplace/search` 的可选 `capabilityKind` 按包携带的能力筛选，跨 package family 包含 Plugin bundle；
+`extensions/search` 的可选 `capabilityKind` 按包携带的能力筛选，跨 package family 包含 Plugin bundle；
 可选 `languageId` 要求已验证 catalog 声明该语言到 executable 的明确路由。它与 `query`、
 `packageType` 同时生效，不会把静态语法资源当作语言服务器。支持这些筛选的后端在 initialize
-发布 `contracts.marketplaceSearch.version=1`；客户端在带筛选的查询前检查该能力，防止旧后端忽略条件。
+发布 `contracts.extensionsSearch.version=1`；客户端在带筛选的查询前检查该能力，防止旧后端忽略条件。
+
+`extensions/sources/list` 返回来源协议、启停状态、产品所有权和 `revision`。`add` 接收独立来源 ID、HTTPS metadata/targets 地址与发布者提供的 trusted root JSON；地址和信任根固定后不能复用同一 ID 替换。`setEnabled` 暂停或恢复后续发现、下载和更新，保留已安装包及其现有授权。两种写操作都检查 `expectedRevision`，由同一个 profile Manager 持久化并发布 `extensions/changed`。认证 Web 会话与产品宿主均可配置来源；普通协议连接只能读取，不能自报升级身份。
 
 `session/create`、`session/read`、`session/list` 与 Session mutation result 返回的每个 `Session`
 都包含 `manager` 读取视图。App Server 从完整 Thread snapshots 推导 `idle`、`needsInput`、
@@ -531,20 +534,20 @@ endpoint policy 属于 host 注入的 provider adapter，不属于 App Server pr
 
 Plugin request 是 config intent；legacy Plugin lifecycle authority 是另一层事实。`plugin/list` 不把它们
 压成一个布尔值，而是分别返回 enabled、granted 与 effective，只有 exact installed package 同时 enabled
-且 granted 时才进入 activation。新的远端 package 只能通过 `marketplace/*` 方法进入
-`PluginsManager`；Plugin authority 不再拥有 Marketplace catalog 或安装入口。
+且 granted 时才进入 activation。新的远端 package 只能通过 `extensions/*` 方法进入
+`ExtensionPackageManager`；Plugin authority 不再拥有 Extensions catalog 或安装入口。
 
-`marketplace/search` 和 `marketplace/get` 查询远程目录，在后台处理且不持有本地状态的全局许可；慢目录请求不阻塞配置读取、保存或 Session 操作。客户端打开 Marketplace 后即可结束导航命令，目录加载与错误由 Marketplace 页面显示。
+`extensions/search` 和 `extensions/get` 查询远程目录，在后台处理且不持有本地状态的全局许可；慢目录请求不阻塞配置读取、保存或 Session 操作。客户端打开 Extensions 后即可结束导航命令，目录加载与错误由 Extensions 页面显示。
 
-同一 profile 的 App Server daemon 是 Marketplace mutation 的 single writer。成功的
+同一 profile 的 App Server daemon 是 Extensions mutation 的 single writer。成功的
 install/update/uninstall 在 consumer reconcile 后推进共享 generation，并向该 profile 的全部
-App Server connection 广播 `marketplace/changed { instanceId, generation }`。该通知只表示“本地安装投影可能
-过期”；客户端必须重新调用 `marketplace/listInstalled`，并以返回的 instanceId + generation + packages 为事实。
+App Server connection 广播 `extensions/changed { instanceId, generation }`。该通知只表示“本地安装投影可能
+过期”；客户端必须重新调用 `extensions/listInstalled`，并以返回的 instanceId + generation + packages 为事实。
 `whenUnused` 卸载会先广播 pending-removal 状态；最后一个 capability lease 被释放或随连接关闭清理、删除
 真正提交时再广播一次，避免其他端长期保留已经消失的 Skill、Connector 或 Extension 投影。
 共享 profile runtime 为唯一 Manager 持有一个 committed-change watcher，所以内部运行时 lease 的异步释放
 也走同一广播；standalone App Server 才自行持有 watcher。broker 对 Manager generation 去重，同一 profile
-拒绝绑定第二个 Marketplace authority。
+拒绝绑定第二个 Extensions authority。
 重连不要求回放旧通知：新连接直接 list 即可补到当前 generation。客户端应忽略不大于已观察
 generation 的同 instance 重复或乱序通知；instanceId 变化表示 authority 已重启，新的低 generation
 也必须接受。
@@ -1041,7 +1044,7 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 - `agent/request`，payload 为仅发送给 selected owner 的 full `AgentRequestEnvelope`；
 - `config/changed`，payload 为已提交的 Config `revision` 与 `generation`；
 - `skills/changed`，payload 为新的 catalog `generation`；
-- `marketplace/changed`，payload 为 profile Marketplace 安装状态的 `instanceId` 与新 `generation`；
+- `extensions/changed`，payload 为 profile Extensions 安装状态的 `instanceId` 与新 `generation`；
 - `git/statusChanged`，payload 为新的 directory Git status；
 - `git/ignoreChanged`，payload 为 repository identity 和受影响的忽略查询路径；
 - `git/repositoriesChanged`，空 payload，表示当前授权目录的仓库清单已变；
@@ -1099,7 +1102,7 @@ TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知�
 
 ### 网络诊断
 
-`network/read` 与 `network/diagnostics/run` 参数均为 `{}`。前者返回当前配置的模型连接、已就绪订阅的模型/登录/额度端点，以及后端接入的 Marketplace、图片和账号代理服务。端点归所属服务维护，诊断不维护另一份固定域名清单；外部 Kimi 程序、浏览器和插件自行发出的请求不在此列表中。每项含稳定目标 ID、连接身份、域名、端口、用途，以及共享网络快照选择的直连、代理主机/端口或权限阻止状态。路径、查询参数、代理认证信息和凭据不返回。
+`network/read` 与 `network/diagnostics/run` 参数均为 `{}`。前者返回当前配置的模型连接、已就绪订阅的模型/登录/额度端点，以及后端接入的 Extensions、图片和账号代理服务。端点归所属服务维护，诊断不维护另一份固定域名清单；外部 Kimi 程序、浏览器和插件自行发出的请求不在此列表中。每项含稳定目标 ID、连接身份、域名、端口、用途，以及共享网络快照选择的直连、代理主机/端口或权限阻止状态。路径、查询参数、代理认证信息和凭据不返回。
 
 运行诊断时，通过同一生产 HTTP 客户端向每个端点的 origin 根路径发送一次无认证 GET，保留现有代理、证书、权限和超时规则。任何收到的 HTTP 状态，包括 401、404、5xx，都表示该次请求已到达服务；这不证明账号授权、模型生成或流式响应有效。DNS、代理连接、TLS、系统证书验证器初始化、连接和超时错误分别报告；一个端点失败不抹掉其他端点的结果。随后通过现有 `account/rateLimits/read` 检查已就绪账号，账号结果与连通性结果分开。服务响应正文不返回。连接关闭取消进行中的等待，结果不缓存，也不写入配置。
 
@@ -1479,7 +1482,7 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 `language/servers` 接收可选的 `dirId` 或 `sessionDirectory`，沿用语言操作的目录选择与执行权限校验。
 返回 `{ servers: [{ id, languageIds }] }`，只包含当前配置下可解析的服务器；无服务器时数组为空。
 该查询不启动服务器，也不暴露可执行文件路径。非法目录或权限不足按现有目录错误返回；配置或运行时不可用返回
-`LanguageServiceUnavailable`。客户端在 `config/changed`、`marketplace/changed` 和工作区变化后重新查询。
+`LanguageServiceUnavailable`。客户端在 `config/changed`、`extensions/changed` 和工作区变化后重新查询。
 
 ## 工作区测试
 

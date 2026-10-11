@@ -26,7 +26,7 @@ import './browser/actions/layoutActions.js';
 import "./contrib/modernUI/browser/modernUI.contribution.js";
 import './contrib/mediaPreview/browser/mediaPreview.contribution.js';
 
-import './contrib/marketplace/browser/marketplace.contribution.js';
+import './contrib/extensions/browser/extensions.contribution.js';
 import './contrib/language/browser/languageServers.contribution.js';
 import './contrib/localization/common/localization.contribution.js';
 import './contrib/commands/common/commands.contribution.js';

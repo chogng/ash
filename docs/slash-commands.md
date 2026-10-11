@@ -115,18 +115,18 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 - **隐藏条件**：光标离开末尾（如回退编辑命令名），或用户开始键入非空白参数字符时，虚提示立即消失。
 - **呈现规范**：输入框在光标后以置灰弱化样式（如 `context.muted()`）绘制虚提示；光标保持在实际输入的空格处，不移动物理光标，实际输入文本也不包含占位符内容。
 
-## Marketplace 与领域管理入口
+## Extensions 与领域管理入口
 
 Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各领域的使用入口。命令只打开对应功能；安装状态由
 [`Core Plugins`](../crates/docs/core-plugins.md#一个包入口多个领域消费方) 统一持有。
 
 | 入口                | 用户操作                                                             | 安装相关操作                                |
 | ------------------- | -------------------------------------------------------------------- | ------------------------------------------- |
-| `/marketplace`      | 搜索所有来源、查看包内容与版本、安装、更新、卸载                     | 使用同一个 Core Plugins 服务                |
-| `/skills`           | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用               | 在 TUI 中用 `/marketplace` 搜索可安装 Skill |
-| `/lsp`              | 查看当前语言与服务器、配置启用状态和路径、检查运行故障               | “查找服务器”打开 Marketplace 的语言筛选     |
-| `/plugins`          | Ash Code 管理已安装插件的启停；Workbench 打开 Marketplace 的插件分类 | 包更新和卸载由 Marketplace 提供             |
-| MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command       | Marketplace 提供对应 capability 筛选        |
+| `/extensions`      | 搜索所有来源、查看包内容与版本、安装、更新、卸载                     | 使用同一个 Core Plugins 服务                |
+| `/skills`           | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用               | 在 TUI 中用 `/extensions` 搜索可安装 Skill |
+| `/lsp`              | 查看当前语言与服务器、配置启用状态和路径、检查运行故障               | “查找服务器”打开 Extensions 的语言筛选     |
+| `/plugins`          | Ash Code 管理已安装插件的启停；Workbench 打开 Extensions 的插件分类 | 包更新和卸载由 Extensions 提供             |
+| MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command       | Extensions 提供对应 capability 筛选        |
 
 - package 是版本和卸载单位；一个 Plugin 包携带的 Skill、MCP 等能力不分别安装，也不重复登记。
 - 领域页面可直接提供安装按钮，但必须调用同一个包管理服务，并明确显示实际安装的整个包。
@@ -136,17 +136,17 @@ Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各�
 - 安装、更新和卸载通知使领域重新读取状态；进程、文档、认证、启用设置仍归各领域管理。
 
 Web/Electron Chat 与 Ash Code 共用 `ProductSlashCommand` 的命令定义；Rust 直接读取，TypeScript 由协议生成器生成 `PRODUCT_SLASH_COMMANDS`。名称、描述、参数模式和占位提示只在共享契约中声明，各端仅绑定自身面板，不加入服务端会话命令。
-`/marketplace [query]` 打开并搜索包；Web/Electron 的 `/lsp [language-id]` 打开设置的“编辑器 → 语言服务器”并设置查找语言，日志与运行故障通过 Output 和状态栏查看，Ash Code 保留终端服务器面板；`/plugins` 与 `/skills` 不接受参数。
+`/extensions [query]` 打开并搜索包；Web/Electron 的 `/lsp [language-id]` 打开设置的“编辑器 → 语言服务器”并设置查找语言，日志与运行故障通过 Output 和状态栏查看，Ash Code 保留终端服务器面板；`/plugins` 与 `/skills` 不接受参数。
 页面提供 Tab/方向键导航、Alt+F1 帮助与独立 accessibility verbosity 设置。安装前展示完整包的版本和能力；
 已安装列表按安装记录 ID 管理，同包多版本不会混用；目录不可用时仍可读取本地安装列表并卸载。
 Skill 启用和 LSP 配置使用后端配置 revision；遇到冲突保留输入并提示刷新，不自动覆盖。
-Ash Code 同时注册 `/marketplace [query]`、`/plugins`、`/lsp [language-id]`，命令直接打开终端面板。
-Ash Code 的 Skills、Marketplace、MCP、Hooks、Plugins 共用扩展面板的五个页签，领域命令进入对应页签。停用项在标题后显示红色 `[disable]`，不再用 All / On / Off 筛选。Plugins 以准确版本、摘要和 revision 启停已安装插件。Marketplace 按包身份中的来源分组；Enter 和左右键展开收起来源，来源内用原分类名称作为行标题，包详情仍用左右键展开收起。
-`/` 聚焦搜索，`i` 打开安装审阅，`u` 打开卸载确认，`r` 刷新 Marketplace 或 Plugins。Tab/Shift+Tab、方向键和 Esc 沿用 Config 面板的焦点与返回规则；安装前仍审阅整个包，已安装版本按具体安装记录更新和卸载。
+Ash Code 同时注册 `/extensions [query]`、`/plugins`、`/lsp [language-id]`，命令直接打开终端面板。
+Ash Code 的 Skills、Extensions、MCP、Hooks、Plugins 共用扩展面板的五个页签，领域命令进入对应页签。停用项在标题后显示红色 `[disable]`，不再用 All / On / Off 筛选。Plugins 以准确版本、摘要和 revision 启停已安装插件。Extensions 按包身份中的来源分组；Enter 和左右键展开收起来源，来源内用原分类名称作为行标题，包详情仍用左右键展开收起。
+`/` 聚焦搜索，`i` 打开安装审阅，`u` 打开卸载确认，`r` 刷新 Extensions 或 Plugins。Tab/Shift+Tab、方向键和 Esc 沿用 Config 面板的焦点与返回规则；安装前仍审阅整个包，已安装版本按具体安装记录更新和卸载。
 `/lsp` 的 Available、Configured、Directories 页签显示可用服务器、配置和会话目录；输入语言 ID 后进入
-Marketplace 精确路由搜索。可用表示已启用且程序可解析，不表示进程已启动。
-Ash Code 的 `/skills` 只管理已发现的技能，安装技能从 `/marketplace` 进入。`/mcp`、`/connectors`、`/lsp` 的获取入口进入同一个 Marketplace；语言服务器配置统一由 `/lsp` 管理，Config 不再重复提供页签。
-分类不对应独立来源：Ash 发行配置已包含 `ash` Marketplace，只有接入另一个独立目录才需要增加来源与信任根。
+Extensions 精确路由搜索。可用表示已启用且程序可解析，不表示进程已启动。
+Ash Code 的 `/skills` 只管理已发现的技能，安装技能从 `/extensions` 进入。`/mcp`、`/connectors`、`/lsp` 的获取入口进入同一个 Extensions；语言服务器配置统一由 `/lsp` 管理，Config 不再重复提供页签。
+分类不对应独立来源：Ash 发行配置已包含 `ash` Extensions，只有接入另一个独立目录才需要增加来源与信任根。
 终端在显示边界翻译共享命令描述和参数提示；面板动态文案使用翻译模板，包名、语言 ID、路径、权限标识和第三方描述保持原文。
 终端使用共享列表的 Tab/方向键、搜索与鼠标路径；请求期间可按 Esc 关闭，迟到结果不会重开面板。
 

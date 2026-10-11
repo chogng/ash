@@ -22,7 +22,7 @@ export default defineConfig({
 				tokenization: resolve(import.meta.dirname, 'tokenization.html'),
 				diff: resolve(import.meta.dirname, 'diff.html'),
 				language: resolve(import.meta.dirname, "language.html"),
-				marketplace: resolve(import.meta.dirname, "marketplace.html"),
+				extensions: resolve(import.meta.dirname, "extensions.html"),
 				issueReporter: resolve(import.meta.dirname, 'issueReporter.html'),
 				processExplorer: resolve(import.meta.dirname, 'processExplorer.html'),
 				advisor: resolve(import.meta.dirname, "advisor.html"),

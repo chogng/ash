@@ -1,7 +1,7 @@
 # Ash UI localization
 
 Ash treats UI localization as a data catalog capability, separate from programming-language
-packages. The product owns the catalog contract it consumes; the remote Marketplace only validates,
+packages. The product owns the catalog contract it consumes; the remote Extensions only validates,
 signs, and distributes product-independent static locale payloads.
 
 Built-in catalogs are generated into `.build/desktop/localization/` and are not tracked by Git.
@@ -14,21 +14,21 @@ source declarations and translations without requiring or writing generated cata
 
 | Surface                                                              | Owner                                                                           | Contract                                                          |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Built-in English and Simplified Chinese                              | `workbench/services/localization/common/localizationCatalogs.ts`                | Always available without Marketplace access                       |
-| Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks`                                                        | `ILanguagePackService`; Marketplace `packageType: "localization"` |
+| Built-in English and Simplified Chinese                              | `workbench/services/localization/common/localizationCatalogs.ts`                | Always available without Extensions access                       |
+| Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks`                                                        | `ILanguagePackService`; Extensions `packageType: "localization"` |
 | Locale selection and persistence                                     | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale`                |
 | Message lookup and NLS projection                                    | `workbench/services/localization` + `src/ash/nls.ts`                            | Selected catalog → English catalog → caller fallback              |
-| Remote package discovery and distribution                            | `../marketplace`                                                                | `packageType: "localization"` and `localization/package.json`     |
-| Installed package lease and resource reads                           | Ash Marketplace Manager                                                         | A localization capability exposes one static JSON catalog         |
+| Remote package discovery and distribution                            | `../extensions`                                                                | `packageType: "localization"` and `localization/package.json`     |
+| Installed package lease and resource reads                           | Ash Extensions Manager                                                         | A localization capability exposes one static JSON catalog         |
 
-The Marketplace does not know Ash bundle IDs, does not execute localization packages, and does not
-install them into the renderer. The App Server/Marketplace Manager acquires and leases the validated
+The Extensions does not know Ash bundle IDs, does not execute localization packages, and does not
+install them into the renderer. The App Server/Extensions Manager acquires and leases the validated
 capability resource. Each client window's `platform/languagePacks` adapter reads that path-free
 resource, validates the Ash catalog contract, and projects the result to its own Workbench services.
 
 ## Catalog shape
 
-The Marketplace manifest declares one locale per package. Its payload uses:
+The Extensions manifest declares one locale per package. Its payload uses:
 
 ```json
 {
@@ -48,11 +48,11 @@ The Marketplace manifest declares one locale per package. Its payload uses:
 Bundle IDs and keys remain data owned by the consuming product. The Ash renderer accepts only
 `catalogVersion: "ash-1"`, validates locale/name/message bounds, and ignores malformed or
 product-mismatched catalogs without preventing other installed locales from loading. A future Ash
-catalog contract can reject a catalog without changing the generic Marketplace schema.
+catalog contract can reject a catalog without changing the generic Extensions schema.
 
 ## Runtime behavior
 
-`MarketplaceLanguagePackService` starts with the built-in catalogs and loads installed Marketplace
+`ExtensionsLanguagePackService` starts with the built-in catalogs and loads installed Extensions
 catalogs through the normal capability lease. `WorkbenchLocaleService` owns the local-profile
 selection and applies it in the current Workbench. `WorkbenchLocalizationService` owns lookup and
 projects it into the low-level `nls.ts` resolver used by platform actions and Workbench chrome.
@@ -60,20 +60,20 @@ Locale resolution prefers an exact match, then a case-insensitive match, then a 
 finally English. Missing messages never erase the UI.
 
 The Command Palette provides **Configure Display Language** and **Clear Display Language Preference**.
-The picker lists installed locales and searches Marketplace localization packages as the user types.
-Selecting a package installs it and selects its new locale; the Marketplace entry opens the package
+The picker lists installed locales and searches Extensions localization packages as the user types.
+Selecting a package installs it and selects its new locale; the Extensions entry opens the package
 browser when the user wants to browse. Clearing the preference removes `workbench.locale` from the
 local profile and restores English. The selected catalog updates the current Workbench immediately.
 
 The current built-in catalog is consumed by the Workbench menu/action layer, core View Container and
 ViewPane titles, CompositeBar overflow labels, region accessibility labels, Settings navigation,
-and Marketplace discovery chrome. Domain-specific editor welcome text, chat content, terminal
+and Extensions discovery chrome. Domain-specific editor welcome text, chat content, terminal
 profile names, diagnostics, and arbitrary server/user data remain English or source-provided until
 their owners add stable bundle/key metadata. This is an explicit migration boundary, not a fallback
-from Marketplace.
+from Extensions.
 
 The interaction follows the same product shape as VS Code: English is always available, additional
-display languages are installed as Marketplace language packs, and the selected display language is
+display languages are installed as Extensions language packs, and the selected display language is
 persisted by the product. The App Server remains locale-neutral because it serves multiple clients;
 Desktop and browser profiles store their own display-language preference. If a
 future server-side Extension Host needs NLS, its locale must be supplied per connection/process and

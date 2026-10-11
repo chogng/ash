@@ -9,8 +9,8 @@ pub enum ExtensionRootKind {
     BuiltIn,
     /// A package selected by the effective Plugin authority snapshot.
     Plugin,
-    /// A package installed by the local Marketplace Manager.
-    Marketplace,
+    /// A package installed by the local Extensions Manager.
+    Registry,
     /// A package installed below the user's trusted profile extension directory.
     User,
 }
@@ -69,18 +69,18 @@ impl DynamicExtensionPackageSource {
         }
     }
 
-    /// Creates a Marketplace-authorized exact package source.
-    pub fn marketplace(subject: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+    /// Creates a Extensions-authorized exact package source.
+    pub fn extension_packages(subject: impl Into<String>, path: impl Into<PathBuf>) -> Self {
         Self {
             subject: subject.into(),
             path: path.into(),
-            kind: ExtensionRootKind::Marketplace,
+            kind: ExtensionRootKind::Registry,
             normalized_manifest_json: None,
         }
     }
 
-    /// Creates a Marketplace source with one host-normalized declarative manifest.
-    pub fn marketplace_with_manifest(
+    /// Creates a Extensions source with one host-normalized declarative manifest.
+    pub fn extension_packages_with_manifest(
         subject: impl Into<String>,
         path: impl Into<PathBuf>,
         normalized_manifest_json: impl Into<String>,
@@ -88,7 +88,7 @@ impl DynamicExtensionPackageSource {
         Self {
             subject: subject.into(),
             path: path.into(),
-            kind: ExtensionRootKind::Marketplace,
+            kind: ExtensionRootKind::Registry,
             normalized_manifest_json: Some(normalized_manifest_json.into()),
         }
     }

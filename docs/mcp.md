@@ -4,14 +4,14 @@
 > Rust crate：`ash_mcp`
 > Low-level client 当前实现：[`crates/rmcp-client/`](../crates/rmcp-client/README.md)，
 > Rust crate：`ash_rmcp_client`
-> 当前状态：low-level client、tools-only product runtime、Config/Connector/Marketplace/legacy Plugin hot composition、
+> 当前状态：low-level client、tools-only product runtime、Config/Connector/Extensions/legacy Plugin hot composition、
 > `tools/list_changed` rebuild、App Server/Core tools vertical slice、Connector disconnect dispatch fence、
 > 独立 Config MCP OAuth 编排、form elicitation 与只读 lifecycle projection 已实现
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)
-> Tool shared contract 与纯转换：[`tools.md`](tools.md)
+> Tool shared contract 与纯转换：[`tools.md`](tools/tools.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
-> Marketplace package 入口：[`core-plugins.md`](../crates/docs/core-plugins.md)
+> Extensions package 入口：[`core-plugins.md`](../crates/docs/core-plugins.md)
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > Connector account 与 ready binding：[`connectors.md`](connectors.md)
 > Skill 指令边界：[`skills.md`](skills.md)
@@ -35,8 +35,8 @@ MCP 客户端把外部 Server 的工具转换成 Ash 的工具目录。外部客
 | MCP 暴露资源或提示词                         | 进入各自的上下文和产品契约                                                        | 仍属计划设计                                |
 | Server 需要 bearer 或 OAuth                  | 凭据保存在 SecretStore；具体 provider adapter 决定 discovery、scope 与 token wire | 独立 Config 与 Connector 路径均已具备窄实现 |
 | MCP 工具运行中请求表单输入                   | 转成 Core durable 用户交互并唤醒同一次工具执行                                    | 基础类型已实现；URL、多选和跨重启恢复不支持 |
-| Marketplace 独立 MCP package                 | Manager 验证 HTTP 或 package-relative stdio transport；MCP consumer 持 lease 启动 | 安装不等于启动或授权                        |
-| Marketplace Plugin bundle 携带 MCP/Connector | 同一次安装按 capability 分给 MCP 与 Connector consumer                            | 不进入第二套 Plugin runtime                 |
+| Extensions 独立 MCP package                 | Manager 验证 HTTP 或 package-relative stdio transport；MCP consumer 持 lease 启动 | 安装不等于启动或授权                        |
+| Extensions Plugin bundle 携带 MCP/Connector | 同一次安装按 capability 分给 MCP 与 Connector consumer                            | 不进入第二套 Plugin runtime                 |
 | Legacy Plugin 独立声明 MCP Server            | 兼容 authority 只贡献声明，经激活和策略解析后由 MCP runtime 启动                  | Plugin 启用不等于连接或授权                 |
 | Connector 需要外部账号                       | Connector connected 后发布 ready MCP binding                                      | Connector 不启动 MCP session                |
 | 用户或 Directory 直接配置 MCP Server         | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime                            | 不必须先安装 Plugin 或创建 Connector        |
@@ -48,7 +48,7 @@ initialize、原始 tools API 和 stdio/Streamable HTTP transport；Current `ash
 runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页/大小限制、调用路由、
 取消与失效标记。Current App Server adapter 将 user config 与 ready Connector snapshot 接入 Core
 `ToolService`、逐次用户 approval 和 durable result，并在两类 generation 变化时重建 tool port。
-Connector API-token materialization、Marketplace HTTP/packaged-stdio MCP、package-rooted legacy Plugin MCP、通用 Connector OAuth PKCE 编排与 Desktop
+Connector API-token materialization、Extensions HTTP/packaged-stdio MCP、package-rooted legacy Plugin MCP、通用 Connector OAuth PKCE 编排与 Desktop
 browser callback 已实现。独立 Config credential reference materialization、provider-injected OAuth
 PKCE/callback/refresh/revoke、process-local connect/disconnect/status，以及 MCP form elicitation 到 Core
 durable interaction 的同调用恢复也已实现。通用自动 OAuth discovery、内建具体 provider、resources、
@@ -62,23 +62,23 @@ prompts、reconnect/health 和更完整的 interaction surface 仍是 Proposed�
 - MCP server 输出、tool annotation 或 prompt 内容的信任背书；
 - Ash Session、Thread、Turn 或 App Server connection 的替代品。
 
-Marketplace、Plugin、Connector 与 MCP 的 canonical 关系由 [`core-plugins.md`](../crates/docs/core-plugins.md)
+Extensions、Plugin、Connector 与 MCP 的 canonical 关系由 [`core-plugins.md`](../crates/docs/core-plugins.md)
 和 [`connectors.md`](connectors.md) 共同维护。从 MCP runtime 视角看，
 边界可压缩为：
 
-> Marketplace Manager 管 package lifecycle，Connector 管外部账号连接，MCP 管协议会话与能力调用，Tool 是 Agent 最终消费的能力。
+> Extensions Manager 管 package lifecycle，Connector 管外部账号连接，MCP 管协议会话与能力调用，Tool 是 Agent 最终消费的能力。
 
 ```mermaid
 flowchart TD
     U["User / Directory MCP configuration"] --> R["MCP runtime"]
-    P["Marketplace MCP capability"] --> R
+    P["Extensions MCP capability"] --> R
     L["Legacy Plugin MCP contribution"] --> R
     C["Connected Connector"] --> B["Ready MCP binding"]
     B --> R
     R --> T["Tool Registry / Core / Agent"]
 ```
 
-这些是并列的 declaration/readiness source，不是必须逐层包装的类型层次。Marketplace Plugin
+这些是并列的 declaration/readiness source，不是必须逐层包装的类型层次。Extensions Plugin
 只是同时携带 MCP、Connector、Skill 等 capability 的 bundle；Manager 只安装一次，各 consumer
 独立授权和激活。Legacy Plugin authority 保留为本地兼容来源。安装 package 不等于允许其 MCP
 server 启动，Connector connected 也不等于自动批准每次 Tool call。
@@ -114,7 +114,7 @@ server 启动，Connector connected 也不等于自动批准每次 Tool call。
 - `compose_mcp_tools_with_connectors` 已通过 host-injected `ConnectorMcpRuntimeProvider` 读取 ready
   Connector credential，并用 exact connector ID / connection generation / definition digest 在 prepare
   与 dispatch 前 fail closed；本地 reconcile loop 同时订阅 Config 与 Connector authority；
-- `MarketplaceConnectorProjection` 已把 Manager 的 exact MCP/Connector capabilities 转成独立或
+- `ExtensionsConnectorProjection` 已把 Manager 的 exact MCP/Connector capabilities 转成独立或
   Connector-bound server，严格限制 credential-free HTTPS 和 package-contained executable，并让每次
   invocation 持有 Manager capability lease；installation generation 变化会触发热重建；
 - 直接 Config MCP 的 HTTPS bearer credential 已在连接启动前由 host SecretStore materialize；
@@ -180,7 +180,7 @@ form elicitation，以及通用 OAuth metadata discovery 和 concrete provider a
 
 ### 4.3 两个 MCP 客户端 crate 都不拥有
 
-- Marketplace/Plugin package 下载、签名、解压、版本解析、enable/disable authority；
+- Extensions/Plugin package 下载、签名、解压、版本解析、enable/disable authority；
 - API token、OAuth refresh token、client secret 的持久化；
 - directory、filesystem 或 network 的最终授权策略；
 - model selection、token budget、Core ContextAssembler 或 Agent loop；
@@ -199,7 +199,7 @@ Agent runtime 决定何时调用工具，Core 负责 durable commit，App Server
 
 ```mermaid
 flowchart TD
-    P["Marketplace Manager：verified MCP/Connector capabilities"] --> A["App Server composition"]
+    P["Extensions Manager：verified MCP/Connector capabilities"] --> A["App Server composition"]
     L["ash-plugin definitions + ash-core-plugins activation"] --> A
     C["ext/connectors：ready runtime bindings"] --> A
     U["User / Directory MCP configuration"] --> A
@@ -215,12 +215,12 @@ flowchart TD
 
 - `ash-rmcp-client` 依赖官方 `rmcp` 和通用 async/HTTP 库，不依赖 Ash product crate；
 - `ash-mcp` 可以依赖 `ash-rmcp-client`、`ash-tools`、`ash-protocol` 和通用 async/JSON 库；
-- `ash-mcp` 不依赖 `ash-core`、stores、App Server、Desktop、CLI、Marketplace Manager 或 Plugin authority；
+- `ash-mcp` 不依赖 `ash-core`、stores、App Server、Desktop、CLI、Extensions Manager 或 Plugin authority；
 - `ash-mcp` 将 revision-specific wire descriptor 转成纯 `McpToolProjection`；
   `ash-tools` 再负责 schema normalization、model-facing definition 和 source-neutral output；
 - `ash-core` 定义 consumer-owned `ToolService` port；App Server adapter 将 MCP tool
   handle/catalog 适配到该 port，Core 不读取 MCP wire DTO；
-- Marketplace Manager 只拥有 artifact/install/lease；App Server adapter 产出 server declaration；两者都不持有 live MCP session；
+- Extensions Manager 只拥有 artifact/install/lease；App Server adapter 产出 server declaration；两者都不持有 live MCP session；
 - legacy Plugin authority 只产出经过验证的 server declaration，不持有 live MCP session；
 - Connector runtime 只产出 generation-bound ready binding，不持有 live MCP session 或 Tool registry；
 - App Server 注入 credential materializer、process launcher、HTTP transport、directory roots 和
@@ -406,7 +406,7 @@ authentication 和 shutdown contract，不能只提供 `send(Value)`。
 ### 9.1 工具
 
 `ash-mcp` 先将 revision-specific descriptor 转成保留 exact remote identity 的
-`McpToolProjection`，再由 [`tools.md`](tools.md) 的共享 adapter 产生 host tool definition。
+`McpToolProjection`，再由 [`tools.md`](tools/tools.md) 的共享 adapter 产生 host tool definition。
 完整转换链必须：
 
 - 完整处理分页，并施加 tool count/page/bytes 上限；

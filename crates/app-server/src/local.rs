@@ -31,6 +31,7 @@ use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginActivationSnapshot;
+use ash_external_ext::packages::ExtensionRoot;
 use ash_file_access::Dir;
 use ash_file_access::Permission as DirPermission;
 use ash_glm::GlmOAuth;
@@ -80,7 +81,6 @@ use core_api::CoreError;
 use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink as CoreModelStreamSink;
-use ash_external_ext::packages::ExtensionRoot;
 use model_provider_info::ModelProviderConfig;
 use model_provider_info::ProviderAccessMode;
 use model_provider_info::ProviderConfigRegistry;
@@ -120,8 +120,8 @@ pub struct AppServerOptions {
     git_attribution: Option<Arc<dyn git_attribution::GitAttributionPolicySource>>,
     connector_runtime: Option<LocalConnectorRuntime>,
     mcp_oauth_providers: Vec<(McpServerId, Arc<dyn McpOAuthProvider>)>,
-    plugin_package_service: Option<Arc<dyn ash_core_plugins::PluginPackageService>>,
-    plugins_manager: Option<Arc<ash_core_plugins::PluginsManager>>,
+    plugin_package_service: Option<Arc<dyn ash_core_plugins::ExtensionPackageService>>,
+    plugins_manager: Option<Arc<ash_core_plugins::ExtensionPackageManager>>,
     language_server_providers: ash_lsp_server_provider::LspServerProviders,
     product_services: Option<crate::LocalProductServicesConfig>,
     github_authentication_extension: Option<PathBuf>,
@@ -347,7 +347,7 @@ impl AppServerOptions {
     /// Installs a Plugin package service when no local Plugins Manager is available.
     pub fn with_plugin_package_service(
         mut self,
-        service: Arc<dyn ash_core_plugins::PluginPackageService>,
+        service: Arc<dyn ash_core_plugins::ExtensionPackageService>,
     ) -> Self {
         self.plugins_manager = None;
         self.plugin_package_service = Some(service);
@@ -357,16 +357,16 @@ impl AppServerOptions {
     /// Composes one profile-owned manager with explicitly named source providers.
     pub fn with_plugin_providers(
         self,
-        providers: ash_core_plugins::PluginProviders,
+        providers: ash_core_plugins::ExtensionSources,
     ) -> Result<Self, OpenAppServerError> {
         let manager = Arc::new(
-            ash_core_plugins::PluginsManager::open(
-                self.profile_root.join("marketplace-manager"),
+            ash_core_plugins::ExtensionPackageManager::open(
+                self.profile_root.join("extensions-manager"),
                 providers,
             )
             .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
-        let client: Arc<dyn ash_core_plugins::PluginPackageService> = manager.clone();
+        let client: Arc<dyn ash_core_plugins::ExtensionPackageService> = manager.clone();
         Ok(Self {
             plugin_package_service: Some(client),
             plugins_manager: Some(manager),
@@ -390,7 +390,7 @@ impl AppServerOptions {
         self
     }
 
-    /// Installs distribution-pinned Marketplace roots and public OAuth product adapters.
+    /// Installs distribution-pinned Extensions roots and public OAuth product adapters.
     pub fn with_product_services(mut self, services: crate::LocalProductServicesConfig) -> Self {
         self.product_services = Some(services);
         self
@@ -543,7 +543,7 @@ pub struct LocalConnectorRuntime {
     base_definitions: Vec<connectors::ConnectorDefinition>,
     base_mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
     plugin_authority: Option<PluginActivationAuthority>,
-    plugins_manager: Option<Arc<ash_core_plugins::PluginsManager>>,
+    plugins_manager: Option<Arc<ash_core_plugins::ExtensionPackageManager>>,
     oauth: Option<Arc<connectors::ConnectorOAuthService>>,
     device_oauth: Option<Arc<connectors::ConnectorDeviceOAuthService>>,
 }
@@ -680,7 +680,7 @@ impl LocalConnectorRuntime {
 
     fn bind_plugins_manager(
         &mut self,
-        manager: Arc<ash_core_plugins::PluginsManager>,
+        manager: Arc<ash_core_plugins::ExtensionPackageManager>,
     ) -> Result<(), OpenAppServerError> {
         self.plugins_manager = Some(manager);
         self.reconcile_sources()
@@ -705,7 +705,7 @@ impl LocalConnectorRuntime {
         self.reconcile_sources()
     }
 
-    fn reconcile_marketplace(&mut self) -> Result<(), OpenAppServerError> {
+    fn reconcile_extension_packages(&mut self) -> Result<(), OpenAppServerError> {
         self.reconcile_sources()
     }
 
@@ -714,7 +714,7 @@ impl LocalConnectorRuntime {
         self.mcp = Arc::clone(&self.base_mcp);
         if let Some(manager) = &self.plugins_manager {
             let catalog =
-                ash_mcp_extension::MarketplaceConnectorCatalog::from_manager(Arc::clone(manager))
+                ash_mcp_extension::ExtensionsConnectorCatalog::from_manager(Arc::clone(manager))
                     .map_err(OpenAppServerError)?;
             definitions.extend(catalog.definitions().iter().cloned());
             self.mcp = ash_mcp_extension::combined_provider(
@@ -784,7 +784,7 @@ impl std::error::Error for OpenAppServerError {}
 /// Process-wide durable authority shared by all Directory runtimes for one profile.
 ///
 /// The profile runtime owns the single recovered Session projection, config store, secret store,
-/// Marketplace Manager/change watcher, and live profile notification graph. Directory filesystem,
+/// Extensions Manager/change watcher, and live profile notification graph. Directory filesystem,
 /// terminal, Git, language, and execution services remain in separately composed [`AppServer`]
 /// instances.
 pub struct LocalProfileRuntime {
@@ -805,15 +805,18 @@ pub struct LocalProfileRuntime {
     plugin_authority: PluginActivationAuthority,
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
-    marketplace: Mutex<Option<ProfileMarketplaceAuthority>>,
+    extension_packages: Mutex<Option<ProfileExtensionsAuthority>>,
     github_authentication: Mutex<Option<Arc<GitHubAuthenticationRuntime>>>,
 }
 
-struct ProfileMarketplaceAuthority {
-    config: BTreeMap<ash_plugin::MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
-    manager: Arc<ash_core_plugins::PluginsManager>,
-    _watcher: Option<crate::server::marketplace_runtime::MarketplaceChangeWatcher>,
-    open_vsx: Option<(ash_plugin::MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
+struct ProfileExtensionsAuthority {
+    config: BTreeMap<ash_plugin::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
+    manager: Arc<ash_core_plugins::ExtensionPackageManager>,
+    _watcher: Option<crate::server::extension_packages_runtime::ExtensionsChangeWatcher>,
+    open_vsx: Option<(
+        ash_plugin::ExtensionSourceId,
+        ash_core_plugins::OpenVsxConfig,
+    )>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -926,7 +929,7 @@ impl LocalProfileRuntime {
             plugin_authority,
             updates: Arc::new(UpdateBroker::default()),
             update_scopes: Mutex::new(BTreeMap::new()),
-            marketplace: Mutex::new(None),
+            extension_packages: Mutex::new(None),
             github_authentication: Mutex::new(None),
         })
     }
@@ -997,34 +1000,37 @@ impl LocalProfileRuntime {
 
     fn plugins_manager(
         &self,
-        config: BTreeMap<ash_plugin::MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
-        open_vsx: Option<(ash_plugin::MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
-    ) -> Result<Arc<ash_core_plugins::PluginsManager>, OpenAppServerError> {
-        let mut marketplace = self
-            .marketplace
+        config: BTreeMap<ash_plugin::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
+        open_vsx: Option<(
+            ash_plugin::ExtensionSourceId,
+            ash_core_plugins::OpenVsxConfig,
+        )>,
+    ) -> Result<Arc<ash_core_plugins::ExtensionPackageManager>, OpenAppServerError> {
+        let mut extension_packages = self
+            .extension_packages
             .lock()
-            .map_err(|_| OpenAppServerError("profile Marketplace lock poisoned".into()))?;
-        if let Some(authority) = marketplace.as_ref() {
+            .map_err(|_| OpenAppServerError("profile Extensions lock poisoned".into()))?;
+        if let Some(authority) = extension_packages.as_ref() {
             if authority.config == config && authority.open_vsx == open_vsx {
                 return Ok(Arc::clone(&authority.manager));
             }
             return Err(OpenAppServerError(
-                "one profile runtime cannot use multiple Marketplace authorities".into(),
+                "one profile runtime cannot use multiple Extensions authorities".into(),
             ));
         }
-        let providers = marketplace_providers(&config, open_vsx.as_ref())?;
+        let providers = extension_packages_providers(&config, open_vsx.as_ref())?;
         let manager = Arc::new(
-            ash_core_plugins::PluginsManager::open(
-                self.profile_root.join("marketplace-manager"),
+            ash_core_plugins::ExtensionPackageManager::open(
+                self.profile_root.join("extensions-manager"),
                 providers,
             )
             .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
-        let watcher = crate::server::marketplace_runtime::MarketplaceChangeWatcher::start(
+        let watcher = crate::server::extension_packages_runtime::ExtensionsChangeWatcher::start(
             &manager,
             Arc::clone(&self.updates),
         );
-        *marketplace = Some(ProfileMarketplaceAuthority {
+        *extension_packages = Some(ProfileExtensionsAuthority {
             config,
             open_vsx,
             manager: Arc::clone(&manager),
@@ -1103,7 +1109,7 @@ pub fn open_app_server_with_codebase_providers(
     if options.plugin_package_service.is_none()
         && let Some(sources) = product_services
             .as_ref()
-            .map(crate::LocalProductServicesConfig::marketplaces)
+            .map(crate::LocalProductServicesConfig::extension_sources)
             .cloned()
     {
         if let Some(runtime) = &options.profile_runtime {
@@ -1113,11 +1119,11 @@ pub fn open_app_server_with_codebase_providers(
                     .as_ref()
                     .and_then(|services| services.open_vsx.clone()),
             )?;
-            let client: Arc<dyn ash_core_plugins::PluginPackageService> = manager.clone();
+            let client: Arc<dyn ash_core_plugins::ExtensionPackageService> = manager.clone();
             options.plugin_package_service = Some(client);
             options.plugins_manager = Some(manager);
         } else {
-            options = options.with_plugin_providers(marketplace_providers(
+            options = options.with_plugin_providers(extension_packages_providers(
                 &sources,
                 product_services
                     .as_ref()
@@ -1288,14 +1294,14 @@ pub fn open_app_server_with_codebase_providers(
         runtime.bind_plugins_manager(Arc::clone(manager))?;
     }
     let managed_node = ManagedNodeRuntime::from_install_context(&InstallContext::current()).ok();
-    let marketplace_language_runtime = plugins_manager.as_ref().map(|manager| {
-        crate::server::marketplace_language_runtime::MarketplaceLanguageRuntime::new(
+    let extension_packages_language_runtime = plugins_manager.as_ref().map(|manager| {
+        crate::server::extension_packages_language_runtime::ExtensionsLanguageRuntime::new(
             Arc::clone(manager),
             managed_node.clone(),
             options.language_server_providers.clone(),
         )
     });
-    if let Some(runtime) = &marketplace_language_runtime {
+    if let Some(runtime) = &extension_packages_language_runtime {
         options.language_server_providers = runtime.providers().map_err(OpenAppServerError)?;
     }
     if let Some(services) = &product_services {
@@ -1350,14 +1356,14 @@ pub fn open_app_server_with_codebase_providers(
     }
     let mut network_services = Vec::new();
     if let Some(services) = &product_services {
-        for (name, marketplace) in &services.marketplaces {
+        for (name, extension_packages) in &services.extension_sources {
             network_services.push((
                 format!("marketplace:{name}"),
-                marketplace.metadata_base_url().to_string(),
+                extension_packages.metadata_base_url().to_string(),
             ));
             network_services.push((
                 format!("marketplace:{name}"),
-                marketplace.targets_base_url().to_string(),
+                extension_packages.targets_base_url().to_string(),
             ));
         }
         if let Some(image) = &services.image_generation {
@@ -1868,9 +1874,9 @@ pub fn open_app_server_with_codebase_providers(
     if let Some(models) = providers.models {
         server = server.with_codebase_models(models);
     }
-    if let Some(runtime) = marketplace_language_runtime {
+    if let Some(runtime) = extension_packages_language_runtime {
         server = server
-            .with_marketplace_language_runtime(runtime)
+            .with_extension_packages_language_runtime(runtime)
             .map_err(OpenAppServerError)?;
     }
     if let Some(manager) = plugins_manager {
@@ -2124,7 +2130,7 @@ impl ToolConfigWatcher {
             .as_ref()
             .and_then(|runtime| runtime.plugin_authority.as_ref())
             .map(PluginActivationAuthority::subscribe);
-        let marketplace_changes = connector_runtime
+        let extension_packages_changes = connector_runtime
             .as_ref()
             .and_then(|runtime| runtime.plugins_manager.as_ref())
             .and_then(|manager| manager.subscribe().ok());
@@ -2145,7 +2151,7 @@ impl ToolConfigWatcher {
                 let mut env_config_dirty = true;
                 let mut catalog_dirty = true;
                 let mut plugin_dirty = plugin_changes.is_some();
-                let mut marketplace_dirty = marketplace_changes.is_some();
+                let mut extension_packages_dirty = extension_packages_changes.is_some();
                 loop {
                     if shutdown_receiver.try_recv().is_ok() {
                         break;
@@ -2201,16 +2207,16 @@ impl ToolConfigWatcher {
                             }
                         }
                     }
-                    if let Some(marketplace_changes) = &marketplace_changes {
-                        while marketplace_changes.try_recv().is_ok() {
-                            marketplace_dirty = true;
+                    if let Some(extension_packages_changes) = &extension_packages_changes {
+                        while extension_packages_changes.try_recv().is_ok() {
+                            extension_packages_dirty = true;
                         }
                     }
                     if !config_dirty
                         && !(env_config_dirty && env_config_ready)
                         && !catalog_dirty
                         && !plugin_dirty
-                        && !marketplace_dirty
+                        && !extension_packages_dirty
                     {
                         continue;
                     }
@@ -2276,10 +2282,11 @@ impl ToolConfigWatcher {
                             Err(error) => env_tools.record_reconcile_failure(error.to_string()),
                         }
                     }
-                    if marketplace_dirty && let Some(connectors) = connector_runtime.as_mut() {
-                        match connectors.reconcile_marketplace() {
+                    if extension_packages_dirty && let Some(connectors) = connector_runtime.as_mut()
+                    {
+                        match connectors.reconcile_extension_packages() {
                             Ok(()) => {
-                                marketplace_dirty = false;
+                                extension_packages_dirty = false;
                                 catalog_dirty = true;
                             }
                             Err(error) => env_tools.record_reconcile_failure(error.to_string()),
@@ -3174,17 +3181,20 @@ fn open_error(error: impl fmt::Display) -> OpenAppServerError {
     OpenAppServerError(error.to_string())
 }
 
-fn marketplace_providers(
-    sources: &BTreeMap<ash_plugin::MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
-    open_vsx: Option<&(ash_plugin::MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
-) -> Result<ash_core_plugins::PluginProviders, OpenAppServerError> {
+fn extension_packages_providers(
+    sources: &BTreeMap<ash_plugin::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
+    open_vsx: Option<&(
+        ash_plugin::ExtensionSourceId,
+        ash_core_plugins::OpenVsxConfig,
+    )>,
+) -> Result<ash_core_plugins::ExtensionSources, OpenAppServerError> {
     let mut providers = sources
         .iter()
         .map(|(name, config)| {
-            let provider = ash_core_plugins::MarketplaceRemoteClient::new(config.clone());
+            let provider = ash_core_plugins::ExtensionsRemoteClient::new(config.clone());
             (
                 name.clone(),
-                Arc::new(provider) as Arc<dyn ash_core_plugins::PluginProvider>,
+                Arc::new(provider) as Arc<dyn ash_core_plugins::ExtensionSource>,
             )
         })
         .collect::<Vec<_>>();
@@ -3192,7 +3202,7 @@ fn marketplace_providers(
         let provider = ash_core_plugins::OpenVsxClient::new(config.clone()).map_err(open_error)?;
         providers.push((name.clone(), Arc::new(provider)));
     }
-    ash_core_plugins::PluginProviders::new(providers).map_err(open_error)
+    ash_core_plugins::ExtensionSources::new(providers).map_err(open_error)
 }
 
 #[cfg(test)]

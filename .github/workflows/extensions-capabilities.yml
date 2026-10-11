@@ -1,0 +1,26 @@
+name: Extensions capabilities
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: extensions-capabilities-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Test Extensions capability crates
+        run: python3 -B scripts/cargo.py test --locked -p ash-plugin -p ash-core-plugins -p ash-external-ext -p ash-external-ext-sdk -p ash-app-server-protocol
+      - name: Lint Extensions capability crates
+        run: python3 -B scripts/cargo.py clippy --locked -p ash-plugin -p ash-core-plugins -p ash-external-ext -p ash-external-ext-sdk -p ash-app-server-protocol --all-targets --no-deps -- -D warnings

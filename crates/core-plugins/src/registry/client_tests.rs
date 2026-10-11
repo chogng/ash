@@ -1,14 +1,14 @@
 use tempfile::TempDir;
 use url::Url;
 
-use super::MarketplaceRemoteClient;
-use crate::PluginProvider;
-use crate::RemoteMarketplaceConfig;
+use super::ExtensionsRemoteClient;
+use crate::ExtensionSource;
+use crate::RemoteExtensionsConfig;
 
 #[test]
 fn opening_the_remote_client_never_requires_network_access() {
     let cache = TempDir::new().unwrap();
-    let config = RemoteMarketplaceConfig::new(
+    let config = RemoteExtensionsConfig::new(
         Url::parse("https://unreachable.invalid/metadata/").unwrap(),
         Url::parse("https://unreachable.invalid/targets/").unwrap(),
         b"not-yet-parsed-because-access-is-lazy".to_vec(),
@@ -16,7 +16,7 @@ fn opening_the_remote_client_never_requires_network_access() {
     )
     .unwrap();
 
-    let client = MarketplaceRemoteClient::new(config);
+    let client = ExtensionsRemoteClient::new(config);
     let result = client
         .search(crate::SearchPackagesRequest {
             capability_kind: Some(crate::CapabilityKind::EditorExtension),

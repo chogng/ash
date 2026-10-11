@@ -219,7 +219,7 @@ impl PluginPackageStore {
         }
         let package = [
             crate::PluginPackageDigestAlgorithm::LegacyAshV1,
-            crate::PluginPackageDigestAlgorithm::MarketplaceV1,
+            crate::PluginPackageDigestAlgorithm::ExtensionsV1,
         ]
         .into_iter()
         .find_map(|algorithm| {

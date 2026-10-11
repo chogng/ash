@@ -8,8 +8,8 @@ use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use ash_core_plugins::ExtensionPackageManager;
 use ash_core_plugins::PluginActivationAuthority;
-use ash_core_plugins::PluginsManager;
 use ash_external_ext::CancelReason;
 use ash_external_ext::ExtensionHostError;
 use ash_external_ext::ExtensionHostLauncher;
@@ -63,8 +63,8 @@ struct RuntimeInner {
     environment: Option<BTreeMap<String, Option<String>>>,
     built_in_extensions: source::BuiltInEditorExtensions,
     plugin_authority: Option<PluginActivationAuthority>,
-    plugins_manager: Option<Arc<PluginsManager>>,
-    marketplace_admission: Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
+    plugins_manager: Option<Arc<ExtensionPackageManager>>,
+    extension_packages_admission: Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
     launcher: Arc<dyn ExtensionHostLauncher>,
     limits: ExtensionHostLimits,
     restart_policy: RestartPolicy,
@@ -192,8 +192,8 @@ impl ExtensionHostRuntime {
     pub(super) fn start(
         built_in_extensions: source::BuiltInEditorExtensions,
         plugin_authority: Option<PluginActivationAuthority>,
-        plugins_manager: Option<Arc<PluginsManager>>,
-        marketplace_admission: Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
+        plugins_manager: Option<Arc<ExtensionPackageManager>>,
+        extension_packages_admission: Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
         launcher: Arc<dyn ExtensionHostLauncher>,
         limits: ExtensionHostLimits,
         restart_policy: RestartPolicy,
@@ -210,10 +210,10 @@ impl ExtensionHostRuntime {
         let plugin_changes = plugin_authority
             .as_ref()
             .map(PluginActivationAuthority::subscribe);
-        let marketplace_changes = plugins_manager
+        let extension_packages_changes = plugins_manager
             .as_ref()
             .and_then(|manager| manager.subscribe().ok());
-        let marketplace_admission_changes = marketplace_admission
+        let extension_packages_admission_changes = extension_packages_admission
             .as_ref()
             .and_then(|admission| admission.subscribe());
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
@@ -222,7 +222,7 @@ impl ExtensionHostRuntime {
             built_in_extensions,
             plugin_authority,
             plugins_manager,
-            marketplace_admission,
+            extension_packages_admission,
             launcher,
             limits,
             restart_policy,
@@ -257,8 +257,8 @@ impl ExtensionHostRuntime {
                 runtime_worker(
                     weak,
                     plugin_changes,
-                    marketplace_changes,
-                    marketplace_admission_changes,
+                    extension_packages_changes,
+                    extension_packages_admission_changes,
                     shutdown_receiver,
                 )
             })
@@ -279,7 +279,7 @@ impl ExtensionHostRuntime {
             self.inner.built_in_extensions,
             self.inner.plugin_authority.clone(),
             self.inner.plugins_manager.clone(),
-            self.inner.marketplace_admission.clone(),
+            self.inner.extension_packages_admission.clone(),
             Arc::clone(&self.inner.launcher),
             self.inner.limits.clone(),
             self.inner.restart_policy,
@@ -1056,8 +1056,8 @@ fn language_operation_name(operation: LanguageProviderOperation) -> &'static str
 fn runtime_worker(
     runtime: Weak<RuntimeInner>,
     plugin_changes: Option<ash_core_plugins::PluginAuthoritySubscription>,
-    marketplace_changes: Option<std::sync::mpsc::Receiver<u64>>,
-    marketplace_admission_changes: Option<std::sync::mpsc::Receiver<u64>>,
+    extension_packages_changes: Option<std::sync::mpsc::Receiver<u64>>,
+    extension_packages_admission_changes: Option<std::sync::mpsc::Receiver<u64>>,
     shutdown: std::sync::mpsc::Receiver<()>,
 ) {
     loop {
@@ -1075,13 +1075,14 @@ fn runtime_worker(
                 false
             }
         };
-        let marketplace_changed = marketplace_changes
+        let extension_packages_changed = extension_packages_changes
             .as_ref()
             .is_some_and(|changes| changes.try_recv().is_ok());
-        let marketplace_admission_changed = marketplace_admission_changes
+        let extension_packages_admission_changed = extension_packages_admission_changes
             .as_ref()
             .is_some_and(|changes| changes.try_recv().is_ok());
-        let changed = plugin_changed || marketplace_changed || marketplace_admission_changed;
+        let changed =
+            plugin_changed || extension_packages_changed || extension_packages_admission_changed;
         let Some(runtime) = runtime.upgrade() else {
             break;
         };

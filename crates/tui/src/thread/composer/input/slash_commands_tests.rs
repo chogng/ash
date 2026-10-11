@@ -16,8 +16,8 @@ fn product_commands_share_definitions_and_bind_to_local_actions() {
     }
     for (shared, action, argument) in [
         (
-            ProductSlashCommand::Marketplace,
-            TuiSlashCommandAction::Marketplace,
+            ProductSlashCommand::Extensions,
+            TuiSlashCommandAction::Extensions,
             "rust tools",
         ),
         (
@@ -100,7 +100,7 @@ fn builtins_follow_enum_presentation_order() {
                 "subagents",
                 "issue",
                 "pr",
-                "marketplace",
+                "extensions",
                 "plugins",
                 "lsp",
             ];

@@ -19,13 +19,13 @@ use std::net::Shutdown;
 use std::time::Duration;
 
 #[test]
-fn stalled_marketplace_queries_leave_state_changes_available() {
+fn stalled_extension_packages_queries_leave_state_changes_available() {
     let server = Arc::new(server());
     let mut connection = server.connection();
     let initialized = server.handle_json(
         &mut connection,
         &json!({"jsonrpc":"2.0", "id":1, "method":"initialize", "params":{
-            "clientInfo":{"name":"marketplace-dispatch-test", "version":"1"}, "capabilities":{},
+            "clientInfo":{"name":"extension_packages-dispatch-test", "version":"1"}, "capabilities":{},
         }})
         .to_string(),
     );
@@ -37,8 +37,8 @@ fn stalled_marketplace_queries_leave_state_changes_available() {
         let (started, entered) = mpsc::channel();
         let cancellation = CancellationSource::new();
         for (index, (method, params)) in [
-            ("marketplace/search", json!({"query":"held"})),
-            ("marketplace/get", json!({"packageId":"example/tools"})),
+            ("extensions/search", json!({"query":"held"})),
+            ("extensions/get", json!({"packageId":"example/tools"})),
         ]
         .into_iter()
         .enumerate()

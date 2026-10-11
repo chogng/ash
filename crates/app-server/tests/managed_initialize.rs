@@ -161,7 +161,7 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
         stream,
         "{}",
         json!({
-            "jsonrpc": "2.0", "id": 3, "method": "marketplace/search", "params": {"query": ""}
+            "jsonrpc": "2.0", "id": 3, "method": "extensions/search", "params": {"query": ""}
         })
     )
     .unwrap();

@@ -23,6 +23,7 @@ use crate::dirs::DirAddTarget;
 use crate::dirs::DirChoices;
 use crate::dirs::DirSelectionAction;
 use crate::dirs::Event as DirEvent;
+use crate::extension_packages::Command as ExtensionsCommand;
 use crate::git::Command as GitCommand;
 use crate::git::Event as GitEvent;
 use crate::hooks::Event as HooksEvent;
@@ -41,7 +42,6 @@ use crate::keymap_setup::Command as KeymapCommand;
 use crate::keymap_setup::Event as KeymapEvent;
 use crate::keymap_setup::KeymapChoices;
 use crate::keymap_setup::KeymapEditorOutcome;
-use crate::marketplace::Command as MarketplaceCommand;
 use crate::mcp::Command as McpCommand;
 use crate::mcp::Event as McpEvent;
 use crate::mcp::McpChoices;
@@ -112,7 +112,7 @@ use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::overlay::DetailOverlay;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceCapabilityKindDto;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsCapabilityKindDto;
 use ash_app_server_protocol::protocol::session::SessionThreadReadResult;
 use ash_memory_diagnostics::ProcessResourceRequest;
 use ash_protocol::ApprovalMode;
@@ -856,9 +856,9 @@ impl App {
                 }
                 .into(),
             ),
-            CommandPanelOutcome::Marketplace(command) => Some(command.into()),
+            CommandPanelOutcome::Extensions(command) => Some(command.into()),
             CommandPanelOutcome::Lsp(crate::lsp::Outcome::Command(command)) => Some(command.into()),
-            CommandPanelOutcome::Lsp(crate::lsp::Outcome::Marketplace(command)) => {
+            CommandPanelOutcome::Lsp(crate::lsp::Outcome::Extensions(command)) => {
                 Some(command.into())
             }
             CommandPanelOutcome::Lsp(crate::lsp::Outcome::Consumed) => None,
@@ -882,9 +882,9 @@ impl App {
                 Some(StatusCommand::EditLine(edit).into())
             }
             CommandPanelOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
-            CommandPanelOutcome::Connectors(ConnectorSelectionAction::Marketplace) => Some(
-                MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Connector)).into(),
-            ),
+            CommandPanelOutcome::Connectors(ConnectorSelectionAction::Extensions) => {
+                Some(ExtensionsCommand::browse(Some(ExtensionsCapabilityKindDto::Connector)).into())
+            }
             CommandPanelOutcome::Consumed => None,
             CommandPanelOutcome::Dismiss => {
                 self.close_command_panel();
@@ -2734,11 +2734,11 @@ impl App {
                     }
                 }
             },
-            AppEvent::Marketplace(event) => {
+            AppEvent::Extensions(event) => {
                 let selected = match (&event.0, self.command_panel()) {
                     (
-                        crate::marketplace::Page::Installed { selected: None, .. },
-                        Some(CommandPanel::Marketplace(panel)),
+                        crate::extension_packages::Page::Installed { selected: None, .. },
+                        Some(CommandPanel::Extensions(panel)),
                     ) if panel.installed() => panel
                         .state()
                         .selected_item()
@@ -2746,8 +2746,8 @@ impl App {
                         .cloned(),
                     _ => None,
                 };
-                let tabs_focused = matches!(self.command_panel(), Some(CommandPanel::Marketplace(panel)) if panel.state().tabs_focused());
-                let mut panel = crate::marketplace::Panel::new(event.0);
+                let tabs_focused = matches!(self.command_panel(), Some(CommandPanel::Extensions(panel)) if panel.state().tabs_focused());
+                let mut panel = crate::extension_packages::Panel::new(event.0);
                 if let Some(selected) = selected {
                     panel.state_mut().focus_item(&selected);
                 }
@@ -2757,7 +2757,7 @@ impl App {
                         &crate::widgets::list_selection::ListSelectionPointerTarget::Tab(tab),
                     );
                 }
-                self.open_command_panel(CommandPanel::Marketplace(panel));
+                self.open_command_panel(CommandPanel::Extensions(panel));
             }
             AppEvent::Lsp(event) => {
                 self.open_command_panel(CommandPanel::Lsp(crate::lsp::Panel::new(event.0)))
@@ -2848,7 +2848,7 @@ impl App {
                     Some(CommandPanel::GitWorktrees(panel)) if panel.is_subpage() => {
                         panel.state_mut().set_message(Some(error.clone()));
                     }
-                    Some(CommandPanel::Marketplace(panel)) => panel.fail(error.clone()),
+                    Some(CommandPanel::Extensions(panel)) => panel.fail(error.clone()),
                     Some(CommandPanel::Lsp(panel)) => panel.fail(error.clone()),
                     _ => {}
                 }
@@ -2901,7 +2901,7 @@ impl App {
             | AppEvent::Connectors(
                 ConnectorEvent::PickerOpened(_) | ConnectorEvent::PickerUpdated(_),
             )
-            | AppEvent::Marketplace(_)
+            | AppEvent::Extensions(_)
             | AppEvent::Lsp(_)
             | AppEvent::Memories(_)
             | AppEvent::Guardian(_)

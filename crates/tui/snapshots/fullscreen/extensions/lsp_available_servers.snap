@@ -1,0 +1,36 @@
+---
+source: crates/tui/src/app/extensions_tests.rs
+expression: screen(&app)
+---
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Language servers ─────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │   Available    Configured                                               │             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Filter server IDs                                                  │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │> Find language servers in Extensions  ·  Match the exact language route │             
+            │  Configure a server by ID  ·  Set mode and optional program path        │             
+            │  Refresh servers  ·  Lists enabled, resolved servers without starting p │             
+            │  web-lsp  ·  Available · typescript, javascript                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            └─────────────────────────────────────────────────────────────────────────┘             
+  ────────────────────────────────────────────────────────────────────────────────────────────────  
+  > Build anything                                                                                  
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  Enter to confirm  ·  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close

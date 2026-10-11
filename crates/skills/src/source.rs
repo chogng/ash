@@ -12,7 +12,7 @@ pub enum SkillSourceKind {
     User,
     Directory,
     Plugin,
-    Marketplace,
+    Registry,
 }
 
 /// Consumer-visible Skill source provenance without its private host root.
@@ -76,13 +76,13 @@ impl SkillSourceRoot {
         Self::new_exact(id, SkillSourceKind::Plugin, name, root.as_ref())
     }
 
-    /// Creates a source for one exact Skill capability in a Marketplace-verified package.
-    pub fn marketplace(
+    /// Creates a source for one exact Skill capability in a Extensions-verified package.
+    pub fn extension_packages(
         id: SkillSourceId,
         name: SkillName,
         root: impl AsRef<Path>,
     ) -> Result<Self, SkillError> {
-        Self::new_exact(id, SkillSourceKind::Marketplace, name, root.as_ref())
+        Self::new_exact(id, SkillSourceKind::Registry, name, root.as_ref())
     }
 
     pub fn view(&self) -> &SkillSourceView {

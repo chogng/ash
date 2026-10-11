@@ -37,7 +37,7 @@ export function createBrowserExtensionApi(fetchResource: typeof fetch = fetch): 
 	};
 }
 
-export function createAppServerExtensionApi(connection: AppServerProtocolClient, resourceApi: IResourceApi): IExtensionApi {
+export function createAppServerExtensionApi(connection: AppServerProtocolClient, resourceApi: IResourceApi, builtIn: IExtensionApi): IExtensionApi {
 	return withBuiltInExtensions({
 		list: async (reload: ExtensionCatalogReload) => normalizeExtensionCatalog(await appServerRequest(connection, "extensions/list", { reload })),
 		resources: new ExtensionResourceLoaderService(request => readExtensionResource(connection, resourceApi, request), {
@@ -51,7 +51,7 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 				return readAppServerResource(resourceApi, opened.resource, MAX_EXTENSION_RESOURCE_BYTES, undefined, generation);
 			},
 		}),
-	});
+	}, builtIn);
 }
 
 /** The client owns built-in editor assets; the backend exposes only host-selected external packages. */

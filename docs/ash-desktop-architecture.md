@@ -567,9 +567,9 @@ Workbench 与 Agents Window 都先注册同一窗口连接上的 `ISessionApi`�
 `IAppServerApi.connectionGeneration` 读取。断线后丢弃旧订阅并重新取快照；关闭消费者时释放其订阅，
 迟到结果只能释放原连接的资源，不能覆盖或取消重连后的订阅。
 
-Ash 当前没有 VS Code `externalServices` 中的 telemetry machine ID / Marketplace header 组合语义，
-也没有构建时替换的 Copilot license endpoint，因此不建立同名空目录。Marketplace 请求继续由
-`platform/marketplace` 拥有；不可把任意网络调用、外部 URL 或产品常量汇总进一个模糊的
+Ash 当前没有 VS Code `externalServices` 中的 telemetry machine ID / Extensions header 组合语义，
+也没有构建时替换的 Copilot license endpoint，因此不建立同名空目录。Extensions 请求继续由
+`platform/extensions` 拥有；不可把任意网络调用、外部 URL 或产品常量汇总进一个模糊的
 `externalServices` 或 `endpoint` 包。运行时事实保留在 `base/common/environment.ts`，固定 Desktop
 应用标题和 Sessions 页面名保留在 `code/common/application.ts`，由产品入口提供。存储以用户数据根、作用域及 profile/workspace id 隔离，不再携带产品身份；
 跨客户端本地资料根在 `platform/profile`；只有出现需要注入、替换或拥有生命周期的真实

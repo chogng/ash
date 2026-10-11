@@ -2,7 +2,7 @@ import { URI } from '../../../base/common/uri.js';
 import type { IExtensionResourceLoaderService } from '../../extensionResourceLoader/common/extensionResourceLoader.js';
 
 export type ExtensionCatalogReload = "cached" | "refresh";
-export type ExtensionSourceKind = "builtIn" | "plugin" | "marketplace" | "user";
+export type ExtensionSourceKind = "builtIn" | "plugin" | "registry" | "user";
 export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | "duplicateExtension" | "pathEscapesRoot" | "resourceNotFound" | "resourceTooLarge";
 
 export interface ExtensionDescriptor {
@@ -70,7 +70,7 @@ function normalizeExtension(value: unknown): ExtensionDescriptor {
 		publisher: boundedText(extension.publisher, "extension publisher", 256),
 		version: boundedText(extension.version, "extension version", 256),
 		displayName: boundedText(extension.displayName, "extension display name", 256),
-		sourceKind: stringEnum(extension.sourceKind, "extension source kind", ["builtIn", "plugin", "marketplace", "user"] as const),
+		sourceKind: stringEnum(extension.sourceKind, "extension source kind", ["builtIn", "plugin", "registry", "user"] as const),
 		...(extensionLocation === undefined ? {} : { extensionLocation }),
 		...(targetPlatform === undefined ? {} : { targetPlatform }),
 		manifestJson: boundedText(extension.manifestJson, "extension manifest", 4 * 1024 * 1024),

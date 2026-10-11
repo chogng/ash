@@ -28,6 +28,8 @@ use ash_core::ToolService;
 use ash_core::TurnActionPolicy;
 use ash_core::TurnExecutor;
 use ash_extension_api::ExtensionRegistry;
+use ash_external_ext::packages::ExtensionPackages;
+use ash_external_ext::packages::ExtensionRoot;
 use ash_file_system::FileSystem;
 use ash_model_provider::ProviderCredentialService;
 use ash_protocol::InteractionCancelReason;
@@ -42,8 +44,6 @@ use core_api::AgentRuntime;
 use core_api::CoreError;
 use core_api::ModelService;
 use core_api::ThreadUpdateSink;
-use ash_external_ext::packages::ExtensionPackages;
-use ash_external_ext::packages::ExtensionRoot;
 pub(crate) use network_operations::http_transport_mode;
 use serde::Deserialize;
 use serde_json::Value;
@@ -102,6 +102,18 @@ mod extension_config_operations;
 mod extension_host_operations;
 pub(crate) mod extension_host_runtime;
 mod extension_operations;
+mod extension_packages_extension_sources;
+pub(crate) mod extension_packages_language_runtime;
+#[cfg(test)]
+#[path = "server/extension_packages_language_runtime_tests.rs"]
+mod extension_packages_language_runtime_tests;
+mod extension_packages_operations;
+#[cfg(test)]
+#[path = "server/extension_packages_operations_tests.rs"]
+mod extension_packages_operations_tests;
+mod extension_packages_projection;
+pub(crate) mod extension_packages_runtime;
+mod extension_packages_skill_sources;
 mod fs_operations;
 mod fs_watcher;
 mod git_operations;
@@ -127,18 +139,6 @@ mod issue_runtime;
 mod language_document_features;
 mod language_operations;
 mod language_runtime;
-mod marketplace_extension_sources;
-pub(crate) mod marketplace_language_runtime;
-#[cfg(test)]
-#[path = "server/marketplace_language_runtime_tests.rs"]
-mod marketplace_language_runtime_tests;
-mod marketplace_operations;
-#[cfg(test)]
-#[path = "server/marketplace_operations_tests.rs"]
-mod marketplace_operations_tests;
-mod marketplace_projection;
-pub(crate) mod marketplace_runtime;
-mod marketplace_skill_sources;
 mod mcp_operations;
 mod memories_context;
 mod memories_operations;
@@ -247,16 +247,19 @@ pub struct AppServer {
     pub(super) plugins: Option<ash_core_plugins::PluginActivationAuthority>,
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     built_in_editor_extensions: extension_host_runtime::source::BuiltInEditorExtensions,
-    pub(super) plugin_package_service: Option<Arc<dyn ash_core_plugins::PluginPackageService>>,
-    plugins_manager: Option<Arc<ash_core_plugins::PluginsManager>>,
-    marketplace_editor_extension_admission:
-        Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
+    pub(super) plugin_package_service: Option<Arc<dyn ash_core_plugins::ExtensionPackageService>>,
+    plugins_manager: Option<Arc<ash_core_plugins::ExtensionPackageManager>>,
+    extension_packages_editor_extension_admission:
+        Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
     editor_extension_policy: Option<Arc<ash_core_plugins::EditorExtensionPolicy>>,
-    marketplace_language_runtime: Option<marketplace_language_runtime::MarketplaceLanguageRuntime>,
+    extension_packages_language_runtime:
+        Option<extension_packages_language_runtime::ExtensionsLanguageRuntime>,
     plugin_skill_sources: Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>>,
-    marketplace_skill_sources: Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>>,
-    plugin_extension_sources: Option<Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>>,
-    marketplace_extension_sources:
+    extension_packages_skill_sources:
+        Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>>,
+    plugin_extension_sources:
+        Option<Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>>,
+    extension_packages_extension_sources:
         Option<Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>>,
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
     pub(super) mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
@@ -305,7 +308,7 @@ pub struct AppServer {
     _subscription_observer: Option<ash_subscriptions::SubscriptionObserver>,
     _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
-    _marketplace_watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
+    _extension_packages_watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     git_turn_changes: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
@@ -361,7 +364,7 @@ struct ConnectionMutableState {
     closed: bool,
     initialized: bool,
     request_ids: BTreeSet<u64>,
-    marketplace_leases: BTreeSet<String>,
+    extension_packages_leases: BTreeSet<String>,
     dir_permissions_host: bool,
 }
 
@@ -397,6 +400,13 @@ impl ConnectionState {
         self.authority == ConnectionAuthority::ProductHost
     }
 
+    fn allows_extension_source_configuration(&self) -> bool {
+        matches!(
+            self.authority,
+            ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+        )
+    }
+
     fn allows_extension_activation(&self) -> bool {
         // Both authenticated editor transports own first-use activation. This
         // does not grant the product host's unrelated privileged capabilities.
@@ -425,24 +435,30 @@ impl ConnectionState {
         connection_state(self).dir_permissions_host
     }
 
-    fn marketplace_leases(&self) -> Vec<String> {
+    fn extension_packages_leases(&self) -> Vec<String> {
         connection_state(self)
-            .marketplace_leases
+            .extension_packages_leases
             .iter()
             .cloned()
             .collect()
     }
 
-    pub(super) fn add_marketplace_lease(&self, lease_id: String) {
-        connection_state(self).marketplace_leases.insert(lease_id);
+    pub(super) fn add_extension_packages_lease(&self, lease_id: String) {
+        connection_state(self)
+            .extension_packages_leases
+            .insert(lease_id);
     }
 
-    pub(super) fn remove_marketplace_lease(&self, lease_id: &str) {
-        connection_state(self).marketplace_leases.remove(lease_id);
+    pub(super) fn remove_extension_packages_lease(&self, lease_id: &str) {
+        connection_state(self)
+            .extension_packages_leases
+            .remove(lease_id);
     }
 
-    pub(super) fn owns_marketplace_lease(&self, lease_id: &str) -> bool {
-        connection_state(self).marketplace_leases.contains(lease_id)
+    pub(super) fn owns_extension_packages_lease(&self, lease_id: &str) -> bool {
+        connection_state(self)
+            .extension_packages_leases
+            .contains(lease_id)
     }
 }
 
@@ -640,13 +656,13 @@ impl AppServer {
                 extension_host_runtime::source::BuiltInEditorExtensions::Omitted,
             plugin_package_service: None,
             plugins_manager: None,
-            marketplace_editor_extension_admission: None,
+            extension_packages_editor_extension_admission: None,
             editor_extension_policy: None,
-            marketplace_language_runtime: None,
+            extension_packages_language_runtime: None,
             plugin_skill_sources: None,
-            marketplace_skill_sources: None,
+            extension_packages_skill_sources: None,
             plugin_extension_sources: None,
-            marketplace_extension_sources: None,
+            extension_packages_extension_sources: None,
             mcp_runtime_intents: McpRuntimeIntents::default(),
             mcp_status: Arc::new(RwLock::new(
                 ash_mcp_extension::McpRuntimeStatusSnapshot::empty(1),
@@ -698,7 +714,7 @@ impl AppServer {
             _subscription_observer: None,
             _connector_watcher: None,
             _plugin_watcher: None,
-            _marketplace_watcher: None,
+            _extension_packages_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             git_turn_changes: None,
@@ -918,33 +934,36 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_marketplace_language_runtime(
+    pub(crate) fn with_extension_packages_language_runtime(
         mut self,
-        runtime: marketplace_language_runtime::MarketplaceLanguageRuntime,
+        runtime: extension_packages_language_runtime::ExtensionsLanguageRuntime,
     ) -> Result<Self, String> {
         let providers = runtime.providers()?;
         self.language
             .get_mut()
             .map_err(|_| "new App Server language runtime mutex is poisoned".to_string())?
             .set_server_providers(providers);
-        self.marketplace_language_runtime = Some(runtime);
+        self.extension_packages_language_runtime = Some(runtime);
         Ok(self)
     }
 
     /// Installs a Plugin package service when no local Plugins Manager is available.
     pub fn with_plugin_package_service(
         mut self,
-        service: Arc<dyn ash_core_plugins::PluginPackageService>,
+        service: Arc<dyn ash_core_plugins::ExtensionPackageService>,
     ) -> Self {
-        self._marketplace_watcher = None;
+        self._extension_packages_watcher = None;
         self.plugins_manager = None;
         self.plugin_package_service = Some(service);
         self
     }
 
     /// Installs the local Plugins Manager and its trusted capability sources.
-    pub fn with_plugins_manager(self, manager: Arc<ash_core_plugins::PluginsManager>) -> Self {
-        let watcher = marketplace_runtime::MarketplaceChangeWatcher::start(
+    pub fn with_plugins_manager(
+        self,
+        manager: Arc<ash_core_plugins::ExtensionPackageManager>,
+    ) -> Self {
+        let watcher = extension_packages_runtime::ExtensionsChangeWatcher::start(
             &manager,
             Arc::clone(&self.updates),
         );
@@ -953,27 +972,30 @@ impl AppServer {
 
     pub(crate) fn with_profile_plugins_manager(
         self,
-        manager: Arc<ash_core_plugins::PluginsManager>,
+        manager: Arc<ash_core_plugins::ExtensionPackageManager>,
     ) -> Self {
         self.bind_plugins_manager(manager, None)
     }
 
     fn bind_plugins_manager(
         mut self,
-        manager: Arc<ash_core_plugins::PluginsManager>,
-        watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
+        manager: Arc<ash_core_plugins::ExtensionPackageManager>,
+        watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
     ) -> Self {
-        self._marketplace_watcher = watcher;
+        self._extension_packages_watcher = watcher;
         let source: Arc<dyn ash_skills_extension::DynamicSkillSourceProvider> = Arc::new(
-            marketplace_skill_sources::MarketplaceSkillSourceProvider::new(Arc::clone(&manager)),
-        );
-        self.marketplace_skill_sources = Some(source);
-        let extension_source: Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider> = Arc::new(
-            marketplace_extension_sources::MarketplaceExtensionSourceProvider::new(Arc::clone(
+            extension_packages_skill_sources::ExtensionsSkillSourceProvider::new(Arc::clone(
                 &manager,
             )),
         );
-        self.marketplace_extension_sources = Some(extension_source);
+        self.extension_packages_skill_sources = Some(source);
+        let extension_source: Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider> =
+            Arc::new(
+                extension_packages_extension_sources::ExtensionsExtensionSourceProvider::new(
+                    Arc::clone(&manager),
+                ),
+            );
+        self.extension_packages_extension_sources = Some(extension_source);
         self.plugin_package_service = Some(manager.clone());
         self.plugins_manager = Some(manager);
         self.rebind_dynamic_skill_sources();
@@ -1032,18 +1054,18 @@ impl AppServer {
         if let Ok(git) = self.git_runtime_service() {
             git.close_connection(connection.connection_id);
         }
-        if let Some(marketplace) = &self.plugin_package_service {
-            let _change = self.updates.lock_marketplace_change();
-            for lease_id in connection.marketplace_leases() {
-                match marketplace
+        if let Some(extension_packages) = &self.plugin_package_service {
+            let _change = self.updates.lock_extension_packages_change();
+            for lease_id in connection.extension_packages_leases() {
+                match extension_packages
                     .release_capability(ash_core_plugins::ReleaseCapabilityRequest { lease_id })
                 {
-                    Ok(outcome) => {
-                        self.reconcile_released_marketplace_capability(outcome.installation_changed)
-                    }
+                    Ok(outcome) => self.reconcile_released_extension_packages_capability(
+                        outcome.installation_changed,
+                    ),
                     Err(error) => {
                         log::warn!(
-                            "failed to release Marketplace capability on disconnect: {error}"
+                            "failed to release Extensions capability on disconnect: {error}"
                         );
                     }
                 }
@@ -1330,15 +1352,14 @@ impl AppServer {
     ) -> Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>> {
         let providers = [
             self.plugin_skill_sources.clone(),
-            self.marketplace_skill_sources.clone(),
+            self.extension_packages_skill_sources.clone(),
         ]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
         (!providers.is_empty()).then(|| {
-            Arc::new(marketplace_skill_sources::CombinedSkillSourceProvider::new(
-                providers,
-            )) as Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>
+            Arc::new(extension_packages_skill_sources::CombinedSkillSourceProvider::new(providers))
+                as Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>
         })
     }
 
@@ -1356,20 +1377,23 @@ impl AppServer {
     ) -> Option<Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>> {
         let providers = [
             self.plugin_extension_sources.clone(),
-            self.marketplace_extension_sources.clone(),
+            self.extension_packages_extension_sources.clone(),
         ]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
         (!providers.is_empty()).then(|| {
-            Arc::new(marketplace_extension_sources::CombinedExtensionSourceProvider::new(providers))
-                as Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>
+            Arc::new(
+                extension_packages_extension_sources::CombinedExtensionSourceProvider::new(
+                    providers,
+                ),
+            ) as Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>
         })
     }
 
     /// Enables executable Editor Extensions over one explicitly injected process launcher.
     ///
-    /// Requires product modules, Plugin authority, or Marketplace Manager paired with admission policy.
+    /// Requires product modules, Plugin authority, or Extensions Manager paired with admission policy.
     /// Without this opt-in,
     /// App Server advertises no executable Extension Host capability and never starts package code.
     pub fn with_extension_host_runtime(
@@ -1378,15 +1402,15 @@ impl AppServer {
         limits: ash_external_ext::ExtensionHostLimits,
         restart_policy: ash_external_ext::RestartPolicy,
     ) -> Result<Self, String> {
-        let marketplace_source =
-            self.plugins_manager.is_some() && self.marketplace_editor_extension_admission.is_some();
+        let extension_packages_source = self.plugins_manager.is_some()
+            && self.extension_packages_editor_extension_admission.is_some();
         if self.plugins.is_none()
-            && !marketplace_source
+            && !extension_packages_source
             && self.built_in_editor_extensions
                 == extension_host_runtime::source::BuiltInEditorExtensions::Omitted
         {
             return Err(
-                "Plugin authority or Marketplace Editor Extension admission must be installed before Extension Host runtime"
+                "Plugin authority or Extensions Editor Extension admission must be installed before Extension Host runtime"
                     .to_string(),
             );
         }
@@ -1394,7 +1418,7 @@ impl AppServer {
             self.built_in_editor_extensions,
             self.plugins.clone(),
             self.plugins_manager.clone(),
-            self.marketplace_editor_extension_admission.clone(),
+            self.extension_packages_editor_extension_admission.clone(),
             launcher,
             limits,
             restart_policy,
@@ -1419,15 +1443,15 @@ impl AppServer {
         self
     }
 
-    /// Installs product-local enable and grant authority for Marketplace Editor Extensions.
+    /// Installs product-local enable and grant authority for Extensions Editor Extensions.
     ///
     /// This policy does not install packages and does not launch processes. It is consulted only
-    /// when an explicitly configured Extension Host runtime consumes Marketplace deployments.
-    pub fn with_marketplace_editor_extension_admission(
+    /// when an explicitly configured Extension Host runtime consumes Extensions deployments.
+    pub fn with_extension_packages_editor_extension_admission(
         mut self,
-        admission: Arc<dyn crate::MarketplaceEditorExtensionAdmission>,
+        admission: Arc<dyn crate::ExtensionsEditorExtensionAdmission>,
     ) -> Self {
-        self.marketplace_editor_extension_admission = Some(admission);
+        self.extension_packages_editor_extension_admission = Some(admission);
         self
     }
 
@@ -1435,10 +1459,10 @@ impl AppServer {
         mut self,
         policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     ) -> Self {
-        self.marketplace_editor_extension_admission = Some(Arc::new(
-            crate::marketplace_editor_extensions::ProfileEditorExtensionAdmission(Arc::clone(
-                &policy,
-            )),
+        self.extension_packages_editor_extension_admission = Some(Arc::new(
+            crate::extension_packages_editor_extensions::ProfileEditorExtensionAdmission(
+                Arc::clone(&policy),
+            ),
         ));
         self.editor_extension_policy = Some(policy);
         self
@@ -2623,37 +2647,54 @@ impl AppServer {
             }
             Some(ClientMethod::PluginList) => self.plugin_list(),
             Some(ClientMethod::PluginInstallLocal) => self.plugin_install_local(&request.params),
-            Some(ClientMethod::MarketplaceSearch) => self.marketplace_search(&request.params),
-            Some(ClientMethod::MarketplaceGet) => self.marketplace_get(&request.params),
-            Some(ClientMethod::MarketplaceDownload) => self.marketplace_download(&request.params),
-            Some(ClientMethod::MarketplaceInstall) => self.marketplace_install(&request.params),
-            Some(ClientMethod::MarketplaceUpdate) => self.marketplace_update(&request.params),
-            Some(ClientMethod::MarketplaceUninstall) => self.marketplace_uninstall(&request.params),
-            Some(ClientMethod::MarketplaceListInstalled) => {
-                self.marketplace_list_installed(&request.params)
+            Some(ClientMethod::ExtensionsSources) => self.extension_sources(&request.params),
+            Some(ClientMethod::ExtensionsAddSource | ClientMethod::ExtensionsSetSourceEnabled) => {
+                if !connection.allows_extension_source_configuration() {
+                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+                }
+                if client_method(&request.method) == Some(ClientMethod::ExtensionsAddSource) {
+                    self.extension_source_add(&request.params)
+                } else {
+                    self.extension_source_set_enabled(&request.params)
+                }
+            }
+            Some(ClientMethod::ExtensionsSearch) => self.extension_packages_search(&request.params),
+            Some(ClientMethod::ExtensionsGet) => self.extension_packages_get(&request.params),
+            Some(ClientMethod::ExtensionsDownload) => {
+                self.extension_packages_download(&request.params)
+            }
+            Some(ClientMethod::ExtensionsInstall) => {
+                self.extension_packages_install(&request.params)
+            }
+            Some(ClientMethod::ExtensionsUpdate) => self.extension_packages_update(&request.params),
+            Some(ClientMethod::ExtensionsUninstall) => {
+                self.extension_packages_uninstall(&request.params)
+            }
+            Some(ClientMethod::ExtensionsListInstalled) => {
+                self.extension_packages_list_installed(&request.params)
             }
             Some(
-                ClientMethod::MarketplaceEditorExtensions
-                | ClientMethod::MarketplaceSetEditorExtensionPolicy,
+                ClientMethod::ExtensionsEditorExtensions
+                | ClientMethod::ExtensionsSetEditorExtensionPolicy,
             ) => {
                 if !connection.allows_product_host_capabilities() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
                 }
-                if client_method(&request.method) == Some(ClientMethod::MarketplaceEditorExtensions)
+                if client_method(&request.method) == Some(ClientMethod::ExtensionsEditorExtensions)
                 {
-                    self.marketplace_editor_extensions(&request.params)
+                    self.extension_packages_editor_extensions(&request.params)
                 } else {
-                    self.marketplace_set_editor_extension_policy(&request.params)
+                    self.extension_packages_set_editor_extension_policy(&request.params)
                 }
             }
-            Some(ClientMethod::MarketplaceAcquireCapability) => {
-                self.marketplace_acquire_capability(connection, &request.params)
+            Some(ClientMethod::ExtensionsAcquireCapability) => {
+                self.extension_packages_acquire_capability(connection, &request.params)
             }
-            Some(ClientMethod::MarketplaceReleaseCapability) => {
-                self.marketplace_release_capability(connection, &request.params)
+            Some(ClientMethod::ExtensionsReleaseCapability) => {
+                self.extension_packages_release_capability(connection, &request.params)
             }
-            Some(ClientMethod::MarketplaceOpenResource) => {
-                self.marketplace_open_resource(connection, &request.params)
+            Some(ClientMethod::ExtensionsOpenResource) => {
+                self.extension_packages_open_resource(connection, &request.params)
             }
             Some(ClientMethod::PluginEnable) => self.plugin_enable(&request.params),
             Some(ClientMethod::PluginDisable) => self.plugin_disable(&request.params),

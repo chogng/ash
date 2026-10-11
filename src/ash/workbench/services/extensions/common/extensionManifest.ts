@@ -276,14 +276,14 @@ function parseSnippets(value: unknown, extensionId: string): readonly ExtensionS
 	});
 }
 
-/** Portable Marketplace themes share the same renderer-owned theme registration path. */
+/** Portable Extensions themes share the same renderer-owned theme registration path. */
 function parsePortableThemes(manifest: Record<string, unknown>): readonly ExtensionThemeContribution[] {
-	const invalid = (): TypeError => new TypeError(localize('extensions.themes.invalidPortableManifest', 'The Marketplace theme manifest is invalid.'));
+	const invalid = (): TypeError => new TypeError(localize('extensions.themes.invalidPortableManifest', 'The Extensions theme manifest is invalid.'));
 	if (manifest.schemaVersion !== 1 || manifest.contributes !== undefined || !Array.isArray(manifest.themes) || !manifest.themes.length || manifest.themes.length > 128 || Object.keys(manifest).some(key => !['schemaVersion', 'themes', 'name', 'publisher', 'version', 'displayName'].includes(key))) { throw invalid(); }
 	const ids = new Set<string>();
 	const paths = new Set<string>();
 	return manifest.themes.map((candidate, index) => {
-		const theme = record(candidate, `Marketplace theme ${index}`);
+		const theme = record(candidate, `Extensions theme ${index}`);
 		const id = requiredString(theme.id, 'Theme ID', 256);
 		const label = requiredString(theme.displayName, 'Theme display name', 256);
 		const path = normalizeResourcePath(theme.path, 'Theme path');

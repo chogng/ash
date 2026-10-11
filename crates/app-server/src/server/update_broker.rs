@@ -9,6 +9,7 @@ use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::config::ConfigChanged;
 use ash_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostChanged;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsChanged;
 use ash_app_server_protocol::protocol::fs::FsChanged;
 use ash_app_server_protocol::protocol::git::GitIgnoreChanged;
 use ash_app_server_protocol::protocol::git::GitStatusChanged;
@@ -19,7 +20,6 @@ use ash_app_server_protocol::protocol::language::LanguageDiagnosticsNotification
 use ash_app_server_protocol::protocol::language::LanguageServerMessageNotification;
 use ash_app_server_protocol::protocol::language::LanguageServerProgressNotification;
 use ash_app_server_protocol::protocol::language::LanguageServerStateNotification;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use ash_app_server_protocol::protocol::memory::MemoryChanged;
 use ash_app_server_protocol::protocol::plugins::PluginsChanged;
 use ash_app_server_protocol::protocol::projects::ProjectChanged;
@@ -73,10 +73,10 @@ pub(crate) struct UpdateBroker {
     transcripts: Arc<Mutex<BTreeMap<(SessionId, ThreadId), TranscriptAccumulator>>>,
     next_connection_id: Arc<AtomicU64>,
     next_scope_id: Arc<AtomicU64>,
-    marketplace_instance_id: Arc<str>,
-    marketplace_generation: Arc<AtomicU64>,
-    marketplace_change_gate: Arc<Mutex<()>>,
-    marketplace_source_generations: Arc<Mutex<BTreeMap<String, u64>>>,
+    extension_packages_instance_id: Arc<str>,
+    extension_packages_generation: Arc<AtomicU64>,
+    extension_packages_change_gate: Arc<Mutex<()>>,
+    extension_packages_source_generations: Arc<Mutex<BTreeMap<String, u64>>>,
     scope_id: u64,
 }
 
@@ -116,10 +116,10 @@ impl Default for UpdateBroker {
             transcripts: Arc::new(Mutex::new(BTreeMap::new())),
             next_connection_id: Arc::new(AtomicU64::new(1)),
             next_scope_id: Arc::new(AtomicU64::new(2)),
-            marketplace_instance_id: Arc::from(new_marketplace_instance_id()),
-            marketplace_generation: Arc::new(AtomicU64::new(1)),
-            marketplace_change_gate: Arc::new(Mutex::new(())),
-            marketplace_source_generations: Arc::new(Mutex::new(BTreeMap::new())),
+            extension_packages_instance_id: Arc::from(new_extension_packages_instance_id()),
+            extension_packages_generation: Arc::new(AtomicU64::new(1)),
+            extension_packages_change_gate: Arc::new(Mutex::new(())),
+            extension_packages_source_generations: Arc::new(Mutex::new(BTreeMap::new())),
             scope_id: 1,
         }
     }
@@ -162,10 +162,12 @@ impl UpdateBroker {
             transcripts: Arc::clone(&self.transcripts),
             next_connection_id: Arc::clone(&self.next_connection_id),
             next_scope_id: Arc::clone(&self.next_scope_id),
-            marketplace_instance_id: Arc::clone(&self.marketplace_instance_id),
-            marketplace_generation: Arc::clone(&self.marketplace_generation),
-            marketplace_change_gate: Arc::clone(&self.marketplace_change_gate),
-            marketplace_source_generations: Arc::clone(&self.marketplace_source_generations),
+            extension_packages_instance_id: Arc::clone(&self.extension_packages_instance_id),
+            extension_packages_generation: Arc::clone(&self.extension_packages_generation),
+            extension_packages_change_gate: Arc::clone(&self.extension_packages_change_gate),
+            extension_packages_source_generations: Arc::clone(
+                &self.extension_packages_source_generations,
+            ),
             scope_id: self.next_scope_id.fetch_add(1, Ordering::Relaxed),
         }
     }
@@ -890,53 +892,53 @@ impl UpdateBroker {
         });
     }
 
-    pub(super) fn marketplace_generation(&self) -> u64 {
-        self.marketplace_generation.load(Ordering::Acquire)
+    pub(super) fn extension_packages_generation(&self) -> u64 {
+        self.extension_packages_generation.load(Ordering::Acquire)
     }
 
-    pub(super) fn marketplace_instance_id(&self) -> &str {
-        &self.marketplace_instance_id
+    pub(super) fn extension_packages_instance_id(&self) -> &str {
+        &self.extension_packages_instance_id
     }
 
-    pub(super) fn lock_marketplace_change(&self) -> Option<std::sync::MutexGuard<'_, ()>> {
-        self.marketplace_change_gate.lock().ok()
+    pub(super) fn lock_extension_packages_change(&self) -> Option<std::sync::MutexGuard<'_, ()>> {
+        self.extension_packages_change_gate.lock().ok()
     }
 
-    pub(super) fn publish_marketplace_changed(&self) -> u64 {
-        self.publish_next_marketplace_generation()
+    pub(super) fn publish_extension_packages_changed(&self) -> u64 {
+        self.publish_next_extension_packages_generation()
     }
 
-    pub(super) fn publish_marketplace_manager_changed(
+    pub(super) fn publish_extension_packages_manager_changed(
         &self,
         source_id: &str,
         source_generation: u64,
     ) -> u64 {
-        let Ok(mut sources) = self.marketplace_source_generations.lock() else {
-            return self.marketplace_generation();
+        let Ok(mut sources) = self.extension_packages_source_generations.lock() else {
+            return self.extension_packages_generation();
         };
         if sources
             .get(source_id)
             .is_some_and(|observed| *observed >= source_generation)
         {
-            return self.marketplace_generation();
+            return self.extension_packages_generation();
         }
         sources.insert(source_id.to_owned(), source_generation);
         drop(sources);
-        self.publish_next_marketplace_generation()
+        self.publish_next_extension_packages_generation()
     }
 
-    fn publish_next_marketplace_generation(&self) -> u64 {
+    fn publish_next_extension_packages_generation(&self) -> u64 {
         let previous = self
-            .marketplace_generation
+            .extension_packages_generation
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |generation| {
                 Some(generation.saturating_add(1))
             })
             .unwrap_or_else(|generation| generation);
         let generation = previous.saturating_add(1);
         self.broadcast_notification(
-            ServerNotificationMethod::MarketplaceChanged,
-            &MarketplaceChanged {
-                instance_id: self.marketplace_instance_id.to_string(),
+            ServerNotificationMethod::ExtensionsChanged,
+            &ExtensionsChanged {
+                instance_id: self.extension_packages_instance_id.to_string(),
                 generation,
             },
         );
@@ -1221,12 +1223,16 @@ fn subscriber_observes_session(subscriber: &Subscriber, session_id: &SessionId) 
             .any(|subscription| subscription.session_owners.contains(session_id))
 }
 
-fn new_marketplace_instance_id() -> String {
+fn new_extension_packages_instance_id() -> String {
     let mut random = [0_u8; 16];
     if getrandom::getrandom(&mut random).is_ok() {
-        return format!("marketplace-{}", hex_bytes(&random));
+        return format!("extension_packages-{}", hex_bytes(&random));
     }
-    format!("marketplace-{}-{}", std::process::id(), unix_time_millis())
+    format!(
+        "extension_packages-{}-{}",
+        std::process::id(),
+        unix_time_millis()
+    )
 }
 
 fn hex_bytes(bytes: &[u8]) -> String {

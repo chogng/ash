@@ -12,7 +12,7 @@ export { parseExtensionTheme } from "./extensionTheme.js";
 export type { ExtensionFileTemplateCatalog, ExtensionFileTemplateDefinition, ExtensionFileTemplateSource } from "./extensionFileTemplate.js";
 export { parseExtensionManifest } from "./extensionManifest.js";
 
-export type ExtensionSourceKind = "builtIn" | "plugin" | "marketplace" | "user";
+export type ExtensionSourceKind = "builtIn" | "plugin" | "registry" | "user";
 export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | "duplicateExtension" | "pathEscapesRoot" | "resourceNotFound" | "resourceTooLarge";
 
 /** Workbench-owned public identity for one discovered declarative extension. */

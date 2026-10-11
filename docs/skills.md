@@ -11,7 +11,7 @@
 > Agent runtime：[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Instructions/Skills/Agents 领域划分与外部导入：[`agent-customizations.md`](agent-customizations.md)
-> Marketplace package 入口：[`core-plugins.md`](../crates/docs/core-plugins.md)
+> Extensions package 入口：[`core-plugins.md`](../crates/docs/core-plugins.md)
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 
@@ -28,12 +28,12 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 | ----------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | 启动或刷新 Skill 目录                           | 只读取名称、描述和来源等元数据                                       | 不把全部正文塞入上下文                                           |
 | 用户输入 `$commit` 等 Skill 选择                | 接受 Turn 时完整读取对应 `SKILL.md`                                  | `$` 候选只持有元数据和精确 `SkillRef`                            |
-| Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文      | 歧义、低置信、user/Directory/Plugin/Marketplace 来源都不自动激活 |
+| Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文      | 歧义、低置信、user/Directory/Plugin/Extensions 来源都不自动激活 |
 | 用户打开 `/skills`                              | 浏览、启用、禁用和查看诊断                                           | 不从管理面板直接执行 Skill                                       |
 | 模型按需选择 Skill                              | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文              | 后端不做关键词分类，也不暴露本地路径                             |
 | 正文引用参考资料                                | 只在当前任务确实需要时读取                                           | 路径必须受来源目录约束                                           |
 | Skill 建议运行脚本或工具                        | 转成普通工具请求                                                     | 不授予文件、网络、凭据或沙箱绕过能力                             |
-| Marketplace package 提供 Skill                  | Manager 验证 exact package，再把 Skill capability 投影进共享 catalog | 安装不等于启用、选择或执行                                       |
+| Extensions package 提供 Skill                  | Manager 验证 exact package，再把 Skill capability 投影进共享 catalog | 安装不等于启用、选择或执行                                       |
 | Legacy Plugin 提供 Skill                        | 保留 Plugin、版本和内容摘要来源                                      | Plugin 启用不等于 Skill 自动执行                                 |
 
 ## 1. 结论
@@ -97,7 +97,7 @@ Desktop 前端文件归属与 VS Code 对应情况：
 
 Skill URI 包含 source-qualified ID、digest 与 Session，不包含后端私有路径，也不授予任意文件读取能力。仅当前窗口发现的 URI 可以经 Prompt 服务读取；`skill/resource/open` 按 exact digest 和 Session 授权，AgentHost 共用有界分块、摘要校验及释放逻辑。目录变更取消未完成读取并使旧 URI 失效；取消或窗口关闭不会发布迟到内容，替代连接不会收到旧资源的读取或释放。已打开编辑器保留只读快照，执行仍由后端校验 pinned reference。
 
-TUI `/skills` 提供 All/On/Off 页签和搜索；列表显示技能名称与 on/off 状态，左右键展开或收起描述。在任一页签选中技能后按 Enter/Space 切换启用状态，修改后重读目录。安装技能从 `/marketplace` 进入。
+TUI `/skills` 提供 All/On/Off 页签和搜索；列表显示技能名称与 on/off 状态，左右键展开或收起描述。在任一页签选中技能后按 Enter/Space 切换启用状态，修改后重读目录。安装技能从 `/extensions` 进入。
 
 当前显式和受信任自动激活链已经接通。显式协议输入为：
 
@@ -122,10 +122,10 @@ App Server 先按 durable command receipt 校验输入并返回原 Turn 结果�
 Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放。
 
 当前 runtime source composition 包含 built-in、user、active Directory 的 `.ash/skills` source、
-Marketplace Manager 安装的 exact Skill capability，以及 effective legacy Plugin manifest 声明的 exact
+Extensions Manager 安装的 exact Skill capability，以及 effective legacy Plugin manifest 声明的 exact
 Skill directory。Manager installation generation 或 Plugin activation generation 变化都会触发 catalog
-refresh，未声明的同包 sibling directory 不会进入 catalog。Marketplace provenance 作为独立
-`SkillSourceKind::Marketplace` 保留，不伪装成 built-in 或 Plugin。Directory config 中额外声明的独立
+refresh，未声明的同包 sibling directory 不会进入 catalog。Extensions provenance 作为独立
+`SkillSourceKind::Registry` 保留，不伪装成 built-in 或 Plugin。Directory config 中额外声明的独立
 Skill source intent 与 script execution adapter 尚未接入；正文读取、通用 package resource resolver、有界 UTF-8 模型
 读取、binary asset Resource materialization、compatibility gate、显式激活和模型按需读取已接入。
 
@@ -134,7 +134,7 @@ Skill source intent 与 script execution adapter 尚未接入；正文读取、�
 - `ash-protocol` 的 UserInput、Resource、ToolName 和 provider-independent model contract；
 - Core `ContextAssembler`、`ModelInvocationSnapshot` 与 durable checkpoint pipeline；
 - App Server 的 typed command、Resource store 和 generated client contract；
-- Marketplace Manager 提供 digest-pinned immutable Skill capability root；
+- Extensions Manager 提供 digest-pinned immutable Skill capability root；
 - legacy Plugin authority 提供 manifest-declared exact Skill contribution root；
 - 目标 `ash-tool-executor` / `ash-sandboxing` 负责脚本执行，而不是 Skill loader；产品层
   `ash-exec` 是 headless Agent runner。
@@ -194,7 +194,7 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
 
 ### 4.2 Skill manager 不拥有
 
-- Marketplace/Plugin package 下载、签名、安装、enablement 或 grants；
+- Extensions/Plugin package 下载、签名、安装、enablement 或 grants；
 - script 执行、shell、dependency install、network 或 filesystem mutation；
 - MCP session、tool call 或 resource read；
 - Agent loop、model selection、prompt tokenization 算法；
@@ -207,7 +207,7 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
 
 ```text
 config / Directory / built-in roots
-Marketplace Manager / legacy Plugin authority
+Extensions Manager / legacy Plugin authority
                 │
                 ▼
           ash-skills
@@ -237,7 +237,7 @@ App Server 只在组合根安装 extension，并把 Config、RPC DTO 和 `skills
   policy；具体 Win32/Unix contract 见
   [`crates/file-identity/README.md`](../crates/file-identity/README.md)；
 - Skill source 以窄 `SkillSourceRoot`/file resolver port 注入；
-- Marketplace Manager 或 legacy Plugin authority 只提供 immutable exact root，Skill manager 仍重新校验 Skill format；
+- Extensions Manager 或 legacy Plugin authority 只提供 immutable exact root，Skill manager 仍重新校验 Skill format；
 - Core ContextAssembler 只接收通用 `PromptFragment`，不依赖 Skill catalog 或 filesystem；
 - `ash-skills-extension` 在 safe point 按 frozen digest 精确重读已激活正文，但不重新做选择；
 - Skill scripts 通过普通 Tool/exec port 执行，`ash-skills` 不依赖
@@ -284,7 +284,7 @@ BuiltIn { release }
 User { configuredRoot }
 Directory { sourceId, configuredRoot }
 Plugin { pluginId, version, packageDigest }
-Marketplace { packageId, version, packageDigest, capabilityId }
+Registry { packageId, version, packageDigest, capabilityId }
 LocalDevelopment { canonicalRoot }
 ```
 
@@ -298,7 +298,7 @@ Precedence 只用于候选排序，不用于静默覆盖：
 用户在当前 Turn 显式选择
 > directory enabled
 > user enabled
-> Marketplace enabled
+> Extensions enabled
 > Plugin enabled
 > built-in fallback
 ```
@@ -330,9 +330,9 @@ Precedence 只用于候选排序，不用于静默覆盖：
 - 跟随逃出 source root 的 symlink；
 - 因单个坏 Skill 让整个 built-in/user catalog 丢失。
 
-Marketplace/Plugin package 是原子安装来源，但 Skill 仍由本领域重新校验。一个 exact Skill capability
+Extensions/Plugin package 是原子安装来源，但 Skill 仍由本领域重新校验。一个 exact Skill capability
 无效时，该 capability 不进入 catalog 并产生来源诊断；普通 user source 可按 entry 隔离错误。其他同包
-capability 是否可用由各自领域 consumer 决定，Skill loader 不回滚整个 Marketplace installation。
+capability 是否可用由各自领域 consumer 决定，Skill loader 不回滚整个 Extensions installation。
 
 ### 7.2 目录快照
 
@@ -418,7 +418,7 @@ compatibility、exact identity 与文件安全。它与下一节的受信任 pre
 
 当前 selector 在 host 内只接收最多 16 KiB 的当前 Turn 文本和 immutable catalog metadata，不把
 catalog 或候选正文写进 prompt。它只考虑 enabled、compatible 且 trust 为 `BuiltInVerified` 的
-Skill；user、Directory、Plugin、Marketplace 等来源即使描述匹配也不会自动激活：
+Skill；user、Directory、Plugin、Extensions 等来源即使描述匹配也不会自动激活：
 
 ```text
 enabled catalog
@@ -884,9 +884,9 @@ description 获得自动 activation。
 
 完成条件：读取 Skill 不产生副作用，运行脚本一定产生标准 durable Tool Call/Result。
 
-### 阶段 S3：包来源与 MCP 依赖（Marketplace/Plugin 来源纵向切片已完成）
+### 阶段 S3：包来源与 MCP 依赖（Extensions/Plugin 来源纵向切片已完成）
 
-- ✅ Marketplace Skill exact source、独立 provenance 与 Manager generation refresh；
+- ✅ Extensions Skill exact source、独立 provenance 与 Manager generation refresh；
 - ✅ Plugin Skill exact source；
 - ✅ Plugin activation generation 触发 catalog composition refresh；
 - machine-readable MCP/tool requirements；

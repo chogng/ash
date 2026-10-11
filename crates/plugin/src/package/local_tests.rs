@@ -119,14 +119,14 @@ fn normalized_package_digest_is_root_independent_and_content_sensitive() {
 }
 
 #[test]
-fn marketplace_digest_is_explicit_and_does_not_change_legacy_local_identity() {
+fn extension_packages_digest_is_explicit_and_does_not_change_legacy_local_identity() {
     let directory = TestDirectory::new();
     create_package(directory.path(), "acme/review", "1.0.0", "same");
 
     let legacy = LocalPluginPackage::load(directory.path()).unwrap();
-    let marketplace = LocalPluginPackage::load_with_digest_algorithm(
+    let extension_packages = LocalPluginPackage::load_with_digest_algorithm(
         directory.path(),
-        PluginPackageDigestAlgorithm::MarketplaceV1,
+        PluginPackageDigestAlgorithm::ExtensionsV1,
     )
     .unwrap();
 
@@ -135,11 +135,11 @@ fn marketplace_digest_is_explicit_and_does_not_change_legacy_local_identity() {
         PluginPackageDigestAlgorithm::LegacyAshV1
     );
     assert_eq!(
-        marketplace.digest_algorithm(),
-        PluginPackageDigestAlgorithm::MarketplaceV1
+        extension_packages.digest_algorithm(),
+        PluginPackageDigestAlgorithm::ExtensionsV1
     );
-    assert_ne!(legacy.package_digest(), marketplace.package_digest());
-    assert_eq!(legacy.manifest(), marketplace.manifest());
+    assert_ne!(legacy.package_digest(), extension_packages.package_digest());
+    assert_eq!(legacy.manifest(), extension_packages.manifest());
 }
 
 #[test]

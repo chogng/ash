@@ -1,4 +1,4 @@
-//! Remote Marketplace source and package contracts used by Core Plugins.
+//! Remote Extensions source and package contracts used by Core Plugins.
 //!
 //! The adapter verifies the current HTTPS/TUF distribution and hands opaque package bytes to the
 //! local store without exposing remote cache paths or extraction directories.
@@ -12,9 +12,9 @@ mod model;
 mod remote;
 mod service;
 
-pub use client::MarketplaceRemoteClient;
-pub use error::MarketplaceClientError;
-pub use error::MarketplaceClientErrorKind;
+pub use client::ExtensionsRemoteClient;
+pub use error::ExtensionsClientError;
+pub use error::ExtensionsClientErrorKind;
 pub use model::AcquireCapabilityRequest;
 pub use model::AcquiredCapability;
 pub use model::ActivationSpec;
@@ -28,6 +28,7 @@ pub use model::ConnectorActivationSpec;
 pub use model::DownloadPackageRequest;
 pub use model::ExecutableActivationSpec;
 pub use model::ExecutableRuntime;
+pub use model::ExtensionsErrorCode;
 pub use model::GetPackageRequest;
 pub use model::InstallPackageRequest;
 pub use model::InstallationState;
@@ -35,7 +36,6 @@ pub use model::InstalledPackage;
 pub use model::LanguageActivationSpec;
 pub use model::ListInstalledRequest;
 pub use model::LocalizationActivationSpec;
-pub use model::MarketplaceErrorCode;
 pub use model::McpActivationSpec;
 pub use model::McpTransportSpec;
 pub use model::OpenResourceRequest;
@@ -56,5 +56,5 @@ pub use model::UninstallPackageRequest;
 pub use model::UpdatePackageRequest;
 pub use model::UpstreamReference;
 pub use model::UpstreamRegistry;
-pub use remote::RemoteMarketplaceConfig;
-pub use service::PluginPackageService;
+pub use remote::RemoteExtensionsConfig;
+pub use service::ExtensionPackageService;

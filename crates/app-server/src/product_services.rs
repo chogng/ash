@@ -1,4 +1,4 @@
-use ash_plugin::MarketplaceName;
+use ash_plugin::ExtensionSourceId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;
@@ -17,17 +17,18 @@ use url::Url;
 
 use crate::OpenAppServerError;
 
-const PRODUCT_SERVICES_SCHEMA_VERSION: u32 = 2;
+const PRODUCT_SERVICES_SCHEMA_VERSION: u32 = 3;
 const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 
 /// Product-distribution trust and public OAuth configuration loaded by a host.
 ///
-/// This document contains no confidential client secret. Marketplace root metadata remains pinned
+/// This document contains no confidential client secret. Extensions root metadata remains pinned
 /// by the product file, while broker URLs and public client IDs are explicit host inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalProductServicesConfig {
-    pub(crate) marketplaces: BTreeMap<MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
-    pub(crate) open_vsx: Option<(MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
+    pub(crate) extension_sources:
+        BTreeMap<ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
+    pub(crate) open_vsx: Option<(ExtensionSourceId, ash_core_plugins::OpenVsxConfig)>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
     pub(crate) github_account: Option<GitHubAccountConfig>,
     pub(crate) github_enterprise_accounts: Vec<github::GitHubBrowserConfig>,
@@ -59,40 +60,40 @@ impl LocalProductServicesConfig {
         let source_root = path.parent().ok_or_else(|| product_config_error(()))?;
         let mut authority_identity = Sha256::new();
         authority_identity.update(&bytes);
-        let mut marketplaces = BTreeMap::new();
-        for marketplace in document.marketplaces {
-            let name = marketplace.name;
-            let trusted_root = read_trusted_root(source_root, &marketplace.trusted_root)?;
+        let mut extension_sources = BTreeMap::new();
+        for extension_packages in document.extension_sources {
+            let name = extension_packages.name;
+            let trusted_root = read_trusted_root(source_root, &extension_packages.trusted_root)?;
             authority_identity.update((trusted_root.len() as u64).to_le_bytes());
             authority_identity.update(&trusted_root);
-            let mut config = ash_core_plugins::RemoteMarketplaceConfig::new(
-                Url::parse(&marketplace.metadata_base_url).map_err(product_config_error)?,
-                Url::parse(&marketplace.targets_base_url).map_err(product_config_error)?,
+            let mut config = ash_core_plugins::RemoteExtensionsConfig::new(
+                Url::parse(&extension_packages.metadata_base_url).map_err(product_config_error)?,
+                Url::parse(&extension_packages.targets_base_url).map_err(product_config_error)?,
                 trusted_root,
                 profile_root
                     .as_ref()
-                    .join("cache/marketplace")
+                    .join("cache/extensions")
                     .join(format!("{:x}", Sha256::digest(name.as_str()))),
             )
             .map_err(product_config_error)?;
-            if let Some(seconds) = marketplace.catalog_refresh_interval_seconds {
+            if let Some(seconds) = extension_packages.catalog_refresh_interval_seconds {
                 config = config
                     .with_catalog_refresh_interval(Duration::from_secs(seconds))
                     .map_err(product_config_error)?;
             }
-            if let Some(publishers) = marketplace.allowed_publishers {
+            if let Some(publishers) = extension_packages.allowed_publishers {
                 config = config
                     .with_allowed_publishers(publishers)
                     .map_err(product_config_error)?;
             }
-            if marketplaces.insert(name, config).is_some() {
+            if extension_sources.insert(name, config).is_some() {
                 return Err(product_config_error(()));
             }
         }
         let open_vsx = document
             .open_vsx
             .map(|source| {
-                if marketplaces.contains_key(&source.name) {
+                if extension_sources.contains_key(&source.name) {
                     return Err(product_config_error(()));
                 }
                 let config = ash_core_plugins::OpenVsxConfig::new(
@@ -164,7 +165,7 @@ impl LocalProductServicesConfig {
         Ok(Self {
             image_generation: document.image_generation,
             git_attribution: document.git_attribution,
-            marketplaces,
+            extension_sources,
             open_vsx,
             connector_oauth,
             github_account,
@@ -174,11 +175,11 @@ impl LocalProductServicesConfig {
         })
     }
 
-    /// Returns named, independently pinned Marketplace provider configurations.
-    pub fn marketplaces(
+    /// Returns named, independently pinned Extensions provider configurations.
+    pub fn extension_sources(
         &self,
-    ) -> &BTreeMap<MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig> {
-        &self.marketplaces
+    ) -> &BTreeMap<ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig> {
+        &self.extension_sources
     }
 
     /// Returns the distribution inputs that must match before products share a local authority.
@@ -224,7 +225,7 @@ pub(crate) enum ProductConnectorOAuthConfig {
 struct ProductServicesDocument {
     schema_version: u32,
     #[serde(default)]
-    marketplaces: Vec<ProductMarketplaceDocument>,
+    extension_sources: Vec<ProductExtensionsDocument>,
     #[serde(default)]
     open_vsx: Option<ProductOpenVsxDocument>,
     #[serde(default)]
@@ -296,15 +297,15 @@ impl TryFrom<GitHubAccountDocument> for GitHubAccountConfig {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ProductOpenVsxDocument {
-    name: MarketplaceName,
+    name: ExtensionSourceId,
     api_url: String,
     download_origins: Vec<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ProductMarketplaceDocument {
-    name: MarketplaceName,
+struct ProductExtensionsDocument {
+    name: ExtensionSourceId,
     metadata_base_url: String,
     targets_base_url: String,
     trusted_root: PathBuf,

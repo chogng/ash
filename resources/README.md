@@ -7,15 +7,15 @@ need a renderer-independent source of truth.
 
 `product-services/` is the release-owned trust bundle copied to
 `ash-resources/product-services/` by both package assemblers. Its
-`product-services.json` uses schema version 2 and lists named HTTPS Marketplace sources under
-`marketplaces`. Each source references its own contained `trustedRoot` file; the product's `ash`
-source pins `marketplace-root.json`. Roots are public verification material, never signing keys.
+`product-services.json` uses schema version 2 and lists named HTTPS Extensions sources under
+`extensionSources`. Each source references its own contained `trustedRoot` file; the product's `ash`
+source pins `extensions-root.json`. Roots are public verification material, never signing keys.
 Both package assemblers require unique source names and every referenced regular, unlinked root file.
 
 Packaged Desktop/server hosts and `ash code`/TUI discover this file through the shared
 App Server client + `ash-install-context` boundary. Each host explicitly injects the typed result;
 an explicit `ASH_PRODUCT_SERVICES_PATH` remains authoritative for development and specialized hosts.
-Marketplace URLs or root replacement must not move into user configuration or Plugin metadata.
+Extensions URLs or root replacement must not move into user configuration or Plugin metadata.
 
 `githubAccount.clientId` is the public Client ID of Ash Desktop's GitHub App, and
 `githubAccount.brokerBaseUrl` is the HTTPS base URL of its authorization Worker. The Welcome
@@ -24,10 +24,10 @@ GitHub App Client Secret and exchanges or refreshes tokens. The GitHub adapter s
 and refresh tokens in the profile secret store and exposes only the account name and status
 to the editor. This account connection is separate from Plugin connector OAuth settings.
 
-The independent Marketplace source, public root owner, publishing pipeline, and key rotation
-procedure live in the private [`marketplace`](https://github.com/chogng/marketplace) repository.
-Ash is one optional consumer: this product bundle chooses to pin that root, while Marketplace
-validation and publication do not depend on Ash. A root rotation must be valid in the Marketplace;
+The independent Extensions source, public root owner, publishing pipeline, and key rotation
+procedure live in the private [`extensions`](https://github.com/chogng/marketplace) repository.
+Ash is one optional consumer: this product bundle chooses to pin that root, while Extensions
+validation and publication do not depend on Ash. A root rotation must be valid in the Extensions;
 Ash then updates its pinned copy before requiring metadata signed only by the rotated root.
 
 ## Application branding

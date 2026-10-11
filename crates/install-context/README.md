@@ -33,7 +33,7 @@ approval、sandbox capability probe、下载、更新或安装 mutation。
     ├── bwrap              # Linux
     ├── node/bin/node[.exe] # packaged-node variant only
     ├── skills/            # built-in Agent Skills
-    └── product-services/  # product Marketplace config + pinned public TUF root
+    └── product-services/  # product Extensions config + pinned public TUF root
 ```
 
 只有 executable 位于 `bin/`，且 package root 同时存在普通文件 `ash-package.json`、

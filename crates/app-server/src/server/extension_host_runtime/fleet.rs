@@ -45,7 +45,7 @@ impl RuntimeInner {
         let mut source_snapshot = source::combined_deployments(
             self.plugin_authority.as_ref(),
             self.plugins_manager.as_ref(),
-            self.marketplace_admission.as_ref(),
+            self.extension_packages_admission.as_ref(),
         )?;
         if authorization.is_none() {
             source_snapshot

@@ -8,7 +8,7 @@
 > [`ash-lsp-server-provider` README](../crates/lsp-server-provider/README.md)、
 > [`ash-lsp-manager` README](../crates/lsp-manager/README.md) 分别拥有。本地符号索引与
 > Language Server 结果如何组合、以及未来代码图的边界见
-> [`code-intelligence.md`](code-intelligence.md)。跨 package family 的 Marketplace source、共享验证、
+> [`code-intelligence.md`](code-intelligence.md)。跨 package family 的 Extensions source、共享验证、
 > 领域投影与失败隔离见 [`core-plugins.md`](../crates/docs/core-plugins.md)。
 
 ## 快速理解
@@ -17,7 +17,7 @@ Ash 通过独立的 server provider、LSP manager 和 LSP 运行时连接现有�
 写进编辑器。Desktop 已接入文档生命周期和事件循环；App Server Config authority 持久化
 内置服务器的 Disabled/Enabled 与可选绝对 executable path。Settings 中每个 server
 都有独立的 Enable switch，默认关闭。未配置的 PATH server 默认 Disabled，不会自动拉起；用户显式开启后才从进程
-启动时冻结的 PATH 解析。Marketplace package 的安装确认同时写入 activation receipt，因此其 packaged
+启动时冻结的 PATH 解析。Extensions package 的安装确认同时写入 activation receipt，因此其 packaged
 route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执行时保持无语言服务器。
 
 | 使用场景                                              | 当前结果                                                                                                                               | 谁负责下一步                                |
@@ -32,9 +32,9 @@ route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执�
 | 日志、show message 与 work-done progress              | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output                      | App Server + Desktop Workbench              |
 | 显式替换服务器并恢复文档                              | ✅ 新实例重放成功后切换 route/incarnation                                                                                              | 宿主需暂存 replacement 早期事件             |
 | 配置与发现 Rust/JSON/Shell server                     | ✅ 独立 Settings draft、revision-safe mode/path、resolver 校验与热重配                                                                 | 扩展安装 provider/UI                        |
-| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node；Rust 同步 TUF catalog、校验兼容性，并从 activation receipt 自动重建 provider collection          | 通过 `/marketplace` 或 `/lsp` 查找并安装包  |
+| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node；Rust 同步 TUF catalog、校验兼容性，并从 activation receipt 自动重建 provider collection          | 通过 `/extensions` 或 `/lsp` 查找并安装包  |
 | 意外退出、退避重启和 crash-loop                       | ✅ 断连 retirement、有限指数退避、状态展示和全文重放                                                                                   | `ash-lsp-manager` + Desktop                 |
-| 安装、更新和移除 server                               | 按签名 catalog 的 languageServer/runtime 声明重建 provider；前端动态刷新语言列表和打开的文档                                           | Marketplace / App Server / Workbench        |
+| 安装、更新和移除 server                               | 按签名 catalog 的 languageServer/runtime 声明重建 provider；前端动态刷新语言列表和打开的文档                                           | Extensions / App Server / Workbench        |
 | 动态注册与 work-done progress                         | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate                                                                 | `ash-lsp` + `ash-lsp-manager`               |
 | workspace edit                                        | ✅ ordered workspace edit、Desktop transaction 与 Workbench preview 已接通                                                             | `ash-lsp-manager` + Desktop Workbench       |
 | LSP 3.18 新能力                                       | 尚未完成                                                                                                                               | 后续按真实消费者逐项加入                    |
@@ -58,11 +58,11 @@ flowchart LR
     Host --> Editor["ash-editor / legacy editor runtime presentation"]
 ```
 
-## Marketplace 与内置扩展
+## Extensions 与内置扩展
 
 - `extensions/` 随产品提供语言识别、编辑配置、TextMate 语法和 snippets，离线可用。
-- Marketplace 的 language 包携带静态资源以及可选服务器；签名 catalog 的 `languageServer` 绑定 executable capability，`runtime` 声明启动方式。
-- `marketplace/search` 搜索包信息、capability ID，以及已验证 catalog 中的语言 ID、名称、别名和扩展名；
+- Extensions 的 language 包携带静态资源以及可选服务器；签名 catalog 的 `languageServer` 绑定 executable capability，`runtime` 声明启动方式。
+- `extensions/search` 搜索包信息、capability ID，以及已验证 catalog 中的语言 ID、名称、别名和扩展名；
   `typescriptreact`、`.tsx`、`jsonc`、`pyright` 可据此找到对应包，不依赖包简介刚好包含这些词。
 - 搜索结果是包候选，不是已安装服务器，也不自动下载安装。静态语言资源同样可被搜索到；schema 2 中
   只有声明 `languageServer` 的语言才加入该 executable 的路由。
@@ -70,15 +70,15 @@ flowchart LR
 - `language/servers` 返回当前目录已启用且可解析的服务器及语言 ID，不启动进程；Workbench 据此注册 provider。
 - 安装、卸载、配置变化后重新读取列表，并为仍打开的文档重建同步。已卸载服务器的晚到诊断被丢弃。
 - 同 ID 的已安装 provider 负责该服务器；用户显式 executable 配置传给该 provider，避免再创建同名 PATH 实例。
-- Node 服务器包的源码保留固定版本、lockfile 和构建配方；Marketplace 在发布时组装依赖并签名。Ash 按需安装整个语言包，校验后缓存，不在用户机器上运行 npm。
-- Marketplace 当前带服务器的语言包为 CSS/Less/SCSS、JSON/JSONC、Python、JavaScript/TypeScript 和 YAML；其他语法包的服务器需另行提供。
-- Web/Electron 的 `/lsp` 打开设置的“编辑器 → 语言服务器”，显示当前编辑器语言、可用服务器及配置；“查找服务器”打开统一 Marketplace 页面，
+- Node 服务器包的源码保留固定版本、lockfile 和构建配方；Extensions 在发布时组装依赖并签名。Ash 按需安装整个语言包，校验后缓存，不在用户机器上运行 npm。
+- Extensions 当前带服务器的语言包为 CSS/Less/SCSS、JSON/JSONC、Python、JavaScript/TypeScript 和 YAML；其他语法包的服务器需另行提供。
+- Web/Electron 的 `/lsp` 打开设置的“编辑器 → 语言服务器”，显示当前编辑器语言、可用服务器及配置；“查找服务器”打开统一 Extensions 页面，
   使用 `languageId` 与 `capabilityKind=executable` 查找明确路由，排除只有语法资源的包。安装前展示整个包。
   `/lsp` 可按工作区目录检查可用性，启用/停用服务器、保存宿主 executable 路径或移除配置覆盖。
   不再提供独立侧栏；日志与启动故障归 Output，各服务器使用独立通道，状态栏显示进度及异常，点击打开对应日志。入口职责见
-  [Slash Commands](slash-commands.md#marketplace-与领域管理入口)。
+  [Slash Commands](slash-commands.md#extensions-与领域管理入口)。
 - Ash Code 的 `/lsp [language-id]` 提供可用服务器、显式配置和会话目录页签；可编辑程序路径、启用状态和恢复默认值。
-  查找入口将精确语言 ID 与 executable 能力筛选交给同一 Marketplace。可用列表不启动服务器，也不代表进程正在运行。
+  查找入口将精确语言 ID 与 executable 能力筛选交给同一 Extensions。可用列表不启动服务器，也不代表进程正在运行。
 
 ## 1. 一次操作
 
@@ -118,7 +118,7 @@ Git object identity 或 durable product sequence。
 | managed Node 与 package 启动命令                      | 只执行冻结 command | ✅                   | ❌                | 只返回入口路径     | 注入 package/provider         | 组合 provider                |
 | process enablement、language route、generation        | ❌                 | 提供 definition      | ✅                | ❌                 | 组合                          | 配置与组合                   |
 | restart backoff、预算和 crash-loop                    | 只上报断连事实     | ❌                   | ✅                | ❌                 | 展示运行态                    | 事件转发                     |
-| server 包 TUF/digest 校验与 side-by-side 安装         | ❌                 | 只消费已安装 receipt | ❌                | ✅ 安装/activation | 展示确认                      | ✅ 组合 Marketplace consumer |
+| server 包 TUF/digest 校验与 side-by-side 安装         | ❌                 | 只消费已安装 receipt | ❌                | ✅ 安装/activation | 展示确认                      | ✅ 组合 Extensions consumer |
 | 当前 document text / editor revision                  | ❌                 | ❌                   | 借用 snapshot     | ❌                 | ✅                            | 文件 I/O authority           |
 | diagnostics freshness 与 position conversion          | 提供协议事实       | ❌                   | ✅                | ❌                 | ✅ Editor 绘制，Desktop hover | 协议投影                     |
 | mode/path durable preference                          | ❌                 | 只消费 preference    | ❌                | ❌                 | Settings UI / adapter         | ✅ authority                 |
@@ -185,10 +185,10 @@ App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary
 - document/workspace pull diagnostics 的 capability gate、report projection、App Server route 与 Desktop Problems 数据接入；
 - 多 definition target 使用现有 Peek 列表选择，单目标直接导航；
 - Rust、JSON/JSONC、Shell、JavaScript/TypeScript 的内置 resolver definitions；
-- 通用 Marketplace Manager 的 TUF verified download、整包 digest 复核、immutable install/update/uninstall；
-- Marketplace Language asset 投影到共享 Extension catalog，Executable 按 signed language route 和
+- 通用 Extensions Manager 的 TUF verified download、整包 digest 复核、immutable install/update/uninstall；
+- Extensions Language asset 投影到共享 Extension catalog，Executable 按 signed language route 和
   `node`/`direct` runtime 组合 provider；
-- App Server 通过通用 Marketplace API 的 `packageType=language` 提供发现与安装，并在
+- App Server 通过通用 Extensions API 的 `packageType=language` 提供发现与安装，并在
   install/update/uninstall 后热重建 provider collection；Desktop 已有消费服务，安装页面尚未接通；
 - in-memory protocol vertical tests。
 

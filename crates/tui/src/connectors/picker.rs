@@ -15,7 +15,7 @@ use crate::widgets::search_box::SearchBoxModel;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConnectorSelectionAction {
-    Marketplace,
+    Extensions,
     ConnectDeviceOAuth {
         connector_id: String,
         connection_generation: u64,
@@ -29,10 +29,10 @@ pub(crate) type ConnectorChoices = ListSelectionSpec<ConnectorSelectionAction>;
 
 pub(crate) fn connector_choices(catalog: &ConnectorListResult) -> ConnectorChoices {
     let mut actions = BTreeMap::new();
-    let marketplace_id = ListSelectionItemId::new("marketplace");
+    let extension_packages_id = ListSelectionItemId::new("extensions");
     actions.insert(
-        marketplace_id.clone(),
-        ConnectorSelectionAction::Marketplace,
+        extension_packages_id.clone(),
+        ConnectorSelectionAction::Extensions,
     );
     let all = catalog
         .connectors
@@ -75,7 +75,7 @@ pub(crate) fn connector_choices(catalog: &ConnectorListResult) -> ConnectorChoic
             ],
         )
         .with_activation(bindings::CONNECTOR_TOGGLE)
-        .with_action(ListSelectionItem::new("Get connectors").with_id(marketplace_id))
+        .with_action(ListSelectionItem::new("Get connectors").with_id(extension_packages_id))
         .with_search(SearchBoxModel::new("Search connectors"))
         .with_empty_message("No matching Connectors"),
         actions,

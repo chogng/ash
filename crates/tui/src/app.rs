@@ -69,5 +69,5 @@ pub(crate) use state::App;
 pub(crate) use state::Status;
 
 #[cfg(test)]
-#[path = "app/marketplace_tests.rs"]
-mod marketplace_tests;
+#[path = "app/extensions_tests.rs"]
+mod extensions_tests;

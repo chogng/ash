@@ -18,7 +18,7 @@ use tough::TargetName;
 use tough::schema::Targets;
 use url::Url;
 
-use crate::MarketplaceClientError;
+use crate::ExtensionsClientError;
 use crate::registry::archive;
 use crate::registry::catalog::CatalogManifest;
 use crate::registry::catalog::Release;
@@ -37,9 +37,9 @@ const DEFAULT_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(300);
 const MIN_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 const MAX_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(86_400);
 
-/// Product-pinned deployment configuration for one remote Marketplace source.
+/// Product-pinned deployment configuration for one remote Extensions source.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RemoteMarketplaceConfig {
+pub struct RemoteExtensionsConfig {
     metadata_base_url: Url,
     targets_base_url: Url,
     trusted_root: Vec<u8>,
@@ -48,14 +48,14 @@ pub struct RemoteMarketplaceConfig {
     catalog_refresh_interval: Duration,
 }
 
-impl RemoteMarketplaceConfig {
-    /// Creates a production HTTPS Marketplace source with an out-of-band trusted root.
+impl RemoteExtensionsConfig {
+    /// Creates a production HTTPS Extensions source with an out-of-band trusted root.
     pub fn new(
         metadata_base_url: Url,
         targets_base_url: Url,
         trusted_root: Vec<u8>,
         cache_root: impl Into<PathBuf>,
-    ) -> Result<Self, MarketplaceClientError> {
+    ) -> Result<Self, ExtensionsClientError> {
         if metadata_base_url.scheme() != "https"
             || targets_base_url.scheme() != "https"
             || !valid_base_url(&metadata_base_url)
@@ -63,8 +63,8 @@ impl RemoteMarketplaceConfig {
             || trusted_root.is_empty()
             || trusted_root.len() > MAX_TRUSTED_ROOT_BYTES
         {
-            return Err(MarketplaceClientError::invalid_request(
-                "Marketplace remote source configuration is invalid",
+            return Err(ExtensionsClientError::invalid_request(
+                "Extensions remote source configuration is invalid",
             ));
         }
         Ok(Self {
@@ -82,14 +82,14 @@ impl RemoteMarketplaceConfig {
         distribution_root: impl AsRef<Path>,
         trusted_root: Vec<u8>,
         cache_root: impl Into<PathBuf>,
-    ) -> Result<Self, MarketplaceClientError> {
+    ) -> Result<Self, ExtensionsClientError> {
         let distribution_root = distribution_root
             .as_ref()
             .canonicalize()
-            .map_err(|_| MarketplaceClientError::storage())?;
+            .map_err(|_| ExtensionsClientError::storage())?;
         if trusted_root.is_empty() || trusted_root.len() > MAX_TRUSTED_ROOT_BYTES {
-            return Err(MarketplaceClientError::invalid_request(
-                "Marketplace trusted root is invalid",
+            return Err(ExtensionsClientError::invalid_request(
+                "Extensions trusted root is invalid",
             ));
         }
         Ok(Self {
@@ -106,7 +106,7 @@ impl RemoteMarketplaceConfig {
     pub fn with_allowed_publishers(
         mut self,
         publishers: impl IntoIterator<Item = String>,
-    ) -> Result<Self, MarketplaceClientError> {
+    ) -> Result<Self, ExtensionsClientError> {
         let publishers = publishers.into_iter().collect::<Vec<_>>();
         let unique = publishers.iter().cloned().collect::<BTreeSet<_>>();
         if unique.is_empty()
@@ -115,8 +115,8 @@ impl RemoteMarketplaceConfig {
                 .iter()
                 .any(|publisher| !valid_identifier_segment(publisher))
         {
-            return Err(MarketplaceClientError::invalid_request(
-                "Marketplace publisher policy is invalid",
+            return Err(ExtensionsClientError::invalid_request(
+                "Extensions publisher policy is invalid",
             ));
         }
         self.allowed_publishers = unique;
@@ -129,10 +129,10 @@ impl RemoteMarketplaceConfig {
     pub fn with_catalog_refresh_interval(
         mut self,
         interval: Duration,
-    ) -> Result<Self, MarketplaceClientError> {
+    ) -> Result<Self, ExtensionsClientError> {
         if !(MIN_CATALOG_REFRESH_INTERVAL..=MAX_CATALOG_REFRESH_INTERVAL).contains(&interval) {
-            return Err(MarketplaceClientError::invalid_request(
-                "Marketplace catalog refresh interval is invalid",
+            return Err(ExtensionsClientError::invalid_request(
+                "Extensions catalog refresh interval is invalid",
             ));
         }
         self.catalog_refresh_interval = interval;
@@ -179,16 +179,16 @@ impl RemotePackageTarget {
 }
 
 pub(crate) struct RemoteSource {
-    config: RemoteMarketplaceConfig,
+    config: RemoteExtensionsConfig,
 }
 
 impl RemoteSource {
-    pub(crate) fn new(config: RemoteMarketplaceConfig) -> Result<Self, MarketplaceClientError> {
+    pub(crate) fn new(config: RemoteExtensionsConfig) -> Result<Self, ExtensionsClientError> {
         prepare_cache_root(&config.cache_root)?;
         Ok(Self { config })
     }
 
-    pub(crate) fn releases(&self) -> Result<Vec<Release>, MarketplaceClientError> {
+    pub(crate) fn releases(&self) -> Result<Vec<Release>, ExtensionsClientError> {
         let runtime = runtime()?;
         runtime.block_on(self.releases_async())
     }
@@ -196,12 +196,12 @@ impl RemoteSource {
     pub(crate) fn materialize(
         &self,
         expected: &RemotePackageTarget,
-    ) -> Result<TempDir, MarketplaceClientError> {
+    ) -> Result<TempDir, ExtensionsClientError> {
         let runtime = runtime()?;
         runtime.block_on(self.materialize_async(expected))
     }
 
-    async fn releases_async(&self) -> Result<Vec<Release>, MarketplaceClientError> {
+    async fn releases_async(&self) -> Result<Vec<Release>, ExtensionsClientError> {
         let loaded = self.load().await?;
         let releases =
             collect_releases(&loaded.repository, &self.config.allowed_publishers).await?;
@@ -215,7 +215,7 @@ impl RemoteSource {
     async fn materialize_async(
         &self,
         expected: &RemotePackageTarget,
-    ) -> Result<TempDir, MarketplaceClientError> {
+    ) -> Result<TempDir, ExtensionsClientError> {
         let loaded = self.load().await?;
         let releases =
             collect_releases(&loaded.repository, &self.config.allowed_publishers).await?;
@@ -223,13 +223,13 @@ impl RemoteSource {
             .iter()
             .map(|release| &release.target)
             .find(|target| target.package == expected.package);
-        let exact = exact.ok_or_else(MarketplaceClientError::package_untrusted)?;
+        let exact = exact.ok_or_else(ExtensionsClientError::package_untrusted)?;
         if exact.name != expected.name
             || exact.signed_length != expected.signed_length
             || exact.package_file_count != expected.package_file_count
             || exact.package_size_bytes != expected.package_size_bytes
         {
-            return Err(MarketplaceClientError::package_untrusted());
+            return Err(ExtensionsClientError::package_untrusted());
         }
         let bytes = read_target(
             &loaded.repository,
@@ -241,7 +241,7 @@ impl RemoteSource {
         let staging = tempfile::Builder::new()
             .prefix(".remote-package-")
             .tempdir_in(&self.config.cache_root)
-            .map_err(|_| MarketplaceClientError::storage())?;
+            .map_err(|_| ExtensionsClientError::storage())?;
         archive::extract(&bytes, staging.path())?;
         if let Some(datastore) = loaded.datastore {
             cache_repository(
@@ -255,7 +255,7 @@ impl RemoteSource {
         Ok(staging)
     }
 
-    async fn load(&self) -> Result<LoadedRepository, MarketplaceClientError> {
+    async fn load(&self) -> Result<LoadedRepository, ExtensionsClientError> {
         let datastore_root = self.config.cache_root.join("tuf");
         let datastore = stage_datastore(&self.config.cache_root, &datastore_root)?;
         let online = RepositoryLoader::new(
@@ -278,7 +278,7 @@ impl RemoteSource {
                 repository: open_cached_repository(&self.config).await?,
                 datastore: None,
             }),
-            Err(_) => Err(MarketplaceClientError::package_untrusted()),
+            Err(_) => Err(ExtensionsClientError::package_untrusted()),
         }
     }
 }
@@ -327,7 +327,7 @@ struct RevokedPackage {
 async fn collect_releases(
     repository: &Repository,
     allowed_publishers: &BTreeSet<String>,
-) -> Result<Vec<Release>, MarketplaceClientError> {
+) -> Result<Vec<Release>, ExtensionsClientError> {
     let revoked = read_revocations(repository).await?;
     let mut releases = BTreeMap::new();
     let mut publishers = BTreeSet::new();
@@ -342,7 +342,7 @@ async fn collect_releases(
             .iter()
             .any(|publisher| !allowed_publishers.contains(publisher))
     {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     Ok(releases.into_values().collect())
 }
@@ -352,7 +352,7 @@ fn collect_delegated_targets(
     releases: &mut BTreeMap<(String, Version), Release>,
     publishers: &mut BTreeSet<String>,
     revoked: &BTreeSet<(String, Version, String)>,
-) -> Result<(), MarketplaceClientError> {
+) -> Result<(), ExtensionsClientError> {
     let Some(delegations) = &targets.delegations else {
         return Ok(());
     };
@@ -361,18 +361,19 @@ fn collect_delegated_targets(
             continue;
         };
         for (name, target) in &signed.signed.targets {
-            let Some(package_value) = target.custom.get("marketplacePackage").cloned() else {
+            let Some(package_value) = target.custom.get("extension_packagesPackage").cloned()
+            else {
                 continue;
             };
             let catalog_value = target
                 .custom
-                .get("marketplaceCatalog")
+                .get("extension_packagesCatalog")
                 .cloned()
-                .ok_or_else(MarketplaceClientError::package_untrusted)?;
+                .ok_or_else(ExtensionsClientError::package_untrusted)?;
             let package: PackageTargetMetadata = serde_json::from_value(package_value)
-                .map_err(|_| MarketplaceClientError::package_untrusted())?;
+                .map_err(|_| ExtensionsClientError::package_untrusted())?;
             let catalog: CatalogTargetMetadata = serde_json::from_value(catalog_value)
-                .map_err(|_| MarketplaceClientError::package_untrusted())?;
+                .map_err(|_| ExtensionsClientError::package_untrusted())?;
             let publisher = package_publisher(&package.id)?;
             if package.schema_version != 1
                 || catalog.schema_version != 1
@@ -387,10 +388,10 @@ fn collect_delegated_targets(
                 || catalog.package_size_bytes == 0
                 || catalog.package_size_bytes > archive::MAX_EXPANDED_BYTES
             {
-                return Err(MarketplaceClientError::package_untrusted());
+                return Err(ExtensionsClientError::package_untrusted());
             }
             crate::registry::catalog::validate_manifest(&catalog.manifest)
-                .map_err(|_| MarketplaceClientError::package_untrusted())?;
+                .map_err(|_| ExtensionsClientError::package_untrusted())?;
             let _ = catalog.consumer_metadata;
             publishers.insert(publisher.to_owned());
             if revoked.contains(&(
@@ -419,7 +420,7 @@ fn collect_delegated_targets(
                 .insert((package.id, package.version), release)
                 .is_some()
             {
-                return Err(MarketplaceClientError::package_untrusted());
+                return Err(ExtensionsClientError::package_untrusted());
             }
         }
         collect_delegated_targets(&signed.signed, releases, publishers, revoked)?;
@@ -429,32 +430,32 @@ fn collect_delegated_targets(
 
 async fn read_revocations(
     repository: &Repository,
-) -> Result<BTreeSet<(String, Version, String)>, MarketplaceClientError> {
-    let name = TargetName::new("marketplace/revocations.json")
-        .map_err(|_| MarketplaceClientError::package_untrusted())?;
+) -> Result<BTreeSet<(String, Version, String)>, ExtensionsClientError> {
+    let name = TargetName::new("extensions/revocations.json")
+        .map_err(|_| ExtensionsClientError::package_untrusted())?;
     let target = repository
         .targets()
         .signed
         .targets
         .get(&name)
-        .ok_or_else(MarketplaceClientError::package_untrusted)?;
+        .ok_or_else(ExtensionsClientError::package_untrusted)?;
     let bytes = read_target(repository, &name, target.length, MAX_REVOCATIONS_BYTES).await?;
     let document: RevocationDocument =
-        serde_json::from_slice(&bytes).map_err(|_| MarketplaceClientError::package_untrusted())?;
+        serde_json::from_slice(&bytes).map_err(|_| ExtensionsClientError::package_untrusted())?;
     if document.schema_version != 1 {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     let mut revoked = BTreeSet::new();
     let mut identities = BTreeMap::new();
     for package in document.revoked {
         if package_publisher(&package.id).is_err() || !valid_digest(&package.digest) {
-            return Err(MarketplaceClientError::package_untrusted());
+            return Err(ExtensionsClientError::package_untrusted());
         }
         let identity = (package.id.clone(), package.version.clone());
         if let Some(existing) = identities.insert(identity, package.digest.clone())
             && existing != package.digest
         {
-            return Err(MarketplaceClientError::package_untrusted());
+            return Err(ExtensionsClientError::package_untrusted());
         }
         revoked.insert((package.id, package.version, package.digest));
     }
@@ -466,21 +467,21 @@ async fn read_target(
     name: &TargetName,
     signed_length: u64,
     limit: usize,
-) -> Result<Vec<u8>, MarketplaceClientError> {
+) -> Result<Vec<u8>, ExtensionsClientError> {
     if signed_length > limit as u64 {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     let stream = repository
         .read_target(name)
         .await
-        .map_err(|_| MarketplaceClientError::unavailable())?
-        .ok_or_else(MarketplaceClientError::unavailable)?;
+        .map_err(|_| ExtensionsClientError::unavailable())?
+        .ok_or_else(ExtensionsClientError::unavailable)?;
     let bytes = stream
         .into_vec()
         .await
-        .map_err(|_| MarketplaceClientError::unavailable())?;
+        .map_err(|_| ExtensionsClientError::unavailable())?;
     if bytes.len() > limit || bytes.len() as u64 != signed_length {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     Ok(bytes)
 }
@@ -494,15 +495,15 @@ fn valid_base_url(url: &Url) -> bool {
         && url.path().ends_with('/')
 }
 
-fn package_publisher(id: &str) -> Result<&str, MarketplaceClientError> {
+fn package_publisher(id: &str) -> Result<&str, ExtensionsClientError> {
     let Some((publisher, name)) = id.split_once('/') else {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     };
     if id.matches('/').count() != 1
         || !valid_identifier_segment(publisher)
         || !valid_identifier_segment(name)
     {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     Ok(publisher)
 }
@@ -526,16 +527,16 @@ fn valid_digest(value: &str) -> bool {
     })
 }
 
-pub(super) fn directory_url(path: &Path) -> Result<Url, MarketplaceClientError> {
-    Url::from_directory_path(path).map_err(|_| MarketplaceClientError::storage())
+pub(super) fn directory_url(path: &Path) -> Result<Url, ExtensionsClientError> {
+    Url::from_directory_path(path).map_err(|_| ExtensionsClientError::storage())
 }
 
-fn runtime() -> Result<tokio::runtime::Runtime, MarketplaceClientError> {
+fn runtime() -> Result<tokio::runtime::Runtime, ExtensionsClientError> {
     tokio::runtime::Builder::new_current_thread()
         .enable_io()
         .enable_time()
         .build()
-        .map_err(|_| MarketplaceClientError::unavailable())
+        .map_err(|_| ExtensionsClientError::unavailable())
 }
 
 #[cfg(test)]

@@ -303,7 +303,7 @@ fn initialize_response(server_schema_hash: &str) -> String {
                 "extensionHost": false,
                 "connectors": false,
                 "plugins": false,
-                "marketplace": false,
+                "extensions": false,
                 "mcp": false,
                 "mcpOAuth": false,
                 "contracts": {}

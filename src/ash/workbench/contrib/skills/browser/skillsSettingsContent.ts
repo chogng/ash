@@ -9,7 +9,7 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID } from '../../../../platform/marketplace/common/marketplaceService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IPromptsService, type SkillManagementSnapshot } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -42,7 +42,7 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 
 	constructor(container: HTMLElement,
 		@IPromptsService private readonly skills: IPromptsService,
-		@IMarketplaceService marketplace: IMarketplaceService,
+		@IExtensionManagementService extensionManagement: IExtensionManagementService,
 		@ICommandService private readonly commands: ICommandService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -55,7 +55,7 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 		this.domNode.className = 'ash-skills';
 		this._register(toDisposable(() => this.domNode.remove()));
 		const actions = h(document, 'div'); actions.className = 'skills-actions';
-		actions.append(this.button(localize('skills.marketplace', 'Get skills from Marketplace'), async () => { await this.commands.executeCommand(OPEN_MARKETPLACE_COMMAND_ID, { capabilityKind: 'skill' }); }), this.button(localize('skills.refresh', 'Refresh'), () => this.load()), this.button(localize('skills.helpButton', 'Help'), () => this.showHelp()));
+		actions.append(this.button(localize('skills.extensions', 'Get skills from Extensions'), async () => { await this.commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { capabilityKind: 'skill' }); }), this.button(localize('skills.refresh', 'Refresh'), () => this.load()), this.button(localize('skills.helpButton', 'Help'), () => this.showHelp()));
 		this.list = h(document, 'select'); this.list.size = 8;
 		const label = h(document, 'label'); const caption = h(document, 'span'); caption.id = generateUuid(); caption.textContent = localize('skills.title', 'Skills'); this.list.setAttribute('aria-labelledby', caption.id); label.append(caption, this.list);
 		this.detail = h(document, 'pre'); this.detail.tabIndex = 0; this.detail.setAttribute('aria-label', localize('skills.details', 'Skill details'));
@@ -68,7 +68,7 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 			if (this.configuration.getValue<boolean>('accessibility.verbosity.skills')) this.list.setAttribute('aria-description', localize('skills.hint', 'Skills. Use arrow keys to select a skill, Tab to navigate, and Alt+F1 for help.'));
 			else this.list.removeAttribute('aria-description');
 		}));
-		this._register(marketplace.onDidChangeInstalled(() => { this.snapshot = undefined; if (this.visible && !this.working) { void this.run(() => this.load()); } }));
+		this._register(extensionManagement.onDidChangeInstalled(() => { this.snapshot = undefined; if (this.visible && !this.working) { void this.run(() => this.load()); } }));
 		this._register(skills.onDidChangeSkills(() => { this.snapshot = undefined; if (this.visible && !this.working) { void this.run(() => this.load()); } }));
 		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
 		scopedContext.createKey('skillsSettingsFocused', true);
@@ -79,7 +79,7 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 				const focused = this.domNode.ownerDocument.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
 				return new AccessibleContentProvider(AccessibleViewProviderId.Skills, { type: AccessibleViewType.Help },
-					() => localize('skills.help', 'This view loads skill metadata and diagnostics. Select a skill by name and source to enable or disable it. Use $name in chat to invoke an enabled skill. Get skills opens Marketplace, including skills bundled in Plugins. Package installation and removal are managed there. If configuration changes elsewhere, refresh before changing enablement again. Use Tab and Shift+Tab to navigate, arrow keys to select a skill, and Escape to close help.'), () => focused.focus(), AccessibilityVerbositySettingId.Skills);
+					() => localize('skills.help', 'This view loads skill metadata and diagnostics. Select a skill by name and source to enable or disable it. Use $name in chat to invoke an enabled skill. Get skills opens Extensions, including skills bundled in Plugins. Package installation and removal are managed there. If configuration changes elsewhere, refresh before changing enablement again. Use Tab and Shift+Tab to navigate, arrow keys to select a skill, and Escape to close help.'), () => focused.focus(), AccessibilityVerbositySettingId.Skills);
 			},
 		}));
 		this.applyEnabled();
@@ -128,7 +128,7 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 	private async run(action: () => Promise<void>): Promise<void> { try { await action(); } catch (error) { if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); } } }
 	private async showHelp(): Promise<void> {
 		const focus = this.domNode.ownerDocument.activeElement;
-		await this.dialogs.showMessage({ title: localize('skills.helpTitle', 'Skills help'), severity: DialogSeverity.Info, message: localize('skills.help', 'This view loads skill metadata and diagnostics. Select a skill by name and source to enable or disable it. Use $name in chat to invoke an enabled skill. Get skills opens Marketplace, including skills bundled in Plugins. Package installation and removal are managed there. If configuration changes elsewhere, refresh before changing enablement again. Use Tab and Shift+Tab to navigate, arrow keys to select a skill, and Escape to close help.') });
+		await this.dialogs.showMessage({ title: localize('skills.helpTitle', 'Skills help'), severity: DialogSeverity.Info, message: localize('skills.help', 'This view loads skill metadata and diagnostics. Select a skill by name and source to enable or disable it. Use $name in chat to invoke an enabled skill. Get skills opens Extensions, including skills bundled in Plugins. Package installation and removal are managed there. If configuration changes elsewhere, refresh before changing enablement again. Use Tab and Shift+Tab to navigate, arrow keys to select a skill, and Escape to close help.') });
 		if (focus instanceof HTMLElement && focus.isConnected) { focus.focus(); }
 	}
 	private button(label: string, action: () => Promise<void>): HTMLButtonElement {

@@ -44,7 +44,7 @@ test('display language commands select an installed catalog and clear the prefer
 	}
 });
 
-test('display language command installs a Marketplace catalog before selecting it', async () => {
+test('display language command installs a Extensions catalog before selecting it', async () => {
 	using environment = new LanguageActionEnvironment();
 	try {
 		await environment.localization.whenReady;
@@ -110,7 +110,7 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 			locale: catalog.locale,
 			languageName: catalog.languageName,
 			localizedLanguageName: catalog.localizedLanguageName,
-			source: catalog.locale === 'fr' ? 'marketplace' : 'builtin',
+			source: catalog.locale === 'fr' ? 'extensionManagement' : 'builtin',
 		}));
 	}
 

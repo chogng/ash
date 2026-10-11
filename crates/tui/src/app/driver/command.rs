@@ -206,12 +206,12 @@ impl AppDriver {
                     origin,
                 );
             }
-            AppCommand::Marketplace(command) => {
+            AppCommand::Extensions(command) => {
                 let mut client = self.client.clone();
                 self.requests.spawn_presentation(
                     request_key,
-                    "ash-tui-marketplace",
-                    move || crate::marketplace::execute(&mut client, command),
+                    "ash-tui-extension_packages",
+                    move || crate::extension_packages::execute(&mut client, command),
                     &mut self.app,
                     origin,
                 );

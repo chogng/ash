@@ -1,7 +1,7 @@
 use semver::Version;
 use serde::Deserialize;
 
-use crate::MarketplaceClientError;
+use crate::ExtensionsClientError;
 use crate::UpstreamReference;
 use crate::UpstreamRegistry;
 
@@ -21,7 +21,7 @@ impl CatalogUpstreamReference {
         &self,
         schema_version: u32,
         is_mcp: bool,
-    ) -> Result<(), MarketplaceClientError> {
+    ) -> Result<(), ExtensionsClientError> {
         if schema_version != 2
             || !is_mcp
             || self.name.trim().is_empty()
@@ -32,7 +32,7 @@ impl CatalogUpstreamReference {
                 .as_deref()
                 .is_some_and(|url| !valid_upstream_url(url, false))
         {
-            return Err(MarketplaceClientError::package_untrusted());
+            return Err(ExtensionsClientError::package_untrusted());
         }
         Ok(())
     }

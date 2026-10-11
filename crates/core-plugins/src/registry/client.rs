@@ -1,29 +1,29 @@
 use std::sync::Mutex;
 
 use crate::DownloadPackageRequest;
-use crate::PluginPackagePayload;
-use crate::PluginProvider;
+use crate::ExtensionPackagePayload;
+use crate::ExtensionSource;
 
+use crate::ExtensionsClientError;
 use crate::GetPackageRequest;
-use crate::MarketplaceClientError;
 use crate::PackageDetails;
 use crate::SearchPackagesRequest;
 use crate::SearchPackagesResult;
 use crate::registry::catalog::Catalog;
-use crate::registry::remote::RemoteMarketplaceConfig;
+use crate::registry::remote::RemoteExtensionsConfig;
 
 const DEFAULT_SEARCH_LIMIT: usize = 50;
 const MAX_SEARCH_LIMIT: usize = 200;
 
-/// HTTPS/TUF client for one product-pinned remote Marketplace distribution.
-pub struct MarketplaceRemoteClient {
-    config: RemoteMarketplaceConfig,
+/// HTTPS/TUF client for one product-pinned remote Extensions distribution.
+pub struct ExtensionsRemoteClient {
+    config: RemoteExtensionsConfig,
     catalog: Mutex<Option<Catalog>>,
 }
 
-impl MarketplaceRemoteClient {
+impl ExtensionsRemoteClient {
     /// Creates a lazy remote client without making App Server startup depend on network access.
-    pub fn new(config: RemoteMarketplaceConfig) -> Self {
+    pub fn new(config: RemoteExtensionsConfig) -> Self {
         Self {
             config,
             catalog: Mutex::new(None),
@@ -32,12 +32,12 @@ impl MarketplaceRemoteClient {
 
     fn with_catalog<T>(
         &self,
-        operation: impl FnOnce(&Catalog) -> Result<T, MarketplaceClientError>,
-    ) -> Result<T, MarketplaceClientError> {
+        operation: impl FnOnce(&Catalog) -> Result<T, ExtensionsClientError>,
+    ) -> Result<T, ExtensionsClientError> {
         let mut catalog = self
             .catalog
             .lock()
-            .map_err(|_| MarketplaceClientError::unavailable())?;
+            .map_err(|_| ExtensionsClientError::unavailable())?;
         if catalog.is_none() {
             *catalog = Some(Catalog::load_remote(self.config.clone())?);
         }
@@ -45,17 +45,18 @@ impl MarketplaceRemoteClient {
     }
 }
 
-impl PluginProvider for MarketplaceRemoteClient {
+impl ExtensionSource for ExtensionsRemoteClient {
     fn search(
         &self,
         request: SearchPackagesRequest,
-    ) -> Result<SearchPackagesResult, MarketplaceClientError> {
+    ) -> Result<SearchPackagesResult, ExtensionsClientError> {
         // This signed catalog's package format has no VSIX/editorExtension capability.
         // An explicit Open VSX filter must not make an unrelated registry network request.
         if request.capability_kind == Some(crate::CapabilityKind::EditorExtension)
             || request.package_type.as_deref() == Some("editorExtension")
         {
             return Ok(SearchPackagesResult {
+                unavailable_sources: Vec::new(),
                 packages: Vec::new(),
             });
         }
@@ -65,6 +66,7 @@ impl PluginProvider for MarketplaceRemoteClient {
             .clamp(1, MAX_SEARCH_LIMIT);
         self.with_catalog(|catalog| {
             Ok(SearchPackagesResult {
+                unavailable_sources: Vec::new(),
                 packages: catalog
                     .search(&request, limit)?
                     .into_iter()
@@ -77,7 +79,7 @@ impl PluginProvider for MarketplaceRemoteClient {
         })
     }
 
-    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, MarketplaceClientError> {
+    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
         let package_id = package_id(&request.package_id)?;
         self.with_catalog(|catalog| {
             let mut details = catalog
@@ -91,11 +93,11 @@ impl PluginProvider for MarketplaceRemoteClient {
     fn download(
         &self,
         request: DownloadPackageRequest,
-    ) -> Result<Box<dyn PluginPackagePayload>, MarketplaceClientError> {
+    ) -> Result<Box<dyn ExtensionPackagePayload>, ExtensionsClientError> {
         let package_id = package_id(&request.package_id)?;
         self.with_catalog(|catalog| {
             let release = catalog.resolve_fresh(&package_id, request.version.as_deref())?;
-            Ok(Box::new(catalog.materialize(&release)?) as Box<dyn PluginPackagePayload>)
+            Ok(Box::new(catalog.materialize(&release)?) as Box<dyn ExtensionPackagePayload>)
         })
     }
 }
@@ -104,15 +106,15 @@ pub(super) fn plugin_name(package_id: &str) -> String {
     package_id.replace('/', ".")
 }
 
-fn package_id(plugin_name: &str) -> Result<String, MarketplaceClientError> {
+fn package_id(plugin_name: &str) -> Result<String, ExtensionsClientError> {
     let (publisher, name) = plugin_name.split_once('.').ok_or_else(|| {
-        MarketplaceClientError::invalid_request(
+        ExtensionsClientError::invalid_request(
             "this registry requires a publisher-qualified plugin name",
         )
     })?;
     ash_plugin::PluginPackageId::new(format!("{publisher}/{name}"))
         .map(|id| id.to_string())
-        .map_err(|_| MarketplaceClientError::invalid_request("invalid registry plugin name"))
+        .map_err(|_| ExtensionsClientError::invalid_request("invalid registry plugin name"))
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@
 > 跨 crate 的选择语义、context、Plugin/MCP 组合与后续阶段由
 > [`docs/skills.md`](../../docs/skills.md) 维护。
 
-`ash-skills` 验证 built-in/user/Directory/Plugin/Marketplace source root，流式读取并严格校验 Agent Skills
+`ash-skills` 验证 built-in/user/Directory/Plugin/Extensions source root，流式读取并严格校验 Agent Skills
 `SKILL.md` frontmatter，计算完整文件 SHA-256 digest，并发布 deterministic、immutable catalog
 snapshot。显式选择后，`SkillCatalog::activate` 还会通过同一个受控 root 完整读取 exact
 `SKILL.md`，重新绑定 file identity 与 digest，并返回 `ActivatedSkill`。`SkillCatalog::read_resource`
@@ -34,7 +34,7 @@ Catalog scanner 通过 [`ash-file-identity`](../file-identity/README.md) 从已�
 | ---------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `ash_protocol::SkillName`                | Agent Skills 的 lowercase ASCII、数字、单连字符、1–64 字符 identity                           | display alias、Unicode normalization           |
 | `ash_protocol::{SkillSourceId, SkillId}` | 跨 config/catalog/App Server 的 source-qualified stable identity                              | raw host path、版本选择                        |
-| `SkillSourceRoot`                        | host 注入并验证的 built-in/user/Directory collection 或 exact Plugin/Marketplace Skill handle | config resolution、安装、immutability          |
+| `SkillSourceRoot`                        | host 注入并验证的 built-in/user/Directory collection 或 exact Plugin/Extensions Skill handle | config resolution、安装、immutability          |
 | `SkillCatalog::discover`                 | 对受控 roots 做首次 bounded metadata scan                                                     | arbitrary path search、recursive source search |
 | `SkillCatalog::refresh`                  | 重扫并仅在 visible projection 改变时 bump generation                                          | filesystem watching、safe-point scheduling     |
 | `SkillCatalogSnapshot::list/read`        | deterministic metadata-only read API                                                          | `SKILL.md` body/content API                    |
@@ -118,7 +118,7 @@ entries 按 exact `SkillId` 排序，同名不同 source 同时保留。refresh 
 digest、compatibility、availability 与 diagnostics 完全不变，会复用同一个 `Arc` snapshot 和
 generation。任何 consumer-visible 变化才发布下一 generation。
 
-当前 `ash-skills-extension` 组合 built-in/user/active Directory 以及 Plugin/Marketplace 动态 roots、订阅 watcher，并叠加
+当前 `ash-skills-extension` 组合 built-in/user/active Directory 以及 Plugin/Extensions 动态 roots、订阅 watcher，并叠加
 per-Skill enablement；App Server 以 `skills/list`/`skills/changed` 投影其 snapshot。共享 identity
 位于 `ash-protocol`，本 crate 只 re-export，不能重新定义一套。
 

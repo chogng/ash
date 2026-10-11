@@ -48,7 +48,7 @@ and Cargo retaining compilation. Gulp is not required for these tasks.
     │   └── yaml/package.json
     ├── product-services/
     │   ├── product-services.json      # official service endpoints
-    │   └── marketplace-root.json      # public pinned TUF root
+    │   └── extensions-root.json      # public pinned TUF root
     └── licenses/
         ├── bubblewrap/COPYING        # Linux only
         ├── node/LICENSE                # packaged-node variant only

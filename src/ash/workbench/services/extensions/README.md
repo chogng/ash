@@ -28,10 +28,10 @@ retirement, the complete TS SDK, and per-extension authorization are not complet
 [direction and current status](../../../../../docs/editor-extensions.md#0-确定的产品方向).
 
 Open VSX packages enter this same declarative loader after Rust verifies and installs their VSIX.
-The Marketplace source remains part of the extension identity. This loader consumes supported
+The Extensions source remains part of the extension identity. This loader consumes supported
 manifest contributions and resources; it does not execute the downloaded `main` or `browser` entries.
 The server excludes debugger commands and executable entries from this source's catalog manifest.
-Both static contribution loaders refresh on Marketplace changes, including removal and updates.
+Both static contribution loaders refresh on Extensions changes, including removal and updates.
 
 ## Ownership
 
@@ -66,7 +66,7 @@ UI are not activated by this loader.
 
 Built-in `customEditors` declarations can select product renderers registered through
 `registerBuiltinEditorPane`. Both the package ID and view type must match an existing factory;
-user and Marketplace packages cannot select these factories. The loader prepares filename/MIME
+user and Extensions packages cannot select these factories. The loader prepares filename/MIME
 selectors and localized editor labels before replacing the package's pane registrations as one
 batch. A rejected batch preserves the previous available editors; removal or window shutdown
 releases the registrations. This mechanism activates the packaged `media-preview` editors and

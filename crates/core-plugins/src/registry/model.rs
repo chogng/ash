@@ -134,6 +134,8 @@ pub struct SearchPackagesRequest {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SearchPackagesResult {
+    #[serde(default)]
+    pub unavailable_sources: Vec<String>,
     pub packages: Vec<PackageSummary>,
 }
 
@@ -340,7 +342,7 @@ pub struct ResourceContent {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum MarketplaceErrorCode {
+pub enum ExtensionsErrorCode {
     InvalidRequest,
     MethodNotFound,
     PackageNotFound,

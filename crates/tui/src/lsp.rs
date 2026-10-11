@@ -16,9 +16,9 @@ use crate::widgets::search_box::SearchBoxModel;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
 use ash_app_server_protocol::protocol::environment::SessionDirSelector;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsCapabilityKindDto;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsSearchParams;
 use ash_app_server_protocol::protocol::language::LanguageServerDescriptorDto;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceCapabilityKindDto;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams;
 use crossterm::event::KeyEventKind;
 use std::collections::BTreeMap;
 
@@ -76,7 +76,7 @@ enum Input {
 #[derive(Debug)]
 pub(crate) enum Outcome {
     Command(Command),
-    Marketplace(crate::marketplace::Command),
+    Extensions(crate::extension_packages::Command),
     Consumed,
     Dismiss,
 }
@@ -101,7 +101,7 @@ impl Panel {
             &mut available,
             &mut actions,
             "find",
-            "Find language servers in Marketplace",
+            "Find language servers in Extensions",
             "Match the exact language route in the package manifest",
             Action::Find,
         );
@@ -296,10 +296,10 @@ impl Panel {
                 return Outcome::Consumed;
             }
             return match self.input.as_ref().unwrap() {
-                Input::Language => Outcome::Marketplace(crate::marketplace::Command::Browse(
-                    MarketplaceSearchParams {
+                Input::Language => Outcome::Extensions(crate::extension_packages::Command::Browse(
+                    ExtensionsSearchParams {
                         language_id: Some(text),
-                        capability_kind: Some(MarketplaceCapabilityKindDto::Executable),
+                        capability_kind: Some(ExtensionsCapabilityKindDto::Executable),
                         ..Default::default()
                     },
                 )),
@@ -322,10 +322,10 @@ impl Panel {
             }
             ListSelectionOutcome::Activate(Action::Find) => {
                 if let Some(language_id) = &self.page.scope.language_id {
-                    return Outcome::Marketplace(crate::marketplace::Command::Browse(
-                        MarketplaceSearchParams {
+                    return Outcome::Extensions(crate::extension_packages::Command::Browse(
+                        ExtensionsSearchParams {
                             language_id: Some(language_id.clone()),
-                            capability_kind: Some(MarketplaceCapabilityKindDto::Executable),
+                            capability_kind: Some(ExtensionsCapabilityKindDto::Executable),
                             ..Default::default()
                         },
                     ));

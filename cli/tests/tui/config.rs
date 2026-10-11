@@ -371,15 +371,15 @@ fn wait_for_config(fixture: &Fixture, expected: &str) {
 }
 
 #[test]
-fn actual_tui_marketplace_and_lsp_commands() {
+fn actual_tui_extensions_and_lsp_commands() {
     let fixture = Fixture::new()
-        .with_product_services(serde_json::json!({"schemaVersion":2,"marketplaces":[]}));
+        .with_product_services(serde_json::json!({"schemaVersion":3,"extensionSources":[]}));
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     fixture.append_config("\n[languageServers.servers.fixture-lsp]\nmode = \"disabled\"\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("? for shortcuts");
-    process.submit("/marketplace");
+    process.submit("/extensions");
     process.wait_for_screen("No packages in this view");
     process.escape();
     process.escape();
@@ -390,7 +390,7 @@ fn actual_tui_marketplace_and_lsp_commands() {
     process.escape();
     process.wait_for_screen("? for shortcuts");
     process.submit("/lsp rust");
-    process.wait_for_screen("Find language servers in Marketplace");
+    process.wait_for_screen("Find language servers in Extensions");
     process.tab();
     process.wait_for_screen("fixture-lsp");
     process.enter();
@@ -398,7 +398,7 @@ fn actual_tui_marketplace_and_lsp_commands() {
     process.down();
     process.enter();
     wait_for_config(&fixture, "mode = \"enabled\"");
-    process.wait_for_screen("Find language servers in Marketplace");
+    process.wait_for_screen("Find language servers in Extensions");
     process.escape();
     process.submit("/skills");
     process.wait_for_stable_screen("create-instructions");

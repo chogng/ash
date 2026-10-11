@@ -773,7 +773,7 @@ test.describe('Manage menu', () => {
 		await expect(page.locator('.ash-keybindings-editor')).toBeVisible();
 
 		await select('Extensions');
-		await expect(page.locator('.ash-marketplace')).toBeVisible();
+		await expect(page.locator('.ash-extensions')).toBeVisible();
 
 		await select('Run Task...');
 		if (target.kind === 'browser' && target.appServerMode === 'required') {

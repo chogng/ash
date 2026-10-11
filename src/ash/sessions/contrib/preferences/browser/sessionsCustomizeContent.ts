@@ -3,13 +3,13 @@ import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/t
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import type { MarketplaceOpenOptions } from '../../../../platform/marketplace/common/marketplaceService.js';
+import type { ExtensionsOpenOptions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AICustomizationManagementEditorInput } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
-import { MarketplaceContent } from '../../../../workbench/contrib/marketplace/browser/marketplaceViewPane.js';
+import { ExtensionsContent } from '../../../../workbench/contrib/extensions/browser/extensionsViewlet.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
 import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
@@ -32,7 +32,7 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 	private activeTab: CustomizeTab = 'settings';
 	private query = new SettingsSearchQuery('');
 	private skills: SkillsSettingsContent | undefined;
-	private plugins: MarketplaceContent | undefined;
+	private plugins: ExtensionsContent | undefined;
 	private hooks: SettingsSectionRenderer | undefined;
 
 	constructor(container: HTMLElement, private readonly closeSettings: () => Promise<void>, private readonly showEditor: () => void,
@@ -52,7 +52,7 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 		this.panel.setAttribute('role', 'tabpanel');
 		this.tabItems = [
 			{ id: 'settings', value: 'settings', label: localize('sessions.customize.settings', 'Settings'), tabId: 'ash-sessions-customize-settings', panelId: this.panel.id },
-			{ id: 'plugins', value: 'plugins', label: localize('sessions.settings.plugins', 'Plugins'), tabId: 'ash-sessions-customize-plugins', panelId: this.panel.id },
+			{ id: 'plugins', value: 'plugins', label: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), tabId: 'ash-sessions-customize-plugins', panelId: this.panel.id },
 			{ id: 'skills', value: 'skills', label: localize('skills.title', 'Skills'), tabId: 'ash-sessions-customize-skills', panelId: this.panel.id },
 			{ id: 'hooks', value: 'hooks', label: localize('sessions.customize.hooks', 'Hooks'), tabId: 'ash-sessions-customize-hooks', panelId: this.panel.id },
 		];
@@ -74,7 +74,7 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 		this.render();
 	}
 
-	public async openPlugins(options: MarketplaceOpenOptions): Promise<void> {
+	public async openExtensions(options: ExtensionsOpenOptions): Promise<void> {
 		this.selectTab('plugins');
 		await this.plugins!.open(options);
 	}
@@ -100,7 +100,7 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 			this._register(this.skills.onDidChange(() => this.changed.fire()));
 		}
 		if (isActive('plugins') && !this.plugins) {
-			this.plugins = this._register(this.instantiation.createInstance(MarketplaceContent, this.panel, { mode: 'installed' }));
+			this.plugins = this._register(this.instantiation.createInstance(ExtensionsContent, this.panel, { mode: 'installed', beforeOpenEditor: async () => { await this.closeSettings(); this.showEditor(); } }));
 			this._register(this.plugins.onDidChange(() => this.changed.fire()));
 		}
 		if (isActive('hooks') && !this.hooks) {

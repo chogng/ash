@@ -11,7 +11,7 @@ use crate::ManagedNodeRuntime;
 use crate::provider::canonical_executable;
 use crate::provider::canonical_regular_file;
 
-/// A Marketplace-verified Node language-server capability.
+/// A Extensions-verified Node language-server capability.
 pub struct NodePackageLanguageServerProvider {
     id: String,
     languages: Vec<String>,
@@ -42,7 +42,7 @@ impl NodePackageLanguageServerProvider {
             languages,
             entrypoint: canonical_regular_file(
                 entrypoint.as_ref(),
-                "Marketplace language-server entrypoint",
+                "Extensions language-server entrypoint",
             )?,
             node,
         })

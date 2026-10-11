@@ -153,7 +153,7 @@ pub(crate) enum CommandPanel {
     Config(ConfigEditor),
     Connectors(ListSelection<ConnectorSelectionAction>),
     Keymap(KeymapEditor),
-    Marketplace(crate::marketplace::Panel),
+    Extensions(crate::extension_packages::Panel),
     Lsp(crate::lsp::Panel),
     Mcp(ListSelection<McpSelectionAction>),
     Hooks(crate::hooks::Panel),
@@ -182,7 +182,7 @@ pub(crate) enum CommandPanelOutcome {
     Config(ConfigEditorOutcome),
     Connectors(ConnectorSelectionAction),
     Keymap(KeymapEditorOutcome),
-    Marketplace(crate::marketplace::Command),
+    Extensions(crate::extension_packages::Command),
     Lsp(crate::lsp::Outcome),
     Mcp(McpSelectionAction),
     Hooks(crate::hooks::Outcome),
@@ -213,7 +213,7 @@ impl CommandPanel {
             Self::Config(content) => content,
             Self::Connectors(content) => content,
             Self::Keymap(content) => content,
-            Self::Marketplace(content) => content,
+            Self::Extensions(content) => content,
             Self::Lsp(content) => content,
             Self::Mcp(content) => content,
             Self::Hooks(content) => content,
@@ -245,7 +245,7 @@ impl CommandPanel {
             Self::Config(content) => content,
             Self::Connectors(content) => content,
             Self::Keymap(content) => content,
-            Self::Marketplace(content) => content,
+            Self::Extensions(content) => content,
             Self::Lsp(content) => content,
             Self::Mcp(content) => content,
             Self::Hooks(content) => content,
@@ -498,8 +498,8 @@ impl CommandPanel {
             Self::Memories(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Memories)
             }
-            Self::Marketplace(content) => {
-                map_selection(content.handle_key(key), CommandPanelOutcome::Marketplace)
+            Self::Extensions(content) => {
+                map_selection(content.handle_key(key), CommandPanelOutcome::Extensions)
             }
             Self::Lsp(content) => CommandPanelOutcome::Lsp(content.handle_key(key)),
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
@@ -591,7 +591,7 @@ impl CommandPanel {
         if let list_selection::ListSelectionPointerTarget::Tab(_) = target
             && self.extension_tab().is_some()
         {
-            if matches!(self, Self::Marketplace(panel) if !panel.can_switch_tabs()) {
+            if matches!(self, Self::Extensions(panel) if !panel.can_switch_tabs()) {
                 return CommandPanelOutcome::Consumed;
             }
             let previous = self.extension_tab();
@@ -791,7 +791,7 @@ impl CommandPanel {
     fn extension_tab(&self) -> Option<crate::extensions::Tab> {
         if !matches!(
             self,
-            Self::Skills(_) | Self::Mcp(_) | Self::Hooks(_) | Self::Marketplace(_)
+            Self::Skills(_) | Self::Mcp(_) | Self::Hooks(_) | Self::Extensions(_)
         ) {
             return None;
         }

@@ -8,7 +8,7 @@ use crate::widgets::list_selection::ListSelectionModel;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Tab {
     Skills,
-    Marketplace,
+    Extensions,
     Mcp,
     Hooks,
     Plugins,
@@ -17,7 +17,7 @@ pub(crate) enum Tab {
 impl Tab {
     pub(crate) const ALL: [Self; 5] = [
         Self::Skills,
-        Self::Marketplace,
+        Self::Extensions,
         Self::Mcp,
         Self::Hooks,
         Self::Plugins,
@@ -30,7 +30,7 @@ impl Tab {
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Skills => "Skills",
-            Self::Marketplace => "Marketplace",
+            Self::Extensions => "Extensions",
             Self::Mcp => "MCP",
             Self::Hooks => "Hooks",
             Self::Plugins => "Plugins",
@@ -40,7 +40,7 @@ impl Tab {
     pub(crate) fn command(self) -> TuiSlashCommandAction {
         match self {
             Self::Skills => TuiSlashCommandAction::Skills,
-            Self::Marketplace => TuiSlashCommandAction::Marketplace,
+            Self::Extensions => TuiSlashCommandAction::Extensions,
             Self::Mcp => TuiSlashCommandAction::Mcp,
             Self::Hooks => TuiSlashCommandAction::Hooks,
             Self::Plugins => TuiSlashCommandAction::Plugins,

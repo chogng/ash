@@ -95,4 +95,4 @@ just rust-warnings ash-connectors-extension
 - 现有测试覆盖连接代次、授权失效、目录发现、SQLite 恢复与命令重放、凭据清理、OAuth 和 device flow。
 - MCP 调用边界由 `ash-mcp-extension` 测试覆盖；产品请求与通知由 App Server 的 `connector_operations_tests` 覆盖。
 
-- `load_connector_declaration` 通过所属执行环境的 `FileSystem` 读取有界声明；Marketplace 通过同一入口绑定服务定义。
+- `load_connector_declaration` 通过所属执行环境的 `FileSystem` 读取有界声明；Extensions 通过同一入口绑定服务定义。

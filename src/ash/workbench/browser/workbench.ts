@@ -250,9 +250,9 @@ import { GitHubConnectionService } from "../services/accounts/browser/gitHubConn
 import { IGitHubConnectionService } from "../services/accounts/common/gitHubConnectionService.js";
 import { IPluginService } from "../../platform/plugins/common/pluginService.js";
 import { AppServerPluginService } from "../services/plugins/browser/appServerPluginService.js";
-import { IMarketplaceService } from "../../platform/marketplace/common/marketplaceService.js";
-import { AppServerMarketplaceService } from "../services/marketplace/browser/appServerMarketplaceService.js";
-import { MarketplaceLanguagePackService } from "../../platform/languagePacks/browser/marketplaceLanguagePackService.js";
+import { IExtensionManagementService } from "../../platform/extensionManagement/common/extensionManagementService.js";
+import { AppServerExtensionManagementService } from "../services/extensionManagement/browser/appServerExtensionManagementService.js";
+import { ExtensionsLanguagePackService } from "../../platform/languagePacks/browser/extensionsLanguagePackService.js";
 import { ILanguagePackService } from "../../platform/languagePacks/common/languagePacksService.js";
 import { ILocaleService } from "../services/localization/common/locale.js";
 import { WorkbenchLocaleService } from "../services/localization/browser/localeService.js";
@@ -718,8 +718,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IIssueReporterService, api.issueReporter);
 		services.registerInstance(IGitHubService, api.github);
 		services.registerInstance(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));
-		const marketplaceService = this._register(new AppServerMarketplaceService(api.marketplace, api.events));
-		services.registerInstance(IMarketplaceService, marketplaceService);
+		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
+		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		services.registerInstance(IAppServerSkillApi, api.skills);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IInstructionService, api.instructions);
@@ -733,7 +733,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
 
-		const languagePackService = this._register(services.createInstance(MarketplaceLanguagePackService, builtinLanguagePackCatalogs));
+		const languagePackService = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const localizationService = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localizationService);

@@ -2,7 +2,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 use url::Url;
 
-use super::RemoteMarketplaceConfig;
+use super::RemoteExtensionsConfig;
 
 #[test]
 fn production_registry_requires_https_and_a_trusted_root() {
@@ -11,11 +11,11 @@ fn production_registry_requires_https_and_a_trusted_root() {
     let targets = Url::parse("https://marketplace.example/targets/").unwrap();
 
     assert!(
-        RemoteMarketplaceConfig::new(metadata, targets.clone(), b"root".to_vec(), cache.path())
+        RemoteExtensionsConfig::new(metadata, targets.clone(), b"root".to_vec(), cache.path())
             .is_err()
     );
     assert!(
-        RemoteMarketplaceConfig::new(
+        RemoteExtensionsConfig::new(
             Url::parse("https://marketplace.example/metadata/").unwrap(),
             targets,
             Vec::new(),
@@ -30,7 +30,7 @@ fn production_registry_exposes_only_pinned_remote_endpoints() {
     let cache = TempDir::new().unwrap();
     let metadata = Url::parse("https://marketplace.example/metadata/").unwrap();
     let targets = Url::parse("https://marketplace.example/targets/").unwrap();
-    let config = RemoteMarketplaceConfig::new(
+    let config = RemoteExtensionsConfig::new(
         metadata.clone(),
         targets.clone(),
         b"root".to_vec(),

@@ -1,6 +1,6 @@
 import { Event } from '../../../../../base/common/event.js';
-import { IMarketplaceService } from '../../../../../platform/marketplace/common/marketplaceService.js';
-import { MarketplaceLanguagePackService } from '../../../../../platform/languagePacks/browser/marketplaceLanguagePackService.js';
+import { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { ExtensionsLanguagePackService } from '../../../../../platform/languagePacks/browser/extensionsLanguagePackService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacksService.js';
@@ -28,9 +28,9 @@ export function createTestLocaleService(configuration: IConfigurationService, la
 	return services.createInstance(WorkbenchLocaleService);
 }
 
-export function createTestLanguagePacks(marketplace: IMarketplaceService): MarketplaceLanguagePackService {
+export function createTestLanguagePacks(extensionManagement: IExtensionManagementService): ExtensionsLanguagePackService {
 	using services = new InstantiationService();
-	services.registerInstance(IMarketplaceService, marketplace);
+	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, { read: async () => undefined, write: async () => { } });
-	return services.createInstance(MarketplaceLanguagePackService, builtinLanguagePackCatalogs);
+	return services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs);
 }

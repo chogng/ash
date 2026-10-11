@@ -1,4 +1,4 @@
-"""Release-stage regression tests use real optimized executables, not mock debug files."""
+"""Release symbol tests use real optimized executables and offline dump snapshots."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import sys
 import tarfile
 import tempfile
@@ -219,9 +220,9 @@ class ReleaseSymbolsTests(unittest.TestCase):
         self.assertFalse(any(path.is_symlink() for path in self.store.root.rglob("*")))
 
     @unittest.skipUnless(
-        sys.platform == "darwin", "Controlled Mach-O core capture requires macOS LLDB"
+        sys.platform == "darwin", "Mach-O core import requires macOS LLDB"
     )
-    def test_real_abort_core_resolves_first_party_frames_and_keeps_external_frames(
+    def test_offline_core_resolves_first_party_frames_and_keeps_external_frames(
         self,
     ):
         module = self.collect()
@@ -238,34 +239,34 @@ class ReleaseSymbolsTests(unittest.TestCase):
             }
         ]
         core = self.work / "crash.core"
-        run(
-            [
-                tool("lldb"),
-                "--no-lldbinit",
-                "--batch",
-                str(self.staged),
-                "-o",
-                "settings set target.disable-aslr false",
-                "-o",
-                "run --abort",
-                "-k",
-                f"process save-core -s stack {core}",
-            ]
-        )
+        # Exercise the real debugger importer without live attachment or macOS
+        # authentication. Unwind metadata and symbols come from the optimized image.
+        core.write_bytes(_macho_core(self.staged, module, self.address))
         self.assertTrue(core.is_file())
         report = load_report(core, self.work, self.staged, manifest)
+        self.assertEqual(
+            report["frames"][0]["pc"], 0x7000000000 + self.address - module["imageBase"]
+        )
+        first_module = report["modules"][report["frames"][0]["module"]]
+        self.assertEqual(first_module["id"], module["id"])
         result = symbolicate(report, self.store.root, manifest, self.work)
         symbols = [
             symbol for frame in result["frames"] for symbol in frame.get("symbols", [])
         ]
         self.assertTrue(
             any(
-                "crash_site" in symbol["FunctionName"] and symbol["Line"] > 0
+                "ash_symbol_fixture" in symbol["FunctionName"] and symbol["Line"] > 0
                 for symbol in symbols
             ),
             result,
         )
-        self.assertTrue(any("unresolved" in frame for frame in result["frames"]))
+        self.assertTrue(
+            any(
+                frame["pc"] == 0x6000000040 and "unresolved" in frame
+                for frame in result["frames"]
+            ),
+            result,
+        )
         self.assertFalse(result["complete"])
 
     def test_package_hashes_are_computed_after_stripping_and_archive_is_verified(self):
@@ -366,6 +367,69 @@ class ReleaseSymbolsTests(unittest.TestCase):
         )
         self.assertEqual(codeview(rsds)["pdbName"], "renamed_symbols.pdb")
         self.assertTrue(codeview(rsds)["id"].endswith("-3"))
+
+
+def _macho_core(executable: Path, module: dict, address: int) -> bytes:
+    """A skinny Mach-O core with one real image and an unknown return address."""
+    image_base = 0x7000000000
+    stack_base = 0x5000000000
+    external_pc = 0x6000000040
+    pc = image_base + address - module["imageBase"]
+    sp, fp = stack_base + 0x100, stack_base + 0x120
+    if module["arch"] == "aarch64":
+        cpu = 0x0100000C
+        registers = struct.pack("<33QII", *([0] * 29), fp, external_pc, sp, pc, 0, 0)
+        flavor, count = 6, 68  # ARM_THREAD_STATE64
+    else:
+        cpu = 0x01000007
+        registers = [0] * 21
+        registers[6], registers[7], registers[16] = fp, sp, pc
+        registers[17], registers[18] = 0x202, 0x2B
+        registers = struct.pack("<21Q", *registers)
+        flavor, count = 4, 42  # x86_THREAD_STATE64
+    thread = struct.pack("<4I", 4, 16 + len(registers), flavor, count) + registers
+    commands_size = len(thread) + 72 + 40
+    note_offset = 32 + commands_size
+    path = os.fsencode(executable.resolve()) + b"\0"
+    # LC_NOTE all-image-infos version 1 stores file offsets, not memory pointers.
+    note = struct.pack("<IIQII", 1, 1, note_offset + 24, 48, 0)
+    note += (
+        struct.pack(
+            "<Q16sQQII",
+            note_offset + 24 + 48,
+            bytes.fromhex(module["id"]),
+            image_base,
+            2**64 - 1,
+            0,
+            0,
+        )
+        + path
+    )
+    stack_offset = (note_offset + len(note) + 4095) // 4096 * 4096
+    stack = bytearray(4096)
+    for offset in range(0x100, 0x148, 8):
+        struct.pack_into("<Q", stack, offset, external_pc)
+    struct.pack_into("<Q", stack, 0x120, 0)
+    segment = struct.pack(
+        "<II16sQQQQiiII",
+        0x19,
+        72,
+        b"__STACK",
+        stack_base,
+        len(stack),
+        stack_offset,
+        len(stack),
+        3,
+        3,
+        0,
+        0,
+    )
+    note_command = struct.pack(
+        "<II16sQQ", 0x31, 40, b"all image infos", note_offset, len(note)
+    )
+    header = struct.pack("<8I", 0xFEEDFACF, cpu, 0, 4, 3, commands_size, 0, 0)
+    data = header + thread + segment + note_command + note
+    return data + bytes(stack_offset - len(data)) + stack
 
 
 if __name__ == "__main__":

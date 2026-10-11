@@ -58,7 +58,7 @@ struct State {
     subscribers: Vec<mpsc::Sender<u64>>,
 }
 
-/// Profile-owned execution consent for exact Marketplace editor artifacts. Package installation
+/// Profile-owned execution consent for exact Extensions editor artifacts. Package installation
 /// and capability leases remain with Manager; this owner never mutates the verified package.
 pub struct EditorExtensionPolicy {
     path: PathBuf,

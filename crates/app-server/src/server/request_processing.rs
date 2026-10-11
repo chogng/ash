@@ -69,8 +69,8 @@ impl RequestLane {
                 | ClientMethod::ProviderProbe
                 | ClientMethod::ProviderModelsList
                 // Catalog I/O can outlive navigation and must not occupy the workers used by Settings reads.
-                | ClientMethod::MarketplaceSearch
-                | ClientMethod::MarketplaceGet
+                | ClientMethod::ExtensionsSearch
+                | ClientMethod::ExtensionsGet
                 | ClientMethod::FsCopy
                 | ClientMethod::FsPasteSystemFiles
                 | ClientMethod::GrepIndexRebuild,

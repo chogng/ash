@@ -10,12 +10,12 @@
 > 图片内容。Code Mode 已完成 exec/wait、V8 cell runtime、durable nested-call broker 和可选 stdio Host；
 > Plugin local content store 已落地，但安装 authority、activation、grant，以及 dynamic owner 断连后的持久化重启
 > 端到端 fixture 仍未完成。
-> Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)
-> Core 调度、approval 与恢复：[`core.md`](core.md)
-> MCP client runtime：[`mcp.md`](mcp.md)
-> Plugin authority：[`plugins.md`](plugins.md)
-> Config 与 runtime snapshot：[`config.md`](config.md)
-> Provider wire adapter：[`ash-api.md`](ash-api.md)
+> Canonical value 与 durable Tool Item：[`protocol.md`](../protocol.md)
+> Core 调度、approval 与恢复：[`core.md`](../core.md)
+> MCP client runtime：[`mcp.md`](../mcp.md)
+> Plugin authority：[`plugins.md`](../plugins.md)
+> Config 与 runtime snapshot：[`config.md`](../config.md)
+> Provider wire adapter：[`ash-api.md`](../ash-api.md)
 
 ## 快速理解
 
@@ -95,7 +95,7 @@ Core durable Tool Call / Tool Result lifecycle
 - model → tool → model loop、approval、并行计划、retry 或 `UnknownOutcome` 决策；
 - Thread/Turn reducer、durable append、Tool Call/Result commit 或 recovery；
 - MCP transport、JSON-RPC session、process supervision、OAuth 或 reconnect；
-- Plugin 安装、启用、grant、版本、digest、marketplace 或 package store；
+- Plugin 安装、启用、grant、版本、digest、Extensions 或 package store；
 - local tool、MCP server、browser、terminal 或 code-mode runtime 的具体 I/O；
 - sandbox、filesystem/network enforcement、credential materialization；
 - provider HTTP DTO、Responses API/Anthropic wire encoding；
@@ -146,7 +146,7 @@ Core durable Tool Call / Tool Result lifecycle
 - Plugin/Connector 已有 typed discovery，Plugin manifest 可声明一个 Connector 到其 MCP contribution
   的绑定；`ash-connectors-extension` 统一拥有连接状态、Plugin 目录转换、SQLite authority 与认证编排，
   ready binding 已接入 MCP/App Server hot composition。local package store、OAuth/refresh/远端 revoke
-  和产品连接入口也已落地；完整状态见 [外部服务连接系统](connectors.md)。Plugin activation
+  和产品连接入口也已落地；完整状态见 [外部服务连接系统](../connectors.md)。Plugin activation
   由 package authority 提供，不能用 executable registry 反向代替；
 - `ash-web-search-extension` 已有 bounded request、executor、JSON HTTP backend 与 App Server opt-in 安装口；
   当前没有默认生产 Search provider 或 credential UI，宿主未注入 backend 时工具完全不可用；
@@ -262,7 +262,7 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - App Server 组合 Tool registry、source runtime、policy 和 Core port。
 
 Sandbox backend 的内部调度、平台 crate 边界和 fail-closed 规则见
-[`sandboxing.md`](sandboxing.md)。这里的 sandbox manager 不是 Core `ToolScheduler`。
+[`sandboxing.md`](../sandboxing.md)。这里的 sandbox manager 不是 Core `ToolScheduler`。
 Action classifier、exact grant 与最终 execution decision 见
 [`guardian.md`](../guardian.md)。
 
@@ -342,7 +342,7 @@ RAII 与 failure contract 由
 `ash-shell-command` 验证并冻结 canonical executable identity；未找到时启用本地工具的
 composition 直接失败。canonical release package 由
 [`build/app_server.py`](../../build/app_server.py) 按
-[`third_party/ripgrep/runtime-lock.json`](../third_party/ripgrep/runtime-lock.json) 下载并校验
+[`third_party/ripgrep/runtime-lock.json`](../../third_party/ripgrep/runtime-lock.json) 下载并校验
 target-specific ripgrep archive，把 executable 放到 `ash-path/rg[.exe]`；源码开发启动仍可使用
 `ASH_RG_PATH` 或 host `PATH`。
 filesystem 与 shell Tool 复用同一个启动时 canonicalized `DirectoryRoot`，CLI 优先采用
@@ -966,7 +966,7 @@ registry snapshot。不能从正在执行的 executor 内部直接修改当前 s
 - 对当前 model/Turn policy 兼容；
 - 尚未直接暴露给当前 invocation 的工具。
 
-它不搜索 marketplace 中未安装的 Plugin，也不触发 install、enable、connect 或 credential flow。
+它不搜索 Extensions 中未安装的 Plugin，也不触发 install、enable、connect 或 credential flow。
 
 ### 12.2 搜索值
 

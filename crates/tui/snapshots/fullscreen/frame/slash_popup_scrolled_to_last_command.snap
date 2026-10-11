@@ -11,7 +11,7 @@ expression: rendered
                                                                                 
   ───────────────────────────────────────────────────────────────────── 38/38   
   /pr                        ask the Agent to create or inspect a pull request │
-  /marketplace               find and install Marketplace packages             │
+  /extensions               find and install Extensions packages             │
   /plugins                   manage installed packages and exact versions      │
   /lsp                       manage language servers and find packages         │
   /voice                     dictate into the current draft; run again to stop │

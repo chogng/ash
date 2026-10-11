@@ -108,7 +108,12 @@ def export(debugger, config_path: str) -> None:
         ids = macho_core_modules(dump)
     else:
         ids = {}
-    target = debugger.CreateTarget(config["executable"])
+    error = lldb.SBError()
+    # Host dependencies are not the crashed process's images. Only verified
+    # product images are supplied; the remaining module identities come from dump bytes.
+    target = debugger.CreateTarget(config["executable"], "", None, False, error)
+    if not error.Success() or not target.IsValid():
+        raise ValueError(f"LLDB could not create dump target: {error}")
     for image in config["images"]:
         target.AddModule(image, None, None)
     error = lldb.SBError()

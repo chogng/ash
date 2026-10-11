@@ -95,7 +95,7 @@ impl IssueServer {
         let secrets = Arc::new(
             ash_secrets::FileSecretStore::open(fixture.profile().join("secrets")).unwrap(),
         );
-        let accounts = github::GitHubOAuth::tokens(http.clone(), secrets);
+        let accounts = github_authentication::GitHubOAuth::tokens(http.clone(), secrets);
         accounts
             .connect_token(
                 "github.com",

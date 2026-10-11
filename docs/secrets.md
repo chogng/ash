@@ -143,7 +143,7 @@ profile file backend 的最低要求：
 - delete 清理 exact value file；
 - error、backup、fixture 和 telemetry 不包含 secret。
 
-`config.toml`、SQLite、Marketplace cache 和普通 JSON 只保存 non-secret reference。daemon 默认的 secret bytes 只进入 `<profile>/secrets/values/` 下的 opaque hashed value file；显式 keyring host 只进入 OS credential facility。两者之间不做 fallback、双写或自动迁移。
+`config.toml`、SQLite、Extensions cache 和普通 JSON 只保存 non-secret reference。daemon 默认的 secret bytes 只进入 `<profile>/secrets/values/` 下的 opaque hashed value file；显式 keyring host 只进入 OS credential facility。两者之间不做 fallback、双写或自动迁移。
 
 ## 6. 生命周期与一致性
 

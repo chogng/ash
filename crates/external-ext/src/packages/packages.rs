@@ -67,8 +67,8 @@ pub enum ExtensionSourceKind {
     BuiltIn,
     /// The package came from an effective, exact Plugin package.
     Plugin,
-    /// The package came from the local Marketplace Manager.
-    Marketplace,
+    /// The package came from the local Extensions Manager.
+    Registry,
     /// The package came from the user's profile extension directory.
     User,
 }
@@ -771,7 +771,7 @@ fn source_kind(kind: &ExtensionRootKind) -> ExtensionSourceKind {
     match kind {
         ExtensionRootKind::BuiltIn => ExtensionSourceKind::BuiltIn,
         ExtensionRootKind::Plugin => ExtensionSourceKind::Plugin,
-        ExtensionRootKind::Marketplace => ExtensionSourceKind::Marketplace,
+        ExtensionRootKind::Registry => ExtensionSourceKind::Registry,
         ExtensionRootKind::User => ExtensionSourceKind::User,
     }
 }

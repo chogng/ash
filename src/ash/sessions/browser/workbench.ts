@@ -37,7 +37,7 @@ import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } 
 import { ILanguageModelsService, LanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
-import { MarketplaceLanguagePackService } from '../../platform/languagePacks/browser/marketplaceLanguagePackService.js';
+import { ExtensionsLanguagePackService } from '../../platform/languagePacks/browser/extensionsLanguagePackService.js';
 import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacksService.js';
 import { ILocaleService } from '../../workbench/services/localization/common/locale.js';
 import { WorkbenchLocaleService } from '../../workbench/services/localization/browser/localeService.js';
@@ -46,8 +46,9 @@ import { WorkbenchLocalizationService } from '../../workbench/services/localizat
 import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
-import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID, type MarketplaceOpenOptions } from '../../platform/marketplace/common/marketplaceService.js';
-import { AppServerMarketplaceService } from '../../workbench/services/marketplace/browser/appServerMarketplaceService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
+import { registerExtensionManagementActions } from '../../workbench/contrib/extensions/browser/extensionsActions.js';
+import { AppServerExtensionManagementService } from '../../workbench/services/extensionManagement/browser/appServerExtensionManagementService.js';
 import { IAppServerRemoteAgentService } from '../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -404,9 +405,9 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IHooksService, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
 		services.registerInstance(IExecutionSettingsService, options.api.executionSettings);
-		const marketplaceService = this._register(new AppServerMarketplaceService(options.api.marketplace, options.api.events));
-		services.registerInstance(IMarketplaceService, marketplaceService);
-		const languagePacks = this._register(services.createInstance(MarketplaceLanguagePackService, builtinLanguagePackCatalogs));
+		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
+		services.registerInstance(IExtensionManagementService, extensionManagementService);
+		const languagePacks = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs));
 		services.registerInstance(ILanguagePackService, languagePacks);
 		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);
@@ -511,10 +512,11 @@ export abstract class Workbench extends Disposable {
 		void configurationService.reloadConfiguration().catch((error: unknown) => console.error("Failed to initialize configuration", error));
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
+		this._register(registerExtensionManagementActions());
 		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, () => { void commandService.executeCommand('sessions.open.code').catch(error => notificationService.error(String(error))); }));
-		this._register(CommandsRegistry.register(OPEN_PLUGINS_COMMAND_ID, () => preferences.open({ section: 'plugins' }, { mode: 'installed' })));
-		this._register(CommandsRegistry.register(OPEN_MARKETPLACE_COMMAND_ID, (_accessor, value: unknown) => {
-			const options = value as MarketplaceOpenOptions | string | undefined;
+		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, () => preferences.open({ section: 'plugins' }, { mode: 'installed' })));
+		this._register(CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, value: unknown) => {
+			const options = value as ExtensionsOpenOptions | string | undefined;
 			return preferences.open({ section: 'plugins' }, typeof options === 'string' ? { query: options.trim() } : { mode: 'browse', ...options });
 		}));
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));

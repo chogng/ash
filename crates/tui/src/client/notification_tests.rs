@@ -3,8 +3,8 @@ use super::map_event;
 use ash_app_server_client::{AppServerEvent, ConnectionCloseReason, ServerNotification};
 use ash_app_server_protocol::protocol::config::ConfigChanged;
 use ash_app_server_protocol::protocol::connectors::ConnectorsChanged;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsChanged;
 use ash_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitStatusResult};
-use ash_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use ash_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
 use ash_app_server_protocol::protocol::plugins::PluginsChanged;
 use ash_app_server_protocol::protocol::session::SessionChanged;
@@ -50,8 +50,8 @@ fn connectors_changed_requests_a_connector_catalog_refresh() {
 #[test]
 fn package_source_changes_request_shared_capability_refresh() {
     for notification in [
-        ServerNotification::MarketplaceChanged(MarketplaceChanged {
-            instance_id: "marketplace-runtime-1".into(),
+        ServerNotification::ExtensionsChanged(ExtensionsChanged {
+            instance_id: "extension_packages-runtime-1".into(),
             generation: 3,
         }),
         ServerNotification::PluginsChanged(PluginsChanged {

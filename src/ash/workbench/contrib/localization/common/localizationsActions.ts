@@ -6,7 +6,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacksService.js';
 import type { LanguagePackInfo, LanguagePackPackage } from '../../../../platform/languagePacks/common/languagePacksService.js';
-import { OPEN_MARKETPLACE_COMMAND_ID } from '../../../../platform/marketplace/common/marketplaceService.js';
+import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
@@ -60,7 +60,7 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 		}));
 		const browseItem: BrowseLanguagesItem = {
 			kind: 'browse',
-			label: localize({ bundle: 'ash.settings', key: 'displayLanguage.installMore' }, 'Install more languages from Marketplace'),
+			label: localize({ bundle: 'ash.settings', key: 'displayLanguage.installMore' }, 'Install more languages from Extensions'),
 		};
 		const search = async (query: string): Promise<void> => {
 			const revision = ++searchRevision;
@@ -100,7 +100,7 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 			picker.hide();
 			void (async () => {
 				if (item.kind === 'browse') {
-					await accessor.get(ICommandService).executeCommand(OPEN_MARKETPLACE_COMMAND_ID, { capabilityKind: 'localization' });
+					await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { capabilityKind: 'localization' });
 					return;
 				}
 				if (item.kind === 'locale') {

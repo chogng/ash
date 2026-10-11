@@ -401,16 +401,16 @@ impl AppDriver {
             }
             match (&command, self.app.panels_mut().command_mut()) {
                 (
-                    AppCommand::Marketplace(_),
-                    Some(super::command_panel::CommandPanel::Marketplace(panel)),
+                    AppCommand::Extensions(_),
+                    Some(super::command_panel::CommandPanel::Extensions(panel)),
                 ) => panel.begin_request(),
                 (AppCommand::Lsp(_), Some(super::command_panel::CommandPanel::Lsp(panel))) => {
                     panel.begin_request()
                 }
-                (AppCommand::Marketplace(_), _) => {
+                (AppCommand::Extensions(_), _) => {
                     self.app
                         .open_command_panel(super::command_panel::CommandPanel::loading(
-                            "Marketplace",
+                            "Extensions",
                             "Loading…",
                         ))
                 }
@@ -486,22 +486,22 @@ impl AppDriver {
                 );
             }
         }
-        if self.refresh.packages && self.requests.is_idle(Some(RequestKey::Marketplace)) {
+        if self.refresh.packages && self.requests.is_idle(Some(RequestKey::Extensions)) {
             self.refresh.packages = false;
-            if let Some(super::command_panel::CommandPanel::Marketplace(panel)) =
+            if let Some(super::command_panel::CommandPanel::Extensions(panel)) =
                 self.app.command_panel()
                 && let Some(command) = panel.refresh()
             {
-                if let Some(super::command_panel::CommandPanel::Marketplace(panel)) =
+                if let Some(super::command_panel::CommandPanel::Extensions(panel)) =
                     self.app.panels_mut().command_mut()
                 {
                     panel.begin_request();
                 }
                 let mut client = self.client.clone();
                 self.requests.spawn_presentation(
-                    Some(RequestKey::Marketplace),
-                    "ash-tui-marketplace-refresh",
-                    move || crate::marketplace::execute(&mut client, command),
+                    Some(RequestKey::Extensions),
+                    "ash-tui-extension_packages-refresh",
+                    move || crate::extension_packages::execute(&mut client, command),
                     &mut self.app,
                     origin,
                 );

@@ -21,7 +21,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
-import { IMarketplaceService } from '../../../platform/marketplace/common/marketplaceService.js';
+import { IExtensionManagementService } from '../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -166,7 +166,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerInstance(AccessibleView, accessibleView);
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
-	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None, listInstalled: async () => [] } as unknown as IMarketplaceService);
+	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None, listInstalled: async () => [] } as unknown as IExtensionManagementService);
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));

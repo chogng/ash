@@ -4,6 +4,7 @@ use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationPrese
 use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use ash_app_server_protocol::protocol::config::ConfigChanged;
 use ash_app_server_protocol::protocol::connectors::ConnectorsChanged;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsChanged;
 use ash_app_server_protocol::protocol::fs::FsChanged;
 use ash_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto};
 use ash_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
@@ -11,7 +12,6 @@ use ash_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
 use ash_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
 use ash_app_server_protocol::protocol::language::LanguagePositionDto;
 use ash_app_server_protocol::protocol::language::LanguageRangeDto;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use ash_app_server_protocol::protocol::plugins::PluginsChanged;
 
 #[test]
@@ -296,20 +296,20 @@ fn decodes_plugins_changed_notification() {
 }
 
 #[test]
-fn decodes_marketplace_changed_notification() {
+fn decodes_extension_packages_changed_notification() {
     let notification = decode(
         r#"{
             "jsonrpc": "2.0",
-            "method": "marketplace/changed",
-            "params": {"instanceId": "marketplace-runtime-1", "generation": 4}
+            "method": "extensions/changed",
+            "params": {"instanceId": "extension_packages-runtime-1", "generation": 4}
         }"#,
     )
-    .expect("Marketplace notification decodes");
+    .expect("Extensions notification decodes");
 
     assert_eq!(
         notification,
-        ServerNotification::MarketplaceChanged(MarketplaceChanged {
-            instance_id: "marketplace-runtime-1".into(),
+        ServerNotification::ExtensionsChanged(ExtensionsChanged {
+            instance_id: "extension_packages-runtime-1".into(),
             generation: 4,
         })
     );

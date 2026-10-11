@@ -895,6 +895,7 @@ dependencies = [
  "ash-core-plugins",
  "ash-exec",
  "ash-github",
+ "ash-github-authentication",
  "ash-http-client",
  "ash-install-context",
  "ash-package-store",

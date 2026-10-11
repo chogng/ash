@@ -33,6 +33,6 @@ pnpm localization:check --report-missing
 
 ## 本地语言资源
 
-内置语言随程序发布。安装或更新 Marketplace 语言包后，客户端把完整目录保存到本地 UI profile：Electron 使用 `<profile>/languagepacks/<locale>.json`，Web 使用 IndexedDB `ash-language-packs`。
+内置语言随程序发布。安装或更新 Extensions 语言包后，客户端把完整目录保存到本地 UI profile：Electron 使用 `<profile>/languagepacks/<locale>.json`，Web 使用 IndexedDB `ash-language-packs`。
 
-保存语言偏好之前必须先保存语言资源。启动读取本地资源，不等待 App Server 或 Marketplace；资源不存在或格式不合法时报告启动错误。移除 Marketplace 包不会删除已经保存的启动资源。
+保存语言偏好之前必须先保存语言资源。启动读取本地资源，不等待 App Server 或 Extensions；资源不存在或格式不合法时报告启动错误。移除 Extensions 包不会删除已经保存的启动资源。

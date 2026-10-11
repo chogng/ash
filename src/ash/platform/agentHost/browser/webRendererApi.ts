@@ -18,7 +18,7 @@ import { createAppServerAppServerApi, createAppServerResourceApi, createAppServe
 import { type AppServerTransport } from "../common/appServerTransport.js";
 import { AppServerProtocolClient, type AppServerProtocolClientOptions, type AppServerConnectionMetadata } from "./appServerProtocolClient.js";
 import { createAppServerFileApi } from "../../files/browser/fileApi.js";
-import { createAppServerExtensionApi } from "../../extensions/browser/extensionApi.js";
+import { createAppServerExtensionApi, createBrowserExtensionApi } from "../../extensions/browser/extensionApi.js";
 import { createAppServerDiffApi } from "../../diff/browser/diffApi.js";
 import { createAppServerSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createAppServerGitApi } from "../../git/browser/gitApi.js";
@@ -35,7 +35,7 @@ import { createAppServerToolSearchApi } from "../../toolSearch/browser/toolSearc
 import { createAppServerLanguageApi } from "../../language/browser/languageApi.js";
 import { createAppServerPluginApi } from "../../plugins/browser/pluginApi.js";
 import { createAppServerExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
-import { createAppServerMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
+import { createAppServerExtensionManagementApi } from "../../extensionManagement/browser/extensionManagementApi.js";
 import { createAppServerDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createAppServerAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
 import { createAppServerTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
@@ -115,7 +115,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		typst: createAppServerTypstApi(connection),
 		documentCollaboration: createAppServerDocumentCollaborationApi(connection),
 		resource,
-		extensions: createAppServerExtensionApi(connection, resource),
+		extensions: createAppServerExtensionApi(connection, resource, createBrowserExtensionApi()),
 		extensionHost: createAppServerExtensionHostApi(connection),
 		fs: createAppServerFileApi(connection),
 		diff: createAppServerDiffApi(connection),
@@ -135,7 +135,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		codebaseSymbols: createAppServerCodebaseSymbolsApi(connection),
 		connectors: createAppServerConnectorApi(connection, connectorHostServices),
 		plugins: createAppServerPluginApi(connection),
-		marketplace: createAppServerMarketplaceApi(connection),
+		extensionManagement: createAppServerExtensionManagementApi(connection),
 		toolSearch: createAppServerToolSearchApi(connection),
 		dirPermissions: createAppServerDirPermissionsApi(connection),
 		networkDiagnostics: createAppServerNetworkDiagnosticsApi(connection),

@@ -67,6 +67,22 @@ use ash_app_server_protocol::protocol::environment::{
 };
 use ash_app_server_protocol::protocol::error::AppServerErrorData;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsAcquireCapabilityParams;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsAcquiredCapabilityDto;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsArtifactHandleDto;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsDownloadParams;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsGetParams;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsInstallParams;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsInstalledPackageDto;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsListInstalledResult;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsOpenResourceParams;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsPackageDetailsDto;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsReleaseCapabilityParams;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsResourceContentDto;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsSearchParams;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsSearchResult;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsUninstallParams;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsUpdateParams;
 use ash_app_server_protocol::protocol::fs::{
     FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult,
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
@@ -91,22 +107,6 @@ use ash_app_server_protocol::protocol::language::LanguageLocationsResult;
 use ash_app_server_protocol::protocol::language::LanguageServersParams;
 use ash_app_server_protocol::protocol::language::LanguageServersResult;
 use ash_app_server_protocol::protocol::language::LanguageSynchronizeParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceAcquireCapabilityParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceAcquiredCapabilityDto;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceArtifactHandleDto;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceDownloadParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceGetParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceInstallParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceInstalledPackageDto;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceListInstalledResult;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceOpenResourceParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplacePackageDetailsDto;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceReleaseCapabilityParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceResourceContentDto;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceSearchResult;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceUninstallParams;
-use ash_app_server_protocol::protocol::marketplace::MarketplaceUpdateParams;
 use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_app_server_protocol::protocol::plugins::PluginCommandResultDto;
 use ash_app_server_protocol::protocol::plugins::PluginListResult;
@@ -1057,73 +1057,73 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::ConnectorCredentialCleanupRetry, params)
     }
 
-    pub fn search_marketplace(
+    pub fn search_extension_packages(
         &mut self,
-        params: MarketplaceSearchParams,
-    ) -> Result<MarketplaceSearchResult, ClientError> {
-        self.call(ClientMethod::MarketplaceSearch, params)
+        params: ExtensionsSearchParams,
+    ) -> Result<ExtensionsSearchResult, ClientError> {
+        self.call(ClientMethod::ExtensionsSearch, params)
     }
 
-    pub fn get_marketplace_package(
+    pub fn get_extension_package(
         &mut self,
-        params: MarketplaceGetParams,
-    ) -> Result<MarketplacePackageDetailsDto, ClientError> {
-        self.call(ClientMethod::MarketplaceGet, params)
+        params: ExtensionsGetParams,
+    ) -> Result<ExtensionsPackageDetailsDto, ClientError> {
+        self.call(ClientMethod::ExtensionsGet, params)
     }
 
-    pub fn download_marketplace_package(
+    pub fn download_extension_package(
         &mut self,
-        params: MarketplaceDownloadParams,
-    ) -> Result<MarketplaceArtifactHandleDto, ClientError> {
-        self.call(ClientMethod::MarketplaceDownload, params)
+        params: ExtensionsDownloadParams,
+    ) -> Result<ExtensionsArtifactHandleDto, ClientError> {
+        self.call(ClientMethod::ExtensionsDownload, params)
     }
 
-    pub fn install_marketplace_package(
+    pub fn install_extension_package(
         &mut self,
-        params: MarketplaceInstallParams,
-    ) -> Result<MarketplaceInstalledPackageDto, ClientError> {
-        self.call(ClientMethod::MarketplaceInstall, params)
+        params: ExtensionsInstallParams,
+    ) -> Result<ExtensionsInstalledPackageDto, ClientError> {
+        self.call(ClientMethod::ExtensionsInstall, params)
     }
 
-    pub fn update_marketplace_package(
+    pub fn update_extension_package(
         &mut self,
-        params: MarketplaceUpdateParams,
-    ) -> Result<MarketplaceInstalledPackageDto, ClientError> {
-        self.call(ClientMethod::MarketplaceUpdate, params)
+        params: ExtensionsUpdateParams,
+    ) -> Result<ExtensionsInstalledPackageDto, ClientError> {
+        self.call(ClientMethod::ExtensionsUpdate, params)
     }
 
-    pub fn uninstall_marketplace_package(
+    pub fn uninstall_extension_package(
         &mut self,
-        params: MarketplaceUninstallParams,
+        params: ExtensionsUninstallParams,
     ) -> Result<(), ClientError> {
-        self.call(ClientMethod::MarketplaceUninstall, params)
+        self.call(ClientMethod::ExtensionsUninstall, params)
     }
 
-    pub fn list_installed_marketplace_packages(
+    pub fn list_installed_extension_packages(
         &mut self,
-    ) -> Result<MarketplaceListInstalledResult, ClientError> {
-        self.call(ClientMethod::MarketplaceListInstalled, EmptyParams {})
+    ) -> Result<ExtensionsListInstalledResult, ClientError> {
+        self.call(ClientMethod::ExtensionsListInstalled, EmptyParams {})
     }
 
-    pub fn acquire_marketplace_capability(
+    pub fn acquire_extension_capability(
         &mut self,
-        params: MarketplaceAcquireCapabilityParams,
-    ) -> Result<MarketplaceAcquiredCapabilityDto, ClientError> {
-        self.call(ClientMethod::MarketplaceAcquireCapability, params)
+        params: ExtensionsAcquireCapabilityParams,
+    ) -> Result<ExtensionsAcquiredCapabilityDto, ClientError> {
+        self.call(ClientMethod::ExtensionsAcquireCapability, params)
     }
 
-    pub fn release_marketplace_capability(
+    pub fn release_extension_capability(
         &mut self,
-        params: MarketplaceReleaseCapabilityParams,
+        params: ExtensionsReleaseCapabilityParams,
     ) -> Result<(), ClientError> {
-        self.call(ClientMethod::MarketplaceReleaseCapability, params)
+        self.call(ClientMethod::ExtensionsReleaseCapability, params)
     }
 
-    pub fn open_marketplace_resource(
+    pub fn open_extension_resource(
         &mut self,
-        params: MarketplaceOpenResourceParams,
-    ) -> Result<MarketplaceResourceContentDto, ClientError> {
-        self.call(ClientMethod::MarketplaceOpenResource, params)
+        params: ExtensionsOpenResourceParams,
+    ) -> Result<ExtensionsResourceContentDto, ClientError> {
+        self.call(ClientMethod::ExtensionsOpenResource, params)
     }
 
     pub fn list_plugins(&mut self) -> Result<PluginListResult, ClientError> {

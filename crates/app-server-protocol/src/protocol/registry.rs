@@ -141,6 +141,14 @@ use crate::protocol::common::TextDocumentsCapability;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionClientRequestParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsAddSourceParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSetSourceEnabledParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSourcesResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::{ExtensionRegistryKindDto, ExtensionsSourceDto};
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::symphony::SymphonyConfigureParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::symphony::SymphonyControlParams;
@@ -1295,6 +1303,93 @@ use crate::protocol::github::GitHubLabelsResult;
 use crate::protocol::github::GitHubRepositoryResult;
 
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsAcquireCapabilityParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsAcquiredCapabilityDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsArtifactHandleDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsAvailableCapabilityDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsCapabilityDescriptorDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsCapabilityKindDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsCapabilityLeaseDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsCapabilityRefDto;
+use crate::protocol::extension_packages::ExtensionsChanged;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsConnectorActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsDownloadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsEditorExtensionPolicyActionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsEditorExtensionPolicyDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsEditorExtensionPolicyParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsEditorExtensionsResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsExecutableActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsExecutableRuntimeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsGetParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsInstallParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsInstallationStateDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsInstalledPackageDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsLanguageActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsListInstalledResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsLocalizationActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsMcpActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsMcpTransportDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsOpenResourceParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsPackageDetailsDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsPackageRefDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsPackageSourceDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsPackageSummaryDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsReleaseCapabilityParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsResourceContentDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsResourceRefDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSearchParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSearchResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSkillActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsThemeActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUninstallModeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUninstallParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUpstreamReferenceDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUpstreamRegistryDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::issue_reporter::IssueReporterCancelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issue_reporter::IssueReporterCancelResult;
@@ -1508,93 +1603,6 @@ use crate::protocol::language::LanguageSynchronizeParams;
 use crate::protocol::language::LanguageTextDocumentEditDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageTextEditDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceAcquireCapabilityParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceAcquiredCapabilityDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceActivationSpecDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceArtifactHandleDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceAvailableCapabilityDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceCapabilityDescriptorDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceCapabilityKindDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceCapabilityLeaseDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceCapabilityRefDto;
-use crate::protocol::marketplace::MarketplaceChanged;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceConnectorActivationSpecDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceDownloadParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyActionDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceEditorExtensionsResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceExecutableActivationSpecDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceExecutableRuntimeDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceGetParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceInstallParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceInstallationStateDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceInstalledPackageDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceLanguageActivationSpecDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceListInstalledResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceLocalizationActivationSpecDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceMcpActivationSpecDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceMcpTransportDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceOpenResourceParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplacePackageDetailsDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplacePackageRefDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplacePackageSourceDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplacePackageSummaryDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceReleaseCapabilityParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceResourceContentDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceResourceRefDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceSearchParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceSearchResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceSkillActivationSpecDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceThemeActivationSpecDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceUninstallModeDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceUninstallParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceUpdateParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceUpstreamReferenceDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceUpstreamRegistryDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::McpOAuthCompleteParams;
 #[cfg(any(test, feature = "export"))]
@@ -3700,65 +3708,80 @@ client_methods! {
         response: PluginInstallLocalResult,
         serialization: GlobalExclusive,
     },
-    MarketplaceSearch => "marketplace/search" {
-        params: MarketplaceSearchParams,
-        response: MarketplaceSearchResult,
+    ExtensionsSources => "extensions/sources/list" {
+        params: EmptyParams,
+        response: ExtensionsSourcesResult,
+        serialization: None,
+    },
+    ExtensionsAddSource => "extensions/sources/add" {
+        params: ExtensionsAddSourceParams,
+        response: ExtensionsSourcesResult,
+        serialization: GlobalExclusive,
+    },
+    ExtensionsSetSourceEnabled => "extensions/sources/setEnabled" {
+        params: ExtensionsSetSourceEnabledParams,
+        response: ExtensionsSourcesResult,
+        serialization: GlobalExclusive,
+    },
+    ExtensionsSearch => "extensions/search" {
+        params: ExtensionsSearchParams,
+        response: ExtensionsSearchResult,
         // Catalog queries do not read local configuration or installation state.
         serialization: None,
     },
-    MarketplaceGet => "marketplace/get" {
-        params: MarketplaceGetParams,
-        response: MarketplacePackageDetailsDto,
+    ExtensionsGet => "extensions/get" {
+        params: ExtensionsGetParams,
+        response: ExtensionsPackageDetailsDto,
         serialization: None,
     },
-    MarketplaceDownload => "marketplace/download" {
-        params: MarketplaceDownloadParams,
-        response: MarketplaceArtifactHandleDto,
+    ExtensionsDownload => "extensions/download" {
+        params: ExtensionsDownloadParams,
+        response: ExtensionsArtifactHandleDto,
         serialization: GlobalExclusive,
     },
-    MarketplaceInstall => "marketplace/install" {
-        params: MarketplaceInstallParams,
-        response: MarketplaceInstalledPackageDto,
+    ExtensionsInstall => "extensions/install" {
+        params: ExtensionsInstallParams,
+        response: ExtensionsInstalledPackageDto,
         serialization: GlobalExclusive,
     },
-    MarketplaceUpdate => "marketplace/update" {
-        params: MarketplaceUpdateParams,
-        response: MarketplaceInstalledPackageDto,
+    ExtensionsUpdate => "extensions/update" {
+        params: ExtensionsUpdateParams,
+        response: ExtensionsInstalledPackageDto,
         serialization: GlobalExclusive,
     },
-    MarketplaceUninstall => "marketplace/uninstall" {
-        params: MarketplaceUninstallParams,
+    ExtensionsUninstall => "extensions/uninstall" {
+        params: ExtensionsUninstallParams,
         response: (),
         serialization: GlobalExclusive,
     },
-    MarketplaceListInstalled => "marketplace/listInstalled" {
+    ExtensionsListInstalled => "extensions/listInstalled" {
         params: EmptyParams,
-        response: MarketplaceListInstalledResult,
+        response: ExtensionsListInstalledResult,
         serialization: GlobalSharedRead,
     },
-    MarketplaceEditorExtensions => "marketplace/editorExtensions" {
+    ExtensionsEditorExtensions => "extensions/editorExtensions" {
         params: EmptyParams,
-        response: MarketplaceEditorExtensionsResult,
+        response: ExtensionsEditorExtensionsResult,
         serialization: GlobalSharedRead,
     },
-    MarketplaceSetEditorExtensionPolicy => "marketplace/setEditorExtensionPolicy" {
-        params: MarketplaceEditorExtensionPolicyParams,
-        response: MarketplaceEditorExtensionsResult,
+    ExtensionsSetEditorExtensionPolicy => "extensions/setEditorExtensionPolicy" {
+        params: ExtensionsEditorExtensionPolicyParams,
+        response: ExtensionsEditorExtensionsResult,
         serialization: GlobalExclusive,
     },
-    MarketplaceAcquireCapability => "marketplace/acquireCapability" {
-        params: MarketplaceAcquireCapabilityParams,
-        response: MarketplaceAcquiredCapabilityDto,
+    ExtensionsAcquireCapability => "extensions/acquireCapability" {
+        params: ExtensionsAcquireCapabilityParams,
+        response: ExtensionsAcquiredCapabilityDto,
         serialization: GlobalExclusive,
     },
-    MarketplaceReleaseCapability => "marketplace/releaseCapability" {
-        params: MarketplaceReleaseCapabilityParams,
+    ExtensionsReleaseCapability => "extensions/releaseCapability" {
+        params: ExtensionsReleaseCapabilityParams,
         response: (),
         serialization: GlobalExclusive,
     },
-    MarketplaceOpenResource => "marketplace/openResource" {
-        params: MarketplaceOpenResourceParams,
-        response: MarketplaceResourceContentDto,
+    ExtensionsOpenResource => "extensions/openResource" {
+        params: ExtensionsOpenResourceParams,
+        response: ExtensionsResourceContentDto,
         serialization: GlobalSharedRead,
     },
     PluginEnable => "plugin/enable" {
@@ -5165,8 +5188,8 @@ server_notifications! {
     PluginsChanged => "plugin/changed" {
         params: PluginsChanged,
     },
-    MarketplaceChanged => "marketplace/changed" {
-        params: MarketplaceChanged,
+    ExtensionsChanged => "extensions/changed" {
+        params: ExtensionsChanged,
     },
     SkillsChanged => "skills/changed" {
         params: SkillsChanged,
@@ -5420,50 +5443,55 @@ typescript_bindings! {
     McpServerRuntimeStateDto,
     McpServerStatusDto,
     McpServerStatusResult,
-    MarketplacePackageRefDto,
-    MarketplaceArtifactHandleDto,
-    MarketplaceCapabilityRefDto,
-    MarketplaceResourceRefDto,
-    MarketplaceCapabilityKindDto,
-    MarketplaceCapabilityDescriptorDto,
-    MarketplaceAvailableCapabilityDto,
-    MarketplacePackageSummaryDto,
-    MarketplaceSearchParams,
-    MarketplaceSearchResult,
-    MarketplaceGetParams,
-    MarketplacePackageDetailsDto,
-    MarketplacePackageSourceDto,
-    MarketplaceUpstreamRegistryDto,
-    MarketplaceUpstreamReferenceDto,
-    MarketplaceDownloadParams,
-    MarketplaceInstallParams,
-    MarketplaceUpdateParams,
-    MarketplaceInstallationStateDto,
-    MarketplaceInstalledPackageDto,
-    MarketplaceListInstalledResult,
-    MarketplaceEditorExtensionPolicyActionDto,
-    MarketplaceEditorExtensionPolicyParams,
-    MarketplaceEditorExtensionPolicyDto,
-    MarketplaceEditorExtensionsResult,
-    MarketplaceChanged,
-    MarketplaceUninstallModeDto,
-    MarketplaceUninstallParams,
-    MarketplaceAcquireCapabilityParams,
-    MarketplaceCapabilityLeaseDto,
-    MarketplaceActivationSpecDto,
-    MarketplaceSkillActivationSpecDto,
-    MarketplaceThemeActivationSpecDto,
-    MarketplaceMcpActivationSpecDto,
-    MarketplaceMcpTransportDto,
-    MarketplaceConnectorActivationSpecDto,
-    MarketplaceLanguageActivationSpecDto,
-    MarketplaceLocalizationActivationSpecDto,
-    MarketplaceExecutableRuntimeDto,
-    MarketplaceExecutableActivationSpecDto,
-    MarketplaceAcquiredCapabilityDto,
-    MarketplaceReleaseCapabilityParams,
-    MarketplaceOpenResourceParams,
-    MarketplaceResourceContentDto,
+    ExtensionsPackageRefDto,
+    ExtensionsArtifactHandleDto,
+    ExtensionsCapabilityRefDto,
+    ExtensionsResourceRefDto,
+    ExtensionsCapabilityKindDto,
+    ExtensionsCapabilityDescriptorDto,
+    ExtensionsAvailableCapabilityDto,
+    ExtensionsPackageSummaryDto,
+    ExtensionsSearchParams,
+    ExtensionsSearchResult,
+    ExtensionsSourcesResult,
+    ExtensionsSourceDto,
+    ExtensionRegistryKindDto,
+    ExtensionsAddSourceParams,
+    ExtensionsSetSourceEnabledParams,
+    ExtensionsGetParams,
+    ExtensionsPackageDetailsDto,
+    ExtensionsPackageSourceDto,
+    ExtensionsUpstreamRegistryDto,
+    ExtensionsUpstreamReferenceDto,
+    ExtensionsDownloadParams,
+    ExtensionsInstallParams,
+    ExtensionsUpdateParams,
+    ExtensionsInstallationStateDto,
+    ExtensionsInstalledPackageDto,
+    ExtensionsListInstalledResult,
+    ExtensionsEditorExtensionPolicyActionDto,
+    ExtensionsEditorExtensionPolicyParams,
+    ExtensionsEditorExtensionPolicyDto,
+    ExtensionsEditorExtensionsResult,
+    ExtensionsChanged,
+    ExtensionsUninstallModeDto,
+    ExtensionsUninstallParams,
+    ExtensionsAcquireCapabilityParams,
+    ExtensionsCapabilityLeaseDto,
+    ExtensionsActivationSpecDto,
+    ExtensionsSkillActivationSpecDto,
+    ExtensionsThemeActivationSpecDto,
+    ExtensionsMcpActivationSpecDto,
+    ExtensionsMcpTransportDto,
+    ExtensionsConnectorActivationSpecDto,
+    ExtensionsLanguageActivationSpecDto,
+    ExtensionsLocalizationActivationSpecDto,
+    ExtensionsExecutableRuntimeDto,
+    ExtensionsExecutableActivationSpecDto,
+    ExtensionsAcquiredCapabilityDto,
+    ExtensionsReleaseCapabilityParams,
+    ExtensionsOpenResourceParams,
+    ExtensionsResourceContentDto,
     PluginPackageDto,
     PluginPermissionDto,
     PluginDirectoryAccessDto,

@@ -17,7 +17,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { ILanguageServerService, type LanguageServerSnapshot } from '../../../../platform/language/common/languageServerService.js';
-import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID } from '../../../../platform/marketplace/common/marketplaceService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
@@ -72,7 +72,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 	constructor(
 		container: HTMLElement,
 		@ILanguageServerService private readonly servers: ILanguageServerService,
-		@IMarketplaceService marketplace: IMarketplaceService,
+		@IExtensionManagementService extensionManagement: IExtensionManagementService,
 		@ICommandService private readonly commands: ICommandService,
 		@ICodeEditorService private readonly editors: ICodeEditorService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
@@ -109,7 +109,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		this._register(this.list.onDidSelect(() => { this.server.value = this.list.value ?? ''; this.select(); }));
 		this._register(this.server.onDidChange(() => this.select()));
 		this._register(this.directory.onDidSelect(() => { void this.load(); }));
-		this._register(marketplace.onDidChangeInstalled(() => {
+		this._register(extensionManagement.onDidChangeInstalled(() => {
 			// Catalog invalidation must not discard an unsaved path or enablement draft.
 			this.generation++;
 			this.loading = false;
@@ -138,7 +138,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 				const active = document.activeElement;
 				if (!this.visible || !isHTMLElement(active) || !this.domNode.contains(active)) { return undefined; }
 				return new AccessibleContentProvider(AccessibleViewProviderId.LanguageServers, { type: AccessibleViewType.Help },
-					() => this.label('helpText', 'Language Servers\nUse Tab and Shift+Tab to reach the workspace folder, language, Marketplace, server selection, enable switch, executable path, Save, Use Default, Refresh, and Help. Use arrow keys in server and folder lists. Configuration applies to the App Server profile; the folder only controls availability checks. Leave the executable path empty to use the installed package or PATH. Use Default removes the override. After a conflict or an installation change, Refresh before saving. Find opens Marketplace for the exact language and executable capability. Logs and startup failures are in Output; click a language server status entry to open its log.'),
+					() => this.label('helpText', 'Language Servers\nUse Tab and Shift+Tab to reach the workspace folder, language, Extensions, server selection, enable switch, executable path, Save, Use Default, Refresh, and Help. Use arrow keys in server and folder lists. Configuration applies to the App Server profile; the folder only controls availability checks. Leave the executable path empty to use the installed package or PATH. Use Default removes the override. After a conflict or an installation change, Refresh before saving. Find opens Extensions for the exact language and executable capability. Logs and startup failures are in Output; click a language server status entry to open its log.'),
 					() => active.focus(), AccessibilityVerbositySettingId.LanguageServers);
 			},
 		}));
@@ -165,7 +165,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 			children: [{
 				element: {
 					kind: 'item', id: 'language-servers.configuration', title: this.label('title', 'Language Servers'), description: this.note.textContent ?? '',
-					keywords: ['lsp', 'language servers', 'output', 'marketplace', 'executable', this.language.value, ...Object.keys(this.snapshot?.configurations ?? {}), ...(this.snapshot?.servers.flatMap(server => [server.id, ...server.languageIds]) ?? [])],
+					keywords: ['lsp', 'language servers', 'output', 'extensionManagement', 'executable', this.language.value, ...Object.keys(this.snapshot?.configurations ?? {}), ...(this.snapshot?.servers.flatMap(server => [server.id, ...server.languageIds]) ?? [])],
 					value: { domNode: this.domNode },
 				}
 			}],
@@ -202,7 +202,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 			if (ids.includes(this.server.value)) { this.list.value = this.server.value; }
 			this.server.value = this.list.value ?? '';
 			this.select();
-			this.setStatus(snapshot.servers.length ? 'available' : 'empty', snapshot.servers.length ? '{0} servers available. They start when a matching document needs them.' : 'No enabled server is available. Find a package in Marketplace or configure an executable.', snapshot.servers.length ? [snapshot.servers.length] : []);
+			this.setStatus(snapshot.servers.length ? 'available' : 'empty', snapshot.servers.length ? '{0} servers available. They start when a matching document needs them.' : 'No enabled server is available. Find a package in Extensions or configure an executable.', snapshot.servers.length ? [snapshot.servers.length] : []);
 			this.changed.fire();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) { return; }
@@ -250,11 +250,11 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		const languageId = this.language.value.trim();
 		if (!languageId) { this.setStatus('missingLanguage', 'Open a code file or enter a language ID first.'); this.language.focus(); return; }
 		try {
-			// Marketplace owns its loading state; do not keep Settings over it while catalog requests run.
+			// Extensions owns its loading state; do not keep Settings over it while catalog requests run.
 			await this.commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
-			await this.commands.executeCommand(OPEN_MARKETPLACE_COMMAND_ID, { languageId, capabilityKind: 'executable' });
+			await this.commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { languageId, capabilityKind: 'executable' });
 		}
-		catch (error) { if (!this.isDisposed) { this.setStatus('findFailed', 'Could not open Marketplace: {0}', [error instanceof Error ? error.message : String(error)]); } }
+		catch (error) { if (!this.isDisposed) { this.setStatus('findFailed', 'Could not open Extensions: {0}', [error instanceof Error ? error.message : String(error)]); } }
 	}
 
 	private updateActions(): void {
@@ -280,7 +280,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		this.save.label = this.label('save', 'Save server configuration');
 		this.reset.label = this.label('reset', 'Use default configuration');
 		this.refreshButton.label = this.label('refresh', 'Refresh');
-		this.find.label = this.label('find', 'Find language servers in Marketplace');
+		this.find.label = this.label('find', 'Find language servers in Extensions');
 		this.help.label = this.label('help', 'Help');
 		if (this.statusMessage) { this.setStatus(this.statusMessage.key, this.statusMessage.text, this.statusMessage.parameters); }
 	}

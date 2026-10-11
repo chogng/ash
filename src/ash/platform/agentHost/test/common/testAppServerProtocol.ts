@@ -35,7 +35,7 @@ export function createTestInitializeResult(): InitializeResult {
 			extensionHost: true,
 			connectors: true,
 			plugins: true,
-			marketplace: true,
+			extensionManagement: true,
 			mcp: true,
 			mcpOAuth: true,
 			contracts: {

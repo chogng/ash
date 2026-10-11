@@ -259,8 +259,8 @@ Turn summary 新增部分提交状态与 `committedPaths`；状态从精确回�
 
 ## 市场编辑器扩展执行
 
-`marketplace/editorExtensions` 查询已安装扩展的精确包身份、可执行入口、enabled、granted 和全局 policy revision。
-`marketplace/setEditorExtensionPolicy` 提交 installationId、精确 packageDigest、expectedRevision 与
+`extensions/editorExtensions` 查询已安装扩展的精确包身份、可执行入口、enabled、granted 和全局 policy revision。
+`extensions/setEditorExtensionPolicy` 提交 installationId、精确 packageDigest、expectedRevision 与
 `enable`、`disable`、`grant`、`revoke` 中的一种动作。安装不启用或授权；两个状态分别修改。
 
 只允许产品 host 连接。启用和授权要求当前平台支持隔离且包有合法 JS 入口；停用和撤销允许清除旧状态。

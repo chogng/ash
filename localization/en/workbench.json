@@ -6,7 +6,7 @@
     "workbench.editor.focusRecentEditorAfterClose.invalid": "Focus Recent Editor After Close must be true or false.",
     "workbench.editor.focusRecentEditorAfterClose.title": "Workbench › Editor: Focus Recent Editor After Close",
     "workbench.editor.focusRecentEditorAfterClose.description": "Focus the most recently used editor when closing the active editor. When disabled, focus the next editor in tab order.",
-    "extensions.themes.invalidPortableManifest": "The Marketplace theme manifest is invalid.",
+    "extensions.themes.invalidPortableManifest": "The Extensions theme manifest is invalid.",
     "extensions.browser.resourceTooLarge": "Browser extension resource exceeds its byte limit.",
     "extensions.resources.retired": "Extension resource generation has retired.",
     "extensions.resources.duplicate": "Extension ID is already provided by the product.",

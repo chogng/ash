@@ -15,7 +15,7 @@ hooks. Electron uses its frozen executable in Node mode; Web uses the packaged s
 No ambient PATH lookup selects the runtime. The supervisor retains process-group cleanup,
 framed protocol quotas, cancellation, deadlines, recovery and authority revocation. This runtime
 has user-level IO and does not claim the V8 host's confinement or whole-process resource limits.
-Marketplace execution contract 5 requires fresh consent. Local Plugin authority retires only
+Extensions execution contract 5 requires fresh consent. Local Plugin authority retires only
 legacy VS Code grants and persists that migration; other Plugin grants survive. Retired `api: ash` entries are rejected.
 Developer environment inheritance excludes product authentication and inherited Electron controls.
 The environment is frozen when the launcher is created; existing processes retain their copy.
@@ -89,10 +89,10 @@ Shared/resizable buffers and WebAssembly are unavailable because they bypass the
 The allocator delegates storage to V8's sandbox allocator; ordinary malloc is unsuitable.
 These limits do not claim a whole-process OS memory cap. Independent executables retain their existing
 whole-process resource requirements and cannot select JS isolation.
-Open VSX scripts are not automatically executed by this host. On macOS and 64-bit Windows the separate Marketplace
+Open VSX scripts are not automatically executed by this host. On macOS and 64-bit Windows the separate Extensions
 execution policy admits exact installed packages after both enablement and execution consent.
 
-The product Node host loads the standard package. Marketplace deployment selects its
+The product Node host loads the standard package. Extensions deployment selects its
 `main` entry before `browser`; local Plugin declarations select their explicit entrypoint
 with `runtime: javascript` and `api: vscode`, using the package-root `package.json`.
 Automatic Task, Debug and status-bar observers are installed only within the authenticated
@@ -190,7 +190,7 @@ immutable snapshots. The document list is populated by event delivery after acti
 reads, so it is not a complete initial document list during activation. Collections capture the version read
 by their invocation, even when a newer event arrives during an await. Workbench owns marker storage, isolates
 collection names by broker-supplied extension identity and removes markers when an incarnation retires.
-Tasks and executable Debug descriptors use Marketplace's execution-consent contract version 5; previous consent
+Tasks and executable Debug descriptors use Extensions's execution-consent contract version 5; previous consent
 requires enablement and authorization under the new contract.
 
 V8 continuation-preserved embedder data and Node AsyncLocalStorage respectively bind each

@@ -11,15 +11,15 @@ use tempfile::TempDir;
 
 use crate::AvailableCapability;
 use crate::CapabilityKind;
-use crate::MarketplaceClientError;
+use crate::ExtensionPackageCapability;
+use crate::ExtensionPackagePayload;
+use crate::ExtensionsClientError;
 use crate::PackageDetails;
 use crate::PackageRef;
 use crate::PackageSource;
 use crate::PackageSummary;
-use crate::PluginPackageCapability;
-use crate::PluginPackagePayload;
 use crate::registry::catalog_provenance::CatalogUpstreamReference;
-use crate::registry::remote::RemoteMarketplaceConfig;
+use crate::registry::remote::RemoteExtensionsConfig;
 use crate::registry::remote::RemotePackageTarget;
 use crate::registry::remote::RemoteSource;
 
@@ -143,19 +143,19 @@ impl CatalogCapability {
     }
 }
 
-/// Exact verified package payload downloaded from the remote Marketplace.
+/// Exact verified package payload downloaded from the remote Extensions.
 ///
 /// The extracted source directory remains private. The local Manager can copy the payload into its
 /// own staging directory but cannot obtain the remote cache path.
-pub(crate) struct MarketplaceDownloadedPackage {
+pub(crate) struct ExtensionsDownloadedPackage {
     package: PackageRef,
-    capabilities: Vec<PluginPackageCapability>,
+    capabilities: Vec<ExtensionPackageCapability>,
     contents: TempDir,
     expected_file_count: u64,
     expected_size_bytes: u64,
 }
 
-impl MarketplaceDownloadedPackage {
+impl ExtensionsDownloadedPackage {
     pub(crate) fn new(release: &Release, contents: TempDir) -> Self {
         Self {
             package: {
@@ -171,12 +171,12 @@ impl MarketplaceDownloadedPackage {
     }
 }
 
-impl PluginPackagePayload for MarketplaceDownloadedPackage {
+impl ExtensionPackagePayload for ExtensionsDownloadedPackage {
     fn package(&self) -> &PackageRef {
         &self.package
     }
 
-    fn capabilities(&self) -> &[PluginPackageCapability] {
+    fn capabilities(&self) -> &[ExtensionPackageCapability] {
         &self.capabilities
     }
 
@@ -188,15 +188,15 @@ impl PluginPackagePayload for MarketplaceDownloadedPackage {
         self.expected_size_bytes
     }
 
-    fn copy_to(&self, destination: &Path) -> Result<(), MarketplaceClientError> {
+    fn copy_to(&self, destination: &Path) -> Result<(), ExtensionsClientError> {
         copy_tree(self.contents.path(), destination)
     }
 }
 
 impl Catalog {
     pub(crate) fn load_remote(
-        config: RemoteMarketplaceConfig,
-    ) -> Result<Self, MarketplaceClientError> {
+        config: RemoteExtensionsConfig,
+    ) -> Result<Self, ExtensionsClientError> {
         let refresh_interval = config.catalog_refresh_interval();
         let remote = RemoteSource::new(config)?;
         let releases = index_releases(remote.releases()?)?;
@@ -212,7 +212,7 @@ impl Catalog {
         &self,
         package_id: &str,
         version: Option<&str>,
-    ) -> Result<Release, MarketplaceClientError> {
+    ) -> Result<Release, ExtensionsClientError> {
         self.refresh_remote_if_stale()?;
         self.resolve_indexed(package_id, version)
     }
@@ -221,7 +221,7 @@ impl Catalog {
         &self,
         package_id: &str,
         version: Option<&str>,
-    ) -> Result<Release, MarketplaceClientError> {
+    ) -> Result<Release, ExtensionsClientError> {
         self.refresh_remote()?;
         self.resolve_indexed(package_id, version)
     }
@@ -230,27 +230,27 @@ impl Catalog {
         &self,
         package_id: &str,
         version: Option<&str>,
-    ) -> Result<Release, MarketplaceClientError> {
+    ) -> Result<Release, ExtensionsClientError> {
         let releases = self
             .releases
             .lock()
-            .map_err(|_| MarketplaceClientError::unavailable())?;
+            .map_err(|_| ExtensionsClientError::unavailable())?;
         let versions = releases
             .get(package_id)
-            .ok_or_else(MarketplaceClientError::package_not_found)?;
+            .ok_or_else(ExtensionsClientError::package_not_found)?;
         match version {
             Some(version) => {
                 let version = Version::parse(version)
-                    .map_err(|_| MarketplaceClientError::version_not_found())?;
+                    .map_err(|_| ExtensionsClientError::version_not_found())?;
                 versions
                     .get(&version)
                     .cloned()
-                    .ok_or_else(MarketplaceClientError::version_not_found)
+                    .ok_or_else(ExtensionsClientError::version_not_found)
             }
             None => versions
                 .last_key_value()
                 .map(|(_, release)| release.clone())
-                .ok_or_else(MarketplaceClientError::version_not_found),
+                .ok_or_else(ExtensionsClientError::version_not_found),
         }
     }
 
@@ -258,13 +258,13 @@ impl Catalog {
         &self,
         request: &crate::SearchPackagesRequest,
         limit: usize,
-    ) -> Result<Vec<PackageSummary>, MarketplaceClientError> {
+    ) -> Result<Vec<PackageSummary>, ExtensionsClientError> {
         self.refresh_remote_if_stale()?;
         let query = request.query.trim().to_ascii_lowercase();
         let releases = self
             .releases
             .lock()
-            .map_err(|_| MarketplaceClientError::unavailable())?;
+            .map_err(|_| ExtensionsClientError::unavailable())?;
         Ok(releases
             .values()
             .filter_map(|versions| versions.last_key_value().map(|(_, release)| release))
@@ -279,29 +279,29 @@ impl Catalog {
     pub(crate) fn materialize(
         &self,
         release: &Release,
-    ) -> Result<MarketplaceDownloadedPackage, MarketplaceClientError> {
+    ) -> Result<ExtensionsDownloadedPackage, ExtensionsClientError> {
         let contents = self.remote.materialize(&release.target)?;
-        Ok(MarketplaceDownloadedPackage::new(release, contents))
+        Ok(ExtensionsDownloadedPackage::new(release, contents))
     }
 
-    fn refresh_remote(&self) -> Result<(), MarketplaceClientError> {
+    fn refresh_remote(&self) -> Result<(), ExtensionsClientError> {
         let releases = index_releases(self.remote.releases()?)?;
         *self
             .releases
             .lock()
-            .map_err(|_| MarketplaceClientError::unavailable())? = releases;
+            .map_err(|_| ExtensionsClientError::unavailable())? = releases;
         *self
             .last_remote_refresh
             .lock()
-            .map_err(|_| MarketplaceClientError::unavailable())? = Some(Instant::now());
+            .map_err(|_| ExtensionsClientError::unavailable())? = Some(Instant::now());
         Ok(())
     }
 
-    fn refresh_remote_if_stale(&self) -> Result<(), MarketplaceClientError> {
+    fn refresh_remote_if_stale(&self) -> Result<(), ExtensionsClientError> {
         if self
             .last_remote_refresh
             .lock()
-            .map_err(|_| MarketplaceClientError::unavailable())?
+            .map_err(|_| ExtensionsClientError::unavailable())?
             .is_some_and(|refreshed| refreshed.elapsed() < self.refresh_interval)
         {
             return Ok(());
@@ -358,7 +358,7 @@ impl CatalogManifest {
 
 fn index_releases(
     releases: Vec<Release>,
-) -> Result<BTreeMap<String, BTreeMap<Version, Release>>, MarketplaceClientError> {
+) -> Result<BTreeMap<String, BTreeMap<Version, Release>>, ExtensionsClientError> {
     let mut indexed = BTreeMap::<String, BTreeMap<Version, Release>>::new();
     for release in releases {
         let id = release.manifest.id.clone();
@@ -369,7 +369,7 @@ fn index_releases(
             .insert(version, release)
             .is_some()
         {
-            return Err(MarketplaceClientError::package_untrusted());
+            return Err(ExtensionsClientError::package_untrusted());
         }
     }
     Ok(indexed)
@@ -417,11 +417,11 @@ impl Release {
             .collect()
     }
 
-    fn install_capabilities(&self) -> Vec<PluginPackageCapability> {
+    fn install_capabilities(&self) -> Vec<ExtensionPackageCapability> {
         self.manifest
             .capabilities
             .iter()
-            .map(|capability| PluginPackageCapability {
+            .map(|capability| ExtensionPackageCapability {
                 kind: capability.public_kind(self.manifest.package_type),
                 id: capability.id.clone(),
                 path: capability.path.clone(),
@@ -448,7 +448,7 @@ fn language_ids_for(manifest: &CatalogManifest, capability: &CatalogCapability) 
         .collect()
 }
 
-pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), MarketplaceClientError> {
+pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), ExtensionsClientError> {
     if !matches!(manifest.schema_version, 1 | 2)
         || !valid_package_id(&manifest.id)
         || manifest.display_name.trim().is_empty()
@@ -457,7 +457,7 @@ pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), Market
         || manifest.capabilities.is_empty()
         || (manifest.schema_version == 2 && !manifest.consumers.is_empty())
     {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     if manifest.capabilities.iter().any(|capability| {
         (manifest.schema_version == 2
@@ -466,7 +466,7 @@ pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), Market
             || (capability.kind != CatalogCapabilityKind::Executable
                 && capability.runtime.is_some())
     }) {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     if let Some(upstream) = &manifest.upstream {
         upstream.validate(
@@ -487,7 +487,7 @@ pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), Market
                 || (manifest.schema_version == 2 && language.lsp)
         })
     {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     if (matches!(manifest.package_type, PackageType::Localization)
         && manifest.localizations.len() != 1)
@@ -499,13 +499,13 @@ pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), Market
                 || localization.localized_language_name.trim().is_empty()
         })
     {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     if manifest.package_type == PackageType::Localization
         && (manifest.capabilities.len() != 1
             || manifest.capabilities[0].kind != CatalogCapabilityKind::Asset)
     {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     let executable_ids = manifest
         .capabilities
@@ -522,7 +522,7 @@ pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), Market
         && manifest.languages.iter().any(|language| language.lsp)
         && executable_ids.len() != 1)
     {
-        return Err(MarketplaceClientError::package_untrusted());
+        return Err(ExtensionsClientError::package_untrusted());
     }
     Ok(())
 }
@@ -558,30 +558,30 @@ fn valid_locale(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
 }
 
-pub(crate) fn copy_tree(source: &Path, destination: &Path) -> Result<(), MarketplaceClientError> {
+pub(crate) fn copy_tree(source: &Path, destination: &Path) -> Result<(), ExtensionsClientError> {
     let mut children = fs::read_dir(source)
-        .map_err(|_| MarketplaceClientError::storage())?
+        .map_err(|_| ExtensionsClientError::storage())?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| MarketplaceClientError::storage())?;
+        .map_err(|_| ExtensionsClientError::storage())?;
     children.sort_by_key(fs::DirEntry::file_name);
     for child in children {
         let source_path = child.path();
         let destination_path = destination.join(child.file_name());
         let metadata =
-            fs::symlink_metadata(&source_path).map_err(|_| MarketplaceClientError::storage())?;
+            fs::symlink_metadata(&source_path).map_err(|_| ExtensionsClientError::storage())?;
         if metadata.file_type().is_symlink() {
-            return Err(MarketplaceClientError::storage());
+            return Err(ExtensionsClientError::storage());
         }
         if metadata.is_dir() {
-            fs::create_dir(&destination_path).map_err(|_| MarketplaceClientError::storage())?;
+            fs::create_dir(&destination_path).map_err(|_| ExtensionsClientError::storage())?;
             copy_tree(&source_path, &destination_path)?;
         } else if metadata.is_file() {
             fs::copy(&source_path, &destination_path)
-                .map_err(|_| MarketplaceClientError::storage())?;
+                .map_err(|_| ExtensionsClientError::storage())?;
             fs::set_permissions(&destination_path, metadata.permissions())
-                .map_err(|_| MarketplaceClientError::storage())?;
+                .map_err(|_| ExtensionsClientError::storage())?;
         } else {
-            return Err(MarketplaceClientError::storage());
+            return Err(ExtensionsClientError::storage());
         }
     }
     Ok(())

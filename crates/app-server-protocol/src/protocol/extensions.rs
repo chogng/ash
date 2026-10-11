@@ -17,7 +17,8 @@ pub enum ExtensionCatalogReloadDto {
 pub enum ExtensionSourceKindDto {
     BuiltIn,
     Plugin,
-    Marketplace,
+    #[serde(alias = "marketplace")]
+    Registry,
     User,
 }
 

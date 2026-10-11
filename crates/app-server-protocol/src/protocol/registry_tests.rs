@@ -4,19 +4,19 @@ use super::SerializationAccess;
 use schemars::JsonSchema;
 
 #[test]
-fn marketplace_execution_policy_roundtrips_and_serializes_global_mutations() {
-    use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyParams;
-    let read = super::client_method_definition("marketplace/editorExtensions").unwrap();
+fn extension_packages_execution_policy_roundtrips_and_serializes_global_mutations() {
+    use crate::protocol::extension_packages::ExtensionsEditorExtensionPolicyParams;
+    let read = super::client_method_definition("extensions/editorExtensions").unwrap();
     assert_eq!(
         read.serialization_scope(&serde_json::json!({})).unwrap(),
         Some(ClientRequestSerializationScope::Global {
             access: SerializationAccess::SharedRead
         })
     );
-    let write = super::client_method_definition("marketplace/setEditorExtensionPolicy").unwrap();
+    let write = super::client_method_definition("extensions/setEditorExtensionPolicy").unwrap();
     for action in ["enable", "disable", "grant", "revoke"] {
         let value = serde_json::json!({"installationId":"installed", "packageDigest":"sha256:exact", "expectedRevision":7, "action":action});
-        let request: MarketplaceEditorExtensionPolicyParams =
+        let request: ExtensionsEditorExtensionPolicyParams =
             serde_json::from_value(value.clone()).unwrap();
         assert_eq!(serde_json::to_value(request).unwrap(), value);
         assert_eq!(
@@ -26,7 +26,7 @@ fn marketplace_execution_policy_roundtrips_and_serializes_global_mutations() {
             })
         );
     }
-    assert!(serde_json::from_value::<MarketplaceEditorExtensionPolicyParams>(serde_json::json!({"installationId":"installed", "packageDigest":"digest", "expectedRevision":1, "action":"automatic"})).is_err());
+    assert!(serde_json::from_value::<ExtensionsEditorExtensionPolicyParams>(serde_json::json!({"installationId":"installed", "packageDigest":"digest", "expectedRevision":1, "action":"automatic"})).is_err());
 }
 
 #[test]
@@ -386,8 +386,8 @@ fn session_directory_move_is_session_exclusive() {
     );
 }
 #[test]
-fn marketplace_catalog_queries_do_not_hold_the_global_mutation_lock() {
-    for method in ["marketplace/search", "marketplace/get"] {
+fn extension_packages_catalog_queries_do_not_hold_the_global_mutation_lock() {
+    for method in ["extensions/search", "extensions/get"] {
         assert_eq!(
             definition(method)
                 .serialization_scope(&serde_json::json!({}))
@@ -522,13 +522,14 @@ fn screen_controls_round_trip_and_reject_ambiguous_targets() {
 }
 
 #[test]
-fn marketplace_search_supports_capabilities_and_exact_language_routes() {
+fn extension_packages_search_supports_capabilities_and_exact_language_routes() {
     let mut capabilities = super::ServerCapabilities {
-        marketplace: true,
+        extension_management: true,
+        extensions: true,
         ..Default::default()
     };
     capabilities.advertise_contracts();
-    assert_eq!(capabilities.contracts["marketplaceSearch"].version, 1);
+    assert_eq!(capabilities.contracts["extensionsSearch"].version, 1);
     assert_eq!(
         capabilities.contracts["extensionGalleryResources"].version,
         1
@@ -540,14 +541,14 @@ fn marketplace_search_supports_capabilities_and_exact_language_routes() {
         "languageId": "typescriptreact",
         "limit": 20
     });
-    let params: super::MarketplaceSearchParams = serde_json::from_value(wire.clone()).unwrap();
+    let params: super::ExtensionsSearchParams = serde_json::from_value(wire.clone()).unwrap();
     assert_eq!(serde_json::to_value(params).unwrap(), wire);
-    let unfiltered: super::MarketplaceSearchParams =
+    let unfiltered: super::ExtensionsSearchParams =
         serde_json::from_value(serde_json::json!({ "query": "review" })).unwrap();
     assert!(unfiltered.capability_kind.is_none());
     assert!(unfiltered.language_id.is_none());
     assert!(
-        serde_json::from_value::<super::MarketplaceSearchParams>(serde_json::json!({
+        serde_json::from_value::<super::ExtensionsSearchParams>(serde_json::json!({
             "query": "", "capabilityKind": "lsp"
         }))
         .is_err()
@@ -719,4 +720,39 @@ fn file_fuzzy_round_trips_unicode_and_declares_connection_cancellation() {
             .unwrap(),
         None
     );
+}
+
+#[test]
+fn extension_source_mutations_have_strict_inputs_and_exclusive_serialization() {
+    use super::super::extension_packages::ExtensionsAddSourceParams;
+    use super::super::extension_packages::ExtensionsSetSourceEnabledParams;
+    let value = serde_json::json!({
+        "sourceId": "vendor", "metadataBaseUrl": "https://vendor.example/metadata/",
+        "targetsBaseUrl": "https://vendor.example/targets/", "trustedRootJson": "{}",
+        "expectedRevision": 4
+    });
+    let request: ExtensionsAddSourceParams = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), value);
+    assert_eq!(
+        definition("extensions/sources/add")
+            .serialization_scope(&value)
+            .unwrap(),
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::Exclusive
+        })
+    );
+    let toggle = serde_json::json!({"sourceId":"vendor", "enabled":false, "expectedRevision":5});
+    let request: ExtensionsSetSourceEnabledParams = serde_json::from_value(toggle.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), toggle);
+    assert_eq!(
+        definition("extensions/sources/setEnabled")
+            .serialization_scope(&toggle)
+            .unwrap(),
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::Exclusive
+        })
+    );
+    let mut unexpected = value;
+    unexpected["replace"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<ExtensionsAddSourceParams>(unexpected).is_err());
 }

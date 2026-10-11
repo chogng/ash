@@ -161,15 +161,18 @@ def load_report(
                     ],
                 },
             )
-            # Only our adapter is imported. Neither user init files nor scripts
-            # embedded in debug info are executed, and symbol servers stay disabled.
+            # Apply symbol settings before the adapter creates a target. Apple
+            # LLDB can otherwise parse unmapped system shared-cache symbols while
+            # loading scripting resources, even when preloading is disabled.
             command = f"script import sys; sys.path.insert(0, {str(ROOT)!r}); from build.release.dump import export; export(lldb.debugger, {str(config)!r})"
             transcript = run(
                 [
                     tool("lldb"),
                     "--no-lldbinit",
                     "--batch",
-                    "-o",
+                    "-O",
+                    "settings set target.preload-symbols false",
+                    "-O",
                     "settings set target.load-script-from-symbol-file false",
                     "-o",
                     command,

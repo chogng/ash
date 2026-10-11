@@ -190,7 +190,7 @@ fn write_plugin(root: &std::path::Path) {
 
 #[test]
 fn one_failed_authority_does_not_remove_other_external_packages() {
-    use super::super::marketplace_extension_sources::CombinedExtensionSourceProvider;
+    use super::super::extension_packages_extension_sources::CombinedExtensionSourceProvider;
     use ash_external_ext::packages::DynamicExtensionPackageSource;
     use ash_external_ext::packages::DynamicExtensionSourceSnapshot;
     use ash_external_ext::packages::ExtensionDiagnosticCode;

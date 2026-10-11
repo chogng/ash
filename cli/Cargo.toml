@@ -52,6 +52,7 @@ ash-async-utils = { workspace = true }
 ash-http-client = { workspace = true }
 ash-secrets = { workspace = true }
 github = { workspace = true }
+github-authentication = { package = "ash-github-authentication", path = "../extensions/github-authentication" }
 cargo-bin = { workspace = true }
 core-plugins = { package = "ash-core-plugins", path = "../crates/core-plugins" }
 plugin = { package = "ash-plugin", path = "../crates/plugin" }

@@ -3,13 +3,13 @@
 > 物理位置：`crates/plugin/`、`crates/core-plugins/`
 > Rust crate：`ash_plugin`、`ash_core_plugins`
 > 当前状态：`ash-plugin` 已拥有 Plugin identity、manifest、path 与 package observation；
-> `ash-core-plugins` 已拥有 local/Marketplace package store、durable authority、activation、lease 与远端 registry 接入；
+> `ash-core-plugins` 已拥有 local/Extensions package store、durable authority、activation、lease 与远端 registry 接入；
 > Connector 领域类型、目录发现、连接状态持久化和认证流程统一归 `crates/ext/connectors`。
 > App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
 > PL4 的可执行 Editor Extension 本地安装/授权声明已实现，Host runtime 不由本 crate 拥有
 > crate 实现契约：[`ash-plugin`](../crates/plugin/README.md)、[`ash-core-plugins`](../crates/core-plugins/README.md)
-> 跨 package family 的 Marketplace source、共享验证与领域投影：[`core-plugins.md`](../crates/docs/core-plugins.md)
+> 跨 package family 的 Extensions source、共享验证与领域投影：[`core-plugins.md`](../crates/docs/core-plugins.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
@@ -21,9 +21,9 @@
 
 Plugin 是可同时携带多种 capability 的集成 bundle。`ash-plugin` 定义并校验这个 bundle；
 `ash-core-plugins` 聚合内置 Ash catalog 与其他来源，统一拥有安装、更新、启用、授权和 activation。
-Marketplace 只是 Plugin 来源，Skill、MCP、Connector 等运行方不解释 Marketplace。
+所有包通过 Extensions 获取和管理。远端来源采用 Open VSX 或 Ash 开放扩展源协议；官方和第三方 Ash 源共用 adapter，领域服务只消费经验证的 capability。
 
-目标有两类可执行扩展：TS/JS 包在 Desktop 复用 Electron、在后端使用独立 Rust/V8 宿主；Rust 能力包运行自己的独立程序。两者共享外部扩展接入语义，App 和 TUI 按需消费。Plugin 是可携带扩展的分发 bundle，不是外部扩展运行的必要条件；目标 `external-ext` 运行层通过产品侧来源 adapter 接入，不直接依赖 `core-plugins`。现有 Plugin 包状态和来源授权继续归本系统，不复制到扩展运行层，也不因这次命名决策修改 `core-plugins`。确定的命名与根目录 SDK 布局见[扩展接入边界](editor-extensions.md#共享接入与语言适配的-crate-边界)。
+目标有两类可执行扩展：TS/JS 包在 Desktop 复用 Electron、在后端使用独立 Rust/V8 宿主；Rust 能力包运行自己的独立程序。两者共享外部扩展接入语义，App 和 TUI 按需消费。Plugin 是可携带扩展的分发 bundle，不是外部扩展运行的必要条件；目标 `external-ext` 运行层通过产品侧来源 adapter 接入，不直接依赖 `core-plugins`。现有包管理演进为统一 Extensions 安装 authority；Plugin 保留多能力 bundle 职责，包状态和来源授权不复制到运行层。确定的命名与根目录 SDK 布局见[扩展接入边界](editor-extensions.md#共享接入与语言适配的-crate-边界)。
 下文的 `editorExtensions[]` 和 Host RPC v1 是既有契约。Rust SDK 与产品 launcher 已被独立认证试点复用；通用第三方安装和系统隔离仍未完成，不能把一个独立程序声明当作完整运行支持。
 职责与安全要求见 [`确定的产品方向`](editor-extensions.md#0-确定的产品方向)。
 
@@ -34,15 +34,15 @@ Marketplace 只是 Plugin 来源，Skill、MCP、Connector 等运行方不解释
 
 | 用户动作                       | 系统发生什么                                                          | 不会自动发生什么                                   |
 | ------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------- |
-| 安装 Marketplace Plugin bundle | `ash-core-plugins` 校验不可变 package、签名和摘要后只写入一次         | 不自动启用或授权任一 capability                    |
+| 安装 Extensions Plugin bundle | `ash-core-plugins` 校验不可变 package、签名和摘要后只写入一次         | 不自动启用或授权任一 capability                    |
 | 各领域启用 capability          | Skill/MCP/Connector/Editor Extension consumer 分别应用自己的 policy   | 不存在 bundle 级隐式全开                           |
 | 启用 local Plugin              | 允许 contribution 参与解析                                            | 不连接 Connector、不启动 MCP、不执行脚本           |
 | 批准请求的能力                 | 记录精确的进程、网络、目录或凭据授权                                  | 不批准未来每一次工具调用                           |
 | 激活贡献                       | 生成带来源和 generation 的不可变快照                                  | 不把 live manager 注入 Agent                       |
 | 更新或回滚                     | 并存校验后的版本并原子切换                                            | 不原地修改已安装包                                 |
 | 卸载                           | 撤销后续激活并清理可回收内容                                          | 不删除其他领域拥有的秘密或历史                     |
-| 打开正式打包的 Ash             | 从产品内固定的 root 刷新官方 HTTPS Marketplace                        | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
-| 浏览 Marketplace               | 读取已签名 manifest、能力、权限与包统计；离线时可使用仍有效的目录缓存 | 不预下载所有 Plugin ZIP                            |
+| 打开正式打包的 Ash             | 从产品内固定的 root 刷新官方 HTTPS Extensions                        | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
+| 浏览 Extensions               | 读取已签名 manifest、能力、权限与包统计；离线时可使用仍有效的目录缓存 | 不预下载所有 Plugin ZIP                            |
 | 安装远端 Plugin                | 重新检查 TUF 与撤销状态，只下载所选 exact ZIP，再校验内容摘要         | 不因已浏览或已下载而自动启用、授权                 |
 
 ## 1. 结论
@@ -51,7 +51,7 @@ Plugin 的定义与产品生命周期分别由两个 crate 拥有，来源不会
 
 | 来源                                        | Package lifecycle owner | Capability activation owner                                    |
 | ------------------------------------------- | ----------------------- | -------------------------------------------------------------- |
-| Built-in / remote Marketplace Plugin bundle | `ash-core-plugins`      | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域     |
+| Built-in / remote Extensions Plugin bundle | `ash-core-plugins`      | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域     |
 | Local Plugin v1                             | `ash-core-plugins`      | App Server 交给各领域；enable/grant 后形成 activation snapshot |
 
 所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。目标 Rust 能力扩展由 Ash 来源 adapter 或产品预装包接入，同样复用 Manager 的精确包安装与租约；不要求 Open VSX 提供 Rust 包，不新建一套安装、启用或授权 authority。
@@ -71,7 +71,7 @@ Plugin 不是：
 ```mermaid
 flowchart TD
     D["ash-plugin definitions"] --> P["ash-core-plugins installed and active set"]
-    M["Built-in / Marketplace / local sources"] --> P
+    M["Built-in / Extensions / local sources"] --> P
     P --> S["Skill capability → Skill runtime"]
     P --> C
     P --> R
@@ -122,17 +122,15 @@ termination 的 platform launcher；没有该 launcher 时 Host capability 必�
 
 ## 2. 当前仓库审计
 
-当前 `ash-plugin` 实现 strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验和确定性 digest。`ash-core-plugins` 实现 discovery、稳定 staging snapshot、内容寻址 object、durable authority、原子 activation generation 与 Marketplace package lifecycle。
+当前 `ash-plugin` 实现 strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验和确定性 digest。`ash-core-plugins` 实现 discovery、稳定 staging snapshot、内容寻址 object、durable authority、原子 activation generation 与 Extensions package lifecycle。
 
 User/Directory TOML 与 App Server 已能表达 exact legacy Plugin request 和 desired enablement。
 Package store 安全保存既有 local-development immutable object，
 并把 exact installed package 解析为 generation-bound activation snapshot；App Server 可据此自动构造
 Skill source、Connector catalog、durable authority 和 package-rooted MCP provider。Plugin authority
 分别持久化 installed/enabled/granted/effective refs 和 command receipts，并驱动 live activation 切换；
-App Server 当前暴露 Plugin authority 与 Marketplace package API；后续产品接口应以 `plugin/*` 为主，
-只在来源管理时暴露 `marketplace/*`。
-TUI 只有在 Plugin domain 进入 App Server API 后才能增加管理能力。TUI 已有可复用的 tabs/search/selection 组件，但当前没有 Plugin view model 或 `/plugins` command；
-这些 UI 基础设施不改变本节的 backend gate。
+App Server 通过 `extensions/*` 统一提供远端来源、搜索、精确版本安装、更新、卸载和租约。
+`plugin/*` 继续提供本地兼容 Plugin 的启用、授权和领域管理。Workbench、Sessions 和 TUI 使用 `/extensions` 进入包管理；`/plugins` 保留为已安装包的快捷入口。
 
 已有可复用边界：
 
@@ -166,7 +164,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 
 ### 3.2 `ash-core-plugins` 拥有
 
-- built-in、Marketplace 与 local Plugin 来源聚合；
+- built-in、Extensions 与 local Plugin 来源聚合；
 - package staging、atomic install、side-by-side update 和 remove；
 - installed/enabled/granted/effective authority 与 typed command replay；
 - immutable `PluginActivationSnapshot`、generation 与 invocation lease；
@@ -182,7 +180,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 - API token、OAuth token、cookie 或 private key；
 - OS sandbox、network enforcement 或 per-call approval 的最终实现；
 - Thread reducer、Tool Call/Result commit 或 Agent retry；
-- Marketplace publisher、签名发布和远端 catalog 存储；
+- Extensions publisher、签名发布和远端 catalog 存储；
 - 第三方 UI iframe、Renderer code execution 或 Electron preload extension；
 - 任意 native ABI、WASM ABI 或 provider adapter ABI。
 
@@ -211,7 +209,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 
 具体规则：
 
-- `ash-plugin` 不依赖 store、Marketplace、Skill、Connector 或 MCP runtime；
+- `ash-plugin` 不依赖 store、Extensions、Skill、Connector 或 MCP runtime；
 - `ash-core-plugins` 依赖 `ash-plugin`，不反向依赖；
 - `ash-core-plugins` 只输出 normalized descriptor 和 immutable root handle；
 - App Server 将 Skill contribution 注册到 Skill source，将 Connector contribution 交给 Connector adapter，
@@ -337,7 +335,7 @@ artifact fail closed。
 
 ### 5.3 身份
 
-通用插件标识采用 `name@marketplace`，规则见 [Core Plugins](../crates/docs/core-plugins.md#插件标识与-provider)。
+通用插件标识采用 `name@source`，规则见 [Core Plugins](../crates/docs/core-plugins.md#插件标识与-provider)。
 本节的 `PluginPackageId` 专指现有 `.ash-plugin` manifest 中的 `publisher/name`，两段使用 lowercase ASCII、数字和单连字符，并限制总长度。
 display name 可本地化且可变化，不能充当 identity。
 
@@ -390,7 +388,7 @@ model 完成后再启用。
 信任规则：
 
 - BuiltIn 由 Ash release trust 继承，但仍经过 manifest/content validation；
-- marketplace/registry package 必须 digest-pinned；生产 channel 还应验证受信 publisher 签名；
+- extensions/registry package 必须 digest-pinned；生产 channel 还应验证受信 publisher 签名；
 - LocalDevelopment 可以 unsigned，但 UI、status 和 audit 必须显著标记；
 - signature 只证明来源/完整性，不证明 Skill 指令安全、MCP tool 无副作用或没有漏洞；
 - publisher/release 被撤销后禁止新 activation，并停止或隔离受影响 runtime；
@@ -426,7 +424,7 @@ resolve source
 → commit installed authority record
 ```
 
-Local-development source 是可变目录：复制完成后必须重新验证 source 和 staging；只要所选 Plugin ID/version 不变，source 变化会丢弃 staging 并有限次重试，以最后一次稳定内容的 digest 建立 object。文件身份检查只属于这段本地复制过程，用于把打开的句柄绑定到刚检查过的 source file；discovery、digest、object read 和 runtime 都只依赖内容与 package contract。正式 Marketplace artifact 应由 Manager 提供已经固定 digest 的 immutable archive/blob，不依赖文件身份或这套可变目录重试。
+Local-development source 是可变目录：复制完成后必须重新验证 source 和 staging；只要所选 Plugin ID/version 不变，source 变化会丢弃 staging 并有限次重试，以最后一次稳定内容的 digest 建立 object。文件身份检查只属于这段本地复制过程，用于把打开的句柄绑定到刚检查过的 source file；discovery、digest、object read 和 runtime 都只依赖内容与 package contract。正式 Extensions artifact 应由 Manager 提供已经固定 digest 的 immutable archive/blob，不依赖文件身份或这套可变目录重试。
 
 任何一步失败都不改变 active snapshot。staging cleanup 可恢复且不得把 broad root 当删除目标；update 只有在新 object、authority record 和新 generation 都准备完成后才原子切换，旧 generation 在 invocation lease 排空前继续读取旧 object。
 
@@ -662,7 +660,7 @@ Connector-bound MCP composition、通用 OAuth PKCE 状态机、Desktop browser 
 | Skill         | source + name + content digest；select/activate         | PR review workflow             |
 | Built-in tool | Ash release 中的 compiled capability                    | 本地受控 command executor      |
 
-卸载 legacy Plugin 只解除其 contribution 和 credential-slot binding；卸载 Marketplace bundle 则由
+卸载 legacy Plugin 只解除其 contribution 和 credential-slot binding；卸载 Extensions bundle 则由
 Manager 撤销 installation，并等待 capability lease 排空。两者都不能擅自删除 auth domain 中可能被
 其他 Connector 使用的 secret。反过来，revoke Connector credential 会让相关 MCP runtime 不可用，
 但不会删除任何 package。
@@ -680,16 +678,16 @@ Manager 撤销 installation，并等待 capability lease 排空。两者都不�
 | 尚未完成 | operation read API                    | 长操作 progress/result                              |
 
 已实现 Plugin mutation 使用 `CommandId + expectedRevision + exact package payload`。这些 mutation 不读取
-Marketplace catalog，也不接受 Renderer 提交宿主文件路径。远端信任、TUF、revocation、下载、artifact
-和安装状态由 [`core-plugins.md`](../crates/docs/core-plugins.md) 定义的 PluginsManager 链路统一拥有。
+Extensions catalog，也不接受 Renderer 提交宿主文件路径。远端信任、TUF、revocation、下载、artifact
+和安装状态由 [`core-plugins.md`](../crates/docs/core-plugins.md) 定义的 ExtensionPackageManager 链路统一拥有。
 
 正式 package 把只读配置和公开信任根放在
-`ash-resources/product-services/{product-services.json,marketplace-root.json}`。Desktop/server、
+`ash-resources/product-services/{product-services.json,extensions-root.json}`。Desktop/server、
 `ash code`/TUI 与 app 通过共享 App Server client + `ash-install-context` 边界发现该资源，默认注册 `https://chogng.github.io/ash-marketplace/` 的 `ash`
-Marketplace；`ASH_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
+Extensions；`ASH_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
 显式覆盖入口。远端 metadata、Plugin、用户配置和 Directory 都不能更换这份 root。发行源仓库仍为
-private，Pages 只暴露经过 Marketplace 自身独立 validator 和 TUF verifier 复核的 `metadata/` 与
-`targets/` 静态产物。Marketplace 不依赖 Ash 源码或发布状态；Ash 只是通过 pinned root 和 consumer
+private，Pages 只暴露经过 Extensions 自身独立 validator 和 TUF verifier 复核的 `metadata/` 与
+`targets/` 静态产物。Extensions 不依赖 Ash 源码或发布状态；Ash 只是通过 pinned root 和 consumer
 adapter 选择性消费它。
 默认产品文件只启用官方源；第三方源只能由 host 在同一只读文件中追加，不能从 Plugin、自身远端 metadata
 或普通用户设置提升为发行信任。
@@ -708,7 +706,7 @@ CLI/TUI/Desktop 不直接扫描 Plugin 目录，不解析 manifest，也不自�
 
 ## 15. 安全
 
-Legacy local package ingestion 必须防御以下问题；remote Marketplace ingestion 的 TUF/archive 契约由
+Legacy local package ingestion 必须防御以下问题；remote Extensions ingestion 的 TUF/archive 契约由
 [`core-plugins.md`](../crates/docs/core-plugins.md) 单独拥有：
 
 - archive path traversal、absolute path 和 drive/device path；
@@ -785,8 +783,8 @@ crates/core-plugins/src/
 │   ├── snapshot.rs
 │   └── store.rs
 ├── manager.rs
-├── marketplace_store.rs
-└── marketplace_activation.rs
+├── extension_packages_store.rs
+└── extension_packages_activation.rs
 ```
 
 ## 18. 分阶段实施
@@ -828,7 +826,7 @@ crates/core-plugins/src/
 ### 阶段 PL3：远端分发迁移（已完成）
 
 - ✅ `ash-core-plugins::registry` 隔离远端 catalog/TUF/download；
-- ✅ `ash-core-plugins` 统一拥有 local/Marketplace artifact、install/update/uninstall、authority 与 lease；
+- ✅ `ash-core-plugins` 统一拥有 local/Extensions artifact、install/update/uninstall、authority 与 lease；
 - ✅ `ash-plugin` 只拥有共享 Plugin 定义与 package observation；
 - ✅ Plugin bundle 经统一 installed/activation state 后按 capability 交给领域 consumer；
 - 尚未完成：统一 UI 中跨 capability 的 permission/contribution diff。

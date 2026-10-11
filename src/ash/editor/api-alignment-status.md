@@ -15,7 +15,7 @@
 
 路径与职责已经对应，完整上游 API 尚未全部具备。共享语言提供者仍使用 Ash 的 snapshot／AbortSignal 请求，引用查询的 compact 语义及控件公开签名也与上游有差异；当前动作数组没有可释放的 provider list 资源。因此这些文件不计为完整上游签名对齐，也不改变下文待处理声明的统计。
 
-验证：相关单测累计 51 项通过；Chromium 定向批次 81 项通过，修正中文场景装配后剩余 1 项单独通过，共覆盖 82 项。包含中文输入、引用预览及提示标签，预览接受／取消，查询／解析取消，分栏参数和一次撤销。Web 产品及 Electron UI 的右键菜单与中文重启冒烟各 2 项通过。Stanza、Renderer 与 Host 的正常构建、结构／样式归属检查及语言目录检查通过。完整 Editor 单测未完成：两项既有 URI-list 粘贴／拖放断言使用正斜杠路径，在 Windows 实际返回反斜杠路径；随后共享测试编译目录中的文件缺失，导致套件中断。语言检查仍报告一项非本批的 Marketplace 译文缺失，未改动该目录。
+验证：相关单测累计 51 项通过；Chromium 定向批次 81 项通过，修正中文场景装配后剩余 1 项单独通过，共覆盖 82 项。包含中文输入、引用预览及提示标签，预览接受／取消，查询／解析取消，分栏参数和一次撤销。Web 产品及 Electron UI 的右键菜单与中文重启冒烟各 2 项通过。Stanza、Renderer 与 Host 的正常构建、结构／样式归属检查及语言目录检查通过。完整 Editor 单测未完成：两项既有 URI-list 粘贴／拖放断言使用正斜杠路径，在 Windows 实际返回反斜杠路径；随后共享测试编译目录中的文件缺失，导致套件中断。语言检查仍报告一项非本批的 Extensions 译文缺失，未改动该目录。
 
 连接 App Server 的 Electron 冒烟：右键菜单行为 1 项通过；中文重启场景在 `test/automation/test.ts:183` 等待应用 `close` 事件时超过 30 秒，尚未通过。失败发生在菜单验证前的重启步骤，不计为完整连接场景通过。
 
@@ -86,7 +86,7 @@
 
 本批最终验证：按键、菜单、剪贴板、导航及层级的 5 个单测文件共 27 项通过；Editor Chromium 定向回归 35 项通过，覆盖本批菜单、固定行菜单、代码动作请求取消、Peek 释放及悬停选项。完整 Editor 浏览器检查共 798 项，首次结果为 796 项通过：固定行键盘菜单未聚焦首项已修复并复测通过，悬停延时断言在未改动悬停代码的定向复测中通过；不把该次完整检查记为全绿。文件集合、CSS 归属、台账检查及 Stanza 类型检查通过。
 
-产品 Playwright：Web 与 Electron UI 各 2 项菜单场景通过，包含真实剪贴板、多处替换、撤销、命令面板、中文重启和无障碍帮助。连接 App Server 的 Electron 菜单操作通过；中文重启场景两次在等待旧 Electron 进程关闭时超时，仓库原有显示语言重启测试也在同一位置超时，因此该目标的中文重启验证尚未通过。本批未修改进程关闭链，也未跳过失败场景。Stanza 与 Renderer 生产构建通过；中文生成检查通过，但报告 1 个既有 Marketplace 文案缺失及 20 个与源文案相同的条目，本批新增菜单中文文案已生成。
+产品 Playwright：Web 与 Electron UI 各 2 项菜单场景通过，包含真实剪贴板、多处替换、撤销、命令面板、中文重启和无障碍帮助。连接 App Server 的 Electron 菜单操作通过；中文重启场景两次在等待旧 Electron 进程关闭时超时，仓库原有显示语言重启测试也在同一位置超时，因此该目标的中文重启验证尚未通过。本批未修改进程关闭链，也未跳过失败场景。Stanza 与 Renderer 生产构建通过；中文生成检查通过，但报告 1 个既有 Extensions 文案缺失及 20 个与源文案相同的条目，本批新增菜单中文文案已生成。
 
 ## 颜色选择器复用 base 控件（2026-10-04）
 
@@ -235,7 +235,7 @@ Quick Fix 有多个类别时使用 `TabbedActionListWidget` 显示“全部操�
 
 验证结果：Widget、模型生命周期、输入、差异窗格和 Editor 架构共 100 项定向单测通过；Chromium 的公共定位、输入/撤销/保存、文件切换共 3 个场景通过；生产 Web 和 Electron UI 各 2 个输入/折叠/分组场景通过；连接 App Server 的 Electron 3 个打开/保存/滚动/替换场景通过。生产构建、Renderer 类型检查及专用入口的结构、CSS、台账和 Stanza 类型检查通过，构建没有 warning。
 
-完整 `check-editor-alignment.mjs --test=all` 未通过：Editor 单测为 243/250 个文件通过，其余失败位于 Copy/Paste、Drop、Semantic Tokens、Multi Diff Widget/Pane、App Server Diagnostics/Providers，涉及文件粘贴行为、token 字段、缺失图标及 Windows 资源路径；本批没有修改这些职责。浏览器完整编译入口另有 Academic、Marketplace、Terminal 测试契约错误，完整 fixture 构建还引用已不存在的 Sessions CSS。本次 Chromium 场景用原配置的编译选项和 Vite 输出规则，仅选择受影响的 text-model fixture 检查与构建；没有跳过该场景的类型检查，也没有将完整检查记为通过。
+完整 `check-editor-alignment.mjs --test=all` 未通过：Editor 单测为 243/250 个文件通过，其余失败位于 Copy/Paste、Drop、Semantic Tokens、Multi Diff Widget/Pane、App Server Diagnostics/Providers，涉及文件粘贴行为、token 字段、缺失图标及 Windows 资源路径；本批没有修改这些职责。浏览器完整编译入口另有 Academic、Extensions、Terminal 测试契约错误，完整 fixture 构建还引用已不存在的 Sessions CSS。本次 Chromium 场景用原配置的编译选项和 Vite 输出规则，仅选择受影响的 text-model fixture 检查与构建；没有跳过该场景的类型检查，也没有将完整检查记为通过。
 
 ## 文件图标类与主题接线（2026-09-25）
 
@@ -381,7 +381,7 @@ Quick Diff 时限续批：独立默认值由不限时改为标准的 1000 毫秒
 
 最终 `check-editor-alignment.mjs --test=all` 完整通过：Editor 单测 249 / 249 个文件、1442 项通过，浏览器 776 / 776 项通过。`typecheck:stanza`、`build:stanza`、完整桌面构建（Host / Renderer）及自动化测试编译通过。结构、CSS 归属、台账及 diff 检查通过，121 组声明的 80 / 41 计数保持不变，没有新增未跟踪的 JavaScript 产物。
 
-完整复测还清除了 Marketplace 测试替身中过期的 `ILocalizationService.onDidChange` 字段；折叠边栏测试等待编辑后的异步范围重算恢复按钮，再读取几何，连续 3 次复测通过。中英文场景遵循语言包重启生效的契约，分别在创建控件前设定启动语言，保留全部中文断言。单测仍有 JSDOM Canvas 提示，Playwright 仍有终端颜色变量提示。
+完整复测还清除了 Extensions 测试替身中过期的 `ILocalizationService.onDidChange` 字段；折叠边栏测试等待编辑后的异步范围重算恢复按钮，再读取几何，连续 3 次复测通过。中英文场景遵循语言包重启生效的契约，分别在创建控件前设定启动语言，保留全部中文断言。单测仍有 JSDOM Canvas 提示，Playwright 仍有终端颜色变量提示。
 
 ## Contrib 控制器身份入口（2026-09-24，续批）
 
