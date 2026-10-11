@@ -8,7 +8,7 @@ import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import { BrowserPathService } from '../../../path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
@@ -40,6 +40,11 @@ import { WorkspaceContextService } from '../../../workspaces/browser/workspaceCo
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { IConfigurationResolverService } from '../../common/configurationResolver.js';
 import '../../browser/configurationResolverService.js';
+
+function testRendererHost(os = OperatingSystem.Linux): IRendererHost {
+	const host = createDisconnectedRendererApi();
+	return { ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } };
+}
 
 suite('ConfigurationResolverService', () => {
 	for (const os of [OperatingSystem.Windows, OperatingSystem.Linux, OperatingSystem.Macintosh]) {
@@ -119,14 +124,18 @@ suite('ConfigurationResolverService', () => {
 		});
 	}
 
-	for (const resource of [URI.file('/work/project folder'), URI.from({ scheme: Schemas.file, path: '/C:/work/project folder' }), createSshRemoteWorkspaceUri('build', '/srv/project folder')]) {
+	for (const { resource, os, path } of [
+		{ resource: URI.from({ scheme: Schemas.file, path: '/work/project folder' }), os: OperatingSystem.Linux, path: '/work/project folder' },
+		{ resource: URI.from({ scheme: Schemas.file, path: '/c:/work/project folder' }), os: OperatingSystem.Windows, path: 'C:\\work\\project folder' },
+		{ resource: URI.from({ scheme: Schemas.file, authority: 'build', path: '/share/project folder' }), os: OperatingSystem.Windows, path: '\\\\build\\share\\project folder' },
+		{ resource: createSshRemoteWorkspaceUri('build', '/srv/project folder'), os: OperatingSystem.Linux, path: '/srv/project folder' },
+	]) {
 		test(`resolves nested execution data without mutating configuration for ${resource.scheme}:${resource.path}`, async () => {
 			using workspace = new WorkspaceContextService({ id: 'test', uri: resource });
-			using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
+			using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost(os)], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			const resolver = services.get(IConfigurationResolverService);
 			const input = Object.freeze({ program: '${workspaceFolder}/app', args: Object.freeze(['${workspaceFolderBasename}', '${workspaceFolder} ${workspaceFolder}', '${unknown}', '${command:run}']), nested: Object.freeze({ cwd: '${workspaceFolder}', count: 3, enabled: false, empty: null }) });
-			const path = resource.scheme === Schemas.file ? resource.fsPath : resource.path;
 			assert.deepEqual(await resolver.resolveAsync(workspace.getWorkspace().folders[0], input), {
 				program: `${path}/app`, args: ['project folder', `${path} ${path}`, '${unknown}', '${command:run}'], nested: { cwd: path, count: 3, enabled: false, empty: null },
 			});
@@ -223,7 +232,7 @@ suite('ConfigurationResolverService', () => {
 
 test('ConfigurationResolverService resolves each command reference once per invocation with resolved configuration and aliases', async () => {
 	using workspace = new WorkspaceContextService({ id: 'test', uri: URI.file('/project') });
-	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
+	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const seen: unknown[] = [];
 	using command = CommandsRegistry.register('resolver.test.value', (_accessor, config) => {
@@ -299,7 +308,7 @@ function inputServices(owner: DisposableStore, workspace: IWorkspaceContextServi
 	const document = dom.window.document;
 	const context = owner.add(new ContextKeyService());
 	const quickInput = owner.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: context }));
-	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
+	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
 		...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace],
 		[IFileService, owner.add(createTestFileService(new MemoryFileService(contents)))], [IQuickInputService, quickInput],
 	)));

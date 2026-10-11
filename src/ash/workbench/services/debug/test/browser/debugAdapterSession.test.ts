@@ -21,6 +21,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
+import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
 import { type AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/common/remote.js";
@@ -30,15 +31,15 @@ import { DebugBreakpoint, type IDebugBreakpoint, type IDebugConfiguration } from
 test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints, and resolves an omitted stopped thread", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	let breakpoints: readonly IDebugBreakpoint[] = [breakpoint(4)];
-	const workspace = URI.file('C:\\workspace');
+	const workspace = URI.from({ scheme: 'file', path: '/C:/workspace' });
 	const breakpointPath = breakpoints[0]!.resource.fsPath;
 	const updates: Array<{ readonly id: string; readonly verified: boolean; readonly message?: string; }> = [];
 	const terminalRequests: unknown[] = [];
 	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspace, runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
 
 	assert.equal(session.state, "running");
-	assert.deepEqual(processes.started, { program: `${workspace.fsPath}\\adapter`, arguments: ['--stdio', workspace.fsPath] });
-	assert.deepEqual(processes.request("launch").arguments, { program: `${workspace.fsPath}\\bin\\app`, cwd: workspace.fsPath });
+	assert.deepEqual(processes.started, { program: 'C:\\workspace\\adapter', arguments: ['--stdio', 'C:\\workspace'] });
+	assert.deepEqual(processes.request("launch").arguments, { program: 'C:\\workspace\\bin\\app', cwd: 'C:\\workspace' });
 	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: breakpointPath }, breakpoints: [{ line: 4 }] });
 	assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
 	assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
@@ -433,7 +434,9 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 async function startSession(options: Omit<DebugAdapterSessionStartOptions, 'resolvedConfiguration'>): Promise<DebugAdapterSession> {
 	using workspace = new WorkspaceContextService({ id: 'test', uri: options.workspace });
-	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
+	const base = createDisconnectedRendererApi();
+	const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: OperatingSystem.Windows } };
+	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const resolver = services.createInstance(ConfigurationResolverService);
 	const resolvedConfiguration = await resolver.resolveAsync(workspace.getWorkspace().folders[0], { adapter: options.configuration.adapter, arguments: options.configuration.arguments });
@@ -470,8 +473,11 @@ for (const id of [0, -1]) {
 
 for (const [path, address] of [
 	['C:\\workspace\\main.ts', 'file:///C:/workspace/main.ts'],
+	['C:/workspace/main.ts', 'file:///C:/workspace/main.ts'],
 	['\\\\server\\share\\main.ts', 'file://server/share/main.ts'],
+	['//server/share/main.ts', 'file://server/share/main.ts'],
 	['/workspace/main\\part.ts', 'file:///workspace/main%5Cpart.ts'],
+	['/workspace/main\\part?#.ts', 'file:///workspace/main%5Cpart%3F%23.ts'],
 ]) {
 	test(`DAP file sources preserve execution path ${path}`, async () => {
 		using processes = new FakeDebugAdapterProcessService(path);

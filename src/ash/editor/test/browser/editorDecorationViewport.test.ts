@@ -113,6 +113,33 @@ test('Viewport decoration data refreshes after filtering, edits and wrapping cha
 	}
 });
 
+test('Viewport decoration data refreshes when variable font support changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	try {
+		using model = new TextModel('font sample');
+		model.deltaDecorations([], [{
+			range: new Range(1, 1, 1, 5),
+			options: { description: 'variable font', inlineClassName: 'viewport-font', affectsFont: true },
+		}]);
+		using view = new View({
+			container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false },
+			allowVariableFonts: true, textMeasurer: new FixedTextMeasurer(),
+		});
+		const range = new Range(1, 1, 1, model.getLineMaxColumn(1));
+		const read = () => view.testViewModel.getViewportViewLineRenderingData(range, 1);
+		assert.equal(read().hasVariableFonts, true);
+		assert.equal(read().inlineDecorations.length, 1);
+		view.testConfiguration.updateOptions({ allowVariableFonts: false });
+		assert.equal(read().hasVariableFonts, false);
+		assert.deepEqual(read().inlineDecorations, []);
+		view.testConfiguration.updateOptions({ allowVariableFonts: true });
+		assert.equal(read().hasVariableFonts, true);
+		assert.equal(read().inlineDecorations.length, 1);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("Model decorations project, update, and follow tracked ranges", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	recordCanvasPaint(dom);
@@ -640,7 +667,7 @@ function overviewCursorColors(paint: readonly CanvasPaint[]): readonly string[] 
 }
 
 class DecorationQueryModel extends TextModel {
-	readonly decorationQueries: Range[] = [];
+	public readonly decorationQueries: Range[] = [];
 
 	public override getDecorationsInRange(...args: Parameters<TextModel['getDecorationsInRange']>): ReturnType<TextModel['getDecorationsInRange']> {
 		this.decorationQueries.push(Range.lift(args[0]));

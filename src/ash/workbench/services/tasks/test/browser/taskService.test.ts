@@ -349,10 +349,16 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 }
 
 
-function taskServices(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, terminals: ITerminalService): InstantiationService {
+// Fixture paths describe the execution host, independently of the test runner's OS.
+function testPathService(workspace: IWorkspaceContextService, os = OperatingSystem.Linux): BrowserPathService {
+	const host = createDisconnectedRendererApi();
+	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
+}
+
+function taskServices(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, terminals: ITerminalService, os = OperatingSystem.Linux): InstantiationService {
 	const parent = workbenchInstantiationService(owner);
 	registerTestWorkbenchInteractionServices(owner, parent);
-	const services = parent.createChild(new ServiceCollection([IFileService, owner.add(createTestFileService(files))], [IWorkspaceContextService, workspace], [IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)], [ITerminalProcessService, { getEnvironment: async () => ({ HOME: '/execution/home' }) }], [ITerminalService, terminals], [ILogService, new NullLoggerService()]), owner);
+	const services = parent.createChild(new ServiceCollection([IFileService, owner.add(createTestFileService(files))], [IWorkspaceContextService, workspace], [IPathService, testPathService(workspace, os)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)], [ITerminalProcessService, { getEnvironment: async () => ({ HOME: '/execution/home' }) }], [ITerminalService, terminals], [ILogService, new NullLoggerService()]), owner);
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 	services.registerInstance(IMarkerService, owner.add(new MarkerService()));
@@ -517,7 +523,7 @@ test('TaskService discovers tasks without terminal execution and rejects dispatc
 	const parent = workbenchInstantiationService(resources);
 	registerTestWorkbenchInteractionServices(resources, parent);
 	registerTestExtensionService(resources, parent);
-	parent.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), parent.get(IWorkspaceContextService)));
+	parent.registerInstance(IPathService, testPathService(parent.get(IWorkspaceContextService)));
 	const services = parent.createChild(new ServiceCollection([IFileService, resources.add(createTestFileService(new FakeFileService(URI.file('/workspace'), {})))], [ILogService, new NullLoggerService()], [ITerminalProcessService, createDisconnectedRendererApi().terminal], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)]), resources);
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const tasks = resources.add(services.createInstance(TaskService));
@@ -563,7 +569,7 @@ suite('TaskService terminal availability', () => {
 			const services = resources.add(new InstantiationService(new ServiceCollection([IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
 				[IMarkerService, resources.add(new MarkerService())], [IModelService, { getModel: () => null }],
 				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
-				[IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace)], [ITerminalProcessService, processes], [IOutputService, output], [ILogService, new NullLoggerService()],
+				[IPathService, testPathService(workspace)], [ITerminalProcessService, processes], [IOutputService, output], [ILogService, new NullLoggerService()],
 			)));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			const terminals = resources.add(services.createInstance(TerminalService));
@@ -623,7 +629,7 @@ suite('TaskService terminal availability', () => {
 				[IMarkerService, resources.add(new MarkerService())], [IModelService, { getModel: () => null }],
 				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))],
 				[IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
-				[IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace)], [ITerminalProcessService, processes],
+				[IPathService, testPathService(workspace)], [ITerminalProcessService, processes],
 				[IOutputService, output],
 				[ILogService, new NullLoggerService()],
 			)));
@@ -659,7 +665,7 @@ suite('Task terminal reuse policies', () => {
 		workspace.updateWorkspace({ id: 'workspace', uri: root });
 		const document = { version: '2.0.0', tasks: ['First', 'Second'].map(label => ({ label, type: 'process', command: label.toLowerCase(), args: [], options: { cwd: `/workspace/${label.toLowerCase()}`, env: { TASK: label } }, presentation: { panel, ...presentation } })) };
 		services.registerInstance(IFileService, owner.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }))));
-		services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+		services.registerInstance(IPathService, testPathService(workspace));
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerInstance(IMarkerService, owner.add(new MarkerService()));
@@ -854,18 +860,44 @@ suite('TaskService configuration capabilities', () => {
 });
 
 suite('TaskService configuration resolution', () => {
-	for (const root of [URI.file('/workspace/project'), URI.from({ scheme: 'file', path: '/C:/work/project' })]) {
+	for (const { root, os, folderPath } of [
+		{ root: URI.from({ scheme: 'file', path: '/workspace/project' }), os: OperatingSystem.Linux, folderPath: '/workspace/project' },
+		{ root: URI.from({ scheme: 'file', path: '/c:/work/project' }), os: OperatingSystem.Windows, folderPath: 'C:\\work\\project' },
+		{ root: URI.from({ scheme: 'file', authority: 'build', path: '/share/project' }), os: OperatingSystem.Windows, folderPath: '\\\\build\\share\\project' },
+	]) {
 		test(`resolves the dispatched command and retains the source task for ${root.path}`, async () => {
 			using resources = new DisposableStore();
 			using terminals = new FakeTerminalService();
 			const folder = { id: 'workspace', uri: root, name: 'Project', index: 0 };
 			const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder };
 			const command = 'echo "${workspaceFolder:Project}" ${workspaceFolderBasename} "${env:HOME}"';
-			using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Resolve', command }] }) }), workspace, terminals).createInstance(TaskService);
+			using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Resolve', command }] }) }), workspace, terminals, os).createInstance(TaskService);
 			const task = (await service.refresh())[0]!;
 			await service.run(task);
-			assert.deepEqual((terminals.instances[0] as FakeTerminalInstance).execution, { type: 'shell', commandLine: `echo "${root.fsPath}" project "/execution/home"` });
+			assert.deepEqual((terminals.instances[0] as FakeTerminalInstance).execution, { type: 'shell', commandLine: `echo "${folderPath}" project "/execution/home"` });
 			assert.equal(task.command, command);
+		});
+
+		if (os !== OperatingSystem.Windows) { continue; }
+		test(`dispatches Windows process paths and platform overrides for ${root.toString()}`, async () => {
+			using resources = new DisposableStore();
+			using terminals = new FakeTerminalService();
+			const folder = { id: 'workspace', uri: root, name: 'Project', index: 0 };
+			const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder };
+			const creates: ITerminalCreateOptions[] = [];
+			const create = terminals.createTerminal.bind(terminals);
+			terminals.createTerminal = async options => { creates.push(options); return create(options); };
+			const document = {
+				version: '2.0.0', tasks: [{
+					label: 'Windows', type: 'process', command: 'wrong-platform',
+					linux: { command: 'wrong-linux' }, osx: { command: 'wrong-mac' },
+					windows: { command: '${workspaceFolder}${pathSeparator}adapter.exe', args: ['${workspaceFolder:Project}', '${/}', ''], options: { cwd: '${workspaceFolder}${/}src', env: { ROOT: '${workspaceFolder}', REMOVED: null } } },
+				}]
+			};
+			using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals, os).createInstance(TaskService);
+			await service.run((await service.refresh())[0]!);
+			assert.deepEqual(creates.map(({ execution, cwd, env }) => ({ execution, cwd, env })), [{ execution: { type: 'process', program: `${folderPath}\\adapter.exe`, args: [folderPath, '\\', ''] }, cwd: `${folderPath}\\src`, env: { ROOT: folderPath, REMOVED: null } }]);
+			assert.deepEqual(terminals.instances[0].writes, []);
 		});
 	}
 
@@ -1522,7 +1554,7 @@ suite('Extension task execution lifecycle', () => {
 				const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
 				workspace.updateWorkspace({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }, { id: 'second', uri: URI.file('/workspace/second'), name: 'Second', index: 1 }] });
 				services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root, {}))));
-				services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+				services.registerInstance(IPathService, testPathService(workspace));
 				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(ILogService, new NullLoggerService());
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
@@ -1695,7 +1727,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 				const documents = { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: kind === 'configured' ? [configured] : [] }) };
 				const files = resources.add(createTestFileService(new FakeFileService(root, documents)));
 				services.registerInstance(IFileService, files);
-				services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+				services.registerInstance(IPathService, testPathService(workspace));
 				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(ILogService, new NullLoggerService());
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
@@ -1796,7 +1828,7 @@ suite('Task instance limits through the execution owners', () => {
 					'.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: kind === 'process' ? [{ label: 'Limited', type: 'process', command: 'compiler', runOptions: { instanceLimit: limit, instancePolicy: 'silent' } }] : [] }),
 				})));
 				services.registerInstance(IFileService, files);
-				services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+				services.registerInstance(IPathService, testPathService(workspace));
 				services.registerInstance(ILogService, new NullLoggerService());
 				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
@@ -1929,7 +1961,7 @@ suite('Task instance policies through the execution owners', () => {
 		workspace.updateWorkspace({ id: 'policy', uri: root });
 		services.registerInstance(IFileService, owner.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Policy', type: 'process', command: 'compiler', runOptions }] }) }, fileChanges))));
 		services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
-		services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+		services.registerInstance(IPathService, testPathService(workspace));
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		services.registerInstance(IMarkerService, owner.add(new MarkerService()));

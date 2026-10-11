@@ -1,4 +1,5 @@
 import { URI } from '../../../../base/common/uri.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { localize } from '../../../../nls.js';
 import type { ILogService } from '../../../../platform/log/common/log.js';
 import type { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -19,6 +20,12 @@ export function getUriFromSource(raw: IDebugSource, path: string | undefined, se
 		logService.debug('debug.source', `Resolving source reference ${raw.sourceReference} in session ${sessionId}.`);
 		return resource;
 	}
-	if (path && !path.includes('\0') && path.length <= 32768) return uriIdentityService.asCanonicalUri(URI.file(/^(?:[a-z]:[\\/]|\\\\)/i.test(path) ? path.replaceAll('\\', '/') : path));
+	if (path && !path.includes('\0') && path.length <= 32768) {
+		// A POSIX adapter can supply a literal backslash even when the renderer runs on Windows.
+		const resource = path.startsWith('/') && !path.startsWith('//')
+			? URI.from({ scheme: Schemas.file, path })
+			: URI.file(/^(?:[a-z]:[\\/]|\\\\)/i.test(path) ? path.replaceAll('\\', '/') : path);
+		return uriIdentityService.asCanonicalUri(resource);
+	}
 	throw new TypeError(localize('debug.invalidSource', 'The debug source needs a path or a source reference and a live session.'));
 }

@@ -74,6 +74,7 @@ interface ModelDecorationEntry {
 	readonly ownerId: number;
 	readonly trackedRange: TrackedRange;
 	readonly options: IModelDecorationOptions;
+	cachedRange?: { readonly versionId: number; readonly range: Range; };
 }
 
 interface CommitContext {
@@ -1277,7 +1278,10 @@ export class TextModel implements ITextModel {
 			if (filterOutValidation && isValidationDecoration(entry.options)) continue;
 			if (filterFontDecorations && entry.options.affectsFont) continue;
 			if (onlyMarginDecorations && !entry.options.glyphMarginClassName) continue;
-			const decorationRange = entry.trackedRange.range;
+			if (entry.cachedRange?.versionId !== this._version) {
+				entry.cachedRange = { versionId: this._version, range: entry.trackedRange.range };
+			}
+			const decorationRange = entry.cachedRange.range;
 			if (!Range.areIntersectingOrTouching(validatedRange, decorationRange)) continue;
 			result.push({
 				id: entry.id,
@@ -1958,6 +1962,10 @@ export class TextModel implements ITextModel {
 			this.plainLineSnapshot = undefined;
 		}
 		this.trackedRanges.acceptChanges(appliedChanges);
+		// Cursor-state callbacks can query decorations before the model version advances.
+		for (const entry of this.modelDecorations.values()) {
+			entry.cachedRange = undefined;
+		}
 		let committedInverseEdits: OffsetEdit[] = inverseEdits;
 		if (eolChanged) {
 			const eolLengthDelta = endOfLineText(targetEOL).length - endOfLineText(previousEOL).length;

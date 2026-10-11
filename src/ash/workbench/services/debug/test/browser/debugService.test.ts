@@ -27,6 +27,7 @@ import { IRendererHostService } from '../../../../../platform/renderer/common/re
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import { BrowserPathService } from '../../../path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { DebugConfigurationProviderTriggerKind, DebugConsoleMode, IDebugService, type DebugConfiguration, type IDebugConfiguration } from '../../common/debugService.js';
 import '../../../../contrib/debug/browser/debugActions.js';
 import { SELECT_AND_START_ID } from '../../../../contrib/debug/common/debug.js';
@@ -444,8 +445,14 @@ function workspaceService(root: URI): IWorkspaceContextService {
 }
 function task(label: string): IWorkspaceTask { return Object.freeze({ id: `vscode:${label}`, label, command: label, source: "vscode", group: "other" }); }
 
-function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, editorServices?: { editor: IEditorService; groups?: IEditorGroupsService; configuration?: IConfigurationService; }): DebugService {
-	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, editorServices?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
+// Fixture paths describe the execution host, independently of the test runner's OS.
+function testPathService(workspace: IWorkspaceContextService, os = OperatingSystem.Linux): BrowserPathService {
+	const host = createDisconnectedRendererApi();
+	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
+}
+
+function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { editor?: IEditorService; groups?: IEditorGroupsService; configuration?: IConfigurationService; executionOS?: OperatingSystem; }): DebugService {
+	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, testPathService(workspace, options?.executionOS)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, owner.add(createTestFileService(files))],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
 		[IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
@@ -461,8 +468,8 @@ function createDebugService(owner: DisposableStore, files: IFileSystemProvider, 
 	if (extensions) services.registerInstance(IExtensionService, extensions);
 	else registerTestExtensionService(owner, services);
 	if (quickInput) services.registerInstance(IQuickInputService, quickInput);
-	services.registerInstance(IEditorService, editorServices?.editor ?? { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
-	services.registerInstance(IEditorGroupsService, editorServices?.groups ?? {} as IEditorGroupsService);
+	services.registerInstance(IEditorService, options?.editor ?? { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
+	services.registerInstance(IEditorGroupsService, options?.groups ?? {} as IEditorGroupsService);
 	return services.createInstance(DebugService);
 }
 
@@ -572,23 +579,32 @@ test('DebugService suppressSaveBeforeStart bypasses saves and parent sessions do
 	await service.stop(parent);
 });
 
-test('DebugService resolves adapter and launch data while retaining the source for restart', async () => {
-	using resources = new DisposableStore();
-	const root = URI.file('/workspace/project');
-	using tasks = new FakeTaskService();
-	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
-	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
-	const configuration = { id: 'resolved', name: 'Resolved', type: 'example', request: 'launch' as const, adapter: { program: '${workspaceFolder}/adapter', arguments: ['${env:HOME}'], cwd: '${workspaceFolder}/src', env: { MODE: '${env:HOME}', LITERAL: '$HOME', TERM_PROGRAM: null } }, arguments: { cwd: '${workspaceFolder}', args: ['${workspaceFolderBasename}', '${workspaceFolder:project}/app', '${env:HOME}', '${env:MISSING}'] } };
-	const session = await service.startDebugging(configuration);
-	assert.equal(session.configuration, configuration);
-	assert.deepEqual(processes.started.at(-1), { program: '/workspace/project/adapter', arguments: ['/execution/home'], cwd: '/workspace/project/src', env: { MODE: '/execution/home', LITERAL: '$HOME', TERM_PROGRAM: null } });
-	assert.deepEqual(processes.requests.find(request => request.command === 'launch')?.arguments, { cwd: '/workspace/project', args: ['project', '/workspace/project/app', '/execution/home', ''] });
-	const restarted = await service.restart(session);
-	assert.equal(restarted.configuration, configuration);
-	assert.equal(configuration.arguments.cwd, '${workspaceFolder}');
-	await service.stop(restarted);
-});
+for (const { root, os, folderPath, separator } of [
+	{ root: URI.from({ scheme: 'file', path: '/workspace/project' }), os: OperatingSystem.Linux, folderPath: '/workspace/project', separator: '/' },
+	{ root: URI.from({ scheme: 'file', path: '/c:/work/project' }), os: OperatingSystem.Windows, folderPath: 'C:\\work\\project', separator: '\\' },
+	{ root: URI.from({ scheme: 'file', authority: 'build', path: '/share/project' }), os: OperatingSystem.Windows, folderPath: '\\\\build\\share\\project', separator: '\\' },
+]) {
+	test(`DebugService resolves adapter and launch data while retaining the source for restart on ${root.toString()}`, async () => {
+		using resources = new DisposableStore();
+		using tasks = new FakeTaskService();
+		using processes = new FakeDebugAdapterProcessService();
+		using adapters = new DebugAdapterFactoryRegistry();
+		using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, undefined, { executionOS: os });
+		const configuration = { id: 'resolved', name: 'Resolved', type: 'example', request: 'launch' as const, adapter: { program: '${workspaceFolder}${pathSeparator}adapter', arguments: ['${env:HOME}'], cwd: '${workspaceFolder}${/}src', env: { MODE: '${env:HOME}', LITERAL: '$HOME', TERM_PROGRAM: null } }, arguments: { cwd: '${workspaceFolder}', args: ['${workspaceFolderBasename}', '${workspaceFolder:project}${pathSeparator}app', '${env:HOME}', '${env:MISSING}'] } };
+		const session = await service.startDebugging(configuration);
+		assert.equal(session.configuration, configuration);
+		const expectedAdapter = { program: `${folderPath}${separator}adapter`, arguments: ['/execution/home'], cwd: `${folderPath}${separator}src`, env: { MODE: '/execution/home', LITERAL: '$HOME', TERM_PROGRAM: null } };
+		const expectedLaunch = { cwd: folderPath, args: ['project', `${folderPath}${separator}app`, '/execution/home', ''] };
+		assert.deepEqual(processes.started.at(-1), expectedAdapter);
+		assert.deepEqual(processes.requests.find(request => request.command === 'launch')?.arguments, expectedLaunch);
+		const restarted = await service.restart(session);
+		assert.equal(restarted.configuration, configuration);
+		assert.equal(configuration.arguments.cwd, '${workspaceFolder}');
+		assert.deepEqual(processes.started, [expectedAdapter, expectedAdapter]);
+		assert.deepEqual(processes.requests.filter(request => request.command === 'launch').map(request => request.arguments), [expectedLaunch, expectedLaunch]);
+		await service.stop(restarted);
+	});
+}
 
 test('DebugService rejects a missing folder before executing preLaunchTask or starting the adapter', async () => {
 	using resources = new DisposableStore();
@@ -1356,7 +1372,7 @@ suite('Extension debug session lifecycle', () => {
 			const root = URI.file('/workspace');
 			const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
 			services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
-			services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+			services.registerInstance(IPathService, testPathService(workspace));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			services.registerInstance(ILogService, new NullLoggerService());
 			services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
@@ -1433,7 +1449,7 @@ suite('Extension debug session lifecycle', () => {
 				const root = URI.file('/workspace');
 				const workspace = services.get(IWorkspaceContextService);
 				services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
-				services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+				services.registerInstance(IPathService, testPathService(workspace));
 				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(ILogService, new NullLoggerService());
 				services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
@@ -1719,7 +1735,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 	const root = URI.file('/workspace');
 	const workspace = services.get(IWorkspaceContextService);
 	services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
-	services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+	services.registerInstance(IPathService, testPathService(workspace));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
@@ -1794,7 +1810,14 @@ test('installed inline descriptors use the real DAP session and await implementa
 	};
 	const resource = getUriFromSource({ name: 'generated?#.ts', path: '/adapter-only/generated?#.ts', sourceReference: 33 }, '/adapter-only/generated?#.ts', session.id, uriIdentity, services.get(ILogService));
 	assert.equal(resource.scheme, 'debug');
-	for (const [path, address] of [['C:\\project\\main.ts', 'file:///C:/project/main.ts'], ['/project/main\\part.ts', 'file:///project/main%5Cpart.ts']]) {
+	for (const [path, address] of [
+		['C:\\project\\main.ts', 'file:///C:/project/main.ts'],
+		['C:/project/main.ts', 'file:///C:/project/main.ts'],
+		['\\\\build\\share\\main.ts', 'file://build/share/main.ts'],
+		['//build/share/main.ts', 'file://build/share/main.ts'],
+		['/project/main\\part.ts', 'file:///project/main%5Cpart.ts'],
+		['/project/main\\part?#.ts', 'file:///project/main%5Cpart%3F%23.ts'],
+	]) {
 		assert.equal(getUriFromSource({ path }, path, session.id, uriIdentity, services.get(ILogService)).toString(), address);
 	}
 	const textModels = services.get(ITextModelService);
@@ -2007,7 +2030,7 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			const root = URI.file('/workspace');
 			const workspace = services.get(IWorkspaceContextService);
 			services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
-			services.registerInstance(IPathService, new BrowserPathService(createDisconnectedRendererApi(), workspace));
+			services.registerInstance(IPathService, testPathService(workspace));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			services.registerInstance(ILogService, new NullLoggerService());
 			services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));

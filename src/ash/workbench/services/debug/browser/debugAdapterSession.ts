@@ -6,6 +6,7 @@ import { CancellationError, getErrorMessage } from "../../../../base/common/erro
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
+import { Schemas } from '../../../../base/common/network.js';
 import { localize } from "../../../../nls.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
@@ -839,7 +840,11 @@ function withTimeout<T>(promise: Promise<T>, milliseconds: number, timeoutMessag
 
 function sourceResource(workspace: URI | undefined, adapterPath: string): URI | undefined {
 	if (!workspace || workspace.scheme === "file") {
-		try { return URI.file(/^(?:[a-z]:[\\/]|\\\\)/i.test(adapterPath) ? adapterPath.replaceAll('\\', '/') : adapterPath); } catch { return undefined; }
+		try {
+			return adapterPath.startsWith('/') && !adapterPath.startsWith('//')
+				? URI.from({ scheme: Schemas.file, path: adapterPath })
+				: URI.file(/^(?:[a-z]:[\\/]|\\\\)/i.test(adapterPath) ? adapterPath.replaceAll('\\', '/') : adapterPath);
+		} catch { return undefined; }
 	}
 	if (!isRemoteResource(workspace)) return undefined;
 	if (!adapterPath.startsWith("/") || adapterPath.includes("\0")) return undefined;
