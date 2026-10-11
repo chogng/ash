@@ -209,6 +209,28 @@ fn start_with_environment(
     files: &[(&str, &str)],
     environment: Option<std::collections::BTreeMap<String, Option<String>>>,
 ) -> Result<Running, ExtensionHostError> {
+    start_with_initialization(
+        source,
+        capabilities,
+        isolation,
+        launcher,
+        api,
+        files,
+        environment,
+        matches!(api, TestApi::Vscode).then(vscode_initialization),
+    )
+}
+
+fn start_with_initialization(
+    source: &str,
+    capabilities: Vec<ExtensionCapability>,
+    isolation: ProcessIsolationPolicy,
+    launcher: Arc<dyn host::ExtensionHostLauncher>,
+    api: TestApi,
+    files: &[(&str, &str)],
+    environment: Option<std::collections::BTreeMap<String, Option<String>>>,
+    initialization: Option<external_ext_protocol::ExtensionHostInitialization>,
+) -> Result<Running, ExtensionHostError> {
     let package = tempfile::tempdir().unwrap();
     std::fs::write(package.path().join("main.js"), source).unwrap();
     std::fs::write(
@@ -256,7 +278,7 @@ fn start_with_environment(
     let authority = Arc::new(Authority(AtomicBool::new(true)));
     let activation = ExtensionActivationSpec::new(
         ActivateParams {
-            initialization: matches!(api, TestApi::Vscode).then(vscode_initialization),
+            initialization,
             extension_id: "example".into(),
             package: PackageBinding {
                 package_id: "example@1.0.0".into(),
@@ -3482,5 +3504,37 @@ fn extension_environment_is_available_during_module_loading_and_isolated_per_pro
             .unwrap()
             .payload["set"],
         json!(value)
+    );
+}
+
+#[test]
+fn vscode_localization_is_available_during_rust_v8_module_evaluation() {
+    let mut initialization = vscode_initialization();
+    initialization.language = Some("zh-CN".into());
+    initialization.localization = Some(
+        serde_json::from_value(json!({
+            "uri":"data:application/json,%7B%7D",
+            "package":{"command.title":"探测"},
+            "bundle":{"Hello {0}":"你好 {0}","Hello {name}":"你好 {name}"}
+        }))
+        .unwrap(),
+    );
+    let running = start_with_initialization(r#"
+        const v = require('vscode');
+        const greeting = v.l10n.t('Hello {0}', 'Ash');
+        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.probe', () => ({
+            greeting, named: v.l10n.t({message:'Hello {name}', args:{name:'Ash'}}),
+            fallback:v.l10n.t('Missing {0}', 'Ash'), language:v.env.language,
+            bundle:v.l10n.bundle, uri:v.l10n.uri.toString()
+        })));
+    "#, vec![ExtensionCapability::Command], ProcessIsolationPolicy::TrustedDevelopment,
+        Arc::new(TrustedDevelopmentLauncher), TestApi::Vscode, &[], None, Some(initialization)).unwrap();
+    assert_eq!(
+        run(&running, "probe", json!([])).unwrap(),
+        json!({
+            "greeting":"你好 Ash","named":"你好 Ash","fallback":"Missing Ash","language":"zh-CN",
+            "bundle":{"Hello {0}":"你好 {0}","Hello {name}":"你好 {name}"},
+            "uri":"data:application/json,%7B%7D"
+        })
     );
 }

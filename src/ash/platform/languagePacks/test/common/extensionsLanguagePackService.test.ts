@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import { Emitter } from "../../../../base/common/event.js";
 import { IExtensionManagementService } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
 import { ExtensionsLanguagePackService } from "../../browser/extensionsLanguagePackService.js";
-import { parseLanguagePackCatalog, resolveLanguagePackCatalog } from "../../common/languagePackCatalog.js";
+import { parseLanguagePackCatalog, parseLanguagePackIndexEntry, resolveLanguagePackCatalog } from "../../common/languagePackCatalog.js";
 import type { LanguagePackCatalog } from "../../common/languagePacksService.js";
 import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from "../../../../workbench/services/localization/common/localizationCatalogs.js";
 
@@ -177,15 +177,16 @@ test('the preinstalled Chinese extension can update independently and uninstall 
 	const updated = { ...original, bundles: { ...original.bundles, ash: { ...original.bundles.ash, greeting: '更新后的语言包' } } };
 	const extensions = createExtensions([updated]);
 	const installed = await extensions.listInstalled();
-	let current = [{ ...installed[0], package: { ...installed[0].package, id: 'ash/language-pack-zh-cn', version: '1.1.0' } }];
+	let current = [{ ...installed[0], package: { ...installed[0].package, id: 'ash.language-pack-zh-cn@official', version: '1.1.0' } }];
 	extensions.listInstalled = async () => current;
 	const store = createTestLanguagePackStore();
 	using service = createService(extensions, store);
 	await service.whenReady;
-	assert.equal(service.installedPackages.find(pack => pack.id === 'ash/language-pack-zh-cn')?.version, '1.1.0');
+	assert.equal(service.installedPackages.find(pack => pack.id === 'ash.language-pack-zh-cn@official')?.version, '1.1.0');
+	assert.equal(service.installedPackages.length, 1);
 	assert.equal(service.availableLocales.find(pack => pack.locale === 'zh-CN')?.source, 'extensionManagement');
 	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles.ash.greeting, '更新后的语言包');
-	assert.deepEqual((await store.readIndex()).map(({ extensionId, version, locale }) => ({ extensionId, version, locale })), [{ extensionId: 'ash/language-pack-zh-cn', version: '1.1.0', locale: 'zh-CN' }]);
+	assert.deepEqual((await store.readIndex()).map(({ extensionId, version, locale }) => ({ extensionId, version, locale })), [{ extensionId: 'ash.language-pack-zh-cn@official', version: '1.1.0', locale: 'zh-CN' }]);
 	current = [];
 	await service.refresh();
 	assert.deepEqual(await store.readIndex(), []);
@@ -230,4 +231,17 @@ test('extension translation resources stay pinned to the startup version until r
 	assert.deepEqual(JSON.parse(uri.path.slice('application/json,'.length)).contents, updated.extensionTranslations['ash.git']);
 	assert.equal(await service.getBuiltInExtensionTranslationsUri('ash.git', 'en'), undefined);
 	assert.equal(await service.getBuiltInExtensionTranslationsUri('unknown.extension', 'zh-CN'), undefined);
+});
+
+test('startup index accepts source-qualified package identities and rejects damaged provenance', () => {
+	const catalog = productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!;
+	const entry = { locale: 'zh-CN', extensionId: 'ash.language-pack-zh-cn@official', version: '1.1.0', digest: `sha256:${'a'.repeat(64)}`, catalog };
+	for (const extensionId of ['ash.language-pack-zh-cn@official', 'language_zh@custom-source', 'ash/language-pack-zh-cn']) {
+		assert.equal(parseLanguagePackIndexEntry({ ...entry, extensionId })?.extensionId, extensionId);
+	}
+	for (const extensionId of ['../other', 'pack@other/source', 'pack@@source', 'x'.repeat(161)]) {
+		assert.equal(parseLanguagePackIndexEntry({ ...entry, extensionId }), undefined);
+	}
+	assert.equal(parseLanguagePackIndexEntry({ ...entry, digest: 'unverified' }), undefined);
+	assert.equal(parseLanguagePackIndexEntry({ ...entry, locale: 'de' }), undefined);
 });

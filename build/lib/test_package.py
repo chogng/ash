@@ -246,6 +246,7 @@ class PackageTests(unittest.TestCase):
         "ini",
         "javascript",
         "json",
+        "language-pack-zh-cn",
         "markdown-basics",
         "markdown-language-features",
         "media-preview",
@@ -656,7 +657,7 @@ class PackageTests(unittest.TestCase):
                     (output / "ash-resources/protocol/metadata.json").read_text()
                 ),
             )
-            for script in ("node.mjs", "vscode.mjs", "host.mjs"):
+            for script in ("node.mjs", "vscode.mjs", "host.mjs", "scm.js"):
                 resource = f"ash-resources/extension-host/{script}"
                 self.assertIn(resource, metadata["files"])
                 self.assertTrue((output / resource).is_file())

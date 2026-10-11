@@ -426,7 +426,8 @@ test('Git explains when the open folder has no repository', async ({ target, wor
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-	await expect(page.locator('.ash-scm-status')).toHaveText('No source control repository found in the open folder.');
+	await expect(page.getByText('The open folder does not contain a Git repository. Initialize a repository to start tracking changes.', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Initialize Repository', exact: true })).toBeVisible();
 	await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 });
 

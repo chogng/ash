@@ -256,9 +256,12 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		const existing = this.pendingActivations.get(key);
 		if (existing) { return existing; }
 		const revision = this.authorityRevision;
-		const pending = this.instantiationService.createInstance(MainThreadLocalization).getLocalization(runtime.id).then(localization => this.api.activateByEvent({
-			extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event, initialization: { ...createExtensionHostInitialization(this.workspace, this.configuration), localization }
-		})).then(snapshot => {
+		const pending = this.instantiationService.createInstance(MainThreadLocalization).getLocalization(runtime.id).then(localization => {
+			if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) throw new CancellationError();
+			return this.api.activateByEvent({
+				extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event, initialization: { ...createExtensionHostInitialization(this.workspace, this.configuration), localization }
+			});
+		}).then(snapshot => {
 			if (!this.isDisposed && this.started && this.connectionReady && revision === this.authorityRevision && snapshot.generation >= this.snapshot.fleetGeneration) { this.acceptSnapshot(snapshot); }
 			const activated = snapshot.extensions.find(extension => extension.id === runtime.id && extension.activationGeneration === runtime.activationGeneration);
 			if (activated?.lifecycle !== 'ready') throw new Error(localize('extensionHost.activationFailed', "Extension '{0}' failed to activate: {1}", runtime.id, activated?.failure?.message ?? activated?.lifecycle ?? 'unavailable'));

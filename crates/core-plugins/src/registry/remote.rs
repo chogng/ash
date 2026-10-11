@@ -5,6 +5,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::PackageRef;
+use ash_http_client::CertificateBundle;
+use ash_http_client::HttpClientConfig;
+use ash_http_client::TlsPolicy;
 use semver::Version;
 use serde::Deserialize;
 use tempfile::TempDir;
@@ -24,6 +27,7 @@ use crate::registry::catalog::CatalogManifest;
 use crate::registry::catalog::Release;
 
 mod cache;
+mod transport;
 
 use cache::cache_repository;
 use cache::open_cached_repository;
@@ -46,6 +50,7 @@ pub struct RemoteExtensionsConfig {
     cache_root: PathBuf,
     allowed_publishers: BTreeSet<String>,
     catalog_refresh_interval: Duration,
+    tls_root_certificates: Option<CertificateBundle>,
 }
 
 impl RemoteExtensionsConfig {
@@ -74,6 +79,7 @@ impl RemoteExtensionsConfig {
             cache_root: cache_root.into(),
             allowed_publishers: BTreeSet::new(),
             catalog_refresh_interval: DEFAULT_CATALOG_REFRESH_INTERVAL,
+            tls_root_certificates: None,
         })
     }
 
@@ -99,7 +105,23 @@ impl RemoteExtensionsConfig {
             cache_root: cache_root.into(),
             allowed_publishers: BTreeSet::new(),
             catalog_refresh_interval: DEFAULT_CATALOG_REFRESH_INTERVAL,
+            tls_root_certificates: None,
         })
+    }
+
+    /// Selects deployment-pinned DER trust anchors for this source, preserving TLS validation.
+    pub fn with_tls_root_certificates(
+        mut self,
+        certificates: Vec<Vec<u8>>,
+    ) -> Result<Self, ExtensionsClientError> {
+        let bundle = CertificateBundle::from_der(certificates).map_err(|_| {
+            ExtensionsClientError::invalid_request("Extensions TLS roots are invalid")
+        })?;
+        transport::HttpsTransport::new(
+            HttpClientConfig::default().with_tls_policy(TlsPolicy::CustomOnly(bundle.clone())),
+        )?;
+        self.tls_root_certificates = Some(bundle);
+        Ok(self)
     }
 
     /// Restricts a host-approved source to exact publisher namespaces.
@@ -258,17 +280,22 @@ impl RemoteSource {
     async fn load(&self) -> Result<LoadedRepository, ExtensionsClientError> {
         let datastore_root = self.config.cache_root.join("tuf");
         let datastore = stage_datastore(&self.config.cache_root, &datastore_root)?;
-        let online = RepositoryLoader::new(
+        let loader = RepositoryLoader::new(
             &self.config.trusted_root,
             self.config.metadata_base_url.clone(),
             self.config.targets_base_url.clone(),
         )
-        .transport(DefaultTransport::default())
         .datastore(datastore.path())
         .limits(Limits::default())
-        .expiration_enforcement(ExpirationEnforcement::Safe)
-        .load()
-        .await;
+        .expiration_enforcement(ExpirationEnforcement::Safe);
+        let loader = if let Some(bundle) = &self.config.tls_root_certificates {
+            loader.transport(transport::HttpsTransport::new(
+                HttpClientConfig::default().with_tls_policy(TlsPolicy::CustomOnly(bundle.clone())),
+            )?)
+        } else {
+            loader.transport(DefaultTransport::default())
+        };
+        let online = loader.load().await;
         match online {
             Ok(repository) => Ok(LoadedRepository {
                 repository,

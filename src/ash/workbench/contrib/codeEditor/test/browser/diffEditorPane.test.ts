@@ -1,3 +1,5 @@
+import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
+import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
@@ -58,6 +60,12 @@ await import('../../../../contrib/accessibility/browser/accessibilityConfigurati
 await import('../../browser/toggleWordWrap.js');
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { registerTestComponentServices } = await import('../../../../test/common/testEditorServices.js');
+function createDiffServices(resources: DisposableStore) {
+	const services = registerTestComponentServices(createCodeEditorServices(resources));
+	services.registerInstance(IWorkingCopyService, resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)));
+	return services;
+}
+
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { createDiffEditorInput, isDiffEditorInput } = await import("../../../../common/editor/diffEditorInput.js");
@@ -71,7 +79,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
-	const container = registerTestComponentServices(createCodeEditorServices(services));
+	const container = createDiffServices(services);
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
@@ -187,7 +195,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 
 test("Stanza diff pane rejects a missing Workbench diff computation service", () => {
 	using services = new DisposableStore();
-	assert.throws(() => registerTestComponentServices(createCodeEditorServices(services)).createInstance(DiffEditorPane, new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
+	assert.throws(() => createDiffServices(services).createInstance(DiffEditorPane, new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
 });
 
 test("Stanza diff pane acquires both models, lays out the review view, and releases both references", async () => {
@@ -197,7 +205,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
-	const container = registerTestComponentServices(createCodeEditorServices(services));
+	const container = createDiffServices(services);
 	const codeEditorService = container.get(ICodeEditorService);
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
@@ -239,13 +247,22 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.NAVIGATION));
 	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.JUMP));
 	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.EDIT));
+	assert.equal(pane.workingCopy?.resource.toString(), URI.file('C:\\project\\after.ts').toString());
+	assert.equal(pane.workingCopy?.isDirty, true);
+	await pane.save();
+	assert.equal(pane.workingCopy?.isDirty, false);
 	assert.match(parent.querySelector(".stanza-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
 	assert.equal(codeEditorService.listDiffEditors().length, 1);
 	pane.focus();
 	assert.equal(editor.contains(dom.window.document.activeElement), true);
 	pane.setVisible(false);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
+	let detachedBeforeModelDisposal = false;
+	using modelDisposalListener = diffWidget.modifiedEditor.getModel()!.onWillDispose(() => {
+		detachedBeforeModelDisposal = codeEditorService.listDiffEditors().length === 0;
+	});
 	pane.clearInput();
+	assert.equal(detachedBeforeModelDisposal, true);
 	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 0);
 	assert.equal(codeEditorService.listDiffEditors().length, 0);
 	pane.dispose();
@@ -259,7 +276,7 @@ test('Diff pane honors a readonly modified resource and preserves shared text wh
 		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 		using services = new DisposableStore();
-		const container = registerTestComponentServices(createCodeEditorServices(services));
+		const container = createDiffServices(services);
 		using pane = container.createInstance(DiffEditorPane, resourceStore, {
 			modelService: models,
 			createComputationService: () => new PaneTestDiffComputationService(),
@@ -273,6 +290,7 @@ test('Diff pane honors a readonly modified resource and preserves shared text wh
 		const widget = pane.getControl();
 		assert.ok(widget);
 		assert.equal(widget.modifiedEditor.getOption(EditorOption.readOnly), true);
+		assert.equal(pane.workingCopy, undefined);
 		assert.equal(widget.modifiedEditor.getModel(), shared.model);
 		pane.clearInput();
 		assert.equal(shared.model.isDisposed(), false);
@@ -291,7 +309,7 @@ for (const phase of ['acquisition', 'computation']) {
 			const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 			using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 			using services = new DisposableStore();
-			const container = registerTestComponentServices(createCodeEditorServices(services));
+			const container = createDiffServices(services);
 			const cancellation = new AbortController();
 			const acquired: ITextModel[] = [];
 			using pane = container.createInstance(DiffEditorPane, resourceStore, {
@@ -334,7 +352,7 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
-	const container = registerTestComponentServices(createCodeEditorServices(services));
+	const container = createDiffServices(services);
 	const configuration = container.get(IConfigurationService);
 	const seenLimits: number[] = [];
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
@@ -364,7 +382,7 @@ test('Diff pane recomputes moved blocks when the setting changes in an open comp
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
-	const container = registerTestComponentServices(createCodeEditorServices(services));
+	const container = createDiffServices(services);
 	const seen: boolean[] = [];
 	using pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
@@ -396,7 +414,7 @@ test('Diff pane follows the modified language override and language changes', as
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
-	const container = registerTestComponentServices(createCodeEditorServices(services));
+	const container = createDiffServices(services);
 	const configuration = container.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	let computations = 0;
@@ -434,7 +452,7 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
-	const container = registerTestComponentServices(createCodeEditorServices(services));
+	const container = createDiffServices(services);
 	const configuration = container.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
@@ -471,7 +489,7 @@ test('Diff pane reveals its first change after layout and keeps an explicit sele
 		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 		using resources = new DisposableStore();
-		const services = registerTestComponentServices(createCodeEditorServices(resources));
+		const services = createDiffServices(resources);
 		using pane = services.createInstance(DiffEditorPane, resourceStore, {
 			modelService: models,
 			createComputationService: () => new PaneTestDiffComputationService(),
@@ -511,7 +529,7 @@ test('Diff collapse command toggles hidden unchanged regions and follows setting
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
-	const container = registerTestComponentServices(createCodeEditorServices(services));
+	const container = createDiffServices(services);
 	const configuration = container.get(IConfigurationService);
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
@@ -603,7 +621,7 @@ test('Diff editor status follows the selected side and ignores the inactive side
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
-	const container = registerTestComponentServices(createCodeEditorServices(services));
+	const container = createDiffServices(services);
 	using pane = container.createInstance(DiffEditorPane, resourceStore, { modelService: models, createComputationService: () => new PaneTestDiffComputationService() });
 	pane.create(parent);
 	pane.layout({ width: 600, height: 300 });

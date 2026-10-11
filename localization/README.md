@@ -2,7 +2,7 @@
 
 界面语言在启动时确定。`workbench.locale` 保存下一次启动使用的语言；选择语言后，可立即重启或稍后重启。当前窗口不重新翻译已经创建的界面。
 
-Electron Main 在创建窗口前读取语言资源，Workbench、Sessions 和系统菜单使用同一份启动快照。刷新 Electron 的单个窗口不会重新读取语言偏好。Web 的每次页面启动先读取浏览器设置和语言资源，再加载贡献注册模块。
+Electron 的 Workbench 和 Sessions 在加载贡献注册模块前读取语言偏好及浏览器缓存，再把解析后的目录交给 Main 更新系统菜单。Web 同样在页面启动时完成解析。当前窗口的界面与扩展译文固定到启动快照。
 
 ## 文案来源
 
@@ -33,19 +33,25 @@ pnpm localization:check --report-missing
 
 ## 本地语言资源
 
-英语是核心基础回退。简中由 [`extensions/language-pack-zh-cn`](../extensions/language-pack-zh-cn/package.json) 以静态语言包扩展随应用预装，断网也可使用。安装或更新 Extensions 语言包后，客户端把完整目录保存到本地 UI profile：Electron 使用 `<profile>/languagepacks/<locale>.json`，Web 使用 IndexedDB `ash-language-packs`。
+英语是核心基础回退。简中由 [`extensions/language-pack-zh-cn`](../extensions/language-pack-zh-cn/package.json) 以静态语言包扩展随应用预装，断网也可使用。安装或更新 Extensions 语言包后，客户端把完整目录保存到本地 UI profile：Electron 和 Web 都使用 IndexedDB `ash-language-packs`，不使用 Node 文件缓存。缓存索引保存 locale、包 ID、版本、摘要和有效目录；Rust 扩展管理仍是安装状态的所有者。
 
-保存语言偏好之前必须先保存语言资源。启动读取本地资源，不等待 App Server 或 Extensions；先匹配指定语言，再逐级尝试基础语言（例如 `fr-CA` → `fr`），最后使用内置英语。缺失、损坏或契约版本不兼容的资源不阻止启动，也不改写语言偏好；重新安装有效语言包后，下次启动可恢复原来的语言。移除 Extensions 包不会删除已经保存的启动资源。
+保存语言偏好之前必须先保存语言资源。启动读取本地资源，不等待 App Server 或 Extensions；先匹配指定语言，再逐级尝试基础语言（例如 `fr-CA` → `fr`），最后使用内置英语。缺失、损坏或契约版本不兼容的资源不阻止启动，也不改写语言偏好；重新安装有效语言包后，下次启动可恢复原来的语言。成功刷新安装状态后，客户端原子替换缓存索引，清理卸载、损坏或冲突的提供者。卸载简中更新后恢复预装版本；其他语言回退英语。后端不可用时保留上次有效缓存。
 
-核心英语和预装语言包优先于后安装扩展提供的同语言目录。多个已安装扩展提供同一语言时，该语言不进入可选列表，也不写入本地资源；卸载重复的包后，剩下的包会重新加载。其他语言正常加载。
+核心英语始终优先。与预装简中相同包 ID 的安装版本可独立替换预装目录，其他包不能覆盖预装语言。多个已安装扩展提供同一语言时，该语言不进入可选列表，也不写入本地资源；卸载重复的包后，剩下的包会重新加载。其他语言正常加载。
 
 ## 预装简中语言包
 
 简中的扩展清单使用 `engines.ash` 和 `contributes.localizations`，声明 `localization/package.json` 目录资源；不声明可执行入口。`localization/languages.json` 仅保留英语。
 
-`pnpm localization:generate` 从扩展的领域译文生成完整目录，并在 `.build/desktop/localization/extensions/ash.language-pack-zh-cn/` 输出可分发包，包括 `package.json`、`manifest.json` 和 `localization/package.json`。正常扩展打包将同一目录加入预装扩展资源；启动时的快照也由这份扩展译文生成。
+`pnpm localization:generate` 从扩展的领域译文生成完整目录，并在 `.build/desktop/localization/extensions/ash.language-pack-zh-cn/` 输出可分发包，包括 `package.json`、`manifest.json`、`localization/package.json` 和声明的 `extension-translations/*.json`。正常扩展打包将同一目录加入预装扩展资源；启动时的快照也由这份扩展译文生成。
 
-生成后可在该目录运行 `zip -r ../../ash-language-pack-zh-cn.zip package.json manifest.json localization`。后安装语言包仍走现有 Extensions 签名分发流程。
+生成后可在该目录运行 `zip -r ../../ash-language-pack-zh-cn.zip package.json manifest.json localization extension-translations`。后安装语言包仍走现有 Extensions 签名分发流程。
+
+## 扩展译文
+
+`contributes.localizations[].translations` 中的 `ash` 目标声明界面目录，其他目标使用扩展 ID，例如 `ash.git`。扩展译文包含 `contents.package`（清单 `%key%` 标签）和 `contents.bundle`（`vscode.l10n` 文案）。预装简中已包含 Git、Remote SSH、Media Preview 和 Markdown 的译文。
+
+MainThreadLocalization 在客户端解析启动时的译文，传给 Worker 与 Rust/V8 扩展的初始化快照。缺失文案保留英语原文；语言包资源损坏时尝试扩展自己的地区和基础语言资源。App Server 不保存全局语言。
 
 ## Ash 语言包示例
 

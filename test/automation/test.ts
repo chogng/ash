@@ -34,11 +34,18 @@ interface PlaywrightFixtures {
 	readonly githubAccount: GitHubBrowserTestConfiguration | undefined;
 	/** Isolated config.toml contents installed before the owning App Server starts. */
 	readonly backendConfiguration: string | undefined;
+	/** Test-owned distribution inputs prepared before the profile daemon starts. */
+	readonly backendFixture: BackendFixture | undefined;
 	readonly target: PlaywrightTarget;
 	readonly application: PlaywrightApplication;
 	readonly driver: PlaywrightDriver;
 	readonly testWorkspace: TestWorkspace;
 	readonly workbench: Workbench;
+}
+
+export interface BackendFixture {
+	readonly productServicesPath: string;
+	prepareProfile(profileDirectory: string): Promise<void>;
 }
 
 export const test = base.extend<PlaywrightFixtures>({
@@ -49,6 +56,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	reportIssueUrl: [undefined, { option: true }],
 	githubAccount: [undefined, { option: true }],
 	backendConfiguration: [undefined, { option: true }],
+	backendFixture: [undefined, { option: true }],
 	// Workspace options may depend on the platform. Connection addresses belong
 	// to the later launch, otherwise target -> server -> workspace -> target cycles.
 	target: async ({ }, use, testInfo) => {
@@ -69,7 +77,8 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, githubAccount, video }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video }, use, testInfo) => {
+		if (backendFixture && githubAccount) { throw new Error('Backend fixture and GitHub account fixture both select product services'); }
 		// Evidence scenarios opt into full recording; the launchers own every page until cleanup.
 		const videoOptions = typeof video === 'string' ? { mode: video, size: undefined } : video;
 		const recordVideo = videoOptions.mode === 'on' ? { directory: testInfo.outputPath('recordings'), size: videoOptions.size ?? { width: 1440, height: 900 } } : undefined;
@@ -138,12 +147,13 @@ export const test = base.extend<PlaywrightFixtures>({
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
 		const options = {
 			appServerMode: target.appServerMode, userDataDirectory, recordVideo,
-			productServicesPath: githubAccount ? join(userDataDirectory, 'product-services.json') : undefined,
+			productServicesPath: backendFixture?.productServicesPath ?? (githubAccount ? join(userDataDirectory, 'product-services.json') : undefined),
 			workspaceDirectory: openWorkspace ? testWorkspace.directory : undefined,
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,
 		};
 		try {
-			if (options.productServicesPath) {
+			if (backendFixture) { await backendFixture.prepareProfile(join(userDataDirectory, 'profile')); }
+			if (githubAccount && options.productServicesPath) {
 				await writeFile(options.productServicesPath, JSON.stringify({ schemaVersion: 3, githubAccount }) + '\n');
 			}
 			// Startup-only backend options must be present before the daemon is composed.

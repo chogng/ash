@@ -1,3 +1,4 @@
+import { isRecord } from '../../../base/common/types.js';
 import { parseLanguagePackCatalog, parseLanguagePackIndexEntry } from '../common/languagePackCatalog.js';
 import type { ILanguagePackStore } from '../common/languagePackStore.js';
 import type { LanguagePackCatalog } from '../common/languagePacksService.js';
@@ -8,7 +9,7 @@ export class BrowserLanguagePackStore implements ILanguagePackStore {
 	public async read(locale: string): Promise<LanguagePackCatalog | undefined> {
 		const value = await this.transact('readonly', store => store.get(locale));
 		if (value === undefined) { return undefined; }
-		const catalog = parseLanguagePackCatalog((value as { catalog?: unknown }).catalog ?? value);
+		const catalog = isRecord(value) && 'catalog' in value ? parseLanguagePackIndexEntry(value)?.catalog : parseLanguagePackCatalog(value);
 		if (!catalog || catalog.locale !== locale) { throw new Error(`Invalid display language resource: ${locale}`); }
 		return catalog;
 	}

@@ -10,7 +10,7 @@ from pathlib import Path
 from build.lib.targets import target_spec
 from build.lib.bubblewrap import BubblewrapResolution
 from build.lib.executable import ExecutableResolution
-from build.lib.package import LAYOUT, build_package_directory
+from build.lib.package import EXTENSION_HOST_RESOURCES, LAYOUT, build_package_directory
 from build.lib.node import NodeResolution
 from build.lib.version import read_workspace_version
 from build.protocol.artifacts import SOURCE_MANIFEST, artifact_digests, portable_sources
@@ -29,11 +29,7 @@ def create_package_sources(root: Path) -> Path:
             root / name,
             ignore=shutil.ignore_patterns("node_modules", "__pycache__"),
         )
-    for name in (
-        "crates/external-js-ext/src/node.mjs",
-        "crates/external-js-ext/src/vscode.js",
-        "crates/external-js-ext/src/host.mjs",
-    ):
+    for name, _ in EXTENSION_HOST_RESOURCES:
         destination = root / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPOSITORY_ROOT / name, destination)

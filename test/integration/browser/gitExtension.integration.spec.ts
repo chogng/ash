@@ -79,5 +79,8 @@ for (const language of ['en', 'zh-CN']) test(`disabled Git stays inactive after 
 		await page.keyboard.press('ControlOrMeta+End'); await page.keyboard.type('saved without Git');
 		await page.evaluate(() => window.gitExtensionIsolation.save());
 		expect(await page.evaluate(() => window.gitExtensionIsolation.editorState())).toMatchObject({ dirty: false, savedText: 'before\nsaved without Git' });
+		await page.evaluate(() => window.gitExtensionIsolation.enable());
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories.map(repository => repository.id))).toEqual(['root']);
+		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).errors).toEqual([]);
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });

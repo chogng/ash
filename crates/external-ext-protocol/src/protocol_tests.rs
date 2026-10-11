@@ -889,6 +889,37 @@ fn activation_initialization_requires_bounded_window_facts_and_preserves_absence
         serde_json::from_value::<ActivateParams>(encoded).unwrap(),
         params
     );
+    assert!(
+        serde_json::to_value(&snapshot)
+            .unwrap()
+            .get("localization")
+            .is_none()
+    );
+    let mut translated = snapshot.clone();
+    translated.localization = Some(serde_json::from_value(json!({
+        "uri":"data:application/json,%7B%7D", "bundle":{"Hello":"你好"}, "package":{"title":"标题"}
+    })).unwrap());
+    assert!(translated.validate().is_ok());
+    assert_eq!(
+        serde_json::from_value::<super::ExtensionHostInitialization>(
+            serde_json::to_value(&translated).unwrap()
+        )
+        .unwrap(),
+        translated
+    );
+    for (key, value) in [("", "value".to_owned()), ("key", "x".repeat(65537))] {
+        let mut invalid = translated.clone();
+        invalid
+            .localization
+            .as_mut()
+            .unwrap()
+            .bundle
+            .insert(key.into(), value);
+        assert!(invalid.validate().is_err());
+    }
+    let mut invalid = serde_json::to_value(&translated).unwrap();
+    invalid["localization"]["bundle"]["Hello"] = json!(42);
+    assert!(serde_json::from_value::<super::ExtensionHostInitialization>(invalid).is_err());
     assert!(snapshot.validate().is_ok());
     for mutate in [0, 1, 2, 3, 4, 5, 6] {
         let mut invalid = snapshot.clone();

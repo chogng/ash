@@ -12,7 +12,7 @@ import { ScrollType } from '../../../../editor/common/editorCommon.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { assertDefined } from "../../../../base/common/types.js";
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput } from '../../../common/editor.js';
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions } from '../../../common/editor.js';
 
 import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
@@ -56,6 +56,10 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	private dimension: IDimension = { width: 0, height: 0 };
 
 	public get workingCopy(): IWorkingCopy | undefined { return this.session.value?.workingCopy; }
+
+	async save(options?: ISaveOptions): Promise<void> {
+		await this.workingCopy?.save(new AbortController().signal, options);
+	}
 
 	public override getControl(): DiffEditorWidget | undefined {
 		return this.session.value?.editor;
@@ -202,6 +206,9 @@ class DiffEditorPaneSession extends Disposable {
 	) {
 		super();
 		this._register(original);
+		// Widgets must detach before their last model reference is released.
+		this.workingCopy = modifiedInput.readOnly ? undefined : this._register(new EditorWorkingCopy(modified, modifiedInput, workingCopies, undefined));
+		if (!this.workingCopy) this._register(modified);
 		const originalEditorModel = this._register(new BaseTextEditorModel(original.model));
 		const modifiedEditorModel = this._register(new BaseTextEditorModel(modified.model, modifiedInput.readOnly === true));
 		const editorModel = this._register(new TextDiffEditorModel(originalEditorModel, modifiedEditorModel));
@@ -301,8 +308,6 @@ class DiffEditorPaneSession extends Disposable {
 			modifiedAriaLabel: modifiedInput.label,
 		}));
 		this.editor.setAccessibilityHelpHint(configuration.getValue(AccessibilityVerbositySettingId.DiffEditor));
-		this.workingCopy = modifiedInput.readOnly ? undefined : this._register(new EditorWorkingCopy(modified, modifiedInput, workingCopies, undefined));
-		if (!this.workingCopy) this._register(modified);
 	}
 
 	updateOptions(options: IDocumentDiffProviderOptions): void {

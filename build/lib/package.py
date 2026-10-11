@@ -36,6 +36,12 @@ LAYOUT = json.loads(
 )
 LAYOUT_VERSION = LAYOUT["layoutVersion"]
 METADATA_FILE = "ash-package.json"
+EXTENSION_HOST_RESOURCES = (
+    ("crates/external-js-ext/src/node.mjs", "node.mjs"),
+    ("crates/external-js-ext/src/vscode.js", "vscode.mjs"),
+    ("crates/external-js-ext/src/host.mjs", "host.mjs"),
+    ("crates/external-js-ext/src/scm.js", "scm.js"),
+)
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
@@ -310,11 +316,7 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     # The standard host uses the same product Node runtime as other installed scripts.
     extension_host = resources / "extension-host"
     extension_host.mkdir()
-    for source, destination in (
-        ("crates/external-js-ext/src/node.mjs", "node.mjs"),
-        ("crates/external-js-ext/src/vscode.js", "vscode.mjs"),
-        ("crates/external-js-ext/src/host.mjs", "host.mjs"),
-    ):
+    for source, destination in EXTENSION_HOST_RESOURCES:
         source_path = source_root / source
         if source_path.is_symlink() or not source_path.is_file():
             raise RuntimeError(
@@ -568,7 +570,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         raise RuntimeError(
             "Package build identity does not match its complete file manifest"
         )
-    for name in ("node.mjs", "vscode.mjs", "host.mjs"):
+    for _, name in EXTENSION_HOST_RESOURCES:
         script = package / "ash-resources/extension-host" / name
         if script.is_symlink() or not script.is_file():
             raise RuntimeError(f"Missing product extension host resource: {script}")

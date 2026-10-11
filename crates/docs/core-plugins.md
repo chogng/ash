@@ -233,6 +233,12 @@ get/install/update 只访问 ID 指定的来源，并核对返回的名称和精
 }
 ```
 
+固定 HTTPS 来源可通过可选的 `tlsRootCertificates` 列表引用产品配置目录内的 DER 证书文件。
+显式配置后，该来源只信任这些证书根，走共享 Rust HTTP 客户端，保留证书链、有效期、主机名与 TUF 校验；
+不跟随 HTTP 重定向。省略此字段保留现有系统证书传输。空列表、超过 32 个根、无效 DER、目录外路径和符号链接
+都会在配置加载时被拒绝，证书内容也计入 profile authority identity。测试 HTTPS 源使用这一入口，
+不改系统证书库，不写入离线缓存，也不需要发布到公开 Marketplace。
+
 App Server 启动时：
 
 1. `LocalProductServicesConfig` 读取 HTTPS endpoints 和 product-pinned trusted root；

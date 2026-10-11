@@ -30,6 +30,7 @@ class PrepareTests(unittest.TestCase):
                 "build/prepare.py",
                 "crates/external-js-ext/src/node.mjs",
                 "crates/external-js-ext/src/vscode.js",
+                "crates/external-js-ext/src/scm.js",
                 "crates/external-js-ext/src/host.mjs",
                 "build/desktop/appServer.ts",
                 "build/lib/package-layout.json",
@@ -67,6 +68,13 @@ class PrepareTests(unittest.TestCase):
             )
             self.assertNotEqual(
                 after_layout,
+                prepare.package_input_digest(prepare.package_sources(root), {}),
+            )
+
+            before_scm = prepare.package_input_digest(prepare.package_sources(root), {})
+            (root / "crates/external-js-ext/src/scm.js").write_text("updated SCM SDK")
+            self.assertNotEqual(
+                before_scm,
                 prepare.package_input_digest(prepare.package_sources(root), {}),
             )
 

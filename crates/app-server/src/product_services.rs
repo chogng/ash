@@ -76,6 +76,22 @@ impl LocalProductServicesConfig {
                     .join(format!("{:x}", Sha256::digest(name.as_str()))),
             )
             .map_err(product_config_error)?;
+            if let Some(paths) = extension_packages.tls_root_certificates {
+                if paths.is_empty() || paths.len() > 32 {
+                    return Err(product_config_error(()));
+                }
+                let certificates = paths
+                    .iter()
+                    .map(|path| read_trusted_root(source_root, path))
+                    .collect::<Result<Vec<_>, _>>()?;
+                for certificate in &certificates {
+                    authority_identity.update((certificate.len() as u64).to_le_bytes());
+                    authority_identity.update(certificate);
+                }
+                config = config
+                    .with_tls_root_certificates(certificates)
+                    .map_err(product_config_error)?;
+            }
             if let Some(seconds) = extension_packages.catalog_refresh_interval_seconds {
                 config = config
                     .with_catalog_refresh_interval(Duration::from_secs(seconds))
@@ -309,6 +325,8 @@ struct ProductExtensionsDocument {
     metadata_base_url: String,
     targets_base_url: String,
     trusted_root: PathBuf,
+    #[serde(default)]
+    tls_root_certificates: Option<Vec<PathBuf>>,
     #[serde(default)]
     catalog_refresh_interval_seconds: Option<u64>,
     #[serde(default)]

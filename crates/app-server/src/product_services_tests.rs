@@ -414,3 +414,37 @@ fn github_enterprise_browser_configuration_has_distinct_host_and_rejects_ambiguo
     .unwrap();
     assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
 }
+
+#[test]
+fn product_services_tls_roots_are_scoped_validated_and_bound_to_authority() {
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("product-services.json");
+    fs::write(root.path().join("root.json"), br#"{"signed":{}}"#).unwrap();
+    fs::write(root.path().join("ca.der"), http_test_support::CA_DER).unwrap();
+    let mut document = serde_json::json!({
+        "schemaVersion": 3,
+        "extensionSources": [{"name":"ash", "metadataBaseUrl":"https://registry.example/metadata/",
+            "targetsBaseUrl":"https://registry.example/targets/", "trustedRoot":"root.json"}]
+    });
+    fs::write(&path, document.to_string()).unwrap();
+    let system = LocalProductServicesConfig::load(&path, root.path()).unwrap();
+    document["extensionSources"][0]["tlsRootCertificates"] = serde_json::json!(["ca.der"]);
+    fs::write(&path, document.to_string()).unwrap();
+    let configured = LocalProductServicesConfig::load(&path, root.path()).unwrap();
+    assert_ne!(system.authority_identity(), configured.authority_identity());
+    // Invalid referenced certificates must fail before the first network request.
+    fs::write(root.path().join("ca.der"), b"invalid certificate").unwrap();
+    assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+    fs::write(root.path().join("ca.der"), http_test_support::CA_DER).unwrap();
+    for roots in [
+        serde_json::json!([]),
+        serde_json::json!(vec!["ca.der"; 33]),
+        serde_json::json!(["../ca.der"]),
+        serde_json::json!(["/ca.der"]),
+        serde_json::json!(["missing.der"]),
+    ] {
+        document["extensionSources"][0]["tlsRootCertificates"] = roots;
+        fs::write(&path, document.to_string()).unwrap();
+        assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+    }
+}

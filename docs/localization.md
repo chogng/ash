@@ -46,12 +46,28 @@ To create a distributable archive after generation:
 
 ```sh
 cd .build/desktop/localization/extensions/ash.language-pack-zh-cn
-zip -r ../../ash-language-pack-zh-cn.zip package.json manifest.json localization
+zip -r ../../ash-language-pack-zh-cn.zip package.json manifest.json localization extension-translations
 ```
 
 The bundled extension ID is `ash.language-pack-zh-cn`; distribution uses
 `ash/language-pack-zh-cn`. Remote installation follows the existing signed Extensions flow.
 The generated archive is a local package, not a published registry release.
+
+## Extension translations
+
+`contributes.localizations[].translations` declares an `ash` catalog target and optional
+publisher-qualified extension targets. The preinstalled Chinese pack contains targets for Git,
+Remote SSH, Media Preview and Markdown. Each extension target uses
+`{ "contents": { "package": { "key": "translation" }, "bundle": { "message": "translation" } } }`.
+The generated Ash catalog embeds these targets in `extensionTranslations`; the distributable
+package also includes the declared JSON resources.
+
+`MainThreadLocalization` resolves these resources from the pinned startup catalog. Manifest
+`%key%` labels use the pack's `package` dictionary after the extension's own English and locale
+resources. The public `vscode.l10n` API receives the `bundle` dictionary before module evaluation;
+missing messages retain their English source and formatting arguments. Absent or damaged pack
+resources fall back to the extension's own regional/base `l10n` bundles. The shared
+`extensionNls.localizeManifest` helper owns recursive manifest substitution.
 
 ## Catalog shape
 
@@ -80,16 +96,19 @@ catalog contract can reject a catalog without changing the generic Extensions sc
 ## Runtime behavior
 
 `ExtensionsLanguagePackService` starts with core English and the preinstalled language-pack extensions,
-and loads additional installed Extensions catalogs through the normal capability lease. Core and
-preinstalled locales take precedence. Their provenance remains distinct in the language-pack service. When multiple
+and loads additional installed Extensions catalogs through the normal capability lease. English always takes precedence. An installed update with the same package ID as a preinstalled
+pack replaces its bundled catalog; a different provider cannot replace that locale. The browser
+startup index records locale, package ID, version and digest alongside the validated catalog. When multiple
 installed providers supply the same normalized locale, that locale is excluded from discovery and
 does not overwrite saved resources; other locales remain available. Removing the duplicate provider
 allows the remaining catalog to load. Unreadable resources release their leases and do not prevent
 other providers from loading.
 
 `WorkbenchLocaleService` owns the local-profile selection and saves resources before the preference.
-Electron Main resolves one startup catalog for all windows and system menus; Web resolves its catalog
-before importing Workbench contributions. Resolution normalizes the requested locale, tries an exact
+Electron and Web resolve their startup catalog in the browser before importing Workbench
+contributions. IndexedDB `ash-language-packs` stores a derived startup index; Rust extension
+management owns installed packages. Electron publishes the resolved catalog to Main for system
+menus. Language-pack caching and loading add no Node service or Extension Host dependency. Resolution normalizes the requested locale, tries an exact
 match, then successively less specific locales, and finally built-in English. Missing, damaged or
 incompatible language resources do not block startup. The preference remains saved so reinstalling a
 valid pack can restore it on a later startup. `WorkbenchLocalizationService` uses the same startup NLS
@@ -100,14 +119,29 @@ The picker lists available locales and searches Extensions localization packages
 Selecting a package installs it and selects its new locale; the Extensions entry opens the package
 browser when the user wants to browse. Clearing the preference removes `workbench.locale` from the
 local profile and selects English for the next startup. Changing the preference leaves the current
-interface unchanged and offers to restart now or later. Uninstalling a package keeps its saved startup
-resource usable, independently of backend availability.
+interface unchanged and offers to restart now or later. After a successful installed-package refresh, the index is replaced atomically; uninstalled,
+conflicting or damaged providers are removed. Uninstalling an update restores the bundled version
+for a preinstalled locale, otherwise the next startup falls back to English. An unavailable backend
+preserves the last validated startup index. The running window keeps its original UI and extension
+translation snapshot until restart.
 
 The [French example package](../localization/examples/fr/manifest.json) uses the Ash `ash-1` catalog
 contract and translates a small part of the shell and display-language settings. Its static resource
 is [localization/package.json](../localization/examples/fr/localization/package.json). The example is
 not published; installation uses the existing signed Extensions distribution flow. It does not adapt
 VS Code language-pack payloads.
+
+The [Desktop language-pack smoke test](../test/smoke/areas/windows/display-language.spec.ts) installs a
+real Simplified Chinese ZIP through Extensions, updates the exact installation to a second release,
+and uninstalls it before checking that a restart restores the preinstalled UI and Git command labels.
+Its isolated signed HTTPS source serves TUF metadata and both releases. The scenario asserts successful
+HTTPS archive downloads with their actual lengths; the production Rust manager
+verifies and extracts the packages, persists installations and serves localization capability resources.
+The fixture never seeds the source cache, installation records or browser language index. Its test CA is
+pinned only by the isolated product-services configuration, with TLS verification enabled and no system
+trust changes. No public Marketplace upload is required. Separate scenarios cover
+missing and damaged indexes, while the installation scenario also checks English fallback for an absent
+message. No production Node language-pack path is involved.
 
 The selected catalog is consumed by the Workbench menu/action layer, core View Container and
 ViewPane titles, CompositeBar overflow labels, region accessibility labels, Settings navigation,
@@ -119,9 +153,8 @@ from Extensions.
 The interaction follows the same product shape as VS Code: English is always available, additional
 display languages are installed as Extensions language packs, and the selected display language is
 persisted by the product. The App Server remains locale-neutral because it serves multiple clients;
-Desktop and browser profiles store their own display-language preference. If a
-future server-side Extension Host needs NLS, its locale must be supplied per connection/process and
-must not become global App Server state. The POSIX `locale` environment variable mentioned in the
+Desktop and browser profiles store their own display-language preference. Worker and Rust/V8 Extension Hosts receive language and translation bundles in the existing
+per-window initialization snapshot; no global App Server language is set. The POSIX `locale` environment variable mentioned in the
 App Server terminal boundary is process environment inheritance, not the UI `workbench.locale`
 selection. See [VS Code Display Language](https://code.visualstudio.com/docs/configure/locales) for
 the reference user experience.

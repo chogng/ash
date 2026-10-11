@@ -70,8 +70,10 @@
 }
 
 .ash-composite-bar-label > .ash-action-bar > .ash-composite-bar-item {
+	box-sizing: border-box;
 	width: auto;
 	min-width: 0;
+	padding: 0 var(--ash-spacing-size100);
 }
 
 .ash-composite-bar-item:hover > .ash-composite-bar-action,
@@ -116,6 +118,18 @@
 
 .ash-composite-bar-label .ash-composite-bar-action {
 	width: auto;
+	font-weight: var(--ash-fontWeight-regular);
+	opacity: 1;
+}
+
+.ash-composite-bar-label .ash-composite-bar-item:hover {
+	color: var(--ash-compositeBar-foreground);
+}
+
+.ash-composite-bar-label .ash-composite-bar-item:focus-visible {
+	outline: 0;
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
 }
 
 .ash-composite-bar-label .ash-icon-label-text {
@@ -199,6 +213,15 @@
 .ash-composite-bar-horizontal > .ash-action-bar {
 	height: 100%;
 	flex-direction: row;
+	padding: 0;
+}
+
+.ash-composite-bar-label.ash-composite-bar-horizontal > .ash-action-bar {
+	gap: 0;
+	padding: 0 var(--ash-compositeBar-contentInset);
+}
+
+.ash-composite-bar-label > .ash-action-bar > .ash-composite-bar-overflow {
 	padding: 0;
 }
 

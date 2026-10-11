@@ -20,7 +20,12 @@ from build.lib.cargo import read_source_layout
 from build.lib.targets import TARGETS, TargetSpec, default_target
 from build.lib.bubblewrap import BubblewrapResolution, load_vendored_source
 from build.lib.package_binaries import build_binaries
-from build.lib.package import LAYOUT, build_package_directory, load_protocol_metadata
+from build.lib.package import (
+    EXTENSION_HOST_RESOURCES,
+    LAYOUT,
+    build_package_directory,
+    load_protocol_metadata,
+)
 from build.lib.livekit import resolve_livekit
 from build.lib.node import resolve_node
 from build.lib.ripgrep import resolve_ripgrep
@@ -218,11 +223,9 @@ def package_sources(root: Path) -> list[Path]:
         root / "build/lib/package-layout.json",
         root / "build/prepare.py",
         root / "Cargo.toml",
-        # The JS host embeds this module; SDK edits must rebuild the backend package.
-        root / "crates/external-js-ext/src/node.mjs",
-        root / "crates/external-js-ext/src/vscode.js",
-        root / "crates/external-js-ext/src/host.mjs",
     ]
+    # SDK imports are part of the runtime package identity, including supporting modules.
+    sources += [root / source for source, _ in EXTENSION_HOST_RESOURCES]
     sources += [
         path
         for path in (root / "build/lib").glob("*.py")

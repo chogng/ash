@@ -86,7 +86,7 @@ export function parseTranslationMessages(value: unknown): Readonly<Record<string
 }
 
 export function parseLanguagePackIndexEntry(value: unknown): LanguagePackIndexEntry | undefined {
-	if (!isRecord(value) || typeof value.extensionId !== "string" || !/^[a-z0-9][a-z0-9-]*[/.][a-z0-9][a-z0-9-]*$/iu.test(value.extensionId)
+	if (!isRecord(value) || typeof value.extensionId !== "string" || !/^(?:[a-z0-9_-]+(?:\.[a-z0-9_-]+)*|[a-z0-9_-]+\/[a-z0-9_-]+)(?:@[a-z0-9_-]+)?$/iu.test(value.extensionId) || value.extensionId.length > 160
 		|| typeof value.version !== "string" || !value.version || value.version.length > 128
 		|| typeof value.digest !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(value.digest)) { return undefined; }
 	const catalog = parseLanguagePackCatalog(value.catalog);

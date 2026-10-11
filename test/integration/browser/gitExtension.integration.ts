@@ -38,6 +38,9 @@ import type { IDecorationsService } from '../../../src/ash/workbench/services/de
 import type { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import type { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
+import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacksService.js';
+import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
+import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 
 const lifetime = new DisposableStore();
 const services = lifetime.add(new InstantiationService());
@@ -74,6 +77,8 @@ const catalog = withEnabledBuiltInExtensions({
 		return { ...value, extensions: [git, ...(includeGeneric ? [{ ...git, id: 'test.snapshots', manifestJson: JSON.stringify({ browser: './main.js' }) }] : [])] };
 	},
 }, enablement);
+services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
+services.registerInstance(IExtensionApi, catalog);
 const calls: { method: string; params: JsonValue; }[] = [];
 const errors: string[] = [];
 const requests: JsonValue[] = [];

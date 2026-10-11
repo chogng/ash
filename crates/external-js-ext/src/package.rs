@@ -76,6 +76,9 @@ impl Package {
             .insert("@ash/vscode".into(), include_str!("vscode.js").into());
         package
             .sources
+            .insert("@ash/scm.js".into(), include_str!("scm.js").into());
+        package
+            .sources
             .insert("@ash/commonjs".into(), include_str!("commonjs.js").into());
         Ok(package)
     }

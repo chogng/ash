@@ -5,6 +5,7 @@ import { toExtensionResourceURI } from '../../../platform/extensionResourceLoade
 import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacksService.js';
 import { parseTranslationMessages } from '../../../platform/languagePacks/common/languagePackCatalog.js';
 import type { ExtensionHostInitialization } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { parseJsonc } from '../../services/extensions/common/jsonc.js';
 import { localizeManifest } from '../../../platform/extensionManagement/common/extensionNls.js';
 
 /** Resolves translations from client resources without setting a shared server language. */
@@ -36,6 +37,10 @@ export class MainThreadLocalization {
 				const messages = parseTranslationMessages(value.contents?.package);
 				if (bundle && messages) { return { uri: uri.toString(), bundle, package: messages }; }
 			}
+		} catch {
+			// A damaged language-pack resource can fall back to the extension’s own bundle.
+		}
+		try {
 			const catalog = await this.extensions.list('cached');
 			const extension = catalog.extensions.find(extension => extension.id.toLowerCase() === id.toLowerCase());
 			if (!extension) { return undefined; }
@@ -45,7 +50,7 @@ export class MainThreadLocalization {
 			for (const locale of locales) {
 				const resource = toExtensionResourceURI({ generation: catalog.generation, extensionId: extension.id, path: `${manifest.l10n.replace(/\/$/u, '')}/bundle.l10n.${locale}.json` });
 				try {
-					const bundle = parseTranslationMessages(JSON.parse(await this.$fetchBundleContents(resource)));
+					const bundle = parseTranslationMessages(parseJsonc(await this.$fetchBundleContents(resource), 'Extension translations'));
 					if (bundle) { return { uri: resource.toString(), bundle, package: {} }; }
 				} catch {
 					// Optional locale resources may be absent; try the base language next.
@@ -65,7 +70,7 @@ export class MainThreadLocalization {
 		for (const suffix of new Set(suffixes)) {
 			try {
 				const uri = toExtensionResourceURI({ generation, extensionId: id, path: 'package.nls' + suffix + '.json' });
-				const parsed = parseTranslationMessages(JSON.parse(await this.$fetchBundleContents(uri)));
+				const parsed = parseTranslationMessages(parseJsonc(await this.$fetchBundleContents(uri), 'Extension messages'));
 				if (parsed) { Object.assign(messages, parsed); }
 			} catch {
 				// Packages can rely on English declarations or omit a regional variant.

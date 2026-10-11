@@ -57,8 +57,8 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 	}
 
 	get installedPackages(): readonly LanguagePackPackage[] {
-		const updatedIds = new Set(this._installedPackages.map(extension => extension.id));
-		return [...this.preinstalled.filter(extension => !updatedIds.has(extension.id)).map(({ catalog: _catalog, ...extension }) => ({ ...extension, installed: true })), ...this._installedPackages];
+		const updatedIds = new Set(this._installedPackages.map(extension => providerId(extension.id)));
+		return [...this.preinstalled.filter(extension => !updatedIds.has(providerId(extension.id))).map(({ catalog: _catalog, ...extension }) => ({ ...extension, installed: true })), ...this._installedPackages];
 	}
 
 	async search(query: string, limit?: number): Promise<readonly LanguagePackPackage[]> {
@@ -110,7 +110,7 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 			for (const entry of cached) {
 				if (this.builtinLocales.has(entry.locale)) { continue; }
 				const preinstalled = this.preinstalled.find(pack => pack.catalog.locale === entry.locale);
-				if (preinstalled && preinstalled.id !== entry.extensionId) { continue; }
+				if (preinstalled && providerId(preinstalled.id) !== providerId(entry.extensionId)) { continue; }
 				this.catalogsByLocale.set(entry.locale, entry.catalog);
 				this.startupCatalogs.set(entry.locale, entry.catalog);
 				this.extensionManagementLocales.add(entry.locale);
@@ -125,7 +125,7 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 		for (const entry of await loadInstalledCatalogs(this.extensionManagement, installed)) {
 			if (this.builtinLocales.has(entry.locale)) { continue; }
 			const preinstalled = this.preinstalled.find(pack => pack.catalog.locale === entry.locale);
-			if (preinstalled && preinstalled.id !== entry.extensionId) { continue; }
+			if (preinstalled && providerId(preinstalled.id) !== providerId(entry.extensionId)) { continue; }
 			candidates.set(entry.locale, candidates.has(entry.locale) ? undefined : entry);
 		}
 		const loaded = [...candidates.values()].filter((entry): entry is LanguagePackIndexEntry => entry !== undefined);
@@ -182,4 +182,8 @@ async function loadInstalledCatalogs(
 		}
 	}
 	return catalogs;
+}
+
+function providerId(id: string): string {
+	return id.split('@', 1)[0].replace('/', '.');
 }

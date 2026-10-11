@@ -276,6 +276,7 @@ fn product_node_process_speaks_the_shared_protocol_and_uses_real_node() {
             "host.mjs",
             include_str!("../../external-js-ext/src/host.mjs"),
         ),
+        ("scm.js", include_str!("../../external-js-ext/src/scm.js")),
     ] {
         std::fs::write(root.join(name), source).unwrap();
     }
@@ -332,7 +333,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
             .unwrap()
             .recv_timeout(Duration::from_secs(5))
             .unwrap_or_else(|error| panic!("{error}: {}", process.stderr()))
-            .unwrap();
+            .unwrap_or_else(|| panic!("Host response stream closed: {}", process.stderr()));
         response
             .validate_for(&request, &limits.protocol_limits())
             .unwrap();

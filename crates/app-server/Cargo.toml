@@ -158,6 +158,7 @@ ash-typst = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]
+http-test-support = { package = "ash-http-test-support", path = "../http-test-support" }
 github-authentication = { package = "ash-github-authentication", path = "../../extensions/github-authentication" }
 mxc-sandbox = { workspace = true }
 ash-app-server-client = { workspace = true }
