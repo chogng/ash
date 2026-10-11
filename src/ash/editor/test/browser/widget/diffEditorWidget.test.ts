@@ -88,7 +88,7 @@ test('DiffEditorWidget colors inline removed lines and refreshes their tokens wi
 	assert.equal(removedLine.textContent, 'before');
 	assert.equal(removedLine.getAttribute('aria-label'), 'Removed line 1: before');
 	assert.equal([...removedLine.querySelectorAll('.token-keyword')].map(token => token.textContent).join(''), 'before');
-	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'bfoe');
+	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'before');
 
 	tokenType = 'string';
 	original.tokenization.resetTokenization();
@@ -127,7 +127,7 @@ test('inline removed lines follow semantic theme styles and coloring settings wh
 	assert.deepEqual(style(), ['#00ff00', 'bold']);
 	await services.get(IConfigurationService).updateValue('editor.semanticHighlighting.enabled', false);
 	assert.deepEqual(style(), ['', '']);
-	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'bfoe');
+	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'before');
 });
 
 test('DiffEditorWidget owns two editors, keeps source models caller-owned, and refreshes decorations after an edit', async () => {

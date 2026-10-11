@@ -15,6 +15,78 @@ test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.ashDiffIntegration?.dispose());
 });
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`diff pairs edited code after inserted setup and highlights whole identifiers (${locale})`, async ({ page }, testInfo) => {
+		await page.setViewportSize({ width: 1500, height: 600 });
+		await openDiffPage(page, locale);
+		const original = 'head\nconst source = new ExplorerDataSource(files, config);\ntail';
+		const modified = 'head\nusing workspace = new WorkspaceContextService(project);\nconst getValue = config.getValue.bind(config);\nconfig.getValue = section => getValue(section);\nusing source = new WorkspaceDataSource(config);\ntail';
+		await page.evaluate(([left, right]) => {
+			document.getElementById('single')!.style.width = '1400px';
+			window.ashDiffIntegration.setTheme('vs');
+			window.ashDiffIntegration.setComparisonText(left, right);
+			window.ashDiffIntegration.setViewMode(true, false, 1400);
+		}, [original, modified]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().kinds)).toEqual(['unchanged', 'added', 'added', 'added', 'modified', 'unchanged']);
+		await expect.poll(() => page.evaluate(() => {
+			const lines = window.ashDiffIntegration.linePositions(2, 5);
+			return Math.abs(lines.originalTop - lines.modifiedTop);
+		})).toBeLessThan(1);
+		const removed = page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed');
+		const added = page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added');
+		await expect.poll(async () => (await removed.allTextContents()).join('')).toBe('constExplorerDataSourcefiles, ');
+		await expect.poll(async () => (await added.allTextContents()).join('')).toBe('usingWorkspaceDataSource');
+		await expect(removed.first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(added.first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await testInfo.attach('paired-code-diff', { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 1400));
+		const inlineOriginal = page.locator('#single .stanza-diff-inline-original-line');
+		await expect(inlineOriginal).toHaveText(original.split('\n')[1]!);
+		await expect.poll(async () => (await inlineOriginal.locator('.stanza-diff-inline-removed').allTextContents()).join('')).toBe('constExplorerDataSourcefiles, ');
+
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 1400));
+		const revert = page.locator('#single .ash-diff-revert').getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true });
+		await revert.focus();
+		await page.keyboard.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe(original);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().kinds)).toEqual(['unchanged', 'unchanged', 'unchanged']);
+		await page.evaluate(() => window.ashDiffIntegration.undo());
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe(modified);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().kinds)).toEqual(['unchanged', 'added', 'added', 'added', 'modified', 'unchanged']);
+	});
+
+	test(`diff keeps a rewritten loop continuous while selection revert preserves the added line (${locale})`, async ({ page }, testInfo) => {
+		await page.setViewportSize({ width: 2400, height: 600 });
+		await openDiffPage(page, locale);
+		const originalLine = '    for (let offset = 0; offset < Math.min(originalCount, modifiedCount); offset++) {';
+		const modifiedLine = '    const pairs = yield* pairChangedLines(original.slice(originalIndex, originalMatch), modified.slice(modifiedIndex, modifiedMatch));';
+		const addedLine = '    for (const [left, right] of pairs) {';
+		await page.evaluate(([original, modified]) => {
+			document.getElementById('single')!.style.width = '2300px';
+			window.ashDiffIntegration.setTheme('vs');
+			window.ashDiffIntegration.setComparisonText(original, modified);
+			window.ashDiffIntegration.setViewMode(true, false, 2300);
+		}, [`${originalLine}\nbody();`, `${modifiedLine}\n${addedLine}\nbody();`]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().kinds)).toEqual(['modified', 'added', 'unchanged']);
+		const removed = page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed');
+		const added = page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added');
+		await expect.poll(async () => (await removed.allTextContents()).join('')).toBe(originalLine.trimStart());
+		await expect.poll(async () => (await added.allTextContents()).join('')).toBe(modifiedLine.trimStart());
+		await expect(removed.first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(added.first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await testInfo.attach('contiguous-loop-rewrite', { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+
+		await page.evaluate(endColumn => window.ashDiffIntegration.selectModified([1, 5, 1, endColumn]), modifiedLine.length + 1);
+		const revert = page.locator('#single').getByRole('button', { name: localized(locale, 'Revert selected changes', '还原选中的更改'), exact: true });
+		await revert.focus();
+		await page.keyboard.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe(`${originalLine}\n${addedLine}\nbody();`);
+		await page.evaluate(() => window.ashDiffIntegration.undo());
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe(`${modifiedLine}\n${addedLine}\nbody();`);
+	});
+}
+
 for (const bracketPairs of [false, true]) {
 	test(`diff line backgrounds stay behind ${bracketPairs ? 'bracket' : 'indent'} guides in every theme`, async ({ page }, testInfo) => {
 		await openDiffPage(page);

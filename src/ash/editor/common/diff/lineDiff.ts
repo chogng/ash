@@ -55,11 +55,31 @@ export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, origi
 			rows.push({ kind: LineDiffKind.Unchanged, originalLineIndex: originalIndex++, modifiedLineIndex: modifiedIndex++, originalChanges: [], modifiedChanges: [] });
 		}
 		const rowStart = rows.length;
-		const originalCount = change.original.length;
-		const modifiedCount = change.modified.length;
-		for (let offset = 0; offset < Math.max(originalCount, modifiedCount); offset++) {
-			const left = offset < originalCount ? originalStart + offset : undefined;
-			const right = offset < modifiedCount ? modifiedStart + offset : undefined;
+		appendChangedRows(rows, change);
+		hunks.push({
+			rowStart,
+			rowEnd: rows.length,
+			originalStartLineIndex: originalStart,
+			originalLineCount: change.original.length,
+			modifiedStartLineIndex: modifiedStart,
+			modifiedLineCount: change.modified.length,
+		});
+		originalIndex = change.original.endLineNumberExclusive - 1;
+		modifiedIndex = change.modified.endLineNumberExclusive - 1;
+	}
+	while (originalIndex < originalEnd && modifiedIndex < modifiedEnd) {
+		rows.push({ kind: LineDiffKind.Unchanged, originalLineIndex: originalIndex++, modifiedLineIndex: modifiedIndex++, originalChanges: [], modifiedChanges: [] });
+	}
+	return { rows, hunks, changes: diff.changes, moves: diff.moves };
+}
+
+function appendChangedRows(rows: LineDiffRow[], change: DetailedLineRangeMapping): void {
+	let originalIndex = change.original.startLineNumber - 1;
+	let modifiedIndex = change.modified.startLineNumber - 1;
+	const appendUntil = (originalEnd: number, modifiedEnd: number): void => {
+		while (originalIndex < originalEnd || modifiedIndex < modifiedEnd) {
+			const left = originalIndex < originalEnd ? originalIndex++ : undefined;
+			const right = modifiedIndex < modifiedEnd ? modifiedIndex++ : undefined;
 			rows.push({
 				kind: left === undefined ? LineDiffKind.Added : right === undefined ? LineDiffKind.Removed : LineDiffKind.Modified,
 				originalLineIndex: left,
@@ -68,21 +88,19 @@ export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, origi
 				modifiedChanges: right === undefined ? [] : changesForLine(change.innerChanges, right + 1, 'modified'),
 			});
 		}
-		hunks.push({
-			rowStart,
-			rowEnd: rows.length,
-			originalStartLineIndex: originalStart,
-			originalLineCount: originalCount,
-			modifiedStartLineIndex: modifiedStart,
-			modifiedLineCount: modifiedCount,
-		});
-		originalIndex = originalStart + originalCount;
-		modifiedIndex = modifiedStart + modifiedCount;
+	};
+	// The algorithm's inner mappings carry the chosen line pairs. Preserve them
+	// for both decorations and view zones rather than pairing the hunk by offset.
+	for (const inner of change.innerChanges ?? []) {
+		const left = inner.originalRange.startLineNumber - 1;
+		const right = inner.modifiedRange.startLineNumber - 1;
+		if (left < originalIndex || right < modifiedIndex) {
+			continue;
+		}
+		appendUntil(left, right);
+		appendUntil(left + 1, right + 1);
 	}
-	while (originalIndex < originalEnd && modifiedIndex < modifiedEnd) {
-		rows.push({ kind: LineDiffKind.Unchanged, originalLineIndex: originalIndex++, modifiedLineIndex: modifiedIndex++, originalChanges: [], modifiedChanges: [] });
-	}
-	return { rows, hunks, changes: diff.changes, moves: diff.moves };
+	appendUntil(change.original.endLineNumberExclusive - 1, change.modified.endLineNumberExclusive - 1);
 }
 
 function changesForLine(changes: readonly RangeMapping[] | undefined, lineNumber: number, side: 'original' | 'modified'): DiffRange[] {

@@ -36,6 +36,69 @@ suite('Frontend line diff', () => {
 		]);
 	});
 
+	test('pairs an edited declaration with its source line after inserted setup code', async () => {
+		const original = ['head', 'const source = new ExplorerDataSource(files, config);', 'tail'];
+		const modified = ['head', 'using workspace = new WorkspaceContextService(project);', 'const getValue = config.getValue.bind(config);', 'config.getValue = section => getValue(section);', 'using source = new ExplorerDataSource(config);', 'tail'];
+		const computer = new DefaultLinesDiffComputer();
+		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
+		const result = computer.computeDiff(original, modified, options);
+		assert.deepEqual(await computer.computeDiffAsync(original, modified, options, new AbortController().signal), result);
+		const diff = toLineDiff(result, original.length, modified.length);
+		assert.deepEqual(diff.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+			['unchanged', 0, 0], ['added', undefined, 1], ['added', undefined, 2], ['added', undefined, 3], ['modified', 1, 4], ['unchanged', 2, 5],
+		]);
+		assert.equal(diff.hunks.length, 1);
+		const declaration = diff.rows[4]!;
+		assert.deepEqual(declaration.originalChanges.map(range => original[1]!.slice(range.startColumn, range.endColumn)), ['const', 'files, ']);
+		assert.deepEqual(declaration.modifiedChanges.map(range => modified[4]!.slice(range.startColumn, range.endColumn)), ['using', '']);
+		const reversed = toLineDiff({ changes: result.changes.map(change => change.flip()), moves: [] }, modified.length, original.length);
+		assert.deepEqual(reversed.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+			['unchanged', 0, 0], ['removed', 1, undefined], ['removed', 2, undefined], ['removed', 3, undefined], ['modified', 4, 1], ['unchanged', 5, 2],
+		]);
+	});
+
+	test('keeps inserted and removed neighbors separate from multiple edited declarations', async () => {
+		const diff = await compute('head\nconst alpha = loadAlpha();\nremovedOnly();\nconst beta = loadBeta();\ntail', 'head\nprepareWorkspace();\nusing alpha = loadAlpha();\nusing beta = loadBeta();\ntail');
+		assert.deepEqual(diff.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+			['unchanged', 0, 0], ['added', undefined, 1], ['modified', 1, 2], ['removed', 2, undefined], ['modified', 3, 3], ['unchanged', 4, 4],
+		]);
+		assert.equal(diff.hunks.length, 1);
+	});
+
+	test('highlights entire renamed identifiers while keeping unchanged code and punctuation clear', async () => {
+		const original = 'const $source_name = new ExplorerDataSource(files);';
+		const modified = 'using $result_name = new WorkspaceContextService(files);';
+		const diff = await compute(original, modified);
+		assert.deepEqual(diff.rows[0]!.originalChanges.map(range => original.slice(range.startColumn, range.endColumn)), ['const $source_name', 'ExplorerDataSource']);
+		assert.deepEqual(diff.rows[0]!.modifiedChanges.map(range => modified.slice(range.startColumn, range.endColumn)), ['using $result_name', 'WorkspaceContextService']);
+	});
+
+	test('highlights a rewritten loop continuously instead of keeping incidental punctuation matches', async () => {
+		const original = '\t\t\t\tfor (let offset = 0; offset < Math.min(originalCount, modifiedCount); offset++) {';
+		const modified = '\t\t\t\tconst pairs = yield* pairChangedLines(original.slice(originalIndex, originalMatch), modified.slice(modifiedIndex, modifiedMatch));';
+		const added = '\t\t\t\tfor (const [left, right] of pairs) {';
+		const diff = await compute(`${original}\nbody();`, `${modified}\n${added}\nbody();`);
+		assert.deepEqual(diff.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+			['modified', 0, 0], ['added', undefined, 1], ['unchanged', 1, 2],
+		]);
+		assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges], [
+			[{ startColumn: 4, endColumn: original.length }],
+			[{ startColumn: 4, endColumn: modified.length }],
+		]);
+	});
+
+	test('groups neighboring argument renames but retains meaningful unchanged expressions between edits', async () => {
+		const argumentsDiff = await compute('call(first, second);', 'call(alpha, beta);');
+		assert.deepEqual([argumentsDiff.rows[0]!.originalChanges, argumentsDiff.rows[0]!.modifiedChanges], [
+			[{ startColumn: 5, endColumn: 18 }], [{ startColumn: 5, endColumn: 16 }],
+		]);
+		const separated = await compute('first OLD middle OLD last', 'first NEW middle NEW last');
+		assert.deepEqual([separated.rows[0]!.originalChanges, separated.rows[0]!.modifiedChanges], [
+			[{ startColumn: 6, endColumn: 9 }, { startColumn: 17, endColumn: 20 }],
+			[{ startColumn: 6, endColumn: 9 }, { startColumn: 17, endColumn: 20 }],
+		]);
+	});
+
 	test('detects moved code with edits and added lines using document coordinates', () => {
 		const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
 		const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];
@@ -167,13 +230,24 @@ suite('Frontend line diff', () => {
 		assert.deepEqual(joined.rows[0]!.originalChanges, [{ startColumn: 1, endColumn: 6 }]);
 	});
 
-	test('marks whitespace and inner insertions exactly', async () => {
+	test('groups neighboring identifier edits without matching trailing whitespace to an interior space', async () => {
 		const diff = await compute('ab cd', 'aXb cYd ');
 		assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges], [[
-			{ startColumn: 1, endColumn: 1 }, { startColumn: 4, endColumn: 4 }, { startColumn: 5, endColumn: 5 },
+			{ startColumn: 0, endColumn: 5 },
 		], [
-			{ startColumn: 1, endColumn: 2 }, { startColumn: 5, endColumn: 6 }, { startColumn: 7, endColumn: 8 },
+			{ startColumn: 0, endColumn: 8 },
 		]]);
+	});
+
+	test('retains precise whitespace and punctuation insertions beside unchanged identifiers', async () => {
+		for (const [original, modified, expected] of [
+			['run(value);', 'run( value );', [[[4, 4], [9, 9]], [[4, 5], [10, 11]]]],
+			['run(value);', 'run(value, extra);', [[[9, 9]], [[9, 16]]]],
+			['  run(value); ', ' run(value);  ', [[[1, 2], [14, 14]], [[1, 1], [13, 14]]]],
+		] as const) {
+			const diff = await compute(original, modified);
+			assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges].map(ranges => ranges.map(range => [range.startColumn, range.endColumn])), expected);
+		}
 	});
 
 	test('finds an optimal alignment with repeated and reordered lines', async () => {
@@ -197,6 +271,18 @@ suite('Frontend line diff', () => {
 		modified[10_000] = 'unsaved edit';
 		const diff = await compute(lines.join('\n'), modified.join('\n'));
 		assert.deepEqual(diff.hunks, [{ rowStart: 10_000, rowEnd: 10_001, originalStartLineIndex: 10_000, originalLineCount: 1, modifiedStartLineIndex: 10_000, modifiedLineCount: 1 }]);
+	});
+
+	test('completes a large unrelated replacement within the computation budget', () => {
+		const original = Array.from({ length: 4_000 }, (_, index) => `before${index}`);
+		const modified = original.map((_, index) => `after${index}`);
+		const result = new DefaultLinesDiffComputer().computeDiff(original, modified, {
+			ignoreTrimWhitespace: false, maxComputationTimeMs: 500, computeMoves: false,
+		});
+		assert.equal(result.hitTimeout, false);
+		assert.equal(result.changes.length, 1);
+		assert.equal(result.changes[0]!.innerChanges!.length, original.length);
+		assert.deepEqual(result.changes[0]!.innerChanges!.map(change => [change.originalRange.startLineNumber, change.modifiedRange.startLineNumber]), original.map((_, index) => [index + 1, index + 1]));
 	});
 
 	test('stops a running expensive comparison when cancelled', async () => {

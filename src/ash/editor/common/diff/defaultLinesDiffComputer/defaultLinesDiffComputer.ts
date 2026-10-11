@@ -5,6 +5,8 @@ import { Range } from '../../core/range.js';
 import { LinesDiff, MovedText, type ILinesDiffComputer, type ILinesDiffComputerOptions } from '../linesDiffComputer.js';
 import { DetailedLineRangeMapping, LineRangeMapping, RangeMapping } from '../rangeMapping.js';
 
+const identifierTokenPattern = /^[$_\p{ID_Continue}]+$/u;
+
 /** Computes one document diff; the asynchronous entry yields for Worker cancellation. */
 export class DefaultLinesDiffComputer implements ILinesDiffComputer {
 	public computeDiff(originalLines: string[], modifiedLines: string[], options: ILinesDiffComputerOptions): LinesDiff {
@@ -49,14 +51,15 @@ function* diffLines(original: readonly string[], modified: readonly string[], op
 		const modifiedCount = modifiedMatch - modifiedIndex;
 		if (originalCount || modifiedCount) {
 			const innerChanges: RangeMapping[] = [];
-			for (let offset = 0; offset < Math.min(originalCount, modifiedCount); offset++) {
+			const pairs = yield* pairChangedLines(original.slice(originalIndex, originalMatch), modified.slice(modifiedIndex, modifiedMatch));
+			for (const [left, right] of pairs) {
 				innerChanges.push(...(yield* diffCharacters(
-					original[originalIndex + offset]!,
-					modified[modifiedIndex + offset]!,
-					originalIndex + offset + 1,
-					modifiedIndex + offset + 1,
+					original[originalIndex + left]!,
+					modified[modifiedIndex + right]!,
+					originalIndex + left + 1,
+					modifiedIndex + right + 1,
 				)));
-				if (offset % 256 === 0) yield;
+				yield;
 			}
 			changes.push(new DetailedLineRangeMapping(
 				new LineRange(originalIndex + 1, originalMatch + 1),
@@ -72,26 +75,255 @@ function* diffLines(original: readonly string[], modified: readonly string[], op
 }
 
 function* diffCharacters(original: string, modified: string, originalLineNumber: number, modifiedLineNumber: number): Generator<void, RangeMapping[]> {
-	const originalBoundaries = getTextGraphemeBoundaries(original);
-	const modifiedBoundaries = getTextGraphemeBoundaries(modified);
-	const originalGraphemes = originalBoundaries.slice(1).map((end, index) => original.slice(originalBoundaries[index], end));
-	const modifiedGraphemes = modifiedBoundaries.slice(1).map((end, index) => modified.slice(modifiedBoundaries[index], end));
-	const matches = yield* matchingItems(originalGraphemes, modifiedGraphemes);
-	matches.push([originalGraphemes.length, modifiedGraphemes.length]);
+	const originalTokens = diffTokens(original);
+	const modifiedTokens = diffTokens(modified);
+	const originalContent = tokenContentRange(originalTokens.values);
+	const modifiedContent = tokenContentRange(modifiedTokens.values);
+	const matches: Match[] = [];
+	let matchingWords = 0;
+	// Indentation and trailing whitespace belong to the line edges. Otherwise
+	// an added trailing space can steal the match for a space between identifiers.
+	for (const [leftStart, leftEnd, rightStart, rightEnd] of [
+		[0, originalContent[0], 0, modifiedContent[0]],
+		[originalContent[0], originalContent[1], modifiedContent[0], modifiedContent[1]],
+		[originalContent[1], originalTokens.values.length, modifiedContent[1], modifiedTokens.values.length],
+	] as const) {
+		const segmentMatches = yield* matchingItems(originalTokens.values.slice(leftStart, leftEnd), modifiedTokens.values.slice(rightStart, rightEnd));
+		for (const [left, right] of segmentMatches) {
+			matches.push([left + leftStart, right + rightStart]);
+			if (identifierTokenPattern.test(originalTokens.values[left + leftStart]!)) {
+				matchingWords++;
+			}
+			if (matches.length % 2048 === 0) {
+				yield;
+			}
+		}
+	}
+	matches.push([originalTokens.values.length, modifiedTokens.values.length]);
 	const changes: RangeMapping[] = [];
 	let originalIndex = 0;
 	let modifiedIndex = 0;
 	for (const [originalMatch, modifiedMatch] of matches) {
 		if (originalMatch > originalIndex || modifiedMatch > modifiedIndex) {
 			changes.push(new RangeMapping(
-				new Range(originalLineNumber, originalBoundaries[originalIndex]! + 1, originalLineNumber, originalBoundaries[originalMatch]! + 1),
-				new Range(modifiedLineNumber, modifiedBoundaries[modifiedIndex]! + 1, modifiedLineNumber, modifiedBoundaries[modifiedMatch]! + 1),
+				new Range(originalLineNumber, originalTokens.boundaries[originalIndex]! + 1, originalLineNumber, originalTokens.boundaries[originalMatch]! + 1),
+				new Range(modifiedLineNumber, modifiedTokens.boundaries[modifiedIndex]! + 1, modifiedLineNumber, modifiedTokens.boundaries[modifiedMatch]! + 1),
 			));
 		}
 		originalIndex = originalMatch + 1;
 		modifiedIndex = modifiedMatch + 1;
 	}
-	return changes;
+	return coalesceCharacterChanges(original, changes, matchingWords);
+}
+
+function coalesceCharacterChanges(original: string, changes: readonly RangeMapping[], matchingWords: number): RangeMapping[] {
+	if (matchingWords === 0 && changes.length > 1) {
+		// Spaces and delimiters alone do not establish shared code in a rewrite.
+		const first = changes[0]!;
+		const last = changes.at(-1)!;
+		return [new RangeMapping(first.originalRange.plusRange(last.originalRange), first.modifiedRange.plusRange(last.modifiedRange))];
+	}
+	const result: RangeMapping[] = [];
+	for (const change of changes) {
+		const previous = result.at(-1);
+		if (previous) {
+			const gap = original.slice(previous.originalRange.endColumn - 1, change.originalRange.startColumn - 1);
+			const beforeLength = Math.max(previous.originalRange.endColumn - previous.originalRange.startColumn, previous.modifiedRange.endColumn - previous.modifiedRange.startColumn);
+			const afterLength = Math.max(change.originalRange.endColumn - change.originalRange.startColumn, change.modifiedRange.endColumn - change.modifiedRange.startColumn);
+			// Nearby renamed words form one phrase or argument list. Keep unchanged
+			// identifiers, operators and call boundaries as meaningful separators.
+			if (gap.length <= 4 && /^[\s,.]*$/u.test(gap) && Math.min(beforeLength, afterLength) > gap.length) {
+				result[result.length - 1] = new RangeMapping(previous.originalRange.plusRange(change.originalRange), previous.modifiedRange.plusRange(change.modifiedRange));
+				continue;
+			}
+		}
+		result.push(change);
+	}
+	return result;
+}
+
+function tokenContentRange(tokens: readonly string[]): readonly [number, number] {
+	let start = 0;
+	let end = tokens.length;
+	while (start < end && /^\s+$/u.test(tokens[start]!)) {
+		start++;
+	}
+	while (end > start && /^\s+$/u.test(tokens[end - 1]!)) {
+		end--;
+	}
+	return [start, end];
+}
+
+/** Identifiers are indivisible; punctuation and whitespace retain grapheme-level precision. */
+function diffTokens(text: string): { values: string[]; boundaries: number[]; } {
+	const graphemes = getTextGraphemeBoundaries(text);
+	const boundaries = [0];
+	let previousIsWord = false;
+	for (let index = 1; index < graphemes.length; index++) {
+		const start = graphemes[index - 1]!;
+		const end = graphemes[index]!;
+		const isWord = identifierTokenPattern.test(text.slice(start, end));
+		if (isWord && previousIsWord) {
+			boundaries[boundaries.length - 1] = end;
+		} else {
+			boundaries.push(end);
+		}
+		previousIsWord = isWord;
+	}
+	return { values: boundaries.slice(1).map((end, index) => text.slice(boundaries[index], end)), boundaries };
+}
+
+interface LineWords {
+	readonly counts: ReadonlyMap<string, number>;
+	readonly weight: number;
+}
+
+function lineWords(line: string): LineWords {
+	const counts = new Map<string, number>();
+	let weight = 0;
+	for (const match of line.matchAll(/[$_\p{ID_Continue}]+/gu)) {
+		const word = match[0];
+		counts.set(word, (counts.get(word) ?? 0) + 1);
+		weight += Math.min(word.length, 32);
+	}
+	return { counts, weight };
+}
+
+function lineSimilarity(original: LineWords, modified: LineWords): number {
+	let overlap = 0;
+	for (const [word, count] of original.counts) {
+		overlap += Math.min(count, modified.counts.get(word) ?? 0) * Math.min(word.length, 32);
+	}
+	// Shared punctuation cannot anchor a pair, and weak word overlap should not
+	// consume a line that has a more convincing counterpart later in the hunk.
+	return overlap === 0 ? 0 : Math.max(0, 2 * overlap / (original.weight + modified.weight) - 0.3);
+}
+
+/** Weighted ordered alignment with linear memory, yielding for the diff's deadline and cancellation. */
+function* similarLinePairs(original: readonly LineWords[], modified: readonly LineWords[]): Generator<void, Match[]> {
+	const pending: Span[] = [[0, original.length, 0, modified.length]];
+	const matches: Match[] = [];
+	while (pending.length) {
+		const [leftStart, leftEnd, rightStart, rightEnd] = pending.pop()!;
+		if (leftStart === leftEnd || rightStart === rightEnd) {
+			continue;
+		}
+		if (leftEnd - leftStart === 1) {
+			let bestScore = 0;
+			let bestRight = rightStart;
+			for (let right = rightStart; right < rightEnd; right++) {
+				const score = lineSimilarity(original[leftStart]!, modified[right]!);
+				if (score > bestScore) {
+					bestScore = score;
+					bestRight = right;
+				}
+				if ((right - rightStart) % 256 === 0) {
+					yield;
+				}
+			}
+			if (bestScore > 0) {
+				matches.push([leftStart, bestRight]);
+			}
+			continue;
+		}
+		const middle = Math.floor((leftStart + leftEnd) / 2);
+		const forward = yield* lineAlignmentScores(original, modified, [leftStart, middle, rightStart, rightEnd], 'forward');
+		const backward = yield* lineAlignmentScores(original, modified, [middle, leftEnd, rightStart, rightEnd], 'backward');
+		let bestScore = 0;
+		let split = rightStart;
+		for (let offset = 0; offset <= rightEnd - rightStart; offset++) {
+			const score = forward[offset]! + backward[rightEnd - rightStart - offset]!;
+			if (score > bestScore) {
+				bestScore = score;
+				split = rightStart + offset;
+			}
+		}
+		if (bestScore > 0) {
+			pending.push([middle, leftEnd, split, rightEnd], [leftStart, middle, rightStart, split]);
+		}
+		yield;
+	}
+	return matches;
+}
+
+function* lineAlignmentScores(original: readonly LineWords[], modified: readonly LineWords[], span: Span, direction: 'forward' | 'backward'): Generator<void, Float64Array> {
+	const [leftStart, leftEnd, rightStart, rightEnd] = span;
+	const scores = new Float64Array(rightEnd - rightStart + 1);
+	let work = 0;
+	for (let left = 0; left < leftEnd - leftStart; left++) {
+		const words = original[direction === 'forward' ? leftStart + left : leftEnd - left - 1]!;
+		let diagonal = 0;
+		for (let right = 1; right < scores.length; right++) {
+			const previous = scores[right]!;
+			const similarity = lineSimilarity(words, modified[direction === 'forward' ? rightStart + right - 1 : rightEnd - right]!);
+			scores[right] = Math.max(previous, scores[right - 1]!, diagonal + similarity);
+			diagonal = previous;
+			if (++work % 256 === 0) {
+				yield;
+			}
+		}
+	}
+	return scores;
+}
+
+function* pairChangedLines(original: readonly string[], modified: readonly string[]): Generator<void, Match[]> {
+	if (original.length === 0 || modified.length === 0) {
+		return [];
+	}
+	const originals: LineWords[] = [];
+	const modifications: LineWords[] = [];
+	for (const [lines, words] of [[original, originals], [modified, modifications]] as const) {
+		for (const line of lines) {
+			words.push(lineWords(line));
+			if (words.length % 256 === 0) {
+				yield;
+			}
+		}
+	}
+	const words = new Set<string>();
+	let work = 0;
+	for (const line of originals) {
+		for (const word of line.counts.keys()) {
+			words.add(word);
+			if (++work % 2048 === 0) {
+				yield;
+			}
+		}
+	}
+	let hasSharedWords = false;
+	for (const line of modifications) {
+		for (const word of line.counts.keys()) {
+			if (words.has(word)) {
+				hasSharedWords = true;
+				break;
+			}
+			if (++work % 2048 === 0) {
+				yield;
+			}
+		}
+		if (hasSharedWords) {
+			break;
+		}
+	}
+	// A disjoint vocabulary cannot produce anchors; skip the quadratic scoring pass.
+	const anchors = hasSharedWords ? yield* similarLinePairs(originals, modifications) : [];
+	anchors.push([original.length, modified.length]);
+	const pairs: Match[] = [];
+	let left = 0;
+	let right = 0;
+	for (const [originalAnchor, modifiedAnchor] of anchors) {
+		// With no content evidence, retain positional replacement behavior inside
+		// the gap. Anchors keep those gaps from swallowing inserted setup lines.
+		while (left < originalAnchor && right < modifiedAnchor) {
+			pairs.push([left++, right++]);
+		}
+		if (originalAnchor < original.length && modifiedAnchor < modified.length) {
+			pairs.push([originalAnchor, modifiedAnchor]);
+		}
+		left = originalAnchor + 1;
+		right = modifiedAnchor + 1;
+	}
+	return pairs;
 }
 
 interface MoveFragment {
