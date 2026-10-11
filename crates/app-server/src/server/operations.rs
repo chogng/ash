@@ -1,4 +1,5 @@
 use super::AppServer;
+use super::ConnectionAuthority;
 use super::ConnectionState;
 use super::RpcError;
 use super::core_error;
@@ -464,7 +465,12 @@ impl AppServer {
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
         }
-        if self.message_history.is_some() {
+        if self.message_history.is_some()
+            && matches!(
+                connection.authority,
+                ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+            )
+        {
             capabilities.contracts.insert(
                 "messageHistory".into(),
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },

@@ -85,6 +85,8 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 const resources = new DisposableStore();
 const configuration = resources.add(new WorkbenchConfigurationService());
 const services = resources.add(new InstantiationService());
+services.registerInstance(IMessageHistoryService, undefined);
+services.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(ILanguageModelsService, {
 	onDidChangeModels: Event.None,

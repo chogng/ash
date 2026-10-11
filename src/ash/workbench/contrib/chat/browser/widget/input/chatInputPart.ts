@@ -289,8 +289,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private handleHistoryKey(event: KeyboardEvent): void {
-		if (event.isComposing) return;
-		if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'r') {
+		if (event.isComposing || event.defaultPrevented) return;
+		if (event.ctrlKey && !event.shiftKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'r') {
 			stopEvent(event);
 			if (!this.history.available) {
 				this.notifications.info(localize('chat.history.unavailable', 'Input history is unavailable on this connection.'));
