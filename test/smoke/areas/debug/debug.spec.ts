@@ -3,6 +3,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createServer, type Socket } from 'node:net';
 import { join, sep } from 'node:path';
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
+import { Workbench } from '../../../automation/workbench.js';
 
 // Exercise the production stdio transport with a deterministic DAP peer. The
 // peer records requests so UI assertions also prove which container was edited.
@@ -219,6 +220,127 @@ test('withdrawing an unrelated declarative debugger preserves a launch waiting f
 	await manage('Uninstall');
 });
 
+test('debugging routes colliding adapter IDs to their own workspace folders', async ({ target, application, testWorkspace }) => {
+	test.skip(target.kind !== 'electron', 'The desktop host opens multi-folder workspace files.');
+	if (!('windows' in application)) return;
+	const folders = ['first', 'second'].map(name => ({ name, directory: join(testWorkspace.directory, name) }));
+	for (const { name, directory } of folders) {
+		await mkdir(join(directory, '.vscode'), { recursive: true });
+		await writeFile(join(directory, 'debug-adapter.cjs'), adapter);
+		await writeFile(join(directory, 'debug-program.js'), `console.log('${name}');\nconsole.log('paused');\nconsole.log('stepped');\n`);
+		await writeFile(join(directory, 'debug-requests.jsonl'), '');
+		await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify({
+			version: '0.2.0', configurations: [{
+				name: `Debug ${name}`, type: 'smoke', request: 'launch',
+				debugAdapter: { program: process.execPath, args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')] },
+			}]
+		}));
+	}
+	const workspaceFile = join(testWorkspace.directory, 'debug.code-workspace');
+	await writeFile(workspaceFile, JSON.stringify({ folders: folders.map(({ name }) => ({ name, path: name })) }));
+	const opened = application.waitForEvent('window');
+	await application.evaluate(({ app }, file) => {
+		app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--workspace', file, '--new-window'], process.cwd(), {});
+	}, workspaceFile);
+	const page = await opened;
+	for (const { directory } of folders) {
+		const prompt = page.getByRole('dialog', { name: 'Ash', exact: true });
+		await expect(prompt.locator('.ash-dialog-detail')).toContainText(directory);
+		await prompt.getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+	}
+	const workbench = new Workbench(page);
+	await workbench.waitForReady();
+	// Observe the real transport without changing requests or backend responses.
+	await page.evaluate(() => {
+		const owner = globalThis as typeof globalThis & { debugAdapterBoundary?: DebugAdapterBoundary; };
+		const post = MessagePort.prototype.postMessage;
+		const pending = new Map<number, string>();
+		const observers = new Map<MessagePort, EventListener>();
+		const bytes = (value: unknown): Uint8Array | undefined => value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array ? value.data : undefined;
+		const state: DebugAdapterBoundary = {
+			starts: [],
+			dispose() {
+				MessagePort.prototype.postMessage = post;
+				for (const [port, observer] of observers) port.removeEventListener('message', observer);
+				delete owner.debugAdapterBoundary;
+			},
+		};
+		MessagePort.prototype.postMessage = function (message: unknown, options?: Transferable[] | StructuredSerializeOptions) {
+			const data = bytes(message);
+			if (data) {
+				const request = JSON.parse(new TextDecoder().decode(data)) as { id: number; method?: string; params?: { dirId?: string; }; };
+				if (request.method === 'debug/adapter/start' && request.params?.dirId) {
+					pending.set(request.id, request.params.dirId);
+					if (!observers.has(this)) {
+						const decoder = new TextDecoder();
+						let buffered = '';
+						const observer: EventListener = event => {
+							if (!(event instanceof MessageEvent)) return;
+							const data = bytes(event.data);
+							if (!data) return;
+							buffered += decoder.decode(data, { stream: true });
+							let end: number;
+							while ((end = buffered.indexOf('\n')) >= 0) {
+								const response = JSON.parse(buffered.slice(0, end)) as { id: number; result?: { sessionId?: string; }; };
+								buffered = buffered.slice(end + 1);
+								const dirId = pending.get(response.id);
+								if (dirId && response.result?.sessionId) { state.starts.push({ dirId, sessionId: response.result.sessionId }); pending.delete(response.id); }
+							}
+						};
+						observers.set(this, observer);
+						this.addEventListener('message', observer);
+					}
+				}
+			}
+			Reflect.apply(post, this, options === undefined ? [message] : [message, options]);
+		};
+		owner.debugAdapterBoundary = state;
+	});
+	try {
+		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+		const pane = page.locator('[data-view-id="workbench.view.debug"]');
+		const configuration = pane.getByRole('combobox', { name: 'Debug configuration', exact: true });
+		const sessions = pane.getByRole('combobox', { name: 'Active debug session', exact: true, includeHidden: true });
+		for (const { name } of folders) {
+			await configuration.selectOption({ label: `Debug ${name} — ${name}` });
+			await pane.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+			const session = sessions.locator('option').filter({ hasText: `Debug ${name} —` });
+			await expect(session).toHaveCount(1);
+			await expect(sessions).toHaveValue((await session.getAttribute('value'))!);
+			await expect(pane.getByRole('status')).toContainText('stopped');
+		}
+		const starts = await page.evaluate(() => (globalThis as typeof globalThis & { debugAdapterBoundary: DebugAdapterBoundary; }).debugAdapterBoundary.starts);
+		expect(starts).toHaveLength(2);
+		expect(new Set(starts.map(start => start.dirId)).size).toBe(2);
+		expect(starts.map(start => start.sessionId)).toEqual(['debug-adapter-1', 'debug-adapter-1']);
+		await expect(sessions.locator('option')).toHaveCount(2);
+		const commands = async (name: string) => (await readFile(join(testWorkspace.directory, name, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line).command as string);
+		for (const { name } of folders) {
+			const id = await sessions.locator('option').filter({ hasText: `Debug ${name} —` }).getAttribute('value');
+			if (name === 'first') await sessions.selectOption(id!);
+			else await expect(sessions).toHaveValue(id!);
+			await pane.getByRole('button', { name: 'Step Over', exact: true }).click();
+			await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:3');
+			await expect.poll(async () => (await commands(name)).filter(command => command === 'next')).toEqual(['next']);
+			if (name === 'first') expect(await commands('second')).not.toContain('next');
+			await pane.getByRole('button', { name: 'Stop', exact: true }).click();
+			await expect.poll(async () => (await commands(name)).filter(command => command === 'disconnect')).toEqual(['disconnect']);
+			if (name === 'first') {
+				expect(await commands('second')).not.toContain('disconnect');
+				await expect(sessions.locator('option')).toHaveCount(1);
+			}
+		}
+		await expect(sessions.locator('option')).toHaveCount(0);
+	} finally {
+		await page.evaluate(() => (globalThis as typeof globalThis & { debugAdapterBoundary?: DebugAdapterBoundary; }).debugAdapterBoundary?.dispose());
+	}
+});
+
+interface DebugAdapterBoundary {
+	readonly starts: { readonly dirId: string; readonly sessionId: string; }[];
+	dispose(): void;
+}
+
 test('debugging locates stopped source, edits nested variables by keyboard, refreshes watches, steps and stops', async ({ workbench, testWorkspace }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
@@ -334,6 +456,7 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await expect(disassembly.locator('[data-instruction-address="0x1004"]')).toBeVisible();
 	await disassembly.getByRole('button', { name: 'Open instruction source', exact: true }).click();
 	await expect(page.getByRole('tab', { name: 'debug-program.js', exact: true, selected: true })).toBeVisible();
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
 	await workbench.quickaccess.runCommand('debug.action.openDisassemblyView');
 	await expect(page.getByRole('tab', { name: 'Disassembly', exact: true, selected: true })).toBeVisible();
 	await expect(page.getByRole('tab', { name: 'Disassembly', exact: true })).toHaveCount(1);
