@@ -22,11 +22,17 @@ interface DiffViewZone {
 	readonly ordinal: number;
 }
 
+interface InlineOriginalLine {
+	readonly element: HTMLElement;
+	readonly lineNumber: number;
+	inlineDecorations?: readonly InlineDecoration[];
+}
+
 /** Owns the paired alignment zones and the original lines shown in inline mode. */
 export class DiffEditorViewZones extends Disposable {
 	private originalZones: string[] = [];
 	private modifiedZones: string[] = [];
-	private inlineOriginalLines: { readonly version: number; readonly lines: { readonly element: HTMLElement; readonly lineNumber: number; }[]; } | undefined;
+	private inlineOriginalLines: { readonly version: number; readonly lines: InlineOriginalLine[]; } | undefined;
 
 	constructor(
 		private readonly originalEditor: CodeEditorWidget,
@@ -37,7 +43,14 @@ export class DiffEditorViewZones extends Disposable {
 	) {
 		super();
 		this._register(model.original.tokenization.renderedTokens.onDidChange(() => this.renderInlineOriginalLines()));
-		this._register(originalEditor.onDidChangeModelDecorations(() => this.renderInlineOriginalLines()));
+		this._register(originalEditor.onDidChangeModelDecorations(() => {
+			// Token batches do not change decorations. Refresh this derived row data
+			// only when its editor owner publishes a decoration change.
+			for (const line of this.inlineOriginalLines?.lines ?? []) {
+				line.inlineDecorations = undefined;
+			}
+			this.renderInlineOriginalLines();
+		}));
 		this._register(themeService.onDidColorThemeChange(() => this.renderInlineOriginalLines()));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) {
@@ -51,7 +64,7 @@ export class DiffEditorViewZones extends Disposable {
 		this.inlineOriginalLines = undefined;
 		if (inlineView) {
 			const layout = this.modifiedEditor.getLayoutInfo();
-			const lines: { readonly element: HTMLElement; readonly lineNumber: number; }[] = [];
+			const lines: InlineOriginalLine[] = [];
 			this.inlineOriginalLines = { version: this.model.original.version, lines };
 			this.originalEditor.changeViewZones(accessor => {
 				for (const id of this.originalZones) accessor.removeZone(id);
@@ -158,9 +171,10 @@ export class DiffEditorViewZones extends Disposable {
 		const theme = this.themeService.getColorTheme();
 		const preference = this.configurationService.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
 		const semanticHighlighting = preference === true || (preference !== false && theme.semanticHighlighting === true);
-		for (const { element, lineNumber } of snapshot.lines) {
+		for (const line of snapshot.lines) {
+			const { element, lineNumber } = line;
 			this.originalEditor.applyFontInfo(element);
-			const inlineDecorations = (this.originalEditor.getLineDecorations(lineNumber) ?? []).flatMap(decoration => decoration.options.inlineClassName
+			const inlineDecorations = line.inlineDecorations ??= (this.originalEditor.getLineDecorations(lineNumber) ?? []).flatMap(decoration => decoration.options.inlineClassName
 				? [new InlineDecoration(decoration.range, decoration.options.inlineClassName, InlineDecorationType.Regular)]
 				: []);
 			projectStanzaSemanticTokenLine(

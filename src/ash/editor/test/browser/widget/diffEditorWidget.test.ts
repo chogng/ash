@@ -94,12 +94,28 @@ test('DiffEditorWidget colors inline removed lines and refreshes their tokens wi
 	original.deltaDecorations([], [{ range: new Range(1, 1, 1, 7), options: { description: 'unrelated margin', linesDecorationsClassName: 'unrelated-margin' } }]);
 	assert.strictEqual(removedLine.firstElementChild, unchangedToken);
 
+	let decorationQueries = 0;
+	let decorationChanges = 0;
+	using decorationListener = editor.originalEditor.onDidChangeModelDecorations(() => { decorationChanges += 1; });
+	const getLineDecorations = editor.originalEditor.getLineDecorations.bind(editor.originalEditor);
+	editor.originalEditor.getLineDecorations = lineNumber => {
+		decorationQueries += 1;
+		return getLineDecorations(lineNumber);
+	};
 	tokenType = 'string';
 	original.tokenization.resetTokenization();
 	await original.tokenization.whenReady(new AbortController().signal);
 	assert.strictEqual(editor.element.querySelector('.stanza-diff-inline-original-line'), removedLine);
 	assert.equal(removedLine.querySelector('.token-keyword'), null);
 	assert.equal([...removedLine.querySelectorAll('.token-string')].map(token => token.textContent).join(''), 'before');
+	// Resetting tokenization may also refresh bracket decorations; only those
+	// owner notifications should query this row's decorations again.
+	assert.equal(decorationQueries, decorationChanges);
+	const [decorationId] = original.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'inline change', inlineClassName: 'changed-inline-decoration' } }]);
+	assert.ok(decorationQueries > 0);
+	assert.equal(removedLine.querySelector('.changed-inline-decoration')?.textContent, 'b');
+	original.deltaDecorations([decorationId], []);
+	assert.equal(removedLine.querySelector('.changed-inline-decoration'), null);
 });
 
 test('inline removed lines follow semantic theme styles and coloring settings while retaining their difference marks', async () => {
