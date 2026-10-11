@@ -5,8 +5,6 @@ applyTo: "**/src/ash/sessions/**"
 
 # Agents Window
 
-Before implementation, review, or design work in this area, invoke the `sessions` skill. It owns the basic principles, focused-document routing, and rules for maintaining that guidance.
+For implementation, review or design in this area, use the [sessions skill](../../.agents/skills/sessions/SKILL.md).
 
-For visual work, read [Sessions style](../../src/ash/sessions/STYLE.md); Workbench design-philosophy and design-token visual rules do not apply here.
-
-Do not append corrective feedback here. Use the `feedback-learning` skill to classify it and apply the learning-memory budget.
+For visual work, read [Sessions style](../../src/ash/sessions/STYLE.md); Workbench design-philosophy and design-token rules do not apply here.

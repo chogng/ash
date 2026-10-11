@@ -217,7 +217,7 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 
 本次不引入 VS Code Node/Copilot SDK runtime、AHP action/state/replay 协议、Mission Control，不用上游私有类图重写 Rust；不按文件数补空模块，不扩展 credentials、权限、部署或共享访问；不把 Project/Workspace/Environment/Session/Thread/connection 合并为一个身份。
 
-通用流程建议落在现有 `.github/copilot-instructions.md` 的 Development workflow，与普通任务流程相邻，而不是放进仅适用于 `/develop` 的四产物文档或对齐 skill 的私有结构说明。建议文字：
+通用流程建议落在现有 [AGENTS.md](AGENTS.md#development-workflow) 的 Development workflow，与普通任务流程相邻，而不是放进仅适用于 `/develop` 的四产物文档或对齐 skill 的私有结构说明。建议文字：
 
 > 模块对齐先在云端核对现有能力、公开契约、真实调用链、唯一 owner 和近期上游行为，形成根目录 `<module>-todo.md`，写清基线、分批路径、依赖、产品验收与未决定事项；用户确认方案后，在指定本地 checkout 按批准批次实施并记录实际验证。云端审计不替代本地差异检查，不自动授权提交或推送。
 

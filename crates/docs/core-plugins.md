@@ -103,6 +103,10 @@ uninstall、lease 或 activation API，因为这些都是本地状态。
 
 ## 所有权
 
+通用 Marketplace 基础设施和模板不得硬编码仓库 owner、个人命名空间或产品身份；publisher
+身份来自仓库配置。产品专属 manifest 只属于可选 consumer adapter，Marketplace 校验与发布不得
+要求任何消费产品的源码树或发行状态。
+
 | 能力                                  | Remote Marketplace | Registry adapter | Core Plugins | 产品 runtime |
 | ------------------------------------- | ------------------ | ---------------- | ------------ | ------------ |
 | catalog、publisher、版本发布          | ✅                 | consume          | ❌           | ❌           |

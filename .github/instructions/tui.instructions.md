@@ -5,17 +5,13 @@ applyTo: "crates/tui/**,cli/**"
 
 # Ash Code CLI/TUI Guidelines
 
-Do not add feature overviews, UI behavior specifications, design notes, change records, plans, or verification reports under `crates/tui/docs`; keep implementation guidance and targeted test commands with the owning product, and keep cross-client methods, parameters, results, notifications, errors, and machine-output contracts in their owning API documents. See [`crates/tui/README.md`](../../crates/tui/README.md) for the product entry point and [`crates/tui/LAYOUT.md`](../../crates/tui/LAYOUT.md) for fullscreen and inline layout, state ownership, and terminal lifecycle. A specification or existing test file is not evidence that behavior passed acceptance.
+Do not add feature overviews, UI specifications, design notes, change records, plans or verification reports under `crates/tui/docs`. Keep implementation guidance and targeted commands with the product; cross-client API and machine-output contracts stay in their owning API documents. Product entry: [README](../../crates/tui/README.md); layout and terminal lifecycle: [LAYOUT](../../crates/tui/LAYOUT.md).
 
-`cli/` owns the user-facing `ash` command and dispatches terminal presentation to `crates/tui/`. `crates/tui/` owns `ash-tui`, raw-mode lifecycle, Ratatui interaction, and terminal-only capabilities. Do not move this product presentation or lifecycle into backend crates; shared backend semantics belong in backend-neutral contracts consumed by both clients.
-
-Keep one writer for each product state, render from explicit state, isolate side effects, reject stale asynchronous results by request/revision identity, and keep host adapters narrow. Feature behavior belongs in vertical feature owners rather than a global application switch.
-
-Prefer command-line-observable tests for state, events, terminal output, timing, and lifecycle. Do not use screenshots or terminal pixel baselines as the primary pass/fail signal.
+Do not move TUI presentation, raw-mode lifecycle or terminal-only capabilities into backend crates. Reject stale async results by request/revision identity; feature handlers belong in their feature modules rather than a global application switch.
 
 ## 命令面板与模态交互规范
 
-Ash Code 的命令面板在 fullscreen 中按内容呈现为居中模态框或底部面板，在 inline 中显示为临时面板；两种模式共用同一个功能编辑器。统一的是面板机制和同类操作的含义，功能数据、业务动作及子页面仍由对应功能负责。批准、提问和正文详情各有自己的交互容器，不因外观相似而塞进 `CommandPanel`。实现入口见 [Ash Code README](../../crates/tui/README.md)，两种呈现的区域见 [LAYOUT.md](../../crates/tui/LAYOUT.md)。本节是新建和整改面板的要求，不能据此认定现有面板已经全部符合。
+Ash Code 的命令面板在 fullscreen 中按内容呈现为居中模态框或底部面板，在 inline 中显示为临时面板；两种模式共用同一个功能编辑器。批准、提问和正文详情各有自己的交互容器，不因外观相似而塞进 `CommandPanel`。
 
 | 职责 | 唯一 owner | 约束 |
 | --- | --- | --- |
@@ -44,15 +40,17 @@ Ash Code 的命令面板在 fullscreen 中按内容呈现为居中模态框或�
 
 同一列表需要展示两个及以上稳定类别时，使用 `ListSelectionItem::as_section_divider` 标记分组标题，不为类别再加一层菜单。标题从内容区起始位置对齐项目文字，文字右侧用一条横线延伸到列表右边界；首组前不留空行，后续每组标题前恰好空一行，标题与首个项目之间不留空行。标题和间隔行只是呈现内容，不参与键盘选择、激活或鼠标命中。搜索跨组匹配项目；输入搜索词时隐藏分组标题和间隔行，仅显示匹配项目。分组的绘制、滚动行数和命中测试由 `widgets::list_selection` 统一实现，功能页只提供分组名称与项目。
 
-验收时按功能 owner 测试按键、焦点、搜索、返回和业务结果；fullscreen 与 inline 分别验证面板呈现与关闭后的焦点。涉及鼠标时验证命中与键盘激活走同一动作，尺寸变化取消未完成的点击；涉及异步请求时验证关闭、替换或切换模式后的迟到结果不会重开旧面板。App 与渲染测试按 [test-tui](../../.agents/skills/test-tui/SKILL.md) 执行；只有行为依赖真实 CLI 进程、PTY 或宿主终端时，才按 [test-tui-pty](../../.agents/skills/test-tui-pty/SKILL.md) 增加进程边界验证。
+## 验证
+
+按功能 owner 测试按键、焦点、搜索、返回和业务结果；fullscreen 与 inline 分别验证面板呈现与关闭后的焦点。涉及鼠标时验证命中与键盘激活走同一动作，尺寸变化取消未完成的点击；涉及异步请求时验证关闭、替换或切换模式后的迟到结果不会重开旧面板。App 与渲染测试按 [test-tui](../../.agents/skills/test-tui/SKILL.md) 执行；只有行为依赖真实 CLI 进程、PTY 或宿主终端时，才按 [test-tui-pty](../../.agents/skills/test-tui-pty/SKILL.md) 增加进程边界验证。
+
+TUI 布局、文案、焦点、交互或临时状态变更必须更新行为断言和终端文本 snapshot；二者不能相互替代，也不以截图或终端像素基线作为主要判据。颜色、修饰符等用实际 buffer 属性断言；动画注入固定时刻，不用 sleep 取样。
 
 ## Learnings
 
 * 行首用于列表选择、消息身份和 inline 输入提示的 `>`、状态圆点等符号的区域统一称为“状态标识列”，简称“标识列”；标识列及其分隔留白之外才是内容区。标签、正文和 fullscreen 输入区分隔线都从内容区开始，不能占用标识列；没有符号时标识列仍保留，不能让内容随状态左右移动。组件必须复用所在面板已有的标识列，不能在内容区内重复预留状态标识。fullscreen 输入提示 `> ` 属于输入区本身，计入换行与光标宽度；inline 输入提示仍放在标识列。输入区外形不作为区分 fullscreen 与 inline 的强制条件，两种模式分别拥有页面布局、滚动和面板容器。布局、命中测试和渲染测试必须使用同一边界；涉及此边界的变更，必须通过两种模式各自的完整 snapshot 和 buffer 列位置断言验证，不能只测试组件内部的相对对齐。
 
-* 修改 TUI 布局、可见文案、焦点标识、交互或临时状态时，必须使用 [test-tui](../../.agents/skills/test-tui/SKILL.md)，在行为 owner 所属测试层更新操作断言和终端文本 snapshot；只有行为依赖真实 CLI 进程、PTY 或宿主终端时，才用 [test-tui-pty](../../.agents/skills/test-tui-pty/SKILL.md) 补边界验证。替换界面时同步替换对应覆盖，不能只删除旧基线。行为断言验证操作，文本 snapshot 验证完整可见内容和布局，二者不能相互替代。颜色、修饰符和动画等文本快照无法表达的反馈，必须另用实际渲染 buffer 的属性断言；动画注入固定时刻，不能靠 sleep 等待取样。
-
-* 设计 StatusLine 数据需求时，先确认同一数据是否服务其他能力。Git 状态必须持续跟随 ChangeTurn；关闭 StatusLine 的 Git branch 或 Git changes 只能停止对应显示与 StatusLine 专属的额外计算，不能停止基础 Git 状态跟随。
+* Git 状态必须持续跟随 ChangeTurn；关闭 StatusLine 的 Git branch 或 Git changes 只能停止对应显示与 StatusLine 专属的额外计算，不能停止基础 Git 状态跟随。
 * Status 只展示状态和证据，不拥有功能启停；需要跨启动保留的 TUI 诊断开关由 Config 写入 `[tui]`，运行层按配置管理诊断会话，不能把会话身份或采样结果写回配置。
-* TUI 内置调色板统一使用 `ThemeRgb::from_hex("#RRGGBB")` 声明六位十六进制颜色，例如 `ThemeRgb::from_hex("#58a6ff")`；不要用 `ThemeRgb::new(0x58, 0xa6, 0xff)` 分散书写三个分量。`ThemeRgb` 只保存解析后的 RGB，内置值与用户主题共用格式校验，`RenderTheme` 不保存或解释颜色字符串。
+* TUI 内置调色板统一使用 `ThemeRgb::from_hex("#RRGGBB")` 声明六位十六进制颜色；不要用 `ThemeRgb::new(0x58, 0xa6, 0xff)` 分散书写三个分量。`ThemeRgb` 只保存解析后的 RGB，内置值与用户主题共用格式校验，`RenderTheme` 不保存或解释颜色字符串。
 * 新增可交互 item 时，能力 owner 必须用绘制所用的同一布局提供 typed hit-test，并把 `selected`、`hovered`、`pressed` 分别交给共享 `InteractionState`；页面组合层只聚合目标，不能按坐标猜业务身份，也不能靠 hover 改写键盘选择。点击必须复用该 item 的键盘激活路径；不可操作的只读行不暴露指针目标，并用 owner 测试断言整行命中、主题状态和键盘选择互不干扰。

@@ -104,10 +104,12 @@ export class EditorTitleControl extends Disposable {
 				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle) || event.affectsConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)) this.updateTabsLayoutStyle();
 			}));
 		}
+		this.domNode.hidden = model.editorLimit !== 1;
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	get height(): number {
+		if (this.domNode.hidden) return 0;
 		const rows = this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
 		return EditorTitleControl.HEIGHT * rows + this.header.height;
 	}
@@ -127,11 +129,15 @@ export class EditorTitleControl extends Disposable {
 		activePane?: IEditorPane,
 		selectedIds?: ReadonlySet<string>,
 	): void {
+		const wasHidden = this.domNode.hidden;
 		this.editors = editors;
 		this.selectedIds = selectedIds;
 		this.activeInput = activeInput;
 		this.tabs.setEditors(editors, activeInput, selectedIds);
 		this.header.setInput(activeInput, activePane);
+		// Single-content hosts retain their group controls even without an editor.
+		this.domNode.hidden = this.model.editorLimit !== 1 && editors.length === 0;
+		if (this.domNode.hidden !== wasHidden) this.heightEmitter.fire();
 	}
 
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {

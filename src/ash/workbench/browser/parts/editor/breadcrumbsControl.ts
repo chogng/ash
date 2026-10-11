@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import { EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput } from '../../../common/editor.js';
 import "./media/breadcrumbscontrol.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { BreadcrumbsItem, BreadcrumbsWidget } from "../../../../base/browser/ui/breadcrumbs/breadcrumbsWidget.js";
@@ -106,19 +106,21 @@ export class EditorBreadcrumbsControl extends Disposable {
 	}
 
 	private render(): void {
-		if (!this.input) {
+		// A comparison's tab identity is synthetic; navigation follows its modified resource.
+		const resource = EditorResourceAccessor.getOriginalUri(this.input, { supportSideBySide: SideBySideEditor.PRIMARY });
+		if (!this.input || !resource) {
 			this.widget.setItems([]);
 			this.domNode.classList.add("empty");
 			this.domNode.hidden = true;
 			return;
 		}
-		const workspaceFolder = this.workspaceContextService.getWorkspaceFolder(this.input.resource);
-		const files = this.filePath === "off" ? [] : new BreadcrumbsModel(this.input.resource, workspaceFolder, this.input.label).getElements();
+		const workspaceFolder = this.workspaceContextService.getWorkspaceFolder(resource);
+		const files = this.filePath === "off" ? [] : new BreadcrumbsModel(resource, workspaceFolder, this.input.label).getElements();
 		const visibleFiles = this.filePath === "last" ? files.slice(-1) : files;
 		const visibleSymbols = this.symbolPath === "off" ? [] : this.symbolPath === "last" ? this.symbols.slice(-1) : this.symbols;
 		const elements = [...visibleFiles, ...visibleSymbols];
 		this.widget.setItems(elements.map((element, index) => new EditorBreadcrumbItem(element, index === elements.length - 1)));
-		this.domNode.title = this.input.resource.toString();
+		this.domNode.title = resource.toString();
 		// Content emptiness is independent of configuration hiding a nonempty path.
 		this.domNode.classList.toggle("empty", elements.length === 0);
 		this.domNode.hidden = elements.length === 0;

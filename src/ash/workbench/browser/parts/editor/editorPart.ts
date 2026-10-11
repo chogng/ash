@@ -56,13 +56,13 @@ import type { IWorkingCopyService } from "../../../services/workingCopy/common/w
 import { EditorPanes, type IEditorPaneDescriptor, type IEditorPaneRegistry } from "../../editor.js";
 import type { IBulkEditService } from "../../../../editor/browser/services/bulkEditService.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
-import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
+import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput, UnknownEditorInputSerializerError } from "../../../services/editor/common/editorInputSerializer.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import { parseEditorWorkingSetLayout } from '../../../services/editor/common/editorWorkingSet.js';
 import { ModalEditorPart, type ModalEditorPartOptions } from "./modalEditorPart.js";
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
 import { WorkbenchConfiguration } from "../../../common/configuration.js";
-import { EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
+import { EditorCloseEmptyGroupsConfiguration, EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 export { EditorOpenSupersededError } from "./editorGroupView.js";
 
@@ -95,7 +95,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	activateEditorMru(offset: number): IEditorPane | undefined;
 	closeEditor(input: IResourceEditorInput): Promise<boolean>;
 	closeEditorIdentifier(identifier: EditorIdentifier): Promise<boolean>;
-	confirmCloseAllEditors(): Promise<boolean>;
+	confirmCloseAllEditors(options?: EditorCloseAllOptions): Promise<boolean>;
 	closeAllEditors(options?: EditorCloseAllOptions): Promise<boolean>;
 	moveActiveEditorTo(target: IEditorPart): Promise<boolean>;
 	saveActiveEditor(): Promise<void>;
@@ -114,6 +114,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 }
 
 export interface EditorCloseAllOptions {
+	readonly excludeSticky?: boolean;
 	readonly reason?: "close" | "reset";
 	readonly skipConfirmation?: boolean;
 }
@@ -458,10 +459,17 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
-		const destination = typeof target === 'object' ? target.groupId : target === 'modalGroup' ? 'modalGroup' : target === 'sideGroup' ? `sideGroup:${this._activeGroup.id}` : this._activeGroup.id;
+		const sideGroup = target === 'sideGroup' ? this._groups[this.groupIndex(this._activeGroup) + 1]?.group : undefined;
+		const destination = typeof target === 'object' ? target.groupId : target === 'modalGroup' ? 'modalGroup' : target === 'sideGroup' ? sideGroup?.id ?? `sideGroup:${this._activeGroup.id}` : this._activeGroup.id;
 		const controller = new AbortController();
 		this.openingIdentities.get(destination)?.abort();
 		this.openingIdentities.set(destination, controller);
+		using openingLifetime = toDisposable(() => {
+			if (this.openingIdentities.get(destination) !== controller) { return; }
+			this.openingIdentities.delete(destination);
+			const group = this._groups.find(host => host.group.id === destination)?.group;
+			if (group) { queueMicrotask(() => this.removeEmptyGroup(group)); }
+		});
 		try {
 			const identity = this.uriIdentity.resolveCanonicalUri(input.resource, controller.signal);
 			if (!(identity instanceof URI)) await identity;
@@ -469,8 +477,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		} catch (error) {
 			if (controller.signal.aborted) throw new EditorOpenSupersededError(input);
 			throw error;
-		} finally {
-			if (this.openingIdentities.get(destination) === controller) this.openingIdentities.delete(destination);
 		}
 		this.assertNotDisposed();
 		if (target === "modalGroup") {
@@ -511,7 +517,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				throw error;
 			}
 		}
-		if (target === undefined || target === "activeGroup") return this._activeGroup.openEditor(input, options);
+		if (target === undefined || target === "activeGroup") return await this._activeGroup.openEditor(input, options);
 		const source = this._activeGroup;
 		const { host, created } = this.resolveSideGroup(source);
 		try {
@@ -662,7 +668,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async closeAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
-		if (!options.skipConfirmation && !await this.confirmCloseAllEditors()) return false;
+		if (!options.skipConfirmation && !await this.confirmCloseAllEditors(options)) return false;
 		const modalInput = this.modalEditor.activeInput;
 		const modalPane = this.modalEditor.activePane;
 		const inputsByGroup = this._groups.map(({ group }) => ({ group, inputs: [...group.inputs] }));
@@ -671,12 +677,16 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false, closedEditor: (options.reason ?? "close") === "close" && modalPane ? { input: modalInput, paneId: modalPane.id } : undefined }));
 		}
 		for (const { group } of inputsByGroup) {
-			for (const input of [...group.inputs]) await group.closeEditor(input, { skipConfirmation: true, reason: options.reason ?? "close" });
+			for (const input of [...group.inputs]) {
+				if (options.excludeSticky && group.isSticky(input)) { continue; }
+				await group.closeEditor(input, { skipConfirmation: true, reason: options.reason ?? "close" });
+			}
+			if ((options.reason ?? 'close') === 'close') this.removeEmptyGroup(group);
 		}
 		return true;
 	}
 
-	async confirmCloseAllEditors(): Promise<boolean> {
+	async confirmCloseAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
 		const modalInput = this.modalEditor.activeInput;
 		const modalPane = this.modalEditor.activePane;
 		const inputsByGroup = this._groups.map(({ group }) => ({ group, inputs: [...group.inputs] }));
@@ -684,7 +694,16 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		if (modalInput && modalPane && !await this.confirmEditorClose(undefined, modalInput, modalPane, closingGroups)) return false;
 		for (const { group, inputs } of inputsByGroup) {
 			for (const input of inputs) {
-				if (!await group.confirmCloseEditor(input, closingGroups)) return false;
+				if (options.excludeSticky && group.isSticky(input)) { continue; }
+				// A retained sticky view still owns the document even when its other views close.
+				let confirmingGroups = closingGroups;
+				if (options.excludeSticky) {
+					const retainedGroups = inputsByGroup.filter(candidate => candidate.group.editors.some(editor =>
+						editor.isSticky && editor.canRevert && this.uriIdentity.extUri.isEqual(editor.input.resource, input.resource),
+					)).map(candidate => candidate.group.id);
+					confirmingGroups = closingGroups.filter(id => !retainedGroups.includes(id));
+				}
+				if (!await group.confirmCloseEditor(input, confirmingGroups)) { return false; }
 			}
 		}
 		return true;
@@ -729,7 +748,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		try {
 			for (const input of inputs) {
 				const preferredEditorId = source.editors.find(editor => editor.input === input)?.paneId;
+				const viewState = source.saveEditorViewState(input);
 				await created.group.openEditor(input, { pinned: true, preferredEditorId });
+				created.group.restoreEditorViewState(input, viewState);
 			}
 			created.group.focus();
 		} catch (error) {
@@ -860,6 +881,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			onDidActivate: () => {
 				this.setActiveGroup(group);
 			},
+			onDidFinishOpenEditor: () => queueMicrotask(() => this.removeEmptyGroup(group)),
 			dragAndDrop: {
 				start: (source, input) => this.tabDragAndDrop.start(source, input),
 				isDragging: () => this.tabDragAndDrop.isDragging(),
@@ -909,7 +931,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
 		if (this._activeGroup === host.group) {
-			this.setActiveGroup((this._groups[index] ?? this._groups[index - 1])!.group);
+			const recent = this.editorsMru.find(editor => editor.groupId !== host.group.id);
+			this.setActiveGroup((this._groups.find(candidate => candidate.group.id === recent?.groupId) ?? this._groups[index] ?? this._groups[index - 1])!.group);
 		}
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "groupRemoved", groupId: host.group.id }));
 		this.groupHosts.deleteAndDispose(host.group.id);
@@ -937,8 +960,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			const created = this.insertGroup(event.target, event.splitDirection);
 			void event.source.moveEditorTo(event.input, created.group, 0)
 				.then(() => {
-					const sourceHost = this._groups.find(host => host.group === event.source);
-					if (sourceHost && sourceHost.group.inputs.length === 0 && this._groups.length > 1) this.removeGroupHost(sourceHost);
 					this.setActiveGroup(created.group);
 					created.group.focus();
 				})
@@ -1001,10 +1022,21 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
 		const target = workingSet === "empty" ? emptyWorkingSet() : validateWorkingSet(workingSet);
-		const groups = target.groups.map(group => ({
-			...group,
-			inputs: group.editors.map(editor => this.inputSerializers.deserialize(editor.input)),
-		}));
+		const groups = target.groups.map(group => {
+			const restored = group.editors.flatMap((editor, index) => {
+				try { return [{ editor, index, input: this.inputSerializers.deserialize(editor.input) }]; }
+				catch (error) {
+					if (error instanceof UnknownEditorInputSerializerError) { return []; }
+					throw error;
+				}
+			});
+			return {
+				...group,
+				editors: restored.map(entry => entry.editor),
+				inputs: restored.map(entry => entry.input),
+				activeEditorIndex: restored.length === 0 ? -1 : Math.max(0, restored.findIndex(entry => entry.index === group.activeEditorIndex)),
+			};
+		});
 		const hadEditorFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
 		if (!await this.closeActiveModalEditor()) throw new CancellationError('Applying the editor working set was cancelled');
 		const retained = (options.preserveGroups ?? []).map(id => this.groupHosts.get(id)!);
@@ -1073,7 +1105,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			: new SerializableGrid(this.contentDomNode, legacyGridDescriptor(hosts, groups, this.dimension), { styles: EDITOR_GROUP_GRID_STYLES });
 		this.gridSlot.value = grid;
 		this.observeGrid();
-		this._activeGroup = hosts[activeGroupIndex]!.group;
+		this.setActiveGroup(hosts[activeGroupIndex]!.group);
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
 		for (const host of hosts) {
@@ -1087,6 +1119,24 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			const autoLock = this.groupOptions.configurationService?.getValue<AutoLockGroups>(AutoLockGroupsConfiguration);
 			if (group?.inputs.length === 1 && autoLock?.[event.editor.paneId]) group.setLocked(true);
 		}
+		if (event.kind === 'editorClosed' && (event.reason === 'close' || event.reason === 'move')) {
+			const group = this._groups.find(host => host.group.id === event.editor.groupId)?.group;
+			if (group && group.inputs.length === 0) {
+				// Finish the group's close events and rendering before disposing their owner.
+				queueMicrotask(() => this.removeEmptyGroup(group));
+			}
+		}
+	}
+
+	private removeEmptyGroup(group: EditorGroupView): void {
+		// Sessions owns its fixed single-editor grid; only ordinary tab groups collapse.
+		if (this.isDisposed || this.groupOptions.editorLimit === 1 || this._groups.length === 1 || group.inputs.length > 0 || group.isOpening || this.openingIdentities.has(group.id) || this.groupOptions.configurationService?.getValue<boolean>(EditorCloseEmptyGroupsConfiguration) === false) return;
+		const host = this._groups.find(candidate => candidate.group === group);
+		if (!host) return;
+		const focused = this.domNode.ownerDocument.activeElement;
+		const restoreFocus = this._activeGroup === group && (focused === this.domNode.ownerDocument.body || group.domNode.contains(focused));
+		this.removeGroupHost(host);
+		if (restoreFocus) this._activeGroup.focus();
 	}
 
 	private setActiveGroup(group: EditorGroupView): void {

@@ -1,67 +1,53 @@
 ---
-description: Ash source code organization — layers, target environments, dependency injection, and folder structure conventions. Reference when adding new modules, services, or contributions.
+description: Ash TypeScript layers, runtime API boundaries, contributions, and entrypoints.
 applyTo: "**/src/ash/**"
 ---
 
 # Source Code Organization
 
-Canonical reference: https://github.com/microsoft/vscode/wiki/Source-Code-Organization
-
 ## Layers
 
-The `src/ash/` core is partitioned into ordered layers — each may only import from layers below it:
+Modules may import their own layer and lower layers; they must not import, reference or derive defaults from higher layers.
 
-1. **`base`** — General utilities and UI building blocks (no service dependencies)
-2. **`platform`** — Service injection support and base services shared across layers
-3. **`editor`** — Stanza Editor core (no `node` or `electron-*` dependencies)
-4. **`workbench`** — Full Ash workbench, panels, views, and framework
-5. **`code`** — Desktop app entry point (Electron main, shared process, CLI)
-6. **`server`** — Server app entry point for remote development
-7. **`sessions`** — Agent Sessions window (may import from `workbench` and below; `workbench` must never import from `sessions`)
+| Layer | Responsibility and restrictions |
+| --- | --- |
+| `base` | Domain-neutral utilities and UI primitives; no service dependencies or references to higher-level features. |
+| `platform` | DI support and services shared across layers. |
+| `editor` | Stanza Editor core; no `node` or `electron-*` dependencies. |
+| `workbench` | Application shell, panels, views and framework. |
+| `code` | Desktop entrypoints: Electron main, shared process and CLI. |
+| `server` | Remote development server entrypoint. |
+| `sessions` | Agent Sessions window; may import `workbench` and below, but `workbench` must never import `sessions`. |
 
 ## Target Environments
 
-Choose the owning layer and feature first, then its runtime environment. The table limits available APIs; it does not require every function without DOM access to live in `common`. A browser feature may keep pure helpers beside its orchestration. Extract shared code only for a concrete independent responsibility and consumer.
+Pure helpers may stay beside browser feature orchestration; absence of DOM access does not require moving them to `common`.
 
-| Folder | APIs Available | May Use |
-|--------|---------------|---------|
-| `common` | Basic JavaScript only | — |
-| `browser` | Web/DOM APIs | `common` |
-| `node` | Node.js APIs | `common` |
-| `electron-browser` | Browser + limited Electron IPC | `common`, `browser` |
+| Folder | APIs available | May use |
+| --- | --- | --- |
+| `common` | Basic JavaScript | — |
+| `browser` | Web/DOM | `common` |
+| `node` | Node.js | `common` |
+| `electron-browser` | Browser and limited Electron IPC | `common`, `browser` |
 | `electron-utility` | Electron utility process | `common`, `node` |
 | `electron-main` | Electron main process | `common`, `node`, `electron-utility` |
 
 ## Workbench Organization
 
-- `ash/workbench/{common|browser|electron-browser}` — minimal workbench core
-- `ash/workbench/api` — `ash.d.ts` API provider
-- `ash/workbench/services` — core services (not contrib-specific)
-- `ash/workbench/contrib` — feature contributions
+| Path under `ash/workbench/` | Responsibility |
+| --- | --- |
+| `common`, `browser`, `electron-browser` | Workbench core |
+| `api` | `ash.d.ts` API provider |
+| `services` | Core services |
+| `contrib` | Feature contributions |
 
-### Contribution Rules
-
-- Workbench core and shared services must not depend on contribution-owned contracts or implementations. This includes type-only imports. Entry points may import contributions to assemble features.
-- Workbench contributions use a `.contribution.ts` registration entry point. Editor contributions follow their editor bundle and registration contracts; this convention does not require an extra editor entry file.
-- Cross-contribution consumers use the owning feature's public API, never its private implementation. There is no requirement to create a `common` API file for every contribution.
-- Contracts consumed by shared registries belong to the lower shared owner; contributions implement or consume them. Do not place those contracts inside a contribution and import them back into the shared registry.
+- Core and shared services must not depend on contribution-owned contracts or implementations, including type-only imports. Entry points may import contributions to assemble features.
+- Workbench contributions use `.contribution.ts` registration entrypoints. Editor contributions follow their bundle and registration contracts without requiring an extra entry file.
+- Cross-contribution consumers use the feature's public API, never private implementation. Not every contribution needs a `common` API file.
+- Contracts consumed by shared registries belong to the lower shared owner; contributions implement or consume them.
 
 ## Entry Points
 
-Only code referenced from entry point files is loaded:
+Register shared dependencies in `workbench.common.main.ts`, desktop-only dependencies in `workbench.desktop.main.ts`, and web-only dependencies in `workbench.web.main.ts`.
 
-- `workbench.common.main.ts` — shared dependencies
-- `workbench.desktop.main.ts` — desktop-only
-- `workbench.web.main.ts` — web-only
-
-## Dependency Injection
-
-Services are consumed via constructor injection with decorator identifiers:
-
-```typescript
-class MyComponent {
-  constructor(@IMyService private readonly myService: IMyService) { }
-}
-```
-
-Services are provided via `registerSingleton(IMyService, MyServiceImpl, InstantiationType.Delayed)`.
+Service assembly rules: [Dependency Injection](frontend-architecture.instructions.md#dependency-injection).

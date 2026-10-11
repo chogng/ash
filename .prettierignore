@@ -39,5 +39,4 @@ crates/skills/assets/
 **/SKILL.md
 AGENTS.md
 .github/instructions/
-.github/copilot-instructions.md
 .agents/

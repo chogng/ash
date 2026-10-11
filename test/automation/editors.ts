@@ -23,7 +23,6 @@ export class EditorGroup {
 
 	async waitForReady(): Promise<void> {
 		await this.element.waitFor({ state: "visible" });
-		await this.title.waitFor({ state: "visible" });
 		await this.content.waitFor({ state: "visible" });
 	}
 }

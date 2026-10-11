@@ -167,14 +167,13 @@ registerAction2(class CloseAllEditorsAction extends Action2 {
 			id: CloseAllEditorsCommandId,
 			title: localize2({ bundle: "ash", key: "workbench.closeAllEditors" }, "Close All Editors"),
 			f1: true,
-			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: { id: MenuId.MenubarFileMenu, group: "6_close", order: 1 },
 			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("w", { primaryKey: true })) },
 		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IEditorPart).closeAllEditors();
+		await accessor.get(IEditorPart).closeAllEditors({ excludeSticky: true });
 	}
 });
 

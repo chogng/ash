@@ -1,3 +1,5 @@
+import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
+import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
 import type { Locator } from "@playwright/test";
 import { parseWorkspace } from "../../../../src/ash/platform/workspace/common/workspace.js";
 import { expect, test } from "../../../automation/test.js";
@@ -10,6 +12,159 @@ interface SashMeasurements {
 	readonly initialRaster: { width: number; height: number; };
 	readonly rasters: { width: number; height: number; }[];
 }
+
+test('closing tabs removes empty editor groups and restores one full-width group', async ({ workbench, reloadWorkbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.groupAt(0).editor.input.focus();
+	await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+	await expect(workbench.editors.groups).toHaveCount(2);
+	await workbench.editors.groupAt(1).editor.input.focus();
+	await expect(workbench.editors.groupAt(1).editor.input).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+W');
+	await expect(workbench.editors.groups).toHaveCount(1);
+	await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+	await expect(workbench.editors.groups).toHaveCount(2);
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await expect(workbench.editors.groups).toHaveCount(1);
+	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
+	await expect(workbench.editors.groupAt(0).title).toBeHidden();
+	await expect(workbench.editors.groupAt(0).watermark).toBeVisible();
+	await expect.poll(async () => workbench.editors.groupAt(0).element.evaluate(element => {
+		const group = element.getBoundingClientRect();
+		const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
+		return Math.round(content.width - group.width);
+	})).toBe(0);
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+	await expect(workbench.editors.groups).toHaveCount(2);
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await expect(workbench.editors.groups).toHaveCount(1);
+	({ workbench } = await reloadWorkbench());
+	await expect(workbench.editors.groups).toHaveCount(1);
+	await expect(workbench.editors.groupAt(0).welcome).toBeVisible();
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: /Untitled-/u })).toHaveCount(0);
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
+	await expect(workbench.editors.groupAt(0).title).toBeHidden();
+});
+
+test('editor group lifecycle keeps recent tabs and sticky editors and focuses empty splits', async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	const group = workbench.editors.groupAt(0);
+	const names: string[] = [];
+	for (let index = 0; index < 3; index++) {
+		await page.keyboard.press('ControlOrMeta+N');
+		await expect(group.tabs).toHaveCount(index + 1);
+		names.push((await group.element.locator('[role="tab"][aria-selected="true"]').getAttribute('aria-label'))!);
+	}
+	const first = group.tabs.filter({ hasText: names[0]! });
+	const third = group.tabs.filter({ hasText: names[2]! });
+	await first.click();
+	await third.click();
+	await group.editor.input.focus();
+	await page.keyboard.press('ControlOrMeta+W');
+	await expect(first).toHaveAttribute('aria-selected', 'true');
+	await expect(group.tabs).toHaveCount(2);
+	await workbench.quickaccess.runCommand('workbench.action.pinEditor');
+	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(1);
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await expect(group.tabs).toHaveCount(1);
+	await expect(first).toHaveAttribute('aria-selected', 'true');
+	await group.editor.input.focus();
+	await page.keyboard.press('ControlOrMeta+W');
+	await expect(group.tabs).toHaveCount(0);
+	await expect(group.element).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+	await expect(workbench.editors.groups).toHaveCount(2);
+	await expect(workbench.editors.groupAt(1).element).toBeFocused();
+	await expect(workbench.editors.groupAt(1).element).toHaveAttribute('aria-label', 'Empty editor group');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await expect(workbench.editors.groups).toHaveCount(1);
+	await expect(workbench.editors.groupAt(0).element).toBeFocused();
+});
+
+test('editor group lifecycle preserves cursor and scrolling through split and tab move', async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await page.keyboard.press('ControlOrMeta+N');
+	const source = workbench.editors.groupAt(0);
+	await source.editor.input.focus();
+	await page.keyboard.insertText(Array.from({ length: 160 }, (_, index) => `line ${index}: editor group view state`).join('\n'));
+	await page.keyboard.press('ControlOrMeta+Home');
+	for (let index = 0; index < 79; index++) await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('ArrowRight');
+	await page.keyboard.press('ArrowRight');
+	const cursor = page.getByText('Ln 80, Col 3', { exact: true });
+	await expect(cursor).toBeVisible();
+	const originalName = (await source.tabs.first().getAttribute('aria-label'))!.split(',')[0]!;
+	const sourceScroll = source.editor.element.locator(':scope > .ash-smooth-scrollable');
+	const scrollTop = await sourceScroll.evaluate(element => element.scrollTop);
+	expect(scrollTop).toBeGreaterThan(0);
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+	await expect(workbench.editors.groups).toHaveCount(2);
+	const target = workbench.editors.groupAt(1);
+	await target.editor.input.focus();
+	await expect(cursor).toBeVisible();
+	await expect.poll(() => target.editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+	await page.keyboard.press('ControlOrMeta+N');
+	await expect(target.tabs).toHaveCount(2);
+	await source.editor.input.focus();
+	await page.keyboard.press('ControlOrMeta+Home');
+	for (let index = 0; index < 39; index++) await page.keyboard.press('ArrowDown');
+	await expect(page.getByText('Ln 40, Col 1', { exact: true })).toBeVisible();
+	const movedScrollTop = await sourceScroll.evaluate(element => element.scrollTop);
+	await source.tabs.filter({ hasText: originalName }).dragTo(target.tabs.last(), { targetPosition: { x: 8, y: 12 } });
+	await expect(workbench.editors.groups).toHaveCount(1);
+	const remaining = workbench.editors.groupAt(0);
+	await expect(remaining.tabs).toHaveCount(2);
+	await expect(remaining.tabs.filter({ hasText: originalName })).toHaveAttribute('aria-selected', 'true');
+	await expect(remaining.editor.input).toBeFocused();
+	await expect(page.getByText('Ln 40, Col 1', { exact: true })).toBeVisible();
+	await expect.poll(() => remaining.editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeCloseTo(movedScrollTop, 0);
+});
+
+test.describe('editor group lifecycle saved state', () => {
+	test.use({ openWorkspace: false });
+	test('restores supported tabs around a missing serializer and updates the window title after reload', async ({ target, application, workbench, reloadWorkbench }) => {
+		const page = workbench.page;
+		const workspaceId = target.kind === 'electron'
+			? parseWorkspace(await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer.invoke('ash:workspace:context:read'))).id
+			: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
+		expect(workspaceId).toBeTruthy();
+		const identity = { scope: StorageScope.WORKSPACE, id: workspaceId! };
+		const saved = {
+			version: 1, active: 0, parts: [{
+				id: 'lastSession', activeGroupIndex: 0, groups: [{
+					id: 'editor-group-restored', size: 1, activeEditorIndex: 2, editors: [
+						{ input: { typeId: 'workbench.removedSerializer', value: {} }, preview: false },
+						{ input: { typeId: 'workbench.editorInput.resource', value: { resource: 'untitled:/restore-first.ts', label: 'restore-first.ts', initialText: '' } }, preview: false, sticky: true },
+						{ input: { typeId: 'workbench.editorInput.resource', value: { resource: 'untitled:/restore-second.ts', label: 'restore-second.ts', initialText: '' } }, preview: true },
+					]
+				}]
+			}]
+		};
+		await seedStorageOnNextLoad(application, page, identity, { 'editorparts.state': { value: JSON.stringify(saved), target: StorageTarget.MACHINE } });
+		await page.reload();
+		const restored = { application, workbench };
+		const group = restored.workbench.editors.groupAt(0);
+		await expect(group.tabs).toHaveCount(2);
+		await expect(group.tabs.filter({ hasText: 'restore-second.ts' })).toHaveAttribute('aria-selected', 'true');
+		await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(1);
+		await expect(restored.workbench.page).toHaveTitle(/restore-second.ts/u);
+		await group.tabs.filter({ hasText: 'restore-first.ts' }).click();
+		await expect(restored.workbench.page).toHaveTitle(/restore-first.ts/u);
+		await restored.workbench.page.keyboard.press('ControlOrMeta+N');
+		await expect(restored.workbench.page).toHaveTitle(/Untitled-/u);
+		await expect.poll(async () => (await readStorageEntries(restored.application, restored.workbench.page, identity))['editorparts.state']).toBeTruthy();
+		const restarted = await reloadWorkbench();
+		await expect(restarted.workbench.editors.groupAt(0).tabs).toHaveCount(3);
+		await expect(restarted.workbench.page).toHaveTitle(/Untitled-/u);
+	});
+});
 
 for (const groupCount of [1, 2]) {
 	test(`sash dragging reuses document rendering with ${groupCount} editor groups`, async ({ driver, workbench }, testInfo) => {

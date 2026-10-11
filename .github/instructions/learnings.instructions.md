@@ -1,26 +1,11 @@
 ---
-description: This document describes how to deal with learnings that you make. (meta instruction)
+description: Record reusable corrections when the user says learn!.
 ---
 
-This document describes how to deal with learnings that you make. It is a meta-instruction file.
+# Recording corrections
 
-Structure of learnings:
-* Each instruction file has a "Learnings" section.
-* Each learning has a 1-4 sentences description of the learning.
+When the user says `learn!`:
 
-Example:
-```markdown
-## Learnings
-* Prefer `const` over `let` whenever possible
-* Avoid `any` type
-```
-
-When the user tells you "learn!", you should:
-* extract a learning from the recent conversation
-	* identify the problem that you created
-	* identify why it was a problem
-	* identify how you were told to fix it/how the user fixed it
-	* reflect over it, maybe it can be generalized? Avoid too specific learnings.
-* create a learning (1-4 sentences) from that
-	* Write this out to the user and reflect over these sentences
-	* then, add the reflected learning to the "Learnings" section of the most appropriate instruction file
+1. Identify the correction and its reusable rule.
+2. Update the existing rule in the most specific applicable instruction or skill. If no rule exists, add one to that owner; do not require a `Learnings` section in every file.
+3. Tell the user what changed and where.

@@ -243,13 +243,13 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return part?.closeEditorIdentifier(identifier) ?? Promise.resolve(false);
 	}
 
-	async confirmCloseAllEditors(): Promise<boolean> {
-		for (const part of this.parts) if (!await part.confirmCloseAllEditors()) return false;
+	async confirmCloseAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
+		for (const part of this.parts) if (!await part.confirmCloseAllEditors(options)) return false;
 		return true;
 	}
 
 	async closeAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
-		if (!options.skipConfirmation && !await this.confirmCloseAllEditors()) return false;
+		if (!options.skipConfirmation && !await this.confirmCloseAllEditors(options)) return false;
 		for (const part of this.parts) {
 			if (!await part.closeAllEditors({ ...options, skipConfirmation: true })) return false;
 		}

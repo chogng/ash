@@ -5,35 +5,24 @@ applyTo: "**/src/ash/**/browser/**/*.ts,**/src/ash/**/browser/**/*.css,**/src/as
 
 # Browser UI Guidelines
 
-Follow [`docs/ui-styling-ownership.md`](../../docs/ui-styling-ownership.md) for detailed ownership rules.
+Detailed ownership contract: [UI styling ownership](../../docs/ui-styling-ownership.md).
 
 ## DOM vocabulary and ownership
 
-- Use `domNode` for the exposed root of a visual component or view whose API is the root DOM itself.
-- Use semantic `<role>DomNode` names for owned children and `container` for a caller-provided parent.
-- Use `element` for short-lived generic DOM values, tree/model elements, or established generic widget contracts.
-- The object that creates stable DOM owns its listener and disposal lifecycle. Register cleanup beside creation.
-- A host may size and position a directly hosted component root; it must not mutate or style through the component's internal DOM.
+- Use `domNode` for an exposed visual root, `<role>DomNode` for owned children, and `container` for a caller-provided parent.
+- Use `element` for short-lived generic DOM values, tree/model elements and established generic widget contracts.
+- Stable DOM creators own listener cleanup; register it beside creation.
+- Hosts may size and position a directly hosted root, but must not mutate or style through its internal DOM.
+- Ash-owned DOM and CSS use Ash's stable brand classes; do not copy or retain upstream product root classes.
 
-## State projection and CSS
+## CSS and rendering
 
-- The component that defines interaction state owns its visual projection.
-- Project state through a stable class such as `.checked` alongside the corresponding ARIA attribute. CSS selects the class, not `[aria-*]` attributes.
-- Do not use behavior identities such as `data-action-id` as visual selectors.
-- Shared colors, typography, elevation, motion, and standard sizing come from semantic design tokens. Tokens provide values; component CSS decides when to use them.
-- A legitimate component variation uses a named presentation variant. Do not add host-specific deep selectors or ambiguous boolean styling options.
-
-## Rendering and layout
-
-- Keep presentation in CSS. Inline styles carry computed geometry or component-local custom-property values, not theme branches.
-- Keep measurements before mutations to avoid forced layout.
-- Do not rebuild stable DOM on every render when retained nodes are cheap and invalidation is explicit.
+- Reflect state in classes such as `.checked` alongside the corresponding ARIA attribute. CSS selects classes, not `[aria-*]` or behavior identities such as `data-action-id`.
+- Component variations use named presentation variants, not host-specific deep selectors or ambiguous boolean styling options.
+- Keep presentation in CSS; inline styles carry computed geometry or component-local custom properties, not theme branches.
+- Read measurements before DOM mutations. Retain stable DOM rather than rebuilding it on every render.
 
 ## Accessibility
 
-- Preserve native semantics, ARIA, keyboard navigation, labels, disabled state, focus visibility, tab relationships, and high-contrast presentation.
+- Preserve element semantics, ARIA, keyboard navigation, labels, disabled state, tab relationships and high-contrast presentation.
 - Do not suppress focus outlines without an equivalent visible treatment.
-
-## Learnings
-
-* 对齐上游 UI 时只对齐职责、行为和可观察契约；Ash 创建并拥有的 DOM 与 CSS 必须使用 Ash 自己的稳定品牌 class，禁止复制或延续上游产品 root class。

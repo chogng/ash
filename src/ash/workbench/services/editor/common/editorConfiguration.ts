@@ -14,6 +14,34 @@ export type EditorTitleScrollbarVisibility = 'auto' | 'visible' | 'hidden';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+export const EditorFocusRecentEditorAfterCloseConfiguration = configurationRegistry.registerConfiguration<boolean>({
+	key: 'workbench.editor.focusRecentEditorAfterClose', scope: ConfigurationScope.WINDOW,
+	schema: { type: 'boolean' }, defaultValue: true,
+	parse: value => {
+		if (typeof value !== 'boolean') throw new TypeError(localize('workbench.editor.focusRecentEditorAfterClose.invalid', 'Focus Recent Editor After Close must be true or false.'));
+		return value;
+	},
+	setting: {
+		get title() { return localize('workbench.editor.focusRecentEditorAfterClose.title', 'Workbench › Editor: Focus Recent Editor After Close'); },
+		get description() { return localize('workbench.editor.focusRecentEditorAfterClose.description', 'Focus the most recently used editor when closing the active editor. When disabled, focus the next editor in tab order.'); },
+		valueType: 'boolean',
+	},
+});
+
+export const EditorCloseEmptyGroupsConfiguration = configurationRegistry.registerConfiguration<boolean>({
+	key: 'workbench.editor.closeEmptyGroups', scope: ConfigurationScope.WINDOW,
+	schema: { type: 'boolean' }, defaultValue: true,
+	parse: value => {
+		if (typeof value !== 'boolean') throw new TypeError(localize('workbench.editor.closeEmptyGroups.invalid', 'Close Empty Groups must be true or false.'));
+		return value;
+	},
+	setting: {
+		get title() { return localize('workbench.editor.closeEmptyGroups.title', 'Workbench › Editor: Close Empty Groups'); },
+		get description() { return localize('workbench.editor.closeEmptyGroups.description', 'Close an editor group when its last tab closes. The last editor group stays open.'); },
+		valueType: 'boolean',
+	},
+});
+
 export const EditorOpenSideBySideDirectionConfiguration = configurationRegistry.registerConfiguration<'right' | 'down'>({
 	key: 'workbench.editor.openSideBySideDirection', scope: ConfigurationScope.WINDOW,
 	schema: { type: 'string', enum: ['right', 'down'] }, defaultValue: 'right',

@@ -3,40 +3,23 @@ description: Ash TypeScript frontend layers, services, adapters, and base bounda
 applyTo: "**/src/**/*.ts,**/src/**/*.cts,**/test/**/*.ts"
 ---
 
-# TypeScript Frontend Architecture Guidelines
-
-## Dependency direction
-
-Preserve `base → platform → editor → workbench`. Lower layers must not import, reference, specialize for, or derive defaults from higher layers.
-
-Keep interfaces small and complete from the caller's point of view. Every method, option, and overload must add distinct semantics.
-
-Prefer an existing canonical context or service over options and callbacks that merely expose the same state again.
+# TypeScript Frontend Architecture
 
 ## Frontend services
 
-- For a domain service managed by dependency injection and shared across runtimes, put its contract in the owning domain's `common` layer and name its public interface and service identifier `I<Capability>Service`. Preserve an established VS Code counterpart's contract filename when aligning APIs.
-- Provider interfaces, request orchestration, and pure helpers do not automatically need a service class or a `common/*Service.ts` file. Choose their owner using [source code organization](source-code-organization.instructions.md); multiple callers or asynchronous work alone do not justify a new service.
-- Name each runtime implementation file after its exported class, including a meaningful runtime qualifier: `appServerSyntaxAnalysisService.ts` exports `AppServerSyntaxAnalysisService`.
-- Align capability names, operation semantics, lifecycle, and error categories across the frontend service, transport protocol, and backend service so adapters remain thin and mechanical.
-- Name adapters and tests after the contract or implementation they exercise.
+- A DI-managed domain service shared across runtimes puts its contract in the owning domain's `common` layer and names its public interface and identifier `I<Capability>Service`. Preserve an established VS Code counterpart's contract filename when aligning APIs.
+- Multiple callers or asynchronous work alone do not justify a service class or `common/*Service.ts`. Place provider interfaces, request orchestration and helpers using [source organization](source-code-organization.instructions.md).
+- Runtime implementation filenames match their exported class, including the runtime qualifier: `appServerSyntaxAnalysisService.ts` exports `AppServerSyntaxAnalysisService`. Adapters and tests use the contract or implementation name.
+- Transport APIs and wire validation stay inside the runtime adapter.
 
-Transport APIs, generated DTOs, and wire validation stay inside the runtime adapter. Product consumers depend on the frontend service contract and frontend-owned domain types, not transport representations.
+## Dependency Injection
 
-## Base layer
+- Stable service dependencies of long-lived objects are explicit constructor parameters with `@I...Service` decorators, resolved by `IInstantiationService.createInstance`.
+- Register singleton implementations with `registerSingleton(IMyService, MyServiceImpl, InstantiationType.Delayed)`.
+- Options carry per-instance data, configuration and host callbacks, not stable services from the container. Do not pass required services through optional options or hide them behind `invokeWithinContext(...getOptional)`.
+- Missing required registrations must fail during creation. Leaf objects must not create fallback containers or implementations.
+- Only a scope owner may create a child container from its injected parent and register scope-specific services. Accessor lookup is limited to a command or action's single execution.
 
-Modules under `src/ash/base` are domain-neutral. Higher-level features may depend on base; base must not import or mention them.
+## NLS boundary
 
-Define URI parsing, URI identity, resource collections, UUID validation, and lifecycle primitives in terms of their general contracts. Preserve exact URI identity by default; a domain that needs alternate semantics, such as ignoring fragments, selects that policy explicitly.
-
-Domain identities and lifecycle rules remain in their owning domain.
-
-Add general structures only for concrete domain-neutral consumers.
-
-## Learnings
-
-* 遇到分层测试报告跨目录导入时，先核对目标模块的实际职责、依赖方向和上游同职责路径；目录位于 `base` 外不自动表示它属于更高层。`src/ash/nls.ts` 对应 VS Code 的根级 NLS 入口，供各前端层共享且只应依赖 `base`；分层检查要精确允许该入口并检查它自身的依赖，不能仅为通过路径断言将它迁入 `base/common`。
-
-* 必需服务不得通过多层可选 options 转传。服务组合发生变化时，沿真实创建入口核对构造注入、容器注册和作用域；缺失依赖必须在创建阶段失败，不能延迟到首次打开文件时暴露。
-
-* TypeScript 长期对象的稳定服务依赖必须在 constructor 上显式可见，由 `IInstantiationService.createInstance` 统一解析；当前端实例化体系以服务标识参数装饰器作为标准入口时，使用 `@I...Service` 声明这些依赖。options 只承载每个实例的数据、配置和宿主回调，不承载可由服务容器提供的稳定服务。禁止用 `invokeWithinContext(...getOptional)` 隐藏必需依赖，也禁止叶子对象在服务缺失时自建容器或替代实现。只有作用域 owner 可以基于注入的父容器创建子作用域并注册该作用域特有的服务；accessor 查找只用于命令或 action 的单次执行。测试应注册真实依赖并经同一创建入口装配对象。
+`src/ash/nls.ts` is the shared root NLS entrypoint and may depend only on `base`. Layer checks must allow that entrypoint and check its dependencies; do not move it into `base/common` merely to satisfy a path assertion.

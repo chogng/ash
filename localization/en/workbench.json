@@ -1,5 +1,11 @@
 {
   "ash": {
+    "workbench.editorGroup.lockedLabel": "Editor group, locked",
+    "workbench.editorGroup.label": "Editor group",
+    "workbench.editorGroup.emptyLabel": "Empty editor group",
+    "workbench.editor.focusRecentEditorAfterClose.invalid": "Focus Recent Editor After Close must be true or false.",
+    "workbench.editor.focusRecentEditorAfterClose.title": "Workbench › Editor: Focus Recent Editor After Close",
+    "workbench.editor.focusRecentEditorAfterClose.description": "Focus the most recently used editor when closing the active editor. When disabled, focus the next editor in tab order.",
     "extensions.themes.invalidPortableManifest": "The Marketplace theme manifest is invalid.",
     "extensions.browser.resourceTooLarge": "Browser extension resource exceeds its byte limit.",
     "extensions.resources.retired": "Extension resource generation has retired.",
@@ -128,6 +134,9 @@
     "breadcrumbs.showEditorType.title": "Breadcrumbs: Show Editor Type",
     "breadcrumbs.showEditorType.description": "Shows an editor selector for resources that support multiple editors.",
     "workbench.splitEditor": "Split Editor",
+    "workbench.editor.closeEmptyGroups.invalid": "Close Empty Groups must be true or false.",
+    "workbench.editor.closeEmptyGroups.title": "Workbench › Editor: Close Empty Groups",
+    "workbench.editor.closeEmptyGroups.description": "Close an editor group when its last tab closes. The last editor group stays open.",
     "workbench.editor.openSideBySideDirection.invalid": "Editor split direction must be right or down.",
     "workbench.editor.openSideBySideDirection.title": "Workbench › Editor: Open Side by Side Direction",
     "workbench.editor.openSideBySideDirection.description": "Controls whether editors open side by side to the right or below.",

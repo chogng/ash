@@ -307,6 +307,10 @@ Core 不解析自然语言冲突，也不声称通过排序保证模型遵守。
 
 ### 6.4 模型输入逐项限幅
 
+新增或调整模型可见片段时，必须明确 owner、来源与 revision、大小预算和超限处理，并通过现有
+`ContextPlanner` 与 `ContextAssembler` 入口注入。限幅不能只覆盖工具结果而让指令、附件或扩展贡献
+无限增长；预算遵循本系统契约，不照搬其他仓库的固定 token 阈值。
+
 `ContextPlanner` 先校验 durable `ThreadItem` 形状，再从同一批 Item 生成只属于本次规划的
 bounded clone。Thread event、`ThreadSnapshot` 和 attachment object 都不被改写：shell 结果按
 30 KiB 保留头尾，`read_file` 按 2000 行和每行 2000 字符限制，`grep`/`glob` 保留 100 条，带
@@ -551,6 +555,9 @@ wait for safe point
 ```
 
 Core 为普通 Turn 请求写入 Session 级 prompt cache key，并在 `ContextPlan` 组装时标出当前 Turn 之前的可复用输入前缀。同一 Session 内的 fork 保留原消息与 key；委托说明追加在前缀之后。模型、工具集、权限指令或模型可见环境变化仍可能改变请求，不能由 AgentId 相同推断缓存命中。
+
+普通续写保持未变化内容的顺序与可复用前缀稳定，不为更新动态信息而无故重写历史前缀。
+rewind、压缩、指令更新或撤权仍按各自契约生效，缓存复用不能覆盖正确性。
 
 OpenAI 公开 Responses API 对支持模型将 Core 前缀终点映射为显式缓存断点；旧模型保持自动缓存。model-provider 按登录通道选择 `ApiEndpoint::ChatGptResponses`，由 ash-api 省略订阅接口不支持的断点，并将同一缓存 key 写入 `session-id` 请求头。续写、fork、消息恢复和认证重试共用这个协议入口，调用者请求和认证 target 不被改写。结构化工具结果和图片能力与断点支持分别处理。供应商行为见 [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)，跨 provider 的请求头规则与验证见[模型 API 协议](ash-api.md#14-供应商配置档案验证矩阵)。
 

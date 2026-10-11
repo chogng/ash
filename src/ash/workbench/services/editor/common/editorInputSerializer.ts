@@ -50,8 +50,15 @@ export class EditorInputSerializerRegistry {
 		if (!isSerializedEditorInput(input)) throw new TypeError('Invalid serialized editor input');
 		if (input.typeId === BaseEditorInputSerializer.typeId) return deserializeBaseEditorInput(input.value);
 		const serializer = this.serializers.get(input.typeId);
-		if (!serializer) throw new RangeError(`Unknown editor input serializer '${input.typeId}'`);
+		if (!serializer) throw new UnknownEditorInputSerializerError(input.typeId);
 		return serializer.deserialize(input.value, this);
+	}
+}
+
+/** An unavailable editor type can be skipped without treating its window state as corrupt. */
+export class UnknownEditorInputSerializerError extends RangeError {
+	constructor(readonly typeId: string) {
+		super(`Unknown editor input serializer '${typeId}'`);
 	}
 }
 

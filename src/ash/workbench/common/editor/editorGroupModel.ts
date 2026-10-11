@@ -35,6 +35,7 @@ export class EditorGroupModel {
 	public readonly id: EditorGroupId;
 	private readonly editors: EditorEntry[] = [];
 	private readonly selection = new Set<EditorInstanceId>();
+	private readonly recentEditors: EditorInstanceId[] = [];
 	private active: EditorEntry | undefined;
 	private selectionAnchor: EditorInstanceId | undefined;
 	private locked = false;
@@ -121,6 +122,10 @@ export class EditorGroupModel {
 			sticky: existing?.sticky ?? false,
 		};
 		if (replaced) {
+			if (replaced.instanceId !== editor.instanceId) {
+				const recentIndex = this.recentEditors.indexOf(replaced.instanceId);
+				if (recentIndex >= 0) { this.recentEditors.splice(recentIndex, 1); }
+			}
 			this.editors[this.editors.indexOf(replaced)] = editor;
 			this.selection.delete(replaced.instanceId);
 			if (this.active === replaced) {
@@ -172,6 +177,9 @@ export class EditorGroupModel {
 		const editor = this.requireEditor(input);
 		const changed = this.active !== editor;
 		this.active = editor;
+		const recentIndex = this.recentEditors.indexOf(editor.instanceId);
+		if (recentIndex >= 0) { this.recentEditors.splice(recentIndex, 1); }
+		this.recentEditors.unshift(editor.instanceId);
 		this.selection.clear();
 		this.selection.add(editor.instanceId);
 		this.selectionAnchor = editor.instanceId;
@@ -201,13 +209,17 @@ export class EditorGroupModel {
 		this.selectionAnchor = editor.instanceId;
 	}
 
-	public closeEditor(input: IResourceEditorInput): void {
+	public closeEditor(input: IResourceEditorInput, focusRecentEditorAfterClose = true): IResourceEditorInput | undefined {
 		const editor = this.requireEditor(input);
-		this.editors.splice(this.editors.indexOf(editor), 1);
+		const index = this.editors.indexOf(editor);
+		this.editors.splice(index, 1);
+		const recentIndex = this.recentEditors.indexOf(editor.instanceId);
+		if (recentIndex >= 0) { this.recentEditors.splice(recentIndex, 1); }
 		this.selection.delete(editor.instanceId);
-		if (this.active === editor) {
-			this.active = undefined;
-		}
+		const next = focusRecentEditorAfterClose
+			? this.editors.find(candidate => candidate.instanceId === this.recentEditors[0])
+			: undefined;
+		if (this.active === editor) { this.active = undefined; }
 		if (this.selectionAnchor === editor.instanceId) {
 			this.selectionAnchor = this.active?.instanceId;
 		}
@@ -215,6 +227,7 @@ export class EditorGroupModel {
 			this.selection.add(this.active.instanceId);
 			this.selectionAnchor = this.active.instanceId;
 		}
+		return (next ?? this.editors[index] ?? this.editors[index - 1])?.input;
 	}
 
 	private requireEditor(input: IResourceEditorInput): EditorEntry {

@@ -23,8 +23,11 @@ class WorkflowTests(unittest.TestCase):
         self.write("crates/example/Cargo.toml", '[package]\nname = "example"\n')
         self.write("crates/tui/src/lib.rs", "")
         self.write("crates/example/src/lib.rs", "")
-        self.write("AGENTS.md", "Repository instructions\n")
-        self.write(".github/copilot-instructions.md", "Ownership rules\n")
+        self.write(
+            "AGENTS.md",
+            "Repository instructions\n[shared](.agents/skills/shared/SKILL.md)\n",
+        )
+        self.write(".agents/skills/shared/SKILL.md", "Shared skill\n")
         self.write(
             ".github/instructions/testing.md", '---\napplyTo: "**"\n---\nTesting\n'
         )
@@ -104,10 +107,38 @@ fn input_keeps_its_bottom_rule() {
             "testing.md",
             "rust.md",
             "tui.md",
+            str(Path(".agents/skills/shared/SKILL.md")),
             str(Path(".agents/skills/test-tui/SKILL.md")),
         ):
             self.assertIn(expected, output)
         self.assertNotIn("frontend.md", output)
+        self.assertEqual(self.commands, [])
+
+    def test_context_orders_nested_rules_and_deduplicates_shared_skills(self):
+        self.write("crates/AGENTS.md", "Crate rules\n")
+        self.write(
+            "crates/tui/AGENTS.md",
+            "TUI rules\n[shared](../../.agents/skills/shared/SKILL.md)\n",
+        )
+        self.write("crates/example/AGENTS.md", "Unrelated rules\n")
+        self.assertEqual(self.execute(["context", self.baseline]), 0)
+        output = self.output.getvalue()
+        instructions = output.split("Instructions:\n", 1)[1].split(
+            "Skills referenced", 1
+        )[0]
+        self.assertEqual(
+            [line.strip() for line in instructions.splitlines()],
+            [
+                "AGENTS.md",
+                str(Path("crates/AGENTS.md")),
+                str(Path("crates/tui/AGENTS.md")),
+                str(Path(".github/instructions/rust.md")),
+                str(Path(".github/instructions/testing.md")),
+                str(Path(".github/instructions/tui.md")),
+            ],
+        )
+        self.assertEqual(output.count(str(Path(".agents/skills/shared/SKILL.md"))), 1)
+        self.assertNotIn("unscoped.md", output)
         self.assertEqual(self.commands, [])
 
     def test_glob_segments_include_root_files_without_crossing_slashes(self):
@@ -118,6 +149,23 @@ fn input_keeps_its_bottom_rule() {
             set(workflow.scope_patterns("**/*.{rs,snap},justfile")),
             {"**/*.rs", "**/*.snap", "justfile"},
         )
+
+    def test_context_discovers_and_deduplicates_anchored_skill_links(self):
+        self.write(".agents/skills/rust-development/SKILL.md", "Rust skill\n")
+        self.write(
+            ".github/instructions/rust.md",
+            '---\napplyTo: "**/*.rs"\n---\n'
+            "[validation](../../.agents/skills/rust-development/SKILL.md#validation)\n"
+            "[contracts](../../.agents/skills/rust-development/SKILL.md#contracts)\n",
+        )
+        self.assertEqual(self.execute(["context", self.source]), 0)
+        output = self.output.getvalue()
+        self.assertEqual(
+            output.count(str(Path(".agents/skills/rust-development/SKILL.md"))), 1
+        )
+        self.assertNotIn("#validation", output)
+        self.assertNotIn("#contracts", output)
+        self.assertNotIn("(missing)", output)
 
     def test_verify_keeps_settings_across_steps_and_filters_only_tests(self):
         self.assertEqual(

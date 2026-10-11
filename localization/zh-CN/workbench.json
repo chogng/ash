@@ -1,5 +1,11 @@
 {
   "ash": {
+    "workbench.editorGroup.lockedLabel": "编辑器组，已锁定",
+    "workbench.editorGroup.label": "编辑器组",
+    "workbench.editorGroup.emptyLabel": "空编辑器组",
+    "workbench.editor.focusRecentEditorAfterClose.invalid": "关闭后聚焦最近使用的编辑器必须为 true 或 false。",
+    "workbench.editor.focusRecentEditorAfterClose.title": "工作台 › 编辑器：关闭后聚焦最近使用的编辑器",
+    "workbench.editor.focusRecentEditorAfterClose.description": "关闭活动编辑器时聚焦最近使用的编辑器。禁用时按标签页顺序聚焦下一个编辑器。",
     "extensions.themes.invalidPortableManifest": "Marketplace 主题清单无效。",
     "extensions.browser.resourceTooLarge": "浏览器扩展资源超过大小限制。",
     "extensions.resources.retired": "扩展资源版本已失效。",
@@ -184,6 +190,9 @@
     "breadcrumbs.showEditorType.title": "面包屑：显示编辑器类型",
     "breadcrumbs.showEditorType.description": "为支持多种编辑器的文件显示编辑器选择菜单。",
     "workbench.splitEditor": "拆分编辑器",
+    "workbench.editor.closeEmptyGroups.invalid": "关闭空编辑器组必须为 true 或 false。",
+    "workbench.editor.closeEmptyGroups.title": "工作台 › 编辑器：关闭空编辑器组",
+    "workbench.editor.closeEmptyGroups.description": "关闭组内最后一个标签页时关闭该编辑器组。保留最后一个编辑器组。",
     "workbench.editor.openSideBySideDirection.invalid": "编辑器拆分方向必须为向右或向下。",
     "workbench.editor.openSideBySideDirection.title": "工作台 › 编辑器：侧边打开方向",
     "workbench.editor.openSideBySideDirection.description": "控制侧边编辑器在右侧还是下方打开。",

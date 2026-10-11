@@ -32,6 +32,8 @@ def workspace_packages(root: Path) -> dict[str, Path]:
     packages = {}
     for member in workspace["members"]:
         for directory in sorted(root.glob(member)):
+            if not directory.is_dir():
+                continue
             if any(directory.match(pattern) for pattern in excluded):
                 continue
             manifest = directory / "Cargo.toml"
@@ -119,7 +121,6 @@ def context(path: Path, root: Path) -> None:
     for directory in sorted(directories, key=lambda item: (len(item.parts), str(item))):
         if (directory / "AGENTS.md").is_file():
             instructions.append(directory / "AGENTS.md")
-    instructions.append(root / ".github/copilot-instructions.md")
     for instruction in sorted((root / ".github/instructions").glob("*.md")):
         header = FRONTMATTER.match(instruction.read_text(encoding="utf-8"))
         if not header:
@@ -141,7 +142,8 @@ def context(path: Path, root: Path) -> None:
     skills = set()
     for instruction in instructions:
         for link in re.findall(
-            r"\]\(([^)]+SKILL\.md)\)", instruction.read_text(encoding="utf-8")
+            r"\]\(([^)]+SKILL\.md)(?:#[^)]*)?\)",
+            instruction.read_text(encoding="utf-8"),
         ):
             skill = (instruction.parent / link).resolve()
             label = os.path.relpath(skill, root)

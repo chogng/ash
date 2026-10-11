@@ -1,3 +1,5 @@
+import { WindowTitle } from '../../../titlebar/windowTitle.js';
+import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
 import { SaveReason, type IResourceEditorInput, type ISaveOptions } from '../../../../../common/editor.js';
@@ -37,6 +39,7 @@ import { BreadcrumbsService } from "../../breadcrumbs.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicEditorConfigurations, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration } from "../../editorConfiguration.js";
 import { createDiffEditorInput } from "../../../../../common/editor/diffEditorInput.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
+import { EditorCloseEmptyGroupsConfiguration, EditorFocusRecentEditorAfterCloseConfiguration } from '../../../../../services/editor/common/editorConfiguration.js';
 import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { FileNotFoundError, type IFileService } from "../../../../../../platform/files/common/files.js";
@@ -1249,6 +1252,418 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	dom.window.close();
 });
 
+test('EditorPart closes empty groups after the last tab and transfers focus to the recent group', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Explorer</button></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.emptyGroups', '.ts', () => new TestEditorPane('test.emptyGroups')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		dom.window.document.body.append(editor.domNode);
+		const first = input('/project/first.ts');
+		const second = input('/project/second.ts');
+		const third = input('/project/third.ts');
+		const firstPane = await editor.openEditor(first) as TestEditorPane;
+		const firstGroup = editor.activeGroup;
+		assert.equal(firstGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!.hidden, false);
+		await editor.openEditor(second, {}, 'sideGroup');
+		const secondGroup = editor.activeGroup;
+		await editor.openEditor(third, {}, 'sideGroup');
+		const closingGroup = editor.activeGroup;
+		const closingPane = editor.activePane as TestEditorPane;
+		editor.activateGroup(firstGroup.id);
+		editor.activateGroup(closingGroup.id);
+		const focusCount = firstPane.focusCount;
+		const events: string[] = [];
+		using listener = editor.onDidChangeEditors(event => events.push(event.kind === 'groupChanged' ? event.event.kind : event.kind));
+		assert.equal(await closingGroup.closeEditor(third), true);
+		assert.deepEqual(editor.groups, [firstGroup, secondGroup]);
+		assert.equal(editor.activeGroup, firstGroup);
+		assert.equal(firstPane.focusCount, focusCount + 1);
+		assert.equal(closingPane.disposed, true);
+		assert.ok(events.indexOf('activeEditorChanged') < events.indexOf('groupRemoved'));
+		assert.equal(closingGroup.domNode.isConnected, false);
+		assert.equal(editor.domNode.querySelectorAll('.ash-editor-group').length, 2);
+		const explorer = dom.window.document.querySelector('button')!;
+		explorer.focus();
+		await secondGroup.closeEditor(second);
+		assert.equal(dom.window.document.activeElement, explorer);
+		await firstGroup.closeEditor(first);
+		assert.deepEqual(editor.groups, [firstGroup]);
+		assert.equal(editor.activePane, undefined);
+		assert.equal(firstGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!.hidden, true);
+		assert.equal(firstPane.disposed, true);
+	} finally { dom.window.close(); }
+});
+
+test('EditorPart closes empty groups when closing all editors, including previously empty groups', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.emptyGroups', '.ts', () => new TestEditorPane('test.emptyGroups')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		await editor.openEditor(input('/project/first.ts'));
+		editor.addGroup(editor.activeGroup.id, Direction.Right);
+		await editor.openEditor(input('/project/second.ts'), {}, 'sideGroup');
+		editor.addGroup(editor.activeGroup.id, Direction.Down);
+		assert.equal(editor.groups.length, 3);
+		await editor.closeAllEditors();
+		assert.equal(editor.groups.length, 1);
+		assert.equal(editor.activeGroup.inputs.length, 0);
+		assert.equal(editor.saveWorkingSet('closed').groups.length, 1);
+		editor.addGroup(editor.activeGroup.id, Direction.Right);
+		await editor.closeAllEditors();
+		assert.equal(editor.groups.length, 1);
+	} finally { dom.window.close(); }
+});
+
+test('EditorPart closes empty groups according to the current setting and preserves layout resets and Sessions grids', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.emptyGroups', '.ts', () => new TestEditorPane('test.emptyGroups')));
+		using configuration = new InMemoryConfigurationService();
+		await configuration.updateValue(EditorCloseEmptyGroupsConfiguration, false);
+		using editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration });
+		const first = input('/project/first.ts');
+		await editor.openEditor(first);
+		await editor.openEditor(input('/project/second.ts'), {}, 'sideGroup');
+		await editor.closeAllEditors();
+		assert.equal(editor.groups.length, 2);
+		await configuration.updateValue(EditorCloseEmptyGroupsConfiguration, true);
+		assert.equal(editor.groups.length, 2);
+		await editor.openEditor(first);
+		await editor.closeAllEditors({ reason: 'reset' });
+		assert.equal(editor.groups.length, 2);
+		await editor.closeAllEditors();
+		assert.equal(editor.groups.length, 1);
+		await editor.openEditor(first);
+		const source = editor.activeGroup;
+		const target = editor.addGroup(source.id, Direction.Right);
+		await source.moveEditorTo(first, target, 0);
+		assert.deepEqual(editor.groups, [target]);
+		assert.deepEqual(target.inputs, [first]);
+		using sessions = createEditorPart(dom.window.document.body, { registry, editorLimit: 1 });
+		await sessions.openEditor(first);
+		sessions.addGroup(sessions.activeGroup.id, Direction.Right);
+		await sessions.closeAllEditors();
+		assert.equal(sessions.groups.length, 2);
+	} finally { dom.window.close(); }
+});
+
+test('EditorPart close empty groups setting validates booleans and localizes its metadata', () => {
+	using localization = toDisposable(resetNlsResolver);
+	initializeTestLocalization('zh-CN');
+	const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorCloseEmptyGroupsConfiguration)!;
+	assert.equal(setting.defaultValue, true);
+	assert.equal(setting.parse(false), false);
+	assert.throws(() => setting.parse('false'), { message: '关闭空编辑器组必须为 true 或 false。' });
+	assert.equal(setting.setting?.title, '工作台 › 编辑器：关闭空编辑器组');
+	assert.equal(setting.setting?.description, '关闭组内最后一个标签页时关闭该编辑器组。保留最后一个编辑器组。');
+});
+
+for (const phase of ['factory', 'input'] as const) {
+	test(`EditorPart keeps an empty group while its new editor awaits ${phase}`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const gate = new DeferredPromise<void>();
+		const entered = new DeferredPromise<void>();
+		try {
+			using registry = new EditorPaneRegistry();
+			let count = 0;
+			let pendingPane: TestEditorPane | undefined;
+			using registration = registry.registerEditorPane(descriptor('test.pendingGroup', '.ts', () => {
+				const pane = new TestEditorPane('test.pendingGroup');
+				if (++count !== 3) return pane;
+				pendingPane = pane;
+				void entered.complete();
+				if (phase === 'factory') return gate.p.then(() => pane);
+				pane.inputPromise = gate.p;
+				return pane;
+			}));
+			using editor = createEditorPart(dom.window.document.body, { registry });
+			await editor.openEditor(input('/project/main.ts'));
+			const old = input('/project/old.ts');
+			await editor.openEditor(old, {}, 'sideGroup');
+			const group = editor.activeGroup;
+			const next = input('/project/new.ts');
+			const opening = group.openEditor(next);
+			await entered.p;
+			await group.closeEditor(old);
+			assert.equal(editor.groups.includes(group), true);
+			assert.equal(pendingPane!.disposed, false);
+			void gate.complete();
+			assert.equal(await opening, pendingPane);
+			assert.deepEqual(group.inputs, [next]);
+			await group.closeEditor(next);
+			assert.equal(editor.groups.includes(group), false);
+		} finally { void gate.complete(); dom.window.close(); }
+	});
+}
+
+for (const target of ['activeGroup', 'sideGroup'] as const) {
+	test(`EditorPart retains the ${target} during pending URI identity resolution`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const entered = new DeferredPromise<void>();
+		const gate = new DeferredPromise<FsReadPathCaseSensitivityResult>();
+		try {
+			using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+			const host = createDisconnectedRendererApi();
+			using provider = new AppServerFileSystemProvider({
+				workspaceContextService: workspace, resourceApi: host.resource, api: {
+					...host.fs, readPathCaseSensitivity: async params => {
+						if (params.path === 'new.ts') { void entered.complete(); return gate.p; }
+						return { scopes: [{ path: '.', sensitivity: 'unknown' }] };
+					}
+				}
+			});
+			using files = new FileService();
+			using providerRegistration = files.registerProvider('file', provider);
+			using parent = new TestUriIdentityServices(files);
+			using registry = new EditorPaneRegistry();
+			using registration = registry.registerEditorPane(descriptor('test.pendingIdentity', '.ts', () => new TestEditorPane('test.pendingIdentity')));
+			using editor = createEditorPart(dom.window.document.body, { registry }, parent);
+			await editor.openEditor(input('/project/main.ts'));
+			const source = editor.activeGroup;
+			const old = input('/project/old.ts');
+			await editor.openEditor(old, {}, 'sideGroup');
+			const group = editor.activeGroup;
+			if (target === 'sideGroup') editor.activateGroup(source.id);
+			const next = input('/project/new.ts');
+			const opening = editor.openEditor(next, {}, target);
+			await entered.p;
+			await group.closeEditor(old);
+			assert.equal(editor.groups.includes(group), true);
+			void gate.complete({ scopes: [{ path: '.', sensitivity: 'unknown' }] });
+			await opening;
+			assert.deepEqual(group.inputs, [next]);
+		} finally { void gate.complete({ scopes: [{ path: '.', sensitivity: 'unknown' }] }); dom.window.close(); }
+	});
+}
+
+test('EditorPart rechecks an empty group after an opening is cancelled', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const gate = new DeferredPromise<void>();
+	const entered = new DeferredPromise<void>();
+	try {
+		using registry = new EditorPaneRegistry();
+		let count = 0;
+		using registration = registry.registerEditorPane(descriptor('test.cancelledGroup', '.ts', async () => {
+			if (++count === 3) {
+				void entered.complete();
+				await gate.p;
+				throw new CancellationError();
+			}
+			return new TestEditorPane('test.cancelledGroup');
+		}));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		await editor.openEditor(input('/project/main.ts'));
+		const old = input('/project/old.ts');
+		await editor.openEditor(old, {}, 'sideGroup');
+		const group = editor.activeGroup;
+		const opening = group.openEditor(input('/project/new.ts'));
+		const rejected = assert.rejects(opening, CancellationError);
+		await entered.p;
+		await group.closeEditor(old);
+		assert.equal(editor.groups.includes(group), true);
+		void gate.complete();
+		await rejected;
+		assert.equal(editor.groups.includes(group), false);
+		assert.equal(editor.groups.length, 1);
+	} finally { void gate.complete(); dom.window.close(); }
+});
+
+for (const operation of ['split', 'move'] as const) {
+	test(`EditorPart preserves pane choice and view state when editors ${operation}`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using registry = new EditorPaneRegistry();
+			using defaultRegistration = registry.registerEditorPane(descriptor('test.defaultView', '.ts', () => new TestEditorPane('test.defaultView')));
+			using registration = registry.registerEditorPane(descriptor('test.customView', '.ts', () => new TestViewStateEditorPane('test.customView')));
+			using editor = createEditorPart(dom.window.document.body, { registry });
+			const resource = input('/project/main.ts');
+			const pane = await editor.openEditor(resource, { preferredEditorId: 'test.customView', pinned: true }) as TestViewStateEditorPane;
+			pane.viewState = { cursor: 42, scrollTop: 700 };
+			const source = editor.activeGroup;
+			source.stickEditor(resource);
+			const instanceId = source.editors[0]!.instanceId;
+			if (operation === 'split') await editor.splitActiveGroupHorizontal();
+			else {
+				const target = editor.addGroup(source.id, Direction.Right);
+				await source.moveEditorTo(resource, target, 0);
+				editor.activateGroup(target.id);
+			}
+			assert.equal(editor.activePane!.id, 'test.customView');
+			assert.deepEqual((editor.activePane as TestViewStateEditorPane).restoredViewState, pane.viewState);
+			assert.equal(editor.activeGroup.isSticky(resource), operation === 'move');
+			assert.equal(editor.activeGroup.isPreview(resource), false);
+			assert.equal(editor.activeGroup.editors[0]!.instanceId === instanceId, operation === 'move');
+			assert.equal(pane.disposed, operation === 'move');
+		} finally { dom.window.close(); }
+	});
+}
+
+test('EditorPart closes the active editor using recent tab history or the current neighbor setting', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.recentTab', '.ts', () => new TestEditorPane('test.recentTab')));
+		using configuration = new InMemoryConfigurationService();
+		using editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration });
+		const [first, second, third] = ['first', 'second', 'third'].map(name => input(`/project/${name}.ts`));
+		for (const resource of [first!, second!, third!]) await editor.openEditor(resource, { pinned: true });
+		editor.activateEditor(first!);
+		editor.activateEditor(third!);
+		await editor.closeEditor(third!);
+		assert.equal(editor.activeInput, first);
+		await editor.openEditor(third!, { pinned: true });
+		editor.activateEditor(first!);
+		editor.activateEditor(third!);
+		await configuration.updateValue(EditorFocusRecentEditorAfterCloseConfiguration, false);
+		await editor.closeEditor(third!);
+		assert.equal(editor.activeInput, second);
+		await configuration.updateValue(EditorFocusRecentEditorAfterCloseConfiguration, true);
+		await editor.openEditor(third!, { pinned: true });
+		editor.activateEditor(first!);
+		editor.activateEditor(third!);
+		await editor.closeEditor(third!);
+		assert.equal(editor.activeInput, first);
+		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorFocusRecentEditorAfterCloseConfiguration)!;
+		assert.equal(setting.defaultValue, true);
+		assert.throws(() => setting.parse('false'), TypeError);
+		using localization = toDisposable(resetNlsResolver);
+		initializeTestLocalization('zh-CN');
+		assert.equal(setting.setting!.title, '工作台 › 编辑器：关闭后聚焦最近使用的编辑器');
+	} finally { dom.window.close(); }
+});
+
+test('Close All Editors command retains dirty sticky tabs without a confirmation and lifecycle close still closes them', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		await import('../../editorActions.js');
+		using registry = new EditorPaneRegistry();
+		const sticky = input('/project/sticky.ts');
+		using workingCopy = new TestWorkingCopy(sticky.resource);
+		workingCopy.markDirty();
+		using registration = registry.registerEditorPane(descriptor('test.closeSticky', '.ts', candidate => new TestEditorPane('test.closeSticky', candidate.input?.resource.path.endsWith('sticky.ts') ? workingCopy : undefined)));
+		let confirmations = 0;
+		using editor = createEditorPart(dom.window.document.body, { registry, beforeCloseEditor: async () => { confirmations++; return true; } });
+		await editor.openEditor(sticky);
+		editor.activeGroup.stickEditor(sticky);
+		await editor.openEditor(input('/project/ordinary.ts'));
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		services.registerInstance(IEditorPart, editor);
+		using commands = new CommandService(services);
+		await commands.executeCommand('workbench.action.closeAllEditors');
+		assert.deepEqual(editor.activeGroup.inputs, [sticky]);
+		assert.equal(confirmations, 1);
+		assert.equal(workingCopy.isDirty, true);
+		assert.equal(await editor.closeAllEditors(), false);
+		assert.equal(confirmations, 2);
+		await editor.closeAllEditors({ reason: 'reset', skipConfirmation: true });
+		assert.deepEqual(editor.activeGroup.inputs, []);
+	} finally { dom.window.close(); }
+});
+
+test('Close All Editors keeps dirty documents owned by a sticky view in another group', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		const resource = input('/project/shared.ts');
+		using workingCopy = new TestWorkingCopy(resource.resource);
+		using registration = registry.registerEditorPane(descriptor('test.sharedSticky', '.ts', () => new TestEditorPane('test.sharedSticky', workingCopy)));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		await editor.openEditor(resource);
+		const retained = editor.activeGroup;
+		retained.stickEditor(resource);
+		await editor.openEditor(resource, {}, 'sideGroup');
+		workingCopy.markDirty();
+		assert.equal(await editor.closeAllEditors({ excludeSticky: true }), true);
+		assert.deepEqual(editor.groups, [retained]);
+		assert.deepEqual(retained.inputs, [resource]);
+		assert.equal(workingCopy.isDirty, true);
+		assert.equal(workingCopy.revertCount, 0);
+	} finally { dom.window.close(); }
+});
+
+test('EditorPart empty groups receive focus and a localized accessible label', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Explorer</button></body>');
+	try {
+		using localization = toDisposable(resetNlsResolver);
+		initializeTestLocalization('zh-CN');
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.emptyFocus', '.ts', () => new TestEditorPane('test.emptyFocus')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		dom.window.document.body.append(editor.domNode);
+		dom.window.document.querySelector('button')!.focus();
+		await editor.splitActiveGroupHorizontal();
+		const group = editor.activeGroup;
+		assert.equal(dom.window.document.activeElement, group.domNode);
+		assert.equal(group.domNode.tabIndex, 0);
+		assert.equal(group.domNode.getAttribute('aria-label'), '空编辑器组');
+		await editor.openEditor(input('/project/main.ts'));
+		assert.equal(group.domNode.hasAttribute('tabindex'), false);
+		assert.equal(group.domNode.getAttribute('aria-label'), '编辑器组');
+		await editor.closeAllEditors();
+		assert.equal(editor.groups.length, 1);
+		editor.focus();
+		assert.equal(dom.window.document.activeElement, editor.activeGroup.domNode);
+	} finally { dom.window.close(); }
+});
+
+test('EditorPart restoration notifies active group subscribers and rebinds the real window title', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.restoreTitle', '.ts', () => new TestEditorPane('test.restoreTitle')));
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+		using editor = createEditorPart(dom.window.document.body, { registry }, services);
+		using title = services.createInstance(WindowTitle, dom.window as unknown as Window, 'Ash', editor);
+		const activated: string[] = [];
+		using listener = editor.onDidChangeActiveGroup(group => activated.push(group.id));
+		await editor.openEditor(input('/project/first.ts'));
+		const previousGroup = editor.activeGroup;
+		const saved = editor.saveWorkingSet('restore');
+		await editor.applyWorkingSet(saved);
+		assert.notEqual(editor.activeGroup, previousGroup);
+		assert.deepEqual(activated, [editor.activeGroup.id]);
+		assert.match(dom.window.document.title, /first.ts/u);
+		await editor.openEditor(input('/project/second.ts'));
+		assert.match(dom.window.document.title, /second.ts/u);
+	} finally { dom.window.close(); }
+});
+
+test('EditorParts restores supported editors around missing serializers and preserves the saved window state', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.missingSerializer', '.ts', () => new TestEditorPane('test.missingSerializer')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const [first, second, third] = ['first', 'second', 'third'].map(name => input(`/project/${name}.ts`));
+		await editor.openEditor(first!, { pinned: true });
+		await editor.openEditor(second!, { pinned: true });
+		editor.activeGroup.stickEditor(second!);
+		await editor.openEditor(third!, { pinned: false });
+		const saved = JSON.parse(JSON.stringify(editor.saveWorkingSet('lastSession')));
+		saved.groups[0].editors.find((entry: { input: { value: { resource: string; }; }; }) => entry.input.value.resource === first!.resource.toString()).input.typeId = 'workbench.removedSerializer';
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'missing-serializer', flushInterval: 0 });
+		using accessibility = new AccessibilityService({ root: dom.window.document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService) });
+		using parts = createEditorParts(editor, windows, container => createAuxiliaryPart(container, registry), accessibility, storage);
+		storage.store('editorparts.state', JSON.stringify({ version: 1, active: 0, parts: [saved] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		await parts.restoreSavedState(true);
+		assert.deepEqual(editor.activeGroup.inputs.map(resource => resource.resource.path), [second!.resource.path, third!.resource.path]);
+		assert.equal(editor.activeInput!.resource.path, third!.resource.path);
+		assert.equal(editor.activeGroup.isSticky(editor.activeGroup.inputs[0]!), true);
+		assert.equal(editor.activeGroup.isPreview(editor.activeGroup.inputs[1]!), true);
+		assert.ok(storage.get('editorparts.state', StorageScope.WORKSPACE));
+		const corrupt = JSON.parse(JSON.stringify(saved));
+		corrupt.groups[0].editors[0].input.value.resource = 42;
+		await assert.rejects(editor.applyWorkingSet(corrupt), TypeError);
+		assert.equal(editor.activeInput!.resource.path, third!.resource.path);
+	} finally { dom.window.close(); }
+});
+
 test("EditorPart saves and restores groups, tabs, previews, active state, and pane ownership", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
@@ -1681,6 +2096,44 @@ test("EditorPart registers and releases focusable breadcrumbs for its group", as
 	editor.dispose();
 	assert.equal(breadcrumbs.getWidget(group.id), undefined);
 	dom.window.close();
+});
+
+test('EditorPart diff breadcrumbs display and navigate the modified path without changing the tab identity', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('stanza.editor.diff', '', () => new TestEditorPane('stanza.editor.diff')));
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		workspace.updateWorkspace({ id: 'breadcrumbs', folders: [{ id: 'project', name: 'Project', uri: URI.file('/project'), index: 0 }] });
+		const breadcrumbs = new BreadcrumbsService();
+		const selected: string[] = [];
+		using editor = registerTestComponentServices(services).createInstance(EditorPart, dom.window.document.body, {
+			registry,
+			breadcrumbsService: breadcrumbs,
+			showBreadcrumbPicker: element => { selected.push(element.uri.toString()); },
+		} satisfies IEditorPartOptions);
+		const modified = input('/project/src/new name.ts');
+		using comparison = createDiffEditorInput(input('/old-project/old.ts'), modified, 'Renamed file');
+		await editor.openEditor(comparison, { pinned: true });
+		const navigation = editor.domNode.querySelector<HTMLElement>('.ash-editor-breadcrumbs')!;
+		assert.deepEqual([...navigation.querySelectorAll('.ash-breadcrumb-item')].map(element => element.textContent), ['Project', 'src', 'new name.ts']);
+		assert.equal(navigation.title, modified.resource.toString());
+		assert.equal(breadcrumbs.getWidget(editor.activeGroup.id)?.focus(), true);
+		const current = dom.window.document.activeElement as HTMLElement;
+		assert.equal(current.textContent, 'new name.ts');
+		current.click();
+		assert.deepEqual(selected, [modified.resource.toString()]);
+		assert.equal(editor.activeInput, comparison);
+		assert.equal(editor.activeGroup.inputs.length, 1);
+
+		await editor.openEditor(input('/project/ordinary.ts'));
+		assert.deepEqual([...navigation.querySelectorAll('.ash-breadcrumb-item')].map(element => element.textContent), ['Project', 'ordinary.ts']);
+		await editor.closeAllEditors({ skipConfirmation: true });
+		assert.equal(navigation.hidden, true);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test("HistoryService navigates backward and forward through opened editors", async () => {
@@ -3030,7 +3483,7 @@ class TestKeybindingService implements IKeybindingService {
 function descriptor(
 	id: string,
 	defaultExtension: string,
-	create: () => EditorPane,
+	create: IEditorPaneDescriptor['create'],
 ): IEditorPaneDescriptor {
 	return {
 		id,

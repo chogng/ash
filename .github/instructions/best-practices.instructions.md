@@ -3,46 +3,38 @@ description: Ash best practices — reusing common UI primitives and patterns. R
 applyTo: src/ash/**
 ---
 
-# Best Practices
+# UI Primitives and APIs
 
-## Buttons & Actions
+## Buttons and Actions
 
-- Don't create a new class or custom CSS to render a button or action. Reuse the existing `Button` class (`ash/base/browser/ui/button/button.ts`) and the existing `Action` types (`ash/base/common/actions.ts`). This keeps theming, accessibility, and behavior consistent.
-- Render actions inside a toolbar rather than by hand. Prefer `MenuWorkbenchToolBar` (`ash/platform/actions/browser/toolbar.ts`): give it a `MenuId` so actions can be contributed from anywhere (contributions, other components) without coupling.
-- Use `WorkbenchToolBar` when you need explicit control over which actions render and where separators go.
-- Never add a separator while rendering an action. Add separators with the existing `Separator` class (`ash/base/common/actions.ts`).
-- If a `MenuWorkbenchToolBar` lives in a widget/view that can be rendered multiple times at once, give the toolbar a scoped `IContextKeyService` which is scoped to the dom element of that widget/view and set the context keys per individual widget/view instance.
+- Use `Button` (`ash/base/browser/ui/button/button.ts`) and `Action` (`ash/base/common/actions.ts`); do not create a custom class or CSS to render a button or action.
+- Render actions with `MenuWorkbenchToolBar` (`ash/platform/actions/browser/toolbar.ts`) and a `MenuId`. Use `WorkbenchToolBar` when actions and separator placement require explicit control.
+- Use `Separator` (`ash/base/common/actions.ts`); do not insert separators inside action rendering.
+- A toolbar in a widget that can have multiple instances needs an `IContextKeyService` scoped to that instance's DOM, with per-instance context keys.
 
-## Editor/Session Actions
+## Editor and Session Actions
 
-- Don't assume the action runs on the active editor/session. An action (e.g. one contributed to some editor or session related toolbar) can be triggered for an editor/session that isn't active. The `run` method receives arguments describing the invocation context (such as the originating editor group or the originating session).
-- Resolve editor action arguments with `resolveCommandsContext` (`ash/workbench/browser/parts/editor/editorCommandsContext.ts`) to get the correct editor(s) instead of reading `editorService.activeEditor`.
-- Support multi-selection. The resolved editor actions context can contain several editors (e.g. multi-selected tabs).
-
-## Context Keys
-
-- Don't use context keys as a source of truth for application logic (for example, by reading `IContextKeyService.getContextKeyValue()` and branching on the result). Read the state from its owning service or model instead. Context keys are intended for declarative enablement and visibility, such as when clauses, command preconditions, and menu contributions.
+- Use invocation arguments to identify the target editor or session; it may be inactive. Resolve editor arguments with `resolveCommandsContext` (`ash/workbench/browser/parts/editor/editorCommandsContext.ts`), not `editorService.activeEditor`.
+- Handle all editors in the resolved context, including multi-selected tabs.
+- Context keys are for declarative enablement and visibility, not application state. Read state from its model or service rather than branching on `IContextKeyService.getContextKeyValue()`.
 
 ## Multi-Window DOM
 
-- Always create workbench DOM elements in the main window JavaScript realm, including elements that will be rendered in an auxiliary window. Use helpers such as `dom.$` and `dom.h`, or use `mainWindow.document.createElement`. Do not use `targetWindow.document.createElement` or `element.ownerDocument.createElement`; auxiliary windows intentionally reject `createElement` so that checks such as `element instanceof HTMLElement` continue to work.
-- This rule applies to DOM element creation, not to window-bound APIs. Resolve the target window with `dom.getWindow(element)` when using APIs such as timers, animation frames, focus, observers, or `getComputedStyle`.
+- Create workbench elements in the main-window realm using `dom.$`, `dom.h` or `mainWindow.document.createElement`, including elements displayed in auxiliary windows. Do not use `targetWindow.document.createElement` or `element.ownerDocument.createElement`; auxiliary windows reject it to preserve `instanceof HTMLElement` checks.
+- For window-bound timers, animation frames, focus, observers and computed styles, resolve the target window with `dom.getWindow(element)`.
 
 ## URI
 
-- Don't hardcode URI scheme strings like `'file'`, `'untitled'`, or `'vscode-remote'`. Use the `Schemas` constants from `ash/base/common/network.ts` (e.g. `Schemas.file`, `Schemas.untitled`, `Schemas.vscodeRemote`).
-- Don't compare URIs with `===` or `uri.toString()`. Use the comparison utilities from `ash/base/common/resources.ts`: `isEqual` for equality, `isEqualOrParent` for containment, and `getComparisonKey` when a URI is used as a map/set key. These handle path-case sensitivity and fragment/authority correctly. When you need explicit control over case sensitivity, use an `ExtUri` instance (`extUri`, `extUriIgnorePathCase`, or `extUriBiasedIgnorePathCase`) instead of the bound helpers.
+- Use `Schemas` from `ash/base/common/network.ts`, not literal scheme strings.
+- Compare URIs with `isEqual`, `isEqualOrParent` and `getComparisonKey` from `ash/base/common/resources.ts`, not `===` or `toString()`. Choose an `ExtUri` instance when case sensitivity needs explicit control.
+- Preserve exact URI identity by default; domains explicitly select alternate policies such as ignoring fragments.
 
 ## Resource Labels
 
-- Don't set `{ supportIcons: true }` when creating a `ResourceLabel` (`ash/workbench/browser/labels.ts`). This option makes the label parse `$(codicon)` syntax in the name/description and is only needed when you want to render a codicon inline with the resource text. By default (without it), the label computes the proper file-icon CSS classes for the resource, which is what we almost always want. Note that those classes only render as icons when an ancestor DOM element enables file icons (see below); otherwise the label shows text only.
-- To actually display file icons for resource labels in a tree/list, an ancestor container must have the `show-file-icons` class and be wired to the active file icon theme. Don't add the class by hand — call `createFileIconThemableTreeContainerScope` (`ash/workbench/contrib/files/browser/views/explorerView.ts`) on the container. It adds the required `show-file-icons` / `file-icon-themable-tree` classes and keeps `align-icons-and-twisties` / `hide-arrows` in sync with the file icon theme. Register the returned `IDisposable`. A common bug is placing a resource-label list/tree outside such a scoped container, which makes file icons silently disappear.
+- Set `ResourceLabel`'s `supportIcons: true` only to parse inline `$(codicon)` text; file icons do not require it.
+- For file icons in a tree/list, call `createFileIconThemableTreeContainerScope` (`ash/workbench/contrib/files/browser/views/explorerView.ts`) on an ancestor and register its disposable. Do not manually add `show-file-icons`; the scope keeps classes synchronized with the icon theme.
 
-## Styling
+## Styling and Decorations
 
-- Avoid `getComputedStyle`. If a style value is needed in both CSS and TypeScript, prefer hardcoding the value in TypeScript and setting it directly on the DOM element (e.g. `element.style.width = '100px'`), or set a CSS custom property via `element.style.setProperty('--my-var', value)` when the value is needed across multiple CSS rules.
-
-## Editor Decorations
-
-- For editor highlights, use a regular editor decoration with an `inlineClassName` or `className` plus a CSS rule.
-- `ICodeEditorService.registerDecorationType` / `setDecorationsByType` is reserved for the extension host API and should be avoided at all cost.
+- Avoid reading CSS values back with `getComputedStyle`. For a value shared by TypeScript and CSS, set it on the element or through a component-local custom property.
+- Editor highlights use regular decorations with `inlineClassName` or `className` and CSS. `ICodeEditorService.registerDecorationType` and `setDecorationsByType` are reserved for the extension-host API.

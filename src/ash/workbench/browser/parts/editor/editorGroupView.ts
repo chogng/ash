@@ -58,6 +58,7 @@ import type { ILanguageFeaturesService } from '../../../../editor/common/service
 import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
 import type { Range } from '../../../../editor/common/core/range.js';
 import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, type EditorAssociations } from './editorConfiguration.js';
+import { EditorFocusRecentEditorAfterCloseConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 /** Construction inputs for one independently navigable EditorGroup. */
 export interface EditorGroupOptions {
@@ -89,6 +90,8 @@ export interface EditorGroupOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
 	readonly onDidActivate?: () => void;
+	/** Lets the layout owner reconsider an empty group after its latest open settles. */
+	readonly onDidFinishOpenEditor?: () => void;
 	readonly resolveOpenError?: (error: unknown, input: IResourceEditorInput, options: EditorOpenOptions, open: (options: EditorOpenOptions) => Promise<IEditorPane>) => unknown;
 	readonly onWillOpenEditor?: (input: IResourceEditorInput) => Promise<void> | undefined;
 	readonly onOpenError?: (error: unknown, input: IResourceEditorInput, options: EditorOpenOptions) => Promise<void>;
@@ -172,11 +175,16 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private contentVisible = true;
 	private titleVisible = true;
 	private openSequence = 0;
+	private pendingOpenSequence: number | undefined;
+	private readonly onDidFinishOpenEditor: EditorGroupOptions['onDidFinishOpenEditor'];
+
+	public get isOpening(): boolean { return this.pendingOpenSequence !== undefined; }
 
 	constructor(container: HTMLElement, options: EditorGroupOptions, @IInstantiationService instantiationService: IInstantiationService, @IUriIdentityService private readonly uriIdentity: IUriIdentityService) {
 		super();
 		this.model = new EditorGroupModel(options.id, options.editorLimit, uriIdentity.extUri);
 		this.id = this.model.id;
+		this.onDidFinishOpenEditor = options.onDidFinishOpenEditor;
 		this.registry = options.registry;
 		this.onOpenError = options.onOpenError;
 		this.resolveOpenError = options.resolveOpenError;
@@ -356,8 +364,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	setLocked(locked: boolean): void {
 		this.model.setLocked(locked);
 		this.domNode.classList.toggle("ash-editor-group-locked", locked);
-		this.domNode.setAttribute("aria-label", locked ? "Editor group, locked" : "Editor group");
 		this.titleControl.setLocked(locked);
+		this.renderChrome();
 	}
 
 	get activePane(): IEditorPane | undefined {
@@ -453,6 +461,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		const sequence = ++this.openSequence;
 		this.cancelPendingOpen();
+		this.pendingOpenSequence = sequence;
+		// Covers identity resolution and asynchronous factories, before a pending pane exists.
+		using openLifetime = toDisposable(() => {
+			if (this.pendingOpenSequence !== sequence) { return; }
+			this.pendingOpenSequence = undefined;
+			if (!this.isDisposed) { this.onDidFinishOpenEditor?.(); }
+		});
 		using identityLifetime = this.uriIdentity.retainUri(input.resource);
 		const identity = this.uriIdentity.resolveCanonicalUri(input.resource);
 		if (!(identity instanceof URI)) await identity;
@@ -697,12 +712,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (index < 0) return;
 		const closedState = this.editorState(entry, index);
 		const wasActive = this.activeEntry === entry;
-		this.model.closeEditor(entry.input);
+		const restoreFocus = wasActive && this.domNode.contains(this.domNode.ownerDocument.activeElement);
+		const nextInput = this.model.closeEditor(entry.input, this.configurationService?.getValue<boolean>(EditorFocusRecentEditorAfterCloseConfiguration) !== false);
 		this.paneEntries.deleteAndDispose(entry.instanceId);
 		this.panes.disposePane(entry.paneInstance);
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason }));
 		if (wasActive) {
-			const next = this.entries[index] ?? this.entries[index - 1];
+			const next = nextInput ? this.entry(nextInput) : undefined;
 			if (next) this.activateEntry(next, true);
 			else {
 				this.editorChangeEmitter.fire(Object.freeze({ kind: "activeEditorChanged", editor: undefined }));
@@ -710,6 +726,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		this.renderContent();
 		this.renderChrome();
+		if (restoreFocus && !this.activePane) { this.focus(); }
 	}
 
 	async replaceEditor(input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void> {
@@ -759,10 +776,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			return;
 		}
 		const entry = this.requireEntry(input);
-		await target.openEditor(input, { index: targetIndex }, entry.instanceId);
+		const viewState = this.saveEditorViewState(input);
+		await target.openEditor(input, { index: targetIndex, pinned: !entry.preview, preferredEditorId: entry.paneInstance.pane.id }, entry.instanceId);
 		if (entry.sticky) target.stickEditor(input);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "move" });
 		target.activateEditor(input);
+		// Removing the source can resize the target; restore after its final layout and activation.
+		target.restoreEditorViewState(input, viewState);
 	}
 
 	async setContent(content: Element): Promise<boolean> {
@@ -815,7 +835,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	focus(): void {
-		this.panes.focus();
+		if (this.activePane) { this.panes.focus(); }
+		else { this.domNode.focus(); }
 	}
 
 	private activateEntry(entry: EditorGroupEntry, focus: boolean): void {
@@ -855,6 +876,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	private renderChrome(): void {
+		if (this.activeInput) { this.domNode.removeAttribute('tabindex'); }
+		else { this.domNode.tabIndex = 0; }
+		let label = localize('workbench.editorGroup.label', 'Editor group');
+		if (!this.activeInput) { label = localize('workbench.editorGroup.emptyLabel', 'Empty editor group'); }
+		else if (this.isLocked) { label = localize('workbench.editorGroup.lockedLabel', 'Editor group, locked'); }
+		this.domNode.setAttribute('aria-label', label);
 		this.titleControl.setEditors(this.entries, this.activeInput, this.activePane, this.model.selectedEditorIds);
 		const input = this.activeInput;
 		this.titleControl.setEditorTypes(input ? this.registry.getEditorPanesForInput(input) : [], async id => {
@@ -911,6 +938,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	private cancelPendingOpen(): void {
+		this.pendingOpenSequence = undefined;
 		this.panes.cancelPending();
 	}
 }

@@ -5,19 +5,16 @@ description: Implement and validate Ash Rust code, Cargo manifests or lockfiles,
 
 # Rust development
 
-Find the owning Cargo package and read its implementation and tests before editing. Use `just context <file>` to find applicable instructions. Keep product ownership as defined in [repository instructions](../../../.github/copilot-instructions.md); workspace membership does not change it.
-
 ## Code
 
 - Use enums for closed states, errors, and modes, with data on the matching variant. Avoid ambiguous boolean or `Option` parameters. Match closed enums without wildcard arms.
 - Add doc comments to new traits. For static async dispatch, prefer methods returning `impl Future` with explicit bounds, including `Send` when needed. Do not silence `async_fn_in_trait`.
 - Use one import per line. Package names may keep product prefixes; avoid repeating them in code.
-- Keep small components together. Split for different responsibilities, resource lifetimes, or dependencies. When moving or removing modules, update declarations, callers, tests, and docs together; report where moved code belongs.
 - Put test-only code in sibling test files when possible. Do not add production methods for tests. Match helpers' `cfg` to their callers.
 
 ## Contracts
 
-For model or provider fields, follow [model-provider-fields](../model-provider-fields/SKILL.md). Model JSON uses `snake_case`; frontend adapters use `camelCase`. Preserve parameter spellings and other formats' rules; see [model naming](../../../crates/protocol/README.md#模型目录从哪里定义).
+For model or provider fields, follow [model-provider-fields](../model-provider-fields/SKILL.md). Model JSON uses `snake_case`; frontend adapters use `camelCase`. Preserve external provider parameter names; see [model naming](../../../crates/protocol/README.md#模型目录从哪里定义).
 
 Rename JSON fields together with callers, validation, serialization tests, generated types, docs, and affected protocol or storage versions. Generate schemas, fixtures, and bindings from their source definitions. Do not hand-edit generated files or duplicate protocol values.
 
@@ -33,9 +30,7 @@ Rename JSON fields together with callers, validation, serialization tests, gener
 
 Validate the changed package with `just verify <crate>`. For targeted runs, use `just check`, `just test`, and `just rust-warnings` with a package name. Use these wrappers rather than direct Cargo checks or tests. Do not hide warnings with `allow`.
 
-Keep the same profile, features, and incremental settings. Rerun failed steps only. `--plan` does not count as validation. See [development commands](../../../docs/build.md#固定开发步骤).
-
-Ask before checking or testing the whole workspace unless the user already requested it. Expand only after package checks pass and a shared contract changed, or the user requested full coverage. Expand targets and features only when the change requires it.
+Keep the same profile, features, and incremental settings. `--plan` does not count as validation.
 
 Add the checks required by the change:
 
@@ -47,6 +42,4 @@ Add the checks required by the change:
 | Platform conditions | Compile affected test targets on every affected platform. |
 | Dependency or build-measurement tools | Run `just test-python scripts` and the changed command against the real workspace. |
 
-For Rust product behavior, verify state, commands, identity, events, output, timing, and PTY lifecycle. For TUI tests, use [test-tui](../test-tui/SKILL.md); for CLI processes and terminal boundaries, use [test-tui-pty](../test-tui-pty/SKILL.md).
-
-For example, an App Server field rename requires package validation, regeneration, the generated TypeScript strict check, and checks for affected clients. A private implementation change without a contract change stays with the owning package.
+For TUI tests, use [test-tui](../test-tui/SKILL.md); for CLI processes and terminal boundaries, use [test-tui-pty](../test-tui-pty/SKILL.md).
