@@ -1488,6 +1488,57 @@ test('inline changes mark the empty side of pure insertions and deletions', asyn
 	await expect(page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed')).toContainText('new ');
 });
 
+for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
+	test(`empty diff markers stay at character boundaries in ${theme}`, async ({ page }, testInfo) => {
+		await openDiffPage(page, 'zh-CN');
+		await page.evaluate(themeId => window.ashDiffIntegration.setTheme(themeId), theme);
+		for (const sideBySide of [false, true]) {
+			await page.evaluate(sideBySide => window.ashDiffIntegration.setViewMode(sideBySide, false, 900), sideBySide);
+			for (const position of ['middle', 'start', 'end'] as const) {
+				const text = position === 'middle' ? '\tpadding: 0;' : 'padding: 0;';
+				const expanded = position === 'middle' ? '\tpadding: 0 2px;' : position === 'start' ? `new ${text}` : `${text} new`;
+				for (const insertion of [false, true]) {
+					// Inline mode shows the original side in a deletion view zone instead of its editor.
+					if (insertion && !sideBySide) continue;
+					await page.evaluate(([original, modified]) => window.ashDiffIntegration.setComparisonText(original, modified), insertion ? [text, expanded] : [expanded, text]);
+					await expect.poll(() => page.evaluate(() => {
+						const state = window.ashDiffIntegration.read();
+						return state.state === 'ready' && state.version === state.resultVersion;
+					})).toBe(true);
+					const side = insertion ? 'original' : 'modified';
+					const kind = insertion ? 'removed' : 'added';
+					const editor = page.locator(`#single .stanza-diff-editor-side.${side}`);
+					await expect(editor.locator('.view-line .stanza-editor-line-text')).toHaveText(text);
+					const marker = editor.locator(`.stanza-diff-inline-${kind}-empty`);
+					await expect(marker).toBeVisible();
+					await expect.poll(async () => Math.abs(await editor.evaluate((root, position) => {
+						const line = root.querySelector('.view-line .stanza-editor-line-text')!;
+						const offset = position === 'middle' ? line.textContent!.indexOf(';') : position === 'start' ? 0 : line.textContent!.length;
+						const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+						let remaining = offset;
+						let node = walker.nextNode()!;
+						while (remaining > node.textContent!.length) {
+							remaining -= node.textContent!.length;
+							node = walker.nextNode()!;
+						}
+						const boundary = document.createRange();
+						boundary.setStart(node, remaining);
+						boundary.collapse(true);
+						const marker = root.querySelector<HTMLElement>('.stanza-diff-inline-added-empty, .stanza-diff-inline-removed-empty');
+						if (!marker) return Infinity;
+						return marker.getBoundingClientRect().left - boundary.getBoundingClientRect().left;
+					}, position)), { message: `${side} ${position} marker offset` }).toBeLessThan(1);
+					if (position === 'middle' && !insertion && !sideBySide) {
+						const screenshot = testInfo.outputPath(`padding-zero-${theme}.png`);
+						await editor.screenshot({ path: screenshot });
+						await testInfo.attach('padding-zero', { path: screenshot, contentType: 'image/png' });
+					}
+				}
+			}
+		}
+	});
+}
+
 test('inline diff keeps removed text readable and restores both sides', async ({ page }) => {
 	await openDiffPage(page);
 	const editor = page.locator('#single .stanza-diff-editor');

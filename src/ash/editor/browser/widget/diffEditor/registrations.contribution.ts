@@ -47,14 +47,14 @@ export const diffDeleteDecoration: IModelDecorationOptions = Object.freeze({
 	inlineClassName: 'stanza-diff-inline-removed',
 });
 
+// The border marks the measured character boundary. Expanding a collapsed range
+// would move its left edge half a character back into the preceding glyph.
 export const diffAddDecorationEmpty: IModelDecorationOptions = Object.freeze({
 	description: 'diff-inline-insertion-anchor',
 	className: 'stanza-diff-inline-added-empty',
-	showIfCollapsed: true,
 });
 
 export const diffDeleteDecorationEmpty: IModelDecorationOptions = Object.freeze({
 	description: 'diff-inline-deletion-anchor',
 	className: 'stanza-diff-inline-removed-empty',
-	showIfCollapsed: true,
 });
