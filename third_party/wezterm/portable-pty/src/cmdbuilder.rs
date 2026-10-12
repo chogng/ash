@@ -202,6 +202,9 @@ fn get_base_env() -> BTreeMap<OsString, EnvEntry> {
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct CommandBuilder {
     args: Vec<OsString>,
+    #[cfg(windows)]
+    #[cfg_attr(feature = "serde_support", serde(default))]
+    raw_args: Option<OsString>,
     envs: BTreeMap<OsString, EnvEntry>,
     cwd: Option<OsString>,
     #[cfg(unix)]
@@ -215,6 +218,8 @@ impl CommandBuilder {
     pub fn new<S: AsRef<OsStr>>(program: S) -> Self {
         Self {
             args: vec![program.as_ref().to_owned()],
+            #[cfg(windows)]
+            raw_args: None,
             envs: get_base_env(),
             cwd: None,
             #[cfg(unix)]
@@ -227,6 +232,8 @@ impl CommandBuilder {
     pub fn from_argv(args: Vec<OsString>) -> Self {
         Self {
             args,
+            #[cfg(windows)]
+            raw_args: None,
             envs: get_base_env(),
             cwd: None,
             #[cfg(unix)]
@@ -254,6 +261,8 @@ impl CommandBuilder {
     pub fn new_default_prog() -> Self {
         Self {
             args: vec![],
+            #[cfg(windows)]
+            raw_args: None,
             envs: get_base_env(),
             cwd: None,
             #[cfg(unix)]
@@ -683,18 +692,38 @@ impl CommandBuilder {
         let mut exe: Vec<u16> = exe.encode_wide().collect();
         exe.push(0);
 
-        for arg in self.args.iter().skip(1) {
-            cmdline.push(' ' as u16);
+        if let Some(raw) = &self.raw_args {
             anyhow::ensure!(
-                !arg.encode_wide().any(|c| c == 0),
-                "invalid encoding for command line argument {:?}",
-                arg
+                self.args.len() == 1,
+                "raw command line cannot be mixed with argv"
             );
-            Self::append_quoted(arg, &mut cmdline);
+            let tail: Vec<u16> = raw.encode_wide().collect();
+            anyhow::ensure!(!tail.contains(&0), "raw command line contains NUL");
+            if !tail.is_empty() {
+                cmdline.push(' ' as u16);
+                cmdline.extend(tail);
+            }
+        } else {
+            for arg in self.args.iter().skip(1) {
+                cmdline.push(' ' as u16);
+                anyhow::ensure!(
+                    !arg.encode_wide().any(|c| c == 0),
+                    "invalid encoding for command line argument {:?}",
+                    arg
+                );
+                Self::append_quoted(arg, &mut cmdline);
+            }
         }
+        anyhow::ensure!(cmdline.len() < 32767, "Windows command line is too long");
         // Ensure that the command line is nul terminated too!
         cmdline.push(0);
         Ok((exe, cmdline))
+    }
+
+    /// Sets a pre-escaped CommandLine tail without changing executable quoting.
+    /// Raw arguments cannot be mixed with argv arguments.
+    pub fn set_raw_args<S: AsRef<OsStr>>(&mut self, args: S) {
+        self.raw_args = Some(args.as_ref().to_owned());
     }
 
     // Borrowed from https://github.com/hniksic/rust-subprocess/blob/873dfed165173e52907beb87118b2c0c05d8b8a1/src/popen.rs#L1117
@@ -819,5 +848,58 @@ mod tests {
 
         cmd.env_remove("cARGO_pKG_aUTHORS");
         assert!(cmd.get_env("CARGO_PKG_AUTHORS").is_none());
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_command_line_tests {
+    use super::*;
+
+    #[test]
+    fn raw_tail_preserves_spaces_quotes_and_shell_syntax() {
+        for raw in [r#"  /d /s /c "echo two words & echo \"quotes\""  "#, ""] {
+            let mut builder = CommandBuilder::new(r"C:\Program Files\shell.exe");
+            builder.set_raw_args(raw);
+            let (exe, line) = builder.cmdline().unwrap();
+            assert_eq!(
+                String::from_utf16(&exe[..exe.len() - 1]).unwrap(),
+                r"C:\Program Files\shell.exe"
+            );
+            assert_eq!(
+                String::from_utf16(&line[..line.len() - 1]).unwrap(),
+                format!(
+                    "\"C:\\Program Files\\shell.exe\"{}",
+                    if raw.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {raw}")
+                    }
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn argv_escapes_empty_spaces_quotes_and_trailing_backslashes() {
+        let mut builder = CommandBuilder::new("shell.exe");
+        builder.args(["", "two words", r#"a"b"#, "tail \\"]);
+        let (_, line) = builder.cmdline().unwrap();
+        assert_eq!(
+            String::from_utf16(&line[..line.len() - 1]).unwrap(),
+            r#"shell.exe "" "two words" "a\"b" "tail \\""#
+        );
+    }
+
+    #[test]
+    fn raw_tail_rejects_mixed_argv_nul_and_windows_length_overflow() {
+        let mut builder = CommandBuilder::new("shell.exe");
+        builder.arg("argv");
+        builder.set_raw_args("/c echo");
+        assert!(builder.cmdline().is_err());
+        for raw in ["nul\0arg".into(), "x".repeat(32760), "🦀".repeat(16380)] {
+            let mut builder = CommandBuilder::new("shell.exe");
+            builder.set_raw_args(raw);
+            assert!(builder.cmdline().is_err());
+        }
     }
 }

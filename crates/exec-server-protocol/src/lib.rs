@@ -5,7 +5,7 @@ pub mod terminal;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const VERSION: u32 = 4;
+pub const VERSION: u32 = 5;
 pub const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_FILE_BYTES: usize = 10 * 1024 * 1024;
 pub const MAX_FILE_CHUNK_BYTES: usize = 256 * 1024;

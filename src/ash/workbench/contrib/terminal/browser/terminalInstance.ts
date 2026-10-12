@@ -392,9 +392,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const replacement = {
 			...shell,
 			executable: typeof shell.executable === 'string' ? shell.executable : shell.executable && Object.freeze([...shell.executable]),
-			args: shell.args && Object.freeze([...shell.args]),
+			args: shell.args && (typeof shell.args === 'string' ? shell.args : Object.freeze([...shell.args])),
 			env: shell.env && Object.freeze({ ...shell.env }),
-			execution: shell.execution?.type === 'process' ? Object.freeze({ ...shell.execution, args: Object.freeze([...shell.execution.args]) }) : shell.execution,
+			execution: shell.execution?.type === 'process' ? Object.freeze({ ...shell.execution, args: (typeof shell.execution.args === 'string' ? shell.execution.args : Object.freeze([...shell.execution.args])) }) : shell.execution,
 		};
 		this.relaunchTask = this.performRelaunch(this.dimensions, replacement).finally(() => { this.relaunchTask = undefined; });
 		return this.relaunchTask;
@@ -506,11 +506,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 					profile: replacement.executable ? Object.freeze({
 						type: 'custom' as const, name: replacement.name ?? this._profile.title,
 						path: Object.freeze(typeof replacement.executable === 'string' ? [replacement.executable] : [...replacement.executable]),
-						args: Object.freeze([...(replacement.args ?? [])]),
+						args: typeof replacement.args === 'string' ? replacement.args : Object.freeze([...(replacement.args ?? [])]),
 					}) : { type: 'default' as const },
 					...(replacement.env === undefined ? {} : { env: Object.freeze({ ...replacement.env }) }),
 					...(replacement.cwd === undefined ? {} : { cwd: replacement.cwd }),
-					...(replacement.execution === undefined ? {} : { execution: replacement.execution.type === 'process' ? Object.freeze({ ...replacement.execution, args: Object.freeze([...replacement.execution.args]) }) : Object.freeze({ ...replacement.execution }) }),
+					...(replacement.execution === undefined ? {} : { execution: replacement.execution.type === 'process' ? Object.freeze({ ...replacement.execution, args: (typeof replacement.execution.args === 'string' ? replacement.execution.args : Object.freeze([...replacement.execution.args])) }) : Object.freeze({ ...replacement.execution }) }),
 				});
 				this._customTitle = replacement.name;
 				this.initialText = replacement.initialText;

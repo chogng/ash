@@ -287,7 +287,18 @@ impl AppToolService {
             AppToolOperation::ReorderSection { session_ids, .. } if session_ids.len() > 1_000 => {
                 return Err(CoreError::Policy("section exceeds 1000 sessions".into()));
             }
-            _ => {}
+            AppToolOperation::ListThreads { .. }
+            | AppToolOperation::ReadThread { .. }
+            | AppToolOperation::SetThreadArchived { .. }
+            | AppToolOperation::ListProjects {}
+            | AppToolOperation::AutomationUpdate { .. }
+            | AppToolOperation::NavigateToAshPage { .. }
+            | AppToolOperation::ListSidebarSections {}
+            | AppToolOperation::DeleteSidebarSection { .. }
+            | AppToolOperation::MoveThreadToSidebarSection { .. }
+            | AppToolOperation::ReorderSection { .. }
+            | AppToolOperation::CheckAppUpdate {}
+            | AppToolOperation::FireConfetti {} => {}
         }
         Ok(operation)
     }
@@ -546,7 +557,7 @@ fn definitions() -> Vec<ToolDefinition> {
         definition(
             "tasks_output",
             "Read bounded output belonging to one Run ID. Use cursor=0 initially, then nextCursor. Cursors count UTF-16 characters; truncated reports an output gap. Output remains associated with the run when its terminal is reused.",
-            json!({"directory":string,"run_id":string,"cursor":{"type":"integer","minimum":0,"maximum":9007199254740991u64},"max_characters":{"type":"integer","minimum":1,"maximum":65536}}),
+            json!({"directory":string,"run_id":string,"cursor":{"type":"integer","minimum":0,"maximum":9007199254740991u64,"description":"UTF-16 character offset from nextCursor; start at zero."},"max_characters":{"type":"integer","minimum":1,"maximum":65536,"description":"Maximum UTF-16 characters to return, from 1 to 65536."}}),
             &["directory", "run_id", "cursor", "max_characters"],
         ),
         definition(

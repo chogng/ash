@@ -15,7 +15,7 @@ import { mergeEnvironments } from '../../../../platform/terminal/common/terminal
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
-import { ProcessPropertyType, type ITerminalChildProcess, type IProcessProperty, type IProcessReadyEvent, type IShellLaunchConfig, type TerminalProcessExecution } from '../../../../platform/terminal/common/terminal.js';
+import { ProcessPropertyType, type ITerminalChildProcess, type IProcessProperty, type IProcessReadyEvent, type IShellLaunchConfig, type TerminalProcessExecution, type TerminalArguments } from '../../../../platform/terminal/common/terminal.js';
 import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverExpression, type Replacement, type IResolvedValue } from '../../../services/configurationResolver/common/configurationResolverExpression.js';
@@ -201,11 +201,10 @@ export class TerminalTaskSystem extends Disposable {
 		const configuredEnvironments = this.configuration.getValue<
 			Readonly<Record<string, Readonly<Record<string, string | null>>>>
 		>('terminal.integrated.env') ?? {};
-		const needsProfile = resolved.execution === undefined
-			|| resolved.execution.type === 'shell' && !resolved.execution.options?.executable;
+		const needsShell = resolved.execution === undefined || resolved.execution.type === 'shell';
 		const needsEnvironment = Object.values(configuredEnvironments).some(env => Object.keys(env).length > 0)
 			|| Object.keys(resolved.env ?? {}).length > 0;
-		if (resolved.execution?.type !== 'custom' && (needsProfile || needsEnvironment)) {
+		if (resolved.execution?.type !== 'custom' && (needsShell || needsEnvironment)) {
 			const platform = this.paths.getOperatingSystem(folder.uri);
 			os = await (signal ? raceCancellationError(platform, signal) : platform);
 			assertCurrent();
@@ -239,9 +238,9 @@ export class TerminalTaskSystem extends Disposable {
 				shellName = path.split(/[\\/]/).at(-1)!.replace(/\.exe$/i, '').toLowerCase();
 			}
 			const commandLine = resolved.execution ? shellCommandLine(shell, shellName) : resolved.command;
-			execution = executable || profile.type === 'custom' || launch.args?.length || shell.options?.shellArgs !== undefined ? {
+			execution = executable || profile.type === 'custom' || launch.args?.length || shell.options?.shellArgs !== undefined || usesWindowsCommandLine(shellName, os!) ? {
 				type: 'process', program: shellPath,
-				args: taskShellArguments(shellName, launch.args ?? [], commandLine),
+				args: taskShellArguments(shellName, launch.args ?? [], commandLine, os!, executable !== undefined),
 			} : { type: 'shell', commandLine };
 		}
 		let environment = resolved.env;
@@ -269,7 +268,9 @@ export class TerminalTaskSystem extends Disposable {
 			this.assertNotDisposed();
 		}
 		this.log('information', `Starting task '${task.label}' (${task.id}).`);
-		const commandText = execution?.type === 'process' ? [execution.program, ...execution.args].map(value => JSON.stringify(value)).join(' ') : execution?.commandLine;
+		const commandText = execution?.type === 'process'
+			? typeof execution.args === 'string' ? `${JSON.stringify(execution.program)} ${execution.args}` : [execution.program, ...execution.args].map(value => JSON.stringify(value)).join(' ')
+			: execution?.commandLine;
 		const initialText = task.presentation?.echo !== false && commandText !== undefined ? localize('tasks.executingCommand', 'Executing task: {0}', commandText) : undefined;
 		let waitOnExit: IShellLaunchConfig['waitOnExit'] = !task.presentation?.close;
 		if (waitOnExit && (task.presentation?.reveal !== 'never' || !task.isBackground || task.presentation?.close === false)) {
@@ -357,13 +358,13 @@ export class TerminalTaskSystem extends Disposable {
 		const run = new TaskRun(task, terminal, collector, current => {
 			const exit = current.exitCode === undefined ? '' : ` (exit code ${current.exitCode})`;
 			this.log(current.status === 'failed' ? 'error' : current.status === 'canceled' ? 'warning' : 'information', `Task '${current.task.label}' ${current.status}${exit}.`);
-			this.stateEmitter.fire(current);
 			if (current.status !== 'running') {
-				// Retained runs keep their output artifact; completed runs no longer own listeners.
 				const retained = this.retainedRuns.get(current.runId);
 				if (retained) retained.createdAt = Date.now();
-				this.runs.deleteAndDispose(current.terminalId);
 			}
+			this.stateEmitter.fire(current);
+			// Retained runs keep their output artifact; completed runs no longer own listeners.
+			if (current.status !== 'running') this.runs.deleteAndDispose(current.terminalId);
 		}, pty?.releaseCompletion, () => {
 			if ((task.presentation?.revealProblems ?? 'never') === 'never' && task.presentation?.reveal === 'silent') revealing = this.revealTerminal(terminal, task.presentation?.focus === true);
 		}, () => {
@@ -537,7 +538,7 @@ class TaskRun extends Disposable implements ITaskRun {
 	}
 	public get terminalId(): string { return this.terminal.id; }
 	public readOutput(cursor: number, maxCharacters: number): ITaskOutput {
-		if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isSafeInteger(maxCharacters) || maxCharacters < 1 || maxCharacters > 65_536 || cursor > this.outputEnd) throw new RangeError('Invalid task output cursor or limit');
+		if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isSafeInteger(maxCharacters) || maxCharacters < 1 || maxCharacters > 65_536 || cursor > this.outputEnd) throw new RangeError(localize('tasks.invalidOutputRange', 'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.'));
 		const start = Math.max(cursor, this.outputStart);
 		const end = Math.min(this.outputEnd, start + maxCharacters);
 		return { text: this.outputText.slice(start - this.outputStart, end - this.outputStart), cursor: start, nextCursor: end, truncated: cursor < this.outputStart, hasMore: end < this.outputEnd };
@@ -615,11 +616,35 @@ function shellInvocationArguments(shellName: string): readonly string[] {
 	return ['-c'];
 }
 
-function taskShellArguments(shellName: string, args: readonly string[], commandLine: string): readonly string[] {
+function taskShellArguments(shellName: string, args: TerminalArguments, commandLine: string, os: OperatingSystem, explicitShell: boolean): TerminalArguments {
 	// Profiles may already include a command flag; adding a second one would
 	// turn the intended command into a shell option instead of executing it.
-	const commandFlag = shellName === 'cmd' ? /^\/c$/i : ['powershell', 'pwsh'].includes(shellName) ? /^-command$/i : /^-[il]*c[il]*$/;
-	return [...args, ...(args.some(arg => commandFlag.test(arg)) ? [] : shellInvocationArguments(shellName)), commandLine];
+	const commandFlag = shellName === 'cmd' ? /^\/c$/i : ['powershell', 'pwsh'].includes(shellName) ? /^-command$/i
+		: shellName === 'wsl' ? /^(?:-e|--exec)$/i : /^-[il]*c[il]*$/;
+	const raw = typeof args === 'string';
+	const hasFlag = raw
+		? (args.match(/(?:[^\s"\\]|\\.|"(?:[^"\\]|\\.)*")+/g) ?? []).some(arg => commandFlag.test(arg.replace(/^"(.*)"$/, '$1')))
+		: args.some(arg => commandFlag.test(arg));
+	const defaults = explicitShell || hasFlag ? [] : os === OperatingSystem.Windows
+		? ['powershell', 'pwsh'].includes(shellName) ? ['-Command']
+			: shellName === 'wsl' ? ['-e'] : ['bash', 'zsh', 'fish', 'nu'].includes(shellName) ? ['-c'] : ['/d', '/c']
+		: shellInvocationArguments(shellName);
+	if (raw || usesWindowsCommandLine(shellName, os)) {
+		const prefix = raw ? args : args.map(arg => /[\s"]/.test(arg) || arg.length === 0 ? quoteWindowsArgument(arg) : arg).join(' ');
+		const command = raw && ['bash', 'zsh', 'fish'].includes(shellName) ? quoteWindowsArgument(commandLine) : commandLine;
+		const result = [prefix, ...defaults, command].filter(value => value.length > 0).join(' ');
+		if (result.length > 32768 || result.includes('\0')) throw new TypeError(localize('terminal.profile.invalidArguments', 'The terminal arguments are too large or contain NUL.'));
+		return result;
+	}
+	return [...args, ...defaults, commandLine];
+}
+
+function usesWindowsCommandLine(shellName: string, os: OperatingSystem): boolean {
+	return os === OperatingSystem.Windows && !['bash', 'zsh', 'fish'].includes(shellName);
+}
+
+function quoteWindowsArgument(value: string): string {
+	return '"' + value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1') + '"';
 }
 
 function shellCommandLine(execution: TaskShellExecution, shellName: string): string {

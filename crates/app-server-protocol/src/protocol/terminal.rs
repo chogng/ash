@@ -6,6 +6,14 @@ use ash_protocol::SessionId;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Literal argv, or a pre-escaped Windows command-line tail.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(untagged)]
+pub enum TerminalArguments {
+    Argv(#[schemars(length(max = 1024))] Vec<String>),
+    CommandLine(#[schemars(length(max = 32768))] String),
+}
+
 /// One server-owned shell profile available to interactive terminal clients.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -56,8 +64,7 @@ pub enum TerminalProfileSelection {
         name: String,
         #[schemars(length(min = 1, max = 32))]
         path: Vec<String>,
-        #[schemars(length(max = 1024))]
-        args: Vec<String>,
+        args: TerminalArguments,
     },
 }
 
@@ -77,7 +84,7 @@ pub struct TerminalProfileResolveParams {
 pub struct TerminalProfileResolveResult {
     pub profile: TerminalProfile,
     pub executable: String,
-    pub args: Vec<String>,
+    pub args: TerminalArguments,
 }
 
 /// Selects whether a terminal dies with its creating connection or may be reattached briefly.
@@ -94,7 +101,7 @@ pub enum TerminalLifecycle {
 pub enum TerminalExecution {
     Process {
         program: String,
-        args: Vec<String>,
+        args: TerminalArguments,
     },
     Shell {
         #[serde(rename = "commandLine")]
@@ -381,6 +388,31 @@ pub struct TerminalCloseParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_command_line_and_argv_round_trip_without_changing_representation() {
+        for args in [
+            serde_json::json!(r#"/d /s /c "echo two words & literal;$HOME""#),
+            serde_json::json!(["", "two words", r#"a"b\"#]),
+            serde_json::json!(""),
+        ] {
+            let profile = serde_json::json!({"type": "custom", "name": "Windows shell", "path": ["cmd.exe"], "args": args});
+            let resolve = serde_json::json!({"profile": profile});
+            let request: TerminalProfileResolveParams =
+                serde_json::from_value(resolve.clone()).unwrap();
+            assert_eq!(serde_json::to_value(request).unwrap(), resolve);
+            let create = serde_json::json!({"rows": 24, "cols": 80, "profile": profile, "lifecycle": {"type": "connectionOwned"}, "execution": {"type": "process", "program": "cmd.exe", "args": args}});
+            let request: TerminalCreateParams = serde_json::from_value(create.clone()).unwrap();
+            assert_eq!(serde_json::to_value(request).unwrap(), create);
+        }
+        for invalid in [
+            serde_json::json!(42),
+            serde_json::json!([null]),
+            serde_json::json!({"raw": "echo"}),
+        ] {
+            assert!(serde_json::from_value::<TerminalArguments>(invalid).is_err());
+        }
+    }
 
     #[test]
     fn terminal_create_environment_preserves_overrides_and_removals() {

@@ -14,11 +14,13 @@ use ash_file_access::Authorization;
 use ash_file_access::Permission;
 use ash_utils_pty::ProcessHandle;
 use ash_utils_pty::ProcessSignal;
+use ash_utils_pty::PtyArguments;
 use ash_utils_pty::SpawnedProcess;
 use ash_utils_pty::TerminalSize;
 use ash_utils_pty::spawn_pty_process;
 pub use environment::is_private_process_environment_key;
 pub use environment::safe_process_environment;
+pub use exec_server_protocol::terminal::TerminalArguments;
 pub use exec_server_protocol::terminal::TerminalAttachRequest;
 pub use exec_server_protocol::terminal::TerminalAttachResult;
 pub use exec_server_protocol::terminal::TerminalCommandStatus;
@@ -253,10 +255,7 @@ impl TerminalService {
                 if program.trim().is_empty()
                     || program.len() > 32768
                     || program.contains('\0')
-                    || args.len() > 1024
-                    || args
-                        .iter()
-                        .any(|value| value.len() > 32768 || value.contains('\0'))
+                    || !profiles::valid_arguments(&args)
                 {
                     return Err(TerminalError::InvalidInput);
                 }
@@ -269,7 +268,10 @@ impl TerminalService {
                 {
                     return Err(TerminalError::InvalidInput);
                 }
-                (profile.program.clone(), profile.command_args(&command_line))
+                (
+                    profile.program.clone(),
+                    TerminalArguments::Argv(profile.command_args(&command_line)),
+                )
             }
             None => (
                 profile.program.clone(),
@@ -284,7 +286,10 @@ impl TerminalService {
             .runtime
             .block_on(spawn_pty_process(
                 &program,
-                &args,
+                match &args {
+                    TerminalArguments::Argv(args) => PtyArguments::Argv(args),
+                    TerminalArguments::CommandLine(args) => PtyArguments::WindowsCommandLine(args),
+                },
                 &dir_root,
                 integration
                     .as_ref()

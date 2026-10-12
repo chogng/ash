@@ -1994,6 +1994,8 @@ use crate::protocol::task_delivery::TaskReport;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::teams::*;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalArguments;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalAttachParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalAttachResult;
@@ -2325,8 +2327,6 @@ use ash_protocol::FrozenSkillActivation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::HistoryPrefixRef;
 #[cfg(any(test, feature = "export"))]
-use ash_protocol::ThreadHistoryState;
-#[cfg(any(test, feature = "export"))]
 use ash_protocol::HookEvent;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::HookRunRecord;
@@ -2504,6 +2504,8 @@ use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadGoal;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ThreadGoalStatus;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ThreadHistoryState;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ThreadItem;
 #[cfg(any(test, feature = "export"))]
@@ -6684,6 +6686,7 @@ typescript_bindings! {
     TerminalProfileResolveResult,
     TerminalEnvironmentReadParams,
     TerminalEnvironmentReadResult,
+    TerminalArguments,
     TerminalProfileSelection,
     TerminalLifecycle,
     TerminalExecution,

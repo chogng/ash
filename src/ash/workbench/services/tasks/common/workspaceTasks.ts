@@ -219,7 +219,7 @@ export function parseShellExecution(value: unknown): TaskShellExecution {
 			if (typeof argument !== 'string' || argument.length > MAX_COMMAND_LENGTH || argument.includes('\0')) throw new TypeError('Shell arguments must be bounded strings without NUL');
 			return argument;
 		});
-		if (shellArgs && (!executable || shellArgs.length > 256)) throw new TypeError('Shell arguments require an executable and at most 256 values');
+		if (shellArgs && shellArgs.length > 256) throw new TypeError(localize('tasks.tooManyShellArgs', 'Shell arguments accept at most {0} values.', 256));
 		let shellQuoting: NonNullable<TaskShellExecution['options']>['shellQuoting'];
 		if (supplied.shellQuoting !== undefined) {
 			const quoting = record(supplied.shellQuoting, 'ShellExecution.shellQuoting');

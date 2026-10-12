@@ -112,7 +112,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		const request = this.terminals.getProfiles().then(async profiles => {
 			const resolved = await Promise.all(profiles.map(async profile => {
 				const result = await this.processes.resolveProfile({ type: 'profile', profileId: profile.profileId });
-				return Object.freeze({ ...profile, profileName: profile.title, path: result.executable, args: Object.freeze([...result.args]), isAutoDetected: true });
+				return Object.freeze({ ...profile, profileName: profile.title, path: result.executable, args: (typeof result.args === 'string' ? result.args : Object.freeze([...result.args])), isAutoDetected: true });
 			}));
 			if (this.isDisposed || revision !== this.revision) throw new CancellationError();
 			this.profiles = Object.freeze(resolved);

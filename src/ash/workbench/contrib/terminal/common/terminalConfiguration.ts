@@ -73,7 +73,7 @@ const profileSchema = {
 	properties: {
 		path: { anyOf: [{ type: 'string' as const, minLength: 1, maxLength: 32768 }, { type: 'array' as const, minItems: 1, maxItems: 32, items: { type: 'string' as const, minLength: 1, maxLength: 32768 } }] },
 		source: { type: 'string' as const, enum: ['PowerShell', 'Git Bash'] },
-		args: { type: 'array' as const, maxItems: 1024, items: { type: 'string' as const, maxLength: 32768 } },
+		args: { anyOf: [{ type: 'array' as const, maxItems: 1024, items: { type: 'string' as const, maxLength: 32768, pattern: '^[^\\u0000]*$' } }, { type: 'string' as const, maxLength: 32768, pattern: '^[^\\u0000]*$' }] },
 		env: environmentSchema, overrideName: { type: 'boolean' as const },
 		icon: { type: 'string' as const, pattern: '^[a-zA-Z0-9_-]{1,256}$' },
 		color: { type: 'string' as const, pattern: '^[a-zA-Z0-9_.]{1,256}$' },
@@ -83,9 +83,10 @@ const profileSchema = {
 	oneOf: [{ required: ['path'] }, { required: ['source'] }, { required: ['extensionIdentifier', 'id', 'title'] }],
 };
 for (const platform of ['linux', 'osx', 'windows']) {
+	const platformProfileSchema = platform === 'windows' ? profileSchema : { ...profileSchema, properties: { ...profileSchema.properties, args: profileSchema.properties.args.anyOf[0] } };
 	properties[`${TERMINAL_CONFIG_SECTION}.profiles.${platform}`] = {
 		type: 'object', default: {}, maxProperties: 128,
-		patternProperties: { '^[^\\u0000-\\u001f\\u007f]{1,256}$': { anyOf: [{ type: 'null' }, profileSchema] } }, additionalProperties: false,
+		patternProperties: { '^[^\\u0000-\\u001f\\u007f]{1,256}$': { anyOf: [{ type: 'null' }, platformProfileSchema] } }, additionalProperties: false,
 		get description() { return localize('terminal.profile.configurationDescription', 'Terminal profiles on {0}. Define executable paths, literal arguments and environment overrides. Set a discovered profile to null to hide it.', platform); },
 	};
 	properties[`${TERMINAL_CONFIG_SECTION}.env.${platform}`] = {
@@ -93,7 +94,7 @@ for (const platform of ['linux', 'osx', 'windows']) {
 	};
 	for (const kind of ['automationProfile', 'agentHostProfile']) {
 		properties[`${TERMINAL_CONFIG_SECTION}.${kind}.${platform}`] = {
-			anyOf: [{ type: 'null' }, { ...profileSchema, required: ['path'] }], default: null,
+			anyOf: [{ type: 'null' }, { ...platformProfileSchema, required: ['path'] }], default: null,
 			get description() { return localize('terminal.profile.executionDescription', 'Shell profile for {0} on {1}. An empty value uses the interactive default.', kind, platform); },
 		};
 	}

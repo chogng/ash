@@ -79,7 +79,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 
 	async create(params: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
-		const execution = params.execution?.type === 'process' ? { ...params.execution, args: [...params.execution.args] } : params.execution;
+		const execution = params.execution?.type === 'process' ? { ...params.execution, args: typeof params.execution.args === 'string' ? params.execution.args : [...params.execution.args] } : params.execution;
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/create"], {
 			...params,
 			profile: profileSelection(params.profile),

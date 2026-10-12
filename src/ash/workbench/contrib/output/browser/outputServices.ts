@@ -1,3 +1,4 @@
+import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -369,3 +370,5 @@ function parseRestoredFilterTerms(value: string): { readonly includes: readonly 
 	}
 	return { includes, excludes };
 }
+
+registerSingleton(IOutputService, OutputService, InstantiationType.Delayed);

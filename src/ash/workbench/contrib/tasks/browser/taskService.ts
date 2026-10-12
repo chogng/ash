@@ -132,9 +132,16 @@ export class TaskService extends Disposable implements ITaskService {
 	start(task: IWorkspaceTask, signal: AbortSignal, expectedRevision: string): ITaskRun {
 		this.assertNotDisposed();
 		if (signal.aborted) throw new CancellationError();
+		const existing = this.activeRuns.filter(run => run.task.id === task.id);
+		if (existing.length >= (task.runOptions?.instanceLimit ?? 1) && ['silent', 'warn'].includes(task.runOptions?.instancePolicy ?? 'prompt')) {
+			if (task.runOptions?.instancePolicy === 'warn') this.notifications.warning(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", task.label, task.runOptions?.instanceLimit ?? 1));
+			return existing[0]!;
+		}
 		if (this.activeRuns.length >= 32) throw new Error(localize('tasks.agentRunLimit', 'This window already has 32 running tasks. Wait for a task to finish before starting another.'));
 		const controller = new AbortController();
 		const emitter = new Emitter<TaskRunStatus>();
+		const readyEmitter = new Emitter<void>();
+		let readyListener: IDisposable | undefined;
 		const completion = new DeferredPromise<number | undefined>();
 		void completion.p.catch(() => undefined);
 		let current: ITaskRun | undefined;
@@ -144,6 +151,9 @@ export class TaskService extends Disposable implements ITaskService {
 			runId: generateUuid(), task,
 			get terminalId() { return current?.terminalId ?? ''; },
 			get processId() { return current?.processId; },
+			get processCompletion() { return current?.processCompletion; },
+			get hasBackgroundMatcher() { return current?.hasBackgroundMatcher; },
+			onDidBecomeReady: readyEmitter.event,
 			get status() { return current?.status ?? status; },
 			get exitCode() { return current?.exitCode; },
 			get isReady() { return current?.isReady; },
@@ -151,17 +161,17 @@ export class TaskService extends Disposable implements ITaskService {
 			onDidChangeStatus: emitter.event, completion: completion.p,
 			readOutput: (cursor, limit) => {
 				if (current) return current.readOutput(cursor, limit);
-				if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > preparationError.length || !Number.isSafeInteger(limit) || limit < 1 || limit > 65_536) throw new RangeError('Invalid task output cursor or limit');
+				if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > preparationError.length || !Number.isSafeInteger(limit) || limit < 1 || limit > 65_536) throw new RangeError(localize('tasks.invalidOutputRange', 'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.'));
 				const end = Math.min(preparationError.length, cursor + limit);
 				return { text: preparationError.slice(cursor, end), cursor, nextCursor: end, truncated: false, hasMore: end < preparationError.length };
 			},
 		};
 		const abort = (): void => controller.abort();
 		signal.addEventListener('abort', abort, { once: true });
-		const operation = this.dispatch(task, controller.signal, false, undefined, expectedRevision, run.runId, value => { current = value; });
+		const operation = this.dispatch(task, controller.signal, false, undefined, expectedRevision, run.runId, value => { current = value; readyListener = value.onDidBecomeReady?.(() => readyEmitter.fire()); if (value.isReady) readyEmitter.fire(); });
 		this.scheduledRuns.set(run.runId, { run, controller, operation, createdAt: Date.now() });
 		this.latestRun = run;
-		this.startEmitter.fire(run);
+		this.stateEmitter.fire(run);
 		void operation.then(async value => {
 			current = value;
 			const listener = value.onDidChangeStatus(value => { const retained = this.scheduledRuns.get(run.runId); if (retained && value !== 'running') retained.createdAt = Date.now(); emitter.fire(value); });
@@ -175,12 +185,20 @@ export class TaskService extends Disposable implements ITaskService {
 			emitter.fire(status);
 			this.stateEmitter.fire(run);
 			void completion.error(error);
-		}).catch(error => { void completion.error(error); }).finally(() => { signal.removeEventListener('abort', abort); emitter.dispose(); });
+		}).catch(error => { void completion.error(error); }).finally(() => { signal.removeEventListener('abort', abort); readyListener?.dispose(); readyEmitter.dispose(); emitter.dispose(); });
 		return run;
 	}
 
 	async describe(task: IWorkspaceTask): Promise<ITaskDescription> {
 		this.assertNotDisposed();
+		const current = resolveKnownTask(task, this.currentTasks);
+		const rootFolder = this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId);
+		const rules = rootFolder ? await this.paths.getPath(rootFolder.uri) : undefined;
+		if (!rules) throw new Error(localize('tasks.agentLocalTaskRequired', 'Agent task execution requires a task in a local workspace folder.'));
+		const [rootPath, folderBasename] = await Promise.all([
+			this.resolver.resolveWithEnvironment({}, rootFolder!, '${workspaceFolder}'),
+			this.resolver.resolveWithEnvironment({}, rootFolder!, '${workspaceFolderBasename}'),
+		]);
 		const recipe: IWorkspaceTask[] = [];
 		const commands: { command: string; cwd: string; }[] = [];
 		const visiting = new Set<string>();
@@ -194,21 +212,23 @@ export class TaskService extends Disposable implements ITaskService {
 			if (candidate.providerId || candidate.execution?.type === 'custom' || candidate.unsupportedFeatures?.length || [...configuration.matchAll(/\$\{([^}]+)\}/g)].some(match => !['workspaceFolder', 'workspaceFolderBasename'].includes(match[1]!))) {
 				throw new Error(localize('tasks.agentStaticTaskRequired', "Task '{0}' needs an extension or interactive variables. Run it from the Tasks view.", candidate.label));
 			}
-			const resolve = (value: string): string => value.replaceAll('${workspaceFolder}', folder.uri.fsPath).replaceAll('${workspaceFolderBasename}', folder.uri.path.replace(/\/+$/, '').split('/').at(-1) ?? '');
+			const resolve = (value: string): string => value.replaceAll('${workspaceFolder}', rootPath).replaceAll('${workspaceFolderBasename}', folderBasename);
 			visiting.add(candidate.id);
 			for (const dependency of taskDependencies(candidate, this.currentTasks)) visit(dependency);
 			visiting.delete(candidate.id);
 			visited.add(candidate.id);
 			recipe.push(candidate);
-			if (candidate.command) commands.push({ command: resolve(candidate.command), cwd: resolve(candidate.cwd ?? folder.uri.fsPath) });
+			if (candidate.command) {
+				const cwd = resolve(candidate.cwd ?? rootPath);
+				commands.push({ command: resolve(candidate.command), cwd: rules.normalize(rules.isAbsolute(cwd) ? cwd : rootPath + rules.sep + cwd) });
+			}
 		};
-		const current = resolveKnownTask(task, this.currentTasks);
 		visit(current);
 		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId)!;
 		const bytes = new TextEncoder().encode(JSON.stringify({ directory: folder.uri.toString(), recipe, terminal: this.configuration.getValue('terminal') }));
 		const digest = await crypto.subtle.digest('SHA-256', bytes);
 		const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-		return { taskId: current.id, label: current.label, directory: folder.uri.fsPath, revision, commands };
+		return { taskId: current.id, label: current.label, directory: rootPath, revision, commands };
 	}
 
 	private async resolveDefaultBuildTask(): Promise<string | undefined> {
@@ -456,9 +476,8 @@ export class TaskService extends Disposable implements ITaskService {
 		};
 		const execute = (candidate: IWorkspaceTask): Promise<ITaskRun> => {
 			candidate = resolvedTasks.get(candidate.id)!;
-			if (expectedRevision !== undefined && candidate.cwd === undefined) {
-				const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === candidate.dirId)!;
-				candidate = { ...candidate, cwd: folder.uri.fsPath };
+			if (expectedRevision !== undefined && (candidate.cwd === undefined || candidate.cwd === '')) {
+				candidate = { ...candidate, cwd: '${workspaceFolder}' };
 			}
 			const existing = pending.get(candidate.id);
 			if (existing) return existing;
@@ -475,6 +494,7 @@ export class TaskService extends Disposable implements ITaskService {
 						if (instances.length < (candidate.runOptions?.instanceLimit ?? 1)) break;
 						const policy = candidate.id === currentTask.id ? candidate.runOptions?.instancePolicy ?? 'prompt' : 'silent';
 						if (policy === 'silent' || policy === 'warn') {
+							if (expectedRevision !== undefined && candidate.id === currentTask.id) throw new Error(localize('tasks.agentAlreadyRunning', "Task '{0}' is already running. Use tasks_list to find and inspect its Run ID.", candidate.label));
 							if (policy === 'warn') this.notifications.warning(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", candidate.label, candidate.runOptions?.instanceLimit ?? 1));
 							// Joining another graph never transfers cancellation or rollback ownership.
 							const instance = instances.find(value => value.run?.status === 'running') ?? instances[0]!;
@@ -514,7 +534,7 @@ export class TaskService extends Disposable implements ITaskService {
 							reservation.run = run;
 							if (candidate.id === currentTask.id) onStarted?.(run);
 							this.runOrder.set(run, reservation.order);
-						});
+						}, candidate.id === currentTask.id ? runId : undefined);
 						started.push(run);
 						if (candidate.id === currentTask.id) this.dependencyRuns.set(run, started.filter(value => value !== run));
 						return run;
@@ -606,11 +626,12 @@ export class TaskService extends Disposable implements ITaskService {
 		if (scheduled) {
 			scheduled.controller.abort();
 			const actual = await scheduled.operation.catch(() => undefined);
-			if (actual) { await this.taskSystem?.terminate(actual); await Promise.all((this.dependencyRuns.get(actual) ?? []).map(dependency => this.taskSystem?.terminate(dependency))); }
+			if (actual) { await this.taskSystem?.terminate(actual); await Promise.all((this.dependencyRuns.get(actual) ?? []).map(async dependency => { await this.taskSystem?.terminate(dependency); await dependency.completion; })); await actual.completion; }
 			return;
 		}
 		await this.taskSystem?.terminate(run);
-		await Promise.all((this.dependencyRuns.get(run) ?? []).map(dependency => this.taskSystem?.terminate(dependency)));
+		await Promise.all((this.dependencyRuns.get(run) ?? []).map(async dependency => { await this.taskSystem?.terminate(dependency); await dependency.completion; }));
+		await run.completion;
 	}
 
 	private setTasks(tasks: readonly IWorkspaceTask[]): void {

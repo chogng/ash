@@ -88,9 +88,9 @@ fn pty_system() -> Box<dyn portable_pty::PtySystem + Send> {
 }
 
 /// Spawn a process attached to a PTY using the shared portable-pty backend.
-pub async fn spawn_process(
+pub async fn spawn_process<'a>(
     program: &str,
-    args: &[String],
+    args: impl Into<PtyArguments<'a>>,
     cwd: &Path,
     env: &HashMap<String, String>,
     arg0: &Option<String>,
@@ -98,6 +98,16 @@ pub async fn spawn_process(
 ) -> Result<SpawnedProcess> {
     if program.is_empty() {
         anyhow::bail!("missing program for PTY spawn");
+    }
+
+    let args = args.into();
+    if let PtyArguments::WindowsCommandLine(value) = args {
+        anyhow::ensure!(cfg!(windows), "raw command lines require Windows");
+        anyhow::ensure!(!value.contains('\0'), "raw command line contains NUL");
+        anyhow::ensure!(
+            value.encode_utf16().count() < 32767,
+            "raw command line is too long"
+        );
     }
 
     let pty_system = pty_system();
@@ -112,8 +122,17 @@ pub async fn spawn_process(
     let mut command_builder = CommandBuilder::new(arg0.as_ref().unwrap_or(&program.to_string()));
     command_builder.cwd(cwd);
     command_builder.env_clear();
-    for arg in args {
-        command_builder.arg(arg);
+    match args {
+        PtyArguments::Argv(args) => command_builder.args(args),
+        PtyArguments::WindowsCommandLine(args) => {
+            #[cfg(windows)]
+            command_builder.set_raw_args(args);
+            #[cfg(not(windows))]
+            {
+                let _ = args;
+                unreachable!("raw command lines were rejected before PTY allocation");
+            }
+        }
     }
     for (key, value) in env {
         command_builder.env(key, value);
@@ -220,4 +239,29 @@ pub async fn spawn_process(
         stderr_rx,
         exit_rx,
     })
+}
+
+/// Borrowed process arguments; Windows command lines bypass argv quoting.
+#[derive(Clone, Copy)]
+pub enum PtyArguments<'a> {
+    Argv(&'a [String]),
+    WindowsCommandLine(&'a str),
+}
+
+impl<'a> From<&'a [String]> for PtyArguments<'a> {
+    fn from(args: &'a [String]) -> Self {
+        Self::Argv(args)
+    }
+}
+
+impl<'a> From<&'a Vec<String>> for PtyArguments<'a> {
+    fn from(args: &'a Vec<String>) -> Self {
+        Self::Argv(args)
+    }
+}
+
+impl<'a, const N: usize> From<&'a [String; N]> for PtyArguments<'a> {
+    fn from(args: &'a [String; N]) -> Self {
+        Self::Argv(args)
+    }
 }

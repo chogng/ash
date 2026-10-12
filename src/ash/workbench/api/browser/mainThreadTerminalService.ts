@@ -4,7 +4,7 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposa
 import { TaskQueue } from '../../../base/common/async.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
 import { localize } from '../../../nls.js';
-import { ITerminalProcessService, type ITerminalChildProcess, type IProcessProperty, type IProcessReadyEvent, ProcessPropertyType, type IShellLaunchConfig } from '../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type ITerminalChildProcess, type IProcessProperty, type IProcessReadyEvent, ProcessPropertyType, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { ITerminalService, type ITerminalInstance } from '../../services/terminal/browser/terminal.js';
@@ -270,7 +270,11 @@ function text(value: unknown, maximum: number, allowEmpty = false): string {
 	return value;
 }
 
-function argumentsList(value: unknown): readonly string[] {
+function argumentsList(value: unknown): TerminalArguments {
+	if (typeof value === 'string') {
+		if (value.length > 32768 || value.includes('\0')) throw invalid();
+		return value;
+	}
 	if (value === undefined) return [];
 	if (!Array.isArray(value) || value.length > 1024) throw invalid();
 	return value.map(arg => {

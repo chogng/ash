@@ -178,8 +178,9 @@ suite('DAP terminal launch policies through execution owners', () => {
 		{ os: OperatingSystem.Linux, platform: 'linux', path: '/automation/bash', args: ['-l'], command: "'/tools/app' 'two words' 'don'\"'\"'t'\r" },
 		{ os: OperatingSystem.Macintosh, platform: 'osx', path: '/automation/zsh', args: ['-l'], command: "'/tools/app' 'two words' 'don'\"'\"'t'\r" },
 		{ os: OperatingSystem.Windows, platform: 'windows', path: 'C:\\tools\\pwsh.exe', args: ['-NoLogo'], command: "& '/tools/app' 'two words' 'don''t'\r" },
+		{ os: OperatingSystem.Windows, platform: 'windows', path: 'C:\\tools\\pwsh.exe', args: '-NoLogo -NoProfile', command: "& '/tools/app' 'two words' 'don''t'\r" },
 	]) {
-		test(`automation profile on ${platform} reaches PTY creation and preserves DAP literal environment`, async () => {
+		test(`automation profile on ${platform} with ${typeof args} arguments reaches PTY creation and preserves DAP literal environment`, async () => {
 			using owner = new DisposableStore();
 			const fixture = assemble(owner, os);
 			await fixture.configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, { path, args, env: { MODE: 'profile', PROFILE: '${env:SOURCE}', REMOVED: 'profile' } });
@@ -326,6 +327,6 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 	return {
 		profile: { profileId, title: selection.type === 'custom' ? selection.name : profileId, isDefault: selection.type === 'default' },
 		executable: selection.type === 'custom' ? selection.path[0]! : /powershell|pwsh/.test(profileId) ? `/tools/${profileId}.exe` : `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
-		args: selection.type === 'custom' ? [...selection.args] : [],
+		args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 	};
 }

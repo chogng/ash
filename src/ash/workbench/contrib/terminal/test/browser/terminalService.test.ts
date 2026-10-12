@@ -824,6 +824,39 @@ suite('TerminalService lifecycle', () => {
 		assert.deepEqual(processes.closeCalls, ['terminal-1', 'terminal-2']);
 	});
 
+	test('raw command line reuse waits for release and retains one instance through raw, argv and relaunch', async () => {
+		const release = deferred<void>();
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const service = services.get(ITerminalService);
+		const raw = '/d /s /c "echo two words & literal;$HOME"';
+		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'custom', name: 'Raw', path: ['cmd.exe'], args: raw }, execution: { type: 'process', program: 'cmd.exe', args: raw }, deferStart: true });
+		processes.closeGates.push(release.promise);
+		const args = ['', 'two words', 'literal;$HOME'];
+		const replacing = instance.reuseTerminal({ name: 'Argv', executable: 'program.exe', args, execution: { type: 'process', program: 'program.exe', args }, deferStart: true });
+		args.push('late mutation');
+		await waitFor(() => processes.closeCalls.length === 1);
+		assert.equal(processes.createCalls.length, 1);
+		release.resolve(); await replacing;
+		assert.deepEqual(processes.createCalls[1], { rows: 24, cols: 80, profile: { type: 'custom', name: 'Argv', path: ['program.exe'], args: ['', 'two words', 'literal;$HOME'] }, execution: { type: 'process', program: 'program.exe', args: ['', 'two words', 'literal;$HOME'] } });
+		await instance.reuseTerminal({ name: 'Raw again', executable: 'cmd.exe', args: raw, execution: { type: 'process', program: 'cmd.exe', args: raw }, deferStart: true });
+		processes.queueRead(readResult({ exited: true }));
+		instance.start();
+		await waitFor(() => instance.state === 'exited');
+		await service.relaunchTerminal(instance, { rows: 30, cols: 100 });
+		assert.equal(service.activeInstance, instance);
+		assert.equal(service.instances.length, 1);
+		assert.deepEqual(processes.closeCalls, ['terminal-1', 'terminal-2', 'terminal-3']);
+		for (const index of [0, 2, 3]) {
+			const create = processes.createCalls[index]!;
+			assert.equal(create.profile.type, 'custom');
+			if (create.profile.type === 'custom') assert.equal(create.profile.args, raw);
+			assert.deepEqual(create.execution, { type: 'process', program: 'cmd.exe', args: raw });
+		}
+		await service.closeTerminal(instance);
+	});
+
 	test('closing a reused terminal during replacement releases its late process before close completes', async () => {
 		const creation = deferred<void>();
 		const processes = new TestTerminalProcessService([readResult({ exited: true })]);

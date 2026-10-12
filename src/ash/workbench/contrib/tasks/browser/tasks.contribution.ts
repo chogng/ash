@@ -24,4 +24,3 @@ export function registerTasksView(registry: WorkbenchViewRegistry = ViewsRegistr
 		ctorDescriptor: new SyncDescriptor(TasksViewPane),
 	}]);
 }
-

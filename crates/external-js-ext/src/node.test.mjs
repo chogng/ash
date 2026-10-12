@@ -450,6 +450,18 @@ test('terminal profile provider returns literal shell options through the real N
 	assert.deepEqual(result.body.body.payload, { options: { name: 'Profile shell', shellPath: '/bin/sh', shellArgs: ['-c', 'literal;$HOME'], env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' } });
 });
 
+test('terminal profile provider preserves Windows raw shell options through the real Node host', { timeout: 15000 }, async t => {
+	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+ context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: token => new v.TerminalProfile({ name: 'Profile shell', shellPath: 'cmd.exe', shellArgs: '/d /s /c \"echo two words & literal;$HOME\"', env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' }) }));
+};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminalProfiles: [{ id: 'shell', title: 'Profile shell' }] } } });
+	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
+	assert.equal(registration.profileId, 'shell');
+	assert.equal(registration.title, 'Profile shell');
+	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	assert.deepEqual(result.body.body.payload, { options: { name: 'Profile shell', shellPath: 'cmd.exe', shellArgs: '/d /s /c \"echo two words & literal;$HOME\"', env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' } });
+});
+
 test('terminal profile Pseudoterminal preserves open and input output and releases once', { timeout: 15000 }, async t => {
 	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
  const write = new v.EventEmitter(); let closes = 0;

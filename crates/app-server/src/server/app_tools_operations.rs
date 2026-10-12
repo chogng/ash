@@ -86,7 +86,7 @@ impl AppToolHost for AppServer {
                     AppToolOperation::ReorderSection { section_id, session_ids } => AppHostOperation::ReorderSection { section_id, session_ids },
                     AppToolOperation::CheckAppUpdate {} => AppHostOperation::CheckUpdate {},
                     AppToolOperation::FireConfetti {} => AppHostOperation::Confetti {},
-                    _ => unreachable!("business operations were handled above"),
+                    AppToolOperation::ListThreads { .. } | AppToolOperation::ReadThread { .. } | AppToolOperation::CreateThread { .. } | AppToolOperation::ForkThread { .. } | AppToolOperation::SetThreadArchived { .. } | AppToolOperation::ListProjects {} | AppToolOperation::AutomationUpdate { .. } => unreachable!("business operations were handled above"),
                 };
                 self.execute_app_host(operation, context, cancellation)?
             }

@@ -1,7 +1,7 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { ICreateContributedTerminalProfileOptions, IExtensionTerminalProfile, IShellLaunchConfig, ITerminalProfile } from '../../../../platform/terminal/common/terminal.js';
+import type { ICreateContributedTerminalProfileOptions, IExtensionTerminalProfile, IShellLaunchConfig, ITerminalProfile, TerminalArguments } from '../../../../platform/terminal/common/terminal.js';
 import type { OperatingSystem } from '../../../../base/common/platform.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 
@@ -46,7 +46,7 @@ export interface ITerminalProfileResolverService {
 	resolveShellLaunchConfig(shellLaunchConfig: IShellLaunchConfig, options: IShellLaunchConfigResolveOptions): Promise<void>;
 	getDefaultProfile(options: IShellLaunchConfigResolveOptions): Promise<ITerminalProfile>;
 	getDefaultShell(options: IShellLaunchConfigResolveOptions): Promise<string>;
-	getDefaultShellArgs(options: IShellLaunchConfigResolveOptions): Promise<readonly string[]>;
+	getDefaultShellArgs(options: IShellLaunchConfigResolveOptions): Promise<TerminalArguments>;
 	getDefaultIcon(): ThemeIcon;
 	getEnvironment(remoteAuthority: string | undefined): Promise<Readonly<Record<string, string>>>;
 }

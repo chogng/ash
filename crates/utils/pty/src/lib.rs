@@ -34,6 +34,7 @@ pub use process::TerminalSize;
 pub use process::combine_output_receivers;
 /// Adapt an externally-driven process into the standard spawned-process handle.
 pub use process::spawn_from_driver;
+pub use pty::PtyArguments;
 /// Report whether ConPTY is available on this platform (Windows only).
 pub use pty::conpty_supported;
 /// Spawn a process attached to a PTY for interactive use.

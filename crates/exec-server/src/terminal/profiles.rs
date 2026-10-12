@@ -1,3 +1,4 @@
+use crate::terminal::TerminalArguments;
 use crate::terminal::TerminalProfile;
 use crate::terminal::TerminalProfileSelection;
 use crate::terminal::command_status::CommandStatusMode;
@@ -56,10 +57,7 @@ impl TerminalProfileCatalog {
                     || name.chars().any(char::is_control)
                     || path.is_empty()
                     || path.len() > 32
-                    || args.len() > 1024
-                    || args
-                        .iter()
-                        .any(|arg| arg.len() > 32768 || arg.contains('\0'))
+                    || !valid_arguments(args)
                     || path
                         .iter()
                         .any(|path| path.is_empty() || path.len() > 32768 || path.contains('\0'))
@@ -101,7 +99,7 @@ pub(crate) struct TerminalProfileSpec {
     pub(crate) profile_id: String,
     pub(crate) title: String,
     pub(crate) program: String,
-    pub(crate) args: Vec<String>,
+    pub(crate) args: TerminalArguments,
     is_default: bool,
 }
 
@@ -114,13 +112,13 @@ impl TerminalProfileSpec {
         }
     }
 
-    pub(crate) fn launch_args(&self) -> Vec<String> {
+    pub(crate) fn launch_args(&self) -> TerminalArguments {
         match self.profile_id.as_str() {
-            "powershell" | "windows-powershell" => vec![
+            "powershell" | "windows-powershell" => TerminalArguments::Argv(vec![
                 "-NoExit".into(),
                 "-Command".into(),
                 super::shell_integration::POWERSHELL.into(),
-            ],
+            ]),
             _ => self.args.clone(),
         }
     }
@@ -242,7 +240,7 @@ fn profile(
         profile_id: profile_id.into(),
         title: title.into(),
         program: program.to_string_lossy().into_owned(),
-        args: Vec::new(),
+        args: TerminalArguments::Argv(Vec::new()),
         is_default: false,
     }
 }
@@ -266,8 +264,22 @@ fn profile_for_program(program: String, is_default: bool) -> TerminalProfileSpec
         profile_id: profile_id.into(),
         title: title.into(),
         program,
-        args: Vec::new(),
+        args: TerminalArguments::Argv(Vec::new()),
         is_default,
+    }
+}
+
+pub(crate) fn valid_arguments(args: &TerminalArguments) -> bool {
+    match args {
+        TerminalArguments::Argv(args) => {
+            args.len() <= 1024
+                && args
+                    .iter()
+                    .all(|value| value.len() <= 32768 && !value.contains('\0'))
+        }
+        TerminalArguments::CommandLine(value) => {
+            cfg!(windows) && value.encode_utf16().count() < 32767 && !value.contains('\0')
+        }
     }
 }
 

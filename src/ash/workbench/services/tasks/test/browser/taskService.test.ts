@@ -1,3 +1,4 @@
+import { ShellQuoting } from '../../common/taskService.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../../contrib/terminal/browser/terminalProfileResolverService.js';
@@ -371,7 +372,7 @@ async function resolveTaskProfile(selection: import('../../../../../platform/ter
 	return {
 		profile: { profileId, title: selection.type === 'custom' ? selection.name : profileId, isDefault: selection.type === 'default' },
 		executable: selection.type === 'custom' ? selection.path[0]! : profileId === 'command-prompt' ? 'C:\\Windows\\cmd.exe' : `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
-		args: selection.type === 'custom' ? [...selection.args] : [],
+		args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 	};
 }
 
@@ -453,7 +454,7 @@ suite('Task shell profiles through execution owners', () => {
 			const first = await tasks.run(task!);
 			assert.deepEqual({ profile: creations[0].profile, execution: creations[0].execution, env: creations[0].env }, {
 				profile: { type: 'custom', name: 'Automation shell', path: [executable], args: os === OperatingSystem.Windows ? ['-NoLogo', '-Command'] : ['-l', '-c'] },
-				execution: { type: 'process', program: executable, args: os === OperatingSystem.Windows ? ['-NoLogo', '-Command', "compiler 'two words' '$HOME'"] : ['-l', '-c', "compiler 'two words' '$HOME'"] },
+				execution: { type: 'process', program: executable, args: os === OperatingSystem.Windows ? "-NoLogo -Command compiler 'two words' '$HOME'" : ['-l', '-c', "compiler 'two words' '$HOME'"] },
 				env: os === OperatingSystem.Windows ? { MODE: 'task', PROFILE: 'first', REMOVED: null } : { MODE: '/execution/home', PROFILE: 'first', REMOVED: null, mode: 'task' },
 			});
 			await finish(first);
@@ -551,7 +552,7 @@ suite('Task shell profiles through execution owners', () => {
 			}, new AbortController().signal);
 			assert.deepEqual(creations[0].env, { Path: 'last task path', GONE: null, GLOBAL_ONLY: 'inherited', TASK_ONLY: '/execution/home' });
 			assert.deepEqual(creations[0].execution, kind === 'shell'
-				? { type: 'process', program: 'C:\\explicit\\cmd.exe', args: ['/c', 'compiler'] } : execution);
+				? { type: 'process', program: 'C:\\explicit\\cmd.exe', args: '/c compiler' } : execution);
 			await finish(run);
 		});
 	}
@@ -580,7 +581,7 @@ suite('Task shell profiles through execution owners', () => {
 		const first = await tasks.run((await tasks.refresh()).find(task => task.label === 'Shell')!);
 		assert.deepEqual({ profile: creations[0].profile, execution: creations[0].execution, env: creations[0].env }, {
 			profile: { type: 'custom', name: 'Build shell', path: ['C:\\tools\\cmd.exe'], args: ['/d', '/s', '/c'] },
-			execution: { type: 'process', program: 'C:\\tools\\cmd.exe', args: ['/d', '/s', '/c', 'compiler "two words" "$HOME"'] },
+			execution: { type: 'process', program: 'C:\\tools\\cmd.exe', args: '/d /s /c compiler "two words" "$HOME"' },
 			env: { PROFILE: '/execution/home', mode: 'task', REMOVED: null },
 		});
 		await finish(first);
@@ -594,6 +595,90 @@ suite('Task shell profiles through execution owners', () => {
 		const run = await tasks.run((await tasks.refresh()).find(task => task.label === 'Command only')!);
 		assert.deepEqual(creations[0].execution, { type: 'process', program: '/automation/bash', args: ['-l', '-c', 'compiler --version'] });
 		await finish(run);
+	});
+
+	for (const [shell, prefix, expected] of [
+		['cmd', '/d /s /c', '/d /s /c compiler "two words" "$HOME"'],
+		['cmd', '/title "ignore /c value"', '/title "ignore /c value" /d /c compiler "two words" "$HOME"'],
+		['cmd', String.raw`/title "ignore \" /c value"`, String.raw`/title "ignore \" /c value" /d /c compiler "two words" "$HOME"`],
+		['cmd', '  /d   "/C"  ', '  /d   "/C"   compiler "two words" "$HOME"'],
+		['pwsh', '-NoLogo -Command', "-NoLogo -Command compiler 'two words' '$HOME'"],
+		['pwsh', '', "-Command compiler 'two words' '$HOME'"],
+		['wsl', '--exec', "--exec compiler 'two words' '$HOME'"],
+		['nu', '', "-c compiler 'two words' '$HOME'"],
+	] as const) {
+		test(`Windows ${shell} tasks preserve raw prefix ${JSON.stringify(prefix)} and command flags`, async () => {
+			using owner = new DisposableStore();
+			const { tasks, configuration, creations, finish } = assemble(owner, OperatingSystem.Windows);
+			await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: `C:\\tools\\${shell}.exe`, args: prefix });
+			const run = await tasks.run((await tasks.refresh()).find(task => task.label === 'Shell')!);
+			assert.deepEqual(creations[0].execution, { type: 'process', program: `C:\\tools\\${shell}.exe`, args: expected });
+			assert.equal(creations[0].profile.type, 'custom');
+			if (creations[0].profile.type === 'custom') assert.equal(creations[0].profile.args, prefix);
+			await finish(run);
+		});
+	}
+
+	test('Windows raw command lines quote command paths and arguments once and replace reused process snapshots', async () => {
+		using owner = new DisposableStore();
+		const { tasks, terminals, configuration, creations, closes, finish } = assemble(owner, OperatingSystem.Windows);
+		await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\tools\\cmd.exe', args: '/d /s /c' });
+		const execution = { type: 'shell' as const, command: 'C:\\Program Files\\compiler.exe', args: ['', 'two words', 'C:\\tail\\', { value: 'A&B', quoting: ShellQuoting.Strong }] };
+		const task = { id: 'quoted', label: 'Quoted', group: 'build' as const, execution, presentation: { reveal: 'never' as const } };
+		const first = await tasks.runProvidedTask('raw', task, new AbortController().signal);
+		const firstArgs = '/d /s /c ""C:\\Program Files\\compiler.exe" "" "two words" C:\\tail\\ "A&B""';
+		assert.deepEqual(creations[0].execution, { type: 'process', program: 'C:\\tools\\cmd.exe', args: firstArgs });
+		const instance = terminals.activeInstance;
+		await finish(first);
+		await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\tools\\bash.exe', args: ['-l', '-c'] });
+		const second = await tasks.runProvidedTask('raw', task, new AbortController().signal);
+		assert.equal(second.terminalId, first.terminalId);
+		assert.equal(terminals.activeInstance, instance);
+		assert.deepEqual(creations[1].execution, { type: 'process', program: 'C:\\tools\\bash.exe', args: ['-l', '-c', "'C:\\Program Files\\compiler.exe' '' 'two words' C:\\tail\\ 'A&B'"] });
+		await finish(second);
+		await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\tools\\pwsh.exe', args: '-NoLogo -Command' });
+		const third = await tasks.runProvidedTask('raw', task, new AbortController().signal);
+		assert.equal(third.terminalId, first.terminalId);
+		assert.equal(terminals.instances.length, 1);
+		assert.deepEqual(creations[2].execution, { type: 'process', program: 'C:\\tools\\pwsh.exe', args: "-NoLogo -Command & 'C:\\Program Files\\compiler.exe' '' 'two words' C:\\tail\\ 'A&B'" });
+		assert.deepEqual(closes, ['task-1', 'task-2']);
+		assert.equal((creations[0].execution as { args: string; }).args, firstArgs);
+		await finish(third);
+	});
+
+	for (const explicit of [true, false]) test(`Windows shell options override raw profile arguments with explicit executable ${explicit}`, async () => {
+		using owner = new DisposableStore();
+		const { tasks, configuration, creations, finish } = assemble(owner, OperatingSystem.Windows);
+		await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\profile\\cmd.exe', args: '/d /s /c' });
+		const run = await tasks.runProvidedTask('options', {
+			id: 'override', label: 'Override', group: 'build', presentation: { reveal: 'never' },
+			execution: { type: 'shell', command: 'compiler', args: [], options: { ...(explicit ? { executable: 'C:\\explicit\\cmd.exe' } : {}), shellArgs: ['/q', '/c'] } },
+		}, new AbortController().signal);
+		assert.deepEqual(creations[0].execution, { type: 'process', program: explicit ? 'C:\\explicit\\cmd.exe' : 'C:\\profile\\cmd.exe', args: '/q /c compiler' });
+		await finish(run);
+	});
+
+	test('explicit Windows shell with empty arguments does not inject automation command flags', async () => {
+		using owner = new DisposableStore();
+		const { tasks, configuration, creations, finish } = assemble(owner, OperatingSystem.Windows, { shell: { executable: 'C:\\explicit\\pwsh.exe', args: [] } });
+		await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\profile\\cmd.exe', args: '/d /s /c' });
+		const run = await tasks.run((await tasks.refresh()).find(task => task.label === 'Shell')!);
+		assert.deepEqual(creations[0].execution, { type: 'process', program: 'C:\\explicit\\pwsh.exe', args: "compiler 'two words' '$HOME'" });
+		await finish(run);
+	});
+
+	test('Windows Bash raw prefix keeps one quoted command argument while argv mode preserves literal prefix values', async () => {
+		using owner = new DisposableStore();
+		const { tasks, configuration, creations, finish } = assemble(owner, OperatingSystem.Windows);
+		const task = { id: 'bash', label: 'Bash', group: 'build' as const, presentation: { reveal: 'never' as const }, execution: { type: 'shell' as const, command: 'echo', args: [{ value: 'two "quotes" and a tail\\', quoting: ShellQuoting.Weak }] } };
+		await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\tools\\bash.exe', args: '-l -c' });
+		const first = await tasks.runProvidedTask('raw', task, new AbortController().signal);
+		assert.deepEqual(creations[0].execution, { type: 'process', program: 'C:\\tools\\bash.exe', args: String.raw`-l -c "echo \"two \\\"quotes\\\" and a tail\\\\\""` });
+		await finish(first);
+		await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\tools\\pwsh.exe', args: ['-Title', 'two "quotes" and a tail\\', '-Command'] });
+		const second = await tasks.runProvidedTask('raw', { ...task, execution: { type: 'shell', command: 'compiler', args: [] } }, new AbortController().signal);
+		assert.deepEqual(creations[1].execution, { type: 'process', program: 'C:\\tools\\pwsh.exe', args: String.raw`-Title "two \"quotes\" and a tail\\" -Command compiler` });
+		await finish(second);
 	});
 
 	for (const invalidation of ['cancel', 'workspace', 'backend rejection'] as const) {
@@ -1196,7 +1281,9 @@ suite('TaskService configuration resolution', () => {
 			using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Resolve', command }] }) }), workspace, terminals, os).createInstance(TaskService);
 			const task = (await service.refresh())[0]!;
 			await service.run(task);
-			assert.deepEqual((terminals.instances[0] as FakeTerminalInstance).execution, { type: 'shell', commandLine: `echo "${folderPath}" project "/execution/home"` });
+			assert.deepEqual((terminals.instances[0] as FakeTerminalInstance).execution, os === OperatingSystem.Windows
+				? { type: 'process', program: 'C:\\Windows\\cmd.exe', args: `/d /c echo "${folderPath}" project "/execution/home"` }
+				: { type: 'shell', commandLine: `echo "${folderPath}" project "/execution/home"` });
 			assert.equal(task.command, command);
 		});
 
@@ -2494,6 +2581,39 @@ suite('Agent Task runs through the shared execution owner', () => {
 		assert.equal(terminals.instances[0]!.state, 'exited');
 		assert.equal(service.activeRuns.length, 0);
 		await service.terminate(run);
+	});
+
+	test('publishes one start with the same Run ID in the service, completed record and terminal', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals } = assemble(resources, [{ label: 'Check', command: 'check' }]);
+		const task = (await service.refresh())[0]!;
+		const description = await service.describe(task);
+		const started = new DeferredPromise<ITaskRun>();
+		const identities: string[] = [];
+		resources.add(service.onDidStartTask(run => { identities.push(run.runId); void started.complete(run); }));
+		const run = service.start(task, new AbortController().signal, description.revision);
+		assert.equal(identities.length, 0, 'preparation does not publish a second process start');
+		assert.equal(await started.p, run);
+		assert.deepEqual(identities, [run.runId]);
+		assert.equal(service.runs.length, 1);
+		assert.equal(service.lastRun, run);
+		assert.equal(run.terminalId, terminals.instances[0]!.id);
+		await service.terminate(run);
+		assert.equal(service.lastRun!.runId, run.runId);
+		assert.equal(service.getRun(run.runId), run);
+	});
+
+	test('joins a silent task at capacity by its original Run ID without adding a second execution', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals } = assemble(resources, [{ label: 'Check', command: 'check', runOptions: { instancePolicy: 'silent' } }]);
+		const task = (await service.refresh())[0]!;
+		const first = await service.run(task);
+		const description = await service.describe(task);
+		const joined = service.start(task, new AbortController().signal, description.revision);
+		assert.equal(joined, first);
+		assert.equal(service.runs.length, 1);
+		assert.equal(terminals.instances.length, 1);
+		await service.terminate(first);
 	});
 
 	test('retains bounded output by Run ID across terminal reuse and reports output gaps', async () => {

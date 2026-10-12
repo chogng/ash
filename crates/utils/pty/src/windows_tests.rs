@@ -311,3 +311,27 @@ async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Resul
     );
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn conpty_preserves_raw_shell_command_line_and_exit_code() -> anyhow::Result<()> {
+    let program = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
+    let env = std::env::vars().collect();
+    let spawned = spawn_pty_process(
+        &program,
+        crate::PtyArguments::WindowsCommandLine(
+            r#"/d /s /c "echo RAW:two words&echo RAW:second&exit /b 7""#,
+        ),
+        Path::new("."),
+        &env,
+        &None,
+        TerminalSize::default(),
+    )
+    .await?;
+    let (_session, output, exit) = combine_spawned_output(spawned);
+    let (output, code) = collect_output_until_exit(output, exit, 10_000).await;
+    assert_eq!(code, 7);
+    let text = String::from_utf8_lossy(&output);
+    assert!(text.contains("RAW:two words"), "{text}");
+    assert!(text.contains("RAW:second"), "{text}");
+    Ok(())
+}

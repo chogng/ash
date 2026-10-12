@@ -1021,6 +1021,36 @@ test('configured terminal profile reaches the real picker and resolver with argv
 	expect(errors).toEqual([]);
 });
 
+test('Windows raw command line profile reaches the picker, resolver and next default without becoming argv', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?pane&profiles&browser&os=windows&locale=zh-CN');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(async () => {
+		await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
+			'原始命令行': { path: 'C:\\Windows\\cmd.exe', args: '/d /s /c "echo ${env:PROFILE_ARG} & echo two words"' },
+		});
+		window.ashTerminalPaneIntegration.panel(true);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
+	const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
+	await expect(picker).toBeFocused(); await picker.fill('原始命令行'); await picker.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
+		profile: { type: 'custom', name: '原始命令行', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo literal;$HOME & echo two words"' }, env: {}, cwd: undefined,
+	});
+	await expect(page.getByRole('tab', { name: '原始命令行', exact: true })).toBeVisible();
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
+	const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
+	await expect(defaults).toBeFocused(); await defaults.fill('原始命令行'); await defaults.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('custom:原始命令行');
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(3);
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1)))?.profile).toEqual({ type: 'custom', name: '原始命令行', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo literal;$HOME & echo two words"' });
+	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 test('extension terminal profile activates from the picker and persists as the next default', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

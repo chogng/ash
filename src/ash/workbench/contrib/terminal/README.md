@@ -88,4 +88,6 @@ DAP runInTerminal 使用 automationProfile，空配置回到交互式默认 prof
 
 Agent 的 openTerminal App Tool 在原 AppToolsHost 采用 agentHostProfile，空配置回到交互默认 profile；全局/profile 环境、cwd、argv 和主题 metadata 均由同一 resolver 解析，再交给原 TerminalService。取消、Host 释放、工作区／执行连接变化会使旧启动失效；晚到 PTY 或无法打开 View 的实例由该请求关闭。App Server adapter 继续拥有 request/connection 取消，窗口 Host 继续拥有执行入口与显示，实例和 Rust PTY owner 保持唯一。
 
-当前 argv 契约为字符串数组；Windows 原始命令行字符串、URI 图标、完整 Shell integration/profile 检测、分组/分屏、编辑器终端和剩余 xterm/backend 链路仍待补齐。没有创建缺乏消费者的 browser 文件。
+参数契约支持 literal argv 数组和仅限 Windows 的原始 CommandLine 字符串。profile、automation、agentHost、扩展 TerminalProfile 与启动配置共用原 resolver；字符串按整体解析变量，保留引用、空值与空格，经本地/SSH adapter 和 App Server/exec-server 到原 ConPTY。数组继续由 PTY 引用，字符串仅追加在正确引用的 executable 后；执行边界拒绝非 Windows、NUL 与超长命令行。内部 exec-server 协议版本为 5，App Server schema 与 TypeScript 由同一生成器更新。
+
+Windows cmd/PowerShell/WSL/Nu task 以完整 CommandLine 创建进程；Windows Bash/Zsh/Fish 的 argv 保持数组，raw prefix 后的完整 Shell command 则按一个 Windows 参数引用。Tasks 的 shellArgs 仍只接受数组，可不指定 executable 而覆盖所选 profile；显式 executable 不注入默认命令标志。复用与 Relaunch 保留字符串和不可变 argv 快照，仍等待旧 PTY 释放并保留原实例、屏幕和环境覆盖 owner。URI 图标、完整 Shell integration/profile 检测、分组/分屏、编辑器终端和剩余 xterm/backend 链路仍待补齐。

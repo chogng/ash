@@ -89,8 +89,9 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 	public async runTask(directory: string, taskId: string, revision: string, signal: AbortSignal): Promise<TaskRunSummary> {
 		await this.describeTask(directory, taskId, revision, signal);
 		throwIfCancelled(signal);
+		const priorRuns = new Set(this.tasks.runs.map(run => run.runId));
 		const run = this.tasks.start(this.findTask(directory, taskId), signal, revision);
-		this.agentTaskRuns.add(run);
+		if (!priorRuns.has(run.runId)) this.agentTaskRuns.add(run);
 		void run.completion?.finally(() => this.agentTaskRuns.delete(run)).catch(() => undefined);
 		return taskSummary(run);
 	}

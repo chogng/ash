@@ -2,6 +2,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
 
+/// Literal argv, or a pre-escaped Windows command-line tail kept intact until ConPTY.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(untagged)]
+pub enum TerminalArguments {
+    Argv(Vec<String>),
+    CommandLine(String),
+}
+
 /// One server-owned shell profile available to interactive terminal clients.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalProfile {
@@ -20,16 +28,16 @@ pub enum TerminalProfileSelection {
     Custom {
         name: String,
         path: Vec<String>,
-        args: Vec<String>,
+        args: TerminalArguments,
     },
 }
 
-/// Validated executable and literal argv selected on the execution host.
+/// Validated executable and argument representation selected on the execution host.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalResolvedProfile {
     pub profile: TerminalProfile,
     pub executable: String,
-    pub args: Vec<String>,
+    pub args: TerminalArguments,
 }
 
 /// Selects whether a terminal dies with its creating connection or may be reattached briefly.
@@ -42,8 +50,13 @@ pub enum TerminalLifecycle {
 /// Executes a program with literal arguments or a command through the selected shell.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum TerminalExecution {
-    Process { program: String, args: Vec<String> },
-    Shell { command_line: String },
+    Process {
+        program: String,
+        args: TerminalArguments,
+    },
+    Shell {
+        command_line: String,
+    },
 }
 
 /// Starts one interactive terminal at the server's authorized directory.

@@ -4,7 +4,7 @@ import { OperatingSystem } from '../../../../base/common/platform.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProfile, type ITerminalProfileObject } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProfile, type ITerminalProfileObject, type TerminalArguments } from '../../../../platform/terminal/common/terminal.js';
 import { mergeEnvironments } from '../../../../platform/terminal/common/terminalEnvironment.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
@@ -75,13 +75,14 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		return typeof profile.path === 'string' ? profile.path : profile.path[0]!;
 	}
 
-	async getDefaultShellArgs(options: IShellLaunchConfigResolveOptions): Promise<readonly string[]> {
+	async getDefaultShellArgs(options: IShellLaunchConfigResolveOptions): Promise<TerminalArguments> {
 		return (await this.getDefaultProfile(options)).args ?? [];
 	}
 
 	async resolveShellLaunchConfig(shell: IShellLaunchConfig, options: IShellLaunchConfigResolveOptions): Promise<void> {
 		this.assertOptions(options);
 		if (shell.customPtyImplementation) { this.resolveIcon(shell, options.os); return; }
+		if (typeof shell.args === 'string' && options.os !== OperatingSystem.Windows) throw new Error(localize('terminal.profile.windowsCommandLine', 'Raw command line strings are only supported on Windows.'));
 		const generation = this.generation;
 		const platform = await this.profiles.getPlatformKey();
 		const overrides: Record<string, string | null> = {};
@@ -97,7 +98,7 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		const env = Object.fromEntries(await Promise.all(Object.entries(overrides).map(async ([key, value]) => [key, value === null ? null : await resolve(value)])));
 		const cwd = shell.cwd ?? this.configuration.getValue<string>(`${TERMINAL_CONFIG_SECTION}.cwd`);
 		const resolvedCwd = cwd ? await resolve(cwd) : undefined;
-		const resolvedArgs = shell.args === undefined ? profile.args ?? [] : await Promise.all(shell.args.map(resolve));
+		const resolvedArgs = shell.args === undefined ? profile.args ?? [] : typeof shell.args === 'string' ? await resolve(shell.args) : await Promise.all(shell.args.map(resolve));
 		const executable = typeof profile.path === 'string' ? profile.path : profile.path[0]!;
 		this.assertCurrent(generation);
 		shell.executable = executable;
@@ -113,7 +114,10 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		const folder = this.workspace.getWorkspace().folders[0];
 		const resolve = (value: string) => this.variables.resolveWithEnvironment(environment, folder, value);
 		const path = await Promise.all((typeof profile.path === 'string' ? [profile.path] : profile.path).map(value => resolve(value.replace(/^~(?=$|[/\\])/, '${userHome}'))));
-		const args = await Promise.all((profile.args ?? []).map(resolve));
+		if (typeof profile.args === 'string' && this.processes.operatingSystem !== OperatingSystem.Windows) {
+			throw new Error(localize('terminal.profile.windowsCommandLine', 'Raw command line strings are only supported on Windows.'));
+		}
+		const args = typeof profile.args === 'string' ? await resolve(profile.args) : await Promise.all((profile.args ?? []).map(resolve));
 		const result = await this.processes.resolveProfile({ type: 'custom', name: profile.profileName, path, args });
 		return { ...profile, path: result.executable, args: result.args };
 	}

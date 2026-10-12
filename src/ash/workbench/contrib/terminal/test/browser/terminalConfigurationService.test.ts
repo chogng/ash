@@ -1,3 +1,5 @@
+import { resetNlsResolver } from '../../../../../nls.js';
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
@@ -46,7 +48,7 @@ function createServices(owner: DisposableStore, useInstances = false) {
 		getEnvironment: async () => ({ HOME: '/execution/home', PATH: '/execution/bin', PROFILE_VALUE: 'environment value' }),
 		resolveProfile: async (selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({
 			profile: selection.type === 'custom' ? { profileId: `custom:${selection.name}`, title: selection.name, isDefault: false } : shells.find(profile => selection.type === 'profile' && selection.profileId === profile.profileId) ?? shells[0]!,
-			executable: selection.type === 'custom' ? selection.path.at(-1)! : '/execution/bin/shell', args: selection.type === 'custom' ? [...selection.args] : [],
+			executable: selection.type === 'custom' ? selection.path.at(-1)! : '/execution/bin/shell', args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 		}),
 		getConnectionState: async () => 'ready',
 		create: async (options: ITerminalProcessCreateOptions) => {
@@ -296,6 +298,66 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.deepEqual(shell, { executable: '/original/shell', args: ['original'] });
 		await assert.rejects(resolver.getEnvironment('unselected-host'), /execution host/);
 		assert.equal(resolver.getDefaultIcon().id, 'terminal');
+	});
+
+	for (const args of ['/d /s /c "echo ${env:PROFILE_VALUE}"', '']) test(`Windows resolver preserves raw profile and launch arguments ${JSON.stringify(args)}`, async () => {
+		using owner = new DisposableStore();
+		const { services, configuration, launches } = createServices(owner, true);
+		await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\Windows\\cmd.exe', args });
+		const resolver = services.get(ITerminalProfileResolverService);
+		const options = { os: OperatingSystem.Windows, remoteAuthority: undefined, allowAutomationShell: true };
+		assert.equal(await resolver.getDefaultShellArgs(options), args.replace('${env:PROFILE_VALUE}', 'environment value'));
+		await configuration.updateValue('terminal.integrated.agentHostProfile.windows', { path: 'C:\\Windows\\cmd.exe', args });
+		assert.equal(await resolver.getDefaultShellArgs({ ...options, allowAutomationShell: false, allowAgentHostShell: true }), args.replace('${env:PROFILE_VALUE}', 'environment value'));
+		const shell: import('../../../../../platform/terminal/common/terminal.js').IShellLaunchConfig = { executable: 'C:\\Windows\\cmd.exe', args };
+		await resolver.resolveShellLaunchConfig(shell, options);
+		const terminal = await services.get(ITerminalService).createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'custom', name: 'Shell', path: [shell.executable as string], args: shell.args! } });
+		assert.deepEqual(launches[0].profile, { type: 'custom', name: 'Shell', path: ['C:\\Windows\\cmd.exe'], args: args.replace('${env:PROFILE_VALUE}', 'environment value') });
+		await waitFor(() => terminal.state === 'exited');
+		await services.get(ITerminalService).relaunchTerminal(terminal, { rows: 30, cols: 100 });
+		assert.deepEqual(launches[1].profile, launches[0].profile);
+	});
+
+	for (const os of [OperatingSystem.Linux, OperatingSystem.Macintosh]) test(`non-Windows resolver rejects raw strings before resolving or creating a process on OS ${os}`, async () => {
+		using owner = new DisposableStore();
+		const { services, configuration, processes, launches } = createServices(owner, true);
+		Object.assign(processes, { operatingSystem: os });
+		const platform = os === OperatingSystem.Linux ? 'linux' : 'osx';
+		await assert.rejects(configuration.updateValue(`terminal.integrated.profiles.${platform}`, { Shell: { path: '/bin/sh', args: '-c echo' } }));
+		await assert.rejects(configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, { path: '/bin/sh', args: '' }));
+		await assert.rejects(configuration.updateValue(`terminal.integrated.agentHostProfile.${platform}`, { path: '/bin/sh', args: '-l' }));
+		const resolver = services.get(ITerminalProfileResolverService);
+		for (const executable of [undefined, '/bin/sh']) {
+			const shell = { executable, args: '-c "literal"' };
+			await assert.rejects(resolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: undefined }), /only supported on Windows/);
+			assert.deepEqual(shell, { executable, args: '-c "literal"' });
+		}
+		assert.deepEqual(launches, []);
+	});
+
+	test('raw command line rejection uses the configured Chinese locale', async () => {
+		using owner = new DisposableStore();
+		const { services, processes } = createServices(owner);
+		initializeTestLocalization('zh-CN');
+		try {
+			Object.assign(processes, { operatingSystem: OperatingSystem.Linux });
+			await assert.rejects(services.get(ITerminalProfileResolverService).resolveShellLaunchConfig({ executable: '/bin/sh', args: '-c echo' }, { os: OperatingSystem.Linux, remoteAuthority: undefined }), { message: '原始命令行字符串仅在 Windows 上受支持。' });
+		} finally { resetNlsResolver(); }
+	});
+
+	test('extension Windows raw shell options pass through the bridge and original resolver without splitting', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, launches } = createServices(owner, true);
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceProfiles([{
+			runtimeId: 'runtime', packageDigest: digest, profileId: 'raw', title: 'Raw shell',
+			invoke: async () => ({ options: { name: 'Raw shell', shellPath: 'C:\\Windows\\cmd.exe', shellArgs: '/d /s /c "echo ${env:PROFILE_VALUE}"' } }),
+		}]);
+		await profiles.getContributedProfileProvider('acme.extension', 'raw')!.createContributedTerminalProfile({});
+		assert.deepEqual(launches[0].profile, { type: 'custom', name: 'Raw shell', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo environment value"' });
+		assert.equal(services.get(ITerminalService).instances.length, 1);
 	});
 
 	test('resolver cancels a late environment result without partially changing launch data', async () => {

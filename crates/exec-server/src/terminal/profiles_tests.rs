@@ -22,22 +22,26 @@ fn powershell_uses_host_markers_and_cmd_keeps_its_standard_launch() {
         profile_id: "command-prompt".into(),
         title: "Command Prompt".into(),
         program: "cmd.exe".into(),
-        args: Vec::new(),
+        args: TerminalArguments::Argv(Vec::new()),
         is_default: true,
     };
     assert!(command_prompt.command_status_mode() == CommandStatusMode::Disabled);
-    assert!(command_prompt.launch_args().is_empty());
+    assert!(command_prompt.launch_args() == TerminalArguments::Argv(Vec::new()));
 
     let powershell = TerminalProfileSpec {
         profile_id: "powershell".into(),
         title: "PowerShell".into(),
         program: "pwsh.exe".into(),
-        args: Vec::new(),
+        args: TerminalArguments::Argv(Vec::new()),
         is_default: false,
     };
     assert!(powershell.command_status_mode() == CommandStatusMode::ShellIntegration);
-    assert!(powershell.launch_args().join(" ").contains("633;C"));
-    assert!(powershell.launch_args().join(" ").contains("633;D"));
+    let TerminalArguments::Argv(args) = powershell.launch_args() else {
+        panic!("expected argv");
+    };
+    let command = args.join(" ");
+    assert!(command.contains("633;C"));
+    assert!(command.contains("633;D"));
     assert_eq!(
         powershell.command_args("Get-Location"),
         [
@@ -153,11 +157,14 @@ fn custom_profiles_choose_the_first_executable_and_preserve_literal_arguments() 
     let selection = TerminalProfileSelection::Custom {
         name: "Profile with spaces".into(),
         path: vec!["/definitely/missing/ash-shell".into(), program.clone()],
-        args: vec!["argument with spaces".into(), "literal;$HOME".into()],
+        args: TerminalArguments::Argv(vec!["argument with spaces".into(), "literal;$HOME".into()]),
     };
     let resolved = catalog.resolve(&selection).unwrap();
     assert_eq!(resolved.program, program);
-    assert_eq!(resolved.args, ["argument with spaces", "literal;$HOME"]);
+    assert_eq!(
+        resolved.args,
+        TerminalArguments::Argv(vec!["argument with spaces".into(), "literal;$HOME".into()])
+    );
     assert_eq!(resolved.profile_id, "custom:Profile with spaces");
     assert_eq!(resolved.title, "Profile with spaces");
     assert!(!resolved.is_default);
@@ -184,9 +191,38 @@ fn custom_profiles_reject_invalid_names_candidates_and_arguments() {
                 .resolve(&TerminalProfileSelection::Custom {
                     name: name.into(),
                     path,
-                    args
+                    args: TerminalArguments::Argv(args)
                 })
                 .is_none()
         );
+    }
+}
+
+#[test]
+fn raw_profile_arguments_are_windows_only_and_preserve_original_quoting() {
+    let catalog = TerminalProfileCatalog::discover();
+    let program = catalog
+        .resolve(&TerminalProfileSelection::Default)
+        .unwrap()
+        .program
+        .clone();
+    for raw in [r#"/d /s /c "echo two words & literal;$HOME""#, ""] {
+        let selection = TerminalProfileSelection::Custom {
+            name: "Raw shell".into(),
+            path: vec![program.clone()],
+            args: TerminalArguments::CommandLine(raw.into()),
+        };
+        let resolved = catalog.resolve(&selection);
+        if cfg!(windows) {
+            assert_eq!(
+                resolved.unwrap().launch_args(),
+                TerminalArguments::CommandLine(raw.into())
+            );
+        } else {
+            assert!(resolved.is_none());
+        }
+    }
+    for raw in ["invalid\0argument".into(), "x".repeat(32769)] {
+        assert!(!valid_arguments(&TerminalArguments::CommandLine(raw)));
     }
 }

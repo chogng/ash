@@ -313,3 +313,18 @@ test('task problem reveal policies inherit independently of terminal reveal and 
 		assert.throws(() => parseWorkspaceTasks(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Invalid', command: 'build', presentation: { revealProblems } }] })), /Invalid task presentation/);
 	}
 });
+
+test('task shell args alone override default profiles but stay an argv-only contract', () => {
+	const tasks = parseWorkspaceTasks(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Override', type: 'shell', command: 'compiler', options: { shell: { args: ['/q', '/c'] } } }] }), OperatingSystem.Windows);
+	assert.deepEqual(tasks[0].execution, { type: 'shell', commandLine: 'compiler', options: { shellArgs: ['/q', '/c'] } });
+	assert.deepEqual(tasks[0].unsupportedFeatures, []);
+	for (const args of ['/c compiler', Array(257).fill('/c'), ['bad\0value']]) {
+		assert.throws(() => parseWorkspaceTasks(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Invalid', type: 'shell', command: 'compiler', options: { shell: { args } } }] }), OperatingSystem.Windows));
+	}
+});
+
+test('task shell argument limit is localized in Chinese', () => {
+	using localization = toDisposable(resetNlsResolver);
+	initializeTestLocalization('zh-CN');
+	assert.throws(() => parseWorkspaceTasks(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Invalid', type: 'shell', command: 'compiler', options: { shell: { args: Array(257).fill('/c') } } }] }), OperatingSystem.Windows), { message: 'Shell 参数最多接受 256 个值。' });
+});

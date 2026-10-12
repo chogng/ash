@@ -1,3 +1,4 @@
+use super::TerminalArguments;
 use super::profiles::TerminalProfileSpec;
 use std::collections::HashMap;
 use std::io;
@@ -5,7 +6,7 @@ use tempfile::TempDir;
 
 /// Keeps injected startup files alive until the PTY has finished reading output.
 pub(super) struct ShellIntegration {
-    pub(super) args: Vec<String>,
+    pub(super) args: TerminalArguments,
     pub(super) environment: HashMap<String, String>,
     directory: Option<TempDir>,
 }
@@ -48,16 +49,29 @@ impl ShellIntegration {
             launch
                 .environment
                 .insert("ASH_SHELL_DIRECTORY".into(), path);
-            launch.args.push("-i".into());
+            let TerminalArguments::Argv(args) = &mut launch.args else {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "raw command lines require Windows",
+                ));
+            };
+            args.push("-i".into());
         } else {
             let rc = path.join("bashrc");
             std::fs::write(&rc, BASH_RC)?;
-            launch.args = vec![
+            let TerminalArguments::Argv(profile_args) = &profile.args else {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "raw command lines require Windows",
+                ));
+            };
+            let mut args = vec![
                 "--rcfile".into(),
                 rc.to_string_lossy().into_owned(),
                 "-i".into(),
             ];
-            launch.args.extend(profile.args.iter().cloned());
+            args.extend(profile_args.iter().cloned());
+            launch.args = TerminalArguments::Argv(args);
         }
         launch.directory = Some(directory);
         Ok(launch)

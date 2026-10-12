@@ -248,6 +248,7 @@ for (const locale of ['en', 'zh-CN']) {
 		for (let attempt = 0; attempt < 2; attempt++) {
 			const cancelled = await page.evaluate(async runId => await window.ashAppToolsIntegration.call({ type: 'tasksCancel', directory: '/workspace', runId }) as { status: string }, run.runId);
 			expect(cancelled.status).toBe('canceled');
+			await expect(row).toContainText(locale === 'zh-CN' ? '已取消' : 'Canceled');
 		}
 		expect((await status()).status).toBe('canceled');
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-1']);

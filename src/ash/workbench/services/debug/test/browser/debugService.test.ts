@@ -470,7 +470,7 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 	return {
 		profile: { profileId, title: selection.type === 'custom' ? selection.name : profileId, isDefault: selection.type === 'default' },
 		executable: selection.type === 'custom' ? selection.path[0]! : /powershell|pwsh/.test(profileId) ? `/tools/${profileId}.exe` : `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
-		args: selection.type === 'custom' ? [...selection.args] : [],
+		args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 	};
 }
 

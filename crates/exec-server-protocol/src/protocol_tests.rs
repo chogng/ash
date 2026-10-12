@@ -163,3 +163,36 @@ fn terminal_ready_and_binary_contract_preserve_process_identity_and_bytes() {
         request
     );
 }
+
+#[test]
+fn terminal_command_line_and_argv_preserve_their_wire_representation() {
+    for args in [
+        terminal::TerminalArguments::Argv(vec!["".into(), "two words".into(), r#"a"b\"#.into()]),
+        terminal::TerminalArguments::CommandLine(
+            r#"/d /s /c "echo two words & literal;$HOME""#.into(),
+        ),
+        terminal::TerminalArguments::CommandLine(String::new()),
+    ] {
+        let execution = terminal::TerminalExecution::Process {
+            program: "cmd.exe".into(),
+            args: args.clone(),
+        };
+        let encoded = serde_json::to_value(&execution).unwrap();
+        let decoded: terminal::TerminalExecution = serde_json::from_value(encoded.clone()).unwrap();
+        assert_eq!(decoded, execution);
+        assert_eq!(
+            encoded["Process"]["args"],
+            serde_json::to_value(&args).unwrap()
+        );
+        let profile = terminal::TerminalProfileSelection::Custom {
+            name: "Raw shell".into(),
+            path: vec!["cmd.exe".into()],
+            args,
+        };
+        let encoded = serde_json::to_value(&profile).unwrap();
+        assert_eq!(
+            serde_json::from_value::<terminal::TerminalProfileSelection>(encoded).unwrap(),
+            profile
+        );
+    }
+}

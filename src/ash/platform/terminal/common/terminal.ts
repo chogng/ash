@@ -12,21 +12,24 @@ export interface ITerminalProcessProfile {
 	readonly isDefault: boolean;
 }
 
+/** Arrays are literal argv; strings are pre-escaped Windows command-line tails. */
+export type TerminalArguments = string | readonly string[];
+
 export type TerminalProcessProfileSelection =
 	| { readonly type: "default"; }
 	| { readonly type: "profile"; readonly profileId: string; }
-	| { readonly type: 'custom'; readonly name: string; readonly path: readonly string[]; readonly args: readonly string[]; };
+	| { readonly type: 'custom'; readonly name: string; readonly path: readonly string[]; readonly args: TerminalArguments; };
 
 export interface ITerminalResolvedProfile {
 	readonly profile: ITerminalProcessProfile;
 	readonly executable: string;
-	readonly args: readonly string[];
+	readonly args: TerminalArguments;
 }
 
 export interface ITerminalProfileObject {
 	readonly path?: string | readonly string[];
 	readonly source?: 'PowerShell' | 'Git Bash';
-	readonly args?: readonly string[];
+	readonly args?: TerminalArguments;
 	readonly env?: Readonly<Record<string, string | null>>;
 	readonly overrideName?: boolean;
 	readonly icon?: string;
@@ -37,7 +40,7 @@ export interface ITerminalProfileObject {
 export interface ITerminalProfile extends ITerminalProcessProfile {
 	readonly profileName: string;
 	readonly path: string | readonly string[];
-	readonly args?: readonly string[];
+	readonly args?: TerminalArguments;
 	readonly env?: Readonly<Record<string, string | null>>;
 	readonly overrideName?: boolean;
 	readonly icon?: ThemeIcon;
@@ -58,7 +61,7 @@ export interface IExtensionTerminalProfile {
 }
 
 export type TerminalProcessExecution =
-	| { readonly type: 'process'; readonly program: string; readonly args: readonly string[]; }
+	| { readonly type: 'process'; readonly program: string; readonly args: TerminalArguments; }
 	| { readonly type: 'shell'; readonly commandLine: string; };
 
 export interface ITerminalProcessCreateOptions {
@@ -165,7 +168,7 @@ export type WaitOnExitValue = boolean | string | ((exitCode: number) => string);
 /** Launch information shared with providers that supply their own terminal output. */
 export interface IShellLaunchConfig {
 	executable?: string | readonly string[];
-	args?: readonly string[];
+	args?: TerminalArguments;
 	name?: string;
 	icon?: ThemeIcon;
 	color?: string;

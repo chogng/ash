@@ -1,10 +1,72 @@
 # Terminal API 对齐状态
 
+## Windows 原始 CommandLine 本批准入（2026-10-12）
+
+Windows profile/automation/Agent/Debug/Task → 原 profile resolver / TerminalTaskSystem → string 或 argv 的领域与生成传输契约 → 原 App Server/exec-server → 原 PTY/ConPTY owner → argv 正常引用，raw string 原样追加至已引用 executable。原实例 reuse/Relaunch 保存字符串而不按字符复制，数组保留不可变 argv 快照；非 Windows 在配置/resolver/执行边界拒绝 raw string。
+
+VS Code 公开 IShellLaunchConfig.args 与 ITerminalProfile.args 为数组或 Windows-only 原始字符串；Task shell options.args 仍是数组，可单独覆盖默认 profile，显式 executable 不注入默认 shell flags。Windows cmd/PowerShell/WSL/Nu Task 使用完整 CommandLine；Windows Bash/Zsh/Fish 的数组保持 argv。只取公开契约与上述最小调用行为，独立实现，不迁移状态 owner。
+
+准入路径：既有 TypeScript 同路径文件只改参数契约/实际消费者，services/terminal 为已批准 Ash 契约归属；现有 platform adapters、protocol、Rust PTY/ConPTY 与 typed fixtures 由原 owner 承接。WezTerm 本地改动保留许可证，仅补 Windows raw 参数 tail 和验证；不改 Unix upstream 实现。生成物只由生成器产生。准确范围：
+
+- `src/ash/platform/terminal/common/terminal.ts`
+- `src/ash/workbench/services/terminal/common/terminal.ts`
+- `src/ash/workbench/contrib/terminal/common/terminalConfiguration.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalProfileService.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalService.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalInstance.ts`
+- `src/ash/platform/terminal/browser/appServerTerminalProcessService.ts`
+- `src/ash/platform/terminal/browser/reconnectableTerminalProcessService.ts`
+- `src/ash/workbench/contrib/tasks/browser/terminalTaskSystem.ts`
+- `src/ash/workbench/services/tasks/common/workspaceTasks.ts`
+- `src/ash/workbench/api/browser/mainThreadTerminalService.ts`
+- `src/ash/workbench/contrib/terminal/test/browser/terminalConfigurationService.test.ts`
+- `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts`
+- `src/ash/workbench/services/tasks/test/common/workspaceTasks.test.ts`
+- `src/ash/workbench/services/tasks/test/browser/taskService.test.ts`
+- `src/ash/workbench/services/debug/test/browser/debugTerminalLauncher.test.ts`
+- `src/ash/workbench/services/debug/test/browser/debugService.test.ts`
+- `src/ash/platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts`
+- `test/integration/browser/terminal.integration.ts`
+- `test/integration/browser/terminal.integration.spec.ts`
+- `test/integration/browser/appTools.integration.ts`
+- `crates/app-server-protocol/src/protocol/terminal.rs`
+- `crates/app-server-protocol/src/protocol/registry.rs`
+- `crates/app-server/src/server/terminal_operations.rs`
+- `crates/exec-server-protocol/src/terminal.rs`
+- `crates/exec-server-protocol/src/lib.rs`
+- `crates/exec-server-protocol/src/protocol_tests.rs`
+- `crates/exec-server/src/terminal.rs`
+- `crates/exec-server/src/terminal/profiles.rs`
+- `crates/exec-server/src/terminal/profiles_tests.rs`
+- `crates/exec-server/src/terminal/service_tests.rs`
+- `crates/exec-server/src/terminal/shell_integration.rs`
+- `crates/utils/pty/src/pty.rs`
+- `crates/utils/pty/src/lib.rs`
+- `crates/utils/pty/src/windows_tests.rs`
+- `crates/utils/pty/src/tests.rs`
+- `third_party/wezterm/portable-pty/src/cmdbuilder.rs`
+- `third_party/wezterm/README.md`
+- `crates/external-js-ext/src/vscode.js`
+- `crates/external-js-ext/src/node.test.mjs`
+- `src/ash/workbench/contrib/terminal/README.md`
+- `extensions/language-pack-zh-cn/translations/workbench.json`
+
+本批结果：Windows 原始字符串由配置/扩展 TerminalProfile、原 resolver、TerminalArguments 领域契约、本地与 SSH adapter、生成协议和内部 exec-server 协议传到现有 PTY/ConPTY。数组维持 argv 引用；原始字符串保留引用、首尾空格和空值，不拆词、不按字符展开，不再经过 argv 二次转义。真实 CreateProcessW executable 继续单独引用；最终命令行以 UTF-16 长度（包含 NUL）限制，拒绝 NUL/混合 argv；非 Windows 在配置、resolver 和执行边界拒绝字符串。Task 的 shellArgs 仍为数组，可独立覆盖默认 profile；显式 executable 不添加默认命令标志。Windows 原生 Shell task 拼接完整命令行，Bash/Zsh/Fish 保留数组语义，raw prefix 的完整 command 则引用成一个 Windows 参数。复用保存完整不可变启动快照，沿用原实例、屏幕、Task 状态与旧 PTY 释放确认。内部 exec-server wire 版本 4→5，App Server 更新 schema/hash 和生成声明，旧数组表示保持；没有迁移执行 owner。
+
+验证：标准 unit 10 文件 380 项通过（Task/Terminal/profile/parser/local+SSH adapter、Debug 启动/服务、Editor/分层/App Server 架构）。随后补强引号内转义引用的命令标志检测，TaskService 整文件 138 项再次通过，workspace/parser 27 项包含 Shell 参数上限的中文验证；新增覆盖 raw→argv→raw/relaunch、旧 PTY release gating、空字符串、变量整体解析、路径/空值/空格/双引号/尾随反斜线/PowerShell 与 cmd Shell 引用、显式与 args-only Shell 覆盖、配置的三种 profile 策略、扩展 bridge、非 Windows 拒绝、中文错误、SSH 恢复不重放 command。标准 Browser Terminal/AppTools/Testing Chromium 82 项全部通过，包含 Windows raw profile 的中文键盘 picker/resolver/默认选择；全浏览器 3494、Renderer 3692、协议类型检查通过。Rust terminal 35、PTY 26、App Server 协议 127、exec-server 协议 7 与真实 Node Extension Host 22 项通过。macOS 原有包的 all-targets deny-warnings 通过；Windows MSVC 的 exec-server/PTY all-targets 与 vendored ConPTY lib/tests deny-warnings 通过，Linux exec-server/PTY 测试目标也交叉编译通过。本机为 macOS，新增 Windows ConPTY 执行/退出码用例尚未在 Windows 上实跑。vendored all-targets 会编译未声明 futures/smol 的上游 whoami_async 示例，保持上游 manifest，实际 product lib/tests 已单独通过；全库 format:config 存在 49 个既有格式失败，本批精确 Markdown/JSON 范围通过 Prettier，未批量改动其他文件。TS/JS 精确 24 文件格式与 git diff --check 通过，保留共享工作树其余变化，未 commit/push。
+
 ## Tasks 全局终端环境本批准入（2026-10-12）
 
 运行/复用 Task → TaskService / TerminalTaskSystem → 原 IConfigurationService 有效设置、ITerminalProfileResolverService profile 选择、IConfigurationResolverService 变量解析与 platform mergeEnvironments → 原 TerminalService/TerminalInstance → 原执行端环境和 PTY owner。基础环境仍由执行端拥有；窗口全局 env、实际所选 profile env、任务 env 按顺序覆盖，null 继续作为删除指令传到执行端。Task 变量已解析的值保持字面量，复用重新读取并替换完整 env，不保存第二份配置状态。
 
-准确准入：`src/ash/workbench/contrib/tasks/browser/terminalTaskSystem.ts`（双方同路径，环境准备和配置 DI）；`browser/taskService.ts`（双方同路径，只补显式配置依赖）；`src/ash/workbench/services/tasks/test/browser/taskService.test.ts`（现有真实执行链测试）；`src/ash/workbench/contrib/terminal/README.md` 与本文。平台环境合并、resolver、Terminal 实现只读；没有新公开 API、DOM、CSS、协议或执行 owner。目录审计：Tasks 生产同路径 4、上游缺失 17、已存在 Ash 专属 taskActions/tasks.contribution/tasksViewPane/tasks.css 4；Terminal browser 同路径 22、上游缺失 43、Ash 专属 0。仅修改上述闭合切片。
+准确准入：`src/ash/workbench/contrib/tasks/browser/terminalTaskSystem.ts`（双方同路径，环境准备和配置 DI）；`src/ash/workbench/contrib/tasks/browser/taskService.ts`（双方同路径，只补显式配置依赖）；`src/ash/workbench/services/tasks/test/browser/taskService.test.ts`（现有真实执行链测试）；`src/ash/workbench/contrib/terminal/README.md` 与本文。平台环境合并、resolver、Terminal 实现只读；没有新公开 API、DOM、CSS、协议或执行 owner。目录审计：Tasks 生产同路径 4、上游缺失 17、已存在 Ash 专属 taskActions/tasks.contribution/tasksViewPane/tasks.css 4；Terminal browser 同路径 22、上游缺失 43、Ash 专属 0。仅修改上述闭合切片。
+
+本批结果：默认 Shell、显式 Shell 与 Process task 继承执行端 OS 对应的全局 env，所选 profile 与任务 env 按顺序覆盖。共用原 mergeEnvironments 的 Windows 键合并和 null 删除指令，Linux/macOS 保留大小写区别；变量读取执行端环境，不复制本机基础环境到启动覆盖。全局/profile 值经原 ConfigurationResolverService 解析，Task 值在它原有交互/嵌套变量解析完成后合并，保留已有字面量与 rerun 语义。没有环境覆盖且不选 profile 的 Process/显式 Shell task 保持原准备路径；CustomExecution 不解析全局进程环境。共享终端每次准备读取当前设置，旧全局/profile 项在下一轮快照中移除；清除设置使用原配置服务的 undefined 删除入口，不将整个 env 设置写为 null。实例、屏幕和旧 PTY 释放规则未改。
+
+验证：标准 unit 4 文件 205 项通过（Tasks 123、TerminalService 49、profile/configuration 20、架构 13）。新增 9 项覆盖三种执行 OS 的全局→profile→任务优先级、Windows 单键大小写覆盖、基础/全局/profile 的 null 删除及恢复、变量解析、不可变启动快照、设置替换/清除和原实例复用、显式 Shell/Process 不选择 automation profile、CustomExecution 原 owner、环境准备取消/工作区变化/读取失败；收尾后 Task profiles 套件 18 项再次通过，包含通过 rerun 清除旧环境。所有新测试沿真实 TaskService、resolver、TerminalService、TerminalInstance 到 typed process boundary，启用 disposable 泄漏检查。
+
+Renderer 3691 文件、全浏览器 3490 文件类型检查通过；App Tools/Testing Chromium 25 项通过（20+5，包含中文及 Agent task Run ID/输出/取消与原 Task/Terminal owner 联动）。3 个 TS 文件格式检查和 git diff --check 通过；目录关系未变。全量回归发现无覆盖 Process task 的额外异步准备影响既有实例策略时序，已将 OS/环境准备限定到实际需要的情形，原 terminateOldest/terminateNewest 测试通过，未改实例准入 owner 或放宽断言。Windows/Linux 是前端执行端契约验证，未执行相应 OS 的真实 PTY/SSH 场景。保留共享工作树其他改动，未 commit/push。
 
 ## Testing 浏览器 Tasks fixture 验证收尾（2026-10-12）
 

@@ -360,7 +360,6 @@ fn terminal_request(lifecycle: TerminalLifecycle) -> TerminalCreateRequest {
     }
 }
 
-#[cfg(unix)]
 fn read_until(service: &TerminalService, terminal_id: &str, marker: &str) -> Vec<u8> {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut output = Vec::new();
@@ -844,12 +843,12 @@ fn terminal_process_execution_preserves_literal_arguments_cwd_and_exit_status() 
     request.cwd = Some("child".into());
     request.execution = Some(TerminalExecution::Process {
         program: "/bin/sh".into(),
-        args: vec![
+        args: TerminalArguments::Argv(vec![
             "-c".into(),
             "printf 'ARG:<%s>\\nCWD:<%s>\\nDONE\\n' \"$1\" \"$PWD\"; exit 7".into(),
             "test".into(),
             "$(touch ../injected) $HOME ; spaces".into(),
-        ],
+        ]),
     });
     let created = service.create(1, request).unwrap();
     let output = read_until(&service, &created.terminal_id, "DONE\r\n");
@@ -926,9 +925,67 @@ fn terminal_execution_rejects_invalid_arguments_and_cwd_before_spawning() {
     let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
     request.execution = Some(TerminalExecution::Process {
         program: "unused".into(),
-        args: vec!["invalid\0argument".into()],
+        args: TerminalArguments::Argv(vec!["invalid\0argument".into()]),
     });
     assert_eq!(service.create(1, request), Err(TerminalError::InvalidInput));
+    assert_eq!(service.active_count(), 0);
+}
+
+#[test]
+fn raw_process_arguments_reject_invalid_or_non_windows_requests_before_spawning() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut invalid = vec!["bad\0value".into(), "x".repeat(32769)];
+    if !cfg!(windows) {
+        invalid.extend(["/c echo raw".into(), "".into()]);
+    }
+    for args in invalid {
+        let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+        request.execution = Some(TerminalExecution::Process {
+            program: "unused".into(),
+            args: TerminalArguments::CommandLine(args),
+        });
+        assert_eq!(service.create(1, request), Err(TerminalError::InvalidInput));
+    }
+    assert_eq!(service.active_count(), 0);
+}
+
+#[cfg(windows)]
+#[test]
+fn raw_command_line_executes_through_the_original_terminal_owner() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.execution = Some(TerminalExecution::Process {
+        program: std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into()),
+        args: TerminalArguments::CommandLine(
+            r#"/d /s /c "echo RAW:two words&echo DONE&exit /b 7""#.into(),
+        ),
+    });
+    let created = service.create(1, request).unwrap();
+    let output = read_until(&service, &created.terminal_id, "DONE\r\n");
+    assert!(String::from_utf8_lossy(&output).contains("RAW:two words"));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let result = service
+            .read(
+                1,
+                TerminalReadRequest {
+                    terminal_id: created.terminal_id.clone(),
+                    after_sequence: 0,
+                    after_command_sequence: 0,
+                    max_chunks: 128,
+                },
+            )
+            .unwrap();
+        if result.exited {
+            assert_eq!(result.exit_code, Some(7));
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    service.close(1, &created.terminal_id).unwrap();
     assert_eq!(service.active_count(), 0);
 }
 
@@ -1026,12 +1083,12 @@ fn custom_profile_resolution_and_creation_share_identity_argv_and_environment() 
     let selection = TerminalProfileSelection::Custom {
         name: "Literal shell".into(),
         path: vec!["/missing/shell".into(), "/bin/sh".into()],
-        args: vec![
+        args: TerminalArguments::Argv(vec![
             "-c".into(),
             "printf 'profile:%s:%s' \"$1\" \"$ASH_PROFILE_TEST\"".into(),
             "profile".into(),
             "literal;$HOME".into(),
-        ],
+        ]),
     };
     let resolved = service.resolve_profile(&selection).unwrap();
     assert_eq!(resolved.executable, "/bin/sh");

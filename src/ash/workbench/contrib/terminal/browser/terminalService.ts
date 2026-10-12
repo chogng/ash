@@ -122,9 +122,9 @@ export class TerminalService extends Disposable implements ITerminalService {
 			: undefined;
 		const environment = options.env === undefined ? undefined : Object.freeze({ ...options.env });
 		const execution = options.execution === undefined ? undefined : Object.freeze(options.execution.type === 'process'
-			? { ...options.execution, args: Object.freeze([...options.execution.args]) }
+			? { ...options.execution, args: (typeof options.execution.args === 'string' ? options.execution.args : Object.freeze([...options.execution.args])) }
 			: { ...options.execution });
-		const profile = options.profile.type === 'custom' ? Object.freeze({ ...options.profile, path: Object.freeze([...options.profile.path]), args: Object.freeze([...options.profile.args]) }) : Object.freeze({ ...options.profile });
+		const profile = options.profile.type === 'custom' ? Object.freeze({ ...options.profile, path: Object.freeze([...options.profile.path]), args: (typeof options.profile.args === 'string' ? options.profile.args : Object.freeze([...options.profile.args])) }) : Object.freeze({ ...options.profile });
 		const launch = Object.freeze({
 			...(environment === undefined ? {} : { env: environment }),
 			...(options.cwd === undefined ? {} : { cwd: options.cwd }),

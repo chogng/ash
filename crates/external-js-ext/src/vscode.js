@@ -1504,7 +1504,7 @@ export function createApi(configuration, initialization) {
 								if (typeof options.shellPath !== 'string' || !options.shellPath) throw new TypeError('Terminal profile shellPath must be a nonempty string');
 								result.shellPath = options.shellPath;
 							}
-							if (options.shellArgs !== undefined && !Array.isArray(options.shellArgs)) throw new TypeError('Terminal profile shellArgs must be an array');
+							if (options.shellArgs !== undefined && typeof options.shellArgs !== 'string' && !Array.isArray(options.shellArgs)) throw new TypeError('Terminal profile shellArgs must be a string or array');
 							if (options.shellArgs !== undefined) result.shellArgs = options.shellArgs;
 							if (options.cwd !== undefined) result.cwd = typeof options.cwd === 'string' ? options.cwd : options.cwd.fsPath;
 							if (options.env !== undefined) result.env = options.env;

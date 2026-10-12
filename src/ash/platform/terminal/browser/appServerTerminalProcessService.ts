@@ -32,7 +32,7 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 	}
 
 	async create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
-		const execution = options.execution?.type === 'process' ? { ...options.execution, args: [...options.execution.args] } : options.execution;
+		const execution = options.execution?.type === 'process' ? { ...options.execution, args: typeof options.execution.args === 'string' ? options.execution.args : [...options.execution.args] } : options.execution;
 		const created = await appServerRequest(this.connection, "terminal/create", { ...options, profile: profileSelection(options.profile), execution, lifecycle: { type: "connectionOwned" } });
 		return { ready: created.ready, terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" };
 	}
@@ -70,7 +70,7 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 
 /** Copies readonly domain collections into the generated transport request. */
 export function profileSelection(profile: TerminalProcessProfileSelection) {
-	return profile.type === 'custom' ? { ...profile, path: [...profile.path], args: [...profile.args] } : profile;
+	return profile.type === 'custom' ? { ...profile, path: [...profile.path], args: typeof profile.args === 'string' ? profile.args : [...profile.args] } : profile;
 }
 
 /** Both connection lifecycles expose the same frontend bytes and exit-code semantics. */

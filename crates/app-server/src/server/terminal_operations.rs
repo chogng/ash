@@ -39,7 +39,14 @@ impl AppServer {
         result(&wire::TerminalProfileResolveResult {
             profile: profile_to_dto(resolved.profile),
             executable: resolved.executable,
-            args: resolved.args,
+            args: match resolved.args {
+                exec_server::terminal::TerminalArguments::Argv(args) => {
+                    wire::TerminalArguments::Argv(args)
+                }
+                exec_server::terminal::TerminalArguments::CommandLine(args) => {
+                    wire::TerminalArguments::CommandLine(args)
+                }
+            },
         })
     }
 
@@ -291,7 +298,10 @@ fn create_request(params: TerminalCreateParams) -> exec_server::terminal::Termin
         cwd: params.cwd,
         execution: params.execution.map(|execution| match execution {
             wire::TerminalExecution::Process { program, args } => {
-                exec_server::terminal::TerminalExecution::Process { program, args }
+                exec_server::terminal::TerminalExecution::Process {
+                    program,
+                    args: terminal_arguments(args),
+                }
             }
             wire::TerminalExecution::Shell { command_line } => {
                 exec_server::terminal::TerminalExecution::Shell { command_line }
@@ -311,7 +321,20 @@ fn profile_selection(
             exec_server::terminal::TerminalProfileSelection::Profile { profile_id }
         }
         wire::TerminalProfileSelection::Custom { name, path, args } => {
-            exec_server::terminal::TerminalProfileSelection::Custom { name, path, args }
+            exec_server::terminal::TerminalProfileSelection::Custom {
+                name,
+                path,
+                args: terminal_arguments(args),
+            }
+        }
+    }
+}
+
+fn terminal_arguments(args: wire::TerminalArguments) -> exec_server::terminal::TerminalArguments {
+    match args {
+        wire::TerminalArguments::Argv(args) => exec_server::terminal::TerminalArguments::Argv(args),
+        wire::TerminalArguments::CommandLine(args) => {
+            exec_server::terminal::TerminalArguments::CommandLine(args)
         }
     }
 }

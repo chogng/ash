@@ -135,7 +135,7 @@ const terminalProcesses: ITerminalProcessService = {
 		if (profileFailure) throw new Error('Profile executable unavailable');
 		return {
 			profile: { profileId: selection.type === 'custom' ? `custom:${selection.name}` : 'bash', title: selection.type === 'custom' ? selection.name : 'Bash', isDefault: selection.type !== 'custom' },
-			executable: selection.type === 'custom' ? selection.path[0]! : '/bin/bash', args: selection.type === 'custom' ? [...selection.args] : [],
+			executable: selection.type === 'custom' ? selection.path[0]! : '/bin/bash', args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 		};
 	},
 	create: async options => {
@@ -171,7 +171,8 @@ services.registerInstance(IChatSessionNavigationService, { openConversation: asy
 services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
 let taskSource = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'compiler', presentation: { reveal: 'never' } }, { label: 'Interactive', command: '${input:value}' }] });
-services.registerInstance(IFileService, { onDidChangeFiles: Event.None,
+services.registerInstance(IFileService, {
+	onDidChangeFiles: Event.None,
 	stat: async (resource: URI) => { if (!resource.path.endsWith('/.vscode/tasks.json')) throw new FileNotFoundError(resource); return { kind: FileKind.File }; },
 	readFile: async (resource: URI) => { if (!resource.path.endsWith('/.vscode/tasks.json')) throw new FileNotFoundError(resource); return { content: taskSource }; },
 } as unknown as import('../../../src/ash/platform/files/common/files.js').IFileService);

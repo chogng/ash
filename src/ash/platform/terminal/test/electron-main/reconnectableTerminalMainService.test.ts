@@ -1,3 +1,5 @@
+import { AppServerTerminalProcessService } from '../../browser/appServerTerminalProcessService.js';
+import type { IAppServerApi } from '../../../agentHost/common/appServerApi.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -203,6 +205,10 @@ class TestSupervisor {
 		switch (definition.method) {
 			case APP_SERVER_METHODS["terminal/profile/list"].method:
 				return { profiles: [{ profileId: "shell", title: "Shell", isDefault: true }] };
+			case APP_SERVER_METHODS["terminal/profile/resolve"].method: {
+				const { profile } = params as { profile: { args: string | string[]; }; };
+				return { profile: { profileId: 'custom:Raw', title: 'Raw', isDefault: false }, executable: 'cmd.exe', args: profile.args };
+			}
 			case APP_SERVER_METHODS["terminal/create"].method:
 				return {
 					terminalId: "terminal-1",
@@ -259,3 +265,31 @@ async function waitFor(condition: () => boolean): Promise<void> {
 		await new Promise(resolve => setTimeout(resolve, 1));
 	}
 }
+
+for (const remote of [false, true]) test(`${remote ? 'SSH' : 'local'} terminal adapter preserves raw and argv representations across resolution and creation`, async () => {
+	const supervisor = new TestSupervisor();
+	supervisor.operatingSystem = OperatingSystem.Windows;
+	using adapter = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+	const service: ITerminalProcessService = remote ? adapter : new AppServerTerminalProcessService(supervisor as unknown as AppServerProtocolClient, {} as IAppServerApi);
+	for (const args of ['/d /s /c "echo two words & literal;$HOME"', '', ['', 'two words', 'literal;$HOME']]) {
+		const profile = { type: 'custom' as const, name: 'Raw', path: ['cmd.exe'], args };
+		assert.deepEqual((await service.resolveProfile(profile)).args, args);
+		await service.create({ rows: 24, cols: 80, profile, execution: { type: 'process', program: 'cmd.exe', args } });
+		const create = supervisor.requests.at(-1)!;
+		assert.deepEqual(create, { method: 'terminal/create', params: { rows: 24, cols: 80, profile, execution: { type: 'process', program: 'cmd.exe', args }, lifecycle: { type: remote ? 'reconnectable' : 'connectionOwned' } } });
+		if (Array.isArray(args)) {
+			args.push('later mutation');
+			assert.deepEqual((create.params as { execution: { args: string[]; }; }).execution.args, ['', 'two words', 'literal;$HOME']);
+		}
+		await service.close({ terminalId: 'terminal-1' });
+	}
+	if (remote) {
+		const args = '/d /s /c "echo once"';
+		await service.create({ rows: 24, cols: 80, profile: { type: 'default' }, execution: { type: 'process', program: 'cmd.exe', args } });
+		const before = supervisor.requests.filter(request => request.method === 'terminal/create').length;
+		supervisor.generation++;
+		await service.write({ terminalId: 'terminal-1', data: 'after reconnect' });
+		assert.equal(supervisor.requests.filter(request => request.method === 'terminal/create').length, before);
+		assert.equal(supervisor.successfulAttachments, 1);
+	}
+});

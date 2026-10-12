@@ -1,5 +1,7 @@
 {
   "ash": {
+    "tasks.invalidOutputRange": "任务输出游标或读取上限无效。首次读取请使用 cursor=0，上限应为 1 到 65536。",
+    "tasks.agentAlreadyRunning": "任务“{0}”已在运行。请使用 tasks_list 查找其运行 ID 并检查状态。",
     "tasks.runExitCode": "（退出代码 {0}）",
     "tasks.runSummary": "{0} — {1}{2}",
     "tasks.runCanceled": "已取消",
@@ -921,6 +923,8 @@
     "terminal.config.cursorStyleInactive": "非活动终端光标样式",
     "terminal.config.cursorStyleInactiveDescription": "终端没有焦点时的光标形状。",
     "terminal.config.defaultProfileDescription": "{0} 上默认的交互式终端配置名称。名称不可用时使用执行端默认配置。",
+    "terminal.profile.invalidArguments": "终端参数过长或包含 NUL。",
+    "terminal.profile.windowsCommandLine": "原始命令行字符串仅在 Windows 上受支持。",
     "terminal.profile.platformUnavailable": "终端执行端尚未就绪。",
     "terminal.profile.selectDefault": "选择默认终端配置",
     "terminal.profile.select": "选择终端配置",
@@ -1338,6 +1342,7 @@
     "configuration.contributedKey": "扩展贡献的设置“{0}”无效或重复。",
     "configuration.contributedValue": "设置“{0}”不符合其声明的架构。",
     "configuration.contributionLimit": "扩展最多可贡献 {0} 个配置部分。",
+    "tasks.tooManyShellArgs": "Shell 参数最多接受 {0} 个值。",
     "tasks.shellUnavailable": "没有可用于执行此任务的 shell。",
     "debug.adapterTrackerFailed": "调试适配器跟踪器失败：{0}",
     "debug.adapterSessionUnavailable": "调试适配器会话已不可用。",

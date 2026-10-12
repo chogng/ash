@@ -320,9 +320,9 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: workspaceChanged.event, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null });
 		if (new URLSearchParams(location.search).has('profiles')) services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService()));
 		services.registerInstance(ITerminalProcessService, {
-			operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None,
+			operatingSystem: new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Linux, onConnectionState: Event.None,
 			getEnvironment: async () => ({ HOME: '/home/test', PROFILE_ARG: 'literal;$HOME' }),
-			resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? [...profile.args] : [] }),
+			resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }),
 		} as unknown as ITerminalProcessService);
 		setupTerminalFixtureServices(services, lifetime);
 		const profileService = lifetime.add(services.createInstance(TerminalProfileService));
@@ -459,7 +459,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 			getConnectionState: async () => 'ready',
 			onConnectionState: () => Disposable.None,
-			resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? [...profile.args] : [] }), getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
+			resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
 			create: async () => {
 				const terminalId = `backend-${nextProcess++}`;
 				calls.push(`create:${terminalId}`);
@@ -619,7 +619,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	if (overflow) await widgetServices.get(IConfigurationService).updateValue('terminal.integrated.scrollback', 5000);
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
-		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? [...profile.args] : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
+		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => ({ terminalId: 'stream-shell', ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
 		write: async () => { },
 		resize: async () => { },
@@ -727,7 +727,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	let sequence = 0;
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
-		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? [...profile.args] : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
+		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => ({ terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
 		write: async options => {
 			writes.push(typeof options.data === 'string' ? options.data : [...options.data]);

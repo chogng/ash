@@ -898,3 +898,21 @@ async fn pipe_spawn_no_stdin_can_preserve_inherited_fds() -> anyhow::Result<()> 
 
     Ok(())
 }
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn raw_command_line_is_rejected_before_pty_spawn_on_non_windows() {
+    let result = spawn_pty_process(
+        "/definitely/missing/program",
+        crate::PtyArguments::WindowsCommandLine("-c echo"),
+        Path::new("."),
+        &HashMap::new(),
+        &None,
+        TerminalSize::default(),
+    )
+    .await;
+    match result {
+        Ok(_) => panic!("raw command line was admitted"),
+        Err(error) => assert!(error.to_string().contains("require Windows")),
+    }
+}
