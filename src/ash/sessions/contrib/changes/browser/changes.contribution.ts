@@ -24,7 +24,7 @@ registerSingleton(IChangesViewService, ChangesViewService, InstantiationType.Del
 registerSingleton(ISessionChangesService, SessionChangesService, InstantiationType.Delayed);
 
 registerEditorPane({
-	id: 'ash.sessions.changesEditor',
+	id: SessionChangesEditor.ID,
 	name: 'Changes',
 	canOpen: input => input.resource.scheme === 'ash-session-changes' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => options.instantiationService!.createInstance(SessionChangesEditor, options),

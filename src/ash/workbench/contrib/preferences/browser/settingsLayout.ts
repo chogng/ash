@@ -348,7 +348,7 @@ export const SettingsNavigation = [
 						id: 'source-control',
 						get label() { return localize('scm.settings.group', 'Source Control'); },
 						get description() { return localize('scm.settings.groupDescription', 'Configure source control providers and diff decorations.'); },
-						settings: ['git.rebaseWhenSync', 'scm.diffDecorationsIgnoreTrimWhitespace', 'scm.graph.pageSize', 'scm.graph.pageOnScroll', 'scm.graph.badges', 'scm.graph.showIncomingChanges', 'scm.graph.showOutgoingChanges'],
+						settings: ['scm.diffDecorationsIgnoreTrimWhitespace', 'scm.graph.pageSize', 'scm.graph.pageOnScroll', 'scm.graph.badges', 'scm.graph.showIncomingChanges', 'scm.graph.showOutgoingChanges'],
 					},
 				],
 			},

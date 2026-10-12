@@ -69,7 +69,7 @@
     "sessions.changes.viewed": "Viewed",
     "sessions.changes.expandFullFile": "Expand Full File",
     "sessions.changes.collapseUnchanged": "Collapse Unchanged Regions",
-    "sessions.changes.editorActionsHelp": "Use the file toolbar to mark a file Viewed, open its workspace file, expand the full file or collapse unchanged regions. Marking Viewed collapses that comparison; marking it unviewed expands it. Read markers belong to the captured revision.",
+    "sessions.changes.editorActionsHelp": "Use the file toolbar to mark a file Viewed, open its workspace file, expand the full file or collapse unchanged regions. Marking Viewed collapses that comparison; marking it unviewed expands it. Read markers belong to the captured revision. Preview commit asks for a message and prepares the exact captured file for review before committing.",
     "sessions.changes.summary": "{0} file changes · +{1} −{2}",
     "sessions.changes.retry": "Retry loading changes",
     "sessions.changes.checks": "Checks",

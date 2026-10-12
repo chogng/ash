@@ -102,11 +102,10 @@ import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/c
 import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/browser/changesViewService.js';
 import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
 import { IResourceLabelService } from '../../../src/ash/workbench/browser/labels.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
-import '../../../src/ash/sessions/contrib/changes/browser/changesActions.js';
-import '../../../src/ash/sessions/contrib/changes/browser/changesetReviewActions.js';
 import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
@@ -120,6 +119,9 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
+
+await import('../../../src/ash/sessions/contrib/changes/browser/changesActions.js');
+await import('../../../src/ash/sessions/contrib/changes/browser/changesetReviewActions.js');
 
 const resources = new DisposableStore();
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
@@ -230,6 +232,7 @@ let titleTheme: TestThemeService | undefined;
 let sessionTheme: TestThemeService | undefined;
 let sessionRevision = 1;
 const sessionOpenedFiles: string[] = [];
+const sessionPreparedFiles: unknown[] = [];
 let focusedHistoryView: string | undefined;
 
 function createSessionChangesPane(): SessionChangesEditor {
@@ -253,6 +256,7 @@ function createSessionChangesPane(): SessionChangesEditor {
 		sessionServices.registerSingleton(ISessionChangesService, () => sessionServices!.createInstance(SessionChangesService));
 		sessionServices.registerSingleton(IChangesViewService, () => sessionServices!.createInstance(ChangesViewService));
 		sessionServices.registerSingleton(ICommandService, () => resources.add(new CommandService(sessionServices!)));
+		sessionServices.registerInstance(IQuickInputService, { input: async () => 'Reviewed file' } as unknown as IQuickInputService);
 		sessionServices.registerSingleton(IMenuService, () => sessionServices!.createInstance(MenuService));
 		const summary: TurnChangeSetSummary = {
 			changeSetId: 'review-change', sessionId: 'review', threadId: 'review-thread', turnId: 'review-turn', repositoryId: 'review-repository',
@@ -265,6 +269,11 @@ function createSessionChangesPane(): SessionChangesEditor {
 			listTurnChanges: async (sessionId: string, threadId: string) => [{ ...summary, sessionId, threadId, revision: sessionRevision }],
 			readTurnChange: async (sessionId: string, threadId: string) => ({ summary: { ...summary, sessionId, threadId, revision: sessionRevision }, files: Array.from({ length: 8 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })) }),
 			readTurnChangeFile: async (_sessionId: string, _threadId: string, _changeSetId: string, path: string) => ({ path, binary: false, truncated: false, before: `before\n${'shared\n'.repeat(30)}`, after: `after\n${'shared\n'.repeat(30)}` }),
+			prepareTurnCommit: async (_sessionId: string, _threadId: string, selections: unknown, message: string) => {
+				sessionPreparedFiles.push({ selections, message });
+				return { commitId: 'prepared-file', targetBranch: 'main', message, files: [{ path: 'file-7.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 }], warnings: [] };
+			},
+			readTurnCommitFile: async () => ({ path: 'file-7.ts', binary: false, truncated: false, before: 'before', after: 'after' }),
 		} as unknown as IChatService);
 		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, {
 			onDidChange: Event.None,
@@ -569,6 +578,7 @@ const harness = {
 	sessionTheme(name: 'dark' | 'light' | 'contrast'): void { sessionTheme!.setColorTheme(name === 'light' ? lightColorTheme : name === 'contrast' ? highContrastDarkColorTheme : darkColorTheme); },
 	advanceSessionRevision(): void { sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
 	sessionOpenedFiles(): readonly string[] { return sessionOpenedFiles; },
+	sessionPreparedFiles(): readonly unknown[] { return sessionPreparedFiles; },
 	readSessionViewState(): unknown {
 		const pane = sessionPane.value!;
 		return isEditorPaneWithViewState(pane) ? pane.saveViewState() : null;

@@ -55,7 +55,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		@IStorageService storageService: IStorageService,
 		@ISessionChangesService private readonly changesService: ISessionChangesService,
 	) {
-		super('ash.sessions.changesEditor', themeService, storageService);
+		super(SessionChangesEditor.ID, themeService, storageService);
 		this._register(chat.onDidUpdateTurnChanges(event => {
 			if (this.input?.resource.path === `/${event.sessionId}` && new URLSearchParams(this.input.resource.query).get('thread') === event.threadId) {
 				void this.refresh();
@@ -238,9 +238,11 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				const items = await Promise.all(selected.changeset.changes.get().map(async change => {
 					const contents = await this.chat.readTurnChangeFile(change.summary.sessionId, change.summary.threadId, change.summary.changeSetId, change.file.path);
 					if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
-					return { label: change.file.path, binary: contents.binary,
+					return {
+						label: change.file.path, binary: contents.binary,
 						original: { resource: change.originalUri, initialText: contents.before ?? '', readOnly: true },
-						modified: { resource: change.modifiedUri, initialText: contents.after ?? '', readOnly: true } };
+						modified: { resource: change.modifiedUri, initialText: contents.after ?? '', readOnly: true }
+					};
 				}));
 				comparison = createMultiDiffEditorInput(input.resource, items, selected.changeset.label, { kind: 'snapshot', label: selected.changeset.label });
 			} else {

@@ -743,6 +743,7 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes reveals a l
 	for (const theme of ['dark', 'light', 'contrast'] as const) {
 		await page.evaluate(theme => window.ashDiffIntegration.sessionTheme(theme), theme);
 		await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		if (theme === 'contrast') { await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').borderTopColor)).not.toBe('rgba(0, 0, 0, 0)'); }
 	}
 	await page.evaluate(() => window.ashDiffIntegration.revealSessionFile(7));
 	const row = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-7.ts', { exact: true }) });
@@ -750,13 +751,20 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes reveals a l
 	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 	await expect(row.locator('.stanza-diff-editor')).toBeVisible();
 	const viewed = row.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true });
-	await viewed.click();
+	await viewed.focus();
+	await page.keyboard.press('Space');
 	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=1']);
 	await viewed.click();
 	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 	await row.getByRole('button', { name: localized(locale, 'Open File', '打开文件'), exact: true }).click();
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenedFiles())).toEqual(['file:/workspace/file-7.ts']);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenedFiles())).toEqual(['file:///workspace/file-7.ts']);
+	await row.getByRole('button', { name: localized(locale, 'Collapse Unchanged Regions', '折叠未更改区域'), exact: true }).click();
+	await expect(row.locator('.ash-diff-hidden-region')).not.toHaveCount(0);
+	await row.getByRole('button', { name: localized(locale, 'Expand Full File', '展开整个文件'), exact: true }).click();
+	await expect(row.locator('.ash-diff-hidden-region')).toHaveCount(0);
+	await row.getByRole('button', { name: localized(locale, 'Preview commit…', '预览提交…'), exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionPreparedFiles())).toEqual([{ selections: [{ changeSetId: 'review-change', expectedRevision: 1, paths: ['file-7.ts'] }], message: 'Reviewed file' }]);
 	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
 	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
 	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(7, 1));

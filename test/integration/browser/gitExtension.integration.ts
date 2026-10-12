@@ -54,6 +54,7 @@ import type { ServerNotification } from '../../../.build/protocol/typescript/ind
 import { ConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { IContextMenuService, IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ILogService } from '../../../src/ash/platform/log/common/log.js';
@@ -74,6 +75,13 @@ import type { CancellationToken } from '../../../src/ash/base/common/cancellatio
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
+
+const chineseMessages: Record<string, Record<string, string>> = {};
+for (const source of [scmChineseMessages, settingsChineseMessages]) {
+	for (const [bundle, messages] of Object.entries(source)) {
+		chineseMessages[bundle] = { ...chineseMessages[bundle], ...messages };
+	}
+}
 
 const lifetime = new DisposableStore();
 const services = lifetime.add(new InstantiationService());
@@ -232,7 +240,7 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 });
 lifetime.add(toDisposable(() => clientHandler.dispose()));
 async function activate(language = 'en') {
-	setNlsMessages(language, language === 'zh-CN' ? { ...scmChineseMessages, ...settingsChineseMessages } : {});
+	setNlsMessages(language, language === 'zh-CN' ? chineseMessages : {});
 	const snapshot = await host.reconcile('refresh'); bridge.update(snapshot);
 	return snapshot.extensions.map(value => ({ lifecycle: value.lifecycle, failure: value.failure, registrations: value.registrations.map(value => value.kind) }));
 }
@@ -303,7 +311,7 @@ const gitSettingsIntegration = {
 		ui.registerInstance(IConfigurationService, configuration);
 		ui.registerInstance(IContextViewService, lifetime.add(new BrowserContextViewService(document.body)));
 		ui.registerInstance(IContextMenuService, { showContextMenu: options => { settingsMenuActions = options.getActions?.() ?? []; } } as IContextMenuService);
-		ui.registerInstance(IClipboardService, { writeText: async () => { } } as unknown as IClipboardService);
+		ui.registerInstance(IClipboardService, lifetime.add(new BrowserClipboardService(navigator.clipboard)));
 		const container = document.createElement('div');
 		container.id = 'git-settings';
 		container.style.width = '620px';
@@ -312,7 +320,7 @@ const gitSettingsIntegration = {
 		lifetime.add(bindColorTheme(new TestThemeService(lightColorTheme), container));
 		const binding = lifetime.add(ui.createInstance(ExtensionSettingBinding, descriptor.configuration));
 		const renderer = lifetime.add(ui.createInstance(SettingsRenderer, container, { onStatus: (message: string, isError: boolean) => { if (isError) errors.push(message); } }));
-		renderer.render({ ...descriptor, binding } as typeof descriptor);
+		container.append(renderer.render({ ...descriptor, binding } as typeof descriptor));
 	},
 	profile: () => ({ ...sharedGit }),
 	rejectWrites: () => { failSettingsWrite = true; },

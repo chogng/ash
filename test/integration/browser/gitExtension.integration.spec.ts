@@ -338,14 +338,17 @@ for (const language of ['en', 'zh-CN']) test(`Git rebase setting reads and write
 		await page.keyboard.press('Space');
 		await expect(toggle).toHaveAttribute('aria-checked', 'true');
 		await expect.poll(() => page.evaluate(() => window.gitSettingsIntegration.profile())).toEqual({ autofetch: 'off', autofetchPeriod: 180, rebaseWhenSync: true });
+		await expect(toggle).toBeEnabled();
 		await page.evaluate(() => window.gitSettingsIntegration.externalChange(false));
 		await expect(toggle).toHaveAttribute('aria-checked', 'false');
 		await toggle.click();
 		await expect.poll(() => page.evaluate(() => window.gitSettingsIntegration.profile().rebaseWhenSync)).toBe(true);
+		await expect(toggle).toHaveAttribute('aria-checked', 'true');
+		await expect(toggle).toBeEnabled();
 		await page.locator('#git-settings .ash-setting-item-actions-trigger').click();
 		await page.evaluate(() => window.gitSettingsIntegration.reset());
 		await expect(toggle).toHaveAttribute('aria-checked', 'false');
-		expect(await page.evaluate(() => window.gitSettingsIntegration.profile())).toEqual({ autofetch: 'off', autofetchPeriod: 180, rebaseWhenSync: false });
+		await expect.poll(() => page.evaluate(() => window.gitSettingsIntegration.profile())).toEqual({ autofetch: 'off', autofetchPeriod: 180, rebaseWhenSync: false });
 		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
 		await testInfo.attach(`git-rebase-setting-${language}`, { body: await page.locator('#git-settings').screenshot(), contentType: 'image/png' });
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
@@ -362,5 +365,17 @@ test('Git rebase Settings UI keeps the saved value when writing fails', async ({
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().errors.some(error => error.includes('Settings save rejected')))).toBe(true);
 		await expect(toggle).toHaveAttribute('aria-checked', 'false');
 		expect(await page.evaluate(() => window.gitSettingsIntegration.profile().rebaseWhenSync)).toBe(false);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+
+test('Git rebase setting command rejects non-boolean input before saving', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIntegration.activate('zh-CN'));
+		await page.evaluate(async () => { try { await window.gitExtensionIntegration.invoke('git.updateRebaseWhenSync', ['true']); } catch { } });
+		expect(await page.evaluate(() => window.gitSettingsIntegration.profile().rebaseWhenSync)).toBe(false);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'config/update'))).toEqual([]);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors.some(error => error.includes('布尔值')))).toBe(true);
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });

@@ -36,15 +36,18 @@ suite('Session Changes opening and capture contract', () => {
 			sessions: [{ sessionId: 'session', chats: [{ threadId: 'thread' }] }],
 		} as unknown as ISessionsManagementService);
 		const details: TurnChangeDetails = {
-			summary: { sessionId: 'session', threadId: 'thread', changeSetId: 'capture', turnId: 'turn', repositoryId: 'repo',
+			summary: {
+				sessionId: 'session', threadId: 'thread', changeSetId: 'capture', turnId: 'turn', repositoryId: 'repo',
 				revision: 3, captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [],
-				statistics: { files: 1, additions: 0, deletions: 2 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [] },
+				statistics: { files: 1, additions: 0, deletions: 2 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: []
+			},
 			files: [{ path: 'deleted.ts', kind: 'deleted', binary: false, additions: 0, deletions: 2 }],
 		};
 		const prepared: unknown[] = [];
+		let currentDetails = details;
 		services.registerInstance(IQuickInputService, { input: async () => 'Delete file' } as unknown as IQuickInputService);
 		services.registerInstance(IChatService, {
-			readTurnChange: async () => details,
+			readTurnChange: async () => currentDetails,
 			prepareTurnCommit: async (_session: string, _thread: string, selections: unknown, message: string) => {
 				prepared.push({ selections, message });
 				return { commitId: 'prepared', targetBranch: 'main', message, files: details.files, warnings: [] };
@@ -55,6 +58,8 @@ suite('Session Changes opening and capture contract', () => {
 		const session = URI.parse('ash-session:/session?thread=thread');
 		const editor = service.getChangesEditorResource(session);
 		assert.equal(service.getSessionResource(editor)?.toString(), session.toString());
+		assert.equal(service.getSessionResource(editor.with({ fragment: 'capture' }))?.toString(), session.toString());
+		assert.equal(service.getChangesEditorResource(session.with({ fragment: 'capture' })).toString(), editor.toString());
 		assert.equal(service.getSessionResource(URI.parse('file:/session')), undefined);
 		const changeset = await service.resolveChangeset(session, 'capture');
 		const change = changeset.changes.get()[0]!;
@@ -76,6 +81,11 @@ suite('Session Changes opening and capture contract', () => {
 		await changeset.invokeOperation('preview', { kind: 'resource', resource: change.modifiedUri });
 		assert.deepEqual(prepared, [{ selections: [{ changeSetId: 'capture', expectedRevision: 3, paths: ['deleted.ts'] }], message: 'Delete file' }]);
 		assert.equal(opened[1]?.input.resource.scheme, 'ash-multi-diff');
+		currentDetails = { ...details, summary: { ...details.summary, captureState: 'open', revision: 4 } };
+		const unsealed = await service.resolveChangeset(session, 'capture');
+		assert.equal(unsealed.operations.get()[0]?.status, SessionChangesetOperationStatus.Disabled);
+		await assert.rejects(unsealed.invokeOperation('preview'), /sealed file changes/u);
+		assert.equal(prepared.length, 1);
 		const changed: string[][] = [];
 		using listener = provider!.onDidChange(resources => changed.push(resources.map(resource => resource.toString())));
 		service.setChangesCount(editor, 1);

@@ -13,7 +13,7 @@ export class ChangesetReviewAction extends Action2 {
 		super({
 			id: CHANGESET_REVIEW_ACTION_ID, title: localize2('sessions.changes.viewed', 'Viewed'),
 			toggled: ContextKeyExpr.in('resource', 'sessions.changesReviewedFiles'),
-			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', 'ash.sessions.changesEditor'), group: 'navigation', order: 1 },
+			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), group: 'navigation', order: 1 },
 		});
 	}
 	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {

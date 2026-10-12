@@ -11,7 +11,10 @@ import { IChatService } from '../../../../workbench/services/chat/common/chatSer
 import { IDecorationsService } from '../../../../workbench/services/decorations/common/decorations.js';
 import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { createSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus, type ISessionChangeset } from '../../../services/sessions/common/session.js';
+import {
+	createSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus,
+	type ISessionChangeset,
+} from '../../../services/sessions/common/session.js';
 import { createTurnCommitPreviewInput } from '../../../browser/turnMultiDiffSource.js';
 import type { ISessionChangesEditorOptions, ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
@@ -42,12 +45,12 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 	}
 
 	public getChangesEditorResource(sessionResource: URI): URI {
-		return sessionResource.with({ scheme: 'ash-session-changes' });
+		return sessionResource.with({ scheme: 'ash-session-changes', fragment: '' });
 	}
 
 	public getSessionResource(editorResource: URI): URI | undefined {
 		if (editorResource.scheme !== 'ash-session-changes' || !editorResource.path.startsWith('/') || editorResource.path.length < 2) { return undefined; }
-		return editorResource.with({ scheme: 'ash-session' });
+		return editorResource.with({ scheme: 'ash-session', fragment: '' });
 	}
 
 	public async openChangesEditor(sessionResource: URI, options?: ISessionChangesEditorOptions, group?: EditorOpenTarget): Promise<void> {
@@ -55,12 +58,14 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 		if (!sessionResource.path.startsWith('/draft/')) { this.getConversation(sessionResource); }
 		const input = new SessionChangesEditorInput(this.getChangesEditorResource(sessionResource), options?.changesetSelection);
 		const selection = options?.selection;
+		const selectionSource = options?.selectionSource;
 		await this.editors.openEditor(input, {
-			pinned: true, forceReload: options?.forceReload ?? options?.changesetSelection !== undefined,
+			pinned: true, forceReload: options?.changesetSelection !== undefined || options?.forceReload,
 			preserveFocus: options?.preserveFocus, revealIfOpened: options?.revealIfOpened,
 			ignoreError: options?.ignoreError, source: options?.source, viewState: options?.viewState,
 			selection: selection ? new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn) : undefined,
-			selectionSource: selection ? TextEditorSelectionSource.NAVIGATION : undefined,
+			selectionSource: selectionSource === TextEditorSelectionSource.PROGRAMMATIC || selectionSource === TextEditorSelectionSource.JUMP
+				? selectionSource : selection ? TextEditorSelectionSource.NAVIGATION : undefined,
 		}, group);
 	}
 
@@ -78,16 +83,30 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 			isEnabled: constObservable(details.summary.captureState !== 'discarded'), isDefault: constObservable(false),
 			isLoadingChanges: constObservable(false), capabilities: { review: details.summary.captureState !== 'discarded' },
 			changes: constObservable(changes),
-			originalCheckpointRef: constObservable(undefined), modifiedCheckpointRef: constObservable(undefined),
-			operations: constObservable([{ id: 'preview', label: localize('sessions.changes.previewCommit', 'Preview commit…'), scopes: [SessionChangesetOperationScope.Changeset, SessionChangesetOperationScope.Resource], status }]),
+			// Turn captures supply content snapshots rather than Git checkpoint references.
+			originalCheckpointRef: constObservable(undefined),
+			modifiedCheckpointRef: constObservable(undefined),
+			operations: constObservable([{
+				id: 'preview', label: localize('sessions.changes.previewCommit', 'Preview commit…'),
+				scopes: [SessionChangesetOperationScope.Changeset, SessionChangesetOperationScope.Resource], status,
+			}]),
 			invokeOperation: async (operationId, target) => {
 				const files = remaining.filter(change => !target || [change.uri, change.originalUri, change.modifiedUri].some(resource => extUri.isEqual(resource, target.resource)));
 				if (this.isDisposed || operationId !== 'preview' || status === SessionChangesetOperationStatus.Disabled || status === SessionChangesetOperationStatus.Running || !files.length) {
 					throw new Error(localize('sessions.changes.noSelection', 'Select sealed file changes that have not been committed.'));
 				}
-				const message = await this.quickInput.input({ title: localize('sessions.changes.commitMessage', 'Commit message'), value: details.draftMessage ?? '', validateInput: async value => value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.') });
+				const message = await this.quickInput.input({
+					title: localize('sessions.changes.commitMessage', 'Commit message'),
+					value: details.draftMessage ?? '',
+					validateInput: async value => value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.'),
+				});
 				if (message === undefined || this.isDisposed) { return; }
-				const preview = await this.chat.prepareTurnCommit(sessionId, threadId, [{ changeSetId: details.summary.changeSetId, expectedRevision: details.summary.revision, paths: files.map(change => change.file.path) }], message);
+				const selections = [{
+					changeSetId: details.summary.changeSetId,
+					expectedRevision: details.summary.revision,
+					paths: files.map(change => change.file.path),
+				}];
+				const preview = await this.chat.prepareTurnCommit(sessionId, threadId, selections, message);
 				const input = await createTurnCommitPreviewInput(this.chat, sessionId, threadId, preview);
 				if (!this.isDisposed) { await this.editors.openEditor(input, { pinned: true }); }
 			},

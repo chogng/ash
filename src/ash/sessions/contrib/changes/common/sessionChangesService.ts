@@ -6,8 +6,8 @@ import type { ISessionChangeset } from '../../../services/sessions/common/sessio
 
 export interface ISessionChangesEditorOptions extends IMultiDiffEditorOptions {
 	readonly changesetSelection?:
-		| { readonly kind: 'id'; readonly id: string | undefined; }
-		| { readonly kind: 'transient'; readonly changeset: ISessionChangeset; };
+	| { readonly kind: 'id'; readonly id: string | undefined; }
+	| { readonly kind: 'transient'; readonly changeset: ISessionChangeset; };
 }
 
 /** Owns Changes editor identity, opening preferences and reconstructable tab decoration. */

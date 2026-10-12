@@ -29,7 +29,7 @@ class OpenChangedFileAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.agentSessions.changes.openFile', title: localize2('sessions.changes.openFile', 'Open File'),
-			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', 'ash.sessions.changesEditor'), group: 'navigation', order: 22 },
+			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), group: 'navigation', order: 22 },
 		});
 	}
 	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
@@ -54,7 +54,7 @@ registerAction2(ViewAllChangesAction);
 registerAction2(OpenChangedFileAction);
 
 async function setUnchangedRegions(accessor: ServicesAccessor, resource: unknown, enabled: boolean): Promise<void> {
-	if (isRecord(resource)) { resource = resource.resource; }
+	if (!(resource instanceof URI) && isRecord(resource)) { resource = resource.resource; }
 	if (!(resource instanceof URI)) { return; }
 	const pane = accessor.get(IEditorPart).activePane;
 	if (!(pane instanceof SessionChangesEditor)) { return; }
@@ -67,18 +67,36 @@ async function setUnchangedRegions(accessor: ServicesAccessor, resource: unknown
 
 class ExpandFullFileAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.agentSessions.changes.expandFullFile', title: localize2('sessions.changes.expandFullFile', 'Expand Full File'),
-			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', 'ash.sessions.changesEditor'), group: 'navigation', order: 23 } });
+		super({
+			id: 'workbench.agentSessions.changes.expandFullFile',
+			title: localize2('sessions.changes.expandFullFile', 'Expand Full File'),
+			menu: {
+				id: MenuId.MultiDiffEditorFileToolbar,
+				when: ContextKeyExpr.and(ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
+				group: 'navigation', order: 23,
+			},
+		});
 	}
-	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> { await setUnchangedRegions(accessor, args[0], false); }
+	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
+		await setUnchangedRegions(accessor, args[0], false);
+	}
 }
 
 class CollapseUnchangedRegionsAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.agentSessions.changes.collapseUnchangedRegions', title: localize2('sessions.changes.collapseUnchanged', 'Collapse Unchanged Regions'),
-			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', 'ash.sessions.changesEditor'), group: 'navigation', order: 24 } });
+		super({
+			id: 'workbench.agentSessions.changes.collapseUnchangedRegions',
+			title: localize2('sessions.changes.collapseUnchanged', 'Collapse Unchanged Regions'),
+			menu: {
+				id: MenuId.MultiDiffEditorFileToolbar,
+				when: ContextKeyExpr.and(ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
+				group: 'navigation', order: 24,
+			},
+		});
 	}
-	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> { await setUnchangedRegions(accessor, args[0], true); }
+	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
+		await setUnchangedRegions(accessor, args[0], true);
+	}
 }
 
 registerAction2(ExpandFullFileAction);
@@ -86,8 +104,15 @@ registerAction2(CollapseUnchangedRegionsAction);
 
 class PreviewChangesetFileAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.agentSessions.changes.previewFile', title: localize2('sessions.changes.previewCommit', 'Preview commit…'),
-			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', 'ash.sessions.changesEditor'), group: 'changes', order: 1 } });
+		super({
+			id: 'workbench.agentSessions.changes.previewFile',
+			title: localize2('sessions.changes.previewCommit', 'Preview commit…'),
+			menu: {
+				id: MenuId.MultiDiffEditorFileToolbar,
+				when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID),
+				group: 'navigation', order: 30,
+			},
+		});
 	}
 	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
 		const argument = args[0];
