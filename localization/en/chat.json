@@ -239,6 +239,21 @@
     "chatEditing.acceptShared": "Accept changes from {0} chats",
     "chatEditing.rejectShared": "Reject changes from {0} chats",
     "chatEditing.acceptSharedHunk": "Accept change from {0} chats",
-    "chatEditing.rejectSharedHunk": "Reject change from {0} chats"
+    "chatEditing.rejectSharedHunk": "Reject change from {0} chats",
+    "chat.restoreCheckpoint.label": "Chat: Restore Checkpoint",
+    "chat.restoreCheckpoint.empty": "No restorable checkpoints are available. {0}",
+    "chat.restoreCheckpoint.choose": "Choose a checkpoint to restore into a new chat",
+    "chat.restoreCheckpoint.before": "Before checkpoint {0}",
+    "chat.restoreCheckpoint.after": "After checkpoint {0}",
+    "chat.restoreCheckpoint.files": "Creates a new chat and restores checkpoint files in a new directory. The original chat and directory are kept.",
+    "chat.restoreCheckpoint.noFiles": "Creates a new chat at this message boundary. This checkpoint contains no files.",
+    "chat.restoreCheckpoint.title": "Restored checkpoint: {0}",
+    "chat.restoreCheckpoint.done": "Checkpoint restored in a new chat.",
+    "chatEditing.invalidStorage": "Saved Agent review data is invalid or too large.",
+    "chatEditing.storageConflict": "Another window changed the saved Agent reviews. Local reviews were kept.",
+    "chatEditing.storageFailed": "Could not restore or save Agent reviews: {0}",
+    "chatEditing.noRecovery": "The file operation has no recovery snapshot. Review it before closing the window.",
+    "chatEditing.recoveryConflict": "A file changed after the Agent edit. Its changes were kept; review the file before rejecting this change set.",
+    "chatEditing.restoreCancelled": "The change set was not restored. It remains available for review."
   }
 }

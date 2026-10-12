@@ -65,7 +65,19 @@ export class SessionsBrowserMain extends Disposable {
 					const editing = services.get(IChatEditingService);
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 				} : undefined,
-				contributionIds: ['workbench.contrib.partsSplash', 'workbench.contrib.sessionsLayout', 'sessions.contrib.multiDiffSource', 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.githubLinkPresentations', 'workbench.contrib.url', 'workbench.contrib.chatAccessibilitySignals', 'workbench.contrib.speechAccessibilitySignal', 'workbench.contrib.saveAccessibilitySignals'],
+				contributionIds: [
+					'workbench.contrib.partsSplash',
+					'workbench.contrib.snippets',
+					'workbench.contrib.sessionsLayout',
+					'sessions.contrib.multiDiffSource',
+					'chat.edits.editorOverlay',
+					'workbench.contrib.dataChannels',
+					'workbench.contrib.githubLinkPresentations',
+					'workbench.contrib.url',
+					'workbench.contrib.chatAccessibilitySignals',
+					'workbench.contrib.speechAccessibilitySignal',
+					'workbench.contrib.saveAccessibilitySignals',
+				],
 				createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
 				createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 				profile,

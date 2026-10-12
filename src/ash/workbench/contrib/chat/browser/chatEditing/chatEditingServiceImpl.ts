@@ -53,6 +53,8 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	private readonly persistence: ChatEditingSessionStorage;
 	private initialized = false;
 	private restorationFailed = false;
+	private reviewRevision = 0;
+	private savedRevision = -1;
 	private readonly saveReview = this._register(new RunOnceScheduler(() => {
 		void this.operations.schedule(() => this.saveReviews()).catch(onUnexpectedError);
 	}, 100));
@@ -69,10 +71,13 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	) {
 		super();
 		this.persistence = instantiation.createInstance(ChatEditingSessionStorage);
-		this._register(this.onDidChange(() => { if (this.initialized && !this.applyingEdits) { this.saveReview.schedule(); } }));
+		this._register(this.onDidChange(() => {
+			this.reviewRevision++;
+			if (this.initialized && !this.applyingEdits) { this.saveReview.schedule(); }
+		}));
 		this._register(lifecycle.onWillShutdown(event => {
 			this.saveReview.cancel();
-			event.join(this.operations.schedule(() => this.storeState()), 'Agent reviews');
+			event.join(() => this.operations.schedule(() => this.storeState()), 'Agent reviews', () => this.restorationFailed || this.savedRevision === this.reviewRevision);
 		}));
 		void this.operations.schedule(() => this.restoreState()).catch(onUnexpectedError);
 		this._register(toDisposable(() => { this.operations.clearPending(); this.entryReviews.clear(); }));
@@ -320,6 +325,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				void this.operations.scheduleSkipIfCleared(async () => {
 					if (this.entryReviews.get(entry) === review && review.revision === revision && !review.cancelled && [...review.turns.values()].every(turn => turn.outcome === 'completed')) {
 						await entry.accept();
+						await this.saveReviews();
 						void this.signals.playSignal(AccessibilitySignal.editsKept);
 					}
 				}).catch(onUnexpectedError);
@@ -354,6 +360,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 
 	private async storeState(): Promise<void> {
 		if (!this.initialized || this.restorationFailed || this.isDisposed) { return; }
+		const revision = this.reviewRevision;
 		const entries: StoredReviewEntry[] = this.entries.map(entry => {
 			const sources = [...this.entryReviews.get(entry)!.turns.values()].map(turn => ({ ...turn.source, outcome: turn.outcome }));
 			if (entry instanceof ChatEditingModifiedDocumentEntry) {
@@ -366,6 +373,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 			throw new Error(localize('chatEditing.noRecovery', 'The file operation has no recovery snapshot. Review it before closing the window.'));
 		});
 		await this.persistence.storeState({ version: 1, entries });
+		this.savedRevision = revision;
 	}
 
 	private async restoreState(): Promise<void> {

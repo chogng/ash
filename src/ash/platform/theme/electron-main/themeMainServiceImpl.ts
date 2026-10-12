@@ -53,7 +53,10 @@ export class ThemeMainService extends Disposable implements IThemeMainService {
 		const background = colors.find(color => color.id === editorBackground)?.value;
 		const text = colors.find(color => color.id === foreground)?.value;
 		if (!background || !text) { throw new Error('The startup theme must define background and foreground colors'); }
-		return { baseTheme: scheme, colorInfo: { background: Color.Format.CSS.formatHex(background), foreground: Color.Format.CSS.formatHex(text) } };
+		return {
+			baseTheme: scheme,
+			colorInfo: { background: Color.Format.CSS.formatHex(background), foreground: Color.Format.CSS.formatHex(text) },
+		};
 	}
 	public async saveWindowSplash(scope: string, splash: IPartsSplash): Promise<void> {
 		this.state.setItem(`windowSplash.${scope}`, splash);

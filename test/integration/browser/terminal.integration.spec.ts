@@ -812,7 +812,7 @@ for (const failed of [false, true]) {
 
 
 test('terminal browser list menu keeps its captured instance after active selection changes', async ({ page }) => {
-	await page.goto('/terminal.html?pane');
+	await page.goto('/terminal.html?pane&browser');
 	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 	await page.evaluate(async () => { window.ashTerminalPaneIntegration.panel(true); });
 	await expect(page.locator('.xterm')).toHaveCount(1);
@@ -820,6 +820,7 @@ test('terminal browser list menu keeps its captured instance after active select
 	const tabs = page.getByRole('tablist', { name: 'Terminal instances' });
 	await expect(tabs.getByRole('tab')).toHaveCount(2);
 	const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Clear Terminal', 'Focus Terminal', 'Kill Terminal']);
 	await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[0]!);
 	await tabs.getByRole('tab').first().click({ button: 'right' });
 	await expect(page.getByRole('menu')).toBeVisible();
@@ -837,13 +838,14 @@ test('terminal browser list menu keeps its captured instance after active select
 });
 
 test('terminal browser list menu supports keyboard dismissal and Chinese labels', async ({ page }) => {
-	await page.goto('/terminal.html?pane&locale=zh-CN');
+	await page.goto('/terminal.html?pane&browser&locale=zh-CN');
 	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 	await expect(page.locator('.xterm')).toHaveCount(1);
 	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 	const tab = page.getByRole('tablist', { name: '终端实例' }).getByRole('tab').first();
 	await tab.focus();
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['清除终端', '终止终端', '聚焦终端'].sort());
 	await tab.press('Shift+F10');
 	await expect(page.getByRole('menu')).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: '聚焦终端', exact: true })).toBeVisible();
@@ -860,7 +862,7 @@ test('terminal browser list menu supports keyboard dismissal and Chinese labels'
 });
 
 test('terminal browser list menu relaunches its exited target and survives asynchronous execution', async ({ page }) => {
-	await page.goto('/terminal.html?pane&exited');
+	await page.goto('/terminal.html?pane&browser&exited');
 	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 	await expect(page.locator('.xterm')).toHaveCount(1);
@@ -876,7 +878,7 @@ test('terminal browser list menu relaunches its exited target and survives async
 });
 
 test('terminal browser resize preserves scrollback while coalescing horizontal reflow', async ({ page }) => {
-	await page.goto('/terminal.html');
+	await page.goto('/terminal.html?browser');
 	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
 	await page.evaluate(async () => {
 		window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready();
@@ -901,7 +903,7 @@ test('terminal browser resize preserves scrollback while coalescing horizontal r
 test('terminal browser resize flushes before focus and cancels pending work on disposal', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/terminal.html');
+	await page.goto('/terminal.html?browser');
 	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
 	await page.evaluate(async () => {
 		window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready();

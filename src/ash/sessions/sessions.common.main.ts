@@ -36,6 +36,7 @@ import './contrib/library/browser/library.contribution.js';
 import './contrib/symphony/browser/symphony.contribution.js';
 import './contrib/layout/browser/sessions.layout.contribution.js';
 import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
+import '../workbench/contrib/snippets/browser/snippets.contribution.js';
 import '../workbench/contrib/scm/browser/scm.service.contribution.js';
 import '../workbench/contrib/scm/browser/quickDiff.contribution.js';
 import '../workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';

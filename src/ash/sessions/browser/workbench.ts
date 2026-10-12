@@ -1,3 +1,4 @@
+import { ISnippetsService } from '../../workbench/contrib/snippets/browser/snippets.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
@@ -400,6 +401,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITextMateService, textMate);
 		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: options.api.events, textMateService: textMate, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), languageFeaturesService: services.get(ILanguageFeaturesService) }));
 		services.registerInstance(IExtensionService, extensionService);
+		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logger.error('extensions', 'Declarative extension activation failed', error));
 		const textModels = this._register(getBrowserTextModelService(getBrowserTextResourceStore(textFiles), services, {

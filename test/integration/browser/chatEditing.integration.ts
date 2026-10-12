@@ -14,6 +14,8 @@ import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
+import { ILogService } from '../../../src/ash/platform/log/common/log.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
@@ -36,12 +38,15 @@ import { ITextModelResourceService } from '../../../src/ash/workbench/services/t
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
+import { BrowserLifecycleService } from '../../../src/ash/workbench/services/lifecycle/browser/lifecycleService.js';
 import { MemoryTextFiles } from './memoryTextFiles.js';
 import '../../../src/ash/workbench/browser/media/style.css';
 
 declare global {
 	interface Window {
-		ashChatEditingIntegration: { snapshot(): { entries: string[][]; texts: string[]; }; };
+		ashChatEditingIntegration: { snapshot(): { entries: string[][]; texts: string[]; }; prepareReload(): Promise<void>; };
 	}
 }
 
@@ -55,9 +60,11 @@ const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
 const first = URI.file('/workspace/first.txt');
 const second = URI.file('/workspace/second.txt');
-const files = new MemoryTextFiles(first, 'original');
+const disk = parameters.has('reopen') ? JSON.parse(localStorage.getItem('chatEditing.test-files')!) as string[] : ['original', 'original'];
+const files = new MemoryTextFiles(first, disk[0]!);
 resources.add(toDisposable(() => files.dispose()));
-await files.save({ resource: second, text: 'original' }, new AbortController().signal);
+await files.save({ resource: second, text: disk[1]! }, new AbortController().signal);
+resources.add(files.onDidChangeFiles(() => localStorage.setItem('chatEditing.test-files', JSON.stringify([files.read(first), files.read(second)]))));
 services.registerInstance(IFileService, resources.add(new FileService()));
 services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
 const models = resources.add(services.createInstance(BrowserTextModelService, new BrowserTextResourceStore(files), {}));
@@ -66,6 +73,10 @@ services.registerInstance(IWorkingCopyService, resources.add(services.createInst
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerInstance(IDialogService, resources.add(new DialogService()));
 services.registerInstance(IBulkEditService, resources.add(services.createInstance(BulkEditService)));
+services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'chat-editing', flushInterval: 0 })));
+services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
+const lifecycle = resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: window, onError: error => console.error(error) }));
+services.registerInstance(ILifecycleService, lifecycle);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
 services.registerInstance(INotificationService, resources.add(new NotificationService()));
 services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
@@ -83,9 +94,12 @@ async function write(resource: URI, threadId: string, text: string): Promise<voi
 	await editing.applyEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: Range.lift(reference.model.getFullModelRange()), text }] }] }, new AbortController().signal, { threadId, turnId: 'turn' });
 }
 
-await write(first, 'first-chat', 'first change');
-await write(second, 'second-chat', 'second change');
-if (parameters.has('shared')) { await write(first, 'second-chat', 'shared change'); }
+if (!parameters.has('reopen')) {
+	await write(first, 'first-chat', 'first change');
+	await write(second, 'second-chat', 'second change');
+	if (parameters.has('shared')) { await write(first, 'second-chat', 'shared change'); }
+}
+await editing.finishTurn({ threadId: 'readiness', turnId: 'readiness' }, 'completed');
 
 for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#review', 'chatEditing.reviewChanges']] as const) {
 	resources.add(addDisposableListener(document.querySelector(selector)!, 'click', () => {
@@ -95,6 +109,7 @@ for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#revi
 	}));
 }
 window.ashChatEditingIntegration = {
+	prepareReload: () => lifecycle.shutdown('reload'),
 	snapshot: () => ({
 		entries: editing.entries.map(entry => entry.resources.map(resource => resource.path)),
 		texts: [first, second].map(resource => models.getModel(resource)?.getText() ?? files.read(resource)),

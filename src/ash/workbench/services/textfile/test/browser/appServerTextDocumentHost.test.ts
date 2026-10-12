@@ -34,7 +34,7 @@ import { ChatEditingService } from '../../../../contrib/chat/browser/chatEditing
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { JSDOM } from 'jsdom';
-import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
 import { ILifecycleService } from '../../../lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleService.js';
@@ -268,6 +268,106 @@ test('consecutive Agent edits keep one review baseline and accepting releases it
 	assert.equal(host.editing.entries.length, 0);
 	assert.equal(host.models.getModel(resource), null);
 	assert.equal(host.files.contents.get(resource.toString()), 'second agent');
+});
+
+test('restarting restores a partially accepted review and shutdown captures the current baseline', async () => {
+	const host = await fixture();
+	const resource = URI.file('c:/workspace/restart-text.txt');
+	host.files.contents.set(resource.toString(), 'first\nseparator\nlast');
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] });
+	await host.editing.acceptEntry(host.editing.entries[0]!, host.editing.entries[0]!.hunks[0]);
+	await host.lifecycle.shutdown('reload');
+	const { backend } = host;
+	const contents = new Map(host.files.contents);
+	host.dispose();
+	using reopened = await fixture({ backend, contents });
+	await flushReviews(reopened);
+	assert.equal(reopened.editing.entries[0]!.hunks.length, 1);
+	assert.equal(reopened.editing.entries[0]!.hunks[0]!.originalText, 'last');
+	await reviewSession(reopened).reject();
+	assert.equal(reopened.files.contents.get(resource.toString()), 'agent first\nseparator\nlast');
+	assert.equal(reopened.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), undefined);
+});
+
+test('restarting retains shared attribution and rebases edits made while the window was closed', async () => {
+	const host = await fixture();
+	const resource = URI.file('c:/workspace/restart-shared.txt');
+	host.files.contents.set(resource.toString(), 'first\nseparator\nlast');
+	for (const [threadId, text] of [['first-chat', 'agent first\nseparator\nlast'], ['second-chat', 'agent first\nseparator\nagent last']] as const) {
+		const id = await snapshot(host.transport, resource);
+		await host.transport.call('textDocument/apply', { threadId, turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text }] });
+	}
+	const { backend } = host;
+	const contents = new Map(host.files.contents);
+	host.dispose();
+	contents.set(resource.toString(), 'agent first\nuser separator\nagent last');
+	using reopened = await fixture({ backend, contents });
+	await flushReviews(reopened);
+	assert.equal(reopened.editing.editingSessionsObs.get().length, 2);
+	const entry = reviewSession(reopened, 'first-chat').getEntry(resource)!;
+	assert.equal(entry, reviewSession(reopened, 'second-chat').getEntry(resource));
+	await assert.rejects(reviewSession(reopened, 'first-chat').reject(), /other chats/);
+	assert.equal(reopened.editing.getAutoAcceptCountdown(entry), undefined);
+	await reopened.editing.rejectEntry(entry);
+	assert.equal(reopened.files.contents.get(resource.toString()), 'first\nuser separator\nlast');
+});
+
+test('restarting restores an atomic create, move and delete review with exact original bytes', async () => {
+	const host = await fixture();
+	const moved = URI.file('c:/workspace/restart-move.txt');
+	const target = URI.file('c:/workspace/restart-target.txt');
+	const deleted = URI.file('c:/workspace/restart-delete.txt');
+	const created = URI.file('c:/workspace/restart-create.txt');
+	host.files.contents.set(moved.toString(), '\uFEFForiginal\r\n');
+	host.files.contents.set(deleted.toString(), 'deleted');
+	const a = await snapshot(host.transport, moved);
+	const b = await snapshot(host.transport, deleted);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'turn', changes: [
+		{ kind: 'move', snapshot: a, target: target.fsPath, text: 'moved' },
+		{ kind: 'delete', snapshot: b },
+		{ kind: 'create', path: created.fsPath, text: 'created' },
+	] });
+	const { backend } = host;
+	const contents = new Map(host.files.contents);
+	host.dispose();
+	using reopened = await fixture({ backend, contents });
+	await flushReviews(reopened);
+	assert.equal(reopened.editing.entries.length, 1);
+	await reviewSession(reopened).reject();
+	assert.deepEqual([...reopened.files.contents].sort(), [[moved.toString(), '\uFEFForiginal\r\n'], [deleted.toString(), 'deleted']].sort());
+});
+
+test('a restored file-operation review refuses to discard later file changes', async () => {
+	const host = await fixture();
+	const entry = await createReview(host, 'restart-conflict.txt');
+	const resource = entry.modifiedURI;
+	const { backend } = host;
+	const contents = new Map(host.files.contents);
+	host.dispose();
+	contents.set(resource.toString(), 'user changes after closing');
+	using reopened = await fixture({ backend, contents });
+	await flushReviews(reopened);
+	await assert.rejects(reviewSession(reopened).reject(), /file changed after the Agent edit/);
+	assert.equal(reopened.files.contents.get(resource.toString()), 'user changes after closing');
+	assert.equal(reopened.editing.entries.length, 1);
+});
+
+test('malformed saved reviews are reported and preserved without touching files', async () => {
+	const host = await fixture();
+	await flushReviews(host);
+	const invalid = '{"version":1,"entries":[{"kind":"text","resource":"file:/bad"}]}';
+	host.storage.store('chatEditing.sessions', invalid, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	await host.storage.flush();
+	const { backend } = host;
+	host.dispose();
+	using reopened = await fixture({ backend });
+	await flushReviews(reopened);
+	assert.equal(reopened.editing.entries.length, 0);
+	assert.equal(reopened.notifications.getNotifications().length, 1);
+	assert.equal(reopened.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), invalid);
+	await createReview(reopened, 'after-invalid.txt');
+	assert.equal(reopened.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), invalid);
 });
 
 test('chat review sessions decide only their own files and release their final entries', async () => {

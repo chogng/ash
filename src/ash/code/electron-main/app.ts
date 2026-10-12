@@ -1353,7 +1353,7 @@ export class AshApplication extends Disposable {
 			});
 	}
 
-	private windowHostOperations(window: BrowserWindow, controls: WindowControlsOverlay): Omit<INativeHostMainService, 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
+	private windowHostOperations(window: BrowserWindow, controls: WindowControlsOverlay): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
 		return {
 			isAdmin,
 			performDialogOperation: operation => this.dialogs.perform(window, operation),

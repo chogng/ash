@@ -2,7 +2,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { IMenuService, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { AppServerAvailableContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
@@ -105,11 +105,12 @@ const instance = createFixtureInstance('test-terminal');
 const widgetServices = store.add(createCodeEditorServices(store).createChild());
 widgetServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const themeService = store.add(new TestThemeService(darkColorTheme));
-if (new URLSearchParams(location.search).has('find')) { store.add(bindColorTheme(themeService, document.body)); }
+if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
 instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 const widget = instance.xterm!;
 widget.setVisible(true);
+if (new URLSearchParams(location.search).has('browser')) widget.element.style.height = '100%';
 let completion: Promise<void> | undefined;
 
 window.ashTerminalIntegration = {
@@ -206,6 +207,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		import('../../../src/ash/base/common/uri.js'),
 	]);
 	const createPane = (root: HTMLElement): Window['ashTerminalPaneIntegration'] & { command(id: string, argument?: unknown): Promise<unknown>; dispose(): void; } => {
+		if (new URLSearchParams(location.search).has('browser')) { root.style.display = 'flex'; root.style.flexDirection = 'column'; }
 		const lifetime = store.add(new DisposableStore());
 		const visibility = lifetime.add(new Emitter<import('../../../src/ash/workbench/services/layout/browser/layoutService.js').WorkbenchPartVisibilityChangeEvent>());
 		const workspaceChanged = lifetime.add(new Emitter<import('../../../src/ash/platform/workspace/common/workspace.js').IWorkspaceChangeEvent>());
@@ -298,8 +300,10 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
 		}, services));
 		root.append(pane.partTitleProjection.actions!);
+		if (new URLSearchParams(location.search).has('browser')) pane.layout(root.clientHeight - pane.partTitleProjection.actions!.offsetHeight, 0, root.clientWidth);
 		return {
 			operations: () => ({ cleared, closed, relaunched }),
+			menuActions: () => menu.getMenuActions(MenuId.TerminalInstanceContext).flatMap(([, actions]) => actions.map(action => action.label)),
 			ids: () => instances.map(instance => instance.instanceId),
 			activate: id => terminals.setActiveInstance(instances.find(instance => instance.instanceId === id)),
 			activeId: () => terminals.activeInstance?.instanceId,
@@ -346,6 +350,7 @@ declare global {
 			dispose(): void;
 			command(id: string, argument?: unknown): Promise<unknown>;
 			operations(): { cleared: readonly number[]; closed: readonly number[]; relaunched: readonly number[]; };
+			menuActions(): readonly string[];
 			ids(): readonly number[];
 			activate(id: number): void;
 			activeId(): number | undefined;

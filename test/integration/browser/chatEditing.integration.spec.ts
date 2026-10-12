@@ -1,6 +1,18 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`pending reviews survive a window reload and decisions remain scoped (${locale})`, async ({ page }) => {
+		await page.goto(`/chatEditing.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await page.evaluate(() => window.ashChatEditingIntegration.prepareReload());
+		await page.goto(`/chatEditing.html?locale=${locale}&reopen`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.snapshot().entries.length)).toBe(2);
+		await page.getByRole('button', { name: 'Reject this chat' }).click();
+		await page.getByRole('combobox').fill('first-chat');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.snapshot())).toEqual({ entries: [['/workspace/second.txt']], texts: ['original', 'second change'] });
+	});
 	test(`chat review commands isolate files and restore focus after cancellation (${locale})`, async ({ page }) => {
 		await page.goto(`/chatEditing.html?locale=${locale}`);
 		await page.waitForFunction(() => !!window.ashChatEditingIntegration);

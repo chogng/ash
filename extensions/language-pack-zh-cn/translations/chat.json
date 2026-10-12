@@ -620,7 +620,22 @@
     "chatEditing.acceptShared": "接受来自 {0} 个对话的更改",
     "chatEditing.rejectShared": "拒绝来自 {0} 个对话的更改",
     "chatEditing.acceptSharedHunk": "接受来自 {0} 个对话的此更改",
-    "chatEditing.rejectSharedHunk": "拒绝来自 {0} 个对话的此更改"
+    "chatEditing.rejectSharedHunk": "拒绝来自 {0} 个对话的此更改",
+    "chat.restoreCheckpoint.label": "对话：恢复检查点",
+    "chat.restoreCheckpoint.empty": "没有可恢复的检查点。{0}",
+    "chat.restoreCheckpoint.choose": "选择要恢复到新对话的检查点",
+    "chat.restoreCheckpoint.before": "检查点 {0} 之前",
+    "chat.restoreCheckpoint.after": "检查点 {0} 之后",
+    "chat.restoreCheckpoint.files": "创建新对话，并在新目录中恢复检查点文件。原对话和目录会保留。",
+    "chat.restoreCheckpoint.noFiles": "在此消息边界创建新对话。此检查点不包含文件。",
+    "chat.restoreCheckpoint.title": "恢复的检查点：{0}",
+    "chat.restoreCheckpoint.done": "已将检查点恢复到新对话。",
+    "chatEditing.invalidStorage": "已保存的智能体审阅数据无效或过大。",
+    "chatEditing.storageConflict": "另一个窗口更改了已保存的智能体审阅。本地审阅已保留。",
+    "chatEditing.storageFailed": "无法恢复或保存智能体审阅：{0}",
+    "chatEditing.noRecovery": "此文件操作没有恢复快照。请在关闭窗口前完成审阅。",
+    "chatEditing.recoveryConflict": "智能体编辑后有文件发生了更改。其更改已保留；请先审阅文件，再拒绝此更改集。",
+    "chatEditing.restoreCancelled": "未恢复此更改集。它仍可供审阅。"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

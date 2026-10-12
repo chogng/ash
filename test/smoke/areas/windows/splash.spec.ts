@@ -26,8 +26,22 @@ test('startup colors survive reload and the decorative splash retires before the
 		const observations: { background: string; hidden: string | null; inert: boolean; pointerEvents: string; parts: unknown[]; }[] = [];
 		Object.assign(window, { ashSplashObservations: observations });
 		const observer = new MutationObserver(records => {
-			for (const record of records) for (const node of record.addedNodes) {
-				if (node instanceof HTMLElement && node.id === 'ash-parts-splash') observations.push({ background: node.style.backgroundColor, hidden: node.getAttribute('aria-hidden'), inert: node.inert, pointerEvents: node.style.pointerEvents, parts: Array.from(node.children, child => { const style = (child as HTMLElement).style; return { left: Number.parseFloat(style.left), top: Number.parseFloat(style.top), width: Number.parseFloat(style.width), height: Number.parseFloat(style.height), background: style.backgroundColor }; }) });
+			for (const record of records) {
+				for (const node of record.addedNodes) {
+					if (!(node instanceof HTMLElement) || node.id !== 'ash-parts-splash') continue;
+					const parts = Array.from(node.children, child => {
+						const style = (child as HTMLElement).style;
+						return {
+							left: Number.parseFloat(style.left), top: Number.parseFloat(style.top),
+							width: Number.parseFloat(style.width), height: Number.parseFloat(style.height),
+							background: style.backgroundColor,
+						};
+					});
+					observations.push({
+						background: node.style.backgroundColor, hidden: node.getAttribute('aria-hidden'),
+						inert: node.inert, pointerEvents: node.style.pointerEvents, parts,
+					});
+				}
 			}
 		});
 		observer.observe(document, { childList: true, subtree: true });

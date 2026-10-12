@@ -102,8 +102,9 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 			return new Promise(resolve => { finish = resolve; });
 		},
 	});
+	let frameStyle: unknown = 'custom';
 	const routes = nativeHostIpcRoutes({
-		getTitleBarStyle: () => 'custom',
+		getTitleBarStyle: () => frameStyle,
 		showOpenDialog: options => dialogs.showOpenDialog(options, window),
 		showSaveDialog: options => dialogs.showSaveDialog(options, window),
 		performDialogOperation: operation => dialogs.perform(window, operation),
@@ -132,6 +133,9 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 		};
 		const host = createNativeHostApi(mainProcess);
 		assert.equal(await host.getTitleBarStyle(), 'custom');
+		frameStyle = 'invalid';
+		await assert.rejects(host.getTitleBarStyle(), /Unknown window title bar style/);
+		frameStyle = 'custom';
 		const open = { title: 'Import', properties: ['openFile', 'multiSelections', 'showHiddenFiles'] as const, securityScopedBookmarks: true };
 		const save = { title: 'Export', nameFieldLabel: 'Name', showsTagField: false, properties: ['showOverwriteConfirmation'] as const, securityScopedBookmarks: true };
 		assert.deepEqual(await host.showOpenDialog({ ...open, properties: [...open.properties] }), { canceled: false, filePaths: ['/one.md', '/two.md'], bookmarks: ['first', 'second'] });

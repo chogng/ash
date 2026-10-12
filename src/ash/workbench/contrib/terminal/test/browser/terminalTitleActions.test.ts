@@ -301,12 +301,17 @@ test('Terminal context commands resolve captured and serialized identities throu
 	registerTerminalActions();
 	const effects: unknown[] = [];
 	const create = (instanceId: number) => ({
-		instanceId, id: `terminal-instance-${instanceId}`, state: 'exited', xterm: undefined,
-		clearBuffer: () => effects.push(['clear', instanceId]),
-	} as ITerminalInstance);
+		...Disposable.None, instanceId, id: `terminal-instance-${instanceId}`, state: 'exited', xterm: undefined,
+		dirId: 'workspace', processId: 100 + instanceId, initialCwd: '/workspace', title: 'Shell',
+		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, exitCode: 0,
+		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
+		xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
+		start() { }, attachToElement() { }, detachFromElement() { }, async sendText() { }, async processBinary() { }, resize() { },
+		async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
+	} satisfies ITerminalInstance);
 	const first = create(1);
 	const second = create(2);
-	const instances = [first, second];
+	const instances: ITerminalInstance[] = [first, second];
 	let active: ITerminalInstance | undefined = second;
 	using services = new InstantiationService();
 	services.registerInstance(ITerminalService, {
