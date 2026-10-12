@@ -53,6 +53,9 @@ jobs:
         run: |
           python -B scripts/install_python_tools.py
           pnpm install --frozen-lockfile
+      - name: Fetch locked Rust graph for offline build-script metadata
+        # V8's include discovery reads Cargo metadata offline, including other targets.
+        run: cargo fetch --locked
       - name: Build self-contained backend for Web and headless hosts
         run: pnpm run prepare:backend:web
       - name: Select the independently usable runtime package
