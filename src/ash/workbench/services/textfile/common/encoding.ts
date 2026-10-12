@@ -1,7 +1,7 @@
 import { localize } from '../../../../nls.js';
 
 /** File encodings offered by the editor, using codec identifiers at the byte boundary. */
-export const SUPPORTED_ENCODINGS: Readonly<Record<string, { readonly labelShort: string; readonly encodeOnly?: boolean; readonly hidden?: boolean }>> = Object.freeze(Object.fromEntries([
+export const SUPPORTED_ENCODINGS: Readonly<Record<string, { readonly labelShort: string; readonly encodeOnly?: boolean; readonly hidden?: boolean; }>> = Object.freeze(Object.fromEntries([
 	['utf8', 'UTF-8'], ['utf8bom', 'UTF-8 with BOM'], ['utf16le', 'UTF-16 LE'],
 	['utf16be', 'UTF-16 BE'], ['windows1252', 'Windows 1252'], ['iso88591', 'ISO 8859-1'],
 	['iso88593', 'ISO 8859-3'], ['iso885915', 'ISO 8859-15'], ['macroman', 'Mac Roman'],

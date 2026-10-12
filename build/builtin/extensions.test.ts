@@ -82,14 +82,21 @@ for (const resource of ['manifest', 'file'] as const) {
 	test(`browser packaging rejects an oversized ${resource} before publishing its snapshot`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-extension-budget-'));
 		try {
-			await writeFile(join(directory, 'package.json'), JSON.stringify({ publisher: 'test', name: 'budget', version: '1.0.0' }));
-			const path = join(directory, resource === 'manifest' ? 'package.json' : 'large.bin');
+			// This fixture must fail on its own budget, independently of generated
+			// language packs or other resources in the developer's checkout.
+			await mkdir(join(directory, 'build/builtin'), { recursive: true });
+			await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+			await symlink(resolve(import.meta.dirname, '../../node_modules'), join(directory, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+			const packageRoot = join(directory, 'extensions/budget');
+			await mkdir(packageRoot, { recursive: true });
+			await writeFile(join(packageRoot, 'package.json'), JSON.stringify({ publisher: 'test', name: 'budget', version: '1.0.0' }));
+			const path = join(packageRoot, resource === 'manifest' ? 'package.json' : 'large.bin');
 			const file = await open(path, 'w');
 			try { await file.truncate((resource === 'manifest' ? 4 : 16) * 1024 * 1024 + 1); }
 			finally { await file.close(); }
 			const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
-				cwd: resolve(import.meta.dirname, '../..'),
-				env: { ...process.env, ASH_WEB_EXTENSION_PATHS: directory },
+				cwd: directory,
+				env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' },
 				encoding: 'utf8', timeout: 30_000,
 			});
 			assert.equal(result.status, 1);

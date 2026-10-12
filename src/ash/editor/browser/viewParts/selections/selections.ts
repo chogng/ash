@@ -44,6 +44,11 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
+		const cursorStates = this.viewModel.getCursorStates();
+		if (cursorStates.every(state => state.modelState.selection.isEmpty())) {
+			this._renderResult = [];
+			return;
+		}
 		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
 			projectStanzaSelectionOverlays(
 				context,
@@ -51,8 +56,8 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 				this.readVisualProjection(),
 				this.readTextLeft(),
 				this.textMeasurer,
-				this.viewModel.getCursorStates().map(state => state.viewState.selection),
-				this.viewModel.getCursorStates().map(state => state.modelState.selection),
+				cursorStates.map(state => state.viewState.selection),
+				cursorStates.map(state => state.modelState.selection),
 				rows,
 			);
 		});

@@ -1,6 +1,6 @@
+use super::fs_watcher::FileSystemWatcher;
 use super::git_turn_changes_commit::spawn_commit_job;
 use super::git_turn_changes_message::spawn_message_job;
-use super::fs_watcher::FileSystemWatcher;
 use super::thread_dirs::ThreadDirs;
 use super::update_broker::UpdateBroker;
 use ash_app_server_protocol::protocol::turn_changes::ChangeSetId as ChangeSetIdDto;
@@ -154,19 +154,33 @@ impl GitTurnChangesRuntime {
     }
 
     pub(super) fn stop_watcher(&self, thread_id: &ThreadId) {
-        self.file_watchers.write().unwrap_or_else(std::sync::PoisonError::into_inner).remove(thread_id);
+        self.file_watchers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(thread_id);
         self.watchers
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(thread_id);
     }
 
-    pub(super) fn start_file_watcher(&self, thread_id: &ThreadId, binding: &ManagedDirBinding) -> Result<(), String> {
-        let mut watchers = self.file_watchers.write().map_err(|_| "Thread file watcher lock poisoned")?;
-        if watchers.contains_key(thread_id) { return Ok(()); }
-        let dir = ash_file_access::Dir::open_local(binding.dir()).map_err(|error| error.to_string())?;
+    pub(super) fn start_file_watcher(
+        &self,
+        thread_id: &ThreadId,
+        binding: &ManagedDirBinding,
+    ) -> Result<(), String> {
+        let mut watchers = self
+            .file_watchers
+            .write()
+            .map_err(|_| "Thread file watcher lock poisoned")?;
+        if watchers.contains_key(thread_id) {
+            return Ok(());
+        }
+        let dir =
+            ash_file_access::Dir::open_local(binding.dir()).map_err(|error| error.to_string())?;
         let id = dir.id().to_string();
-        let watcher = FileSystemWatcher::start_for_dir(dir, Arc::clone(&self.updates), id).map_err(|error| error.to_string())?;
+        let watcher = FileSystemWatcher::start_for_dir(dir, Arc::clone(&self.updates), id)
+            .map_err(|error| error.to_string())?;
         watchers.insert(thread_id.clone(), watcher);
         Ok(())
     }
@@ -291,16 +305,36 @@ impl GitTurnChangesRuntime {
                 .map_err(|error| error.to_string())?;
             self.publish(&refreshed);
         }
-        let visible = self.threads.read_thread(thread_id).map_err(|error| error.to_string())?.turns.into_iter().map(|turn| turn.turn_id).collect::<std::collections::BTreeSet<_>>();
-        Ok(self.store
+        let visible = self
+            .threads
+            .read_thread(thread_id)
+            .map_err(|error| error.to_string())?
+            .turns
+            .into_iter()
+            .map(|turn| turn.turn_id)
+            .collect::<std::collections::BTreeSet<_>>();
+        Ok(self
+            .store
             .list_for_thread(thread_id)
-            .map_err(|error| error.to_string())?.into_iter().filter(|record| visible.contains(&record.turn_id)).collect())
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .filter(|record| visible.contains(&record.turn_id))
+            .collect())
     }
 
     pub(super) fn history_files_ready(&self, thread: &ThreadId) -> Result<bool, String> {
-        Ok(self.store.list_for_thread(thread).map_err(|error| error.to_string())?.iter().all(|record| {
-            record.capture_state != CaptureState::Open && !matches!(record.commit_state, CommitState::Queued | CommitState::Committing)
-        }))
+        Ok(self
+            .store
+            .list_for_thread(thread)
+            .map_err(|error| error.to_string())?
+            .iter()
+            .all(|record| {
+                record.capture_state != CaptureState::Open
+                    && !matches!(
+                        record.commit_state,
+                        CommitState::Queued | CommitState::Committing
+                    )
+            }))
     }
 
     pub(super) fn retry_message(

@@ -19,6 +19,9 @@ concurrency:
 jobs:
   select:
     name: Select affected checks
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -34,15 +37,19 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
           FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' }}
+          MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "$FORCE_ALL" = true ]; then
             python3 -B scripts/ci_workflows.py select --base "$BASE_SHA" --head "$HEAD_SHA" --all
+          elif [ "$MAIN_PUSH" = true ]; then
+            python3 -B scripts/ci_workflows.py select --head "$HEAD_SHA" --since-successful-main
           else
             python3 -B scripts/ci_workflows.py select --base "$BASE_SHA" --head "$HEAD_SHA"
           fi
 
   bazel:
-    needs: select
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
     if: fromJSON(needs.select.outputs.selection).bazel
     uses: ./.github/workflows/bazel.yml
 
@@ -67,27 +74,27 @@ jobs:
     uses: ./.github/workflows/format.yml
 
   frontend:
-    needs: select
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
     if: fromJSON(needs.select.outputs.selection).frontend
     uses: ./.github/workflows/frontend.yml
 
   media:
-    needs: select
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
     if: fromJSON(needs.select.outputs.selection).media
     uses: ./.github/workflows/media.yml
 
   rust-build-health:
-    needs: select
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
     if: fromJSON(needs.select.outputs.selection).rust-build-health
     uses: ./.github/workflows/rust-build-health.yml
 
   rust-warnings:
-    needs: select
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
     if: fromJSON(needs.select.outputs.selection).rust-warnings
     uses: ./.github/workflows/rust-warnings.yml
 
   tooling:
-    needs: select
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
     if: fromJSON(needs.select.outputs.selection).tooling
     uses: ./.github/workflows/tooling.yml
 

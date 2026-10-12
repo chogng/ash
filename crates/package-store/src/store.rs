@@ -42,6 +42,8 @@ pub struct PublishedPackage {
     pub package_root: PathBuf,
     pub sequence: u64,
     pub cleanup_error: Option<io::Error>,
+    /// Installation-owned bindings committed with this selection, outside signed package bytes.
+    pub installation: Option<Value>,
 }
 
 #[derive(Debug)]
@@ -61,6 +63,8 @@ struct Manifest {
     sequence: u64,
     package: PackageIdentity,
     directory: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    installation: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -107,7 +111,25 @@ impl PackageStore {
     }
 
     pub fn publish(&self, staging: impl AsRef<Path>) -> io::Result<PublishedPackage> {
-        let staging = staging.as_ref();
+        self.publish_selection(staging.as_ref(), None)
+    }
+
+    /// Atomically selects a package with bounded, installation-owned dependency bindings.
+    /// Package bytes and their signed identity are never changed by these local bindings.
+    pub fn publish_with_installation(
+        &self,
+        staging: impl AsRef<Path>,
+        installation: Value,
+    ) -> io::Result<PublishedPackage> {
+        validate_installation(&installation)?;
+        self.publish_selection(staging.as_ref(), Some(installation))
+    }
+
+    fn publish_selection(
+        &self,
+        staging: &Path,
+        installation: Option<Value>,
+    ) -> io::Result<PublishedPackage> {
         let metadata = validate_package(staging)?;
         let identity = package_identity(&metadata);
         let build = identity
@@ -119,6 +141,7 @@ impl PackageStore {
         self.remove_pending_manifests()?;
         if let Some(current) = self.latest_manifest()?
             && current.package == identity
+            && current.installation == installation
         {
             remove_directory_if_present(staging)?;
             let mut published = self.published(current)?;
@@ -160,10 +183,13 @@ impl PackageStore {
             .unwrap_or(1);
         let version = identity.version.clone();
         let manifest = Manifest {
+            // The optional field is additive: older clients can still select a self-contained
+            // rollback package using the same manifest version.
             format_version: 1,
             sequence,
             package: identity,
             directory: format!("{PACKAGES_DIRECTORY}/{version}/{build}"),
+            installation: installation.clone(),
         };
         self.commit_manifest(&manifest)?;
         let cleanup_error = self.cleanup_stale().err();
@@ -171,6 +197,7 @@ impl PackageStore {
             package_root,
             sequence,
             cleanup_error,
+            installation,
         })
     }
 
@@ -267,6 +294,7 @@ impl PackageStore {
             package_root,
             sequence: manifest.sequence,
             cleanup_error: None,
+            installation: manifest.installation,
         })
     }
 
@@ -538,13 +566,27 @@ fn read_manifest(path: &Path, sequence: u64) -> io::Result<Manifest> {
         .strip_prefix(SHA256_PREFIX)
         .filter(|build| is_sha256(build))
         .map(|build| format!("{PACKAGES_DIRECTORY}/{}/{build}", manifest.package.version));
-    if manifest.format_version != 1
+    let installation_valid = match (&manifest.installation, manifest.format_version) {
+        (None, 1) => true,
+        (Some(binding), 1) => validate_installation(binding).is_ok(),
+        _ => false,
+    };
+    if !installation_valid
         || manifest.sequence != sequence
         || expected_directory.as_deref() != Some(&manifest.directory)
     {
         return Err(invalid("package manifest is invalid"));
     }
     Ok(manifest)
+}
+
+fn validate_installation(value: &Value) -> io::Result<()> {
+    if !value.is_object() || serde_json::to_vec(value).map_err(invalid)?.len() > 16 * 1024 {
+        return Err(invalid(
+            "package installation binding is invalid or exceeds its size limit",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_segment(value: &str, name: &str) -> io::Result<()> {

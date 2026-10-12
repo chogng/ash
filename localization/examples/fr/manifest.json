@@ -7,10 +7,12 @@
   "displayName": "Français for Ash (example)",
   "description": "A partial French display-language catalog for Ash.",
   "license": "MIT",
-  "capabilities": [
-    { "kind": "asset", "id": "fr", "path": "localization" }
-  ],
+  "capabilities": [{ "kind": "asset", "id": "fr", "path": "localization" }],
   "localizations": [
-    { "locale": "fr", "languageName": "French", "localizedLanguageName": "Français" }
+    {
+      "locale": "fr",
+      "languageName": "French",
+      "localizedLanguageName": "Français"
+    }
   ]
 }

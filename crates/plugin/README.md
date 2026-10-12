@@ -5,7 +5,6 @@
 - Validates one package observation and computes its deterministic content identity.
 - Contains no installation, Extensions, activation, credential or runtime lifecycle.
 
-
 JavaScript editor-extension manifests admit the implemented command, language, status-bar,
 Task-provider and Debug capabilities. Task and Debug callbacks still use the Workbench
 owners and their process boundaries. Ash SDK V8 remains confined; standard `api: vscode`

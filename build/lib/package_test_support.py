@@ -73,6 +73,7 @@ def create_runtime_package(
     *,
     first_party_binary: Path | None = None,
     symbols_dir: Path | None = None,
+    include_js_host: bool = False,
 ) -> Path:
     spec = target_spec(target)
     inputs = root / "runtime-inputs"
@@ -94,6 +95,8 @@ def create_runtime_package(
     license_file.write_text("Node test license", encoding="utf-8")
     copying = inputs / "COPYING"
     copying.write_text("Bubblewrap test license", encoding="utf-8")
+    copying_lib = inputs / "COPYING.LIB"
+    copying_lib.write_text("Bubblewrap library test license", encoding="utf-8")
     runtime = root / "runtime"
     sources = create_package_sources(root / "package-sources")
     build_package_directory(
@@ -107,7 +110,7 @@ def create_runtime_package(
         executable("ash-exec-server"),
         executable("ash-app-server-daemon"),
         executable("ash-code-mode-host"),
-        executable("ash-external-js-ext"),
+        executable("ash-external-js-ext") if include_js_host else None,
         ExecutableResolution(rg, "test", "local-override", _digest(rg)),
         ExecutableResolution(tgrep, "test", "local-override", _digest(tgrep)),
         NodeResolution(
@@ -125,7 +128,7 @@ def create_runtime_package(
             _digest(bwrap),
             "bwrap.tar",
             "c" * 64,
-            [copying],
+            [copying, copying_lib],
             "vendored-source-build",
         )
         if bwrap is not None

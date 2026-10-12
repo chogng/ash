@@ -166,8 +166,14 @@ pub trait AgentRuntime {
     fn replace_thread(&self, request: ReplaceThreadRequest) -> Result<ThreadView, CoreError>;
     fn rewind_thread(&self, request: RewindThreadRequest) -> Result<ThreadView, CoreError>;
     fn restore_message(&self, request: RestoreMessageRequest) -> Result<ThreadView, CoreError>;
-    fn move_thread_history(&self, request: crate::MoveThreadHistoryRequest) -> Result<ThreadView, CoreError>;
-    fn thread_history_state(&self, thread_id: &ThreadId) -> Result<ash_protocol::ThreadHistoryState, CoreError>;
+    fn move_thread_history(
+        &self,
+        request: crate::MoveThreadHistoryRequest,
+    ) -> Result<ThreadView, CoreError>;
+    fn thread_history_state(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<ash_protocol::ThreadHistoryState, CoreError>;
     fn message_checkpoints(
         &self,
         thread_id: &ThreadId,

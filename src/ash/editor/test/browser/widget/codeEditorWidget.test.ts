@@ -446,10 +446,93 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	assert.equal(editor.getRawOptions().lineNumbers, 'off');
 	assert.equal(editor.getDomNode().classList.contains('hide-line-numbers'), true);
 	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.margin').style.getPropertyValue('--stanza-editor-line-numbers-width'), '0px');
-	assert.deepEqual([0, 1, 2].map(lineNumber), ['', '', '']);
+	assert.equal(editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers').length, 0);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 5);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide').length, 0);
 	dom.window.close();
+});
+
+test('simple line numbers and empty overlays do not create or serialize temporary rows', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel('one\ntwo\nthree');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, renderWhitespace: 'none', minimap: { enabled: false } });
+	editor.layout({ width: 280, height: 100 });
+	editor.view.render(true, false);
+	const prototype = dom.window.Element.prototype;
+	const innerHTML = Object.getOwnPropertyDescriptor(prototype, 'innerHTML')!;
+	const createElement = dom.window.document.createElement;
+	let elementsCreated = 0;
+	let temporaryRowsSerialized = 0;
+	try {
+		dom.window.document.createElement = function (...args: Parameters<Document['createElement']>) {
+			elementsCreated++;
+			return createElement.apply(this, args);
+		};
+		Object.defineProperty(prototype, 'innerHTML', {
+			...innerHTML,
+			get() {
+				if (this.tagName === 'DIV' && !this.isConnected && !this.className) temporaryRowsSerialized++;
+				return innerHTML.get!.call(this);
+			},
+		});
+		editor.setPosition(new Position(2, 1));
+		editor.view.render(true, false);
+		assert.equal(temporaryRowsSerialized, 0);
+		assert.equal(elementsCreated, 0);
+		assert.deepEqual([...editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers')].map(node => node.textContent), ['1', '2', '3']);
+	} finally {
+		dom.window.document.createElement = createElement;
+		Object.defineProperty(prototype, 'innerHTML', innerHTML);
+	}
+});
+
+test('line-number strings escape custom text and retain active and wrapped row behavior', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel('wrapped text '.repeat(12) + '\nlast');
+	const label = (lineNumber: number) => `<img src=x onerror="throw 1"> & '${lineNumber}'`;
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineNumbers: label, wordWrap: 'on', minimap: { enabled: false } });
+	editor.layout({ width: 180, height: 300 });
+	editor.view.render(true, false);
+	const numbers = [...editor.getDomNode().querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')];
+	assert.equal(numbers[0]!.textContent, label(1));
+	assert.equal(numbers[1]!.textContent, '');
+	assert.ok(numbers.length > 2);
+	assert.equal(editor.getDomNode().querySelectorAll('.margin-view-overlays img').length, 0);
+	assert.equal(numbers[0]!.classList.contains('active-line-number'), true);
+	assert.equal(numbers[1]!.classList.contains('active-line-number'), true);
+	editor.updateOptions({ lineNumbers: 'relative', wordWrap: 'off' });
+	editor.setPosition(new Position(2, 1));
+	editor.view.render(true, false);
+	assert.deepEqual([...editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers')].map(node => node.textContent), ['1', '2']);
+});
+
+test('empty overlay results clear earlier selection, whitespace and indentation content', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel('root\n    one\n    two');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, renderWhitespace: 'selection', guides: { indentation: true, bracketPairs: false }, minimap: { enabled: false } });
+	editor.layout({ width: 280, height: 100 });
+	editor.setSelection(new Selection(2, 1, 2, 5));
+	editor.view.render(true, false);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection').length, 1);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 4);
+	assert.ok(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide').length > 0);
+	editor.setPosition(new Position(2, 1));
+	model.setValue('root\none\ntwo');
+	editor.view.render(true, false);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide').length, 0);
+	editor.updateOptions({ renderWhitespace: 'all' });
+	model.setValue('root\n    one\n    two');
+	editor.setSelection(new Selection(3, 1, 3, 5));
+	editor.view.render(true, false);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection').length, 1);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 8);
+	assert.ok(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide').length > 0);
 });
 
 test('indent guides use model indentation units and include blank lines in the active block', () => {

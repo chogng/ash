@@ -156,21 +156,12 @@ pub(crate) fn deployments(
             extension_id: extension_id.clone(),
             requested_capabilities: capabilities.clone(),
         };
-        let current = std::env::current_exe().map_err(|error| error.to_string())?;
-        let executable = current
-            .parent()
-            .ok_or("missing product executable directory")?
-            .join(format!(
-                "ash-external-js-ext{}",
-                std::env::consts::EXE_SUFFIX
-            ));
         let root = source
             .host_path()
             .to_str()
             .ok_or("invalid extension source path")?
             .to_string();
         let command = ExtensionLaunchCommand::vscode(
-            executable,
             vec![
                 "--extension-id".into(),
                 extension_id.clone(),

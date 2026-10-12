@@ -220,7 +220,7 @@ test("URI.joinPathSegment preserves components and encodes one child name", () =
 	assert.equal(child.toString(), "ash://workspace/root/hello%20%25%E4%B8%AD%3F%23.txt?rev=2#anchor");
 	assert.deepEqual([child.scheme, child.authority, child.path, child.query, child.fragment], ["ash", "workspace", "/root/hello %中?#.txt", "rev=2", "anchor"]);
 	assert.equal(URI.file("/tmp/root/").joinPathSegment("a b").toString(), "file:///tmp/root/a%20b");
-	assert.equal(URI.file("/tmp/root").joinPathSegment("..").toString(), "file:///tmp/");
+	assert.equal(URI.file("/tmp/root").joinPathSegment("..").toString(), isWindows ? "file:///tmp" : "file:///tmp/");
 	const directories = [
 		...(isWindows ? [URI.file("C:\\project\\src"), URI.file("\\\\server\\share\\src")] : []),
 		URI.parse("vscode-remote://ssh-remote+host/workspace?rev=1#anchor"),

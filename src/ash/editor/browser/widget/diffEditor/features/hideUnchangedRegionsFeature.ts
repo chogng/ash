@@ -44,7 +44,7 @@ export class HideUnchangedRegionsFeature extends Disposable {
 	}
 
 	private readonly zones = this._register(new DisposableStore());
-	private readonly regionZones = this._register(new DisposableMap<UnchangedRegion, IDisposable & { update(original: LineRange, modified: LineRange): void }>());
+	private readonly regionZones = this._register(new DisposableMap<UnchangedRegion, IDisposable & { update(original: LineRange, modified: LineRange): void; }>());
 	private readonly drag = this._register(new MutableDisposable<DisposableStore>());
 	private draggedRegion: UnchangedRegion | undefined;
 	private readonly source = this._register(new MutableDisposable<IDiffEditorBreadcrumbsSource>());

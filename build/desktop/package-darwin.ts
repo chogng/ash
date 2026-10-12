@@ -41,16 +41,19 @@ try {
 	await rebuild({ buildPath: appStage, electronVersion: electronMetadata.version, platform: 'darwin', arch, onlyModules: ['native-keymap'], force: true });
 	await writeApplicationChecksums(appStage);
 
-	const backend = options.backendPackage ?? join(stage, 'backend');
+	const sourceBackend = options.backendPackage ?? join(stage, 'backend');
 	if (!options.backendPackage) {
 		await run(process.env.PYTHON ?? 'python3', [
 			'-B', join(repositoryRoot, 'build', 'app_server.py'),
 			'--target', target,
-			'--javascript-runtime', 'packaged-node',
-			'--package-dir', backend,
+			'--javascript-runtime', 'host-provided-node',
+			'--electron-version', electronMetadata.version,
+			'--package-dir', sourceBackend,
 		], repositoryRoot);
 	}
-	await validateBackend(backend);
+	const backend = join(stage, 'desktop-backend');
+	await run(process.env.PYTHON ?? 'python3', ['-B', join(repositoryRoot, 'build', 'desktop', 'package_runtime.py'), '--source', sourceBackend, '--output', backend, '--electron-version', electronMetadata.version], repositoryRoot);
+	await validateBackend(backend, electronMetadata.version);
 	const updateArtifact = join(stage, 'update-host.json');
 	await run(process.env.PYTHON ?? 'python3', [
 		'-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'build-update-host',
@@ -145,10 +148,11 @@ function parseOptions(args: readonly string[]): { readonly backendPackage?: stri
 	return { backendPackage, output, unsigned };
 }
 
-async function validateBackend(path: string): Promise<void> {
+async function validateBackend(path: string, electronVersion: string): Promise<void> {
 	const metadata = JSON.parse(await readFile(join(path, 'ash-package.json'), 'utf8'));
 	const application = JSON.parse(await readFile(join(appRoot, 'package.json'), 'utf8'));
-	if (metadata.target !== target || metadata.javascriptRuntime?.kind !== 'packagedNode'
+	if (metadata.target !== target || metadata.javascriptRuntime?.kind !== 'hostProvidedNode'
+		|| metadata.javascriptRuntime.electronVersion !== electronVersion || metadata.components?.node !== undefined
 		|| metadata.layoutVersion !== 2 || metadata.version !== application.version
 		|| metadata.entrypoint !== 'bin/ash-app-server'
 		|| metadata.protocol?.major !== APP_SERVER_PROTOCOL_MAJOR
@@ -159,6 +163,9 @@ async function validateBackend(path: string): Promise<void> {
 		throw new Error(`Backend does not match this macOS desktop build: ${path}`);
 	}
 	await lstat(join(path, metadata.entrypoint));
+	for (const relative of ['ash-resources/node', 'ash-resources/licenses/node']) {
+		if (await exists(join(path, relative))) throw new Error(`Desktop backend contains standalone Node: ${relative}`);
+	}
 }
 
 async function exists(path: string): Promise<boolean> {

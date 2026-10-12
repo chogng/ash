@@ -82,7 +82,9 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		args: [
 			"--disable-gpu",
 			"--in-process-gpu",
-			...(windowMode === 'active' ? [] : ['--require', join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')]),
+			// Keep the preload value in the switch: packaged Electron can retain Node
+			// switches in argv, where a separate value would become a file to open.
+			...(windowMode === 'active' ? [] : [`--require=${join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')}`]),
 			...(bundle ? [] : [desktopDirectory]),
 			`--user-data-dir=${options.userDataDirectory}`,
 			// AppKit's recovery prompt can block ready after test-owned processes are terminated.

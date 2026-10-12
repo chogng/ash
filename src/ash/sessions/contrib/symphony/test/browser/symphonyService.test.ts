@@ -9,14 +9,14 @@ import { SymphonyService } from '../../browser/symphonyService.js';
 
 const conversation = (id: string) => ({ id, workflowId: 'workflow', identifier: id, title: id, status: 'running' as const, tokens: 15, tokensComplete: true, durationMs: 1000, error: undefined });
 function backend(read: () => Promise<SymphonySnapshot>, messages: ISymphonyBackend['messages']): ISymphonyBackend {
-	return { onDidChange: new Emitter<void>().event, read, messages, configure: async () => ({ workflows: [], conversations: [] }), submit: async () => conversation('new'), control: async () => {}, enable: async () => {} };
+	return { onDidChange: new Emitter<void>().event, read, messages, configure: async () => ({ workflows: [], conversations: [] }), submit: async () => conversation('new'), control: async () => { }, enable: async () => { } };
 }
 
 suite('Built-in Symphony presentation', () => {
 	test('a late message read cannot replace the newly selected conversation', async () => {
 		const stored = new Map<string, string>();
 		const storage = { get: (key: string) => stored.get(key), store: (key: string, value: string) => stored.set(key, value) } as unknown as IStorageService;
-		const previous = new DeferredPromise<{ conversation: ReturnType<typeof conversation>; messages: [] }>();
+		const previous = new DeferredPromise<{ conversation: ReturnType<typeof conversation>; messages: []; }>();
 		const second = new DeferredPromise<void>();
 		const api = backend(async () => ({ workflows: [], conversations: [conversation('one'), conversation('two')] }), async id => {
 			if (id === 'one') { return previous.p; }

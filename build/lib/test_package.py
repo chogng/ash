@@ -28,6 +28,7 @@ from build.lib.package import (
     record_system_signing,
     require_verified_system_signing,
     system_signing_artifacts,
+    validate_package_directory,
 )
 from build.lib.node import (
     NodeResolution,
@@ -38,7 +39,10 @@ from build.lib.node import (
 from build.lib.ripgrep import load_lock, resolve_ripgrep
 from build.lib.executable import ExecutableResolution
 from build.lib.version import read_workspace_version
-from build.lib.package_test_support import create_package_sources
+from build.lib.package_test_support import (
+    create_package_sources,
+    create_runtime_package,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -107,7 +111,6 @@ class PackageTests(unittest.TestCase):
                 "ash-app-server",
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
-                "ash-external-js-ext",
                 "ash-github-authentication",
                 "ash-remote-ssh-extension",
                 "ash-voice-host",
@@ -175,6 +178,48 @@ class PackageTests(unittest.TestCase):
             )
             for name in names:
                 self.assertEqual(name.encode(), (output / "bin" / name).read_bytes())
+            self.assertFalse((output / "bin/ash-external-js-ext").exists())
+            metadata = json.loads((output / "ash-package.json").read_text())
+            self.assertNotIn("jsExtensionHost", metadata["components"])
+
+    def test_default_packages_keep_node_resources_and_code_mode_without_v8_extension_host(
+        self,
+    ):
+        for target in (
+            "x86_64-pc-windows-msvc",
+            "aarch64-apple-darwin",
+            "x86_64-unknown-linux-gnu",
+        ):
+            with (
+                self.subTest(target=target),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                output = create_runtime_package(Path(temporary), target)
+                spec = TARGETS[target]
+                metadata = json.loads((output / "ash-package.json").read_text())
+                self.assertNotIn("jsExtensionHost", metadata["components"])
+                self.assertNotIn(
+                    "jsExtensionHost", system_signing_artifacts(output, spec)
+                )
+                self.assertFalse(
+                    (output / "bin" / spec.js_extension_host_name).exists()
+                )
+                self.assertTrue((output / "bin" / spec.code_mode_host_name).is_file())
+                for name in ("node.mjs", "host.mjs", "vscode.mjs", "scm.js"):
+                    self.assertTrue(
+                        (output / "ash-resources/extension-host" / name).is_file()
+                    )
+
+    def test_explicit_v8_host_packages_keep_their_component_integrity_and_signing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = create_runtime_package(
+                Path(temporary), "x86_64-pc-windows-msvc", include_js_host=True
+            )
+            spec = TARGETS["x86_64-pc-windows-msvc"]
+            self.assertIn("jsExtensionHost", system_signing_artifacts(output, spec))
+            (output / "bin" / spec.js_extension_host_name).unlink()
+            with self.assertRaisesRegex(RuntimeError, "Optional package executable"):
+                validate_package_directory(output, spec)
 
     def test_product_services_requires_every_sources_regular_trust_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -477,9 +522,11 @@ class PackageTests(unittest.TestCase):
             self.assertFalse((output / "bin" / "ash-git-extension").exists())
             self.assertIn(
                 "仓库",
-                json.loads((git_extension / "package.nls.zh-CN.json").read_text())[
-                    "description"
-                ],
+                json.loads(
+                    (git_extension / "package.nls.zh-CN.json").read_text(
+                        encoding="utf-8"
+                    )
+                )["description"],
             )
             product_services = json.loads(
                 (
@@ -798,9 +845,12 @@ class PackageTests(unittest.TestCase):
             (package / "src").mkdir()
             (package / "package.json").write_text(
                 '{"name":"git","browser":"./browser/extension.ts",'
-                '"ashRuntime":{"kind":"rust"}}', encoding="utf-8"
+                '"ashRuntime":{"kind":"rust"}}',
+                encoding="utf-8",
             )
-            (package / "browser/extension.ts").write_text("export function activate() {}")
+            (package / "browser/extension.ts").write_text(
+                "export function activate() {}"
+            )
             (package / "src/main.rs").write_text("fn main() {}")
             (package / "Cargo.toml").write_text("[package]")
             (package / "package.nls.json").write_text('{"name":"Git"}')

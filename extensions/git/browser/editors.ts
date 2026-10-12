@@ -15,7 +15,7 @@ function encode(value: unknown): unknown { return JSON.parse(JSON.stringify(valu
 export async function input(options: { title?: string; placeHolder?: string; value?: string; validateInput?(value: string): Promise<string | undefined>; }): Promise<string | undefined> {
 	let value = options.value;
 	let validationMessage: string | undefined;
-	for (;;) {
+	for (; ;) {
 		const result = await editors.request<string | null>({ method: 'input', title: options.title, placeHolder: options.placeHolder, value, validationMessage });
 		if (result === null) { return undefined; }
 		const error = await options.validateInput?.(result);

@@ -52,13 +52,13 @@ Custom PTY completion waits for its brokered release acknowledgment and emits no
 
 ## Current contract
 
-| Symbol                | Responsibility                                                                          | Must not own                                                 |
-| --------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `ITaskService`        | Enumerate current workspace tasks, start a selected task, terminate an active run       | PTY processes, shell rendering, editor state                 |
-| `TaskService`         | Read task files through `IFileService`, own providers, catalog freshness and dependency graphs | PTY execution and terminal run state |
-| `TerminalTaskSystem`  | Resolve shell/process/custom execution, own run status and listeners | Task discovery and provider state |
-| `parseWorkspaceTasks` | Preserve `tasks.json` and declare unsupported execution settings                        | Variable expansion or command execution |
-| `TaskRun`             | Bind the first terminal command identity to one run and retain its final status         | Terminal output buffering or shell integration parsing       |
+| Symbol                | Responsibility                                                                                 | Must not own                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `ITaskService`        | Enumerate current workspace tasks, start a selected task, terminate an active run              | PTY processes, shell rendering, editor state           |
+| `TaskService`         | Read task files through `IFileService`, own providers, catalog freshness and dependency graphs | PTY execution and terminal run state                   |
+| `TerminalTaskSystem`  | Resolve shell/process/custom execution, own run status and listeners                           | Task discovery and provider state                      |
+| `parseWorkspaceTasks` | Preserve `tasks.json` and declare unsupported execution settings                               | Variable expansion or command execution                |
+| `TaskRun`             | Bind the first terminal command identity to one run and retain its final status                | Terminal output buffering or shell integration parsing |
 
 The execution path is `Run Task` or `TasksViewPane` → `TaskService.run` →
 `TerminalTaskSystem.run` → `IConfigurationResolverService.resolveWithInteractionReplace` →
@@ -271,11 +271,11 @@ workspace and folder configuration targets remain incomplete.
 
 ## Full VS Code compatibility target
 
-| Contract area | Current behavior and remaining work |
-| --- | --- |
-| Environment | Shared host lookup, configured/provider overrides and nested variable resolution are implemented; inherited values retain the backend allowlist. |
-| Task model and providers | TaskDefinition, process/shell/custom execution and dispatch-time resolveTask are implemented. Folder/Workspace scope, version/type filters, public execution handles, edits and copies of fetched CustomExecution and ordered start/end/process events are implemented. Empty-window execution, direct opaque callback invocation, presentation and automatic task execution remain incomplete; configured instance limits and all five capacity policies are supported. |
-| Execution | Process argv, task cwd, structured shell quoting, explicit shell execution and custom PTY lifetimes are implemented. Platform overrides use the execution host OS; presentation policies remain incomplete; Windows shell behavior still needs host validation. |
-| Orchestration and diagnostics | Dependency graphs, background readiness, bounded problem collection, contributed registries and scoped file-location search are implemented. History, persistent reconnection and automatic run policies remain incomplete. |
+| Contract area                 | Current behavior and remaining work                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Environment                   | Shared host lookup, configured/provider overrides and nested variable resolution are implemented; inherited values retain the backend allowlist.                                                                                                                                                                                                                                                                                                                         |
+| Task model and providers      | TaskDefinition, process/shell/custom execution and dispatch-time resolveTask are implemented. Folder/Workspace scope, version/type filters, public execution handles, edits and copies of fetched CustomExecution and ordered start/end/process events are implemented. Empty-window execution, direct opaque callback invocation, presentation and automatic task execution remain incomplete; configured instance limits and all five capacity policies are supported. |
+| Execution                     | Process argv, task cwd, structured shell quoting, explicit shell execution and custom PTY lifetimes are implemented. Platform overrides use the execution host OS; presentation policies remain incomplete; Windows shell behavior still needs host validation.                                                                                                                                                                                                          |
+| Orchestration and diagnostics | Dependency graphs, background readiness, bounded problem collection, contributed registries and scoped file-location search are implemented. History, persistent reconnection and automatic run policies remain incomplete.                                                                                                                                                                                                                                              |
 
 These remaining areas must be implemented and validated through the same owner before claiming the complete VS Code Tasks API or arbitrary task extension compatibility.

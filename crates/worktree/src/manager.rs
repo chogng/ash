@@ -668,7 +668,9 @@ impl WorktreeManager {
         }
         request.owner.validate(&request.source_dir_id)?;
         if matches!(request.source, ManagedDirSource::DirectoryCheckpoint { .. }) {
-            return self.provision_directory(request, request.source.source_directory()).await;
+            return self
+                .provision_directory(request, request.source.source_directory())
+                .await;
         }
         let source_directory = dunce::canonicalize(request.source.source_directory())
             .with_context(|| {
@@ -698,7 +700,9 @@ impl WorktreeManager {
             ManagedDirSource::ImmutableTree { tree_id, .. } => {
                 ash_git::GitTreeId::new(tree_id.clone())?
             }
-            ManagedDirSource::DirectoryCheckpoint { .. } => bail!("directory checkpoint cannot initialize a Git worktree"),
+            ManagedDirSource::DirectoryCheckpoint { .. } => {
+                bail!("directory checkpoint cannot initialize a Git worktree")
+            }
         };
         let (target_branch, target_head, target_unborn) = match &request.target {
             ManagedDirTarget::SourceHead => {
@@ -982,7 +986,9 @@ impl WorktreeManager {
                             )
                         })?,
                 )?,
-                ManagedDirSource::DirectoryCheckpoint { .. } => bail!("directory checkpoint cannot initialize nested Git worktrees"),
+                ManagedDirSource::DirectoryCheckpoint { .. } => {
+                    bail!("directory checkpoint cannot initialize nested Git worktrees")
+                }
             };
             let target = request.repository_targets.get(&relative_path);
             let inherited = binding::try_read(source_repository.git_dir())?;
@@ -1189,12 +1195,17 @@ impl WorktreeManager {
             .tempdir_in(parent)?;
         let dir = staging.path().join("dir");
         std::fs::create_dir(&dir)?;
-        let baseline_tree = if let ManagedDirSource::DirectoryCheckpoint { digest, .. } = &request.source {
-            self.copy_directory_checkpoint(digest, &dir)?;
-            digest.as_str().strip_prefix("sha256:").expect("ContentDigest validates its prefix").to_string()
-        } else {
-            copy_directory(source_directory, &dir)?
-        };
+        let baseline_tree =
+            if let ManagedDirSource::DirectoryCheckpoint { digest, .. } = &request.source {
+                self.copy_directory_checkpoint(digest, &dir)?;
+                digest
+                    .as_str()
+                    .strip_prefix("sha256:")
+                    .expect("ContentDigest validates its prefix")
+                    .to_string()
+            } else {
+                copy_directory(source_directory, &dir)?
+            };
         binding::write(
             staging.path(),
             &binding::BindingRecord::new(
@@ -1740,8 +1751,13 @@ fn copy_directory_entries(
             }
             std::fs::set_permissions(&destination_path, metadata.permissions())?;
             destination_file.sync_all()?;
-            if copied != metadata.len() || source_file.metadata()?.modified()? != metadata.modified()? {
-                bail!("file changed while capturing directory checkpoint: {}", source_path.display());
+            if copied != metadata.len()
+                || source_file.metadata()?.modified()? != metadata.modified()?
+            {
+                bail!(
+                    "file changed while capturing directory checkpoint: {}",
+                    source_path.display()
+                );
             }
         } else {
             bail!(

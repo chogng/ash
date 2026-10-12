@@ -252,20 +252,22 @@ test('snippet save protection follows mirrors, transforms and multiple insertion
 	using other = await fixture.bulk.models.acquire({ resource: URI.file('/workspace/other.ts') }, signal());
 	const snippet = parseSnippet('${1:  }\n$1\n${1/(.*)/$1/}\n${2:x}\n$0\noutside  ');
 	const separator = '\nbetween  \n';
-	reference.model.setValue(snippet.text + separator + snippet.text);
+	const header = 'header\n';
+	reference.model.setValue(header + snippet.text + separator + snippet.text);
 	using editor = new SaveTestEditor(reference.model, fixture.services);
-	editor.snippets.startSession(reference.model, [0, snippet.text.length + separator.length], snippet);
-	assert.deepEqual(editor.snippets.getSessionEnclosingRange(), new Range(1, 1, 12, 1));
-	reference.model.pushEditOperations(null, [{ range: new Range(1, 1, 1, 1), text: 'prefix\n' }], null);
+	editor.snippets.startSession(reference.model, [header.length, header.length + snippet.text.length + separator.length], snippet);
 	assert.deepEqual(editor.snippets.getSessionEnclosingRange(), new Range(2, 1, 13, 1));
+	// Insert outside the active placeholder; typing at its own edge belongs to it.
+	reference.model.pushEditOperations(null, [{ range: new Range(1, 1, 1, 1), text: 'prefix\n' }], null);
+	assert.deepEqual(editor.snippets.getSessionEnclosingRange(), new Range(3, 1, 14, 1));
 	await reference.save(signal(), { reason: SaveReason.AUTO });
-	assert.equal(fixture.bulk.store.text(resource), 'prefix\n' + snippet.text + separator + snippet.text.trimEnd());
+	assert.equal(fixture.bulk.store.text(resource), 'prefix\n' + header + snippet.text + separator + snippet.text.trimEnd());
 	editor.snippets.next();
-	assert.deepEqual(editor.getSelections(), [new Selection(5, 1, 5, 2), new Selection(12, 1, 12, 2)]);
+	assert.deepEqual(editor.getSelections(), [new Selection(6, 1, 6, 2), new Selection(13, 1, 13, 2)]);
 	editor.editor.setModel(other.model);
 	assert.deepEqual([editor.snippets.getSessionEnclosingRange(), editor.snippets.isInSnippet()], [undefined, false]);
 	await reference.save(signal(), { reason: SaveReason.AUTO });
-	assert.equal(fixture.bulk.store.text(resource), 'prefix\n\n\n\nx\n\noutside\nbetween\n\n\n\nx\n\noutside');
+	assert.equal(fixture.bulk.store.text(resource), 'prefix\nheader\n\n\n\nx\n\noutside\nbetween\n\n\n\nx\n\noutside');
 });
 
 test('implicit snippet final stop is protected until cancellation and disposal', async () => {

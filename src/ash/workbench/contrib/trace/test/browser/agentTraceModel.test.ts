@@ -38,8 +38,8 @@ suite('Execution Trace saved execution flow', () => {
 		try {
 			assert.equal(recordingLabel({ formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [], diagnostics: { formatVersion: 2, captureId: 'c', recordingStatus: 'incomplete', droppedRecords: 2, pendingRecords: 3, events: [] } }), '诊断证据不完整 · 已省略 2 条记录 · 3 条记录待写入。');
 			assert.equal(relationLabel('accountsFor'), '已提交的模型账目');
-			assert.equal(evidenceLabel('hookExecution'), 'Hook 命令与有界的进程输入／输出');
-			assert.deepEqual(['running', 'continued', 'denied', 'failed', 'cancelled'].map(hookStatusLabel), ['运行中', '已继续', '已阻止', '失败', '已取消']);
+			assert.equal(evidenceLabel('hookExecution'), 'Hook 命令及有界的进程输入输出');
+			assert.deepEqual(['running', 'continued', 'denied', 'failed', 'cancelled'].map(hookStatusLabel), ['执行中', '已继续', '已阻断', '失败', '已取消']);
 		} finally { resetNlsResolver(); }
 	});
 	test('associates Hook bodies with the exact Thread, Turn and run, and filters blocked runs as errors', () => {

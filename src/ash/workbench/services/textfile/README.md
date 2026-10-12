@@ -30,7 +30,7 @@ or forwarding exports. Rust filesystem transport remains in
 | Crash backup and workspace-scoped recovery                            | `IWorkingCopyBackupService` / `WorkingCopyBackupTracker`      | ✅                                                        |
 | UTF-8 validation, BOM handling, binary detection, and safe size limit | `ITextFileService.resolve`                                    | ✅                                                        |
 | Binary preview fallback                                               | `workbench/contrib/files/browser/editors/binaryFileEditor.ts` | ✅, bounded read-only hex/ascii view                      |
-| Unicode and legacy encoding conversion                              | Rust `ash-file-system` codec through the file provider        | ✅, strict decoding and lossless writes                   |
+| Unicode and legacy encoding conversion                                | Rust `ash-file-system` codec through the file provider        | ✅, strict decoding and lossless writes                   |
 
 `TextFileService.resolve` checks resource size before requesting provider-owned text decoding. Rust `ash-file-system` recognizes UTF-8 and UTF-16 BOMs; files without a BOM default to strict UTF-8. Legacy encodings are explicit choices, not guessed. The resolved encoding and exact-byte revision travel through the resource adapter to the shared text model. `TextFileService.save` delegates one atomic conditional text write; Rust encodes before publication, rejecting unrepresentable characters instead of substituting them. Binary byte APIs retain their original behavior.
 

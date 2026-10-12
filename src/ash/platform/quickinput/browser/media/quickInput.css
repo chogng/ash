@@ -224,7 +224,9 @@
 }
 
 .ash-quick-pick-list .ash-list-row:hover .ash-quick-pick-row-action.icon-only,
-.ash-quick-pick-list .ash-list-row.is-active .ash-quick-pick-row-action.icon-only,
+.ash-quick-pick-list
+	.ash-list-row.is-active
+	.ash-quick-pick-row-action.icon-only,
 .ash-quick-pick-row-action.icon-only:focus-visible {
 	opacity: 1;
 }

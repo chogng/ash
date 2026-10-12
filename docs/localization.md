@@ -12,15 +12,15 @@ source declarations and translations without requiring or writing generated cata
 
 ## Ownership
 
-| Surface                                                              | Owner                                                                           | Contract                                                          |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Core English fallback | `localization/en` + feature NLS declarations | Always available |
-| Preinstalled Simplified Chinese extension | `extensions/language-pack-zh-cn` | Static Ash extension, available offline |
+| Surface                                                              | Owner                                                                           | Contract                                                         |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Core English fallback                                                | `localization/en` + feature NLS declarations                                    | Always available                                                 |
+| Preinstalled Simplified Chinese extension                            | `extensions/language-pack-zh-cn`                                                | Static Ash extension, available offline                          |
 | Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks`                                                        | `ILanguagePackService`; Extensions `packageType: "localization"` |
-| Locale selection and persistence                                     | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale`                |
-| Message lookup and NLS resolution                                    | `workbench/services/localization` + `src/ash/nls.ts`                            | Selected catalog → caller's English source message                |
-| Remote package discovery and distribution                            | Extensions distribution                                                        | `packageType: "localization"` and `localization/package.json`     |
-| Installed package lease and resource reads                           | Ash Extensions Manager                                                         | A localization capability exposes one static JSON catalog         |
+| Locale selection and persistence                                     | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale`               |
+| Message lookup and NLS resolution                                    | `workbench/services/localization` + `src/ash/nls.ts`                            | Selected catalog → caller's English source message               |
+| Remote package discovery and distribution                            | Extensions distribution                                                         | `packageType: "localization"` and `localization/package.json`    |
+| Installed package lease and resource reads                           | Ash Extensions Manager                                                          | A localization capability exposes one static JSON catalog        |
 
 The Extensions does not know Ash bundle IDs, does not execute localization packages, and does not
 install them into the renderer. The App Server/Extensions Manager acquires and leases the validated

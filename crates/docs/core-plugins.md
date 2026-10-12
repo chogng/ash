@@ -17,14 +17,14 @@
 Extensions 是统一的产品管理入口，远端 registry 是包来源。`ash-core-plugins` 聚合内置、远端和本地来源，
 远端签名 registry 只是其中一个 adapter；它们不是 client/server 进程对，也不通过 JSONL 相连。
 
-| 组件                         | 位置                                                                    | 职责                                                                      |
-| ---------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Ash 签名分发                 | GitHub Pages（地址由产品服务配置提供）                                  | catalog、publisher、签名、撤销、TUF metadata 和 package targets           |
+| 组件                        | 位置                                                                    | 职责                                                                      |
+| --------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Ash 签名分发                | GitHub Pages（地址由产品服务配置提供）                                  | catalog、publisher、签名、撤销、TUF metadata 和 package targets           |
 | Extensions registry adapter | `crates/core-plugins/src/registry.rs`                                   | HTTPS/TUF、远端发现和 verified download 的私有适配                        |
-| Core Plugins                 | `crates/core-plugins`                                                   | Plugin 来源聚合、本地 artifact、安装、authority、lease 和 opaque resource |
-| Plugin definitions           | `crates/plugin`                                                         | identity、manifest、path 与 package observation                           |
-| App Server                   | `crates/app-server`                                                     | 稳定 RPC、connection-owned lease 和 error mapping                         |
-| capability consumers         | Skill/MCP/Connector/Theme/Language/Localization/Editor Extension 各领域 | enable/grant、认证、配置、激活、执行、停用                                |
+| Core Plugins                | `crates/core-plugins`                                                   | Plugin 来源聚合、本地 artifact、安装、authority、lease 和 opaque resource |
+| Plugin definitions          | `crates/plugin`                                                         | identity、manifest、path 与 package observation                           |
+| App Server                  | `crates/app-server`                                                     | 稳定 RPC、connection-owned lease 和 error mapping                         |
+| capability consumers        | Skill/MCP/Connector/Theme/Language/Localization/Editor Extension 各领域 | enable/grant、认证、配置、激活、执行、停用                                |
 
 Ash 产品层依赖 Core Plugins，不依赖 registry 的远端存储形式。当前静态分发没有远程业务服务器，
 因此这些实现细节由 `ash-core-plugins::registry` 封装。App Server、Renderer 和 capability runtime 都看不到
@@ -108,15 +108,15 @@ uninstall、lease 或 activation API，因为这些都是本地状态。
 要求任何消费产品的源码树或发行状态。
 
 | 能力                                  | Remote Extensions | Registry adapter | Core Plugins | 产品 runtime |
-| ------------------------------------- | ------------------ | ---------------- | ------------ | ------------ |
-| catalog、publisher、版本发布          | ✅                 | consume          | ❌           | ❌           |
-| TUF、revocation、target download      | 发布               | ✅ verify        | ❌           | ❌           |
-| remote cache / temporary extraction   | ❌                 | ✅ private       | ❌           | ❌           |
-| local artifact store / digest recheck | ❌                 | handoff          | ✅           | ❌           |
-| install/update/uninstall/list         | ❌                 | ❌               | ✅           | ❌           |
-| capability ref / lease / resource     | ❌                 | ❌               | ✅           | consume      |
-| permission/authentication             | ❌                 | ❌               | ❌           | ✅           |
-| activation/execution/deactivation     | ❌                 | ❌               | ❌           | ✅           |
+| ------------------------------------- | ----------------- | ---------------- | ------------ | ------------ |
+| catalog、publisher、版本发布          | ✅                | consume          | ❌           | ❌           |
+| TUF、revocation、target download      | 发布              | ✅ verify        | ❌           | ❌           |
+| remote cache / temporary extraction   | ❌                | ✅ private       | ❌           | ❌           |
+| local artifact store / digest recheck | ❌                | handoff          | ✅           | ❌           |
+| install/update/uninstall/list         | ❌                | ❌               | ✅           | ❌           |
+| capability ref / lease / resource     | ❌                | ❌               | ✅           | consume      |
+| permission/authentication             | ❌                | ❌               | ❌           | ✅           |
+| activation/execution/deactivation     | ❌                | ❌               | ❌           | ✅           |
 
 Extensions package lifecycle：
 
@@ -148,14 +148,14 @@ ExtensionPackageManager；领域页面不另建安装记录、更新策略或下
 不把静态语言资源当作服务器。`packageType` 筛选整个包的 family；`capabilityKind` 筛选包携带的能力，包括 Plugin bundle；
 `languageId` 只匹配明确绑定 executable 的语言，三个筛选条件同时生效。
 
-| Extensions capability                           | Ash consumer                                                 | 进入方式                                                                                                | Core Plugins 不拥有                         |
-| ------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `skill`                                          | `ash-skills-extension` / Skill catalog                       | verified exact Skill root                                                                               | 选择、完整 `SKILL.md` 加载与执行            |
-| `mcp`                                            | MCP composition                                              | HTTPS 或 package-relative stdio transport；调用持有 capability lease                                    | OAuth、审批、Tool policy                    |
-| `connector`                                      | Connector authority                                          | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入                                         | 登录、SecretStore、连接状态                 |
-| Theme package 的 `asset`                         | `ash-external-ext::packages` → Workbench Theme               | 规范化为 Theme capability，主题清单交给 TS Theme loader 解析，后端只校验包身份与资源                    | Theme 选择与应用                            |
-| Language package 的 `asset` + `executable`       | `ash-external-ext::packages` + `LspServerProviders`          | editor assets 与 LSP route 分别消费同一安装                                                             | 文档路由、LSP lifecycle                     |
-| `localization`                                   | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window         | 文案提取、产品 bundle 设计与 UI 重建        |
+| Extensions capability                            | Ash consumer                                                 | 进入方式                                                                                                         | Core Plugins 不拥有                         |
+| ------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `skill`                                          | `ash-skills-extension` / Skill catalog                       | verified exact Skill root                                                                                        | 选择、完整 `SKILL.md` 加载与执行            |
+| `mcp`                                            | MCP composition                                              | HTTPS 或 package-relative stdio transport；调用持有 capability lease                                             | OAuth、审批、Tool policy                    |
+| `connector`                                      | Connector authority                                          | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入                                                  | 登录、SecretStore、连接状态                 |
+| Theme package 的 `asset`                         | `ash-external-ext::packages` → Workbench Theme               | 规范化为 Theme capability，主题清单交给 TS Theme loader 解析，后端只校验包身份与资源                             | Theme 选择与应用                            |
+| Language package 的 `asset` + `executable`       | `ash-external-ext::packages` + `LspServerProviders`          | editor assets 与 LSP route 分别消费同一安装                                                                      | 文档路由、LSP lifecycle                     |
+| `localization`                                   | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window                  | 文案提取、产品 bundle 设计与 UI 重建        |
 | `executable` + 可选 `ash/editor-extensions.json` | Editor Extension source/admission → Host                     | Ash consumer sidecar 绑定 exact executable；admission generation/lease 与 ExtensionPackageManager lease 同时成立 | enable/grant、目录执行 capability、进程隔离 |
 
 `ash/editor-extensions.json` 是可选的产品 consumer adapter，并非 Extensions schema、Plugin package
@@ -181,12 +181,12 @@ repository 链接用于展示与审计，但不会让 Renderer 绕过 Core Plugi
 
 ## 插件标识与 provider
 
-| 值                | 格式与用途                                                                 |
-| ----------------- | -------------------------------------------------------------------------- |
-| `PluginId`        | `name@source`，用于发现、查询、安装和更新；名称不要求发布者前缀       |
+| 值                  | 格式与用途                                                                 |
+| ------------------- | -------------------------------------------------------------------------- |
+| `PluginId`          | `name@source`，用于发现、查询、安装和更新；名称不要求发布者前缀            |
 | `ExtensionSourceId` | host 配置中的唯一来源名，绑定一个 provider                                 |
-| `PluginPackageId` | 现有 `.ash-plugin` 包格式中的 `publisher/name`；仅该包格式和对应消费方使用 |
-| `PackageRef.id`   | 对外返回完整 `PluginId`；客户端原样传回，版本和摘要使用独立字段            |
+| `PluginPackageId`   | 现有 `.ash-plugin` 包格式中的 `publisher/name`；仅该包格式和对应消费方使用 |
+| `PackageRef.id`     | 对外返回完整 `PluginId`；客户端原样传回，版本和摘要使用独立字段            |
 
 通用 ID 校验只约束非空、长度和安全字符。插件名允许 ASCII 字母、数字、`_`、`-` 与分隔非空名称段的
 `.`；来源名不允许 `.`。禁止路径分隔符、空白和额外的 `@`。字段私有，构造和反序列化使用同一校验。
@@ -288,13 +288,13 @@ generation；同一 profile 也会拒绝绑定第二个 Extensions authority。
 
 ## 安全和失败语义
 
-| 失败                                                      | 稳定结果                                | 行为                                                 |
-| --------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------- |
-| package/version 不存在                                    | `packageNotFound` / `versionNotFound`   | 展示业务错误，可重新查询                             |
-| trust、expiry、rollback、digest、revocation、archive 失败 | `packageUntrusted`                      | fail closed，不落盘、不激活                          |
+| 失败                                                      | 稳定结果                                | 行为                                                |
+| --------------------------------------------------------- | --------------------------------------- | --------------------------------------------------- |
+| package/version 不存在                                    | `packageNotFound` / `versionNotFound`   | 展示业务错误，可重新查询                            |
+| trust、expiry、rollback、digest、revocation、archive 失败 | `packageUntrusted`                      | fail closed，不落盘、不激活                         |
 | local artifact/state I/O 失败                             | `storageUnavailable`                    | Extensions 调用失败，不泄露路径                     |
-| capability 无 path-free handoff                           | `capabilityUnsupported`                 | package 可保持 installed，不走路径 fallback          |
-| installation 有 lease                                     | `installationInUse` 或 `pendingRemoval` | 等待 release 后删除                                  |
+| capability 无 path-free handoff                           | `capabilityUnsupported`                 | package 可保持 installed，不走路径 fallback         |
+| installation 有 lease                                     | `installationInUse` 或 `pendingRemoval` | 等待 release 后删除                                 |
 | remote 网络不可用                                         | `serviceUnavailable`                    | Extensions 功能不可用，其他 App Server 能力继续工作 |
 
 ExtensionPackageManager 在复制远端 verified payload 后再次计算 `extensions-package-v1` normalized digest，并核对
@@ -304,25 +304,25 @@ relative path 和 size limits 约束。
 
 ## 当前实现与后续迁移
 
-| 项目                                                                                        | 状态                                                                                                                                                                                |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 远端 HTTPS/TUF catalog + verified download                                                  | ✅                                                                                                                                                                                  |
-| Ash 本地 artifact/install/update/uninstall state                                            | ✅                                                                                                                                                                                  |
-| immutable installation、lease、deferred removal                                             | ✅                                                                                                                                                                                  |
-| App Server package RPC 与 connection cleanup                                                | ✅                                                                                                                                                                                  |
+| 项目                                                                                       | 状态                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 远端 HTTPS/TUF catalog + verified download                                                 | ✅                                                                                                                                                                                  |
+| Ash 本地 artifact/install/update/uninstall state                                           | ✅                                                                                                                                                                                  |
+| immutable installation、lease、deferred removal                                            | ✅                                                                                                                                                                                  |
+| App Server package RPC 与 connection cleanup                                               | ✅                                                                                                                                                                                  |
 | profile-scoped single writer、`extensions/changed` fan-out 与重连 instance/generation 补读 | ✅                                                                                                                                                                                  |
-| Desktop 无独立 Core Plugins binary / adapter                                                | ✅                                                                                                                                                                                  |
+| Desktop 无独立 Core Plugins binary / adapter                                               | ✅                                                                                                                                                                                  |
 | Extensions Skill                                                                           | ✅ 安装后进入共享 Skill catalog；完整内容仍按需加载                                                                                                                                 |
 | Extensions MCP / Connector                                                                 | ✅ HTTP/packaged stdio materialization、Connector credential binding、热重建与调用 lease                                                                                            |
-| Language、Executable activation spec                                                        | ✅ opaque manifest/entrypoint resource；本地 adapter 另用 verified host handle                                                                                                      |
-| Extensions Language editor assets                                                          | ✅ 进入共享 declarative Extension catalog，来源标记为 Extensions                                                                                                                   |
+| Language、Executable activation spec                                                       | ✅ opaque manifest/entrypoint resource；本地 adapter 另用 verified host handle                                                                                                      |
+| Extensions Language editor assets                                                          | ✅ 进入共享 declarative Extension catalog，来源标记为 Extensions                                                                                                                    |
 | Extensions Language server                                                                 | ✅ 按 signed language route 组合 `node`/`direct` provider，并在 install/update/uninstall 后热重建                                                                                   |
-| Extensions Theme                                                                           | ✅ Theme activation spec + TS portable manifest parsing + validated external resources；来源标记为 Extensions                                                                      |
+| Extensions Theme                                                                           | ✅ Theme activation spec + TS portable manifest parsing + validated external resources；来源标记为 Extensions                                                                       |
 | Extensions Localization                                                                    | ✅ 独立 `localization` package family、静态 catalog capability、安装生命周期通知、内置 en/zh-CN、核心 Workbench shell 与 Settings locale selector；领域文案仍按 bundle/key 增量迁移 |
-| Extensions executable Editor Extension                                                     | ✅ 可选产品 sidecar、独立 admission + 目录执行 capability、ExtensionPackageManager lease 与 Host deployment seam；生产 launcher 仍按 Host 文档失败关闭                                       |
-| Plugin bundle 语义                                                                          | ✅ `ash-core-plugins` 聚合来源、统一安装与 activation，再按 capability 分解                                                                                                         |
-| 旧 Plugin distribution consumer 迁移                                                        | ✅ 专用 catalog、install/update RPC 与远端 crate 已删除                                                                                                                             |
-| 旧 Language distribution consumer 迁移                                                      | ✅ 专用 crate、RPC、Desktop service 与 duplicate storage 已删除                                                                                                                     |
+| Extensions executable Editor Extension                                                     | ✅ 可选产品 sidecar、独立 admission + 目录执行 capability、ExtensionPackageManager lease 与 Host deployment seam；生产 launcher 仍按 Host 文档失败关闭                              |
+| Plugin bundle 语义                                                                         | ✅ `ash-core-plugins` 聚合来源、统一安装与 activation，再按 capability 分解                                                                                                         |
+| 旧 Plugin distribution consumer 迁移                                                       | ✅ 专用 catalog、install/update RPC 与远端 crate 已删除                                                                                                                             |
+| 旧 Language distribution consumer 迁移                                                     | ✅ 专用 crate、RPC、Desktop service 与 duplicate storage 已删除                                                                                                                     |
 
 如果未来 Extensions 从静态 TUF 分发改成真正的 HTTPS business API，替换
 `ExtensionSource` 的实现即可；ExtensionPackageManager、App Server RPC、Renderer service 和 capability
@@ -330,13 +330,13 @@ runtime contract 不应改变。
 
 ## 修改影响与验证
 
-| 修改                              | 必须联动检查                                                       |
-| --------------------------------- | ------------------------------------------------------------------ |
-| remote catalog/TUF contract       | Extensions build/verify、Ash client tests、trusted-root rollout   |
+| 修改                              | 必须联动检查                                                                |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| remote catalog/TUF contract       | Extensions build/verify、Ash client tests、trusted-root rollout             |
 | public Plugin package DTO/service | App Server protocol/schema、frontend service、ExtensionPackageManager tests |
-| artifact/install state            | digest、atomic persistence、restart、update/uninstall tests        |
-| ActivationSpec                    | 对应 runtime、permission/auth policy、无路径泄漏测试               |
-| Desktop product services          | packaging tests、trusted-root resource、App Server startup         |
+| artifact/install state            | digest、atomic persistence、restart、update/uninstall tests                 |
+| ActivationSpec                    | 对应 runtime、permission/auth policy、无路径泄漏测试                        |
+| Desktop product services          | packaging tests、trusted-root resource、App Server startup                  |
 
 最低验证集：
 

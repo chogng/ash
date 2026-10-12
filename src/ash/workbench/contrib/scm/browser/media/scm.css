@@ -92,12 +92,15 @@
 	background: var(--scm-graph-row-background);
 }
 
-.ash-scm-graph:focus-within .ash-scm-graph-commit.selected > .ash-scm-graph-row {
+.ash-scm-graph:focus-within
+	.ash-scm-graph-commit.selected
+	> .ash-scm-graph-row {
 	color: var(--ash-list-activeSelectionForeground);
 }
 
 .ash-scm-graph-commit.selected:not(:focus-visible) > .ash-scm-graph-row {
-	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 	outline-offset: -1px;
 }
 

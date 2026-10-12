@@ -1,7 +1,7 @@
 import { URI } from '../../../../base/common/uri.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
-import type { ITextModel } from '../../../../editor/common/model.js';
+import { EndOfLineSequence, type ITextModel } from '../../../../editor/common/model.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -46,6 +46,8 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 		this.assertNotDisposed();
 		if (!this.textModel) {
 			const model = this.modelService.createModel(this.getText(), this.languageService.createById(this.languageId), this.resource);
+			// Output is a stream of normalized lines, independent of file EOL preferences.
+			model.setEOL(EndOfLineSequence.LF);
 			this.textModel = model;
 			// Views borrow the model through the resolver. Retained entries outlive its last reference.
 			this.modelListener.value = model.onWillDispose(() => { this.textModel = undefined; });
@@ -70,7 +72,7 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 				const line = this.textModel.getLineCount();
 				const column = this.textModel.getLineMaxColumn(line);
 				// A CRLF can arrive in separate writes; the model already normalized its CR.
-				const text = previous?.text.endsWith('\r') && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text;
+				const text = (previous?.text.endsWith('\r') && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text).replace(/\r\n?|\n/g, '\n');
 				this.textModel.applyEdits([{ range: new Range(line, column, line, column), text }]);
 			}
 		}

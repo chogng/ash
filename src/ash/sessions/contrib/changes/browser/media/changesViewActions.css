@@ -12,7 +12,8 @@
 	font: inherit;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-strokeThickness) solid var(--ash-input-border, var(--ash-contrastBorder));
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-contrastBorder));
 	border-radius: var(--ash-cornerRadius-small);
 	padding: var(--ash-spacing-size40);
 }

@@ -30,9 +30,11 @@ function snapshot(value: SnapshotDto): SymphonySnapshot {
 	return { workflows: value.workflows.map(workflow => ({ ...workflow, error: workflow.error ?? undefined })), conversations: value.conversations.map(conversation) };
 }
 function conversation(value: ConversationDto): SymphonyConversation {
-	return { id: value.id, workflowId: value.workflowId, identifier: value.identifier, title: value.title, status: value.status,
+	return {
+		id: value.id, workflowId: value.workflowId, identifier: value.identifier, title: value.title, status: value.status,
 		tokens: value.usage.inputTokens.reported + value.usage.outputTokens.reported, tokensComplete: value.usage.inputTokens.complete && value.usage.outputTokens.complete,
-		durationMs: value.durationMs, error: value.error ?? undefined };
+		durationMs: value.durationMs, error: value.error ?? undefined
+	};
 }
 function explain(error: unknown): never {
 	if (error instanceof AppServerRemoteError) {

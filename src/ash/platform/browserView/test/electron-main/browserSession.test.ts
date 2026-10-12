@@ -102,7 +102,7 @@ test('website grants bind both origins, reset removes decisions and closing canc
 });
 
 test('a remote session retains one SOCKS policy until its last page closes and never clears it to direct mode', async () => {
-	const child = Object.assign(new EventEmitter(), { exitCode: null, stderr: new EventEmitter(), kill: () => { child.emit('exit', 0); return true; } });
+	const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null, stderr: new EventEmitter(), kill: () => { child.emit('exit', 0); return true; } });
 	using tunnels = new SshPortForwardingService({
 		getWorkspace: () => ({ id: 'remote', remoteAuthority: 'ssh+test-host' }),
 		sshExecutable: 'ssh', localEnvironment: {}, reserveLocalPort: async () => 12345,

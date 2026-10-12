@@ -314,7 +314,6 @@ fn snapshot_retains_ordered_process_fenced_output_events() {
                 text: "ready\n".into(),
                 severity: HostOutputSeverity::Information,
                 category: None,
-                enablement: None,
             },
         });
 

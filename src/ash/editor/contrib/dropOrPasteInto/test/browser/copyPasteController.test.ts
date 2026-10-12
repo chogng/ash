@@ -46,10 +46,10 @@ test('URI-list paste inserts paths before duplicate plain text', async () => {
 	const paste = clipboardEvent(dom.window, data);
 
 	input.dispatchEvent(paste);
-	await waitFor(() => model.getText() === '/workspace/one.rs https://example.test/two');
+	await waitFor(() => model.getText() === `${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`);
 
 	assert.deepEqual({ value: model.getText(), handled: paste.defaultPrevented }, {
-		value: '/workspace/one.rs https://example.test/two',
+		value: `${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`,
 		handled: true,
 	});
 });
@@ -578,11 +578,11 @@ test('Paste As merges service resources without replacing event URI data', async
 	clipboard.data.setData('text/plain', 'file path fallback');
 	clipboard.resources = [URI.file('/workspace/service.ts')];
 	await CopyPasteController.get(editor)!.pasteAs({ only: new HierarchicalKind('uri') });
-	assert.equal(model.getText(), '/workspace/service.ts');
+	assert.equal(model.getText(), URI.file('/workspace/service.ts').fsPath);
 	model.setValue('');
 	clipboard.data.setData('text/uri-list', 'file:///workspace/event.ts');
 	await CopyPasteController.get(editor)!.pasteAs({ only: new HierarchicalKind('uri') });
-	assert.equal(model.getText(), '/workspace/event.ts');
+	assert.equal(model.getText(), URI.parse('file:///workspace/event.ts').fsPath);
 });
 
 test('Paste command resolves after delayed provider edits', async () => {

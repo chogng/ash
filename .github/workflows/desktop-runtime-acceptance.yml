@@ -1,0 +1,107 @@
+name: Desktop Electron runtime acceptance
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-runtime-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  acceptance:
+    name: Desktop runtime (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # The production packager compiles .icon assets with macOS 26's actool.
+        runner: [windows-latest, macos-26]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    env:
+      # Behavioral CI uses unsigned bundles, not release credentials or publishing.
+      ASH_UPDATE_PUBLIC_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
+        with:
+          install: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26"
+          cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version-file: scripts/pyproject.toml
+      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: ". -> .build/cargo"
+          # Keep the verified input archives used to restore pruned native outputs.
+          cache-directories: third_party/.cache/v8
+          shared-key: desktop-runtime-${{ matrix.runner }}
+          save-if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      - name: Sync locked tools and dependencies
+        run: |
+          python -B scripts/install_python_tools.py
+          pnpm install --frozen-lockfile
+      - name: Install browser used to render Windows application icons
+        if: runner.os == 'Windows'
+        run: pnpm exec playwright install chromium
+      - name: Fetch locked Rust graph for offline build-script metadata
+        # V8's include discovery reads Cargo metadata offline, including other targets.
+        run: cargo fetch --locked
+      - name: Revalidate V8 outputs after restoring the build cache
+        # Cargo can consider V8 fresh while profile/gn_out was pruned from the cache.
+        run: |
+          cargo clean --package v8 --profile dev-small
+          cargo clean --package v8 --profile ci-test
+      - name: Build self-contained backend for Web and headless hosts
+        run: pnpm run prepare:backend:web
+      - name: Select the independently usable runtime package
+        shell: bash
+        run: |
+          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_RUNTIME_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'packaged-node') + '\n');"
+      - name: Build delivered Desktop bundle without standalone Node
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            pnpm run package:win32:bundle --backend-package "$ASH_ACCEPTANCE_RUNTIME_PACKAGE" --output .build/desktop-runtime-ci
+          else
+            pnpm run package:darwin:bundle --unsigned --backend-package "$ASH_ACCEPTANCE_RUNTIME_PACKAGE" --output .build/desktop-runtime-ci
+          fi
+          node --input-type=module -e "import {appendFileSync,readFileSync} from 'node:fs'; import {resolve,join} from 'node:path'; const mac=process.platform==='darwin'; const bundle=resolve('.build/desktop-runtime-ci', mac ? 'Ash-darwin-'+process.arch+'/Ash.app' : 'Ash-win32-x64'); const electron=mac ? join(bundle,'Contents/MacOS/Ash') : join(bundle,'Ash.exe'); const version=JSON.parse(readFileSync('node_modules/electron/package.json','utf8')).version; appendFileSync(process.env.GITHUB_ENV, 'ASH_PACKAGED_BUNDLE='+bundle+'\nASH_TEST_ELECTRON_PATH='+electron+'\nASH_TEST_ELECTRON_VERSION='+version+'\n');"
+      - name: Check packaged automation types
+        run: pnpm exec bun check -p test/automation/tsconfig.json --all
+      - name: Verify real Desktop startup, quit, file and terminal operations
+        run: pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/packaged-app.spec.ts
+      - name: Verify background, TUI restart, crash recovery, binding upgrade and rollback
+        shell: bash
+        run: python -B build/desktop/runtime_acceptance.py --bundle "$ASH_PACKAGED_BUNDLE" --standalone-package "$ASH_ACCEPTANCE_RUNTIME_PACKAGE" --report .build/desktop-runtime-acceptance.json
+      - name: Test publication, daemon and capability contracts
+        run: just test ash-app-server-daemon -p ash-package-store -p ash-lsp-server-provider -p ash-external-ext --lib --profile ci-test --locked
+      - name: Verify real Electron language-server initialization and shutdown
+        run: just test-processes ash-lsp-server-provider --test electron_runtime --profile ci-test --locked -- --ignored
+      - name: Verify real Electron extensions retain separate window lifetimes
+        run: just test ash-app-server --lib --profile ci-test --locked standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate
+      - name: Upload runtime and application diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: desktop-runtime-${{ matrix.runner }}
+          path: |
+            .build/desktop-runtime-acceptance.json
+            .build/desktop/playwright/
+          if-no-files-found: warn

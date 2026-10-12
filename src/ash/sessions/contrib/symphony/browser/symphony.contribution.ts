@@ -45,17 +45,21 @@ async function openSymphony(accessor: ServicesAccessor): Promise<void> {
 
 registerAction2(class OpenSymphony extends Action2 {
 	constructor() {
-		super({ id: 'sessions.open.symphony', title: localize2('symphony.title', 'Symphony'), f1: true, icon: Lxicon.agent,
-			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 70 } });
+		super({
+			id: 'sessions.open.symphony', title: localize2('symphony.title', 'Symphony'), f1: true, icon: Lxicon.agent,
+			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 70 }
+		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> { await openSymphony(accessor); }
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-	AccessibleViewRegistry.register({ type, priority: 100, name: `sessionsSymphony${type}`, when: ContextKeyExpr.has('sessionsSymphonyFocused'), getProvider: accessor => {
-		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		return new AccessibleContentProvider(AccessibleViewProviderId.Symphony, { type },
-			() => type === AccessibleViewType.Help ? localize('symphony.help', 'Symphony schedules tasks inside Ash. Load an absolute WORKFLOW.md path, select a workflow and create a task. GitHub and Linear workflows also poll issues automatically. Tab moves between controls; Up, Down, Home and End select conversations in the list. The monitor shows messages, status, cumulative tokens and runtime. Pause stops the current Turn; Resume keeps the same conversation. Pause dispatch only prevents new work. Complete stops a task. Closing this page leaves scheduling running. Totals include all runs and retries; runtime excludes paused time. <keybinding:editor.action.accessibleView> reads the monitor as text.') : symphonyAccessibleContent(accessor.get(ISymphonyService)),
-			() => focused?.focus(), AccessibilityVerbositySettingId.Symphony);
-	} });
+	AccessibleViewRegistry.register({
+		type, priority: 100, name: `sessionsSymphony${type}`, when: ContextKeyExpr.has('sessionsSymphonyFocused'), getProvider: accessor => {
+			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+			return new AccessibleContentProvider(AccessibleViewProviderId.Symphony, { type },
+				() => type === AccessibleViewType.Help ? localize('symphony.help', 'Symphony schedules tasks inside Ash. Load an absolute WORKFLOW.md path, select a workflow and create a task. GitHub and Linear workflows also poll issues automatically. Tab moves between controls; Up, Down, Home and End select conversations in the list. The monitor shows messages, status, cumulative tokens and runtime. Pause stops the current Turn; Resume keeps the same conversation. Pause dispatch only prevents new work. Complete stops a task. Closing this page leaves scheduling running. Totals include all runs and retries; runtime excludes paused time. <keybinding:editor.action.accessibleView> reads the monitor as text.') : symphonyAccessibleContent(accessor.get(ISymphonyService)),
+				() => focused?.focus(), AccessibilityVerbositySettingId.Symphony);
+		}
+	});
 }

@@ -32,27 +32,27 @@ Plugin 是可同时携带多种 capability 的集成 bundle。`ash-plugin` 定�
 适用于 Open VSX 包。运行兼容性由 TS 扩展 API 和隔离的 JS 宿主决定，具体要求见
 [`第三方扩展来源采用 Open VSX`](editor-extensions.md#05-第三方扩展来源采用-open-vsx)。
 
-| 用户动作                       | 系统发生什么                                                          | 不会自动发生什么                                   |
-| ------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------- |
+| 用户动作                      | 系统发生什么                                                          | 不会自动发生什么                                   |
+| ----------------------------- | --------------------------------------------------------------------- | -------------------------------------------------- |
 | 安装 Extensions Plugin bundle | `ash-core-plugins` 校验不可变 package、签名和摘要后只写入一次         | 不自动启用或授权任一 capability                    |
-| 各领域启用 capability          | Skill/MCP/Connector/Editor Extension consumer 分别应用自己的 policy   | 不存在 bundle 级隐式全开                           |
-| 启用 local Plugin              | 允许 contribution 参与解析                                            | 不连接 Connector、不启动 MCP、不执行脚本           |
-| 批准请求的能力                 | 记录精确的进程、网络、目录或凭据授权                                  | 不批准未来每一次工具调用                           |
-| 激活贡献                       | 生成带来源和 generation 的不可变快照                                  | 不把 live manager 注入 Agent                       |
-| 更新或回滚                     | 并存校验后的版本并原子切换                                            | 不原地修改已安装包                                 |
-| 卸载                           | 撤销后续激活并清理可回收内容                                          | 不删除其他领域拥有的秘密或历史                     |
-| 打开正式打包的 Ash             | 从产品内固定的 root 刷新官方 HTTPS Extensions                        | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
+| 各领域启用 capability         | Skill/MCP/Connector/Editor Extension consumer 分别应用自己的 policy   | 不存在 bundle 级隐式全开                           |
+| 启用 local Plugin             | 允许 contribution 参与解析                                            | 不连接 Connector、不启动 MCP、不执行脚本           |
+| 批准请求的能力                | 记录精确的进程、网络、目录或凭据授权                                  | 不批准未来每一次工具调用                           |
+| 激活贡献                      | 生成带来源和 generation 的不可变快照                                  | 不把 live manager 注入 Agent                       |
+| 更新或回滚                    | 并存校验后的版本并原子切换                                            | 不原地修改已安装包                                 |
+| 卸载                          | 撤销后续激活并清理可回收内容                                          | 不删除其他领域拥有的秘密或历史                     |
+| 打开正式打包的 Ash            | 从产品内固定的 root 刷新官方 HTTPS Extensions                         | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
 | 浏览 Extensions               | 读取已签名 manifest、能力、权限与包统计；离线时可使用仍有效的目录缓存 | 不预下载所有 Plugin ZIP                            |
-| 安装远端 Plugin                | 重新检查 TUF 与撤销状态，只下载所选 exact ZIP，再校验内容摘要         | 不因已浏览或已下载而自动启用、授权                 |
+| 安装远端 Plugin               | 重新检查 TUF 与撤销状态，只下载所选 exact ZIP，再校验内容摘要         | 不因已浏览或已下载而自动启用、授权                 |
 
 ## 1. 结论
 
 Plugin 的定义与产品生命周期分别由两个 crate 拥有，来源不会建立第二套生命周期：
 
-| 来源                                        | Package lifecycle owner | Capability activation owner                                    |
-| ------------------------------------------- | ----------------------- | -------------------------------------------------------------- |
+| 来源                                       | Package lifecycle owner | Capability activation owner                                    |
+| ------------------------------------------ | ----------------------- | -------------------------------------------------------------- |
 | Built-in / remote Extensions Plugin bundle | `ash-core-plugins`      | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域     |
-| Local Plugin v1                             | `ash-core-plugins`      | App Server 交给各领域；enable/grant 后形成 activation snapshot |
+| Local Plugin v1                            | `ash-core-plugins`      | App Server 交给各领域；enable/grant 后形成 activation snapshot |
 
 所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。目标 Rust 能力扩展由 Ash 来源 adapter 或产品预装包接入，同样复用 Manager 的精确包安装与租约；不要求 Open VSX 提供 Rust 包，不新建一套安装、启用或授权 authority。
 `ash-core-plugins` 先形成统一 installed Plugin 与 activation，再按 capability 交给各领域。

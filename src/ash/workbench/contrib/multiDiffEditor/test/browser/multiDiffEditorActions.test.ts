@@ -19,7 +19,7 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { commandActionLabel } from '../../../../../platform/action/common/action.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 
 test('MultiDiff Action2 contributions use active-editor context and route to the active pane', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -131,7 +131,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		await commands.executeCommand(MultiDiffExpandAllCommandId);
 		await commands.executeCommand(MultiDiffToggleCollapseUnchangedRegionsCommandId);
 		assert.deepEqual(pane.calls, ['next', 'previous', 'collapse', 'expand', 'toggleUnchanged']);
-		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(chinese.locale, chinese.bundles);
 		assert.deepEqual([
 			new MultiDiffCollapseAllAction(), new MultiDiffExpandAllAction(), new MultiDiffToggleCollapseUnchangedRegionsAction(),

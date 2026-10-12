@@ -140,7 +140,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 			const previous = this.activeControl;
 			this.activeControl = original.hasTextFocus() ? original
 				: modified.hasTextFocus() ? modified
-				: previous === original || previous === modified ? previous : modified;
+					: previous === original || previous === modified ? previous : modified;
 		} else {
 			this.activeControl = registered.find(editor => editor === control);
 		}
@@ -196,7 +196,8 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		const encodingSupport = model && this.models.getModel(model.uri) === model ? this.models.getEncodingSupport(model.uri) : undefined;
 		const fileEncoding = encodingSupport?.getEncoding();
 		const encoding = fileEncoding ? getEncodingLabel(fileEncoding) : model ? model.getValueLength(undefined, true) > model.getValueLength() ? localize('status.editor.utf8Bom', 'UTF-8 with BOM') : 'UTF-8' : status?.encoding;
-		this.setEntry(this.encoding, encoding ? { text: encoding, ariaLabel: localize('status.editor.encoding', 'Editor encoding {0}', encoding),
+		this.setEntry(this.encoding, encoding ? {
+			text: encoding, ariaLabel: localize('status.editor.encoding', 'Editor encoding {0}', encoding),
 			...(encodingSupport && editor ? { tooltip: localize('status.editor.changeEncoding', 'Change File Encoding'), run: () => { editor.focus(); return this.commands.executeCommand(ChangeEncodingAction.ID); } } : {}),
 		} : undefined, 'ash.status.editor.encoding', 60);
 		const endOfLine = model ? model.getEOL() === '\r\n' ? 'CRLF' : 'LF' : status?.endOfLine;
@@ -215,7 +216,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		const workingCopy = pane?.workingCopy;
 		const stateText = workingCopy?.hasExternalChange ? localize('status.editor.conflict', 'Conflict')
 			: workingCopy?.isDirty ? localize('status.editor.unsaved', 'Unsaved')
-			: workingCopy && (editor ? editor.getOption(EditorOption.readOnly) : input?.readOnly) ? localize('status.editor.readOnly', 'Read-only') : undefined;
+				: workingCopy && (editor ? editor.getOption(EditorOption.readOnly) : input?.readOnly) ? localize('status.editor.readOnly', 'Read-only') : undefined;
 		this.setEntry(this.state, stateText ? {
 			text: stateText, ariaLabel: stateText,
 			...(workingCopy?.hasExternalChange ? { tooltip: localize('status.editor.conflictTooltip', 'The file changed on disk while this editor has unsaved changes.') } : {}),
@@ -346,7 +347,7 @@ export class ChangeEncodingAction extends Action2 {
 		if (modes.length === 0) return;
 		const choice = await pickStatusItem(quickInput, modes, localize('status.editor.selectEncodingAction', 'Select an Encoding Action'), pickerLifetime);
 		if (!choice || !isCurrent()) return;
-		const picks: (IQuickPickItem & { id: string })[] = [];
+		const picks: (IQuickPickItem & { id: string; })[] = [];
 		if (choice.mode === EncodingMode.Decode) {
 			const controller = new AbortController();
 			pickerLifetime.add(toDisposable(() => controller.abort()));

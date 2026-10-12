@@ -11,7 +11,7 @@ use ash_external_ext::ExtensionCapability;
 use ash_external_ext::ExtensionHostLimits;
 use ash_external_ext::ExtensionLaunchCommand;
 use ash_external_ext::PackageBinding;
-use ash_external_ext::ProductJavaScriptLauncher;
+use ash_external_ext::ProductNodeLauncher;
 use ash_external_ext::RestartPolicy;
 use ash_file_access::Dir;
 use ash_file_access::Grant;
@@ -114,8 +114,14 @@ impl Drop for EditorPeer {
     }
 }
 
-fn install_node_fixture(root: &Path) -> (ProductJavaScriptLauncher, EditorExtensionDeployment) {
-    let output = std::process::Command::new("node")
+fn install_node_fixture(root: &Path) -> (ProductNodeLauncher, EditorExtensionDeployment) {
+    let electron = std::env::var_os("ASH_TEST_ELECTRON_PATH");
+    let mut runtime =
+        std::process::Command::new(electron.as_deref().unwrap_or(std::ffi::OsStr::new("node")));
+    if electron.is_some() {
+        runtime.env("ELECTRON_RUN_AS_NODE", "1");
+    }
+    let output = runtime
         .args(["--print", "process.execPath"])
         .output()
         .expect("Node is required for standard extension lifecycle tests");
@@ -157,12 +163,14 @@ exports.activate = context => {
 "#,
     )
     .unwrap();
-    let product = root.join("ash-external-js-ext");
-    let launcher = ProductJavaScriptLauncher::new(product.clone())
-        .with_node_runtime(node, root.join("node.mjs"), BTreeMap::new())
-        .unwrap();
+    let mut environment = std::env::var_os("SYSTEMROOT")
+        .map(|value| BTreeMap::from([("SYSTEMROOT".into(), value)]))
+        .unwrap_or_default();
+    if electron.is_some() {
+        environment.insert("ELECTRON_RUN_AS_NODE".into(), "1".into());
+    }
+    let launcher = ProductNodeLauncher::new(node, root.join("node.mjs"), environment).unwrap();
     let command = ExtensionLaunchCommand::vscode(
-        product,
         vec![
             "--extension-id".into(),
             "test.node".into(),
@@ -240,7 +248,7 @@ fn invoke(runtime: &ExtensionHostRuntime, owner: u64) -> Value {
 }
 
 fn runtime_with_recipe(
-    launcher: ProductJavaScriptLauncher,
+    launcher: ProductNodeLauncher,
     deployment: EditorExtensionDeployment,
     grant: &Grant,
     client: Arc<crate::client_host::ClientHost>,

@@ -1979,14 +1979,7 @@ pub fn open_app_server_with_codebase_providers(
         }
     }
     {
-        let executable =
-            std::env::current_exe().map_err(|error| OpenAppServerError(error.to_string()))?;
-        let directory = executable
-            .parent()
-            .ok_or_else(|| OpenAppServerError("missing product executable directory".into()))?;
-        let mut launcher = ash_external_ext::ProductJavaScriptLauncher::new(directory.join(
-            format!("ash-external-js-ext{}", std::env::consts::EXE_SUFFIX),
-        ));
+        let mut launcher = ash_external_ext::ProductNodeLauncher::default();
         if let Some(node) = &managed_node {
             let bootstrap = InstallContext::current()
                 .bundled_resource("extension-host/node.mjs")
@@ -2002,9 +1995,12 @@ pub fn open_app_server_with_codebase_providers(
             {
                 environment.insert("ELECTRON_RUN_AS_NODE".into(), "1".into());
             }
-            launcher = launcher
-                .with_node_runtime(node.executable().to_path_buf(), bootstrap, environment)
-                .map_err(|error| OpenAppServerError(error.to_string()))?;
+            launcher = ash_external_ext::ProductNodeLauncher::new(
+                node.executable().to_path_buf(),
+                bootstrap,
+                environment,
+            )
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
         }
         server = server
             .with_built_in_editor_extensions()

@@ -32,8 +32,10 @@ test('TypeScript project include patterns select existing sources', () => {
 
 test("product build and launch tools have one owner while repository scripts remain shared", () => {
 	for (const directory of ["src/scripts", "scripts/desktop", "scripts/code", "build/remote", "build/runtime", "app-rs", "app-ts", "ash-rs", "ash-cli", "code"]) {
-		const path = join(repositoryRoot, directory);
-		assert.equal(existsSync(path), false, `${directory} must not own product tooling`);
+		// Ignored leftovers from an older checkout do not own repository sources.
+		const inventory = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', directory], { cwd: repositoryRoot, encoding: 'utf8' });
+		assert.equal(inventory.status, 0, inventory.stderr);
+		assert.equal(inventory.stdout, '', `${directory} must not own product tooling`);
 	}
 	assert.equal(existsSync(join(repositoryRoot, "cli/Cargo.toml")), true);
 	for (const category of ["desktop", "code", "download", "lib", "pnpm", "darwin", "win32", "linux", "resources"]) {
@@ -73,7 +75,7 @@ test("frontend Node tools and backend package builders have separate language ow
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".py"), [], directory);
 	}
 	for (const [directory, entries] of [
-		['desktop', ['__init__.py', 'develop.py', 'test_develop.py']],
+		['desktop', ['__init__.py', 'develop.py', 'package_runtime.py', 'runtime_acceptance.py', 'test_develop.py', 'test_package_runtime.py']],
 		['protocol', ['__init__.py', 'artifacts.py', 'generate.py', 'test_generate.py']],
 	] as const) {
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py').map(path => path.slice(join(import.meta.dirname, directory).length + 1)).sort(), [...entries].sort(), directory);

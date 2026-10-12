@@ -3,12 +3,7 @@
   "compilerOptions": {
     "outDir": ".build/desktop/test",
     "rootDir": ".",
-    "types": [
-      "node",
-      "vite/client",
-      "@webgpu/types",
-      "electron"
-    ]
+    "types": ["node", "vite/client", "@webgpu/types", "electron"]
   },
   "include": [
     "src/typings/css.d.ts",

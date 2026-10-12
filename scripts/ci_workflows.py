@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from urllib.request import Request, urlopen
 
 from check_blob_size import changed_paths
 
@@ -74,6 +75,40 @@ def select(paths: list[str], policy: dict, force_all: bool = False) -> dict[str,
     }
 
 
+def successful_main_base(
+    root: Path, head: str, repository: str, token: str
+) -> str | None:
+    """Include commits whose queued runs were replaced or whose checks failed."""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) or not token:
+        raise ValueError("main CI selection requires a repository and GitHub token")
+    request = Request(
+        f"https://api.github.com/repos/{repository}/actions/workflows/blocking-ci.yml/runs"
+        "?branch=main&event=push&status=success&per_page=1",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urlopen(request, timeout=30) as response:
+        runs = json.loads(response.read(2 * 1024 * 1024))["workflow_runs"]
+    if not isinstance(runs, list):
+        raise ValueError("GitHub workflow runs must be a list")
+    if not runs:
+        return None
+    if not isinstance(runs[0], dict):
+        raise ValueError("successful CI run must be an object")
+    base = runs[0].get("head_sha")
+    if not isinstance(base, str) or not re.fullmatch(r"[0-9a-f]{40}", base):
+        raise ValueError("successful CI run has an invalid commit SHA")
+    # A force push can replace main's history. A success on its old history
+    # cannot establish coverage for the replacement; check every workflow.
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", base, head], cwd=root, check=False
+    )
+    return base if ancestor.returncode == 0 else None
+
+
 def require_results(needs: dict, selection: dict, policy: dict) -> list[str]:
     if not isinstance(selection, dict) or set(selection) != set(policy):
         raise ValueError("selection must include exactly the configured workflows")
@@ -105,13 +140,24 @@ def main(arguments: list[str] | None = None) -> int:
     selection_parser.add_argument("--base")
     selection_parser.add_argument("--head", default="HEAD")
     selection_parser.add_argument("--all", action="store_true")
+    selection_parser.add_argument("--since-successful-main", action="store_true")
     subparsers.add_parser("require")
     args = parser.parse_args(arguments)
     try:
         policy = load_policy(args.policy)
         if args.operation == "select":
-            paths = changed_paths(ROOT, args.base, args.head)
-            selection = select(paths, policy, args.all)
+            base = args.base
+            force_all = args.all
+            if args.since_successful_main and not force_all:
+                base = successful_main_base(
+                    ROOT,
+                    args.head,
+                    os.environ["GITHUB_REPOSITORY"],
+                    os.environ["GITHUB_TOKEN"],
+                )
+                force_all = base is None
+            paths = changed_paths(ROOT, base, args.head)
+            selection = select(paths, policy, force_all)
             serialized = json.dumps(selection, separators=(",", ":"))
             print(serialized)
             if output := os.environ.get("GITHUB_OUTPUT"):

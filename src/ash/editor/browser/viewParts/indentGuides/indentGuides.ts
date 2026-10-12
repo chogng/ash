@@ -73,6 +73,10 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		const bracketGuides = this.resolveBracketGuides(context);
 		const { startLineNumber, endLineNumber } = context.viewportData;
 		const indentation = this.guides.indentation ? this.viewModel.getLinesIndentGuides(startLineNumber, endLineNumber) : [];
+		if (!indentation.some(depth => depth > 0) && !bracketGuides.some(guides => guides.length > 0)) {
+			this._renderResult = [];
+			return;
+		}
 		const activeIndentation = this.guides.indentation && this.guides.highlightActiveIndentation !== false
 			? this.viewModel.getActiveIndentGuide(this.viewModel.getPrimaryCursorState().viewState.position.lineNumber, startLineNumber, endLineNumber)
 			: undefined;

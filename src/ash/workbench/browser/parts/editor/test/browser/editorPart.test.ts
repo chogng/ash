@@ -24,7 +24,6 @@ import { IEditorService } from '../../../../../services/editor/common/editorServ
 import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../../../../../services/editor/browser/codeEditorService.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
-import { WorkbenchQuickInputService } from '../../../../../services/quickinput/browser/quickInputService.js';
 import { IConfigurationResolverService } from '../../../../../services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverService } from '../../../../../services/configurationResolver/browser/configurationResolverService.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
@@ -3981,7 +3980,6 @@ function createEditorParts(main: ConstructorParameters<typeof EditorParts>[0], w
 	const parts = services.createInstance(EditorParts, main, windows, factory, accessibility, storage);
 	services.registerSingleton(ICodeEditorService, () => new CodeEditorService(parts));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
-	services.registerSingleton(IQuickInputService, () => new WorkbenchQuickInputService({ container: main.domNode.ownerDocument.body, contextKeyService: services.get(IContextKeyService) }));
 	return parts;
 }
 

@@ -2901,7 +2901,9 @@ impl ThreadController {
         }
         let expected_sequence = snapshot.as_ref().map_or(0, |snapshot| snapshot.sequence);
         let previous_turns = snapshot.as_ref().map(|snapshot| snapshot.turns.clone());
-        let index_ready = !events.iter().any(|event| matches!(event, ThreadEvent::ThreadHistoryMoved { .. }))
+        let index_ready = !events
+            .iter()
+            .any(|event| matches!(event, ThreadEvent::ThreadHistoryMoved { .. }))
             && self.store.history_index_sequence(thread_id)? == Some(expected_sequence);
         let completed_items = events
             .iter()
@@ -4011,14 +4013,24 @@ impl ThreadStore for InMemoryThreadStore {
             .threads
             .values()
             .flatten()
-            .flat_map(|event| event.event.history_prefixes().map(|prefix| prefix.digest.as_str().to_string()))
+            .flat_map(|event| {
+                event
+                    .event
+                    .history_prefixes()
+                    .map(|prefix| prefix.digest.as_str().to_string())
+            })
             .collect::<Vec<_>>();
         while let Some(digest) = pending.pop() {
             if !retained.insert(digest.clone()) {
                 continue;
             }
             if let Some(prefix) = state.prefixes.get(&digest) {
-                pending.extend(prefix.events.iter().flat_map(|event| event.event.history_prefixes().map(|prefix| prefix.digest.as_str().to_string())));
+                pending.extend(prefix.events.iter().flat_map(|event| {
+                    event
+                        .event
+                        .history_prefixes()
+                        .map(|prefix| prefix.digest.as_str().to_string())
+                }));
             }
         }
         state.prefixes.retain(|digest, _| retained.contains(digest));

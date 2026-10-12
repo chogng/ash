@@ -8,7 +8,7 @@ import shutil
 import stat
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Mapping, Optional
 from urllib.parse import urlsplit
 
 from build.builtin import (
@@ -73,7 +73,7 @@ def build_package_directory(
     exec_server_binary: Path,
     app_server_daemon_binary: Path,
     code_mode_host_binary: Path,
-    js_extension_host_binary: Path,
+    js_extension_host_binary: Optional[Path],
     ripgrep: RipgrepResolution,
     tgrep: ExecutableResolution,
     node: Optional[NodeResolution],
@@ -81,6 +81,7 @@ def build_package_directory(
     protocol_metadata: Optional[Dict[str, object]] = None,
     update_public_key: Optional[str] = None,
     build_profile: str = "release",
+    electron_version: Optional[str] = None,
     windows_sandbox_binary: Optional[Path] = None,
     windows_sandbox_service_binary: Optional[Path] = None,
     remote_host_binary: Optional[Path] = None,
@@ -140,13 +141,14 @@ def build_package_directory(
             "execServer": str(exec_server_binary),
             "appServerDaemon": str(app_server_daemon_binary),
             "codeModeHost": str(code_mode_host_binary),
-            "jsExtensionHost": str(js_extension_host_binary),
             "githubAuthentication": str(github_authentication_binary),
             "remoteSshExtension": str(remote_ssh_extension_binary),
             "voiceHost": str(voice_host_binary),
             "collaborationServer": str(collaboration_server_binary),
             "livekit": livekit["executable"],
         }
+        if js_extension_host_binary is not None:
+            executables["jsExtensionHost"] = str(js_extension_host_binary)
         if windows_sandbox_binary is not None:
             executables["windowsSandbox"] = str(windows_sandbox_binary)
             executables["windowsSandboxService"] = str(windows_sandbox_service_binary)
@@ -204,6 +206,7 @@ def build_package_directory(
                 "sourceRoot": str(repository_root),
                 "version": version,
                 "buildProfile": build_profile,
+                "electronVersion": electron_version,
                 "protocol": protocol_metadata
                 if protocol_metadata is not None
                 else load_protocol_metadata(repository_root),
@@ -282,7 +285,7 @@ def assemble_package(staging: Path, inputs: dict) -> None:
         )
 
     suffix = ".exe" if is_windows else ""
-    for component, relative in LAYOUT["binaries"].items():
+    for component, relative in package_binary_layout(executables).items():
         destination = staging / relative.format(exe=suffix)
         copy_executable(Path(executables[component]), destination, is_windows)
     if is_windows:
@@ -340,7 +343,7 @@ def assemble_package(staging: Path, inputs: dict) -> None:
         if options["buildProfile"] != "release":
             raise RuntimeError("Companion symbols require the release profile")
         store = SymbolStore(Path(inputs["symbolsDir"]), source_root)
-        for component, relative in LAYOUT["binaries"].items():
+        for component, relative in package_binary_layout(executables).items():
             if component != "livekit":
                 store.collect(
                     Path(executables[component]),
@@ -366,7 +369,7 @@ def assemble_package(staging: Path, inputs: dict) -> None:
             if key in ("archive", "archiveSha256", "binarySha256", "source", "version")
         },
     }
-    for component, relative in LAYOUT["binaries"].items():
+    for component, relative in package_binary_layout(executables).items():
         components[component] = {
             "source": "cargo-build",
             "binarySha256": file_sha256(staging / relative.format(exe=suffix)),
@@ -448,6 +451,13 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     }
     if catalog:
         identity["remoteRuntimeCatalog"] = catalog
+    electron_version = options.get("electronVersion")
+    if electron_version is not None:
+        if node or not valid_electron_version(electron_version):
+            raise RuntimeError(
+                "Electron contract requires a valid version and host-provided Node"
+            )
+        identity["javascriptRuntime"]["electronVersion"] = electron_version
     files = package_files(staging)
     metadata = {
         **identity,
@@ -496,20 +506,29 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
                 )
             )
 
+    components = metadata.get("components")
+    if not isinstance(components, dict):
+        raise RuntimeError("Invalid package component metadata")
+    binary_layout = package_binary_layout(components)
+    for component, relative in LAYOUT["optionalBinaries"].items():
+        artifact = package / relative.format(exe=spec.executable_suffix)
+        if artifact.is_symlink() or (
+            not artifact.is_file() if component in components else artifact.exists()
+        ):
+            raise RuntimeError(
+                f"Optional package executable does not match its component: {component}"
+            )
     executables = [
         package / relative.format(exe=spec.executable_suffix)
-        for relative in LAYOUT["binaries"].values()
+        for relative in binary_layout.values()
     ]
     executables.append(package / LAYOUT["pathDir"] / spec.ripgrep_name)
     executables.append(
         package / "ash-resources/tgrep" / ("tgrep" + spec.executable_suffix)
     )
-    components = metadata.get("components")
-    if not isinstance(components, dict):
-        raise RuntimeError("Invalid package component metadata")
     first_party_artifacts = {
         component: package / relative.format(exe=".exe" if spec.is_windows else "")
-        for component, relative in LAYOUT["binaries"].items()
+        for component, relative in binary_layout.items()
     }
     first_party_artifacts["tgrep"] = (
         package / "ash-resources/tgrep" / ("tgrep" + spec.executable_suffix)
@@ -575,7 +594,15 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         if not isinstance(components.get("node"), dict):
             raise RuntimeError("Packaged Node runtime metadata is missing")
         executables.append(package / "ash-resources" / "node" / "bin" / spec.node_name)
-    elif javascript_runtime == {"kind": "hostProvidedNode"}:
+    elif (
+        isinstance(javascript_runtime, dict)
+        and javascript_runtime.get("kind") == "hostProvidedNode"
+    ):
+        if set(javascript_runtime) not in ({"kind"}, {"kind", "electronVersion"}) or (
+            "electronVersion" in javascript_runtime
+            and not valid_electron_version(javascript_runtime["electronVersion"])
+        ):
+            raise RuntimeError("Invalid Electron runtime contract")
         if "node" in components:
             raise RuntimeError("Host-provided runtime package contains Node metadata")
         if (package / "ash-resources" / "node").exists():
@@ -656,6 +683,30 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
                 )
 
 
+def package_binary_layout(components: Mapping[str, object]) -> Dict[str, str]:
+    # Existing packages and explicit V8-host packages retain their signed component.
+    return {
+        **LAYOUT["binaries"],
+        **{
+            name: path
+            for name, path in LAYOUT["optionalBinaries"].items()
+            if name in components
+        },
+    }
+
+
+def valid_electron_version(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) <= 128
+        and re.fullmatch(
+            r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?",
+            value,
+        )
+        is not None
+    )
+
+
 def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]:
     """Return executable package members covered by system signing."""
     metadata = json.loads((package / METADATA_FILE).read_text(encoding="utf-8"))
@@ -665,7 +716,6 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     artifacts = {
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
-        "jsExtensionHost": package / "bin" / spec.js_extension_host_name,
         "githubAuthentication": package
         / "bin"
         / ("ash-github-authentication" + spec.executable_suffix),
@@ -685,6 +735,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "remoteServer": package / "bin" / spec.remote_server_name,
         "execServer": package / "bin" / spec.exec_server_name,
     }
+    for component, relative in LAYOUT["optionalBinaries"].items():
+        if component in components:
+            artifacts[component] = package / relative.format(exe=spec.executable_suffix)
     if spec.is_windows:
         artifacts["windowsSandbox"] = package / "bin/ash-windows-sandbox.exe"
         artifacts["windowsSandboxService"] = (

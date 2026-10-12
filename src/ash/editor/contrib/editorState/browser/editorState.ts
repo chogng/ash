@@ -40,7 +40,7 @@ export class EditorStateCancellationTokenSource extends EditorKeybindingCancella
 		}
 		if (flags & CodeEditorStateFlag.Scroll) {
 			const state = new EditorState(editor, CodeEditorStateFlag.Scroll);
-			this.changes.add(editor.onDidLayoutChange(() => {
+			this.changes.add(editor.onDidScrollChange(() => {
 				if (!state.validate(editor)) {
 					this.cancel();
 				}

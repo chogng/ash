@@ -7,6 +7,11 @@ fn main() {
     // the linked engine cannot silently use different V8 allocator interfaces.
     let metadata = Command::new(std::env::var_os("CARGO").expect("Cargo executable"))
         .args(["metadata", "--locked", "--offline", "--format-version=1"])
+        // A host shim does not need sources for Android or other inactive targets.
+        .args([
+            "--filter-platform",
+            &std::env::var("TARGET").expect("Cargo target"),
+        ])
         .output()
         .expect("resolve locked V8 headers");
     assert!(

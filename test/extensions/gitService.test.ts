@@ -274,7 +274,7 @@ test('GitService preserves legacy commit parameters and forwards explicit commit
 		{ repositoryId: 'nested', message: 'Signed amended message', scope: 'includeUntracked', mode: 'amend', signoff: 'add', expectedHead: { type: 'branch', name: 'main', objectId: 'captured', upstream: null } },
 		{ repositoryId: 'nested', message: 'Detached message', mode: 'amend', expectedHead: { type: 'detached', objectId: 'captured' } },
 	]);
-	assert.equal(result.status.workspacePath, '/workspace/nested');
+	assert.equal(result.status.workspacePath, URI.file('/workspace/nested').fsPath);
 	assert.equal(service.activeRepository?.id, 'root');
 });
 

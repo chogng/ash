@@ -28,18 +28,18 @@ MCP 客户端把外部 Server 的工具转换成 Ash 的工具目录。外部客
 
 大目录通过 `search_tools` 与 `call_mcp_tool` 发现和调用。两者的工具描述保持固定，目录与定义摘要通过搜索结果和调用参数传递；目录更新后，旧目录的绑定会被拒绝，调用方须重新搜索。目录身份不进入工具描述，避免目录更新改写模型的工具前缀。
 
-| 场景                                         | 使用的边界                                                                        | 当前状态                                    |
-| -------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------- |
-| Ash 连接外部 MCP Server                      | `ash-rmcp-client` 建立单连接，`ash-mcp` 管理多 Server 和工具目录                  | 工具纵向切片已实现                          |
-| MCP 暴露工具                                 | 转成带来源、绑定和失效 generation 的统一工具                                      | 已实现基础目录与调用路由                    |
-| MCP 暴露资源或提示词                         | 进入各自的上下文和产品契约                                                        | 仍属计划设计                                |
-| Server 需要 bearer 或 OAuth                  | 凭据保存在 SecretStore；具体 provider adapter 决定 discovery、scope 与 token wire | 独立 Config 与 Connector 路径均已具备窄实现 |
-| MCP 工具运行中请求表单输入                   | 转成 Core durable 用户交互并唤醒同一次工具执行                                    | 基础类型已实现；URL、多选和跨重启恢复不支持 |
+| 场景                                        | 使用的边界                                                                        | 当前状态                                    |
+| ------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------- |
+| Ash 连接外部 MCP Server                     | `ash-rmcp-client` 建立单连接，`ash-mcp` 管理多 Server 和工具目录                  | 工具纵向切片已实现                          |
+| MCP 暴露工具                                | 转成带来源、绑定和失效 generation 的统一工具                                      | 已实现基础目录与调用路由                    |
+| MCP 暴露资源或提示词                        | 进入各自的上下文和产品契约                                                        | 仍属计划设计                                |
+| Server 需要 bearer 或 OAuth                 | 凭据保存在 SecretStore；具体 provider adapter 决定 discovery、scope 与 token wire | 独立 Config 与 Connector 路径均已具备窄实现 |
+| MCP 工具运行中请求表单输入                  | 转成 Core durable 用户交互并唤醒同一次工具执行                                    | 基础类型已实现；URL、多选和跨重启恢复不支持 |
 | Extensions 独立 MCP package                 | Manager 验证 HTTP 或 package-relative stdio transport；MCP consumer 持 lease 启动 | 安装不等于启动或授权                        |
 | Extensions Plugin bundle 携带 MCP/Connector | 同一次安装按 capability 分给 MCP 与 Connector consumer                            | 不进入第二套 Plugin runtime                 |
-| Legacy Plugin 独立声明 MCP Server            | 兼容 authority 只贡献声明，经激活和策略解析后由 MCP runtime 启动                  | Plugin 启用不等于连接或授权                 |
-| Connector 需要外部账号                       | Connector connected 后发布 ready MCP binding                                      | Connector 不启动 MCP session                |
-| 用户或 Directory 直接配置 MCP Server         | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime                            | 不必须先安装 Plugin 或创建 Connector        |
+| Legacy Plugin 独立声明 MCP Server           | 兼容 authority 只贡献声明，经激活和策略解析后由 MCP runtime 启动                  | Plugin 启用不等于连接或授权                 |
+| Connector 需要外部账号                      | Connector connected 后发布 ready MCP binding                                      | Connector 不启动 MCP session                |
+| 用户或 Directory 直接配置 MCP Server        | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime                            | 不必须先安装 Plugin 或创建 Connector        |
 
 ## 1. 结论
 

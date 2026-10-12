@@ -5,7 +5,7 @@
 | 源码文件 | Ash | VS Code | 同路径 | 仅 Ash | 仅 VS Code |
 | -------- | --: | ------: | -----: | -----: | ---------: |
 | 首次审计 |  95 |     965 |     72 |     23 |        893 |
-| 当前  |      103 |      965 |     84 |     19 |        881 |
+| 当前     | 103 |     965 |     84 |     19 |        881 |
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 

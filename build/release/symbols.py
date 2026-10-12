@@ -124,7 +124,9 @@ class SymbolStore:
                 raise ValueError("Refusing to reuse another compilation's symbol store")
             commit = os.environ.get("ASH_BUILD_COMMIT")
             if commit and result["build"]["commit"] != commit.lower():
-                raise ValueError("Symbol store source commit differs from this compilation")
+                raise ValueError(
+                    "Symbol store source commit differs from this compilation"
+                )
             return result
         build_id, commit = (
             os.environ.get("ASH_BUILD_ID"),
@@ -395,7 +397,7 @@ class SymbolStore:
                 return existing or module
 
     def bind(self, product: str, package: Path, extras: list[str] = ()) -> None:
-        from build.lib.package import LAYOUT, validate_package_directory
+        from build.lib.package import package_binary_layout, validate_package_directory
         from build.lib.targets import target_spec
 
         metadata = json.loads((package / "ash-package.json").read_text())
@@ -403,7 +405,7 @@ class SymbolStore:
         validate_package_directory(package, spec)
         expected = [
             path.format(exe=".exe" if spec.is_windows else "")
-            for component, path in LAYOUT["binaries"].items()
+            for component, path in package_binary_layout(metadata["components"]).items()
             if component != "livekit"
         ]
         if spec.is_windows:

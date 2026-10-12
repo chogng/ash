@@ -63,6 +63,14 @@ jobs:
           workspaces: ". -> .build/cargo"
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+          cache-directories: third_party/.cache/v8
+
+      - name: Restore complete V8 build inputs
+        shell: bash
+        run: |
+          # rust-cache prunes gn_out but retains V8's build-script fingerprint.
+          cargo clean --package v8 --profile ci-test
+          cargo fetch --locked
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
@@ -108,6 +116,14 @@ jobs:
           shared-key: stdio-lifecycle-${{ matrix.runner }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+          cache-directories: third_party/.cache/v8
+
+      - name: Restore complete V8 build inputs
+        shell: bash
+        run: |
+          # rust-cache prunes gn_out but retains V8's build-script fingerprint.
+          cargo clean --package v8 --profile ci-test
+          cargo fetch --locked
 
       - name: Install Linux process and build dependencies
         if: runner.os == 'Linux'
@@ -191,6 +207,14 @@ jobs:
           workspaces: ". -> .build/cargo"
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+          cache-directories: third_party/.cache/v8
+
+      - name: Restore complete V8 build inputs
+        shell: bash
+        run: |
+          # rust-cache prunes gn_out but retains V8's build-script fingerprint.
+          cargo clean --package v8 --profile ci-test
+          cargo fetch --locked
 
       - name: Install Linux build dependencies
         run: |
@@ -260,6 +284,14 @@ jobs:
           workspaces: ". -> .build/cargo"
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+          cache-directories: third_party/.cache/v8
+
+      - name: Restore complete V8 build inputs
+        shell: bash
+        run: |
+          # rust-cache prunes gn_out but retains V8's build-script fingerprint.
+          cargo clean --package v8 --profile ci-test
+          cargo fetch --locked
 
       - name: Prepare locked ripgrep for macOS TUI tests
         run: |

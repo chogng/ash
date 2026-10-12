@@ -100,6 +100,31 @@ fn only_self_contained_release_packages_with_a_trusted_key_check_automatically()
 }
 
 #[test]
+fn desktop_runtime_packages_cannot_enter_the_standalone_update_channel() {
+    let root = TempDir::new().unwrap();
+    let backend = crate::installation::backend_in(root.path());
+    fs::create_dir(backend.parent().unwrap()).unwrap();
+    let metadata = serde_json::json!({
+        "layoutVersion": 2, "buildProfile": "release", "entrypoint": "bin/ash-app-server",
+        "version": "1.2.3", "target": "aarch64-apple-darwin",
+        "javascriptRuntime": {"kind": "hostProvidedNode", "electronVersion":"44.4.5"},
+        "protocol": {"major": 1, "schemaHash": format!("sha256:{}", "a".repeat(64))},
+        "components": {"appServer":{"updatePublicKey":"a".repeat(64)}},
+    });
+    fs::write(
+        root.path().join("ash-package.json"),
+        serde_json::to_vec(&metadata).unwrap(),
+    )
+    .unwrap();
+    assert!(!eligible_for_automatic_updates(&backend).unwrap());
+    assert!(
+        super::require_self_contained_update(&root.path().join("profile"), &backend)
+            .unwrap_err()
+            .contains("Desktop application")
+    );
+}
+
+#[test]
 fn signed_zip_extraction_rejects_paths_outside_the_package() {
     let root = TempDir::new().unwrap();
     let archive = root.path().join("update.zip");

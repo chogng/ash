@@ -53,7 +53,6 @@ App Server and `ash-git` retain the shared repository, history, watcher and exec
 used independently by Desktop, Agent and TUI. `build/builtin` bundles the frontend and stages its
 metadata; the shared runtime package needs no separate Git extension executable.
 
-
 `remote-ssh` registers the product's `ssh` authority resolver through the TS SDK in the Rust V8
 host. Its `main` entry and SDK are compiled into the executable; App Server verifies their release
 binding. It selects a saved connection name; the Remote service validates the target and the
@@ -114,7 +113,7 @@ Supported declarative fields are deliberately narrower than a VS Code extension 
 | `debuggers`                                                              | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API                                                | Extension registry / Debug service                       |
 | `configurationDefaults`, `semanticTokenScopes`                           | 尚未接入；bundled manifest 中的字段不会被投影                                                                            | 后续领域 adapter                                         |
 | extension JavaScript                                                     | 声明式扫描不执行；可信 `browser` 包由独立 Worker 路径执行                                                                | TS 扩展宿主                                              |
-| Extensions LSP executable                                               | 由已验证 catalog 映射并运行                                                                                              | App Server / LSP manager                                 |
+| Extensions LSP executable                                                | 由已验证 catalog 映射并运行                                                                                              | App Server / LSP manager                                 |
 
 User packages are read from the host-selected profile extension root, but the current Editor
 Extension system has no registry, download, enable/disable, signature, or grant authority. Built-in

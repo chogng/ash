@@ -255,7 +255,7 @@ test('Memory records and process memory diagnostics use disjoint generated metho
 test('Git repository invalidation and tag references cross the generated protocol boundary', () => {
 	const notification = { jsonrpc: '2.0', method: 'git/repositoriesChanged', params: {} };
 	assert.deepEqual(decodeAppServerNotification(notification), notification);
-	const result = { commits: [], references: [{ name: 'reviewed', objectId: 'commit', kind: 'tag', remoteName: null, current: false }], remotes: [], hasMore: false };
+	const result = { streamInstanceId: 'test-stream', historyRevision: 1, graphRevision: 1, commits: [], references: [{ name: 'reviewed', objectId: 'commit', kind: 'tag', remoteName: null, current: false }], remotes: [], hasMore: false };
 	const response = { jsonrpc: '2.0', id: 1, result };
 	assert.deepEqual(decodeAppServerResponse('git/graph', response), response);
 });
@@ -300,11 +300,11 @@ test('extension package location and execution platform survive the generated ca
 });
 
 test('backend credential services are rejected at the renderer extension boundary', () => {
-    const params = {
-        extensionId: 'ash.github-authentication', activationGeneration: 1, incarnation: 1,
-        operation: { operation: 'coreService', request: { service: 'secretLoad', key: 'provider/github/accounts' } },
-    };
-    const envelope = { jsonrpc: '2.0', id: 'core-service', method: 'extensionClient/request', params: { ...params, operation: { operation: 'readInitialization' } } };
-    assert.deepEqual(decodeAppServerServerRequest(envelope), envelope);
-    assert.throws(() => decodeAppServerServerRequest({ ...envelope, params }), AppServerProtocolDecodeError);
+	const params = {
+		extensionId: 'ash.github-authentication', activationGeneration: 1, incarnation: 1,
+		operation: { operation: 'coreService', request: { service: 'secretLoad', key: 'provider/github/accounts' } },
+	};
+	const envelope = { jsonrpc: '2.0', id: 'core-service', method: 'extensionClient/request', params: { ...params, operation: { operation: 'readInitialization' } } };
+	assert.deepEqual(decodeAppServerServerRequest(envelope), envelope);
+	assert.throws(() => decodeAppServerServerRequest({ ...envelope, params }), AppServerProtocolDecodeError);
 });

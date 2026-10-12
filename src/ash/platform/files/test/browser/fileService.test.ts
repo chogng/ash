@@ -883,7 +883,8 @@ test('file text codec errors retain their domain category and conflicts protect 
 	const resource = URI.file('/project/encoding.txt');
 	using provider = new AppServerFileSystemProvider({
 		workspaceContextService: workspace, resourceApi: unavailableResourceApi(),
-		api: { ...unavailableFileApi(),
+		api: {
+			...unavailableFileApi(),
 			readFile: async () => { throw new AppServerRemoteError(-32000, 'Invalid text', { kind: 'FileSystemInvalidText' }); },
 			writeFile: async () => { throw new AppServerRemoteError(-32000, 'Revision conflict', { kind: 'FileSystemRevisionConflict' }); },
 		},

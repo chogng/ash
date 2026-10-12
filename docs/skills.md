@@ -24,17 +24,17 @@
 Skill 是按任务逐步加载的工作方法和参考资料，不是工具权限。Agent 可以按照 Skill 建议行动，
 但任何脚本、网络或文件操作仍经过正常工具、权限和沙箱流程。
 
-| 发生的事情                                      | 加载什么                                                             | 安全边界                                                         |
-| ----------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 启动或刷新 Skill 目录                           | 只读取名称、描述和来源等元数据                                       | 不把全部正文塞入上下文                                           |
-| 用户输入 `$commit` 等 Skill 选择                | 接受 Turn 时完整读取对应 `SKILL.md`                                  | `$` 候选只持有元数据和精确 `SkillRef`                            |
+| 发生的事情                                      | 加载什么                                                             | 安全边界                                                        |
+| ----------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 启动或刷新 Skill 目录                           | 只读取名称、描述和来源等元数据                                       | 不把全部正文塞入上下文                                          |
+| 用户输入 `$commit` 等 Skill 选择                | 接受 Turn 时完整读取对应 `SKILL.md`                                  | `$` 候选只持有元数据和精确 `SkillRef`                           |
 | Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文      | 歧义、低置信、user/Directory/Plugin/Extensions 来源都不自动激活 |
-| 用户打开 `/skills`                              | 浏览、启用、禁用和查看诊断                                           | 不从管理面板直接执行 Skill                                       |
-| 模型按需选择 Skill                              | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文              | 后端不做关键词分类，也不暴露本地路径                             |
-| 正文引用参考资料                                | 只在当前任务确实需要时读取                                           | 路径必须受来源目录约束                                           |
-| Skill 建议运行脚本或工具                        | 转成普通工具请求                                                     | 不授予文件、网络、凭据或沙箱绕过能力                             |
-| Extensions package 提供 Skill                  | Manager 验证 exact package，再把 Skill capability 投影进共享 catalog | 安装不等于启用、选择或执行                                       |
-| Legacy Plugin 提供 Skill                        | 保留 Plugin、版本和内容摘要来源                                      | Plugin 启用不等于 Skill 自动执行                                 |
+| 用户打开 `/skills`                              | 浏览、启用、禁用和查看诊断                                           | 不从管理面板直接执行 Skill                                      |
+| 模型按需选择 Skill                              | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文              | 后端不做关键词分类，也不暴露本地路径                            |
+| 正文引用参考资料                                | 只在当前任务确实需要时读取                                           | 路径必须受来源目录约束                                          |
+| Skill 建议运行脚本或工具                        | 转成普通工具请求                                                     | 不授予文件、网络、凭据或沙箱绕过能力                            |
+| Extensions package 提供 Skill                   | Manager 验证 exact package，再把 Skill capability 投影进共享 catalog | 安装不等于启用、选择或执行                                      |
+| Legacy Plugin 提供 Skill                        | 保留 Plugin、版本和内容摘要来源                                      | Plugin 启用不等于 Skill 自动执行                                |
 
 ## 1. 结论
 
@@ -87,11 +87,11 @@ Desktop 前端文件归属与 VS Code 对应情况：
 
 | 职责                     | 当前文件与调用路径                                                                                                                                                                                                         | 对应情况                                                                                                                                        |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 配置 Skill 命令          | `workbench/contrib/chat/browser/promptSyntax/skillActions.ts` 导出 `CONFIGURE_SKILLS_ACTION_ID` 与 `registerSkillActions`，由 Chat contribution 注册；两种窗口的 `/skills` 使用 `workbench.action.chat.configure.skills`。 | 使用 VS Code 同路径与公开入口；打开 Extensions 的 Skills 窗格；选择技能后在右侧详情管理启停、查看诊断，并惰性打开只读 `SKILL.md` 快照。                       |
+| 配置 Skill 命令          | `workbench/contrib/chat/browser/promptSyntax/skillActions.ts` 导出 `CONFIGURE_SKILLS_ACTION_ID` 与 `registerSkillActions`，由 Chat contribution 注册；两种窗口的 `/skills` 使用 `workbench.action.chat.configure.skills`。 | 使用 VS Code 同路径与公开入口；打开 Extensions 的 Skills 窗格；选择技能后在右侧详情管理启停、查看诊断，并惰性打开只读 `SKILL.md` 快照。         |
 | `$name` 解析与补全       | `workbench/contrib/chat/common/skillSelectors.ts` 与 `browser/widget/input/chatSkillCompletion.ts` 各提供一份共享实现；Cowork 指定自己的输入语言和 provider 标识。                                                         | Ash 的独立 `$` 选择器与 Stanza 适配，未对齐为 VS Code 的完整 ChatRequestParser 或 AgentHost completion provider。                               |
-| Prompt 发现与解析        | `workbench/contrib/chat/common/promptSyntax/service/promptsService.ts`、`promptsServiceImpl.ts` 由每个窗口注册，Code/Cowork/Extensions 消费；`promptFileParser.ts` 保留 exact 文件并分离 Markdown 正文。             | VS Code 同路径，按真实调用逐步实现：已支持 Skill 元数据、可读 URI、启停和正文快照；完整 Prompt API 与 YAML 语法工具仍待实现。                   |
+| Prompt 发现与解析        | `workbench/contrib/chat/common/promptSyntax/service/promptsService.ts`、`promptsServiceImpl.ts` 由每个窗口注册，Code/Cowork/Extensions 消费；`promptFileParser.ts` 保留 exact 文件并分离 Markdown 正文。                   | VS Code 同路径，按真实调用逐步实现：已支持 Skill 元数据、可读 URI、启停和正文快照；完整 Prompt API 与 YAML 语法工具仍待实现。                   |
 | 后端目录、启停与资源访问 | `platform/agentHost/common/appServerApi.ts` 提供前端契约，`browser/appServerApi.ts` 独占 wire 归一化、协议请求及共享资源读取。                                                                                             | Ash App Server 接入；source-qualified ID、digest、revision 与 TUI 共用同一 Rust authority。TS `platform/skills` 已退出，UI 不直接调用后端端口。 |
-| Extensions 管理界面        | `workbench/contrib/extensions/browser/extensionsViews.ts` 提供 Skills 窗格，`extensionsEditor.ts` 提供右侧详情，由 Workbench 和 Sessions 共用。                                                                                             | Skills 与 Plugins、MCP 统一在 Extensions 中管理；Settings 不再持有技能管理组件。                                                                 |
+| Extensions 管理界面      | `workbench/contrib/extensions/browser/extensionsViews.ts` 提供 Skills 窗格，`extensionsEditor.ts` 提供右侧详情，由 Workbench 和 Sessions 共用。                                                                            | Skills 与 Plugins、MCP 统一在 Extensions 中管理；Settings 不再持有技能管理组件。                                                                |
 
 当前 Prompt 服务只实现上述生产调用需要的 Skill 契约，未实现完整的 Prompt/Instruction/Agent/Hook 发现与解析、文本模型解析、provider、disable 策略或 Sessions `AgenticPromptsService` 和 AgentHost Customization 服务。后续沿真实调用方补齐，保留 Rust 的目录与执行 authority。
 

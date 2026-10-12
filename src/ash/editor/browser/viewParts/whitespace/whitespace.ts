@@ -55,13 +55,15 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
+		if (this.mode === 'none'
+			|| (this.mode === 'selection' && this.viewModel.getCursorStates().every(state => state.modelState.selection.isEmpty()))) {
+			this._renderResult = [];
+			return;
+		}
 		const projection = this.readVisualProjection();
 		const textLeft = this.readTextLeft();
 		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
 			for (const [visualLineIndex, row] of rows) {
-				if (this.mode === 'none') {
-					continue;
-				}
 				const visualLine = projection.lineAt(visualLineIndex);
 				if (!visualLine) {
 					continue;

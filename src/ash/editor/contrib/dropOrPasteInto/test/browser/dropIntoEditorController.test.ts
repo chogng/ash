@@ -1,5 +1,6 @@
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
+import { URI } from '../../../../../base/common/uri.js';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -161,11 +162,12 @@ test('URI-list drop inserts file paths and external URIs before duplicate plain 
 	const drop = transferDropEvent(dom.window, dataTransfer);
 
 	editor.getDomNode().dispatchEvent(drop);
-	await waitFor(() => model.getText() === 'alpha/workspace/one.rs https://example.test/two');
+	const expected = `alpha${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`;
+	await waitFor(() => model.getText() === expected);
 
 	assert.deepEqual({ handled: drop.defaultPrevented, value: model.getText() }, {
 		handled: true,
-		value: 'alpha/workspace/one.rs https://example.test/two',
+		value: expected,
 	});
 });
 

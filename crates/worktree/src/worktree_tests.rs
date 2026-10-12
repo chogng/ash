@@ -1203,9 +1203,10 @@ async fn directory_copy_rejects_a_destination_inside_its_source_before_creating_
     let source = temporary.path().join("source");
     fs::create_dir(&source).unwrap();
     fs::write(source.join("file"), "original").unwrap();
-    let mut roots = vec![source.join("worktrees")];
+    let roots = vec![source.join("worktrees")];
     #[cfg(unix)]
-    {
+    let roots = {
+        let mut roots = roots;
         let alias = temporary.path().join("alias");
         std::os::unix::fs::symlink(&source, &alias).unwrap();
         roots.push(alias.join("missing/worktrees"));
@@ -1222,7 +1223,8 @@ async fn directory_copy_rejects_a_destination_inside_its_source_before_creating_
                 .join(source.strip_prefix("/").unwrap())
                 .join("worktrees"),
         );
-    }
+        roots
+    };
     for root in roots {
         let manager = WorktreeManager::new(WorktreeSettings {
             root,

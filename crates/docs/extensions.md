@@ -23,7 +23,7 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 | `ext/sleep`                                    | 模型侧计时等待，复用运行时的截止与取消机制                                                        |
 | `ext/items`                                    | 文本、搜索来源、图片路径和等待结果的结构化数据与边界校验                                          |
 | `ext/connectors`                               | 外部账号连接、认证、目录与声明加载；通过所属执行环境的文件接口读取声明                            |
-| `ext/mcp`                                      | MCP 会话、工具、生命周期，以及 Extensions Connector/MCP 的绑定与调用租约                         |
+| `ext/mcp`                                      | MCP 会话、工具、生命周期，以及 Extensions Connector/MCP 的绑定与调用租约                          |
 | `ext/skills`、`ext/memories`、`ext/web-search` | Skill 激活、记忆访问和网络搜索；搜索同时发布结构化来源                                            |
 
 - crate 用于隔离能力与依赖；目录对齐不要求把所有底层存储、协议或执行库移入扩展。
@@ -45,16 +45,16 @@ TUI 将连续的读取、搜索、列出合并展示为 Explore，单次调用�
 
 ## 已收回的实现
 
-| 旧路径                                                         | 当前归属                                                                    |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `ext/clock`                                                    | `ext/sleep` 的 `sleep` 工具；后台命令和子任务使用各自的完成条件             |
-| `crates/connectors`                                            | `ext/connectors`                                                            |
-| `crates/queue`                                                 | `ext/queue`，包括原 App Server `QueueExtension`                             |
-| `crates/auto-review`                                           | `ext/guardian-reviewer`                                                     |
-| `app-server/src/review.rs`                                     | 模型适配归 `ext/guardian-v2`；授权模式判断归 `core/src/turn_policy.rs`      |
-| `app-server/src/server/goal_tool.rs`、Core Goal 提示与续跑策略 | `ext/goal`                                                                  |
-| `app-server/src/server/multi_agent_tools.rs`、角色选择逻辑     | `ext/agent`；App Server 仅获取已授权目录快照                                |
-| `app-server/src/extensions_connector_runtime.rs`              | `ext/mcp/extensions`；Connector 声明解析归 `ext/connectors/declaration.rs` |
+| 旧路径                                                         | 当前归属                                                                   |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `ext/clock`                                                    | `ext/sleep` 的 `sleep` 工具；后台命令和子任务使用各自的完成条件            |
+| `crates/connectors`                                            | `ext/connectors`                                                           |
+| `crates/queue`                                                 | `ext/queue`，包括原 App Server `QueueExtension`                            |
+| `crates/auto-review`                                           | `ext/guardian-reviewer`                                                    |
+| `app-server/src/review.rs`                                     | 模型适配归 `ext/guardian-v2`；授权模式判断归 `core/src/turn_policy.rs`     |
+| `app-server/src/server/goal_tool.rs`、Core Goal 提示与续跑策略 | `ext/goal`                                                                 |
+| `app-server/src/server/multi_agent_tools.rs`、角色选择逻辑     | `ext/agent`；App Server 仅获取已授权目录快照                               |
+| `app-server/src/extensions_connector_runtime.rs`               | `ext/mcp/extensions`；Connector 声明解析归 `ext/connectors/declaration.rs` |
 
 ## Agent 共享讨论板
 

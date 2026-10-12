@@ -20,7 +20,7 @@ suite('Welcome page', () => {
 	test('dispatches the Git clone command from an empty desktop window', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		const calls: string[] = [];
-		using registeredClone = CommandsRegistry.register('git.clone', () => {});
+		using registeredClone = CommandsRegistry.register('git.clone', () => { });
 		const recent = { onDidChange: Event.None, recentWorkspaces: [] } as unknown as IRecentWorkspacesService;
 		const workspace = { canOpenFolder: true, canOpenWorkspace: true } as IWorkspaceOpenService;
 		let commandDispatched: (() => void) | undefined;

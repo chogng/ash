@@ -41,7 +41,6 @@ import { DOMLineBreaksComputerFactory } from '../../view/domLineBreaksComputer.j
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
 import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { OutgoingViewModelEventKind } from '../../../common/viewModelEventDispatcher.js';
-import { EditorViewportChangeReason } from '../../../common/viewLayout/viewLayout.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -422,9 +421,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				},
 			}));
 			this.modelState = { model, view, viewModel, contributions };
-			modelStore.add(view.onDidChangeLayout(event => {
-				if (event.reason !== EditorViewportChangeReason.Scroll) this.layoutChangeEmitter.fire(this.getLayoutInfo());
-			}));
 			for (const widget of this.contentWidgets.values()) this.view.addContentWidget(widget);
 			for (const widget of this.overlayWidgets.values()) this.view.addOverlayWidget(widget);
 			for (const widget of this.glyphWidgets.values()) this.view.addGlyphMarginWidget(widget);
@@ -901,7 +897,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	getBottomForLineNumber(lineNumber: number, includeViewZones = false): number {
 		if (!this.currentModel) return 0;
 		const model = this.view.textModel;
-		const position = model.validatePosition(new Position(lineNumber, model.getLineMaxColumn(lineNumber)));
+		// Diff gutters can still refer to an old final line while model edits are
+		// being published. Let the model normalize both coordinates together.
+		const position = model.validatePosition(new Position(lineNumber, Number.MAX_SAFE_INTEGER));
 		const viewLine = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(position.lineNumber, position.column);
 		return this.viewModel.viewLayout.getVerticalOffsetAfterLineNumber(viewLine, includeViewZones);
 	}

@@ -6,16 +6,16 @@
 
 ## 提供哪些接入点
 
-| 接口 | 职责 |
-| --- | --- |
-| `TurnInputContributor` | 为一次模型调用提供带来源、信任层级和保留策略的提示片段；Core 负责优先级、预算和最终组装。 |
-| `ContextContributor` | 在 Turn 首次模型调用时收集带 revision 的临时证据，作为不可信用户上下文处理。 |
-| `SkillActivationContributor` | 在 Core 接受新 Turn 前，将 Skill 选择解析为绑定具体内容的激活快照。 |
-| `ReadOnlyToolContributor` / `CapabilityToolContributor` | 提供只读工具或声明所需权限的工具；宿主通过统一工具策略检查和路由。 |
-| `LifecycleObserver` / `ToolLifecycleContributor` / `McpLifecycleContributor` | 观察已提交的 Thread、工具事实或 MCP 目录变化，更新扩展自己的状态和缓存。 |
-| `IdleContributor` / `ContinuationContributor` | 唤醒领域调度器、规划后续 Turn 和恢复待执行工作；Turn 接纳与模型执行仍归核心 owner。 |
-| `ApprovalReviewContributor` | 对准备好的 action 返回审核评估；只有 ActionPolicy 可以将评估转为执行授权。 |
-| `ItemContributor` / `ExtensionItemStore` | 为已授权 Thread 提供结果展示，并保留有界的近期结果，不替代持久历史。 |
+| 接口                                                                         | 职责                                                                                      |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `TurnInputContributor`                                                       | 为一次模型调用提供带来源、信任层级和保留策略的提示片段；Core 负责优先级、预算和最终组装。 |
+| `ContextContributor`                                                         | 在 Turn 首次模型调用时收集带 revision 的临时证据，作为不可信用户上下文处理。              |
+| `SkillActivationContributor`                                                 | 在 Core 接受新 Turn 前，将 Skill 选择解析为绑定具体内容的激活快照。                       |
+| `ReadOnlyToolContributor` / `CapabilityToolContributor`                      | 提供只读工具或声明所需权限的工具；宿主通过统一工具策略检查和路由。                        |
+| `LifecycleObserver` / `ToolLifecycleContributor` / `McpLifecycleContributor` | 观察已提交的 Thread、工具事实或 MCP 目录变化，更新扩展自己的状态和缓存。                  |
+| `IdleContributor` / `ContinuationContributor`                                | 唤醒领域调度器、规划后续 Turn 和恢复待执行工作；Turn 接纳与模型执行仍归核心 owner。       |
+| `ApprovalReviewContributor`                                                  | 对准备好的 action 返回审核评估；只有 ActionPolicy 可以将评估转为执行授权。                |
+| `ItemContributor` / `ExtensionItemStore`                                     | 为已授权 Thread 提供结果展示，并保留有界的近期结果，不替代持久历史。                      |
 
 ## 如何接入
 

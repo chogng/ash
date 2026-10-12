@@ -2888,7 +2888,9 @@ impl AppServer {
         // A managed directory is accessible only through a Thread in this Session tree.
         // Do not turn knowing a managed path into a grant for another Session's files.
         for thread in threads {
-            if let Some(scope) = runtime.dir_grants.thread_scope(&thread.thread_id, permission)
+            if let Some(scope) = runtime
+                .dir_grants
+                .thread_scope(&thread.thread_id, permission)
                 .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?
             {
                 if scope.primary().dir().canonical_path() == root {
@@ -2896,20 +2898,29 @@ impl AppServer {
                 }
             }
         }
-        Err(RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))
+        Err(RpcError::new(
+            -32064,
+            AppServerErrorName::TerminalOperationFailed,
+        ))
     }
 
     pub(super) fn thread_directory(
         &self,
         thread_id: &ash_protocol::ThreadId,
     ) -> Result<Option<ash_protocol::SessionExecutionTarget>, RpcError> {
-        let runtime = self.env_runtime.read()
+        let runtime = self
+            .env_runtime
+            .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let scope = runtime.dir_grants.thread_scope(thread_id, Permission::ReadFiles)
+        let scope = runtime
+            .dir_grants
+            .thread_scope(thread_id, Permission::ReadFiles)
             .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?;
-        Ok(scope.map(|scope| ash_protocol::SessionExecutionTarget::Local {
-            root: scope.primary().dir().canonical_path().to_path_buf(),
-        }))
+        Ok(
+            scope.map(|scope| ash_protocol::SessionExecutionTarget::Local {
+                root: scope.primary().dir().canonical_path().to_path_buf(),
+            }),
+        )
     }
 
     fn terminate_revoked_terminal_sessions(&self) {

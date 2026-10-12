@@ -303,7 +303,7 @@
 }
 
 .ash-diff-hidden-region > .ash-button::after {
-	content: '';
+	content: "";
 	position: absolute;
 	top: 50%;
 	left: 0;

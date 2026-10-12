@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import io
+from contextlib import redirect_stdout
 import os
 from pathlib import Path
 import re
@@ -19,6 +21,78 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CiWorkflowTests(unittest.TestCase):
+    def test_main_uses_the_last_successful_ancestor_instead_of_the_previous_push(
+        self,
+    ) -> None:
+        base = "1" * 40
+        response = io.BytesIO(
+            json.dumps({"workflow_runs": [{"head_sha": base}]}).encode()
+        )
+        with (
+            patch("ci_workflows.urlopen", return_value=response) as request,
+            patch(
+                "ci_workflows.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 0),
+            ) as git,
+        ):
+            self.assertEqual(
+                ci_workflows.successful_main_base(
+                    ROOT, "HEAD", "chogng/ash", "test-token"
+                ),
+                base,
+            )
+        self.assertIn("status=success", request.call_args.args[0].full_url)
+        git.assert_called_once_with(
+            ["git", "merge-base", "--is-ancestor", base, "HEAD"], cwd=ROOT, check=False
+        )
+
+    def test_main_without_a_successful_ancestor_requires_every_check(self) -> None:
+        for runs, status in (([], 0), ([{"head_sha": "1" * 40}], 1)):
+            with (
+                self.subTest(runs=runs),
+                patch(
+                    "ci_workflows.urlopen",
+                    return_value=io.BytesIO(
+                        json.dumps({"workflow_runs": runs}).encode()
+                    ),
+                ),
+                patch(
+                    "ci_workflows.subprocess.run",
+                    return_value=subprocess.CompletedProcess([], status),
+                ),
+            ):
+                self.assertIsNone(
+                    ci_workflows.successful_main_base(
+                        ROOT, "HEAD", "chogng/ash", "test-token"
+                    )
+                )
+
+    def test_main_rejects_invalid_api_commit_data(self) -> None:
+        with patch(
+            "ci_workflows.urlopen",
+            return_value=io.BytesIO(b'{"workflow_runs":[{"head_sha":"--all"}]}'),
+        ):
+            with self.assertRaises(ValueError):
+                ci_workflows.successful_main_base(
+                    ROOT, "HEAD", "chogng/ash", "test-token"
+                )
+
+    def test_no_main_baseline_forces_all_workflows_even_for_a_narrow_diff(self) -> None:
+        output = io.StringIO()
+        with (
+            patch("ci_workflows.successful_main_base", return_value=None),
+            patch("ci_workflows.changed_paths", return_value=["docs/example.md"]),
+            patch.dict(
+                os.environ,
+                {"GITHUB_REPOSITORY": "chogng/ash", "GITHUB_TOKEN": "test-token"},
+            ),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(
+                ci_workflows.main(["select", "--since-successful-main"]), 0
+            )
+        self.assertTrue(all(json.loads(output.getvalue()).values()))
+
     def test_windows_desktop_release_prepares_the_locked_python_environment(
         self,
     ) -> None:
@@ -191,6 +265,25 @@ class CiWorkflowTests(unittest.TestCase):
             self.assertNotRegex(triggers, r"(?m)^  (push|pull_request):", name)
             if self.policy[name] is not None:
                 self.assertIn(f".github/workflows/{name}.yml", self.policy[name])
+
+    def test_expensive_jobs_wait_for_the_cheap_gates(self) -> None:
+        workflow = (ROOT / ".github/workflows/blocking-ci.yml").read_text()
+        for name, patterns in self.policy.items():
+            if patterns is None:
+                continue
+            job = re.split(
+                r"\n  [a-z-]+:\n", workflow.split(f"\n  {name}:\n", 1)[1], maxsplit=1
+            )[0]
+            needs = re.search(r"needs: \[([^\]]+)\]", job)
+            self.assertIsNotNone(needs, name)
+            self.assertEqual(
+                {value.strip() for value in needs.group(1).split(",")},
+                {"select", "blob-size-policy", "cargo-deny", "codespell", "format"},
+                name,
+            )
+            # Default success gating prevents a rejected source from starting
+            # builds; the fan-in still rejects every selected skipped job.
+            self.assertNotIn("always()", job, name)
 
     def test_cli_selection_and_failure_exit_codes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -154,12 +154,14 @@
 	line-height: 18px;
 }
 
-
 .ash-explorer-compressed .ash-icon-label-segment {
 	cursor: pointer;
 }
 
-.ash-explorer .ash-tree:focus-visible .ash-tree-row.focused .ash-explorer-active-segment {
+.ash-explorer
+	.ash-tree:focus-visible
+	.ash-tree-row.focused
+	.ash-explorer-active-segment {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

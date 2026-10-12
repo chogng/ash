@@ -4128,7 +4128,10 @@ fn message_restore_points_preserve_git_versions_after_restart() {
             &mut connection,
             serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"session/thread/read","params":{"sessionId":session_id,"threadId":restored_id}}),
         );
-        assert_eq!(std::path::Path::new(read["result"]["directory"]["root"].as_str().unwrap()), directory.dir());
+        assert_eq!(
+            std::path::Path::new(read["result"]["directory"]["root"].as_str().unwrap()),
+            directory.dir()
+        );
         request_id += 1;
         let files = local_call(
             &server,

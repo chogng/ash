@@ -124,7 +124,7 @@ export class ProcessRun {
 		return resources;
 	}
 
-	private async rememberTree(root?: number): Promise<void> {
+	private async rememberTree(root?: number): Promise<Map<number, ProcessIdentity>> {
 		const current = await processes();
 		const roots = new Set<number>();
 		if (root && current.has(root)) roots.add(root);
@@ -143,13 +143,16 @@ export class ProcessRun {
 			}
 		}
 		for (const pid of roots) this.owned.set(pid, current.get(pid)!);
+		return current;
 	}
 
 	private async cleanup(): Promise<void> {
 		const errors: unknown[] = [];
-		try { await this.rememberTree(this.child?.pid); } catch (error) { errors.push(error); }
+		let current: Map<number, ProcessIdentity> | undefined;
+		try { current = await this.rememberTree(this.child?.pid); } catch (error) { errors.push(error); }
 		const resources = await this.resources();
-		const current = await processes();
+		current ??= await processes();
+		const terminationErrors = new Map<number, unknown>();
 		if (process.platform !== 'win32') {
 			// Kill owned groups as well as the snapshot's PIDs: a renderer can fork
 			// another helper between enumeration and delivery of the signal.
@@ -167,7 +170,7 @@ export class ProcessRun {
 				if (process.platform === 'win32') await execute('taskkill', ['/PID', String(identity.pid), '/T', '/F'], { windowsHide: true, timeout: 5_000 });
 				else process.kill(identity.pid, 'SIGKILL');
 			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code !== 'ESRCH' && (await processes()).get(identity.pid)?.started === identity.started) errors.push(error);
+				if ((error as NodeJS.ErrnoException).code !== 'ESRCH') terminationErrors.set(identity.pid, error);
 			}
 		}
 		// Confirm exit rather than equating delivery of a signal with termination.
@@ -176,7 +179,11 @@ export class ProcessRun {
 			const remaining = await processes();
 			const alive = [...this.owned.values()].filter(identity => remaining.get(identity.pid)?.started === identity.started);
 			if (!alive.length) break;
-			if (Date.now() >= deadline) { errors.push(new Error(`Owned processes did not exit: ${alive.map(identity => identity.pid).join(', ')}`)); break; }
+			if (Date.now() >= deadline) {
+				for (const identity of alive) if (terminationErrors.has(identity.pid)) errors.push(terminationErrors.get(identity.pid));
+				errors.push(new Error(`Owned processes did not exit: ${alive.map(identity => identity.pid).join(', ')}`));
+				break;
+			}
 			await new Promise<void>(resolveDelay => setTimeout(resolveDelay, 50));
 		}
 		// End workers and renderers before stopping daemons, so clients cannot
@@ -193,7 +200,9 @@ export class ProcessRun {
 
 async function processes(): Promise<Map<number, ProcessIdentity>> {
 	if (process.platform === 'win32') {
-		const { stdout } = await execute('powershell.exe', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | Where-Object { $_.CreationDate } | Select-Object ProcessId,ParentProcessId,@{n="Started";e={$_.CreationDate.ToUniversalTime().Ticks.ToString()}} | ConvertTo-Json -Compress'], { windowsHide: true, timeout: 5_000, maxBuffer: 8 * 1024 * 1024 });
+		const query = execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate | Where-Object { $_.CreationDate } | Select-Object ProcessId,ParentProcessId,@{n="Started";e={$_.CreationDate.ToUniversalTime().Ticks.ToString()}} | ConvertTo-Json -Compress'], { windowsHide: true, timeout: 15_000, maxBuffer: 8 * 1024 * 1024 });
+		query.child.stdin?.end();
+		const { stdout } = await query;
 		const entries = JSON.parse(stdout) as { ProcessId: number; ParentProcessId: number; Started: string; }[];
 		return new Map(entries.map(entry => [entry.ProcessId, { pid: entry.ProcessId, parent: entry.ParentProcessId, started: entry.Started }]));
 	}

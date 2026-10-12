@@ -143,7 +143,7 @@ suite('App Server directory path identity', () => {
 			workspaceContextService: workspace,
 			api: {
 				...host.fs, readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'insensitive' }] }),
-				readBinaryFile: async params => { reads.push(params.path); return { resource: { resourceId: 'content', mimeType: 'text/plain', size: 4, sha256: 'digest' }, revision: 'revision' }; },
+				readFile: async params => { reads.push(params.path); return { content: 'disk', encoding: 'utf8', revision: 'revision' }; },
 				getMetadata: async () => ({ fileType: 'file', sizeBytes: 4, readonly: false, modifiedAtMillis: null }),
 			}, resourceApi: { ...host.resource, read: async () => ({ resourceId: 'content', offset: 0, dataBase64: 'ZGlzaw==', decodedLength: 4, eof: true }), release: async () => { } },
 		});
@@ -174,7 +174,7 @@ suite('App Server directory path identity', () => {
 			api: {
 				...host.fs,
 				readPathCaseSensitivity: async () => ++queries === 2 ? oldResponse.p : { scopes: [{ path: '.', sensitivity: queries === 1 ? 'insensitive' : 'sensitive' }] },
-				readBinaryFile: async params => { reads.push(params.path); return { resource: { resourceId: 'content', mimeType: 'text/plain', size: 4, sha256: 'digest' }, revision: 'revision' }; },
+				readFile: async params => { reads.push(params.path); return { content: 'disk', encoding: 'utf8', revision: 'revision' }; },
 				getMetadata: async () => ({ fileType: 'file', sizeBytes: 4, readonly: false, modifiedAtMillis: null }),
 			},
 			resourceApi: { ...host.resource, read: async () => ({ resourceId: 'content', offset: 0, dataBase64: 'ZGlzaw==', decodedLength: 4, eof: true }), release: async () => { } },
@@ -206,10 +206,14 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		using provider = new AppServerFileSystemProvider({
 			workspaceContextService: workspace, resourceApi: host.resource, onDidChange: changes.event,
-			api: { ...host.fs, readPathCaseSensitivity: async params => ({ scopes: [
-				{ path: '.', sensitivity: 'sensitive' },
-				...(missing && params.path.startsWith('Parent/') ? [] : [{ path: params.path.split('/')[0], sensitivity: 'insensitive' as const }]),
-			] }) },
+			api: {
+				...host.fs, readPathCaseSensitivity: async params => ({
+					scopes: [
+						{ path: '.', sensitivity: 'sensitive' },
+						...(missing && params.path.startsWith('Parent/') ? [] : [{ path: params.path.split('/')[0], sensitivity: 'insensitive' as const }]),
+					]
+				})
+			},
 		});
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
@@ -262,7 +266,7 @@ suite('App Server directory path identity', () => {
 			api: {
 				...host.fs,
 				readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }, { path: params.path.split('/')[0], sensitivity: 'insensitive' }] }),
-				readBinaryFile: async params => { reads.push(params.path); return { resource: { resourceId: 'content', mimeType: 'text/plain', size: 4, sha256: 'digest' }, revision: 'revision' }; },
+				readFile: async params => { reads.push(params.path); return { content: 'disk', encoding: 'utf8', revision: 'revision' }; },
 				getMetadata: async () => ({ fileType: 'file', sizeBytes: 4, readonly: false, modifiedAtMillis: null }),
 			},
 			resourceApi: { ...host.resource, read: async () => ({ resourceId: 'content', offset: 0, dataBase64: 'ZGlzaw==', decodedLength: 4, eof: true }), release: async () => { } },
@@ -284,10 +288,12 @@ suite('App Server directory path identity', () => {
 
 	test('unrelated workspace events keep another root query valid', async () => {
 		const root = URI.file('/one');
-		using workspace = new WorkspaceContextService({ id: 'multi', folders: [
-			{ id: 'one', uri: root, name: 'one', index: 0 },
-			{ id: 'two', uri: URI.file('/two'), name: 'two', index: 1 },
-		] });
+		using workspace = new WorkspaceContextService({
+			id: 'multi', folders: [
+				{ id: 'one', uri: root, name: 'one', index: 0 },
+				{ id: 'two', uri: URI.file('/two'), name: 'two', index: 1 },
+			]
+		});
 		using changes = new Emitter<FsChanged>();
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
@@ -336,10 +342,14 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		using provider = new AppServerFileSystemProvider({
 			workspaceContextService: workspace, resourceApi: host.resource,
-			api: { ...host.fs, readPathCaseSensitivity: async () => ({ scopes: [
-				{ path: '.', sensitivity: 'insensitive' },
-				{ path: '../outside', sensitivity: 'insensitive' },
-			] }) },
+			api: {
+				...host.fs, readPathCaseSensitivity: async () => ({
+					scopes: [
+						{ path: '.', sensitivity: 'insensitive' },
+						{ path: '../outside', sensitivity: 'insensitive' },
+					]
+				})
+			},
 		});
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);

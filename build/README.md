@@ -170,7 +170,12 @@ The release entry point is `build/app_server.py`. It prepares `.build/protocol/`
 `ash-app-server` or profile-scoped `ash-app-server-daemon` for the selected target.
 When `ASH_UPDATE_PUBLIC_KEY` or `--update-public-key` is supplied, the builder binds that trusted key into the App Server component of the immutable package metadata. The release backend uses it to verify independently published stable updates while running; development packages without a key do not check automatically.
 It collects all missing first-party executables into one locked Cargo build, including
-the Code Mode Host, Rust/V8 JavaScript extension host, Remote programs, and Windows sandbox when required. Prebuilt inputs
+the Code Mode Host, Remote programs, and Windows sandbox when required. The Rust/V8
+JavaScript extension host is optional: only `--external-js-ext-bin` explicitly adds
+it to release packages; default development and release packages omit it. Existing
+packages containing that component remain valid, including integrity and signing
+checks. Standard extensions retain their packaged JS bootstrap and use the bound
+Node/Electron runtime. Prebuilt inputs
 are validated before the build and are not rebuilt. Executable paths come from Cargo's
 JSON artifact messages; a successful build without a requested artifact is rejected.
 Windows builds explicitly select the package's MSVC target, including development
@@ -213,11 +218,32 @@ For release packages, `--javascript-runtime packaged-node` is the default and re
 for CLI, browser-bridge, remote, and headless App Server hosts.
 `--javascript-runtime host-provided-node` omits the executable, license, and Node
 component metadata; this variant is valid only when the product host injects an
-exact Node-compatible executable. Electron Desktop uses that variant, declares
-its exact `process.execPath` to the Rust App Server, and enters run-as-Node mode
-only for JavaScript language-server children. Both alternatives are explicit in
+exact Node-compatible executable. Desktop release builders use that variant with
+`--electron-version` and bind the package to the exact delivered Electron version.
+`build/desktop/package_runtime.py` also composes this variant from a validated
+self-contained backend without changing its source; it omits Node, its license,
+component and signing record. Electron Desktop declares its exact `process.execPath`
+and enters run-as-Node mode for standard JS extensions and Node language servers.
+Both alternatives are explicit in
 package layout version 2 under `javascriptRuntime.kind`; validators reject a
 payload whose files and declared runtime kind disagree.
+
+The daemon atomically commits the installation's Electron path, SHA-256 and
+Electron/Node versions with the selected package manifest, without changing signed
+package bytes. Ordinary clients reuse that selection; restart probes the frozen
+runtime again. Missing or incompatible Electron disables its JS capabilities while
+the Rust backend remains available. An explicit selection changes the process
+generation when the binding or runtime availability changes. Desktop updates use
+the signed whole-application channel; standalone App Server updates cannot replace
+a selected Desktop-backed package. CLI, Web and Remote packages retain Node.
+
+`.github/workflows/desktop-runtime-acceptance.yml` is called by Frontend CI and can
+be dispatched independently. Windows/macOS build real unsigned Desktop bundles
+with compact development backends, check packaged application startup/quit and
+terminal/file operations, then verify TUI reuse/restart, crash recovery, binding
+upgrade/rollback, incompatible versions and missing Electron. Real Electron LSP
+and extension-window tests cover initialization, requests, shutdown and ownership.
+Official release optimization, signing and notarization remain in the release workflows.
 
 Desktop development uses the same locks and canonical layout through the Python
 entry at `build/prepare.py`. It defaults to the

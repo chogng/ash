@@ -82,6 +82,8 @@ jobs:
           sudo apt-get install --yes --no-install-recommends build-essential libssl-dev pkg-config
       - name: Check the default protocol build and generated artifacts
         run: |
+          # The boundary tests inspect the server graph offline as well as the protocol.
+          cargo fetch --locked
           # The warning gate checks every target covered by the regular check.
           just rust-warnings ash-app-server-protocol --locked
           just test ash-app-server-protocol --locked

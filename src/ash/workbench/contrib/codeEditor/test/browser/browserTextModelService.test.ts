@@ -913,7 +913,7 @@ test('encoding saves retain the captured codec and later encoding changes remain
 	const { EncodingMode } = await import('../../../../services/textfile/common/textfiles.js');
 	const started = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
-	const writes: { text: string; encoding: string | undefined; expectedRevision: string | undefined }[] = [];
+	const writes: { text: string; encoding: string | undefined; expectedRevision: string | undefined; }[] = [];
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
 		onDidChange: Event.None,
 		resolve: async (request: TextResourceResolveRequest) => ({ resource: request.resource, text: '中文', revision: 'initial', encoding: 'utf8' }),

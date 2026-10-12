@@ -94,7 +94,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
     parser.add_argument(
         "--external-js-ext-bin",
         type=Path,
-        help="Prebuilt Rust/V8 JavaScript extension host. If omitted, Cargo builds it.",
+        help="Optional prebuilt Rust/V8 JavaScript extension host. Default packages omit it.",
     )
     parser.add_argument(
         "--rg-bin",
@@ -122,6 +122,10 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         "--update-public-key",
         default=os.environ.get("ASH_UPDATE_PUBLIC_KEY"),
         help="Ed25519 public key trusted by the independently updated App Server.",
+    )
+    parser.add_argument(
+        "--electron-version",
+        help="Exact Electron version required by a Desktop host-provided runtime package.",
     )
     parser.add_argument(
         "--bwrap-bin",
@@ -197,7 +201,6 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-app-server": args.server_bin,
         "ash-app-server-daemon": args.app_server_daemon_bin,
         "ash-code-mode-host": args.code_mode_host_bin,
-        "ash-external-js-ext": args.external_js_ext_bin,
         "ash-github-authentication": args.github_authentication_bin,
         "ash-remote-ssh-extension": args.remote_ssh_extension_bin,
         "ash-remote": args.remote_bin,
@@ -205,6 +208,8 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-remote-server": args.remote_server_bin,
         "ash-exec-server": args.exec_server_bin,
     }
+    if args.external_js_ext_bin is not None:
+        inputs["ash-external-js-ext"] = args.external_js_ext_bin
     if spec.is_windows:
         inputs["ash-windows-sandbox"] = args.windows_sandbox_bin
         inputs["ash-windows-sandbox-service"] = args.windows_sandbox_service_bin
@@ -229,6 +234,13 @@ def build_package(args: argparse.Namespace) -> int:
     if args.javascript_runtime == "host-provided-node" and args.node_bin is not None:
         raise RuntimeError(
             "--node-bin cannot be used with --javascript-runtime host-provided-node"
+        )
+    if (
+        args.electron_version is not None
+        and args.javascript_runtime != "host-provided-node"
+    ):
+        raise ValueError(
+            "--electron-version requires --javascript-runtime host-provided-node"
         )
     tgrep = resolve_tgrep(
         spec, args.tgrep_lock, args.tgrep_cache_root, args.tgrep_bin, cargo=args.cargo
@@ -264,7 +276,7 @@ def build_package(args: argparse.Namespace) -> int:
         binaries["ash-exec-server"],
         binaries["ash-app-server-daemon"],
         binaries["ash-code-mode-host"],
-        binaries["ash-external-js-ext"],
+        binaries.get("ash-external-js-ext"),
         ripgrep,
         tgrep,
         node,
@@ -278,6 +290,7 @@ def build_package(args: argparse.Namespace) -> int:
         protocol_metadata=protocol_metadata,
         update_public_key=args.update_public_key,
         build_profile=args.cargo_profile,
+        electron_version=args.electron_version,
         symbols_dir=args.symbols_dir,
         windows_sandbox_service_binary=binaries.get("ash-windows-sandbox-service"),
         windows_sandbox_binary=binaries["ash-windows-sandbox"]

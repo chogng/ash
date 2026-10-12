@@ -644,7 +644,6 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
 3. [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的组装快照和行为测试；
 4. 运行对应的现有单元/集成测试；只有启用版本化模型 benchmark 时，才补充 T1/T2 对比。
 
-
 ## 既有开发 Task
 
 `ash-app-tools` 提供 `tasks_list`、`tasks_run`、`tasks_status`、`tasks_output` 和 `tasks_cancel`。它们与会话管理、自动化分开：Task 定义和执行由窗口的 `ITaskService` 唯一拥有，进程沿现有 Terminal → exec-server 执行；Rust 只持有工具定义、调用身份、审批和宿主路由。

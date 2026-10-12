@@ -1,5 +1,5 @@
 set working-directory := "."
-set positional-arguments := true
+set positional-arguments
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 

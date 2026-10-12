@@ -1,7 +1,8 @@
 .ash-chat-code-block {
 	min-width: 0;
 	margin: var(--ash-spacing-size80) 0;
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, var(--ash-border));
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
 	border-radius: var(--ash-cornerRadius-medium);
 	background: var(--ash-text-codeBlockBackground);
 }
@@ -27,5 +28,6 @@
 .ash-chat-code-block-editor {
 	min-width: 0;
 	overflow: hidden;
-	border-radius: 0 0 var(--ash-cornerRadius-medium) var(--ash-cornerRadius-medium);
+	border-radius: 0 0 var(--ash-cornerRadius-medium)
+		var(--ash-cornerRadius-medium);
 }

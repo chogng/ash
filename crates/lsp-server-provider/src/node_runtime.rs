@@ -1,10 +1,14 @@
 use std::env;
 use std::ffi::OsStr;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
 use ash_install_context::InstallContext;
 use ash_lsp::LanguageServerCommand;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::LanguageServerProviderError;
 use crate::provider::canonical_executable;
@@ -45,6 +49,7 @@ pub enum ManagedNodeRuntimeSource {
 pub struct ManagedNodeRuntime {
     executable: PathBuf,
     source: ManagedNodeRuntimeSource,
+    electron_digest: Option<String>,
 }
 
 impl ManagedNodeRuntime {
@@ -53,14 +58,18 @@ impl ManagedNodeRuntime {
         Ok(Self {
             executable: canonical_executable(path.as_ref(), "managed Node runtime")?,
             source: ManagedNodeRuntimeSource::PackagedNode,
+            electron_digest: None,
         })
     }
 
     /// Freezes one exact Electron executable to be invoked in its supported Node mode.
     pub fn from_electron_path(path: impl AsRef<Path>) -> Result<Self, LanguageServerProviderError> {
+        let executable = canonical_executable(path.as_ref(), "managed Electron Node runtime")?;
+        let electron_digest = Some(runtime_digest(&executable)?);
         Ok(Self {
-            executable: canonical_executable(path.as_ref(), "managed Electron Node runtime")?,
+            executable,
             source: ManagedNodeRuntimeSource::ElectronRunAsNode,
+            electron_digest,
         })
     }
 
@@ -72,7 +81,17 @@ impl ManagedNodeRuntime {
         context: &InstallContext,
     ) -> Result<Self, LanguageServerProviderError> {
         if let Some(executable) = env::var_os(ELECTRON_RUN_AS_NODE_PATH) {
-            return Self::from_electron_path(executable);
+            match env::var("ASH_ELECTRON_RUNTIME_AVAILABLE").as_deref() {
+                Ok("1") | Err(env::VarError::NotPresent) => {}
+                Ok(_) | Err(_) => return Err(LanguageServerProviderError::ManagedNodeUnavailable),
+            }
+            let runtime = Self::from_electron_path(executable)?;
+            if let Some(expected) = env::var_os("ASH_ELECTRON_RUN_AS_NODE_SHA256")
+                && expected.to_str() != runtime.electron_digest.as_deref()
+            {
+                return Err(LanguageServerProviderError::ManagedNodeUnavailable);
+            }
+            return Ok(runtime);
         }
         let resource = PathBuf::from("node")
             .join("bin")
@@ -98,6 +117,11 @@ impl ManagedNodeRuntime {
         script: &Path,
         dir_root: &Path,
     ) -> Result<LanguageServerCommand, LanguageServerProviderError> {
+        if let Some(expected) = &self.electron_digest
+            && &runtime_digest(&self.executable)? != expected
+        {
+            return Err(LanguageServerProviderError::ManagedNodeUnavailable);
+        }
         let script = canonical_regular_file(script, "language-server Node entrypoint")?;
         let mut command = LanguageServerCommand::new(self.executable.as_os_str())
             .with_clean_environment()
@@ -114,6 +138,23 @@ impl ManagedNodeRuntime {
         }
         Ok(command)
     }
+}
+
+fn runtime_digest(path: &Path) -> Result<String, LanguageServerProviderError> {
+    let mut file =
+        File::open(path).map_err(|_| LanguageServerProviderError::ManagedNodeUnavailable)?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|_| LanguageServerProviderError::ManagedNodeUnavailable)?;
+        if read == 0 {
+            break;
+        }
+        digest.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 #[cfg(windows)]

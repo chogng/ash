@@ -219,6 +219,7 @@ test('Desktop tunnels cross the Main channel into the window SSH owner and close
 
 class TestSshChild extends EventEmitter {
 	public exitCode: number | null = null;
+	public signalCode: NodeJS.Signals | null = null;
 	public kill(): boolean {
 		if (this.exitCode === null) {
 			this.exitCode = 0;
@@ -401,6 +402,7 @@ test('tunnel service creation fails immediately when the host boundary is missin
 
 class Child extends EventEmitter {
 	public exitCode: number | null = null;
+	public signalCode: NodeJS.Signals | null = null;
 	public kill(): boolean {
 		if (this.exitCode === null) {
 			this.exitCode = 0;

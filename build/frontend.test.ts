@@ -23,6 +23,17 @@ test('Frontend CI finishes main acceptance and cancels stale runs on other refs'
 	assert.match(concurrency, /^  cancel-in-progress: \$\{\{ github\.ref != 'refs\/heads\/main' \}\}$/m);
 });
 
+test('Frontend acceptance waits for shared contracts and unit tests', () => {
+	for (const job of ['desktop-runtime', 'check']) {
+		const definition = workflow.split(`\n  ${job}:\n`)[1].split(/\n  [a-z-]+:\n/u)[0];
+		assert.match(definition, /^    needs: contracts$/m);
+	}
+	const contracts = workflow.split('\n  contracts:\n')[1].split(/\n  [a-z-]+:\n/u)[0];
+	assert.match(contracts, /pnpm typecheck:renderer/u);
+	assert.match(contracts, /pnpm test:build/u);
+	assert.match(contracts, /pnpm test:unit/u);
+});
+
 test('Frontend CI smoke commands collect applicable tests from configured Playwright projects', { timeout: 30_000 }, async () => {
 	assert.ok(projects.length > 0, 'Frontend CI must retain explicit smoke project selections');
 	for (const project of projects) {

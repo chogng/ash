@@ -208,11 +208,14 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	findButton(remainingRoot, 'Save').click();
 	await waitForStatus(ownerDocument, 'Keybinding saved.');
 	assert.equal((await resources.read())[0]?.key, 'ctrl+[KeyJ]');
-	await splitGroup.moveEditorTo(splitGroup.inputs[0]!, sourceGroup, 0);
-	editor.activateGroup(sourceGroup.id);
+	// Closing the source's last tab retires that empty group. Create a live target
+	// for the move while retaining the same input and resolved shortcut model.
+	const targetGroup = editor.addGroup(splitGroup.id, 'left');
+	await splitGroup.moveEditorTo(splitGroup.inputs[0]!, targetGroup, 0);
+	editor.activateGroup(targetGroup.id);
 	assert.equal(splitGroup.inputs.length, 0);
-	assert.ok(sourceGroup.inputs[0] === openedInput, 'Moving the recorded tab input opens the target before the source releases it');
-	assert.ok(await (sourceGroup.inputs[0] as InstanceType<typeof KeybindingsEditorInput>).resolve() === openedModel);
+	assert.ok(targetGroup.inputs[0] === openedInput, 'Moving the recorded tab input opens the target before the source releases it');
+	assert.ok(await (targetGroup.inputs[0] as InstanceType<typeof KeybindingsEditorInput>).resolve() === openedModel);
 	assert.deepEqual([openedInput.isDisposed, openedModel.isDisposed(), modelDisposals], [false, false, 0]);
 	const serializedInput = EditorInputSerializers.serialize(openedInput);
 	assert.equal(await editor.closeEditor(openedInput), true);

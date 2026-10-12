@@ -7,4 +7,5 @@
 - `src/main.rs` 只把进程参数交给 `bwrap_main`；它不构造 Bubblewrap 参数，不选择策略，也不发现或启动其他可执行文件。
 
 2026-10-11 在 WSL2 Linux x64 上，`just verify ash-bwrap` 的构建、版本回归和 warning 检查通过。上游 `tests/test-sandbox.py` 使用本次构建的随包二进制，68 项通过、1 项因 user namespace 不支持 mqueue 跳过；覆盖安全路径处理、旧内核 fallback 和递归只读挂载。Ash 沙箱 PTY 6 项通过，WSL 文件、取消和互操作隔离 3 项分别在 Linux `/tmp` 与 Windows 挂载的临时目录通过。macOS 只完成相关 Rust 测试目标交叉编译。
+
 - 修改源码文件集合、编译定义或链接依赖时，必须同步 vendor 来源元数据、发布包测试和 Linux 构建工具链。

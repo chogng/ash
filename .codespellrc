@@ -12,6 +12,7 @@ skip =
     docs/tools/*,
     # Copied dependencies and generated contracts; the ConPTY file credits WezTerm.
     third_party/*,**/vendor/*,
+    crates/file-system/src/text_encoding_tables.LICENSE,
     src/ash/base/browser/dompurify/*,src/ash/base/common/marked/*,
     src/ash/base/common/productIcons.ts,crates/app-server-protocol/schema/*,schemas/*,
     crates/utils/pty/src/win/psuedocon.rs

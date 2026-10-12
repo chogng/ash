@@ -402,10 +402,10 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 				: typeof content === 'string'
 					? await this.api.writeFile({ ...this.fileTarget(resource), content, ...(encoding === undefined ? {} : { encoding }), options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) } })
 					: await this.api.writeBinaryFile({
-					...this.fileTarget(resource),
-					dataBase64: encodeBinaryFile(content),
-					options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
-				});
+						...this.fileTarget(resource),
+						dataBase64: encodeBinaryFile(content),
+						options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
+					});
 			return Object.freeze({
 				stat: {
 					resource,

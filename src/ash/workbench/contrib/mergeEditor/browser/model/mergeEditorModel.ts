@@ -366,10 +366,18 @@ function characterEdits(base: TextModel, side: TextModel, hunk: LineRange, chang
 		if (change.original.endLineNumberExclusive < hunk.startLineNumber || change.original.startLineNumber > hunk.endLineNumberExclusive) continue;
 		if (!hunk.containsRange(change.original) || !change.innerChanges) return undefined;
 		for (const inner of change.innerChanges) {
+			// Display diffs can expand a character change to the whole word. Strip
+			// its unchanged edges before deciding whether two actual edits overlap.
+			const original = base.getValueInRange(inner.originalRange);
+			const modified = side.getValueInRange(inner.modifiedRange);
+			let prefix = 0;
+			while (prefix < original.length && prefix < modified.length && original[prefix] === modified[prefix]) prefix++;
+			let suffix = 0;
+			while (suffix < original.length - prefix && suffix < modified.length - prefix && original[original.length - suffix - 1] === modified[modified.length - suffix - 1]) suffix++;
 			edits.push({
-				start: base.getOffsetAt(inner.originalRange.getStartPosition()) - baseOffset,
-				end: base.getOffsetAt(inner.originalRange.getEndPosition()) - baseOffset,
-				text: side.getValueInRange(inner.modifiedRange),
+				start: base.getOffsetAt(inner.originalRange.getStartPosition()) - baseOffset + prefix,
+				end: base.getOffsetAt(inner.originalRange.getEndPosition()) - baseOffset - suffix,
+				text: modified.slice(prefix, modified.length - suffix),
 			});
 		}
 	}

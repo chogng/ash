@@ -74,8 +74,18 @@ fn commonjs_snapshot_captures_data_and_modules_without_compiling_unused_files() 
         Package::read_vscode("example".into(), root.path().into(), "main.cjs".into()).unwrap();
     std::fs::write(root.path().join("data.json"), "changed").unwrap();
     assert_eq!(
-        package.sources.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["@ash/commonjs", "@ash/host", "@ash/scm.js", "@ash/vscode", "main.cjs"]
+        package
+            .sources
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        [
+            "@ash/commonjs",
+            "@ash/host",
+            "@ash/scm.js",
+            "@ash/vscode",
+            "main.cjs"
+        ]
     );
     assert!(package.sources["main.cjs"].contains("captured"));
     assert!(package.sources["main.cjs"].contains("unused invalid source"));

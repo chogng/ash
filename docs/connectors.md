@@ -19,15 +19,15 @@ Connector 管理“外部服务是否已经连接以及连接对应哪个账号�
 这是 declaration 和 runtime 之间的数据流，不是 Plugin 在运行时包含 Connector、MCP session 或 Tool。
 Connector 不要求用户登录 Ash，连接的账号是 GitHub、Slack、Google Drive 等外部产品账号。
 
-| 用户场景                              | 系统发生什么                                                             | 不会自动发生什么                     |
-| ------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------ |
+| 用户场景                             | 系统发生什么                                                             | 不会自动发生什么                     |
+| ------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------ |
 | 安装 GitHub Extensions Plugin bundle | Manager 只安装一次，Connector/MCP consumer 分别读取 exact capabilities   | 不连接 GitHub、不启动 MCP            |
-| 启用 legacy GitHub Plugin             | 兼容 contribution 提供 GitHub Connector declaration                      | 不建立远端安装旁路                   |
-| 查看未连接的 GitHub                   | Connector 以 `Connect` candidate 出现在 discovery                        | 不向 Agent 暴露 GitHub tools         |
-| 完成 GitHub OAuth                     | 认证 owner 保存 secret，并向 Connector 发布 non-secret account/reference | Connector 不读取 token bytes         |
-| Connector 成为 connected              | ready MCP binding 可以由 host materialize                                | 不绕过 MCP policy 或 Tool approval   |
-| 用户断开 GitHub                       | connection generation 前进，ready binding 立即撤销                       | 不删除 Plugin package 或 Thread 历史 |
-| 用户直接配置 MCP server               | 经过配置、凭据和策略解析后直接进入 MCP runtime                           | 不必须伪造 Plugin 或 Connector       |
+| 启用 legacy GitHub Plugin            | 兼容 contribution 提供 GitHub Connector declaration                      | 不建立远端安装旁路                   |
+| 查看未连接的 GitHub                  | Connector 以 `Connect` candidate 出现在 discovery                        | 不向 Agent 暴露 GitHub tools         |
+| 完成 GitHub OAuth                    | 认证 owner 保存 secret，并向 Connector 发布 non-secret account/reference | Connector 不读取 token bytes         |
+| Connector 成为 connected             | ready MCP binding 可以由 host materialize                                | 不绕过 MCP policy 或 Tool approval   |
+| 用户断开 GitHub                      | connection generation 前进，ready binding 立即撤销                       | 不删除 Plugin package 或 Thread 历史 |
+| 用户直接配置 MCP server              | 经过配置、凭据和策略解析后直接进入 MCP runtime                           | 不必须伪造 Plugin 或 Connector       |
 
 ## 1. 结论
 
@@ -35,13 +35,13 @@ Connector 不要求用户登录 Ash，连接的账号是 GitHub、Slack、Google
 
 > Extensions Manager 管 package lifecycle，Connector 管外部账号连接，MCP 管协议会话与能力调用，Tool 是 Agent 最终消费的能力。
 
-| 对象                       | 回答的核心问题                                        | 产出                                                             | 不拥有                                         |
-| -------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| 对象                      | 回答的核心问题                                        | 产出                                                             | 不拥有                                         |
+| ------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
 | Extensions package/bundle | “一次安装提供哪些 capabilities？”                     | 带版本、摘要和来源的 capability declarations                     | enable/grant、外部账号、MCP session            |
-| Legacy Plugin              | “本地兼容包当前启用了哪些贡献？”                      | generation-bound contribution declaration                        | 远端安装、外部账号、MCP session                |
-| Connector                  | “这个外部产品连上了吗，连的是哪个账号？”              | generation-bound connection state 和 ready runtime binding       | Plugin package、secret bytes、MCP transport    |
-| MCP                        | “如何与 capability server 建立会话并发现、调用能力？” | session、capability catalog、绑定和调用结果                      | Plugin/Connector authority、每次 Tool approval |
-| Tool Registry / Core       | “Agent 当前可以调用什么，这次调用是否允许？”          | provider-independent Tool definition、approval 和 durable result | Plugin 安装、connect/OAuth lifecycle           |
+| Legacy Plugin             | “本地兼容包当前启用了哪些贡献？”                      | generation-bound contribution declaration                        | 远端安装、外部账号、MCP session                |
+| Connector                 | “这个外部产品连上了吗，连的是哪个账号？”              | generation-bound connection state 和 ready runtime binding       | Plugin package、secret bytes、MCP transport    |
+| MCP                       | “如何与 capability server 建立会话并发现、调用能力？” | session、capability catalog、绑定和调用结果                      | Plugin/Connector authority、每次 Tool approval |
+| Tool Registry / Core      | “Agent 当前可以调用什么，这次调用是否允许？”          | provider-independent Tool definition、approval 和 durable result | Plugin 安装、connect/OAuth lifecycle           |
 
 ```mermaid
 flowchart TD
@@ -170,7 +170,7 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | OAuth browser/device interaction                                 | ✅ Desktop browser+device、browser host device、TUI device 已实现                                                         |
 | ready binding → `ash-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider）                                                                                       |
 | exact legacy Plugin activation → Connector/MCP runtime provider  | ✅ 已实现，支持 live install/enable/disable authority reconcile                                                           |
-| Extensions bundle → Connector/MCP runtime provider              | ✅ 已实现，同 digest exact binding、HTTP/packaged stdio 校验、Manager invocation lease 与 install/update/uninstall 热重建 |
+| Extensions bundle → Connector/MCP runtime provider               | ✅ 已实现，同 digest exact binding、HTTP/packaged stdio 校验、Manager invocation lease 与 install/update/uninstall 热重建 |
 | MCP `tools/list_changed` → safe-point rebuild                    | ✅ 已实现                                                                                                                 |
 
 产品部署入口为 `LocalProductServicesConfig` / `--product-services PATH` /

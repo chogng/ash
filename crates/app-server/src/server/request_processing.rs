@@ -313,9 +313,10 @@ impl AppServer {
                 if cancellation.is_cancelled() {
                     None
                 } else {
-                    Some(crate::git_service::with_invocation(cancellation.clone(), || {
-                        self.dispatch(&mut dispatch_connection, request, cancellation)
-                    }))
+                    Some(crate::git_service::with_invocation(
+                        cancellation.clone(),
+                        || self.dispatch(&mut dispatch_connection, request, cancellation),
+                    ))
                 }
             },
             deliver,

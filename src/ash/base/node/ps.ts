@@ -16,7 +16,9 @@ export async function listProcesses(rootPid: number): Promise<ProcessItem> {
 			'[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new()',
 			'Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | Select-Object IDProcess,CreatingProcessID,Name,PercentProcessorTime,WorkingSet | ConvertTo-Json -Compress',
 		].join('; ');
-		const { stdout } = await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], options);
+		const query = execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { ...options, timeout: 15_000 });
+		query.child.stdin?.end();
+		const { stdout } = await query;
 		const value: unknown = JSON.parse(stdout.replace(/^\uFEFF/, ''));
 		for (const row of Array.isArray(value) ? value : [value]) {
 			if (!row || typeof row !== 'object' || typeof row.Name !== 'string') { throw new TypeError('Invalid process counter'); }

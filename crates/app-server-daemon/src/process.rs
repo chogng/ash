@@ -65,6 +65,10 @@ pub(crate) struct ExecutableIdentity {
     sha256: String,
     #[serde(default)]
     package_build_id: Option<String>,
+    #[serde(default)]
+    runtime_binding: Option<crate::runtime::ElectronRuntimeBinding>,
+    #[serde(default)]
+    runtime_availability: Option<crate::runtime::RuntimeAvailability>,
 }
 
 impl ExecutableIdentity {
@@ -88,6 +92,8 @@ impl ExecutableIdentity {
         !self.sha256.is_empty()
             && self.sha256 == other.sha256
             && self.package_build_id == other.package_build_id
+            && self.runtime_binding == other.runtime_binding
+            && self.runtime_availability == other.runtime_availability
     }
 }
 
@@ -121,20 +127,33 @@ impl ProcessRecord {
         if let Some(identity) = &process_start_identity {
             digest.update(identity.as_bytes());
         }
+        let mut executable_identity = binary_identity(
+            &dunce::canonicalize(std::env::current_exe().map_err(io_error)?).map_err(io_error)?,
+        )?;
+        // The process owns the launch-time binding, even after another installation is selected.
+        executable_identity.runtime_binding = crate::runtime::frozen_binding()?;
+        executable_identity.runtime_availability = crate::runtime::frozen_availability()?;
         Ok(Self {
             pid,
             instance_id: format!("{:x}", digest.finalize()),
             process_start_identity,
             daemon_version: build_info::VERSION.into(),
-            executable_identity: Some(executable_identity(
-                &dunce::canonicalize(std::env::current_exe().map_err(io_error)?)
-                    .map_err(io_error)?,
-            )?),
+            executable_identity: Some(executable_identity),
         })
     }
 }
 
 pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, String> {
+    let mut identity = binary_identity(path)?;
+    identity.runtime_binding = crate::runtime::binding_for_backend(path)?;
+    identity.runtime_availability = identity
+        .runtime_binding
+        .as_ref()
+        .map(|binding| binding.availability());
+    Ok(identity)
+}
+
+pub(crate) fn binary_identity(path: &Path) -> Result<ExecutableIdentity, String> {
     let mut file = File::open(path).map_err(io_error)?;
     let mut digest = Sha256::new();
     let mut buffer = [0; EXECUTABLE_HASH_BUFFER_BYTES];
@@ -148,6 +167,8 @@ pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, Str
     Ok(ExecutableIdentity {
         sha256: format!("{:x}", digest.finalize()),
         package_build_id: package_build_id(path)?,
+        runtime_binding: None,
+        runtime_availability: None,
     })
 }
 
@@ -366,8 +387,9 @@ impl Drop for SpawnedBackend {
 pub(crate) fn spawn_backend(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
-    backend_executable: &Path,
+    backend: &BackendExecutable,
 ) -> Result<SpawnedBackend, String> {
+    let backend_executable = &backend.path;
     let metadata = fs::symlink_metadata(backend_executable).map_err(io_error)?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(format!(
@@ -393,6 +415,33 @@ pub(crate) fn spawn_backend(
         command.env(PRODUCT_SERVICES_ENV, path);
     } else {
         command.env_remove(PRODUCT_SERVICES_ENV);
+    }
+    if let Some(binding) = &backend.identity.runtime_binding {
+        crate::runtime::clear_binding(&mut command);
+        binding.apply(
+            &mut command,
+            backend
+                .identity
+                .runtime_availability
+                .as_ref()
+                .ok_or("Electron binding has no availability state")?,
+        )?;
+    } else if backend.identity.package_build_id.is_some() {
+        let metadata: serde_json::Value = serde_json::from_slice(
+            &fs::read(
+                backend_executable
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("ash-package.json"),
+            )
+            .map_err(io_error)?,
+        )
+        .map_err(|error| error.to_string())?;
+        if metadata["javascriptRuntime"]["kind"] == "packagedNode" {
+            crate::runtime::clear_binding(&mut command);
+        }
     }
     detach_command(&mut command);
     let child = command.spawn().map_err(io_error)?;

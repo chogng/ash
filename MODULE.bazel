@@ -30,7 +30,12 @@ single_version_override(
 single_version_override(
     module_name = "rules_rs",
     patch_strip = 1,
-    patches = ["//third_party/rules_rs:windows_gnullvm_exec_triples.patch"],
+    # Ubuntu's moving package pool deletes superseded versions. The snapshot
+    # preserves the exact zlib bytes already pinned by rules_rs.
+    patches = [
+        "//third_party/rules_rs:immutable_zlib_urls.patch",
+        "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
+    ],
 )
 
 register_toolchains("@llvm//toolchain:all")

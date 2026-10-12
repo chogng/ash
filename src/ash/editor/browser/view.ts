@@ -393,7 +393,6 @@ export class View extends ViewEventHandler {
 		this.marginViewOverlays.addDynamicOverlay(new LineNumbersOverlay(this.viewContext, {
 			viewModel: this.viewModel,
 			readVisualProjection: () => this.visualProjection,
-			host: this.contentElement,
 		}));
 		this.glyphMarginWidgets = this.registerViewPart(new GlyphMarginWidgets(this.viewContext));
 		this.margin.getDomNode().domNode.append(this.viewZones.marginDomNode.domNode, this.marginViewOverlays.getDomNode().domNode, this.glyphMarginWidgets.domNode.domNode);

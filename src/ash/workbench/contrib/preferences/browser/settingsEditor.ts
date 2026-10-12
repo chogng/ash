@@ -107,11 +107,11 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 				if (setting.id === DESKTOP_UPDATE_POLICY_SETTING) return localUpdatePolicySetting(setting, configurationService);
 				if (setting.id === LocalizationConfiguration.locale) return displayLanguageSetting(setting, localeService, languagePackService, localizationService, configurationService);
 				if (setting.configuration.extensionBinding) {
-     const binding = this._register(this.instantiationService.createInstance(ExtensionSettingBinding, setting.configuration));
-     return { ...setting, binding } as ISetting;
-    }
-    return setting;
-   }),
+					const binding = this._register(this.instantiationService.createInstance(ExtensionSettingBinding, setting.configuration));
+					return { ...setting, binding } as ISetting;
+				}
+				return setting;
+			}),
 		]));
 		this.contextMenuProvider = contextMenuProvider;
 		this.contextViewProvider = contextViewProvider;

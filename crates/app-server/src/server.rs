@@ -185,8 +185,8 @@ mod testing_operations;
 #[cfg(test)]
 mod testing_operations_tests;
 mod thread_dir_binding;
-mod thread_history_files;
 mod thread_dirs;
+mod thread_history_files;
 mod turn_backend_router;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
@@ -3155,7 +3155,9 @@ impl AppServer {
             Some(ClientMethod::CloudCodebaseSync) => self.cloud_codebase_sync(&request.params),
             Some(ClientMethod::CloudCodebaseRevoke) => self.cloud_codebase_revoke(&request.params),
             Some(ClientMethod::TerminalProfileList) => self.terminal_profile_list(&request.params),
-            Some(ClientMethod::TerminalProfileResolve) => self.terminal_profile_resolve(&request.params),
+            Some(ClientMethod::TerminalProfileResolve) => {
+                self.terminal_profile_resolve(&request.params)
+            }
             Some(ClientMethod::TerminalEnvironmentRead) => {
                 self.terminal_environment_read(&request.params)
             }
@@ -3320,7 +3322,9 @@ pub(super) fn result<T: serde::Serialize>(value: &T) -> Result<Value, RpcError> 
 
 pub(super) fn core_error(error: CoreError) -> RpcError {
     match error {
-        CoreError::WorkspaceCheckpointConflict => RpcError::new(-32010, AppServerErrorName::ThreadHistoryConflict),
+        CoreError::WorkspaceCheckpointConflict => {
+            RpcError::new(-32010, AppServerErrorName::ThreadHistoryConflict)
+        }
         CoreError::CommandConflict => RpcError::new(-32004, AppServerErrorName::CommandConflict),
         CoreError::NotFound(_) => RpcError::new(-32011, AppServerErrorName::CoreOperationFailed),
         _ => RpcError::new(-32010, AppServerErrorName::CoreOperationFailed),

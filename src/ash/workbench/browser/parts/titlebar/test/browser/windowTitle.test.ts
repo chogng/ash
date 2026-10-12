@@ -153,7 +153,9 @@ test('WindowTitle renders path variables and updates templates, separators and c
 	await context.editors.openEditor({ resource: URI.file('/project/src/main.ts') });
 	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
 	await context.configuration.updateValue('window.title', '${activeEditorMedium}${separator}${activeFolderShort}${separator}${folderName}${separator}${folderPath}${separator}${rootPath}');
-	assert.equal(title.value, 'src/main.ts — src — Project — /project — /project');
+	const rootPath = URI.file('/project').fsPath;
+	const relativePath = URI.file('/project/src/main.ts').fsPath.slice(rootPath.length + 1);
+	assert.equal(title.value, `${relativePath} — src — Project — ${rootPath} — ${rootPath}`);
 	await context.configuration.updateValue('window.title', '${branch}${separator}${activeEditorShort}${separator}${appName}');
 	await context.configuration.updateValue('window.titleSeparator', ' | ');
 	context.contextKeys.setContext('git.branch', 'feature/title');

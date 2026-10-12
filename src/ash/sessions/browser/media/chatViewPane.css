@@ -95,8 +95,10 @@
 	flex-direction: column;
 }
 
-.ash-chat-body.sessions-stacked.sessions-sidebar-visible > .ash-chat-sessions-sidebar,
-.ash-chat-body.sessions-list-only.sessions-sidebar-visible > .ash-chat-sessions-sidebar {
+.ash-chat-body.sessions-stacked.sessions-sidebar-visible
+	> .ash-chat-sessions-sidebar,
+.ash-chat-body.sessions-list-only.sessions-sidebar-visible
+	> .ash-chat-sessions-sidebar {
 	flex: 1 1 0;
 	min-width: 0;
 	border-left: 0;
@@ -108,7 +110,9 @@
 	max-height: 50%;
 }
 
-.ash-chat-body.sessions-stacked.sessions-sidebar-visible > .ash-chat-pane-host > .ash-chat {
+.ash-chat-body.sessions-stacked.sessions-sidebar-visible
+	> .ash-chat-pane-host
+	> .ash-chat {
 	height: auto;
 }
 

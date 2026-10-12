@@ -13,8 +13,55 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  contracts:
+    name: Frontend contracts and units
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
+        with:
+          install: false
+      - name: Install frontend build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev libcap-dev libssl-dev pkg-config
+      - name: Cache protocol exporter builds
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: ". -> .build/cargo"
+          shared-key: frontend-contracts
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version-file: scripts/pyproject.toml
+      - name: Sync locked Python tools
+        run: python -B scripts/install_python_tools.py
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check localization, styles and generated contracts
+        run: |
+          pnpm localization:check
+          pnpm stylelint
+          pnpm typecheck:protocol
+          pnpm typecheck:renderer
+      - name: Check and test build tools
+        run: |
+          pnpm typecheck:build
+          pnpm test:build
+          pnpm build:stanza
+      - name: Test frontend units
+        run: pnpm test:unit
+
+  desktop-runtime:
+    needs: contracts
+    uses: ./.github/workflows/desktop-runtime-acceptance.yml
+
   check:
     name: ${{ matrix.surface }} (${{ matrix.runner }})
+    needs: contracts
     strategy:
       fail-fast: false
       matrix:
@@ -52,6 +99,13 @@ jobs:
           workspaces: ". -> .build/cargo"
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+          cache-directories: third_party/.cache/v8
+      - name: Restore complete V8 build inputs
+        run: |
+          # rust-cache prunes gn_out but retains V8's build-script fingerprint.
+          # Re-run only that crate so linking recreates the verified static library.
+          cargo clean --package v8 --profile dev-small
+          cargo fetch --locked
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.11"
@@ -64,21 +118,6 @@ jobs:
         run: python -B scripts/install_python_tools.py
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
-      - name: Check localization sources
-        run: pnpm localization:check
-      - name: Check CSS variable names
-        run: pnpm stylelint
-      - name: Check generated protocol contracts
-        run: pnpm typecheck:protocol
-      - name: Check and test build tools
-        if: matrix.surface == 'browser'
-        run: |
-          pnpm typecheck:build
-          pnpm test:build
-          pnpm build:stanza
-      - name: Test frontend units
-        if: matrix.surface == 'browser'
-        run: pnpm test:unit
       - name: Install Chromium
         if: matrix.surface == 'browser'
         run: pnpm exec playwright install --with-deps chromium

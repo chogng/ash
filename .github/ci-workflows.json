@@ -8,6 +8,8 @@
     "bazel/**",
     "third_party/tgrep/**",
     "third_party/ripgrep/**",
+    "third_party/rules_rs/**",
+    "third_party/v8/**",
     "**/BUILD.bazel",
     "**/*.bzl",
     "Cargo.toml",
@@ -49,7 +51,8 @@
     "Cargo.lock",
     "rust-toolchain.toml",
     ".cargo/**",
-    ".github/workflows/frontend.yml"
+    ".github/workflows/frontend.yml",
+    ".github/workflows/desktop-runtime-acceptance.yml"
   ],
   "media": [
     "crates/livekit-client/**",

@@ -1,4 +1,5 @@
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
+import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from "node:assert/strict";
@@ -150,7 +151,8 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	assert.equal(widget.viewMode, 'sideBySide');
 	const configuration = container.get(IConfigurationService);
 	await configuration.updateValue('diffEditor.splitViewDefaultRatio', 0.3);
-	assert.equal(widget.element.style.getPropertyValue('--stanza-diff-original-width'), '291px');
+	const availableWidth = widget.originalEditor.getLayoutInfo().width + widget.modifiedEditor.getLayoutInfo().width;
+	assert.equal(widget.element.style.getPropertyValue('--stanza-diff-original-width'), `${Math.round(availableWidth * 0.3)}px`);
 	const sash = widget.element.querySelector('.stanza-diff-sash') as HTMLElement;
 	sash.focus();
 	await configuration.updateValue('diffEditor.enableSplitViewResizing', false);
@@ -551,7 +553,8 @@ test('Diff collapse command toggles hidden unchanged regions and follows setting
 	await container.get(ICommandService).executeCommand('diffEditor.toggleCollapseUnchangedRegions');
 	assert.equal(configuration.getValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled), true);
 	assert.equal(regions().length, 2);
-	assert.equal(regions()[0]?.querySelector('.ash-diff-hidden-region-count')?.textContent, '33 hidden lines');
+	// The leading block retains one context line adjacent to the final changed line.
+	assert.equal(regions()[0]?.querySelector('.ash-diff-hidden-region-count')?.textContent, '34 hidden lines');
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 100);
 	assert.equal(regions().length, 0);
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 3);
@@ -633,6 +636,7 @@ test('Diff editor status follows the selected side and ignores the inactive side
 	const widget = pane.getControl();
 	assert.ok(widget);
 	using statusbar = new StatusbarService();
+	container.registerInstance(IFileTextModelService, models);
 	const statusPart = { domNode: parent, activeInput: input, activePane: pane, onDidChangeEditors: Event.None } as unknown as IEditorPart;
 	using status = container.createInstance(EditorStatusContribution, statusPart, statusbar);
 	const cursorStatus = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.cursor')?.entry.text;

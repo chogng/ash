@@ -4,6 +4,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { HierarchicalKind } from '../../../../../base/common/hierarchicalKind.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { registerWindow } from '../../../../../base/browser/window.js';
 import { parseJsonDocument } from '../../../../../base/common/json.js';
 import { validateJsonSchema, type JsonSchema } from '../../../../../base/common/jsonSchema.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
@@ -17,6 +18,8 @@ import { createConfigurationSchema } from '../../../../../platform/configuration
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { IPreferencesService, type IOpenSettingsOptions } from '../../../../services/preferences/common/preferences.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
@@ -30,6 +33,7 @@ for (const mode of ['paste', 'drop'] as const) {
 	test(`${mode} applies language-specific ordered preferences and opens its own settings from the selector`, async () => {
 		const dom = new JSDOM('<body><main></main></body>');
 		using close = toDisposable(() => dom.window.close());
+		using registeredWindow = registerWindow(dom.window as unknown as Window);
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		using services = new InstantiationService();
 		registerCodeEditorServices(services);
@@ -149,6 +153,7 @@ for (const [args, expected] of [[{ preferences: ['missing', 'html', 'text'] }, '
 		const dom = new JSDOM('<body><main></main></body>');
 		using close = toDisposable(() => dom.window.close());
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using registeredWindow = registerWindow(dom.window as unknown as Window);
 		Object.defineProperty(dom.window.navigator, 'clipboard', {
 			value: {
 				read: async () => [{
@@ -160,7 +165,11 @@ for (const [args, expected] of [[{ preferences: ['missing', 'html', 'text'] }, '
 			},
 		});
 		using model = new TextModel('old');
-		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
+		using services = new InstantiationService();
+		using clipboard = new BrowserClipboardService(dom.window.navigator.clipboard);
+		services.registerInstance(IClipboardService, clipboard);
+		registerCodeEditorServices(services);
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services });
 		editor.setSelection(new Selection(1, 1, 1, 4));
 		editor.focus();
 		await editor.invokeWithinContext(accessor => accessor.get(ICommandService).executeCommand(

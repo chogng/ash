@@ -8,6 +8,31 @@ import { ProcessRun } from './processes.ts';
 
 const repository = resolve(import.meta.dirname, '..');
 
+test('Windows process ownership tracks and cleans a live parent and child', { skip: process.platform !== 'win32', timeout: 60_000 }, async t => {
+	const child = spawn(process.execPath, ['-e', `
+const { spawn } = require('node:child_process');
+const helper = spawn(process.execPath, ['-e', 'process.send(process.pid); setInterval(() => {}, 1000)'], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+helper.once('message', pid => process.send(pid));
+setInterval(() => {}, 1000);
+`], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+	const ready = new Promise<number>(resolveReady => child.once('message', pid => resolveReady(Number(pid))));
+	const run = new ProcessRun(repository, undefined, 100);
+	let helper: number | undefined;
+	t.after(async () => {
+		try { await run.close(); }
+		finally {
+			for (const pid of [child.pid, helper]) {
+				if (!pid) continue;
+				try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+			}
+		}
+	});
+	helper = await ready;
+	await run.own(child);
+	await run.close();
+	for (const pid of [child.pid!, helper]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+});
+
 for (const ignoresSignal of [false, true]) {
 	test(`owned process trees exit when the root ${ignoresSignal ? 'ignores' : 'handles'} termination`, { skip: process.platform === 'win32', timeout: 15_000 }, async t => {
 		const child = spawn(process.execPath, ['-e', `

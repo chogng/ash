@@ -1,18 +1,16 @@
 import "./lineNumbers.css";
-import { h, reset } from "../../../../base/browser/dom.js";
+import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { EditorOption, type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type IViewModel } from '../../../common/viewModel.js';
 import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { renderViewPartRows } from '../../view/viewLayer.js';
 import * as viewEvents from '../../../common/viewEvents.js';
 
 interface LineNumbersOverlayOptions {
 	readonly viewModel: IViewModel;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
-	readonly host: HTMLElement;
 }
 
 /** Projects line numbers into virtual rows. */
@@ -23,7 +21,6 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	private activeLineNumber: number;
 	private readonly viewModel: IViewModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
-	private readonly host: HTMLElement;
 
 	constructor(private readonly context: ViewContext, options: LineNumbersOverlayOptions) {
 		super();
@@ -32,7 +29,6 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		this.viewModel = options.viewModel;
 		this.activeLineNumber = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber;
 		this.readVisualProjection = options.readVisualProjection;
-		this.host = options.host;
 	}
 
 	public override dispose(): void {
@@ -62,22 +58,22 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
+		this._renderResult = [];
+		if (this.lineNumbers.renderType === RenderLineNumbersType.Off) {
+			return;
+		}
 		const visualProjection = this.readVisualProjection();
 		const activeLineIndex = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber - 1;
-		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
-			for (const [visualLineIndex, row] of rows) {
-				const visualLine = visualProjection.lineAt(visualLineIndex);
-				if (!visualLine) continue;
-				const number = h(row.ownerDocument, "span");
-				number.className = LineNumbersOverlay.CLASS_NAME;
-				number.classList.toggle("active", visualLine.logicalLineIndex === activeLineIndex);
-				number.classList.toggle("active-line-number", visualLine.logicalLineIndex === activeLineIndex);
-				number.textContent = visualLine.firstForLogicalLine
-					? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex)
-					: '';
-				reset(row, number);
+		for (let lineNumber = context.viewportData.startLineNumber; lineNumber <= context.viewportData.endLineNumber; lineNumber++) {
+			const visualLine = visualProjection.lineAt(lineNumber - 1);
+			if (!visualLine) {
+				this._renderResult.push('');
+				continue;
 			}
-		});
+			const active = visualLine.logicalLineIndex === activeLineIndex ? ' active active-line-number' : '';
+			const label = visualLine.firstForLogicalLine ? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex) : '';
+			this._renderResult.push(`<span class="${LineNumbersOverlay.CLASS_NAME}${active}">${htmlAttributeEncodeValue(String(label))}</span>`);
+		}
 	}
 
 	public render(startLineNumber: number, lineNumber: number): string {

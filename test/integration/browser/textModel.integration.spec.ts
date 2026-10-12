@@ -152,6 +152,40 @@ test('line numbers and glyph markers share text coordinates after vertical and h
 	}))).toEqual({ fixedRoot: true, marginOutsideContent: true, inputInScrollViewport: true });
 });
 
+test('simple overlays escape custom line numbers and clear content on empty transitions', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.getModel()!.setLanguage('plaintext');
+		editor.updateOptions({ lineNumbers: line => `<img src=x onerror="throw 1"> & ${line}`, wordWrap: 'on', renderWhitespace: 'selection', guides: { indentation: false, bracketPairs: false }, minimap: { enabled: false } });
+		editor.setValue('wrapped text '.repeat(100) + '\nlast');
+		editor.setPosition({ lineNumber: 1, column: 1 });
+	});
+	const editor = page.locator('.stanza-editor');
+	const numbers = editor.locator('.margin-view-overlays .line-numbers');
+	await expect(numbers.first()).toHaveText('<img src=x onerror="throw 1"> & 1');
+	await expect(numbers.nth(1)).toHaveText('');
+	await expect(numbers.nth(1)).toHaveClass(/active-line-number/);
+	await expect(editor.locator('.margin-view-overlays img')).toHaveCount(0);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.updateOptions({ lineNumbers: 'on', wordWrap: 'off', renderWhitespace: 'all', guides: { indentation: true, bracketPairs: false } });
+		editor.setValue('root\n    one\n    two');
+		editor.setSelection({ startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 5 });
+	});
+	await expect(editor.locator('.stanza-editor-selection')).toHaveCount(1);
+	await expect(editor.locator('.stanza-editor-whitespace')).toHaveCount(8);
+	await expect(editor.locator('.stanza-editor-indent-guide').first()).toBeVisible();
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.updateOptions({ lineNumbers: 'off', renderWhitespace: 'selection' });
+		editor.setPosition({ lineNumber: 2, column: 1 });
+		editor.setValue('root\none\ntwo');
+	});
+	await expect(numbers).toHaveCount(0);
+	await expect(editor.locator('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide')).toHaveCount(0);
+});
+
 test('physical scroll offsets follow model clamping, resizing and browser scroll events', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {

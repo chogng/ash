@@ -594,10 +594,12 @@ test('editor save cancels when a participant switches the pane input without wri
 		using services = paneServices(models);
 		const first = URI.file('/project/first.txt');
 		const second = URI.file('/project/second.txt');
-		using pane = createPane(services, store, { createPart: options => {
-			options.registerBeforeSave?.(() => pane.setInput({ resource: second }, new AbortController().signal));
-			return createInertEditorPart();
-		} });
+		using pane = createPane(services, store, {
+			createPart: options => {
+				options.registerBeforeSave?.(() => pane.setInput({ resource: second }, new AbortController().signal));
+				return createInertEditorPart();
+			}
+		});
 		pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
 		await pane.setInput({ resource: first }, new AbortController().signal);
 		using firstReference = await models.acquire({ resource: first }, new AbortController().signal);

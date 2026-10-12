@@ -34,9 +34,11 @@ async function loadMarkdown(language: string, documents: readonly unknown[] = []
 	const bundle = JSON.parse(await readFile(resolve(process.cwd(), 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
 	const entry = bundle.resources['vscode.markdown-language-features']['src/extension.js'];
 	const manifest = JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.json'), 'utf8'));
+	const packageNls = JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.nls.json'), 'utf8'));
+	if (language === 'zh-CN') Object.assign(packageNls, JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.nls.zh-CN.json'), 'utf8')));
 	const empty = { contents: {}, keys: [], overrides: [] };
 	previousGlobals = new Map(['__ashConfiguration', '__ashInitialization', '__ashInvocation', '__ashRequest', '__ashBackgroundRequest'].map(name => [name, Object.getOwnPropertyDescriptor(globals, name)]));
-	globals.__ashConfiguration = { extensionId: 'vscode.markdown-language-features', extensionPath: '/', pathSeparator: '/', manifest, commands: manifest.contributes.commands };
+	globals.__ashConfiguration = { extensionId: 'vscode.markdown-language-features', extensionPath: '/', pathSeparator: '/', manifest, commands: manifest.contributes.commands, localization: { package: packageNls } };
 	globals.__ashInitialization = { language, workspaceFolders: folders.map((uri, index) => ({ uri, name: 'Workspace', index })), workspaceName: null, workspaceFile: null, configurationValues: configuration, configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] } };
 	globals.__ashInvocation = (required = true) => { const id = invocationScope.getStore(); if (required && id === undefined) throw new Error('No invocation'); return id; };
 	globals.__ashRequest = async (_id: number, encoded: string) => JSON.stringify(await clientRequest(JSON.parse(encoded)));

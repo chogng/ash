@@ -47,7 +47,7 @@ test('SCM history command contexts revive only the owning live repository', asyn
 	const repository = value.scm.getRepository('repo')!;
 	const item = { id: 'abc', parentIds: ['parent'], subject: 'Commit', message: 'Commit', remoteLinks: [{ name: 'origin', uri: URI.parse('https://example.com/abc') }] };
 	const encoded = await value.bridge.prepareCommandArguments('ash.git', [{ type: 'historyItemViewModel', repository, historyItemViewModel: { historyItem: item } }]);
-	const [revived] = value.bridge.reviveCommandArguments(source, encoded) as Array<{ repository: typeof repository; historyItemViewModel: { historyItem: typeof item }; }>;
+	const [revived] = value.bridge.reviveCommandArguments(source, encoded) as Array<{ repository: typeof repository; historyItemViewModel: { historyItem: typeof item; }; }>;
 	assert.strictEqual(revived.repository, repository);
 	assert.deepEqual(revived.historyItemViewModel.historyItem.remoteLinks, item.remoteLinks);
 	assert.throws(() => value.bridge.reviveCommandArguments({ ...source, extensionId: 'other.extension' }, encoded), /foreign repository/);

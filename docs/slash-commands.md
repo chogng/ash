@@ -120,13 +120,13 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各领域的使用入口。命令只打开对应功能；安装状态由
 [`Core Plugins`](../crates/docs/core-plugins.md#一个包入口多个领域消费方) 统一持有。
 
-| 入口                | 用户操作                                                             | 安装相关操作                                |
-| ------------------- | -------------------------------------------------------------------- | ------------------------------------------- |
-| `/extensions`      | 搜索所有来源、查看包内容与版本、安装、更新、卸载                     | 使用同一个 Core Plugins 服务                |
-| `/skills`           | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用               | 在 TUI 中用 `/extensions` 搜索可安装 Skill |
-| `/lsp`              | 查看当前语言与服务器、配置启用状态和路径、检查运行故障               | “查找服务器”打开 Extensions 的语言筛选     |
+| 入口                | 用户操作                                                            | 安装相关操作                               |
+| ------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
+| `/extensions`       | 搜索所有来源、查看包内容与版本、安装、更新、卸载                    | 使用同一个 Core Plugins 服务               |
+| `/skills`           | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用              | 在 TUI 中用 `/extensions` 搜索可安装 Skill |
+| `/lsp`              | 查看当前语言与服务器、配置启用状态和路径、检查运行故障              | “查找服务器”打开 Extensions 的语言筛选     |
 | `/plugins`          | Ash Code 管理已安装插件的启停；Workbench 打开 Extensions 的插件分类 | 包更新和卸载由 Extensions 提供             |
-| MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command       | Extensions 提供对应 capability 筛选        |
+| MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command      | Extensions 提供对应 capability 筛选        |
 
 - package 是版本和卸载单位；一个 Plugin 包携带的 Skill、MCP 等能力不分别安装，也不重复登记。
 - 领域页面可直接提供安装按钮，但必须调用同一个包管理服务，并明确显示实际安装的整个包。

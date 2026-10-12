@@ -36,9 +36,10 @@ jobs:
           version-file: scripts/pyproject.toml
       - name: Sync locked Python tools
         run: just install-python
-      - name: Check Python lint
-        run: just lint
-      - name: Check Python format
-        run: just python-format-check
+      - name: Install Linux symbol tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends llvm
       - name: Test build, package, signing and repository contracts
         run: just test-python build scripts code
