@@ -21,6 +21,7 @@ import type { EditorPart as SessionsEditorPart } from '../../../browser/parts/ed
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
 import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebar/sidebarPart.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
+import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 
 export const documentEntry: ISessionsEntry = {
@@ -97,6 +98,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		}
 		this.controller = this._register(instantiation.createInstance(DesktopLayoutController, this.pageGroupId, this));
 		this.controller.start();
+		this._register(instantiation.createInstance(EditorTitleMenuBridgeContribution, this.controller, this));
 		this._register(storage.onWillSaveState(() => this.saveVisibility()));
 		this._register(lifecycle.onWillShutdown(event => event.join(this.navigationQueue.then(() => this.saveVisibility()), 'Sessions entry layout')));
 		this._register(editors.onDidActiveEditorChange(() => {

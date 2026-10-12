@@ -1,0 +1,49 @@
+import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { MenusRegistry, MenuId } from '../../../../platform/actions/common/actions.js';
+import type { ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
+import { localize2 } from '../../../../nls.js';
+import { Menus } from '../../../browser/menus.js';
+
+/** Callbacks retain the window's layout queue; tab actions do not own layout state. */
+export function registerAddTabActions(
+	openFiles: () => Promise<void> | false,
+	openChanges: () => Promise<void> | false,
+	when: ContextKeyExpression,
+): IDisposable {
+	const registrations = new DisposableStore();
+	const actions = [
+		{
+			id: 'ash.sessions.openFilesTab',
+			title: localize2({ bundle: 'ash', key: 'sessions.layout.openFiles' }, 'Open Files tab'),
+			icon: Lxicon.files,
+			run: openFiles,
+		},
+		{
+			id: 'ash.sessions.openChangesTab',
+			title: localize2({ bundle: 'ash', key: 'sessions.layout.openChanges' }, 'Open Changes tab'),
+			icon: Lxicon.diff,
+			run: openChanges,
+		},
+	];
+	for (const [order, action] of actions.entries()) {
+		registrations.add(CommandsRegistry.register(action.id, action.run));
+		registrations.add(MenusRegistry.appendMenuItems([
+			{
+				id: Menus.CodeAddTab,
+				item: { command: { id: action.id, title: action.title, icon: action.icon }, order },
+			},
+			...([MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
+				id,
+				item: {
+					command: { id: action.id, title: action.title },
+					when,
+					order: order + 4,
+					group: '2_code_layout',
+				},
+			}))),
+		]));
+	}
+	return registrations;
+}
