@@ -16,6 +16,7 @@ import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInp
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { SessionChangesetOperationScope, SessionChangesetOperationStatus } from '../../../../services/sessions/common/session.js';
+import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 
 suite('Session Changes opening and capture contract', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -25,6 +26,8 @@ suite('Session Changes opening and capture contract', () => {
 		let provider: IDecorationsProvider | undefined;
 		let providerDisposed = false;
 		const opened: { input: IResourceEditorInput; options?: EditorOpenOptions; group?: EditorOpenTarget; }[] = [];
+		const editorGroup = { id: 'group', get inputs() { return opened.map(request => request.input); } } as unknown as IEditorGroup;
+		services.registerInstance(IEditorGroupsService, { groups: [editorGroup] } as unknown as IEditorGroupsService);
 		services.registerInstance(IDecorationsService, {
 			registerDecorationsProvider: value => { provider = value; return toDisposable(() => { providerDisposed = true; }); },
 		} as IDecorationsService);
@@ -66,7 +69,7 @@ suite('Session Changes opening and capture contract', () => {
 		assert.equal(change.uri.toString(), 'ash-turn-diff:/capture/deleted.ts?session=session&thread=thread&revision=3');
 		assert.equal(change.deletions, 2);
 		const viewState = { revealData: { resource: { original: change.originalUri, modified: change.modifiedUri } } };
-		await service.openChangesEditor(session, { changesetSelection: { kind: 'id', id: 'capture' }, preserveFocus: true, viewState }, 'sideGroup');
+		assert.equal(await service.openChangesEditor(session, { changesetSelection: { kind: 'id', id: 'capture' }, preserveFocus: true, viewState }, 'sideGroup'), editorGroup);
 		const request = opened[0]!;
 		assert.equal(request.group, 'sideGroup');
 		assert.equal(request.options?.preserveFocus, true);

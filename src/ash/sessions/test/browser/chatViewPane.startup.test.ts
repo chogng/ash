@@ -6,6 +6,8 @@ import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyn
 import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
+import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
+import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { errorHandler } from '../../../base/common/errors.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
@@ -17,6 +19,7 @@ import { JSDOM } from "jsdom";
 import type { IFileService } from '../../../platform/files/common/files.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { Emitter, Event } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { type IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
@@ -61,6 +64,9 @@ test("opens a local Chat conversation before the backend session request settles
 	using layoutService = new VisibleAuxiliarybarLayoutService({ root: document.body });
 	using contextViewService = new BrowserContextViewService(document.body);
 	using services = createTestEditorServices();
+	using notifications = new NotificationService();
+	services.registerInstance(INotificationService, notifications);
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async () => { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(IDictationService, undefined);
@@ -87,7 +93,7 @@ test("opens a local Chat conversation before the backend session request settles
 		layoutService,
 		{} as IFileService,
 		{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
-		new NotificationService(),
+		notifications,
 		services,
 		services.get(IConfigurationService),
 		services.get(IStorageService),

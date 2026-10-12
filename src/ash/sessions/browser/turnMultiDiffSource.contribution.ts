@@ -16,8 +16,8 @@ CommandsRegistry.register(OPEN_CHAT_CHANGES_COMMAND_ID, async (accessor, session
 		throw new Error(localize('chat.changes.unavailable', 'This conversation is no longer available.'));
 	}
 	// Sessions reveals its managed Changes tab; the Workbench opens the identity-bound comparison below.
-	if (CommandsRegistry.hasCommand('ash.sessions.openChangesTab') && sessions.active?.session.sessionId === sessionId && sessions.active.threadId === threadId) {
-		const opened = await accessor.get(ICommandService).executeCommand('ash.sessions.openChangesTab');
+	if (CommandsRegistry.hasCommand('workbench.agentSessions.action.viewChanges') && sessions.active?.session.sessionId === sessionId && sessions.active.threadId === threadId) {
+		const opened = await accessor.get(ICommandService).executeCommand('workbench.agentSessions.action.viewChanges');
 		if (opened !== false) return;
 	}
 	const input = await createTurnMultiDiffEditorInput(accessor.get(IChatService), { session, threadId }, 'throughCurrentTurn');

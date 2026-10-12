@@ -18,7 +18,7 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { assertDefined } from '../../../../base/common/types.js';
+import { assertDefined, isRecord } from '../../../../base/common/types.js';
 import { MultiDiffEditorWidget } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { DocumentDiffItem, MultiDiffEditorModel, type IDocumentDiffItem } from '../../../../editor/browser/widget/multiDiffEditor/model.js';
@@ -42,6 +42,7 @@ import { localize } from '../../../../nls.js';
 import { extname } from '../../../../base/common/path.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
 import { Range } from '../../../../editor/common/core/range.js';
+import { URI } from '../../../../base/common/uri.js';
 import type { IMultiDiffEditorOptionsViewState } from '../../../../editor/common/multiDiffEditor.js';
 import {
 	ActiveEditorContext, ActiveEditorReadonlyContext, ResourceContext, ResourceSchemeContext,
@@ -189,9 +190,18 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	public restoreViewState(state: unknown): void {
 		const editor = this.session.value?.editor;
 		if (!editor) throw new Error('Multi-diff editor view-state restoration is unavailable');
-		if (state && typeof state === 'object' && 'revealData' in state) {
-			const reveal = (state as IMultiDiffEditorOptionsViewState).revealData;
-			if (reveal) { editor.reveal(reveal.resource, { range: reveal.range ? Range.lift(reveal.range) : undefined, highlight: false }); }
+		if (isRecord(state) && (Object.keys(state).length === 0 || 'revealData' in state)) {
+			const reveal = state.revealData;
+			if (reveal === undefined) { return; }
+			if (!isRecord(reveal) || !isRecord(reveal.resource)
+				|| ![reveal.resource.original, reveal.resource.modified].some(resource => resource instanceof URI)
+				|| ![reveal.resource.original, reveal.resource.modified].every(resource => resource === undefined || resource instanceof URI)
+				|| (reveal.range !== undefined && (!Range.isIRange(reveal.range)
+					|| ![reveal.range.startLineNumber, reveal.range.startColumn, reveal.range.endLineNumber, reveal.range.endColumn].every(value => Number.isSafeInteger(value) && value > 0)))) {
+				throw new TypeError('Invalid multi-diff editor view state');
+			}
+			const options = reveal as unknown as NonNullable<IMultiDiffEditorOptionsViewState['revealData']>;
+			editor.reveal(options.resource, { range: options.range ? Range.lift(options.range) : undefined, highlight: false });
 			return;
 		}
 		editor.restoreViewState(state);
@@ -421,6 +431,8 @@ class MultiDiffEditorSession extends Disposable {
 		const resources = new DisposableStore();
 		const scoped = resources.add(options.fileActions!.contextKeyService.createScoped(container));
 		ActiveEditorContext.bindTo(scoped).set(options.activeEditorId ?? MULTI_DIFF_EDITOR_ID);
+		scoped.createKey('multiDiffEditorFileIsBinary', input.binary === true);
+		for (const [key, value] of Object.entries(input.contextKeys ?? {})) { scoped.createKey(key, value); }
 		const resource = (input.goToFile ?? input.modified).resource;
 		ActiveEditorReadonlyContext.bindTo(scoped).set(input.modified.readOnly === true);
 		ResourceContext.bindTo(scoped).set(resource.toString());

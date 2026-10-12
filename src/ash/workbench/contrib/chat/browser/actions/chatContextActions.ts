@@ -20,6 +20,8 @@ import { FilesAndFoldersPickerPick, SymbolsContextPickerPick, SearchViewResultCh
 import type { IAnythingQuickPickItem } from '../../../search/browser/anythingQuickAccess.js';
 import { ClipboardImageContextValuePick, GitHubContextValuePick, ScreenshotContextValuePick, SessionReferenceContextPickerPick, TerminalContext, ToolsContextPickerPick, type ChatContextSource } from './chatContext.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
 
 interface AttachContextHost {
 	readonly target: Pick<IChatContextTarget, 'addContext'>;
@@ -37,7 +39,7 @@ type ContextSourceItem = IQuickPickItem & (
 /** Each picker belongs to its originating composer, even when another pane becomes active. */
 export class AttachContextAction extends Disposable {
 	private readonly pickers = this._register(new DisposableStore());
-	private pending = false;
+	private pending: AbortController | undefined;
 
 	constructor(
 		private readonly host: AttachContextHost,
@@ -53,40 +55,64 @@ export class AttachContextAction extends Disposable {
 		super();
 	}
 
-	public async run(): Promise<void> {
-		if (this.pending) { return; }
-		this.pending = true;
+	public async run(anchor?: HTMLElement): Promise<void> {
+		if (this.pending) { this.pending.abort(); return; }
 		const controller = new AbortController();
+		this.pending = controller;
 		this.pickers.add(toDisposable(() => controller.abort()));
+		anchor?.setAttribute('aria-expanded', 'true');
+		let added = false;
+		let failed = false;
+		let completed = false;
+		// Child sources borrow the window's picker owner with this composer's placement.
+		// Keeping the scope in DI covers multi-step sources without changing their attachment logic.
+		const quickInput = this.quickInput;
+		const scopedQuickInput: IQuickInputService = {
+			get currentQuickInput() { return quickInput.currentQuickInput; },
+			createQuickPick: <T extends IQuickPickItem>() => {
+				const picker = quickInput.createQuickPick<T>();
+				picker.anchor = anchor;
+				picker.anchorPosition = 'above';
+				return picker;
+			},
+			input: (options, token) => quickInput.input(options, token),
+		};
+		const instantiation = this.pickers.add(this.instantiation.createChild(new ServiceCollection([IQuickInputService, scopedQuickInput])));
+		const addContext = (attachment: Parameters<IChatContextTarget['addContext']>[0]): void => {
+			this.host.target.addContext(attachment);
+			added = true;
+		};
 		try {
 			const sources: ContextSourceItem[] = [{ label: localize('chat.attach.files', 'Attach files'), iconClass: ThemeIcon.asClassName(Lxicon.paperclip), source: 'upload' }];
 			if (this.workspace.getWorkspace().folders.length) sources.unshift({ label: localize('chat.context.filesAndFolders', 'Files & Folders…'), iconClass: ThemeIcon.asClassName(Lxicon.folders), source: 'workspace' });
 			const contexts: readonly ChatContextSource[] = [
-				...(this.host.supportsImages() ? [this.instantiation.createInstance(ClipboardImageContextValuePick), this.instantiation.createInstance(ScreenshotContextValuePick)] : []),
-				this.instantiation.createInstance(SessionReferenceContextPickerPick, this.navigation.getActiveConversation()),
-				this.instantiation.createInstance(GitHubContextValuePick, 'issue'),
-				this.instantiation.createInstance(GitHubContextValuePick, 'pullRequest'),
-				this.instantiation.createInstance(TerminalContext),
-				this.instantiation.createInstance(ToolsContextPickerPick, await this.host.getDisabledTools?.() ?? []),
-				this.instantiation.createInstance(SymbolsContextPickerPick),
-				this.instantiation.createInstance(SearchViewResultChatContextPick),
-				this.instantiation.createInstance(ChatInstructionsPickerPick, this.navigation.getActiveConversation()?.sessionId),
+				...(this.host.supportsImages() ? [instantiation.createInstance(ClipboardImageContextValuePick), instantiation.createInstance(ScreenshotContextValuePick)] : []),
+				instantiation.createInstance(SessionReferenceContextPickerPick, this.navigation.getActiveConversation()),
+				instantiation.createInstance(GitHubContextValuePick, 'issue'),
+				instantiation.createInstance(GitHubContextValuePick, 'pullRequest'),
+				instantiation.createInstance(TerminalContext),
+				instantiation.createInstance(ToolsContextPickerPick, await this.host.getDisabledTools?.() ?? []),
+				instantiation.createInstance(SymbolsContextPickerPick),
+				instantiation.createInstance(SearchViewResultChatContextPick),
+				instantiation.createInstance(ChatInstructionsPickerPick, this.navigation.getActiveConversation()?.sessionId),
 			];
 			sources.push(...contexts.filter(context => context.isEnabled?.() !== false).map(context => ({ label: context.label, iconClass: ThemeIcon.asClassName(context.icon), source: 'context' as const, context })));
 			if (this.editors.groups.some(group => group.inputs.length)) sources.push({ label: localize('chat.context.editors', 'Open editors'), iconClass: ThemeIcon.asClassName(Lxicon.files), source: 'editors' });
 			if ((await Promise.all(this.contextPicks.items.map(picker => picker.isEnabled()))).some(Boolean)) sources.push({ label: localize('chat.context.providers', 'Other context sources'), iconClass: ThemeIcon.asClassName(Lxicon.connectors), source: 'providers' });
-			if (this.isDisposed) return;
-			await this.showAttachments(sources, controller.signal);
+			if (this.isDisposed || controller.signal.aborted) return;
+			completed = await this.showAttachments(sources, controller.signal, scopedQuickInput, addContext, anchor);
 		} catch (error) {
-			if (!this.isDisposed) this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
+			failed = true;
+			if (!this.isDisposed && !controller.signal.aborted) this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
 		} finally {
-			this.pending = false;
+			this.pending = undefined;
 			this.pickers.clear();
-			if (!this.isDisposed) this.host.focusInput();
+			anchor?.setAttribute('aria-expanded', 'false');
+			if (!this.isDisposed && ((added && completed) || failed)) this.host.focusInput();
 		}
 	}
 
-	private showAttachments(sources: readonly ContextSourceItem[], signal: AbortSignal): Promise<void> {
+	private showAttachments(sources: readonly ContextSourceItem[], signal: AbortSignal, quickInput: IQuickInputService, addContext: IChatContextTarget['addContext'], anchor?: HTMLElement): Promise<boolean> {
 		const lifetime = this.pickers.add(new DisposableStore());
 		const ownedPicker = lifetime.add(new MutableDisposable());
 		const resolver = this.instantiation.createInstance(FilesAndFoldersPickerPick);
@@ -94,13 +120,14 @@ export class AttachContextAction extends Disposable {
 			let finished = false;
 			let transitioning = false;
 			let accepting = false;
-			const finish = (error?: unknown): void => {
+			const finish = (error?: unknown, accepted = false): void => {
 				if (finished) return;
 				finished = true;
-				if (error) reject(error); else resolve();
+				if (error) reject(error); else resolve(accepted);
 				lifetime.dispose();
 			};
 			lifetime.add(toDisposable(() => finish()));
+			lifetime.add(addDisposableListener(signal, 'abort', () => finish()));
 			const show = (folders = false): void => {
 				if (finished || signal.aborted) return;
 				transitioning = true;
@@ -111,6 +138,8 @@ export class AttachContextAction extends Disposable {
 					handleAccept: (item, background) => { void accept(item, background); },
 				};
 				this.quickAccess.show('', {
+					anchor,
+					anchorPosition: 'above',
 					placeholder: folders ? localize('chat.context.searchFilesAndFolders', 'Search file or folder by name') : localize('chat.context.searchAttachments', 'Search attachments'),
 					enabledProviderPrefixes: [''],
 					providerOptions,
@@ -140,31 +169,31 @@ export class AttachContextAction extends Disposable {
 							const attachment = selection?.attachment;
 							if (finished || signal.aborted) return;
 							if (attachment) {
-								this.host.target.addContext(attachment);
+								addContext(attachment);
 								status(localize('chat.context.added', 'Added {0}', attachment.name));
 							}
-							if (!attachment || background || selection?.acceptInBackground) show(); else finish();
+							if (!attachment || background || selection?.acceptInBackground) show(); else finish(undefined, true);
 							return;
 						}
-						if (item.source === 'upload') { await this.showFilePicker(); finish(); return; }
+						if (item.source === 'upload') { await this.showFilePicker(addContext, signal); finish(undefined, true); return; }
 						if (item.source === 'providers') {
-							const attachment = await this.contextPicks.pickContext(this.quickInput, signal);
-							if (attachment && !signal.aborted) this.host.target.addContext(attachment);
-							if (attachment) finish(); else show();
+							const attachment = await this.contextPicks.pickContext(quickInput, signal);
+							if (attachment && !signal.aborted) addContext(attachment);
+							if (attachment) finish(undefined, true); else show();
 							return;
 						}
 						const editors = [...new Map(this.editors.groups.flatMap(group => group.inputs).map(input => [extUri.getComparisonKey(input.resource), input])).values()];
 						const attachments = await Promise.all(editors.map(editor => resolver.asAttachment(editor.resource, FileKind.File, signal)));
-						if (!signal.aborted) for (const attachment of attachments) this.host.target.addContext(attachment);
-						finish();
+						if (!signal.aborted) for (const attachment of attachments) addContext(attachment);
+						finish(undefined, true);
 						return;
 					}
 					const resource = item as IAnythingQuickPickItem;
 					const attachment = await resolver.asAttachment(resource.resource, resource.kind, signal);
 					if (signal.aborted || finished) return;
-					this.host.target.addContext(attachment);
+					addContext(attachment);
 					status(localize('chat.context.added', 'Added {0}', attachment.name));
-					if (!background) finish();
+					if (!background) finish(undefined, true);
 				} catch (error) {
 					if (!signal.aborted) finish(error);
 				} finally {
@@ -176,19 +205,17 @@ export class AttachContextAction extends Disposable {
 		});
 	}
 
-	private async showFilePicker(): Promise<void> {
-		const controller = new AbortController();
-		this.pickers.add(toDisposable(() => controller.abort()));
+	private async showFilePicker(addContext: IChatContextTarget['addContext'], signal: AbortSignal): Promise<void> {
 		const files = await pickFiles({
 			ownerDocument: this.host.container.ownerDocument,
 			selection: 'multiple',
 			ariaLabel: localize('chat.attach.files', 'Attach files'),
-			signal: controller.signal,
+			signal,
 		});
-		if (files && !this.isDisposed) { await this.attachFiles(files); }
+		if (files && !signal.aborted && !this.isDisposed) { await this.attachFiles(files, addContext, signal); }
 	}
 
-	private async attachFiles(files: readonly File[]): Promise<void> {
+	private async attachFiles(files: readonly File[], addContext: IChatContextTarget['addContext'], signal: AbortSignal): Promise<void> {
 		try {
 			const attachments = await Promise.all(files.map(async file => {
 				const bytes = new Uint8Array(await file.arrayBuffer());
@@ -207,12 +234,12 @@ export class AttachContextAction extends Disposable {
 				}
 				return { id: createUuid(), name: file.name, kind: 'file', resolve: async () => ({ name: file.name, content }) };
 			}));
-			if (!this.isDisposed) {
-				for (const attachment of attachments) { this.host.target.addContext(attachment); }
+			if (!this.isDisposed && !signal.aborted) {
+				for (const attachment of attachments) { addContext(attachment); }
 				status(localize('chat.context.filesAdded', 'Added {0} attachments', attachments.length));
 			}
 		} catch (error) {
-			if (!this.isDisposed) { this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error))); }
+			if (!this.isDisposed && !signal.aborted) { this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error))); }
 		}
 	}
 

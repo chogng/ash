@@ -10,6 +10,7 @@ import { IFileTextModelService } from '../../../src/ash/workbench/services/textm
 import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import '../../../src/ash/workbench/common/theme.js';
+import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/sessions/browser/media/chatViewPane.css';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';

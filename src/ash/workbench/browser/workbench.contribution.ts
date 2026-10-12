@@ -35,6 +35,7 @@ import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/quickAccess.contribution.js";
 import "../contrib/themes/browser/themes.contribution.js";
+import '../contrib/themeEditor/browser/themeEditor.contribution.js';
 import "../contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js";
 import "../contrib/search/browser/searchQuickAccess.contribution.js";
 import { registerRemoteViews } from "../contrib/remote/browser/remote.contribution.js";

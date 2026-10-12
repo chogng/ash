@@ -3,8 +3,9 @@ import { addDisposableListener, h, isHTMLElement } from '../../../base/browser/d
 import { observeResize } from '../../../base/browser/observer.js';
 import { setAriaAttribute, setRole } from '../../../base/browser/ui/aria/aria.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
+import { RunOnceScheduler } from '../../../base/common/async.js';
 import { localize } from '../../../nls.js';
 import type { IInputOptions, IQuickPick, IQuickPickItem } from '../common/quickInput.js';
 import { QuickPick, type BrowserQuickInputHostOptions, type IBrowserQuickInputHost } from './quickInput.js';
@@ -18,6 +19,7 @@ export class QuickInputController extends Disposable {
 	private readonly hidden = this._register(new Emitter<void>());
 	private active: IBrowserQuickInputHost | undefined;
 	private focusToRestore: HTMLElement | undefined;
+	private readonly visibleListeners = this._register(new DisposableStore());
 	public readonly onShow = this.shown.event;
 	public readonly onHide = this.hidden.event;
 	public get currentQuickInput(): IQuickPick<IQuickPickItem> | undefined {
@@ -37,10 +39,18 @@ export class QuickInputController extends Disposable {
 			if (this.active instanceof QuickPick) this.active.layout();
 		}));
 		this._register(addDisposableListener(this.host.ownerDocument, 'mousedown', event => {
-			if (this.active && !event.composedPath().includes(this.host)) {
+			const anchor = this.active instanceof QuickPick ? this.active.anchor : undefined;
+			if (this.active && !event.composedPath().includes(this.host) && !(isHTMLElement(anchor) && event.composedPath().includes(anchor))) {
 				this.active.hide();
 			}
 		}, true));
+		this._register(addDisposableListener(this.host, 'keydown', event => {
+			if (event.key === 'Escape' && !event.isComposing) {
+				event.preventDefault();
+				event.stopPropagation();
+				this.active?.hide();
+			}
+		}));
 		this._register(toDisposable(() => {
 			for (const quickInput of [...this.quickInputs]) {
 				quickInput.hide();
@@ -132,6 +142,33 @@ export class QuickInputController extends Disposable {
 		this.active = quickPick;
 		this.host.replaceChildren(quickPick.element);
 		this.host.hidden = false;
+		const anchor = quickPick instanceof QuickPick ? quickPick.anchor : undefined;
+		quickPick.element.classList.toggle('anchored', isHTMLElement(anchor));
+		if (quickPick instanceof QuickPick && isHTMLElement(anchor)) {
+			this.focusToRestore = anchor;
+			const layout = (): void => quickPick.layout();
+			// Composer content can move a toolbar button without changing the button's own size.
+			const containers: HTMLElement[] = [];
+			for (let container = anchor.parentElement; container; container = container.parentElement) containers.push(container);
+			this.visibleListeners.add(observeResize([quickPick.element, anchor, ...containers], layout));
+			this.visibleListeners.add(addDisposableListener(this.host.ownerDocument.defaultView!, 'resize', layout));
+			this.visibleListeners.add(addDisposableListener(this.host.ownerDocument, 'scroll', layout, true));
+			const viewport = this.host.ownerDocument.defaultView!.visualViewport;
+			if (viewport) {
+				this.visibleListeners.add(addDisposableListener(viewport, 'resize', layout));
+				this.visibleListeners.add(addDisposableListener(viewport, 'scroll', layout));
+			}
+			const checkFocus = this.visibleListeners.add(new RunOnceScheduler(() => {
+				// Native focus changes briefly pass through body before reaching the trigger.
+				// Check after that transition; leaving the document produces no focusin event.
+				const focused = this.host.ownerDocument.activeElement;
+				if (!quickPick.element.contains(focused) && !anchor.contains(focused)) quickPick.hide();
+			}, 0));
+			this.visibleListeners.add(quickPick.onDidBlur(() => checkFocus.schedule()));
+			this.visibleListeners.add(addDisposableListener(this.host.ownerDocument, 'focusin', event => {
+				if (!event.composedPath().includes(this.host) && !event.composedPath().includes(anchor)) quickPick.hide();
+			}));
+		}
 		this.shown.fire();
 		quickPick.focus();
 	}
@@ -142,6 +179,7 @@ export class QuickInputController extends Disposable {
 		}
 		const shouldRestoreFocus = quickPick.element.contains(this.host.ownerDocument.activeElement);
 		this.active = undefined;
+		this.visibleListeners.clear();
 		this.host.replaceChildren();
 		this.host.hidden = true;
 		const focusToRestore = this.focusToRestore;

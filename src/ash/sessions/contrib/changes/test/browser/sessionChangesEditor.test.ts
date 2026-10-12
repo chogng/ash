@@ -25,6 +25,7 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 import { IDecorationsService } from '../../../../../workbench/services/decorations/common/decorations.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 
 test('a hidden Changes editor ignores a late ledger result and loads fresh content when shown', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -33,6 +34,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { } } as unknown as IEditorService);
 	services.registerInstance(IDecorationsService, { registerDecorationsProvider: () => toDisposable(() => { }) } as unknown as IDecorationsService);
 	services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
+	services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
 	using configuration = new InMemoryConfigurationService();
 	using context = new ContextKeyService();
 	using changes = new Emitter<{ sessionId: string; threadId: string; }>();

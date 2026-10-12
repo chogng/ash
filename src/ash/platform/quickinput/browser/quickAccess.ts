@@ -28,6 +28,8 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 		this.active?.hide();
 		const session = new DisposableStore();
 		const picker = session.add(this.quickInputService.createQuickPick<IQuickPickItem>());
+		picker.anchor = options?.anchor;
+		picker.anchorPosition = options?.anchorPosition;
 		const provider = session.add(new MutableDisposable());
 		let descriptor: IQuickAccessProviderDescriptor | undefined;
 		const activate = (input: string): void => {

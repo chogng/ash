@@ -75,10 +75,7 @@ const store = new DisposableStore();
 setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
 	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => lifetime.add(services.createInstance(TerminalGroupService)));
-	if (!services.has(IStorageService)) {
-		services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', backend: window.localStorage, flushInterval: 0 })));
-	}
-
+	if (!services.has(IStorageService)) services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', flushInterval: 0 })));
 	services.registerInstance(IExtensionService, { terminalProfiles: [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	services.registerInstance(IPathService, { path: Promise.resolve(posix), resolvedUserHome: URI.file('/home/test'), userHome: async () => URI.file('/home/test'), getPath: async () => posix, getOperatingSystem: async () => OperatingSystem.Linux, fileURI: async (path: string) => URI.file(path) } as unknown as IPathService);
 	services.registerInstance(IConfigurationResolverService, lifetime.add(services.createInstance(ConfigurationResolverService)));
@@ -376,7 +373,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
 		}, services, profileService, resolver, services.get(ITerminalProcessService), services.get(ITerminalGroupService)));
 		root.append(pane.partTitleProjection.actions!);
-		if (new URLSearchParams(location.search).has('browser')) pane.layout(root.clientHeight - pane.partTitleProjection.actions!.offsetHeight, 0, root.clientWidth);
+		pane.layout(Math.max(0, root.clientHeight - pane.partTitleProjection.actions!.offsetHeight), 0, root.clientWidth);
 		return {
 			configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
 			createdProfiles: () => [...createdProfiles],

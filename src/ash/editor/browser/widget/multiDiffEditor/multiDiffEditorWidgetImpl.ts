@@ -357,6 +357,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	/** Reveal an explicitly requested file through the existing viewport and collapse state. */
 	public reveal(resource: IMultiDiffResourceId, options?: RevealOptions): void {
+		if (!resource.original && !resource.modified) { return; }
 		const index = this.items.findIndex(item => extUri.isEqual(item.originalUri, resource.original) && extUri.isEqual(item.modifiedUri, resource.modified));
 		if (index < 0) { return; }
 		this.cancelPendingNavigation();

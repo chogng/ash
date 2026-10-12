@@ -168,7 +168,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	await assert.rejects(async () => openChanges(services, 'session', 'unknown-thread'), /no longer available/);
 	await assert.rejects(async () => openChanges(services, undefined, 'thread'), /require a conversation/);
 	let managedChangesOpened = 0;
-	using managedChanges = CommandsRegistry.register('ash.sessions.openChangesTab', () => { managedChangesOpened++; });
+	using managedChanges = CommandsRegistry.register('workbench.agentSessions.action.viewChanges', () => { managedChangesOpened++; });
 	services.registerInstance(ICommandService, { executeCommand: async (id: string) => CommandsRegistry.getCommand(id)!(services) } as unknown as ICommandService);
 	await openChanges(services, 'session', 'thread');
 	assert.equal(managedChangesOpened, 1);

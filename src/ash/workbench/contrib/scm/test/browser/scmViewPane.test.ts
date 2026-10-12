@@ -1007,7 +1007,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.equal(pane.element.querySelector(".ash-scm-graph-change-label .ash-icon-label-icon")?.getAttribute("data-file-icon"), "editor.ts");
 		assert.ok([...pane.element.querySelectorAll<SVGPathElement>(".ash-scm-graph-path")].some((path) => path.getAttribute("d")?.endsWith("V 44")));
 		assert.equal(commit.style.getPropertyValue("--scm-graph-node-x"), "11px");
-		assert.equal(commit.style.getPropertyValue("--scm-graph-content-x"), "22px");
+		assert.equal(commit.style.getPropertyValue("--scm-graph-content-x"), "26px");
 		assert.ok(commit.querySelector(":scope > .ash-scm-graph-row > .ash-scm-graph-graph"));
 
 		const change = pane.element.querySelector<HTMLButtonElement>(".ash-scm-graph-change");

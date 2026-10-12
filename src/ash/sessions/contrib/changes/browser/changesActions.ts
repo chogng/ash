@@ -2,28 +2,17 @@ import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../common/changes.js';
 import { SessionChangesEditor } from './sessionChangesEditor.js';
 import { getChangesEditorLabels } from './changesEditorLabels.js';
 import { ILabelService } from '../../../../platform/label/common/labelService.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesetOperationStatus } from '../../../services/sessions/common/session.js';
-
-class ViewAllChangesAction extends Action2 {
-	constructor() {
-		super({ id: VIEW_SESSION_CHANGES_COMMAND_ID, title: localize2('sessions.changes.title', 'Changes'), f1: true });
-	}
-	public async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(ICommandService).executeCommand('ash.sessions.openChangesTab');
-	}
-}
 
 class OpenChangedFileAction extends Action2 {
 	constructor() {
@@ -50,7 +39,6 @@ class OpenChangedFileAction extends Action2 {
 	}
 }
 
-registerAction2(ViewAllChangesAction);
 registerAction2(OpenChangedFileAction);
 
 async function setUnchangedRegions(accessor: ServicesAccessor, resource: unknown, enabled: boolean): Promise<void> {
@@ -107,6 +95,7 @@ class PreviewChangesetFileAction extends Action2 {
 		super({
 			id: 'workbench.agentSessions.changes.previewFile',
 			title: localize2('sessions.changes.previewCommit', 'Preview commit…'),
+			precondition: ContextKeyExpr.has('sessions.changesCanPreview'),
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,
 				when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID),

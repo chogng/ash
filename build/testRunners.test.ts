@@ -5,9 +5,22 @@ import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
 import { parseRunnerOptions } from '../test/scenario/src/options.ts';
+import { collectTests } from './playwright.ts';
+import { withProcessRun } from './processes.ts';
 
 const repository = resolve(import.meta.dirname, '..');
 const execute = promisify(execFile);
+
+test('large browser collections retain their count without executing test bodies', { timeout: 15_000 }, async t => {
+	const directory = await mkdtemp(join(repository, 'test/.integration-runner-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const config = join(directory, 'playwright.config.ts');
+	await writeFile(config, `export default { testDir: '.', projects: [{ name: 'chromium' }] };`);
+	await writeFile(join(directory, 'large.spec.ts'), `import { test } from '@playwright/test'; for (let i = 0; i < 2000; i++) test(i + ': ' + 'long title '.repeat(30), () => { throw Error('collection must not execute tests'); });`);
+	await withProcessRun(repository, async (run, environment) => {
+		assert.equal(await collectTests(run, ['node_modules/@playwright/test/cli.js', 'test', '--config', config], [], environment), true);
+	});
+});
 
 test('scenario foreground mode is explicit and rejects Web targets', () => {
 	assert.equal(parseRunnerOptions([]).activeWindow, false);

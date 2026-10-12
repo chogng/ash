@@ -159,6 +159,7 @@ async function partCssFiles(directory: string): Promise<string[]> {
 async function cssFiles(directory: string): Promise<string[]> {
 	const result: string[] = [];
 	for (const entry of await readdir(directory, { withFileTypes: true })) {
+		if (entry.name === '.build') continue;
 		const path = join(directory, entry.name);
 		if (entry.isDirectory()) result.push(...await cssFiles(path));
 		else if (entry.name.endsWith(".css")) result.push(path);

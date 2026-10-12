@@ -41,6 +41,12 @@ import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/t
 import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { isCancellationError } from '../../../src/ash/base/common/errors.js';
+import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
+import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
+import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
+import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
+import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
+import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 
 const provider = await IndexedDBFileSystemProvider.create(indexedDB, Schemas.vscodeUserData);
 const files = new FileService();
@@ -289,6 +295,8 @@ const integration = {
 		await files.createDirectory(browserRoot);
 		lifetime.add(files.registerProvider(Schemas.file, new MemoryFileService([])));
 		const services = lifetime.add(new InstantiationService());
+		services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
+		services.registerInstance(IExtensionApi, createBrowserExtensionApi());
 		services.registerInstance(IFileService, files);
 		services.registerInstance(ICommandService, {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
@@ -308,11 +316,17 @@ const integration = {
 					manifestJson: JSON.stringify({ browser: 'main.js' }), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'b'.repeat(64)}`,
 				}]
 			}),
-			resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode(`export function activate(api) {
-				api.register({ kind: 'command', registrationId: 'folders', command: 'folders', title: 'Folders' },
-					() => api.clientRequest({ operation: 'workspaceFolders' }));
-			}`)),
+			resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode(`
+				export function activate() { return [{ kind: 'command', registrationId: 'folders', command: 'folders', title: 'Folders' }]; }
+				export function invoke() { return globalThis.__ashInitialization.workspaceFolders.map(folder => folder.uri); }
+			`)),
 		}, createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected remote operation ${operation}`); }), services));
+		using configuration = new InMemoryConfigurationService();
+		const handler = host.registerClientHandler(async operation => {
+			if (!operation || typeof operation !== 'object' || !('operation' in operation) || operation.operation !== 'readInitialization') throw new Error('Unexpected offline client operation');
+			return { result: 'initialization', initialization: createExtensionHostInitialization(services.get(IWorkspaceContextService), configuration) };
+		});
+		lifetime.add(toDisposable(() => handler.dispose()));
 		const runtime = (await host.reconcile('refresh')).extensions[0]!;
 		if (runtime.lifecycle !== 'ready') throw new Error(`Extension activation failed: ${JSON.stringify(runtime.failure)}`);
 		return await host.invoke({

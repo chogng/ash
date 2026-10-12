@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import type { IExtensionApi, ExtensionResourceRequest } from '../../src/ash/platform/extensions/common/extensionApi.js';
 
-const output = resolve(import.meta.dirname, '../../.build/desktop/test/src/ash');
+const output = resolve(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(import.meta.dirname, '../../.build/desktop/test'), 'src/ash');
 const { ExtensionResourceLoaderService } = await import(pathToFileURL(resolve(output, 'platform/extensionResourceLoader/browser/extensionResourceLoaderService.js')).href);
 const { normalizeExtensionCatalog } = await import(pathToFileURL(resolve(output, 'platform/extensions/common/extensionApi.js')).href);
 const { decodeBase64 } = await import(pathToFileURL(resolve(output, 'base/common/buffer.js')).href);

@@ -474,7 +474,11 @@ function decorationClasses(options: IResourceLabelOptions, decoration: IDecorati
 	return [
 		...(options.extraClasses ?? []),
 		...(options.fileDecorations.colors && decoration.labelClassName ? [decoration.labelClassName] : []),
-		...(options.fileDecorations.badges && decoration.badgeClassName ? ['ash-resource-label-badge', decoration.badgeClassName] : []),
+		...(options.fileDecorations.badges && decoration.badgeClassName ? [
+			'ash-resource-label-badge',
+			decoration.badgeClassName,
+			...(decoration.isTextBadge ? ['ash-decoration-badge'] : []),
+		] : []),
 		...(options.fileDecorations.badges && decoration.iconClassName ? [decoration.iconClassName] : []),
 		...(decoration.strikethrough ? ['strikethrough'] : []),
 	];

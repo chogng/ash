@@ -13,7 +13,8 @@ import '../../../sessions/contrib/creator/browser/widget/designToolsWidget.js';
 import '../../../platform/theme/common/colors/baseColors.js';
 import '../../../platform/theme/common/sizes/baseSizes.js';
 import { strict as assert } from "node:assert";
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from 'node:os';
 import { join, relative } from "node:path";
 import { test } from "mocha";
 import { colorCssVariable } from "../../../platform/theme/common/colorUtils.js";
@@ -26,6 +27,7 @@ import "../../common/theme.js";
 import "../../contrib/chat/common/widget/chatColors.js";
 import "../../contrib/pdf/common/pdfColors.js";
 import "../../contrib/preferences/common/settingsEditorColorRegistry.js";
+import '../../contrib/scm/browser/scmHistory.js';
 import "../../contrib/terminal/common/terminalColorRegistry.js";
 import "../../../sessions/common/theme.js";
 
@@ -58,9 +60,26 @@ test("CSS isolates intentional color samples", async () => {
 	assert.deepEqual(rawColors, []);
 });
 
+test('presentation scan skips nested .build output while retaining source CSS', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-design-tokens-'));
+	try {
+		const sources = ['source.css', 'code/.build.css', 'code/.build-tools/source.css'];
+		const outputs = ['.build/assets/output.css', 'code/.build/assets/output.css'];
+		for (const name of [...sources, ...outputs]) {
+			const path = join(root, name);
+			await mkdir(join(path, '..'), { recursive: true });
+			await writeFile(path, '.sample { color: #ffffff; }');
+		}
+		assert.deepEqual((await presentationFiles(root)).sort(), sources.map(name => join(root, name)).sort());
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
 async function presentationFiles(directory: string): Promise<string[]> {
 	const result: string[] = [];
 	for (const entry of await readdir(directory, { withFileTypes: true })) {
+		if (entry.isDirectory() && entry.name === '.build') continue;
 		const path = join(directory, entry.name);
 		if (entry.isDirectory()) result.push(...await presentationFiles(path));
 		else if (entry.name.endsWith(".css") || entry.name.endsWith(".ts") && !path.includes("/test/")) result.push(path);

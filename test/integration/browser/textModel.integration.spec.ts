@@ -1733,11 +1733,11 @@ test('Workbench editor actions update the open editor and Go to Line retains key
 
 	await input.focus();
 	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('workbench.action.gotoLine'));
-	const dialog = page.locator('.stanza-editor-goto-line-widget');
+	const dialog = page.getByRole('dialog', { name: /^Type a line number and optional column/u });
 	await expect(dialog).toBeVisible();
-	const lineInput = dialog.getByRole('textbox', { name: 'Line number and optional column' });
+	const lineInput = dialog.getByRole('combobox', { name: /^Type a line number and optional column/u });
 	await expect(lineInput).toBeFocused();
-	await lineInput.fill('2:1');
+	await lineInput.fill(':2:1');
 	await lineInput.press('Enter');
 	await expect(dialog).toBeHidden();
 	await expect(input).toBeFocused();

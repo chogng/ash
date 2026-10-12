@@ -10,12 +10,12 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
-
 interface ThemeQuickPickItem extends IQuickPickItem {
 	readonly value: string;
 }
 
-const themesMenu = new MenuId('ThemesSubMenu');
+const themesMenu = MenuId.for('ThemesSubMenu');
+
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
 	title: localize2({ bundle: 'ash', key: 'workbench.manageThemes' }, 'Themes'),
 	submenu: themesMenu,

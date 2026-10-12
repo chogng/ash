@@ -4,7 +4,7 @@ import { ICommandService } from '../../../src/ash/platform/commands/common/comma
 import { createDisconnectedAppServerApi } from '../../../src/ash/platform/agentHost/browser/appServerApi.js';
 import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
-import type { ExtensionSourceKind } from '../../../src/ash/platform/extensions/common/extensionApi.js';
+import { IExtensionApi, type ExtensionSourceKind } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { WebWorkerExtensionHost } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
@@ -14,11 +14,15 @@ import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import chinese from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
+import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
+import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
+services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 services.registerInstance(ICommandService, { onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async () => { throw new Error('SSH registration must not execute a command'); } });
 const packages = createBrowserExtensionApi();
+services.registerInstance(IExtensionApi, packages);
 const unavailable = (operation: string): never => { throw new Error(`Unexpected backend operation: ${operation}`); };
 services.registerInstance(IFileService, resources.add(new FileService()));
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'empty', folders: [] }), getWorkbenchState: () => WorkbenchState.EMPTY, getWorkspaceFolder: () => null });

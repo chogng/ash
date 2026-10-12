@@ -76,6 +76,41 @@ const document = {
 	tokenColors: [{ scope: 'comment, string.quoted', settings: { foreground: '#123456', fontStyle: 'italic bold' } }],
 };
 
+test('temporary previews update bound windows, keep settings unchanged, and restore the latest configured theme', async () => {
+	const browser = new JSDOM('<!doctype html><body><div id="secondary"></div></body>');
+	try {
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener() { }, removeEventListener() { } }) });
+		using configuration = new WorkbenchConfigurationService();
+		using services = new InstantiationService();
+		services.registerInstance(IConfigurationService, configuration);
+		using languages = new LanguageService();
+		services.registerInstance(ILanguageService, languages);
+		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
+		services.registerInstance(IHostColorSchemeService, hostColors);
+		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
+		active.initialize();
+		await active.setColorTheme('ash-dark');
+		const original = configuration.getValue(WorkbenchConfiguration.colorTheme);
+		const first = parseUserColorTheme('{"colors":{"editor.background":"#123456"}}', 'first-preview');
+		const second = parseUserColorTheme('{"colors":{"editor.background":"#abcdef"}}', 'second-preview');
+		using older = active.previewColorTheme(first);
+		assert.equal(active.getColorTheme(), first);
+		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-background'), '#123456');
+		assert.equal(configuration.getValue(WorkbenchConfiguration.colorTheme), original);
+		using newer = active.previewColorTheme(second);
+		older.update(parseUserColorTheme('{"colors":{"editor.background":"#112233"}}', 'first-preview'));
+		assert.equal(active.getColorTheme(), second);
+		await active.setColorTheme('ash-light');
+		assert.equal(active.getColorTheme(), second);
+		newer.dispose();
+		assert.equal(active.getColorTheme().getColorCss('editor.background'), '#112233');
+		older.dispose();
+		assert.equal(active.getColorTheme().id, 'ash-light');
+		older.update(first);
+		assert.equal(active.getColorTheme().id, 'ash-light');
+	} finally { browser.window.close(); }
+});
+
 test('persisted color customizations override themes, update live, and restore themed colors when removed', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -328,6 +363,11 @@ test('user theme reload applies included files from its theme directory', async 
 		using fileService = createTestFileService(files);
 		using service = await loadThemes(fileService, directory);
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('statusBar.background'), '#112233');
+		const unsaved = await service.resolve(JSON.stringify({ name: 'Custom', type: 'dark', include: './shared/base.json', colors: { 'editor.background': '#aabbcc' } }), 'custom');
+		assert.equal(unsaved.getColorCss('editor.background'), '#aabbcc');
+		assert.equal(unsaved.getColorCss('statusBar.background'), '#112233');
+		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('editor.background'), '#445566');
+		assert.match(await readFile(join(directory, 'custom.json'), 'utf8'), /#445566/u);
 		await writeFile(join(directory, 'shared', 'base.json'), JSON.stringify({ colors: { 'statusBar.background': '#667788' } }));
 		await service.reload();
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('statusBar.background'), '#667788');

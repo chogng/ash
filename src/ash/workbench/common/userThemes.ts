@@ -30,6 +30,8 @@ export interface IUserThemeService {
 
 	sourceFor(themeId: string): IUserThemeSource | undefined;
 	getSource(themeId: string): string | undefined;
+	/** Compiles an unsaved candidate using the loaded theme's include boundary. */
+	resolve(source: string, themeId?: string): Promise<IColorTheme>;
 	delete(themeId: string): Promise<IUserThemeDeleteResult>;
 	reload(): Promise<void>;
 	save(themeId: string, source: string): Promise<IUserThemeSaveResult>;
@@ -45,6 +47,7 @@ export const UnavailableUserThemeService: IUserThemeService = Object.freeze({
 	issues: Object.freeze([]),
 	sourceFor: () => undefined,
 	getSource: () => undefined,
+	resolve: () => Promise.reject(new Error("User themes are not available in this host")),
 	delete: () => Promise.reject(new Error("User themes are not available in this host")),
 	reload: () => Promise.resolve(),
 	save: () => Promise.reject(new Error("User themes are not available in this host")),

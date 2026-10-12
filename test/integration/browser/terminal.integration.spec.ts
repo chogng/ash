@@ -4,7 +4,7 @@ test('terminal Find navigates real matches without sending its keys to the proce
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?input&find');
-	await page.waitForFunction(() => Boolean(window.ashTerminalFindIntegration));
+	await expect.poll(async () => ({ initialized: await page.evaluate(() => Boolean(window.ashTerminalFindIntegration)), errors })).toEqual({ initialized: true, errors: [] });
 	await page.evaluate(() => window.ashTerminalInputIntegration.feed('needle one\r\nNEEDLE two\r\nneedles three\r\nneedle four\r\n'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('needle four');
 	await page.evaluate(() => window.ashTerminalInputIntegration.clear());

@@ -1,3 +1,4 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
 import { OperatingSystem, isWindows } from '../../../../../base/common/platform.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
@@ -746,6 +747,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	await import('../../browser/fileActions.contribution.js');
 	await import('../../../../browser/parts/editor/editorCommands.js');
 	await import('../../../../browser/parts/editor/editorActions.js');
+	await import('../../../../browser/parts/editor/editor.contribution.js');
 	const active = new FileEditorInput(URI.file('/project/active.ts'));
 	const clicked = new FileEditorInput(URI.file('/project/src/clicked.ts'));
 	const group = { id: 'main', inputs: [active, clicked], selectedInputs: [active], editors: [{ input: active }, { input: clicked }], activeInput: active };

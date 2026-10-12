@@ -71,7 +71,7 @@ test('disassembly opens adapter-owned source as a read-only editor', async ({ pa
 	await expect(page.locator('.ash-disassembly [data-instruction-address="0x1000"]')).toBeVisible();
 	await grid.focus();
 	await grid.press('Enter');
-	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1))).toEqual({ resource: 'debug-source://session/session-one/33/generated.ts', initialText: 'const generated = true;', readOnly: true, line: 2 });
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1))).toEqual({ resource: 'debug:/generated.ts?session=session-one&ref=33', initialText: undefined, readOnly: true, line: 2 });
 });
 
 test('a frame without an instruction reference can inspect an explicit address', async ({ page }) => {

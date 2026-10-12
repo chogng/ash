@@ -40,6 +40,113 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+for (const variant of [
+	{ locale: 'en', theme: 'light', surface: 'code' },
+	{ locale: 'en', theme: 'light', surface: 'cowork' },
+	{ locale: 'zh-CN', theme: 'dark', surface: 'code' },
+	{ locale: 'en', theme: 'hcDark', surface: 'code' },
+	{ locale: 'zh-CN', theme: 'hcLight', surface: 'code' },
+]) {
+	test(`Add context anchors searchable child menus and restores keyboard focus (${variant.locale}, ${variant.theme}, ${variant.surface})`, async ({ page }) => {
+		await page.setViewportSize({ width: 760, height: 900 });
+		await page.goto(`/chatInput.html?locale=${variant.locale}&theme=${variant.theme}&surface=${variant.surface}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		await page.locator('main').evaluate(element => { element.style.marginTop = '480px'; });
+		const chinese = variant.locale === 'zh-CN';
+		const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
+		const picker = page.getByRole('dialog');
+		const search = picker.getByRole('combobox');
+		const assertAbove = async (): Promise<void> => {
+			await expect.poll(async () => {
+				const button = await add.boundingBox();
+				const menu = await picker.boundingBox();
+				return button && menu ? Math.round(button.y - menu.y - menu.height) : -1;
+			}).toBe(4);
+			const button = (await add.boundingBox())!;
+			const menu = (await picker.boundingBox())!;
+			expect(Math.abs(menu.x - Math.max(8, button.x))).toBeLessThanOrEqual(1);
+			expect(menu.width).toBe(380);
+		};
+		await expect(add).toHaveAttribute('aria-haspopup', 'dialog');
+		await expect(add).toHaveAttribute('aria-expanded', 'false');
+		await add.press('Space');
+		await expect(search).toBeFocused();
+		await expect(add).toHaveAttribute('aria-expanded', 'true');
+		await assertAbove();
+		const menuBounds = (await picker.boundingBox())!;
+		const buttonBounds = (await add.boundingBox())!;
+		await page.screenshot({ path: test.info().outputPath('attachment-menu.png'), clip: { x: menuBounds.x - 8, y: menuBounds.y - 8, width: 600, height: buttonBounds.y + buttonBounds.height - menuBounds.y + 24 } });
+		await expect(picker).toHaveCSS('border-radius', '8px');
+		if (variant.theme.startsWith('hc')) await expect(picker).toHaveCSS('border-top-color', variant.theme === 'hcDark' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)');
+		await search.fill(chinese ? '会话' : 'Sessions');
+		await assertAbove();
+		await page.keyboard.press('Enter');
+		await expect(search).toHaveAttribute('placeholder', chinese ? '选择会话' : 'Select a session');
+		await expect(search).toBeFocused();
+		await assertAbove();
+		await search.fill(chinese ? '返回' : 'Go back');
+		await page.keyboard.press('Enter');
+		await expect(search).toHaveAttribute('placeholder', chinese ? '搜索附件' : 'Search attachments');
+		await search.fill('edited');
+		await page.keyboard.press('Control+Enter');
+		await expect(page.getByRole('listitem')).toHaveCount(1);
+		await expect(search).toBeFocused();
+		await assertAbove();
+		await page.keyboard.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await expect(add).toBeFocused();
+		await expect(add).toHaveAttribute('aria-expanded', 'false');
+		await add.press('Enter');
+		await search.fill('nested');
+		await expect(picker.getByRole('option', { name: /nested.txt/ })).toBeVisible();
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('ArrowUp');
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('listitem')).toHaveCount(2);
+		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	});
+}
+
+test('attachment menu flips below Add, fits a narrow viewport, follows resize and toggles closed', async ({ page }) => {
+	await page.setViewportSize({ width: 320, height: 600 });
+	await page.goto('/chatInput.html');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	const add = page.getByRole('button', { name: 'Add context', exact: true });
+	const picker = page.getByRole('dialog');
+	await add.click();
+	await expect(picker.getByRole('combobox')).toBeFocused();
+	await expect.poll(async () => {
+		const button = await add.boundingBox();
+		const menu = await picker.boundingBox();
+		return button && menu ? Math.round(menu.y - button.y - button.height) : -1;
+	}).toBe(4);
+	let menu = (await picker.boundingBox())!;
+	expect(menu.x).toBeGreaterThanOrEqual(8);
+	expect(menu.x + menu.width).toBeLessThanOrEqual(312);
+	expect(menu.y + menu.height).toBeLessThanOrEqual(592);
+	await page.locator('main').evaluate(element => { element.style.marginTop = '480px'; });
+	await page.setViewportSize({ width: 760, height: 900 });
+	await expect.poll(async () => {
+		const button = await add.boundingBox();
+		const bounds = await picker.boundingBox();
+		return button && bounds ? Math.round(button.y - bounds.y - bounds.height) : -1;
+	}).toBe(4);
+	await add.click();
+	await expect(picker).toHaveCount(0);
+	await expect(add).toBeFocused();
+	await expect(add).toHaveAttribute('aria-expanded', 'false');
+	await add.press('Enter');
+	await expect(picker).toBeVisible();
+	const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+	await message.click({ position: { x: (await message.boundingBox())!.width - 12, y: 12 } });
+	await expect(picker).toHaveCount(0);
+	await expect(message).toBeFocused();
+	await add.press('Enter');
+	await picker.getByRole('combobox').press('Tab');
+	await expect(picker).toHaveCount(0);
+	await expect(add).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('context uploads preview images, retain keyboard focus and remain attached after a failed send', async ({ page }) => {
 	await page.goto('/chatInput.html?sendFailure=1');
 	await page.evaluate(() => window.ashChatInputIntegration.showModels());
@@ -71,7 +178,7 @@ test('cancel and provider failures close the context picker and restore focus', 
 	await add.press('Enter');
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog')).toHaveCount(0);
-	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	await expect(add).toBeFocused();
 	await add.press('Enter');
 	await page.getByRole('dialog').getByRole('combobox').fill('Other context sources');
 	await page.keyboard.press('Enter');
@@ -166,7 +273,7 @@ test('workspace path queries discard late results and cancel when the picker clo
 	await expect(picker).toHaveCount(0);
 	await expect(page.getByLabel('Context error')).toHaveText('');
 	await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
-	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	await expect(page.getByRole('button', { name: 'Add context', exact: true })).toBeFocused();
 });
 
 test('disposing the composer cancels an outstanding workspace file scan', async ({ page }) => {
@@ -626,7 +733,7 @@ test('context picker hides unavailable terminal and search sources and lets symb
 	await picker.getByRole('option', { name: 'Go back ↩', exact: true }).click();
 	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
 	await page.keyboard.press('Escape');
-	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	await expect(page.getByRole('button', { name: 'Add context', exact: true })).toBeFocused();
 	await expect(page.locator('.ash-chat-input-attachment-item')).toHaveCount(0);
 });
 
@@ -711,7 +818,7 @@ test('cancelled instruction catalogs cannot recreate a picker or attachment', as
 	await page.evaluate(() => window.ashChatInputIntegration.releaseInstructions());
 	await expect(page.getByRole('dialog')).toHaveCount(0);
 	await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
-	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	await expect(page.getByRole('button', { name: 'Add context', exact: true })).toBeFocused();
 });
 
 for (const locale of ['en', 'zh-CN']) {

@@ -1,7 +1,20 @@
 import { localize } from '../../../../nls.js';
 import { svg as createSvgElement } from "../../../../base/browser/dom.js";
 import { findLastIdx } from "../../../../base/common/arraysFind.js";
+import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
+import { chartsBlue, chartsPurple } from '../../../../platform/theme/common/colors/chartsColors.js';
 import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, type ISCMHistoryItem, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel } from '../common/history.js';
+import '../../../common/theme.js';
+
+registerColor('scmGraph.historyItemRefColor', {
+	dark: chartsBlue, light: chartsBlue, hcDark: chartsBlue, hcLight: chartsBlue,
+}, { description: 'History item reference color.', owner: 'workbench.scm' });
+registerColor('scmGraph.historyItemRemoteRefColor', {
+	dark: chartsPurple, light: chartsPurple, hcDark: chartsPurple, hcLight: chartsPurple,
+}, { description: 'History item remote reference color.', owner: 'workbench.scm' });
+registerColor('scmGraph.historyItemHoverLabelForeground', {
+	dark: 'panel.background', light: 'panel.background', hcDark: 'panel.background', hcLight: 'panel.background',
+}, { description: 'History item hover label foreground color.', owner: 'workbench.scm' });
 
 const LaneHeight = 22;
 const LaneWidth = 11;

@@ -45,7 +45,8 @@ test('commit details preserve whitespace, metadata, scrolling and long-title geo
 	await expect(messageScroll).toHaveCSS('height', '180px');
 	await expect(messageViewport).toHaveCSS('scrollbar-width', 'none');
 	await messageScroll.focus();
-	await expect(messageScroll.locator('.ash-scrollbar-track-vertical')).toHaveAttribute('data-visibility', 'visible');
+	await expect(messageScroll.locator('.ash-scrollbar-track-vertical')).toHaveAttribute('data-visibility', 'auto');
+	await messageViewport.hover();
 	await expect(messageScroll.locator('.ash-scrollbar-track-vertical')).toHaveCSS('opacity', '1');
 	await messageScroll.press('End');
 	await expect.poll(() => messageViewport.evaluate(element => element.scrollTop > 0 && Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 1)).toBe(true);

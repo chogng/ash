@@ -1,4 +1,4 @@
-.ash-icon-label.ash-session-changes-editor-label.ash-resource-label-badge::after {
+.ash-icon-label.ash-session-changes-editor-label.ash-resource-label-badge.ash-decoration-badge::after {
 	font-variant-numeric: tabular-nums;
 	font-weight: var(--ash-fontWeight-semiBold);
 	padding-inline: var(--ash-spacing-size40);

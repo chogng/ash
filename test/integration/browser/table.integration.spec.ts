@@ -7,6 +7,7 @@ for (const scale of [1, 1.25, 1.5, 2]) {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto('/table.html');
+			await expect.poll(async () => ({ initialized: await page.evaluate(() => !!window.ashTableIntegration), errors })).toEqual({ initialized: true, errors: [] });
 			expect(await page.evaluate(() => devicePixelRatio)).toBe(scale);
 			const grid = page.getByRole('grid', { name: 'Local dictation models' });
 			await expect(grid.getByRole('row')).toHaveCount(3);

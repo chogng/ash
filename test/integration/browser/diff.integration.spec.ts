@@ -765,12 +765,17 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes reveals a l
 	await expect(row.locator('.ash-diff-hidden-region')).toHaveCount(0);
 	await row.getByRole('button', { name: localized(locale, 'Preview commit…', '预览提交…'), exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionPreparedFiles())).toEqual([{ selections: [{ changeSetId: 'review-change', expectedRevision: 1, paths: ['file-7.ts'] }], message: 'Reviewed file' }]);
+	expect(await page.evaluate(() => window.ashDiffIntegration.rejectInvalidSessionReveal())).toBe(true);
 	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
 	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
 	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(7, 1));
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
-	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(7, 2));
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(7, 2, true));
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=2']);
+	await page.evaluate(() => window.ashDiffIntegration.unsealSessionCapture());
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.revealSessionFile(7));
+	await expect(row.getByRole('button', { name: localized(locale, 'Preview commit…', '预览提交…'), exact: true })).toBeDisabled();
 	expect(errors).toEqual([]);
 });
 
@@ -1621,12 +1626,14 @@ for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
 					await expect(editor.locator('.view-line .stanza-editor-line-text')).toHaveText(text);
 					const marker = editor.locator(`.stanza-diff-inline-${kind}-empty`);
 					await expect(marker).toBeVisible();
-					const colors = await marker.evaluate((element, kind) => {
+					// Read both decorations from the attached side; a model update may replace a resolved marker.
+					await expect.poll(() => editor.evaluate((root, { kind, highContrast }) => {
+						const element = root.querySelector(`.stanza-diff-inline-${kind}-empty`);
+						const sign = root.closest('.stanza-diff-editor')?.querySelector(kind === 'added' ? '.stanza-diff-insert-sign' : '.stanza-diff-remove-sign');
+						if (!element || !sign) return false;
 						const style = getComputedStyle(element);
-						const sign = element.closest('.stanza-diff-editor')!.querySelector(kind === 'added' ? '.stanza-diff-insert-sign' : '.stanza-diff-remove-sign')!;
-						return { border: style.borderLeftColor, background: style.backgroundColor, marker: getComputedStyle(sign).color };
-					}, kind);
-					expect(colors.border).toBe(theme.startsWith('hc-') ? colors.marker : colors.background);
+						return style.borderLeftColor === (highContrast ? getComputedStyle(sign).color : style.backgroundColor);
+					}, { kind, highContrast: theme.startsWith('hc-') })).toBe(true);
 					await expect.poll(async () => Math.abs(await editor.evaluate((root, position) => {
 						const line = root.querySelector('.view-line .stanza-editor-line-text')!;
 						const offset = position === 'middle' ? line.textContent!.indexOf(';') : position === 'start' ? 0 : line.textContent!.length;

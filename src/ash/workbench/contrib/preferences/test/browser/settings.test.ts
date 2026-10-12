@@ -790,6 +790,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'terminal.integrated.lineHeight',
 		'terminal.integrated.minimumContrastRatio',
 		'terminal.integrated.scrollback',
+		'terminal.integrated.shellIntegration.history',
 	]);
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'voice-input');
@@ -1444,7 +1445,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	await preferences.openSettings({ section: 'terminal' });
 	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');
-	assert.equal(root.querySelectorAll('[data-settings-item-id^="terminal.integrated."]').length, 10);
+	assert.equal(root.querySelectorAll('[data-settings-item-id^="terminal.integrated."]').length, 11);
 	await preferences.openSettings({ section: 'search' });
 	const searchEngine = root.querySelector<HTMLElement>('[data-settings-item-id="grep.backend"] [role="combobox"]');
 	assert.equal(searchEngine?.textContent, 'tgrep (default)');

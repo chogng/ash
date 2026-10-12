@@ -1,4 +1,5 @@
 import { ProcessRun } from './processes.ts';
+import { resolve } from 'node:path';
 
 /** Normalize package-manager syntax before Playwright can discard selection arguments. */
 export function playwrightArguments(input: readonly string[]): string[] {
@@ -19,13 +20,14 @@ export function playwrightArguments(input: readonly string[]): string[] {
 
 /** Collection precedes asset builds and product launches, including list/help requests. */
 export async function collectTests(run: ProcessRun, cli: readonly string[], args: readonly string[], environment: NodeJS.ProcessEnv): Promise<boolean> {
-	const selection = await run.command(process.execPath, [...cli, '--list', '--reporter=list'], environment, true);
+	const help = args.includes('--help') || args.includes('-h');
+	const reporter = help || args.includes('--list') ? 'list' : resolve(import.meta.dirname, 'playwrightCollectionReporter.ts');
+	const selection = await run.command(process.execPath, [...cli, '--list', `--reporter=${reporter}`], environment, true);
 	if (selection.code !== 0) {
 		process.stdout.write(selection.output);
 		process.exitCode = selection.code;
 		return false;
 	}
-	const help = args.includes('--help') || args.includes('-h');
 	const count = Number(selection.output.match(/Total: (\d+) tests? in /u)?.[1]);
 	if (!help && !count) throw new Error(`Test collection did not select any tests.\n${selection.output}`);
 	if (help || args.includes('--list')) {

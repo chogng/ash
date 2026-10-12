@@ -193,10 +193,10 @@ test('picked-folder watches receive real browser filesystem observation events',
 	} finally { await browser.close(); }
 });
 
-test('an offline extension sees accessible browser roots and excludes registered inaccessible backend roots', async ({ page }) => {
+test('an offline extension retains configured folder identities without reading backend roots', async ({ page }) => {
 	await page.goto('/files.html');
 	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
-	expect(await page.evaluate(() => window.ashFilesIntegration.offlineExtensionFolders())).toEqual(['ash-userdata:/offline-project']);
+	expect(await page.evaluate(() => window.ashFilesIntegration.offlineExtensionFolders())).toEqual(['ash-userdata:/offline-project', 'file:///disconnected-workspace', 'unregistered:///workspace']);
 });
 
 test('browser files persist through reload and reject competing saves from two windows', async ({ page, context }) => {

@@ -1,5 +1,5 @@
 import './media/accessibleView.css';
-import { h } from '../../../../base/browser/dom.js';
+import { h, getActiveDocument, getActiveElement } from '../../../../base/browser/dom.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
@@ -31,7 +31,7 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 		super();
 	}
 
-	public show(type: AccessibleViewType): boolean {
+	public show(type: AccessibleViewType, target?: HTMLElement): boolean {
 		// A modal surface already owns focus; looking up its previous feature
 		// again would create a provider for an inactive element.
 		if (this.provider) {
@@ -41,8 +41,12 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			}
 			return false;
 		}
-		const root = this.layoutService.mainContainer;
-		const activeElement = root.ownerDocument.activeElement;
+		const mainRoot = this.layoutService.mainContainer;
+		const focusedDocument = getActiveDocument();
+		// Auxiliary editors share services with their opener, but their help dialog
+		// and scoped context must stay in the document that owns keyboard focus.
+		const root = target?.closest<HTMLElement>('.ash-workbench') ?? getActiveElement(focusedDocument)?.closest<HTMLElement>('.ash-workbench') ?? mainRoot;
+		const activeElement = target ?? getActiveElement(root.ownerDocument);
 		const implementations = [...AccessibleViewRegistry.getImplementations()]
 			.filter(implementation => implementation.type === type && this.contextKeys.contextMatchesRules(implementation.when, activeElement))
 			.sort((left, right) => right.priority - left.priority);

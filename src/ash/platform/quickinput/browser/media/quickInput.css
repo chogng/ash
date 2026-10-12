@@ -27,6 +27,14 @@
 	box-shadow: 0 8px 32px var(--ash-widget-shadow);
 }
 
+.ash-quick-pick.anchored {
+	position: fixed;
+	box-sizing: border-box;
+	max-height: calc(100vh - 16px);
+	border-radius: var(--ash-cornerRadius-large);
+	border-color: var(--ash-contrastBorder, var(--ash-widget-border));
+}
+
 .ash-quick-pick-input {
 	padding: 8px;
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);

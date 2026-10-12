@@ -33,6 +33,7 @@ import { registerColorThemeSchemas } from '../common/colorThemeSchema.js';
 export class WorkbenchThemeService extends Disposable implements IWorkbenchThemeService, IResourceIconRenderer {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
 	private colorTheme: IColorTheme;
+	private readonly previews = new Map<object, IColorTheme>();
 	private initialized = false;
 	public readonly onDidColorThemeChange = this.colorThemeChange.event;
 	private readonly resourceIconChange = this._register(new Emitter<void>());
@@ -53,6 +54,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	) {
 		super();
 		this.colorTheme = this.resolveColorTheme();
+		this._register(toDisposable(() => this.previews.clear()));
 	}
 
 	public initialize(): void {
@@ -116,7 +118,28 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		return this.colorTheme;
 	}
 
+	public previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void; } {
+		this.assertNotDisposed();
+		const owner = {};
+		this.previews.set(owner, theme);
+		this.updateColorTheme();
+		const lifetime = toDisposable(() => {
+			if (this.previews.delete(owner) && !this.isDisposed) this.updateColorTheme();
+		});
+		return Object.assign(lifetime, {
+			update: (candidate: IColorTheme): void => {
+				if (!this.previews.has(owner) || this.isDisposed) return;
+				this.previews.set(owner, candidate);
+				this.updateColorTheme();
+			},
+		});
+	}
+
 	private resolveColorTheme(): IColorTheme {
+		// Auxiliary editor windows share this service. Preview never changes settings,
+		// and keeps the same customization precedence as the persisted theme.
+		const preview = [...this.previews.values()].at(-1);
+		if (preview) return applyThemeCustomizations(preview, this.configurationService);
 		let preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
 		const settings = ThemeConfigurationSettings;
 		if (this.hostColorScheme.highContrast && this.configurationService.getValue<boolean>(settings.autoDetectHighContrast)) {
@@ -206,6 +229,10 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 	public get issues(): readonly IUserThemeLoadIssue[] { return this.loadIssues; }
 	public sourceFor(id: string): IUserThemeSource | undefined { return this.sources.get(id); }
 	public getSource(id: string): string | undefined { return this.sources.get(id)?.fileContent.content; }
+	public async resolve(source: string, id?: string): Promise<IColorTheme> {
+		const existing = id ? this.sources.get(id) : undefined;
+		return existing ? this.compileTheme(existing.file, source, id) : parseUserColorTheme(source, id);
+	}
 
 	public reload(): Promise<void> {
 		const operation = this.reloadQueue.then(() => this.reloadResources());

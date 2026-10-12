@@ -8,6 +8,7 @@ import '../../../../common/theme.js';
 import '../../../chat/common/widget/chatColors.js';
 import '../../../pdf/common/pdfColors.js';
 import '../../../preferences/common/settingsEditorColorRegistry.js';
+import '../../../scm/browser/scmHistory.js';
 import '../../../terminal/common/terminalColorRegistry.js';
 import '../../../../../sessions/common/theme.js';
 import '../../../../../platform/theme/common/colors/chartsColors.js';

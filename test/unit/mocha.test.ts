@@ -85,6 +85,42 @@ test('a selection containing only skipped tests fails the run', () => {
 	assert.match(result.output, /No unit tests executed/);
 });
 
+test('a running suite retains its modules after the shared compiler output is cleaned', { timeout: 20_000 }, async t => {
+	const ready = join(directory, 'snapshot-ready');
+	const release = join(directory, 'snapshot-release');
+	const waiting = join(directory, 'snapshot.test.js');
+	const dependency = join(directory, 'snapshot-dependency.js');
+	writeFileSync(dependency, 'export const value = 42;');
+	writeFileSync(waiting, `
+import assert from 'node:assert/strict';
+import { existsSync, writeFileSync } from 'node:fs';
+import { setTimeout } from 'node:timers/promises';
+import { test } from 'mocha';
+test('retains a dependency loaded after cleanup', async () => {
+ writeFileSync(${JSON.stringify(ready)}, 'ready');
+ while (!existsSync(${JSON.stringify(release)})) await setTimeout(25);
+ assert.equal((await import('./snapshot-dependency.js')).value, 42);
+});
+`);
+	const child = spawn(process.execPath, ['test/unit/run.ts', '--run', relative(outputDirectory, waiting).replaceAll('\\', '/')], { cwd: desktopDirectory, stdio: ['ignore', 'pipe', 'pipe'] });
+	let output = '';
+	child.stdout.on('data', chunk => { output += chunk; });
+	child.stderr.on('data', chunk => { output += chunk; });
+	const stopped = new Promise<number | null>((resolveExit, reject) => { child.once('error', reject); child.once('close', resolveExit); });
+	t.after(async () => { if (child.exitCode === null) child.kill('SIGTERM'); await stopped; });
+	const deadline = Date.now() + 10_000;
+	while (!existsSync(ready) && Date.now() < deadline) {
+		await new Promise(resolveWait => setTimeout(resolveWait, 25));
+		if (child.exitCode !== null) throw new Error(output);
+	}
+	assert.ok(existsSync(ready), output);
+	rmSync(waiting);
+	rmSync(dependency);
+	writeFileSync(release, 'continue');
+	assert.equal(await stopped, 0, output);
+	assert.match(output, /1 tests executed across 1 files; 0 failed files/);
+});
+
 for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]] as const) {
 	test(`${signal} stops Mocha descendants and prevents the next file from starting`, { skip: process.platform === 'win32', timeout: 20_000 }, async t => {
 		const marker = join(directory, `ready-${signal}`);

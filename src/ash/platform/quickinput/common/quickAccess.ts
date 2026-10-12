@@ -16,6 +16,8 @@ export interface AnythingQuickAccessProviderRunOptions extends IQuickAccessProvi
 
 export interface IQuickAccessOptions {
 	readonly placeholder?: string;
+	readonly anchor?: unknown;
+	readonly anchorPosition?: 'above' | 'below';
 	readonly enabledProviderPrefixes?: readonly string[];
 	readonly providerOptions?: IQuickAccessProviderRunOptions;
 }

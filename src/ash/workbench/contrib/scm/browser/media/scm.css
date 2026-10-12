@@ -256,8 +256,16 @@
 }
 
 .ash-scm-graph-label.head {
-	color: var(--ash-list-activeSelectionForeground);
-	background: var(--ash-list-activeSelectionBackground);
+	background: var(--ash-scmGraph-historyItemRefColor);
+}
+
+.ash-scm-graph-label.remote {
+	background: var(--ash-scmGraph-historyItemRemoteRefColor);
+}
+
+.ash-scm-graph-label.head,
+.ash-scm-graph-label.remote {
+	color: var(--ash-scmGraph-historyItemHoverLabelForeground);
 }
 
 .ash-scm-graph-overlay {
@@ -591,10 +599,20 @@
 .ash-scm-find-issues.ash-button {
 	width: 100%;
 	color: var(--ash-button-primaryForeground);
+}
+
+.ash-scm-commit.ash-button {
+	background: var(--ash-button-primaryBackground);
+}
+
+.ash-scm-find-issues.ash-button {
 	background: var(--ash-files-emptyExplorerOpenFolderBackground);
 }
 
-.ash-scm-commit.ash-button:not(:disabled):hover,
+.ash-scm-commit.ash-button:not(:disabled):hover {
+	background: var(--ash-button-primaryHoverBackground);
+}
+
 .ash-scm-find-issues.ash-button:not(:disabled):hover {
 	background: var(--ash-files-emptyExplorerOpenFolderHoverBackground);
 }

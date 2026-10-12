@@ -164,7 +164,7 @@ services.registerInstance(IDictationService, {
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 registerTestDictationOnboarding(services);
 services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
-services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None } as unknown as IEditorService);
+services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None, onDidActiveEditorChange: Event.None } as unknown as IEditorService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const codeContainer = document.createElement('div');
 codeContainer.style.cssText = 'width:600px;height:220px';

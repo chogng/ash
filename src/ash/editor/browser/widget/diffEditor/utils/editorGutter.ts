@@ -37,6 +37,9 @@ export class EditorGutter<T extends IGutterItemInfo> extends Disposable {
 		const invalidate = (): void => this.geometry.set(this.geometry.get() + 1);
 		this._register(editor.onDidScrollChange(invalidate));
 		this._register(editor.onDidLayoutChange(invalidate));
+		// Alignment zones can change without changing the editor's viewport or scroll position.
+		this._register(editor.onDidChangeViewZones(invalidate));
+		this._register(editor.onDidContentSizeChange(invalidate));
 		this._register(editor.onDidChangeCursorSelection(invalidate));
 		this._register(autorun(reader => {
 			this.geometry.read(reader);

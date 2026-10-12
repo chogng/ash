@@ -65,3 +65,16 @@ test('binary metadata survives serialization and never makes a comparison writab
 	assert.deepEqual([restored.readOnly, restored.items[0].binary, restored.items[0].modified.resource.toString()], [true, true, binary.modified.resource.toString()]);
 	assert.throws(() => createMultiDiffEditorInput(input.resource, [{ ...binary, binary: 'yes' as unknown as boolean }], input.label), /binary state must be boolean/);
 });
+
+test('restored comparisons retain disabled file capabilities and reject corrupted context values', () => {
+	const input = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/capture'), [{
+		label: 'file.ts', original: { resource: URI.parse('snapshot:/before') }, modified: { resource: URI.parse('snapshot:/after') },
+		contextKeys: { 'sessions.changesCanPreview': false },
+	}], 'Capture');
+	const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+	const restored = EditorInputSerializers.deserialize(serialized);
+	assert.ok(isMultiDiffEditorInput(restored));
+	assert.deepEqual(restored.items[0]!.contextKeys, { 'sessions.changesCanPreview': false });
+	serialized.value.items[0].contextKeys['sessions.changesCanPreview'] = 'true';
+	assert.throws(() => EditorInputSerializers.deserialize(serialized), /Invalid multi-diff context keys/u);
+});

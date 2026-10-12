@@ -166,6 +166,8 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this._register(this.gutter.onDidChangeContentHeight(() => this.updateContentSize()));
 		this._register(this.originalEditor.onDidLayoutChange(() => this.updateContentSize()));
 		this._register(this.modifiedEditor.onDidLayoutChange(() => this.updateContentSize()));
+		this._register(this.originalEditor.onDidContentSizeChange(() => this.updateContentSize()));
+		this._register(this.modifiedEditor.onDidContentSizeChange(() => this.updateContentSize()));
 		this._register(addDisposableListener(this.element, 'keydown', event => this.handleKeydown(event), true));
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			if (event.key === 'Escape' && !event.defaultPrevented && this.movedTextToCompare && !this.accessibleDiffViewer.isVisible) {
@@ -366,6 +368,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 
 	public updateOptions(options: IDiffEditorOptions & Pick<DiffEditorWidgetOptions, 'showInlineChanges' | 'loopChanges'>): void {
 		this.diffOptions.updateOptions(options);
+		if (options.hideUnchangedRegions) { this.hiddenRegions.setOptions(options.hideUnchangedRegions); }
 		this.showInlineChanges = options.showInlineChanges ?? this.showInlineChanges;
 		this.loopChanges = options.loopChanges ?? this.loopChanges;
 		this.editors.updateOptions(options);

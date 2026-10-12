@@ -10,6 +10,7 @@ export const enum AccessibleViewProviderId {
 	Editor = 'editor',
 	WebviewEditor = 'webviewEditor',
 	ColorPicker = 'colorPicker',
+	ThemeEditor = 'themeEditor',
 	BulkEditPreview = 'bulkEditPreview',
 	ActionWidget = 'actionWidget',
 	InspectEditorTokens = 'inspectEditorTokens',
@@ -71,6 +72,7 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	ThemeEditor = 'accessibility.verbosity.themeEditor',
 	ProcessExplorer = 'accessibility.verbosity.processExplorer',
 	Disassembly = 'accessibility.verbosity.disassembly',
 	GitHub = 'accessibility.verbosity.github',
@@ -162,7 +164,8 @@ export class AccessibleContentProvider extends AbstractDisposable implements IAc
 }
 
 export interface IAccessibleViewService extends IDisposable {
-	show(type: AccessibleViewType): boolean;
+	/** An explicit feature target keeps auxiliary-window help in its owning document. */
+	show(type: AccessibleViewType, target?: HTMLElement): boolean;
 	getOpenAriaHint(verbositySettingKey: string): string | undefined;
 	disableHint(): Promise<void>;
 	showAccessibleViewHelp(): void;

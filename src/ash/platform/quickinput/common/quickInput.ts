@@ -70,6 +70,9 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	canAcceptInBackground?: boolean;
 	readonly keyMods?: IKeyMods;
 	ariaLabel: string;
+	/** An optional HTMLElement anchor; unanchored pickers retain the window's default placement. */
+	anchor?: unknown;
+	anchorPosition?: 'above' | 'below';
 	placeholder: string;
 	value: string;
 	valueSelection: IQuickInputSelection;

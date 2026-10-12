@@ -2,6 +2,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { IColorTheme, IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import type { IFileIconTheme, IProductIconTheme } from '../../../../platform/theme/common/themeService.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 
 export interface FileIconDefinition {
 	readonly character: string;
@@ -29,5 +30,7 @@ export interface IColorCustomizations { [colorOrThemeScope: string]: string | Re
 /** Theme selection updates the currently active system preference when automatic appearance is enabled. */
 export interface IWorkbenchThemeService extends IThemeService {
 	setColorTheme(themeId: string): Promise<IColorTheme>;
+	/** A window-shared, temporary theme; disposing restores the configured selection. */
+	previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void; };
 }
 export const IWorkbenchThemeService = createServiceIdentifier<IWorkbenchThemeService>('workbenchThemeService');

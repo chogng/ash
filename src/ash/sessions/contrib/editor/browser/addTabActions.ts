@@ -5,6 +5,7 @@ import { MenusRegistry, MenuId } from '../../../../platform/actions/common/actio
 import type { ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
+import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
 
 /** Callbacks retain the window's layout queue; tab actions do not own layout state. */
 export function registerAddTabActions(
@@ -21,7 +22,7 @@ export function registerAddTabActions(
 			run: openFiles,
 		},
 		{
-			id: 'ash.sessions.openChangesTab',
+			id: VIEW_SESSION_CHANGES_COMMAND_ID,
 			title: localize2({ bundle: 'ash', key: 'sessions.layout.openChanges' }, 'Open Changes tab'),
 			icon: Lxicon.diff,
 			run: openChanges,

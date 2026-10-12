@@ -1,4 +1,6 @@
-import { stopEvent, h } from "../../../base/browser/dom.js";
+import { stopEvent, h, isHTMLElement } from "../../../base/browser/dom.js";
+import { getViewport } from '../../../base/browser/geometry.js';
+import { AnchorPosition, layout2d } from '../../../base/common/layout.js';
 import {
 	setAriaAttribute,
 	setRole,
@@ -38,6 +40,8 @@ export class QuickPick<TItem extends IQuickPickItem>
 	extends Disposable
 	implements IQuickPick<TItem>, IBrowserQuickInputHost {
 	readonly element: HTMLDivElement;
+	public anchor?: unknown;
+	public anchorPosition?: 'above' | 'below';
 	private readonly inputBox: InputBox;
 	private readonly list: QuickInputList<TItem>;
 	private readonly progress: HTMLDivElement;
@@ -50,6 +54,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.progress.hidden = !value;
 		this.element.classList.toggle('busy', value);
 		this.element.setAttribute('aria-busy', String(value));
+		if (this.visible) this.layout();
 	}
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
@@ -202,6 +207,37 @@ export class QuickPick<TItem extends IQuickPickItem>
 
 	layout(): void {
 		const ownerWindow = this.element.ownerDocument.defaultView!;
+		if (isHTMLElement(this.anchor)) {
+			if (!this.anchor.isConnected) { this.hide(); return; }
+			const viewport = getViewport(ownerWindow);
+			const margin = 8;
+			const gap = 4;
+			const bounds = {
+				left: viewport.left + margin, top: viewport.top + margin,
+				width: Math.max(0, viewport.width - margin * 2), height: Math.max(0, viewport.height - margin * 2),
+			};
+			const anchor = this.anchor.getBoundingClientRect();
+			this.element.style.width = `${Math.min(380, bounds.width)}px`;
+			const style = ownerWindow.getComputedStyle(this.element);
+			const listStyle = ownerWindow.getComputedStyle(this.list.element);
+			const reservedHeight = this.inputBox.element.getBoundingClientRect().height
+				+ (this.busy ? this.progress.getBoundingClientRect().height : 0)
+				+ Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth)
+				+ Number.parseFloat(listStyle.paddingTop) + Number.parseFloat(listStyle.paddingBottom);
+			// Size the list before placing the surface so a short search stays next to its button.
+			const roomAbove = anchor.top - bounds.top - gap;
+			const roomBelow = bounds.top + bounds.height - anchor.bottom - gap;
+			const availableHeight = Math.max(0, roomAbove, roomBelow);
+			this.list.layout(Math.max(0, Math.min(360, availableHeight) - reservedHeight));
+			const picker = this.element.getBoundingClientRect();
+			const position = layout2d(bounds, picker, anchor, {
+				anchorPosition: this.anchorPosition === 'below' ? AnchorPosition.Below : AnchorPosition.Above,
+				gap,
+			});
+			this.element.style.left = `${position.left}px`;
+			this.element.style.top = `${position.top}px`;
+			return;
+		}
 		const hostBounds = this.host.getBoundingClientRect();
 		const pickerBounds = this.element.getBoundingClientRect();
 		const inputHeight = this.inputBox.element.getBoundingClientRect().height;
@@ -233,6 +269,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 
 	private handleValueChange(value: string): void {
 		this.list.filter(this._filterValue(value));
+		if (this.visible) this.layout();
 		this._onDidChangeValue.fire(value);
 	}
 

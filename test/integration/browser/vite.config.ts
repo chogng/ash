@@ -47,6 +47,7 @@ export default defineConfig({
 				sessionGitHub: resolve(import.meta.dirname, 'sessionGitHub.html'),
 				markdown: resolve(import.meta.dirname, 'markdown.html'),
 				themes: resolve(import.meta.dirname, "themes.html"),
+				themeEditor: resolve(import.meta.dirname, 'themeEditor.html'),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
 				files: resolve(import.meta.dirname, 'files.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),

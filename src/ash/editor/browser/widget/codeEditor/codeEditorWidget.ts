@@ -15,7 +15,7 @@ import { Range, type IRange } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextModel } from '../../../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
-import { EditorType, Handler, ScrollType, type CompositionTypePayload, type ICommand, type IEditorAction, type ICodeEditorViewState, type IEditorDecorationsCollection, type IEditorModel, type IEditorViewState, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
+import { EditorType, Handler, ScrollType, type CompositionTypePayload, type ICommand, type IEditorAction, type ICodeEditorViewState, type IEditorDecorationsCollection, type IEditorModel, type IEditorViewState, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload, type IContentSizeChangedEvent } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, IPasteEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { View, type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
@@ -138,6 +138,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly modelDecorationsEmitter = this._register(new Emitter<IModelDecorationsChangedEvent>());
 	private readonly readOnlyEditEmitter = this._register(new Emitter<void>());
 	private readonly layoutChangeEmitter = this._register(new Emitter<EditorLayoutInfo>());
+	private readonly viewZonesChangeEmitter = this._register(new Emitter<void>());
+	private readonly contentSizeChangeEmitter = this._register(new Emitter<IContentSizeChangedEvent>());
 	private readonly cursorPositionEmitter = this._register(new Emitter<ICursorPositionChangedEvent>());
 	private readonly cursorSelectionEmitter = this._register(new Emitter<ICursorSelectionChangedEvent>());
 	private readonly compositionStartEmitter = this._register(new Emitter<void>());
@@ -156,6 +158,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	readonly onDidChangeModelDecorations = this.modelDecorationsEmitter.event;
 	readonly onDidAttemptReadOnlyEdit = this.readOnlyEditEmitter.event;
 	readonly onDidLayoutChange = this.layoutChangeEmitter.event;
+	readonly onDidChangeViewZones = this.viewZonesChangeEmitter.event;
+	readonly onDidContentSizeChange = this.contentSizeChangeEmitter.event;
 	readonly onDidChangeCursorPosition = this.cursorPositionEmitter.event;
 	readonly onDidChangeCursorSelection = this.cursorSelectionEmitter.event;
 	readonly onDidFocusEditorText = this.focusEditorTextEmitter.event;
@@ -337,6 +341,14 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				{ batchChanges: callback => callback() },
 			));
 			modelStore.add(viewModel.onEvent(event => {
+				if (event.kind === OutgoingViewModelEventKind.ContentSizeChanged) {
+					this.contentSizeChangeEmitter.fire(event);
+					return;
+				}
+				if (event.kind === OutgoingViewModelEventKind.ViewZonesChanged) {
+					this.viewZonesChangeEmitter.fire();
+					return;
+				}
 				if (event.kind === OutgoingViewModelEventKind.ScrollChanged) {
 					this.scrollChangeEmitter.fire({ scrollTopChanged: event.scrollTopChanged, scrollLeftChanged: event.scrollLeftChanged });
 					return;

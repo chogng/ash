@@ -103,6 +103,7 @@ import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/br
 import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
 import { IResourceLabelService } from '../../../src/ash/workbench/browser/labels.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
@@ -234,6 +235,7 @@ function makeTitleGitStatus(paths: readonly string[], revision: number, reposito
 let titleTheme: TestThemeService | undefined;
 let sessionTheme: TestThemeService | undefined;
 let sessionRevision = 1;
+let sessionCaptureState: 'sealed' | 'open' = 'sealed';
 const sessionOpenedFiles: string[] = [];
 const sessionPreparedFiles: unknown[] = [];
 let focusedHistoryView: string | undefined;
@@ -256,6 +258,7 @@ function createSessionChangesPane(): SessionChangesEditor {
 		sessionServices.registerInstance(ISessionsService, { onDidChange: Event.None, activeSelection: { kind: 'session', active: { session: sessions[0], threadId: 'review-thread' } } } as unknown as ISessionsService);
 		sessionServices.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async input => { sessionOpenedFiles.push(input.resource.toString()); } } as IEditorService);
 		sessionServices.registerInstance(IEditorPart, { get activePane() { return sessionPane.value; } } as IEditorPart);
+		sessionServices.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
 		sessionServices.registerSingleton(ISessionChangesService, () => sessionServices!.createInstance(SessionChangesService));
 		sessionServices.registerSingleton(IChangesViewService, () => sessionServices!.createInstance(ChangesViewService));
 		sessionServices.registerSingleton(ICommandService, () => resources.add(new CommandService(sessionServices!)));
@@ -269,8 +272,8 @@ function createSessionChangesPane(): SessionChangesEditor {
 		sessionServices.registerInstance(IChatService, {
 			onDidUpdateTurnChanges: sessionChanges.event,
 			onDidBecomeReady: Event.None,
-			listTurnChanges: async (sessionId: string, threadId: string) => [{ ...summary, sessionId, threadId, revision: sessionRevision }],
-			readTurnChange: async (sessionId: string, threadId: string) => ({ summary: { ...summary, sessionId, threadId, revision: sessionRevision }, files: Array.from({ length: 8 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })) }),
+			listTurnChanges: async (sessionId: string, threadId: string) => [{ ...summary, sessionId, threadId, revision: sessionRevision, captureState: sessionCaptureState }],
+			readTurnChange: async (sessionId: string, threadId: string) => ({ summary: { ...summary, sessionId, threadId, revision: sessionRevision, captureState: sessionCaptureState }, files: Array.from({ length: 8 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })) }),
 			readTurnChangeFile: async (_sessionId: string, _threadId: string, _changeSetId: string, path: string) => ({ path, binary: false, truncated: false, before: `before\n${'shared\n'.repeat(30)}`, after: `after\n${'shared\n'.repeat(30)}` }),
 			prepareTurnCommit: async (_sessionId: string, _threadId: string, selections: unknown, message: string) => {
 				sessionPreparedFiles.push({ selections, message });
@@ -573,15 +576,24 @@ const harness = {
 		const change = changeset.changes.get()[index]!;
 		sessionPane.value!.restoreViewState({ revealData: { resource: { original: change.originalUri, modified: change.modifiedUri }, range: new Range(15, 1, 15, 2) } });
 	},
-	async reviewSessionFile(index: number, revision = sessionRevision): Promise<void> {
-		const resource = URI.parse(`ash-turn-diff:/review-change/file-${index}.ts?session=review&thread=review-thread&revision=${revision}&side=after`);
+	async reviewSessionFile(index: number, revision = sessionRevision, canonical = false): Promise<void> {
+		const resource = URI.parse(`ash-turn-diff:/review-change/file-${index}.ts?session=review&thread=review-thread&revision=${revision}${canonical ? '' : '&side=after'}`);
 		await sessionServices!.get(ICommandService).executeCommand('changeset.review', { resource });
 	},
 	sessionReviewState(): readonly string[] { return [...sessionServices!.get(IChangesViewService).reviewedFilesObs.get()]; },
 	sessionTheme(name: 'dark' | 'light' | 'contrast'): void { sessionTheme!.setColorTheme(name === 'light' ? lightColorTheme : name === 'contrast' ? highContrastDarkColorTheme : darkColorTheme); },
 	advanceSessionRevision(): void { sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
+	unsealSessionCapture(): void { sessionCaptureState = 'open'; sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
 	sessionOpenedFiles(): readonly string[] { return sessionOpenedFiles; },
 	sessionPreparedFiles(): readonly unknown[] { return sessionPreparedFiles; },
+	rejectInvalidSessionReveal(): boolean {
+		try {
+			sessionPane.value!.restoreViewState({ revealData: { resource: { original: 'invalid' } } });
+			return false;
+		} catch (error) {
+			return error instanceof TypeError;
+		}
+	},
 	readSessionViewState(): unknown {
 		const pane = sessionPane.value!;
 		return isEditorPaneWithViewState(pane) ? pane.saveViewState() : null;

@@ -67,7 +67,7 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	using palette = menus.createMenu(MenuId.CommandPalette);
 	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
 	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Show editor', true, undefined]]);
-	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), ['ash.sessions.openFilesTab', 'ash.sessions.openChangesTab']);
+	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), ['ash.sessions.openFilesTab', 'workbench.agentSessions.action.viewChanges']);
 	assert.equal(palette.getActions().flatMap(([, actions]) => actions).length, 5);
 
 	await commands.executeCommand('ash.sessions.showEditor');
@@ -83,7 +83,7 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 
 	const files = commands.executeCommand('ash.sessions.openFilesTab');
 	await started.p;
-	const changes = commands.executeCommand('ash.sessions.openChangesTab');
+	const changes = commands.executeCommand('workbench.agentSessions.action.viewChanges');
 	assert.deepEqual(effects, []);
 	await pending.complete();
 	await Promise.all([files, changes]);
@@ -91,12 +91,13 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	documentContent.set(false, undefined);
 	assert.deepEqual(title.getActions(), []);
 	assert.deepEqual(palette.getActions(), []);
-	await commands.executeCommand('ash.sessions.openChangesTab');
+	await commands.executeCommand('workbench.agentSessions.action.viewChanges');
 	assert.deepEqual(effects, ['files', 'changes']);
 
 	contribution.dispose();
 	assert.deepEqual(addTab.getActions(), []);
-	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleSidePane', 'openFilesTab', 'openChangesTab']) {
+	assert.equal(CommandsRegistry.getCommand('workbench.agentSessions.action.viewChanges'), undefined);
+	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleSidePane', 'openFilesTab']) {
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.' + id), undefined);
 	}
 	assert.equal(layoutChanged.hasListeners(), false);

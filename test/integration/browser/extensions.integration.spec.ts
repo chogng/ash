@@ -268,7 +268,8 @@ test('LSP and Skills share capability discovery while retaining their own config
 	await expect(lsp.getByLabel('Language ID', { exact: true })).toHaveValue('typescriptreact');
 	await expect(lsp.getByRole('status')).toContainText('1 servers available.');
 	await lsp.getByRole('button', { name: 'Find language servers in Extensions', exact: true }).click();
-	await expect(page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('button', { name: 'Providers · typescriptreact', exact: true })).toBeVisible();
+	await expect(page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('option')).toHaveCount(1);
+	await expect(page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('option')).toContainText('Web tools');
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'search' && entry[1].languageId === 'typescriptreact' && entry[1].capabilityKind === 'executable' && entry[1].packageType === null))).toBe(true);
 	await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
 	const skills = page.locator('[data-view-id="ash.extensions.skills"]');
@@ -343,9 +344,10 @@ for (const trigger of ['command', 'view']) {
 		await page.evaluate(trigger => trigger === 'command' ? window.ashExtensionsIntegration.startHeldCommand() : window.ashExtensionsIntegration.startHeldSearch(), trigger);
 		await expect(view.getByRole('status')).toHaveText('Loading Extensions…');
 		await page.evaluate(() => window.ashExtensionsIntegration.open({ mode: 'installed' }));
-		await expect(view.getByRole('status')).toHaveText('No matching extensions.');
+		await expect(view).toHaveAttribute('aria-busy', 'false');
+		await expect(view.getByRole('status')).toBeEmpty();
 		await page.evaluate(() => window.ashExtensionsIntegration.failHeldSearch());
-		await expect(view.getByRole('status')).toHaveText('No matching extensions.');
+		await expect(view.getByRole('status')).toBeEmpty();
 		await expect(view.getByRole('option')).toHaveCount(0);
 	});
 }

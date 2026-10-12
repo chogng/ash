@@ -5,7 +5,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/viewpaneLayout.html?locale=${locale}&hc`);
-		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
 		const body = page.locator('.ash-agent-trace-navigation-view');
 		await body.hover();
 		await page.mouse.wheel(0, 1000);

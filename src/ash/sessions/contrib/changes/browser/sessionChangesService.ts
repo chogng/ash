@@ -10,6 +10,7 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { IDecorationsService } from '../../../../workbench/services/decorations/common/decorations.js';
 import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
+import { IEditorGroupsService, type IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import {
 	createSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus,
@@ -30,6 +31,7 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 		@IChatService private readonly chat: IChatService,
 		@IDecorationsService decorations: IDecorationsService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@IEditorGroupsService private readonly groups: IEditorGroupsService,
 	) {
 		super();
 		this._register(decorations.registerDecorationsProvider({
@@ -53,7 +55,7 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 		return editorResource.with({ scheme: 'ash-session', fragment: '' });
 	}
 
-	public async openChangesEditor(sessionResource: URI, options?: ISessionChangesEditorOptions, group?: EditorOpenTarget): Promise<void> {
+	public async openChangesEditor(sessionResource: URI, options?: ISessionChangesEditorOptions, group?: EditorOpenTarget): Promise<IEditorGroup | undefined> {
 		if (sessionResource.scheme !== 'ash-session') { throw new Error(localize('sessions.changes.invalidSelection', 'This review has no Turn selection.')); }
 		if (!sessionResource.path.startsWith('/draft/')) { this.getConversation(sessionResource); }
 		const input = new SessionChangesEditorInput(this.getChangesEditorResource(sessionResource), options?.changesetSelection);
@@ -67,6 +69,7 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 			selectionSource: selectionSource === TextEditorSelectionSource.PROGRAMMATIC || selectionSource === TextEditorSelectionSource.JUMP
 				? selectionSource : selection ? TextEditorSelectionSource.NAVIGATION : undefined,
 		}, group);
+		return this.groups.groups.find(group => group.inputs.includes(input));
 	}
 
 	public async resolveChangeset(sessionResource: URI, id: string): Promise<ISessionChangeset> {

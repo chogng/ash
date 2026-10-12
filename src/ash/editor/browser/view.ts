@@ -1159,7 +1159,8 @@ export class View extends ViewEventHandler {
 	}
 
 	public override onCursorStateChanged(): boolean {
-		this.updateAccessibilityStatus();
+		// A pending cursor event must not replace help announced by a focused overflow widget.
+		if (this.isFocused()) this.updateAccessibilityStatus();
 		return true;
 	}
 

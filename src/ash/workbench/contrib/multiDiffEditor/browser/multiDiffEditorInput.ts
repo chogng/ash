@@ -22,6 +22,7 @@ EditorInputSerializers.registerStatic({
 				...(item.binary === undefined ? {} : { binary: item.binary }),
 				...(item.goToFile === undefined ? {} : { goToFile: registry.serialize(item.goToFile) }),
 				...(item.actions === undefined ? {} : { actions: item.actions }),
+				...(item.contextKeys === undefined ? {} : { contextKeys: item.contextKeys }),
 			}))),
 			...(input.source === undefined ? {} : { source: input.source }),
 		});
@@ -39,6 +40,8 @@ EditorInputSerializers.registerStatic({
 				...(entry.binary === undefined ? {} : { binary: requireBinary(entry.binary) }),
 				...(entry.goToFile === undefined ? {} : { goToFile: registry.deserialize(requireSerializedEditorInput(entry.goToFile, 'serialized multi-diff Open File input')) }),
 				...(entry.actions === undefined ? {} : { actions: requireActions(entry.actions) }),
+				// The input factory validates this metadata before publishing the comparisons.
+				...(entry.contextKeys === undefined ? {} : { contextKeys: entry.contextKeys as Readonly<Record<string, boolean>> }),
 			};
 		});
 		return createMultiDiffEditorInput(
@@ -68,6 +71,8 @@ export interface MultiDiffEditorInputItem {
 	/** Resource opened by the per-file Open File action. Defaults to the modified side. */
 	readonly goToFile?: IResourceEditorInput;
 	readonly actions?: readonly MultiDiffCommandAction[];
+	/** Provider capabilities are scoped to this file's toolbar. */
+	readonly contextKeys?: Readonly<Record<string, boolean>>;
 }
 
 export interface MultiDiffEditorInput extends IResourceEditorInput {
@@ -101,6 +106,7 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 			...(item.binary === undefined ? {} : { binary: item.binary }),
 			...(item.goToFile ? { goToFile: item.goToFile } : {}),
 			...(item.actions ? { actions: requireActions(item.actions) } : {}),
+			...(item.contextKeys === undefined ? {} : { contextKeys: requireContextKeys(item.contextKeys) }),
 		});
 		const key = multiDiffEditorItemKey(normalized);
 		if (keys.has(key)) throw new TypeError(`Duplicate multi-diff comparison '${normalized.label}'`);
@@ -156,6 +162,14 @@ export function requireActions(value: unknown): readonly MultiDiffCommandAction[
 		if (!Array.isArray(entry.arguments) || entry.arguments.length > 64 || (entry.enabled !== undefined && typeof entry.enabled !== 'boolean')) throw new TypeError('Invalid multi-diff action arguments');
 		return Object.freeze({ id: requireString(entry.id, 'action id'), label: requireString(entry.label, 'action label'), tooltip: requireString(entry.tooltip, 'action tooltip'), command: requireString(entry.command, 'action command'), arguments: Object.freeze([...entry.arguments]), ...(entry.icon === undefined ? {} : { icon: requireString(entry.icon, 'action icon') }), ...(entry.enabled === undefined ? {} : { enabled: entry.enabled }) });
 	}));
+}
+
+function requireContextKeys(value: unknown): Readonly<Record<string, boolean>> {
+	const record = requireRecord(value, 'multi-diff context keys');
+	if (Object.keys(record).length > 64 || Object.entries(record).some(([key, flag]) => !key || key.length > 128 || typeof flag !== 'boolean')) {
+		throw new TypeError('Invalid multi-diff context keys');
+	}
+	return Object.freeze({ ...record }) as Readonly<Record<string, boolean>>;
 }
 
 function requireMultiDiffSource(value: unknown): MultiDiffEditorSource {

@@ -12,7 +12,7 @@ import { type EditorPaneCreationOptions, EditorPane } from '../../../../workbenc
 import { isEditorPaneWithViewState, type IEditorPaneWithViewState } from '../../../../workbench/browser/parts/editor/editorWithViewState.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
-import type { MultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import type { MultiDiffEditorInput, MultiDiffEditorInputItem } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -161,17 +161,17 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	}
 
 	public restoreViewState(state: unknown): void {
-		this.viewState = state;
 		const pane = this.comparison.value;
 		if (state != null && pane && isEditorPaneWithViewState(pane)) {
 			pane.restoreViewState(state);
 		}
+		this.viewState = state;
 	}
 
 	public async getFileChange(resource: URI): Promise<ISessionFileChange | undefined> {
 		const comparison = this.comparisonInput;
 		const input = this.input;
-		if (!this.visible || !input || !comparison?.items.some(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, resource))) { return undefined; }
+		if (!this.visible || !input || !comparison || !this.findComparisonItem(resource)) { return undefined; }
 		const id = resource.path.split('/')[1];
 		if (!id) { return undefined; }
 		const sessionResource = new SessionChangesEditorInput(input.resource).sessionResource;
@@ -184,7 +184,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	public expand(resource: URI): void { this.setFileCollapsed(resource, false); }
 
 	private setFileCollapsed(resource: URI, collapsed: boolean): void {
-		const item = this.comparisonInput?.items.find(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, resource));
+		const item = this.findComparisonItem(resource);
 		const pane = this.comparison.value;
 		if (!item || !pane || !isEditorPaneWithViewState(pane)) { return; }
 		const state = pane.saveViewState() as MultiDiffEditorViewState;
@@ -192,6 +192,12 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		const id = multiDiffEditorItemKey(item);
 		if (collapsed) { ids.add(id); } else { ids.delete(id); }
 		pane.restoreViewState({ ...state, collapsedItemIds: [...ids] });
+	}
+
+	private findComparisonItem(resource: URI): MultiDiffEditorInputItem | undefined {
+		const query = new URLSearchParams(resource.query);
+		const modified = query.has('side') ? resource : resource.with({ query: `${resource.query}&side=after` });
+		return this.comparisonInput?.items.find(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, modified));
 	}
 
 	private async refresh(signal?: AbortSignal): Promise<void> {
@@ -240,6 +246,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 					if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 					return {
 						label: change.file.path, binary: contents.binary,
+						contextKeys: { 'sessions.changesCanPreview': change.summary.captureState === 'sealed' && !change.summary.committedPaths.includes(change.file.path) && change.summary.commitState !== 'queued' && change.summary.commitState !== 'committing' },
 						original: { resource: change.originalUri, initialText: contents.before ?? '', readOnly: true },
 						modified: { resource: change.modifiedUri, initialText: contents.after ?? '', readOnly: true }
 					};

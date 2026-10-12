@@ -24,6 +24,7 @@ import { IStorageService } from '../../../src/ash/platform/storage/common/storag
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { AgentTraceEditor } from '../../../src/ash/workbench/contrib/trace/browser/agentTraceEditor.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { ITraceService } from '../../../src/ash/workbench/services/trace/common/traceService.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/services/themes/browser/browserHostColorSchemeService.js';
@@ -61,6 +62,13 @@ services.registerInstance(IChatService, {
 	onDidUpdateThread: Event.None,
 	onDidBecomeReady: Event.None,
 } as unknown as IChatService);
+const rejectLiveRead = async (): Promise<never> => { throw new Error('Imported trace fixtures must not read live captures'); };
+services.registerInstance(ITraceService, {
+	readTrace: rejectLiveRead,
+	readTraceDiagnostics: rejectLiveRead,
+	readTracePayload: rejectLiveRead,
+	readTraceGraph: rejectLiveRead,
+});
 const themes = resources.add(services.createInstance(WorkbenchThemeService, root));
 themes.initialize();
 services.registerInstance(IThemeService, themes);

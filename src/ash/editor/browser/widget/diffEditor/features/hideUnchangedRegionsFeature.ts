@@ -94,12 +94,13 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		return this.options.enabled;
 	}
 
-	public setOptions(options: HideUnchangedRegionsOptions): void {
-		validateOptions(options);
-		if (sameOptions(this.options, options)) return;
-		this.options = options;
-		if (options.enabled && !this.source.value) this.connectSource();
-		if (!options.enabled) this.source.clear();
+	public setOptions(options: Partial<HideUnchangedRegionsOptions>): void {
+		const updated = { ...this.options, ...options };
+		validateOptions(updated);
+		if (sameOptions(this.options, updated)) return;
+		this.options = updated;
+		if (updated.enabled && !this.source.value) this.connectSource();
+		if (!updated.enabled) this.source.clear();
 		this.recompute();
 	}
 
