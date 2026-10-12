@@ -131,6 +131,7 @@ import { IStorageService, WillSaveStateReason, StorageScope } from "../../platfo
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from "../../platform/workspace/common/workspace.js";
 import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
+import { IMarkerService, MarkerService } from '../../platform/markers/common/markers.js';
 import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
 import { SessionFileService } from '../contrib/providers/agentHost/browser/sessionFileService.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -397,6 +398,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ISessionGroupsService, this._register(services.createInstance(SessionGroupsService)));
 		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
 		services.registerInstance(IWorkspaceContextService, workspace);
+		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		const files = this._register(services.createInstance(SessionFileService, options.api));
 		const fileService = this._register(services.createInstance(FileService));
 		this._register(userDataFileSystemProvider);
