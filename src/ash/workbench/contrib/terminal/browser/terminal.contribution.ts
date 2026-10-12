@@ -30,6 +30,7 @@ import { TerminalConfigurationService } from './terminalConfigurationService.js'
 import { TerminalProfileService } from './terminalProfileService.js';
 import { TerminalService } from './terminalService.js';
 import { TerminalMainContribution } from './terminalMainContribution.js';
+import { IEnvironmentVariableService } from '../common/environmentVariable.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 
@@ -58,7 +59,7 @@ registerWorkbenchServiceContribution({
 
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileResolverService,
-	dependencies: [ITerminalProfileService, ITerminalProcessService, IConfigurationService, IConfigurationResolverService, IWorkspaceContextService],
+	dependencies: [ITerminalProfileService, ITerminalProcessService, IConfigurationService, IConfigurationResolverService, IWorkspaceContextService, IEnvironmentVariableService],
 	install: context => context.register(context.container.createInstance(BrowserTerminalProfileResolverService)),
 });
 

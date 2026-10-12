@@ -7,6 +7,10 @@ import type { ITerminalProfile } from "../../../services/terminal/browser/termin
 export function terminalProfileIcon(profile: Pick<ITerminalProfile, "profileId" | "icon"> | undefined): Icon {
 	if (profile?.icon && getLxiconDefinition(profile.icon.id)) return profile.icon;
 	switch (profile?.profileId) {
+		case "powershell":
+		case "windows-powershell":
+		case "pwsh":
+			return Lxicon.terminalPowershell;
 		case "cmd":
 		case "command-prompt":
 			return Lxicon.terminalCmd;

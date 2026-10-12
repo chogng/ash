@@ -162,10 +162,12 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 			errors.push({ code: 'unsupportedYaml', range: nodeRange, message: localize('prompt.syntax.unsupported', 'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.') });
 			return { type: 'scalar', value: '', format: 'none', range: nodeRange };
 		}
-		if (isMap(node)) return { type: 'map', range: nodeRange, properties: node.items.flatMap(pair => {
-			const key = convert(isNode(pair.key) ? pair.key : undefined, depth + 1);
-			return key.type === 'scalar' ? [{ key, value: convert(isNode(pair.value) ? pair.value : undefined, depth + 1) }] : [];
-		}) };
+		if (isMap(node)) return {
+			type: 'map', range: nodeRange, properties: node.items.flatMap(pair => {
+				const key = convert(isNode(pair.key) ? pair.key : undefined, depth + 1);
+				return key.type === 'scalar' ? [{ key, value: convert(isNode(pair.value) ? pair.value : undefined, depth + 1) }] : [];
+			})
+		};
 		if (isSeq(node)) return { type: 'sequence', range: nodeRange, items: node.items.map(item => convert(isNode(item) ? item : undefined, depth + 1)) };
 		const format = isScalar(node) ? ({ QUOTE_SINGLE: 'single', QUOTE_DOUBLE: 'double', BLOCK_LITERAL: 'literal', BLOCK_FOLDED: 'folded', PLAIN: 'none' } as const)[node.type ?? 'PLAIN'] : 'none';
 		return { type: 'scalar', value: isScalar(node) ? String(node.value ?? '') : '', format, range: nodeRange };

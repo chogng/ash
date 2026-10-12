@@ -1,3 +1,4 @@
+import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
 import { ShellQuoting } from '../../common/taskService.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
@@ -391,6 +392,7 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 
 function registerTaskProfiles(services: InstantiationService): void {
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
+	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: { applyToProcessEnvironment: async () => { } }, onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
 	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 }
 

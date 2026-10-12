@@ -24,6 +24,28 @@ export function createApi(configuration, initialization) {
 	}
 	const pending = new Map();
 	let subscriptions;
+	const environmentMutators = new Map();
+	let environmentPersistent = true;
+	const environmentVariableCollection = Object.freeze({
+		get persistent() { return environmentPersistent; },
+		set persistent(value) {
+			if (typeof value !== 'boolean') throw new TypeError('Environment collection persistence must be a boolean');
+			environmentPersistent = value;
+		},
+		replace(variable, value) { setEnvironmentMutator(variable, value, 1); },
+		append(variable, value) { setEnvironmentMutator(variable, value, 2); },
+		prepend(variable, value) { setEnvironmentMutator(variable, value, 3); },
+		get(variable) { return environmentMutators.get(variable); },
+		delete(variable) { environmentMutators.delete(variable); },
+		clear() { environmentMutators.clear(); },
+		forEach(callback, thisArg) { environmentMutators.forEach((mutator, variable) => callback.call(thisArg, variable, mutator, environmentVariableCollection)); },
+		[Symbol.iterator]() { return environmentMutators[Symbol.iterator](); },
+	});
+	function setEnvironmentMutator(variable, value, type) {
+		if (typeof variable !== 'string' || !variable || variable.length > 32768 || /[=\0]/.test(variable) || typeof value !== 'string' || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid terminal environment mutator');
+		if (!environmentMutators.has(variable) && environmentMutators.size >= 1024) throw new RangeError('Terminal environment collection quota exceeded');
+		environmentMutators.set(variable, Object.freeze({ value, type }));
+	}
 	let providerSequence = 0;
 	let activeEditor;
 	const editorContexts = new Map();
@@ -1492,6 +1514,7 @@ export function createApi(configuration, initialization) {
 				const declaration = configuration.manifest?.contributes?.terminalProfiles?.find(profile => profile.id === id);
 				if (!declaration || typeof provider?.provideTerminalProfile !== 'function') throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
 				const handle = ashTerminals.registerTerminalProfileProvider(`vscode.terminalProfile.${++providerSequence}`, id, declaration.title, {
+					getEnvironmentVariableCollection: () => ({ persistent: environmentPersistent, map: [...environmentMutators] }),
 					createTerminalProfile: context => invoke(async () => {
 						const profile = await provider.provideTerminalProfile(context.cancellationToken);
 						if (profile === undefined || profile === null) return undefined;
@@ -1642,6 +1665,7 @@ export function createApi(configuration, initialization) {
 			// Keep the runtime subscription array: host retirement disposes this exact owner.
 			const publicContext = Object.freeze({
 				subscriptions,
+				environmentVariableCollection,
 				extensionUri,
 				extensionPath: extensionUri.fsPath,
 				extensionMode: 1,

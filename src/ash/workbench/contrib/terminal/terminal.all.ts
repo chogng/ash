@@ -1,5 +1,6 @@
 // One product loading boundary; each feature keeps its own registration owner.
 import './browser/terminal.contribution.js';
+import './common/environmentVariable.contribution.js';
 import '../terminalContrib/voice/browser/terminal.voice.contribution.js';
 import '../terminalContrib/links/browser/terminal.links.contribution.js';
 import '../terminalContrib/find/browser/terminal.find.contribution.js';

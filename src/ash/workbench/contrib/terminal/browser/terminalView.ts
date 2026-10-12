@@ -233,7 +233,13 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private updateProfiles(): void {
-		this.titleActions.setProfiles([...this.profileService.availableProfiles, ...this.profileService.contributedProfiles.map(profile => ({ profileId: `extension:${profile.extensionIdentifier}/${profile.id}`, title: profile.title, isDefault: this.profileService.getDefaultProfileName() === profile.title }))]);
+		const profiles = this.profileService.availableProfiles.map(profile => {
+			const shell: IShellLaunchConfig = { executable: profile.path, args: profile.args, icon: profile.icon };
+			const os = this.processes.operatingSystem;
+			if (os !== undefined) this.profileResolver.resolveIcon(shell, os);
+			return { ...profile, icon: shell.icon };
+		});
+		this.titleActions.setProfiles([...profiles, ...this.profileService.contributedProfiles.map(profile => ({ profileId: `extension:${profile.extensionIdentifier}/${profile.id}`, title: profile.title, isDefault: this.profileService.getDefaultProfileName() === profile.title }))]);
 	}
 
 	public async relaunchActive(): Promise<void> {

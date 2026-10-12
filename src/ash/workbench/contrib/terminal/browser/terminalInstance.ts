@@ -7,7 +7,6 @@ import { CancellationError, isCancellationError, onUnexpectedError } from '../..
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import {
-	ITerminalProcessService,
 	TerminalLocation,
 	ProcessPropertyType,
 	type IShellLaunchConfig,
@@ -21,7 +20,8 @@ import {
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ITerminalCommandStatusEvent, ITerminalContribution, ITerminalDimensions, ITerminalInstance, ITerminalProfile, TerminalInstanceState } from '../../../services/terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from './terminalExtensions.js';
-import { TerminalProcessManager } from './terminalProcessManager.js';
+import type { AgentHostPty } from './agentHostPty.js';
+import type { AgentHostTerminalService } from './agentHostTerminalService.js';
 import { XtermTerminal } from './xterm/xtermTerminal.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
@@ -52,7 +52,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private pendingScreenBytes = 0;
 	private screenDataTruncated = false;
 	private readonly shellLifetime = this._register(new MutableDisposable<DisposableStore>());
-	private shellProcessManager: TerminalProcessManager | undefined;
+	private shellProcessManager: AgentHostPty | undefined;
 	private screen: XtermTerminal | undefined;
 	private screenInitialization: Promise<XtermTerminal | undefined> | undefined;
 	private readonly contributions = this._register(new DisposableMap<string, ITerminalContribution>());
@@ -84,7 +84,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private closeTask: Promise<void> | undefined;
 	private processCloseTask: Promise<void> | undefined;
 	private relaunchTask: Promise<void> | undefined;
-	private serverTerminalId: string;
 	private _profile: ITerminalProfile;
 	private customIcon: ThemeIcon | undefined;
 	private _title: string;
@@ -100,7 +99,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		private readonly instanceNumber: number,
 		readonly dirId: string,
 		private readonly processWorkspaceFolderId: string | undefined,
-		serverTerminalId: string,
+		child: AgentHostPty | undefined,
 		private processReady: ITerminalProcessReady,
 		title: string,
 		profile: ITerminalProfile,
@@ -114,11 +113,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		private initialText: IShellLaunchConfig['initialText'],
 		private waitOnExit: IShellLaunchConfig['waitOnExit'],
 		private dimensions: ITerminalDimensions,
-		@ITerminalProcessService private readonly processService: ITerminalProcessService,
+		private readonly backend: AgentHostTerminalService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this.serverTerminalId = serverTerminalId;
+		this.shellProcessManager = child;
 		this._profile = profile;
 		this._title = title;
 		this.resource = getTerminalUri(generateUuid(), instanceNumber, title);
@@ -248,7 +247,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.customLifetime.value = lifetime;
 		lifetime.add(process);
 		lifetime.add(process.onProcessData(data => {
-			const event: IProcessDataEvent = { data: VSBuffer.fromString(data).buffer, trackCommit: false };
+			const event: IProcessDataEvent = typeof data === 'string' ? { data: VSBuffer.fromString(data).buffer, trackCommit: false } : data;
 			this.writeScreenData(event.data);
 			// The PTY can write inside open(), before the view owns its xterm widget.
 			if (!this._onDidWriteData.hasListeners() || this.pendingOutput.length > 0) {
@@ -297,7 +296,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			const input = screen.raw.onData(data => {
 				if (!this.isReadOnly && !this.closed && this._state === 'running') {
 					if (this.customProcess) this.customProcess.input?.(data);
-					else void this.shellProcessManager!.write(data).catch(onUnexpectedError);
+					else void this.shellProcessManager!.input(data).catch(onUnexpectedError);
 				}
 			});
 			this._register(toDisposable(() => input.dispose()));
@@ -336,13 +335,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		text = text.replace(/\r?\n/g, '\r');
 		if (shouldExecute && !text.endsWith('\r')) { text += '\r'; }
 		if (this.customProcess?.input) {
-			this.customProcess.input(text);
+			await this.customProcess.input(text);
 			return;
 		}
 		if (this.isReadOnly || this.closed || this._state !== 'running' || !this.shellProcessManager) {
 			throw new CancellationError();
 		}
-		await this.shellProcessManager.write(text);
+		await this.shellProcessManager.input(text);
 	}
 
 	public processBinary(data: string): Promise<void> {
@@ -360,7 +359,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			return;
 		}
 		if (!this.closed && this._state === 'running') {
-			void this.shellProcessManager?.setDimensions(dimensions.cols, dimensions.rows).catch(onUnexpectedError);
+			void this.shellProcessManager?.resize(dimensions.cols, dimensions.rows).catch(onUnexpectedError);
 		}
 	}
 
@@ -486,10 +485,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			const process = this.customProcess;
 			return this.processCloseTask ??= Promise.resolve().then(() => process?.shutdown(true));
 		}
-		return this.processCloseTask ??= this.processService.close({
-			...processWorkspaceFolder(this.processWorkspaceFolderId),
-			terminalId: this.serverTerminalId,
-		});
+		return this.processCloseTask ??= this.shellProcessManager!.close();
 	}
 
 	loseConnection(): void {
@@ -583,23 +579,25 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				if (!replacement?.deferStart) this.start();
 				return;
 			}
-			const created = await this.processService.create({
+			const child = await this.backend.createProcess({
 				...processWorkspaceFolder(this.processWorkspaceFolderId),
 				...this.launch,
 				rows: dimensions.rows,
 				cols: dimensions.cols,
 				profile: this.launch?.profile ?? { type: 'profile', profileId: this._profile.profileId },
-			});
+			}, this.instanceNumber);
+			const created = child.creation;
 			if (this.closed) {
-				await this.processService.close({ ...processWorkspaceFolder(this.processWorkspaceFolderId), terminalId: created.terminalId });
+				await child.close();
 				throw new CancellationError();
 			}
-			this.serverTerminalId = created.terminalId;
+
 			this.processReady = created.ready;
 			this.connectionPersistence = created.connectionPersistence;
 			this.processCloseTask = undefined;
 			this._profile = { ...created.profile, icon: replacement?.icon ?? this._profile.icon, color: replacement?.color ?? this._profile.color };
 			this.shellLifetime.clear();
+			this.shellProcessManager = child;
 			this.createShellProcessManager();
 			this._exitCode = undefined;
 			if (!replacement) this.handleProcessData({ data: VSBuffer.fromString(`\r\n${localize('terminal.relaunched', '[terminal relaunched]')}\r\n`).buffer, trackCommit: false });
@@ -615,11 +613,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.statusList.remove('process-error');
 		const lifetime = new DisposableStore();
 		this.shellLifetime.value = lifetime;
-		const manager = this.instantiationService.createInstance(TerminalProcessManager, {
-			...processWorkspaceFolder(this.processWorkspaceFolderId),
-			terminalId: this.serverTerminalId,
-		});
-		this.shellProcessManager = lifetime.add(manager);
+		const manager = this.shellProcessManager!;
+		// The backend owns the child. This instance holds a release lease, not a second disposable owner.
+		lifetime.add(toDisposable(() => { void manager.close().catch(() => { }); }));
+		lifetime.add(manager.onProcessReady(ready => { this.processReady = ready; }));
 		lifetime.add(manager.onProcessError(error => {
 			this.statusList.add({
 				id: 'process-error', severity: Severity.Error,

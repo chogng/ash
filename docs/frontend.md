@@ -176,9 +176,11 @@ iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源
 
 Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench-modes.md)。
 
-Agent Task 闭环回归位于 [task-agent.spec.ts](../test/smoke/areas/tasks/task-agent.spec.ts)，分别覆盖 process 与 shell Task。仅模型 Responses 使用回环 HTTP mock；聊天输入、Agent Core、一次性审批、TaskService、exec-server、PTY 和 Tasks/Terminal 均为真实产品路径。测试读取 Core 工具记录，确认发现、单次启动、Run ID 状态与输出查询、取消、进程退出及保留输出，并覆盖审批拒绝、启动失败、审批期间与运行中的命令权限撤销、窗口关闭后的进程清理、依赖完成前主 Task 不启动、后台 ready 状态、UTF-16 输出分页和终端复用后的 Run 输出隔离；模型不生成 Task 或直接执行命令，不需要模型账户或密钥。
+Agent Task 闭环回归位于 [task-agent.spec.ts](../test/smoke/areas/tasks/task-agent.spec.ts)，分别覆盖 process 与 shell Task。仅模型 Responses 使用回环 HTTP mock；聊天输入、Agent Core、一次性审批、TaskService、exec-server、PTY 和 Tasks/Terminal 均为真实产品路径。测试读取 Core 工具记录，确认发现、单次启动、Run ID 状态与输出查询、取消、进程退出及保留输出，并覆盖审批拒绝、启动失败、审批期间与运行中的命令权限撤销、窗口关闭后的进程清理、依赖完成前主 Task 不启动、后台 ready 状态、UTF-16 输出分页、终端复用后的 Run 输出隔离、依赖失败阻止主 Task 启动、取消多层并行依赖链、后台始终未 ready 和输出截断后的游标恢复；模型不生成 Task 或直接执行命令，不需要模型账户或密钥。
 
 依赖和后台用例通过真实进程读取文件门闩推进，先记录等待中的 Run 状态，再允许依赖结束或输出 ready matcher 的结束行。分页用例以一个 UTF-16 单元为预算读取中文、组合字符和 emoji，沿实际 `nextCursor` 一直读到 EOF，并逐字重建完整原始输出（包含平台 PTY 控制字符）；终端复用用例确认两个 Run 使用同一 Terminal ID、不同进程，并由 Agent 再次读取第一个 Run 的独立输出。游标契约见 [Agent Task 工具](agent-tools-spec.md)。
+
+依赖失败用例从真实子 Run 读取退出码 17，确认主 Run 无终端且未启动进程；依赖链取消用例在两个并行叶子仍运行时取消根 Run，确认叶子退出且中间与主 Task 未启动。后台未 ready 用例跨两轮 Agent 查询保持 `running` / `ready=false`，随后显式取消。截断用例先记录初始游标，再分块输出超过 1,048,576 个 UTF-16 单元的 Unicode 流，每块在真实 Terminal 可见后，通过 Terminal 输入确认再放行下一块，确保超限发生在 Task 保留区；过期游标返回 `truncated=true` 及新的实际起点，Agent 沿返回的 `nextCursor` 读取保留区直到 EOF。
 
 ```sh
 pnpm run smoketest test/smoke/areas/tasks/task-agent.spec.ts
@@ -186,7 +188,7 @@ pnpm run smoketest test/smoke/areas/tasks/task-agent.spec.ts
 pnpm run smoketest-no-compile test/smoke/areas/tasks/task-agent.spec.ts
 ```
 
-[Frontend CI](../.github/workflows/frontend.yml) 在 Windows 和 macOS 的 connected Electron 构建后单独运行这 20 个用例，普通 connected Electron 步骤排除同组测试以避免重复。关闭窗口的用例保留空白测试窗口及独立后端连接，先确认 Task 进程退出、后端仍可响应，再拆卸 fixture。失败诊断沿用 Playwright 报告、trace 和截图，并附加实际 Agent Thread 与 mock 模型交互记录；CI 将这些文件上传到对应的 frontend 诊断 artifact。
+[Frontend CI](../.github/workflows/frontend.yml) 在 Windows 和 macOS 的 connected Electron 构建后单独运行这 28 个用例，普通 connected Electron 步骤排除同组测试以避免重复。关闭窗口的用例保留空白测试窗口及独立后端连接，先确认 Task 进程退出、后端仍可响应，再拆卸 fixture。失败诊断沿用 Playwright 报告、trace 和截图，并附加实际 Agent Thread 与 mock 模型交互记录；CI 将这些文件上传到对应的 frontend 诊断 artifact。
 
 ### UI 场景录屏
 

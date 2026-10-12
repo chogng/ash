@@ -45,6 +45,10 @@ properties[`${TERMINAL_CONFIG_SECTION}.cursorBlinking`] = {
 	get description() { return localize('terminal.config.cursorBlinkingDescription', 'Blink the terminal cursor.'); },
 	ashSetting: { valueType: 'boolean', get title() { return localize('terminal.config.cursorBlinking', 'Terminal cursor blinking'); }, get description() { return localize('terminal.config.cursorBlinkingDescription', 'Blink the terminal cursor.'); } },
 };
+properties[`${TERMINAL_CONFIG_SECTION}.showLinkHover`] = {
+	type: 'boolean', default: true,
+	get description() { return localize('terminal.config.showLinkHover', 'Show a hover with the URL when pointing at a terminal link.'); },
+};
 for (const [name, defaultValue, choices] of [
 	['cursorStyle', 'block', ['block', 'line', 'underline']],
 	['cursorStyleInactive', 'outline', ['outline', 'block', 'line', 'underline', 'none']],

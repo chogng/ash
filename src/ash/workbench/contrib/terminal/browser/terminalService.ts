@@ -6,6 +6,7 @@ import { IWorkspaceContextService } from "../../../../platform/workspace/common/
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService } from "../../../services/terminal/browser/terminal.js";
 import { TerminalInstance } from './terminalInstance.js';
+import { TerminalInstanceService } from './terminalInstanceService.js';
 
 /** Browser Workbench owner of terminal instances and their process lifecycle. */
 export class TerminalService extends Disposable implements ITerminalService {
@@ -17,9 +18,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 	private readonly _onDidChangeActiveInstance = this._register(new Emitter<ITerminalInstance | undefined>());
 	private readonly ownedInstances = this._register(new DisposableMap<string, TerminalInstance>());
 	private _activeInstance: TerminalInstance | undefined;
-	private nextInstanceId = 1;
-	private connectionState: TerminalProcessConnectionState = "ready";
-	private connectionRevision = 0;
+	private readonly instanceFactory: TerminalInstanceService;
+	private get connectionState(): TerminalProcessConnectionState { return this.instanceFactory.backend.connectionState; }
 
 	readonly onDidCreateInstance: Event<ITerminalInstance> = this._onDidCreateInstance.event;
 	readonly onDidDisposeInstance: Event<ITerminalInstance> = this._onDidDisposeInstance.event;
@@ -29,22 +29,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 	constructor(@ITerminalProcessService processService: ITerminalProcessService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		this.processService = processService;
-		this._register(processService.onConnectionState((state) => {
-			this.connectionRevision += 1;
-			this.setConnectionState(state);
-		}));
-		const connectionRevision = this.connectionRevision;
-		void processService.getConnectionState()
-			.then((state) => {
-				if (!this.isDisposed && this.connectionRevision === connectionRevision) {
-					this.setConnectionState(state);
-				}
-			})
-			.catch(() => {
-				if (!this.isDisposed && this.connectionRevision === connectionRevision) {
-					this.setConnectionState('crashed');
-				}
-			});
+		this.instanceFactory = this._register(instantiationService.createInstance(TerminalInstanceService));
+		this._register(this.instanceFactory.backend.onDidChangeConnectionState(state => this.setConnectionState(state)));
 	}
 
 	protected override disposeCore(): void {
@@ -67,110 +53,21 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
-		if (this.isDisposed) {
-			throw new CancellationError();
-		}
-		if (options.config) {
-			const instanceNumber = this.nextInstanceId++;
-			const workspaceFolder = options.dirId === undefined ? undefined : this.requireWorkspaceFolder(options.dirId);
-			const name = options.title ?? options.config.name ?? '';
-			const instance = this.instantiationService.createInstance(TerminalInstance,
-				`terminal-instance-${instanceNumber}`,
-				instanceNumber,
-				workspaceFolder?.id ?? '',
-				workspaceFolder && this.workspaceContext.getWorkspace().folders.length > 1 ? workspaceFolder.id : undefined,
-				'',
-				{ pid: -1, cwd: '' },
-				name,
-				{ profileId: `embedder-${instanceNumber}`, title: name, isDefault: false, icon: options.icon ?? options.config.icon, color: options.color ?? options.config.color },
-				'connectionOwned',
-				name,
-				() => this.connectionState,
-				() => this.removeInstance(instance),
-				() => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
-				{
-					create: options.config.customPtyImplementation,
-					instanceNumber,
-					dimensions: options.dimensions,
-					onTitleChanged: () => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
-				},
-				undefined,
-				options.initialText ?? options.config.initialText,
-				options.waitOnExit ?? options.config.waitOnExit,
-				options.dimensions,
-			);
-			this.ownedInstances.set(instance.id, instance);
-			this._instances.push(instance);
-			try {
-				instance.prepareCustomProcess();
-			} catch (error) {
-				instance.dispose();
-				throw error;
-			}
-			this._onDidCreateInstance.fire(instance);
-			if (this.isDisposed || !this._instances.includes(instance)) {
-				throw new CancellationError();
-			}
-			this.setActiveInstance(instance);
-			if (!options.deferStart) instance.start();
-			this._onDidChangeInstances.fire();
-			return instance;
-		}
-		const workspaceFolder = this.requireWorkspaceFolder(options.dirId);
-		// A Session directory needs its execution route even when it is the only visible folder.
-		const processWorkspaceFolderId = this.workspaceContext.getWorkspace().folders.length > 1 || workspaceFolder.id.startsWith('session:')
-			? workspaceFolder.id
-			: undefined;
-		const environment = options.env === undefined ? undefined : Object.freeze({ ...options.env });
-		const execution = options.execution === undefined ? undefined : Object.freeze(options.execution.type === 'process'
-			? { ...options.execution, args: (typeof options.execution.args === 'string' ? options.execution.args : Object.freeze([...options.execution.args])) }
-			: { ...options.execution });
-		const profile = options.profile.type === 'custom' ? Object.freeze({ ...options.profile, path: Object.freeze([...options.profile.path]), args: (typeof options.profile.args === 'string' ? options.profile.args : Object.freeze([...options.profile.args])) }) : Object.freeze({ ...options.profile });
-		const launch = Object.freeze({
-			...(environment === undefined ? {} : { env: environment }),
-			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-			...(execution === undefined ? {} : { execution }),
+		if (this.isDisposed) throw new CancellationError();
+		const instance = await this.instanceFactory.createInstance(options, {
+			getConnectionState: () => this.connectionState,
+			onClosed: instance => this.removeInstance(instance),
+			onTitleChanged: () => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
 		});
-		const created = await this.processService.create({
-			...processWorkspaceFolder(processWorkspaceFolderId),
-			rows: options.dimensions.rows,
-			cols: options.dimensions.cols,
-			profile,
-			...(environment === undefined ? {} : { env: environment }),
-			...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
-			...(execution === undefined ? {} : { execution }),
-		});
-		// A completed backend request still owns a PTY even if its window has closed.
-		if (this.isDisposed) {
-			await this.processService.close({ ...processWorkspaceFolder(processWorkspaceFolderId), terminalId: created.terminalId });
-			throw new CancellationError();
-		}
-		const instanceNumber = this.nextInstanceId++;
-		const instance = this.instantiationService.createInstance(TerminalInstance,
-			`terminal-instance-${instanceNumber}`,
-			instanceNumber,
-			workspaceFolder.id,
-			processWorkspaceFolderId,
-			created.terminalId,
-			created.ready,
-			options.title ?? terminalProfileTitle(created.profile),
-			{ ...created.profile, icon: options.icon, color: options.color },
-			created.connectionPersistence,
-			options.title,
-			() => this.connectionState,
-			() => this.removeInstance(instance),
-			() => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
-			undefined,
-			Object.freeze({ ...launch, profile: profile.type === 'custom' ? profile : { type: 'profile' as const, profileId: created.profile.profileId } }),
-			options.initialText,
-			options.waitOnExit,
-			options.dimensions,
-		);
+		if (this.isDisposed) { await instance.close(); throw new CancellationError(); }
 		this.ownedInstances.set(instance.id, instance);
 		this._instances.push(instance);
+		try { instance.prepareCustomProcess(); }
+		catch (error) { instance.dispose(); throw error; }
 		this.refreshInstanceTitles();
 		if (options.deferStart && this.connectionState !== 'ready') instance.loseConnection();
 		this._onDidCreateInstance.fire(instance);
+		if (this.isDisposed || !this._instances.includes(instance)) throw new CancellationError();
 		this.setActiveInstance(instance);
 		if (!options.deferStart) instance.start();
 		this._onDidChangeInstances.fire();
@@ -250,8 +147,6 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	private setConnectionState(state: TerminalProcessConnectionState): void {
-		if (this.connectionState === state) return;
-		this.connectionState = state;
 		if (state === "ready") {
 			for (const instance of this._instances) instance.restoreConnection();
 			return;
@@ -267,10 +162,6 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");
 		return folder;
 	}
-}
-
-function processWorkspaceFolder(dirId: string | undefined): { readonly dirId?: string; } {
-	return dirId === undefined ? {} : { dirId };
 }
 
 function terminalProfileTitle(profile: ITerminalProfile): string {

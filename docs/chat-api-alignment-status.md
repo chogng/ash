@@ -131,16 +131,13 @@ Agent 通知边界追加准入：既有 platform/agentHost/common/agentService.t
 
 共享工作区本轮另一任务执行了 rebase，并把部分本批初始修改带入其 Terminal 提交。仅合并 ChatInputPart 中双方的帮助与建议上下文内容，保留其他任务的源代码和分支操作；本批后续差异仍在当前 checkout。
 
-
 ## 持久媒体与连续补全（2026-10-12）
 
 用户阅读历史图片/音频或工具媒体结果 → ChatListItems 保留已有 ThreadItem / ChatContentPart 与所属 Session/Thread → ChatAttachmentsContentPart → IAgentThreadService.readAttachment → 原 App Server ProtocolClient → attachment/resource/open → 既有 read_session_thread 与 Attachments 验证 → 原 ResourceStore 的连接所属 handle → 原 resource/read/release → Blob URL 与图片/音频控件。输入和工具媒体均由原 Rust 附件存储拥有；前端组件只拥有加载取消、播放和 object URL，移除/切换/断线不把迟到字节装入新行。不以客户端 digest 或 URL 提供任意存储访问。
 
 准确修改范围：既有 crates/attachments/src/{service.rs,audio.rs} 公开实际读取消费的验证端口；crates/app-server-protocol/src/protocol/{attachments.rs,registry.rs} 增加 Item 定位的媒体 resource 请求，现有生成器更新协议/schema/decoder；crates/app-server/src/{server.rs,server/attachment_operations.rs} 沿现有 Session/Thread 校验和 ResourceStore 接入，不新建 owner。验证追加 server/attachment_operations_tests.rs 并在 server.rs 注册 sibling test（Rust 独立测试文件），使用真实已存储用户与工具媒体、连接隔离、错误 Session/Thread/Item/index、取消与字节校验。platform/agentHost/common/agentService.ts 与 browser/appServerAgentService.ts 增加领域 readAttachment，复用原 readAppServerResource，不将 DTO 或 resource ID 暴露给产品。共用媒体展示落到上游同路径 browser/widget/chatContentParts/chatAttachmentsContentPart.ts，使用既有 DI 和原 Browser 控件，不复制上游内部实现；样式只追加现有 chatMarkdownPart.css 的该组件职责。已确认 chatListItems.ts / ChatListWidget、现有 toolInvocationPart、Sessions ChatWidgetModel 传递原线程身份；现有 Chat/agentHost/browser fixtures 验证真实读取、媒体、迟到回包、释放、键盘、主题和中文。其他模块改动保留。
 
-
 媒体验证结果：真实 Rust 持久图片、音频和工具结果的 Item 读取测试通过，资源拒绝其他连接，错误 Session/Item/index 不建立可用 handle。3 个前端套件 107 项通过；Chromium 历史/工具媒体、音频播放与释放、迟到读取取消等 11 项通过，另补同一 Thread 快照刷新时保留播放和 blob URL 的回归。协议生成、协议类型检查与协议测试通过；App Server warnings 检查通过。媒体读取沿 IAgentThreadService / 原 resource 适配器，UI 只在用户加载时创建 object URL，取消后仍由原 helper 释放晚到 resource；断线不会向新代次释放旧 handle。后续继续闭合流式 Markdown 与 Prompt，不将媒体通过作为整个任务结束。
-
 
 ## 流式 Markdown 准入
 
@@ -173,3 +170,7 @@ Hover 追加验证发现当前通用 ContentHoverController 尚未消费 MarkerS
 准确范围追加：既有 parser 的 PromptBody 仅解析实际 provider 消费的正文文件引用，使用当前 Ash Marked lexer 跳过代码/HTML，不创建未消费的变量 API；缺失 promptLinkProvider.ts 按上游同路径创建并在原 PromptLanguageFeaturesProvider 注册。既有 promptsServiceImpl.ts 的已发现 URI registry 允许该 Skill 内衍生资源 URI，并保留来源、摘要与 Session；不接受其他窗口或 query 更改的 URI。已确认 platform/agentHost/common/appServerApi.ts 与 browser/appServerApi.ts 把 readInstructions 唯一入口迁为实际生产读取的 readTextResource(reference,path,signal,sessionId)，沿原 Resource helper 验证与释放，只消费 text MIME / UTF-8。所有既有调用与 fake implementation 同批迁移（rg readInstructions 的 Skills/Sessions/agentHost tests 和 fixture）；无新旧 API 并存。
 
 PromptLanguageFeaturesProvider 通过既有 ITextModelService 注册 private scheme 的 Skill authority 文本，IModelService 仍唯一拥有模型，resolver 仍引用计数与只读模型；提供者释放取消 pending parse，不创建第二份正文缓存。ExtensionsEditor 的既有 Skill Instructions 预览传入 parsed body source，链接绑定原 Skill URI；Open instructions 直接打开原只读 URI，退出失去来源的 untitled copy。extensionsEditor.ts 只改这条 Skill 读取/打开链和原 renderDocument 的 Skill source URI 转换，包 README owner 保留；该仅 Ash 编辑器归属已在台账确认。验证使用既有 PromptsService/parser/provider/agentHost/Extensions 测试，正文 Markdown 引用、CRLF、代码排除、精确范围、相对嵌套、source/digest/Session、权限失败、取消/释放与中文仍沿真实入口；其他能力保持只读。
+
+流式 Markdown 图片布局追加准入：既有 ChatMarkdownContentPart 补充上游已有 onDidChangeHeight 公开事件，当前 render snapshot 的异步资源回调和本 part root 捕获的 img load 触发高度变化；原 ChatListWidget 使用原 ScrollableElement 的滚动事件维护跟随状态并在资源加载时布局，不改变滚动 owner。测试仍限当前 widget/browser transcript，覆盖追加时只读取一次工作区图片、实际图片解码、用户阅读位置、移除后的 URL 释放和安全链接回调；不把 Base 的图片生命周期搬到 Chat。
+
+资源关闭边界追加准入：持久媒体与 Skill IO 完成后，mint connection resource 前必须重新在 ConnectionState 锁内检查 closed，并持锁完成短暂的 ResourceStore.create。否则旧连接关闭清理与慢读取完成之间可能建立无人可释放的晚到 handle。仅追加 attachment_operations.rs 和双方现有 skill_operations.rs 的 mint hunk，保持 state → resources 的关闭锁顺序；不持连接锁执行文件或外部网络 IO。验证沿既有 App Server media/Skill 测试，并保留前端 generation / abort 回归。

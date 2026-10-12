@@ -1,5 +1,6 @@
 import './media/chatMarkdownPart.css';
-import { h } from '../../../../../../base/browser/dom.js';
+import { Emitter } from '../../../../../../base/common/event.js';
+import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { MarkdownElement, type MarkdownElementOptions } from '../../../../../../base/browser/markdownRenderer.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -16,6 +17,8 @@ interface RenderedBlock {
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
 export class ChatMarkdownContentPart extends Disposable {
 	public readonly domNode: HTMLElement;
+	private readonly changedHeight = this._register(new Emitter<void>());
+	public readonly onDidChangeHeight = this.changedHeight.event;
 	private readonly current = this._register(new MutableDisposable<DisposableStore>());
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
@@ -26,6 +29,7 @@ export class ChatMarkdownContentPart extends Disposable {
 		super();
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part';
+		this._register(addDisposableListener(this.domNode, 'load', event => { if ((event.target as Element).tagName === 'IMG') this.changedHeight.fire(); }, true));
 		this._register(toDisposable(() => { this.images.clear(); this.blocks = []; this.domNode.remove(); }));
 		const markdown = typeof options.markdown === 'string' ? { value: options.markdown } : options.markdown ?? { value: '' };
 		this.render(markdown, options.fillInIncompleteTokens ?? false);
@@ -51,6 +55,7 @@ export class ChatMarkdownContentPart extends Disposable {
 		try {
 			const rendered = lifetime.add(new MarkdownElement({
 				...this.options, markdown, fillInIncompleteTokens,
+				asyncRenderCallback: () => { this.options.asyncRenderCallback?.(); this.changedHeight.fire(); },
 				imageResourceLoader: this.options.imageResourceLoader ? resource => {
 					const key = resource.toString();
 					images.add(key);

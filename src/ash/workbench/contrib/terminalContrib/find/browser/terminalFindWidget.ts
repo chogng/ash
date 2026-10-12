@@ -17,6 +17,7 @@ import './media/terminalFind.css';
 
 /** Owns query controls for one retained terminal; xterm owns matches and selection. */
 export class TerminalFindWidget extends Disposable {
+	readonly id = 'find';
 	private readonly domNode: HTMLElement;
 	private readonly input: InputBox;
 	private readonly resultDomNode: HTMLElement;
@@ -27,6 +28,8 @@ export class TerminalFindWidget extends Disposable {
 	private readonly previous: Button;
 	private readonly next: Button;
 	private readonly screen: IXtermTerminal;
+	attach(container: HTMLElement): void { container.append(this.domNode); }
+
 	private searchGeneration = 0;
 	private invalidRegex = false;
 
@@ -43,7 +46,8 @@ export class TerminalFindWidget extends Disposable {
 		this.domNode.className = 'ash-terminal-find';
 		this.domNode.hidden = true;
 		this.domNode.setAttribute('aria-label', localize('terminal.find.label', 'Find in terminal'));
-		this.screen.element.append(this.domNode);
+		const attachment = this.screen.attachWidget(this);
+		if (attachment) this._register(attachment);
 		this._register(toDisposable(() => {
 			this.searchGeneration++;
 			if (!this.screen.isDisposed) { this.screen.clearSearchDecorations(); }

@@ -2,6 +2,8 @@ import { CommandsRegistry, type ICommandService } from '../../../../../platform/
 import type { ISCMService } from '../../../../../workbench/contrib/scm/common/scm.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { mock } from 'node:test';
+import { setImmediate as yieldEventLoop } from 'node:timers/promises';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -280,6 +282,39 @@ suite('Session GitHub associations', () => {
 		await pending.complete(pullRequest);
 		await refreshed;
 		assert.deepEqual(context.service.getSessionPullRequests('session'), []);
+	});
+
+	test('coalesces session refreshes until canceled GitHub requests retire', async () => {
+		const referencesChanged = new Emitter<string>();
+		const pending = new DeferredPromise<Awaited<ReturnType<IGitHubService['listAccounts']>>>();
+		let reads = 0;
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			using context = fixture({
+				onDidChangeSessionPullRequests: referencesChanged.event,
+				listAccounts: async () => { reads++; return reads === 1 ? pending.p : []; },
+			});
+			context.service.initialize();
+			mock.timers.tick(0);
+			assert.equal(reads, 1);
+			// Deliver notifications in separate scheduler turns while transport cancellation is pending.
+			for (let notification = 0; notification < 150; notification++) {
+				referencesChanged.fire('session');
+				mock.timers.tick(0);
+			}
+			assert.equal(reads, 1);
+			const refreshed = context.nextChange();
+			await pending.complete([]);
+			await yieldEventLoop();
+			mock.timers.tick(0);
+			await refreshed;
+			assert.equal(reads, 2);
+			assert.deepEqual(context.service.getSessionPullRequests('session'), []);
+		} finally {
+			mock.timers.reset();
+			referencesChanged.dispose();
+			if (!pending.isSettled) await pending.complete([]);
+		}
 	});
 
 	test('disposing the owner cancels the in-flight GitHub request', async () => {

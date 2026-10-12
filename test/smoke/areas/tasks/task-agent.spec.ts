@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import type { AppServerProtocolClient } from '../../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
@@ -15,7 +15,7 @@ interface TaskSession {
 const pagePayload = 'a😀中éb😀终';
 const firstPayload = 'FIRST_RUN_ONLY 😀';
 const secondPayload = 'SECOND_RUN_ONLY 中';
-type TaskScenario = 'loop' | 'dependencies' | 'background' | 'pages' | 'reuse';
+type TaskScenario = 'loop' | 'dependencies' | 'background' | 'pages' | 'reuse' | 'dependency-failure' | 'dependency-cancel' | 'background-pending' | 'truncated';
 
 const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'shell'; startupFailure: boolean; mockModel: TaskAgentModelFixture; taskSession: TaskSession; }>({
 	taskScenario: ['loop', { option: true }],
@@ -24,22 +24,36 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 	testWorkspace: async ({ testWorkspace, taskKind, startupFailure, taskScenario }, use) => {
 		const directory = testWorkspace.directory;
 		await mkdir(join(directory, '.vscode'), { recursive: true });
-		const presentation = { echo: taskScenario !== 'pages' && taskScenario !== 'reuse', reveal: 'always', focus: false, panel: taskScenario === 'reuse' ? 'shared' : 'new', clear: taskScenario === 'reuse' };
+		const presentation = { echo: taskScenario !== 'pages' && taskScenario !== 'reuse' && taskScenario !== 'truncated', reveal: 'always', focus: false, panel: taskScenario === 'reuse' ? 'shared' : 'new', clear: taskScenario === 'reuse' };
 		const root = { label: taskLabel, type: taskKind, command: startupFailure ? 'ash-task-fixture-missing-executable-7f0c2' : 'node', args: ['task-loop.cjs'], presentation };
 		let tasks: unknown[] = [root];
 		const starts = "fs.appendFileSync('task-starts.jsonl', JSON.stringify({pid:process.pid}) + String.fromCharCode(10));";
 		let script = "const fs = require('node:fs'); " + starts + "console.log('" + taskMarker + " pid=' + process.pid + ' 😀'); setInterval(() => console.log('TASK_TICK pid=' + process.pid), 500);";
-		if (taskScenario === 'dependencies') {
+		if (taskScenario === 'dependencies' || taskScenario === 'dependency-failure') {
 			tasks = [{ ...root, dependsOn: 'Mock Agent Prepare', dependsOrder: 'sequence' }, { label: 'Mock Agent Prepare', type: taskKind, command: 'node', args: ['task-prepare.cjs'], presentation }];
 			await writeFile(join(directory, 'task-prepare.cjs'), "const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid}) + String.fromCharCode(10)); fs.appendFileSync('task-order.txt', 'prepare-start\\n'); const timer = setInterval(() => { if (fs.existsSync('prepare-release')) { clearInterval(timer); fs.appendFileSync('task-order.txt', 'prepare-finish\\n'); fs.writeFileSync('prepare-finished', 'done'); } }, 25);");
+			if (taskScenario === 'dependency-failure') {
+				await writeFile(join(directory, 'task-prepare.cjs'), "const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid}) + String.fromCharCode(10)); console.error('DEPENDENCY_WAITING'); const timer = setInterval(() => { if (fs.existsSync('failure-release')) { clearInterval(timer); console.error('DEPENDENCY_FAILED_EXIT_17'); process.exitCode = 17; } }, 25);");
+			}
 			await writeFile(join(directory, 'dependency-starts.jsonl'), '');
 			await writeFile(join(directory, 'task-order.txt'), '');
 			script = "const fs = require('node:fs'); if (!fs.existsSync('prepare-finished')) throw new Error('Root started before dependency completion'); fs.appendFileSync('task-order.txt', 'root-start\\n'); " + script.replace("const fs = require('node:fs'); ", '');
-		} else if (taskScenario === 'background') {
+		} else if (taskScenario === 'dependency-cancel') {
+			tasks = [{ ...root, dependsOn: 'Mock Agent Prepare' }, { ...root, label: 'Mock Agent Prepare', args: ['task-middle.cjs'], dependsOn: ['Mock Agent Leaf A', 'Mock Agent Leaf B'], dependsOrder: 'parallel' }, ...['A', 'B'].map(leaf => ({ ...root, label: 'Mock Agent Leaf ' + leaf, args: ['task-leaf.cjs', leaf] }))];
+			await writeFile(join(directory, 'task-middle.cjs'), "require('node:fs').writeFileSync('middle-started', 'unexpected');");
+			await writeFile(join(directory, 'task-leaf.cjs'), "const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid, leaf:process.argv[2]}) + String.fromCharCode(10)); setInterval(() => console.log('LEAF_' + process.argv[2] + ' pid=' + process.pid), 100);");
+			await writeFile(join(directory, 'dependency-starts.jsonl'), '');
+		} else if (taskScenario === 'background' || taskScenario === 'background-pending') {
 			tasks = [{ ...root, isBackground: true, problemMatcher: { owner: 'task-regression', pattern: { regexp: '^(.*):(\\d+):(.*)$', file: 1, line: 2, message: 3 }, background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' } } }];
 			script = "const fs = require('node:fs'); " + starts + "console.log('BUILD'); console.log('" + taskMarker + " pid=' + process.pid); const timer = setInterval(() => { if (fs.existsSync('ready-release')) { clearInterval(timer); console.log('READY'); } }, 25); setInterval(() => console.log('TASK_TICK pid=' + process.pid), 500);";
+			if (taskScenario === 'background-pending') {
+				script = "const fs = require('node:fs'); " + starts + "console.log('BUILD'); console.log('" + taskMarker + " pid=' + process.pid); setInterval(() => console.log('STILL_BUILDING pid=' + process.pid), 100);";
+			}
 		} else if (taskScenario === 'pages') {
 			script = "const fs = require('node:fs'); " + starts + 'process.stdout.write(' + JSON.stringify(pagePayload) + ');';
+		} else if (taskScenario === 'truncated') {
+			// Keep the initial output intact until the Agent has recorded its actual cursor.
+			script = "const fs = require('node:fs'); " + starts + "console.log('" + taskMarker + " INITIAL 😀'); const timer = setInterval(() => { if (!fs.existsSync('flood-release')) return; clearInterval(timer); let step = 0; const input = require('node:readline').createInterface({input:process.stdin}); const emit = () => { step++; process.stdout.write('x'.repeat(65536) + String.fromCharCode(10) + 'TRUNCATION_STEP_' + step + ' 😀' + String.fromCharCode(10)); }; input.on('line', line => { if (line !== 'ACK_' + step) return; if (step < 18) emit(); else { input.close(); process.stdin.pause(); process.stdout.write('TRUNCATION_DONE 😀'); } }); emit(); }, 25);";
 		} else if (taskScenario === 'reuse') {
 			tasks = [{ ...root, args: ['task-loop.cjs', 'first'] }, { ...root, label: taskLabel + ' Second', args: ['task-loop.cjs', 'second'] }];
 			script = "const fs = require('node:fs'); " + starts + 'process.stdout.write(process.argv[2] === "first" ? ' + JSON.stringify(firstPayload) + ' : ' + JSON.stringify(secondPayload) + ');';
@@ -54,18 +68,20 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 		await model.start();
 		try { await use(model); } finally { await model.close(); }
 	},
-	taskSession: async ({ application, workbench, testWorkspace, mockModel }, use, testInfo) => {
+	taskSession: async ({ application, workbench, testWorkspace, mockModel, taskScenario }, use, testInfo) => {
 		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true });
 		const { client } = connection;
 		let readThread: (() => Promise<Thread>) | undefined;
 		try {
 			await expect(workbench.page.locator('.ash-sessions-window')).toBeVisible();
+			// Reading the full retained output should exercise Task cursors without triggering model compaction.
+			const contextWindow = taskScenario === 'truncated' ? 1_000_000 : 272_000;
 			const initial = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['provider/configure'], {
 				commandId: 'task-fixture-provider', expectedRevision: initial.revision, config: {
 					connection: taskModel.provider, provider: taskModel.provider, baseUrl: mockModel.baseUrl,
-					custom: { name: 'Task regression mock', protocol: 'responses', order: 0, contextWindow: 272_000 },
-					modelContext: { [taskModel.model]: { contextWindow: 272_000 } },
+					custom: { name: 'Task regression mock', protocol: 'responses', order: 0, contextWindow },
+					modelContext: { [taskModel.model]: { contextWindow } },
 				}
 			});
 			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: taskModel.provider, apiKey: 'synthetic-fixture-key' });
@@ -96,9 +112,9 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 			await use({ client, page, directory, sessionId, readThread: readThread! });
 		} finally {
 			try {
-				if (testInfo.status !== testInfo.expectedStatus && !workbench.page.isClosed()) await testInfo.attach('task-agent-window', { body: await workbench.page.screenshot(), contentType: 'image/png' });
 				await testInfo.attach('mock-model-exchanges', { body: JSON.stringify({ exchanges: mockModel.exchanges, errors: mockModel.errors }, null, 2), contentType: 'application/json' });
 				if (readThread) await testInfo.attach('agent-thread', { body: JSON.stringify(await readThread(), null, 2), contentType: 'application/json' });
+				if (testInfo.status !== testInfo.expectedStatus && !workbench.page.isClosed()) await testInfo.attach('task-agent-window', { body: await workbench.page.screenshot(), contentType: 'image/png' });
 			} finally { await connection.close(); }
 		}
 	},
@@ -159,7 +175,7 @@ async function completedTurn(page: Page, read: () => Promise<Thread>, count: num
 		}
 		const thread = await read();
 		const turn = thread.turns[count - 1];
-		if (turn?.status === 'failed' || turn?.status === 'interrupted') throw new Error('Agent Turn failed: ' + JSON.stringify(turn));
+		if (turn?.status === 'failed' || turn?.status === 'interrupted') throw new Error('Agent Turn failed: ' + JSON.stringify({ turnId: turn.turnId, status: turn.status, error: turn.error }));
 		if (turn && observe) await observe(turn);
 		if (turn?.status === 'completed') completed = turn;
 		return completed !== undefined;
@@ -236,6 +252,174 @@ async function cancelTask(session: TaskSession, count: number, runId: string, pi
 for (const taskKind of ['process', 'shell'] as const) {
 	test.describe(taskKind, () => {
 		test.use({ taskKind });
+		test.describe('dependency failure', () => {
+			test.use({ taskScenario: 'dependency-failure' });
+			test('Mock Agent Task loop keeps the root unstarted when its dependency fails', { tag: '@electron-app-server' }, async ({ taskSession, mockModel }) => {
+				mockModel.expectOutcome('failed');
+				const { page, directory, readThread } = taskSession;
+				let childRunId: string | undefined;
+				await submit(page, 'TASK_FIXTURE_RUN: Run the existing Task and report a dependency failure.');
+				const evidence = toolEvidence(await completedTurn(page, readThread, 1, true, async turn => {
+					if (childRunId) return;
+					const waiting = toolEvidence(turn).find(item => item.name === 'tasks_status' && item.result.status === 'running' && !item.result.terminalId);
+					const children = await processStarts(directory, 'dependency-starts.jsonl');
+					if (!waiting || !children.length) return;
+					expect(children).toHaveLength(1);
+					expect(() => process.kill(children[0]!.pid, 0)).not.toThrow();
+					expect(await processStarts(directory)).toEqual([]);
+					await showTasks(page);
+					const child = page.locator('[data-run-id]').filter({ hasText: 'Mock Agent Prepare — Running' });
+					await expect(child).toHaveCount(1);
+					childRunId = (await child.getAttribute('data-run-id'))!;
+					expect(childRunId).toBeTruthy();
+					await writeFile(join(directory, 'failure-release'), 'fail');
+				}));
+				const root = evidence.filter(item => item.name === 'tasks_status').at(-1)!.result;
+				expect(root).toMatchObject({ status: 'failed', terminalId: '', exitCode: null, ready: false });
+				expect(evidence.filter(item => item.name === 'tasks_run')).toHaveLength(1);
+				expect(evidence.at(-1)!.result.text).toContain("Dependency 'Mock Agent Prepare'");
+				expect(evidence.at(-1)!.result.text).toContain('failed');
+				await expect(page.locator('[data-run-id="' + root.runId + '"]')).toContainText(taskLabel + ' — Failed');
+				mockModel.inspectRun(childRunId!);
+				await submit(page, 'TASK_FIXTURE_INSPECT: Read dependency Run ID ' + childRunId + ' status and output.');
+				const failed = toolEvidence(await completedTurn(page, readThread, 2, false));
+				expect(failed.map(item => item.name)).toEqual(['tasks_status', 'tasks_output']);
+				expect(failed[0]!.result).toMatchObject({ runId: childRunId, status: 'failed', exitCode: 17 });
+				expect(failed[1]!.result.text).toContain('DEPENDENCY_FAILED_EXIT_17');
+				expect(failed[1]!.result.text).not.toContain(taskMarker);
+				const children = await processStarts(directory, 'dependency-starts.jsonl');
+				await processExited(children[0]!.pid);
+				expect(await processStarts(directory)).toEqual([]);
+				expect(await readFile(join(directory, 'task-order.txt'), 'utf8')).toBe('');
+				expect(mockModel.errors).toEqual([]);
+			});
+		});
+
+		test.describe('dependency cancellation', () => {
+			test.use({ taskScenario: 'dependency-cancel' });
+			test('Mock Agent Task loop cancels nested dependencies and both parallel leaf processes', { tag: '@electron-app-server' }, async ({ taskSession, mockModel }) => {
+				mockModel.expectOutcome('preparing');
+				const { page, directory, readThread } = taskSession;
+				await submit(page, 'TASK_FIXTURE_RUN: Start the dependency chain and report its waiting root Run ID.');
+				const evidence = toolEvidence(await completedTurn(page, readThread, 1, async () => {
+					const approval = page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible');
+					await expect(approval).toContainText('task-middle.cjs');
+					await expect(approval).toContainText('task-leaf.cjs');
+				}));
+				const root = evidence.filter(item => item.name === 'tasks_status').at(-1)!.result;
+				expect(root).toMatchObject({ status: 'running', terminalId: '', ready: false, exitCode: null });
+				await expect.poll(async () => (await processStarts(directory, 'dependency-starts.jsonl')).length).toBe(2);
+				const children = await processStarts(directory, 'dependency-starts.jsonl') as { pid: number; leaf: string; }[];
+				expect(children.map(child => child.leaf).sort()).toEqual(['A', 'B']);
+				for (const child of children) expect(() => process.kill(child.pid, 0)).not.toThrow();
+				expect(await processStarts(directory)).toEqual([]);
+				await expect(access(join(directory, 'middle-started'))).rejects.toMatchObject({ code: 'ENOENT' });
+				await showTasks(page);
+				await expect(page.locator('.ash-task-run.running [data-run-id]')).toHaveCount(3);
+				await expect(page.locator('[data-run-id="' + root.runId + '"]')).toContainText(taskLabel + ' — Running');
+				await cancelTask(taskSession, 2, root.runId, children[0]!.pid);
+				await processExited(children[1]!.pid);
+				await showTasks(page);
+				await expect(page.locator('.ash-task-run.running [data-run-id]')).toHaveCount(0);
+				await expect(page.locator('[data-run-id="' + root.runId + '"]')).toContainText(taskLabel + ' — Canceled');
+				expect(await processStarts(directory, 'dependency-starts.jsonl')).toEqual(children);
+				expect(await processStarts(directory)).toEqual([]);
+				await expect(access(join(directory, 'middle-started'))).rejects.toMatchObject({ code: 'ENOENT' });
+				expect(mockModel.errors).toEqual([]);
+			});
+		});
+
+		test.describe('background never ready', () => {
+			test.use({ taskScenario: 'background-pending' });
+			test('Mock Agent Task loop keeps a background Task unready until explicit cancellation', { tag: '@electron-app-server' }, async ({ taskSession, mockModel }) => {
+				mockModel.expectOutcome('not-ready');
+				const { page, directory, readThread } = taskSession;
+				await submit(page, 'TASK_FIXTURE_RUN: Run the background Task and sample its readiness without waiting indefinitely.');
+				const evidence = toolEvidence(await completedTurn(page, readThread, 1, true));
+				const run = evidence.filter(item => item.name === 'tasks_status').at(-1)!.result;
+				const starts = await processStarts(directory);
+				expect(starts).toHaveLength(1);
+				await expect(page.locator('.ash-terminal-instance:visible')).toContainText('STILL_BUILDING pid=' + starts[0]!.pid);
+				mockModel.beginFollowup();
+				await submit(page, 'TASK_FIXTURE_INSPECT: Query the same background Run again; it still has no end pattern.');
+				const inspected = toolEvidence(await completedTurn(page, readThread, 2, false));
+				for (const samples of [evidence, inspected]) {
+					const statuses = samples.filter(item => item.name === 'tasks_status' && item.result.terminalId);
+					expect(statuses.length).toBeGreaterThanOrEqual(3);
+					for (const status of statuses) expect(status.result).toMatchObject({ runId: run.runId, terminalId: run.terminalId, status: 'running', ready: false, exitCode: null });
+				}
+				expect(inspected.at(-1)!.result.text).toContain('STILL_BUILDING pid=' + starts[0]!.pid);
+				expect(() => process.kill(starts[0]!.pid, 0)).not.toThrow();
+				await showTasks(page);
+				await expect(page.locator('[data-run-id="' + run.runId + '"]')).toContainText(taskLabel + ' — Running');
+				await cancelTask(taskSession, 3, run.runId, starts[0]!.pid);
+				const canceled = toolEvidence((await readThread()).turns[2]!);
+				expect(canceled[1]!.result).toMatchObject({ status: 'canceled', ready: false });
+				expect(await processStarts(directory)).toEqual(starts);
+				expect(mockModel.errors).toEqual([]);
+			});
+		});
+
+		test.describe('truncated output', () => {
+			test.use({ taskScenario: 'truncated' });
+			test('Mock Agent Task loop recovers a stale cursor after Unicode output truncation', { tag: '@electron-app-server' }, async ({ taskSession, mockModel }) => {
+				const { page, directory, readThread } = taskSession;
+				await submit(page, 'TASK_FIXTURE_RUN: Start the Task and read its initial output cursor.');
+				const initial = toolEvidence(await completedTurn(page, readThread, 1, true));
+				const runId = initial.find(item => item.name === 'tasks_run')!.result.runId;
+				const first = initial.at(-1)!.result;
+				expect(first.text).toContain(taskMarker + ' INITIAL 😀');
+				expect(first.truncated).toBe(false);
+				const staleCursor = first.nextCursor;
+				await writeFile(join(directory, 'flood-release'), 'continue');
+				// Use Terminal input for acknowledgments, avoiding workspace file-watch refreshes per chunk.
+				const terminal = page.locator('.ash-terminal-instance:visible');
+				for (let step = 1; step <= 18; step++) {
+					await expect(terminal).toContainText('TRUNCATION_STEP_' + step + ' 😀');
+					await terminal.locator('.xterm-helper-textarea').focus();
+					await page.keyboard.type('ACK_' + step);
+					await page.keyboard.press('Enter');
+				}
+				mockModel.expectOutcome('succeeded');
+				mockModel.readPages(65536, staleCursor);
+				mockModel.beginFollowup();
+				await submit(page, 'TASK_FIXTURE_INSPECT: Wait for Run ID ' + runId + ' to finish, recover cursor ' + staleCursor + ' if truncated, then read through EOF.');
+				const recovered = toolEvidence(await completedTurn(page, readThread, 2, false));
+				expect(recovered.filter(item => item.name === 'tasks_status').at(-1)!.result).toMatchObject({ runId, status: 'succeeded', exitCode: 0 });
+				const pages = recovered.filter(item => item.name === 'tasks_output');
+				const start = pages[0]!.result.cursor;
+				expect(start).toBeGreaterThan(staleCursor);
+				expect(pages[0]!.arguments.cursor).toBe(staleCursor);
+				expect(pages[0]!.result.truncated).toBe(true);
+				const retained = pages.map(item => item.result.text).join('');
+				expect(retained.length).toBeGreaterThanOrEqual(1_048_575);
+				expect(retained.length).toBeLessThanOrEqual(1_048_576);
+				expect(retained).not.toContain(taskMarker + ' INITIAL');
+				expect(retained).toContain('TRUNCATION_DONE 😀');
+				let cursor = staleCursor;
+				for (const [index, page] of pages.entries()) {
+					expect(page.arguments).toMatchObject({ run_id: runId, cursor, max_characters: 65536 });
+					expect(page.result.truncated).toBe(index === 0);
+					expect(page.result.cursor).toBe(index === 0 ? start : cursor);
+					expect(page.result.nextCursor).toBe(page.result.cursor + page.result.text.length);
+					expect(page.result.hasMore).toBe(page.result.nextCursor < start + retained.length);
+					if (page.result.text) {
+						const first = page.result.text.charCodeAt(0);
+						expect(first >= 0xDC00 && first <= 0xDFFF).toBe(false);
+						const last = page.result.text.charCodeAt(page.result.text.length - 1);
+						expect(last >= 0xD800 && last <= 0xDBFF).toBe(false);
+					}
+					cursor = page.result.nextCursor;
+				}
+				expect(pages.at(-1)!.result).toMatchObject({ text: '', cursor: start + retained.length, nextCursor: start + retained.length, hasMore: false, truncated: false });
+				const starts = await processStarts(directory);
+				expect(starts).toHaveLength(1);
+				await processExited(starts[0]!.pid);
+				expect(recovered.some(item => item.name === 'tasks_run')).toBe(false);
+				expect(mockModel.errors).toEqual([]);
+			});
+		});
+
 		test.describe('dependencies', () => {
 			test.use({ taskScenario: 'dependencies' });
 			test('Mock Agent Task loop waits for dependency completion before starting the root', { tag: '@electron-app-server' }, async ({ taskSession, mockModel }) => {

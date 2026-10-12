@@ -616,6 +616,7 @@ fn run_engine(
                                     | "taskEvent"
                                     | "debugEvent"
                                     | "createTerminalProfile"
+                                    | "getTerminalEnvironment"
                                     | "provideTasks"
                                     | "resolveTask"
                                     | "createDebugAdapterDescriptor"

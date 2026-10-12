@@ -4,7 +4,7 @@
 
 剩余 54 项中新增 16 个实际使用的生产文件，当前同路径 51、缺失 38、仅 Ash 0。编辑区往返保留同一 PTY/屏幕，标签关闭释放进程；Clear/Relaunch/Kill 直接作用于编辑区实例。中英文 Rename/Icon 选择及关闭目标取消通过；用户元数据跨 PTY 替换保留。屏幕标记跨进程 ID 隔离、中文 ARIA/tooltip 与原命令导航通过；marker 淘汰即时释放监听。水平列表宽度重建和页面重载恢复，非法持久化数值使用默认尺寸。扩展 PTY 从 MainThread 内嵌类迁入标准代理文件，通用事件端口由 BasePty 拥有；原注册、实例和后端 owner 保持，关闭时丢弃晚到 frame，opaque handle 恰好发送一次释放。
 
-最终正常 unit 入口 8 文件 139 项通过（含 24 项装载/架构检查、2 项 marker 生命周期和 3 项 provider PTY 边界），runner 自测 9 项通过；正常 Chromium 全套 74 项通过。曾被共享 Chat 修改阻塞：chat.json 顶层翻译值不是 bundle，chatListWidget.ts 的缺失 Symbol.dispose、chatListWidget.test.ts 的 implicit-any；期间保留外部修改、按原 compiler options 定向编译成功，并使用原 runners 验证。外部修复后最后正常入口重新通过，未把较早失败抹掉。终端 3 个 CSS 的 scoped stylelint 零错误（1 条原有 font-size 建议），精确 TS 格式、Markdown/NLS/CSS Prettier 与本批 whitespace 检查通过。全工作树 whitespace 曾另有范围外 task-agent.spec.ts 的 trailing whitespace，未修改。无 Electron/真实 SSH/Windows/Linux 运行声明。
+最终 common 2387 文件与 renderer 3744 文件类型检查通过；正常 unit 入口 8 文件 139 项通过（含 24 项装载/架构检查、2 项 marker 生命周期和 3 项 provider PTY 边界），runner 自测 9 项通过；正常 Chromium 全套 74 项通过。曾被共享 Chat 修改阻塞：chat.json 顶层翻译值不是 bundle，chatListWidget.ts 的缺失 Symbol.dispose、chatListWidget.test.ts 的 implicit-any；期间保留外部修改、按原 compiler options 定向编译成功，并使用原 runners 验证。外部修复后最后正常入口重新通过，未把较早失败抹掉。终端 3 个 CSS 的 scoped stylelint 零错误（1 条原有 font-size 建议），精确 TS 格式、Markdown/NLS/CSS Prettier 与本批 whitespace 检查通过。全工作树 whitespace 曾另有范围外 task-agent.spec.ts 的 trailing whitespace，未修改。无 Electron/真实 SSH/Windows/Linux 运行声明。
 
 38 个剩余路径仍待闭合消费链与前置契约，不按数量创建空壳；准确分类见下文当前差集。没有发起 commit/push；共享工作树期间其他操作提交了本批部分变化，未撤销这些提交或外部改动。
 
@@ -27,6 +27,10 @@
 ## 标题与图标本批准入（2026-10-12）
 
 Rename / Change Icon 命令和实例菜单 → 新同路径 `browser/terminalEditingService.ts`（Quick Input 的编辑中实例和取消 lifetime）/`browser/terminalIconPicker.ts`（实际产品 icon registry 的搜索/选择）→ 原 TerminalInstance 的 rename/changeIcon → 原 TerminalService 刷新 labels → 面板列表和编辑器标签。标题/图标只由原实例拥有，Quick Input 不保存第二份 title；关闭目标取消选择，修改活动实例不会把选择写到另一个实例；Relaunch 保持用户元数据。
+
+Ubuntu 自动图标不依赖配置名或终端标题。参照 VS Code 的职责划分，`BrowserTerminalProfileResolverService` 使用执行端已解析的启动程序和参数选择默认图标；配置菜单调用既有 `resolveIcon`，创建后的实例保存解析结果，显示层只消费图标。识别 Ubuntu launcher 及 `wsl.exe -d/--distribution` 的实际发行版名，保留显式图标优先级；Windows 原始命令行仅为识别读取，原启动字符串不被拆写，子命令里的 `-d Ubuntu` 不当作 WSL 参数。VS Code 在执行端自动发现 WSL 发行版时赋图标；Ash 的自定义 WSL 参数推断是本次用户要求的补充，不表示已实现 WSL 自动发现或读取无参数 WSL 的默认发行版。
+
+本次图标验证：原 unit runner 的两项定向回归通过，覆盖配置改名、启动程序、两种 WSL 发行版参数、Windows 引号/反斜杠、子命令隔离、变量解析与显式覆盖；正常 Chromium 入口的三项场景通过，验证改名前后菜单和实例图标以及中文配置/原始命令行回归。完整 unit 编译曾遇到共享 PTY 事件类型不匹配，运行完整配置套件另遇到范围外 `AgentHostPty` 重复 disposable owner，不能记为全套通过；本次未改动这些 PTY 所有权实现。
 
 准确新增路径仅 VS Code：上述 2 文件。准确局部路径双方已有：terminalInstance.ts（用户元数据）、terminalService.ts（已有 title callback 先刷新原组名，再发布 labels）、terminalActions.ts/terminalMenus.ts/common/terminal.ts（命令/菜单）、terminal.contribution.ts（delayed 注册）、terminalEditorInput.ts（已用原 label event）、terminalAccessibilityHelp.ts（发现性）；已批准服务契约 services/terminal/browser/terminal.ts；现有 integration fixture/spec、新 test/browser/terminalEditor.test.ts（元数据/资源回归）、terminalService.test.ts（复用）；zh-CN/workbench.json、README、本台账。采用现有 Quick Input 的键盘/焦点/取消路径，不添加无消费者 inline editing API 或其他新 owner；测试双语重命名、取消、图标搜索、关闭目标期间选择与复用。
 
@@ -780,3 +784,35 @@ Desktop 正常构建、完整 Web 构建和 automation 编译通过，Renderer �
 首次新增消费者 fixture 漏了 read 结果的 terminalId/commandEventGap，完整测试编译指出后已补齐；screen-only fixture 过早初始化破坏其延迟加载断言，已恢复 fixture 的显式初始化边界，真实实例由生产服务装配测试覆盖。automation 类型图到达动态 CSS import 后出现 TS2307，已纳入仓库现有 CSS 声明，编译及正常产品场景通过；没有绕过类型检查。
 
 该输入批次没有修改 Rust、生成协议、CSS 或新增/移动/删除文件。后端为产品测试完成构建，未运行 Rust 单测；运行验证为 macOS，未验证 Windows/Linux 与真实 SSH transport。服务器输出 ACK/背压、完整 child process/backend、profile/configuration、编辑区终端、真正分组分屏、终端输出无障碍等 terminalContrib 与 Agent 会话接管仍待后续闭合；Find 的后续进展见本文开头。
+
+## 剩余依赖连续批：环境集合（2026-10-12）
+
+扩展 TerminalProfileProvider 的 ExtensionContext.environmentVariableCollection → 原 admitted provider callback 的 getTerminalEnvironment operation → MainThreadTerminalService 的 incarnation lifetime → EnvironmentVariableService → ProfileResolver → 原 Rust create.env。新 Shell 实际应用 Replace/Append/Prepend，Windows 保持执行端变量名大小写，原 Rust 继续拥有实际进程环境；集合唯一属于扩展 context，Workbench 只保留已同步的只读快照。provider 退出移除集合，调用取消不覆盖新 incarnation，persistent 集合保存 Workspace/Machine storage。当前 SDK 能力范围为获准的 terminalProfileProvider，未声称所有未获此能力的扩展均可改变终端环境。
+
+准确新增仅上游路径：platform/terminal/common/environmentVariable.ts；terminal/common/environmentVariable.ts、environmentVariableService.ts、environmentVariable.contribution.ts、terminalEnvironment.ts；测试 terminal/test/common/environmentVariableService.test.ts。准确已有局部路径：terminal/browser/terminalProfileResolverService.ts（启动合并）、terminal/browser/terminal.contribution.ts（DI 前置依赖）、terminal/terminal.all.ts（共同注册入口）、api/browser/mainThreadTerminalService.ts（provider lifetime）、terminalConfigurationService.test.ts（真实 DI fixture）；external-js-ext/src/{host.mjs,vscode.js,node.test.mjs,runtime.rs} 与 app-server/src/server/extension_host_runtime.rs（同一 operation 的 SDK producer/admission）。新 SDK 集合为用户明确授权补齐的前置契约，无新 transport owner、协议 variant 或生成 DTO。实现根据 Ash 原 incarnation/abort/存储链独立设计。
+
+环境 DI 测试追加准入：现有 services/{tasks,debug}/test/browser/{taskService,debugService,debugTerminalLauncher}.test.ts 与 integration/browser/{terminal,appTools}.integration.ts，仅补 resolver 新前置依赖的 fixture 注册。Task/DAP 测试使用无扩展集合的 typed fake；集合启动和持久化在真实服务专项测试覆盖。
+
+## 连续批：屏幕 widget lifetime（2026-10-12）
+
+Find 与实际 WebLinks hover → XtermTerminal.attachWidget → TerminalWidgetManager → 唯一屏幕 overlay container；相同 widget ID 替换立即释放原 widget，detach lease 不移除后来的 widget。TerminalHover 读取 xterm 公共 link range、屏幕 DOM 几何与 cols/rows，交给既有 HoverService 的显示/键盘/Escape/主题 owner。不使用 xterm 私有 renderer 数据、不新建第二套 hover DOM。屏幕释放关闭 widgets，实例移动保留屏幕及 widgets。
+
+准确新增仅上游路径：terminal/browser/widgets/{widgets.ts,widgetManager.ts,terminalHoverWidget.ts}、browser/media/widgets.css。双方已有局部：xterm/xtermTerminal.ts（overlay、WebLinks callbacks、hover policy）、services/terminal/browser/terminal.ts（批准领域契约只用结构 widget port，禁止下层导入 contribution）、terminalContrib/find/browser/terminalFindWidget.ts（Find attach 移交）、terminal/common/{terminal.ts,terminalConfiguration.ts}（showLinkHover 标准设置）、integration/browser/{terminal,chatInput}.integration.ts（真实 HoverService fixture）、terminal.integration.spec.ts（hover/Find geometry/theme/Escape/移交），中文 workbench.json。DOM class 使用 Ash，Find 原控件与焦点 owner 保持。读屏用户继续通过已有 Open Detected Link 命令发现并打开链接。
+
+## 连续批：实例创建 owner（2026-10-12）
+
+TerminalService.createTerminal → TerminalInstanceService.createInstance → 原 execution-host create → 原 TerminalInstance。把现有单一窗口编号、不可变启动快照、两种实例构造及迟到 PTY 回收从 Service 迁入工厂；Service 保留成员、活动实例、标题编号与连接广播。工厂由原 DI container 创建，跟随 Service lifetime。保持现有 Ash create 的异步 backend-ready 行为，本批不声称已完成上游同步 Shell 创建签名；下一 backend 批依赖此创建边界。
+
+准确新增仅上游路径：browser/terminalInstanceService.ts。双方已有局部：browser/terminalService.ts（仅创建方法移交及 ID owner 退出）；已有 terminalService.test.ts（创建/迟到结果/取消/自定义 PTY/重用全部回归）、integration fixture/spec（现有真实入口）。不改变活动模型、屏幕 owner、PTY 输送或平台路由，不新增仅 Ash 文件。
+
+## 连续批：App Server child-process 前置契约（2026-10-12）
+
+实例工厂批 104 项测试通过。下一链：Factory/Instance.reuse → AgentHostTerminalService（Ash App Server 执行端，当前实际 host）→ AgentHostPty → 原 TerminalProcessManager → 已批准 platform/terminal adapters/Rust；Instance 只订阅 child events、保留界面和启动配置。backend 统一拥有在途 create 取消及 client handle lifetime，child 唯一拥有 raw process identity、关闭 Promise 和原 manager；backend lease/token 保留在已有 platform adapter，Rust parser/nonce/命令历史不迁移。BaseTerminalBackend 承接 Service 现有连接缓存/初始化 revision，Service 仅广播实例状态。不会增加另一个 raw IO/channel 或伪造 AHP RPC。
+
+准确新增仅上游路径：browser/{baseTerminalBackend.ts,agentHostPty.ts,agentHostTerminalService.ts}。双方已有局部：platform/terminal/common/terminal.ts 与 terminal/common/basePty.ts（标准 child 支持 byte event 和异步 input/resize）；terminal/{browser/terminalInstanceService.ts,terminalService.ts,terminalInstance.ts}（迁移创建/identity/关闭/连接 owner）；既有 terminalService/configuration/编辑器等测试及 terminal integration fixture/spec（原入口验证完整回归）。当前支持的是 Ash App Server host，并不声明 upstream AHP session/resource 工具契约已存在；Local/Remote transport 仍由批准的 platform adapters 负责。本批不得把相同原始通道再包装成 native/remote 两套 state owner。
+
+## 连续批：已提交命令 source（2026-10-12）
+
+backend/PTY 的 109 项单测通过后，沿原 read→writePromise→metadata 链继续：Manager 只拥有 IO 游标、输入队列和 commit 等待；新 browser/ahpTerminalCommandSource.ts 承接现有待提交 command/cwd/ShellIntegration 元数据及唯一只读发布快照。Rust 仍唯一解析/保存命令，source 只在对应 bytes 已提交时转换协议事件，不增加 parser、nonce 或另一份历史。现有 decoration/history/Chat consumers 继续从原实例读取这一快照。
+
+准确新增仅上游路径 ahpTerminalCommandSource.ts，已有仅局部 terminalProcessManager.ts（将 metadata gate 移交）。现有 terminalService.test.ts 的 parse commit、分页/输出空档、断线/重连、迟到旧结果、reuse 回归直接证明可观察行为；不声明 upstream AHP session command/render API 完成。

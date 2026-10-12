@@ -339,10 +339,11 @@ function registerPseudoterminalCallbacks(registration, provider) {
 
 	const handle = register({
 		...registration, operation: [
-			...(registration.kind === 'taskEvents' ? ['taskEvent'] : registration.kind === 'terminalProfileProvider' ? ['createTerminalProfile'] : ['provideTasks', 'resolveTask']),
+			...(registration.kind === 'taskEvents' ? ['taskEvent'] : registration.kind === 'terminalProfileProvider' ? ['createTerminalProfile', 'getTerminalEnvironment'] : ['provideTasks', 'resolveTask']),
 			'createTaskTerminal', 'openTaskTerminal', 'readTaskTerminal', 'inputTaskTerminal', 'resizeTaskTerminal', 'closeTaskTerminal',
 		],
 		async callback(context, payload, operation) {
+			if (operation === 'getTerminalEnvironment') return provider.getEnvironmentVariableCollection();
 			if (operation === 'taskEvent') return await provider.onTaskEvent(context, payload);
 			if (operation === 'provideTasks') return { tasks: await provider.provideTasks(context) ?? [] };
 			if (operation === 'resolveTask') {

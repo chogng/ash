@@ -60,6 +60,10 @@ test('Frontend CI collects lifecycle, dependency, readiness, output and reuse ca
 	assert.match(stdout, /process › Mock Agent Task loop/u);
 	assert.match(stdout, /shell › Mock Agent Task loop/u);
 	for (const title of [
+		'keeps the root unstarted',
+		'cancels nested dependencies',
+		'keeps a background Task unready',
+		'recovers a stale cursor',
 		'waits for dependency completion',
 		'observes background readiness',
 		'pages Unicode output',
@@ -75,5 +79,5 @@ test('Frontend CI collects lifecycle, dependency, readiness, output and reuse ca
 			assert.equal(stdout.split('\n').filter(line => line.includes(kind + ' ›') && line.includes(title)).length, 1, kind + ': ' + title);
 		}
 	}
-	assert.match(stdout, /Total: 20 tests in 1 file/u);
+	assert.match(stdout, /Total: 28 tests in 1 file/u);
 });

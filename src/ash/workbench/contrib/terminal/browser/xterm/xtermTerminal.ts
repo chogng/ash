@@ -28,11 +28,17 @@ import { contrastBorder, focusBorder } from '../../../../../platform/theme/commo
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { XtermAddonImporter } from './xtermAddonImporter.js';
 import { updateTerminalFontRendering } from './terminalFontRendering.js';
+import { TerminalWidgetManager } from '../widgets/widgetManager.js';
+import { TerminalHover } from '../widgets/terminalHoverWidget.js';
+import type { ITerminalWidget } from '../widgets/widgets.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 
 const addonImporter = new XtermAddonImporter();
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
 export class XtermTerminal extends Disposable implements IXtermTerminal {
+	private readonly widgets = this._register(new TerminalWidgetManager());
+	private readonly linkHover = this._register(new MutableDisposable<import('../../../../../base/common/lifecycle.js').IDisposable>());
 	readonly element: HTMLDivElement;
 	private terminal: Terminal | undefined;
 	private fitAddon: FitAddon | undefined;
@@ -68,12 +74,14 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
 		@ITerminalConfigurationService private readonly configuration: ITerminalConfigurationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 		this.element = h(container.ownerDocument, "div");
 		this.element.className = "ash-terminal-instance";
 		this.element.hidden = true;
 		container.append(this.element);
+		this.widgets.attachToElement(this.element);
 		this._register(toDisposable(() => {
 			this.pendingWrites.length = 0;
 			this.element.remove();
@@ -89,6 +97,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this.element.dataset.state = instance.state;
 		this._register(observeResize(this.element, () => this.fit()));
 		this._register(configuration.onConfigChanged(() => {
+			this.linkHover.clear();
 			if (!this.terminal) return;
 			this.terminal.options = this.screenOptions();
 			updateTerminalFontRendering(this.terminal, this.configuration.config.fontRendering);
@@ -130,7 +139,19 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		terminal.loadAddon(this.fitAddon);
 		terminal.loadAddon(this.decorationAddon);
 		terminal.loadAddon(this.markNavigationAddon);
-		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }));
+		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }, {
+			hover: (_event, url, viewportRange) => {
+				if (!this.configuration.config.showLinkHover || !this.visible) return;
+				const rect = terminal.element?.querySelector('.xterm-screen')?.getBoundingClientRect();
+				if (!rect?.width || !rect.height) return;
+				this.linkHover.value = this.widgets.attachWidget(this.instantiation.createInstance(TerminalHover, {
+					viewportRange,
+					cellDimensions: { width: rect.width / terminal.cols, height: rect.height / terminal.rows },
+					terminalDimensions: { width: rect.width, height: rect.height },
+				}, url));
+			},
+			leave: () => this.linkHover.clear(),
+		}));
 		terminal.open(this.element);
 		updateTerminalFontRendering(terminal, this.configuration.config.fontRendering);
 		const bell = terminal.onBell(() => { void this.signals.playSignal(AccessibilitySignal.terminalBell); });
@@ -171,7 +192,12 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		}
 	}
 
+	attachWidget(widget: ITerminalWidget): import('../../../../../base/common/lifecycle.js').IDisposable | undefined {
+		return this.widgets.attachWidget(widget);
+	}
+
 	setVisible(visible: boolean): void {
+		if (!visible) this.linkHover.clear();
 		if (this.visible === visible) return;
 		this.visible = visible;
 		if (!visible) this.focusSource = undefined;

@@ -120,6 +120,7 @@ export interface IXtermTerminal extends IDisposable {
 	readonly isDisposed: boolean;
 	readonly onDidChangeFindResults: Event<ISearchResultChangeEvent>;
 	readonly findResult: ISearchResultChangeEvent | undefined;
+	attachWidget(widget: IDisposable & { readonly id: string; attach(container: HTMLElement): void; }): IDisposable | undefined;
 	setVisible(visible: boolean): void;
 	focus(): void;
 	fit(): void;

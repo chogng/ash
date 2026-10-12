@@ -226,14 +226,14 @@ export interface IProcessProperty {
 export interface ITerminalChildProcess extends IDisposable {
 	readonly id: number;
 	readonly shouldPersist: boolean;
-	readonly onProcessData: Event<string>;
+	readonly onProcessData: Event<string | IProcessDataEvent>;
 	readonly onProcessReady: Event<IProcessReadyEvent>;
 	readonly onDidChangeProperty: Event<IProcessProperty>;
 	readonly onProcessExit: Event<number | undefined>;
 	start(): Promise<void>;
 	shutdown(immediate: boolean): void;
-	input?(data: string): void;
-	resize?(cols: number, rows: number): void;
+	input?(data: string): void | Promise<void>;
+	resize?(cols: number, rows: number): void | Promise<void>;
 }
 
 /** Workbench host for a terminal screen; moving it retains the process. */

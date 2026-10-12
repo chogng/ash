@@ -47,6 +47,8 @@ export class GitHubService extends Disposable implements IGitHubService {
 	private readonly operation = new MutableDisposable<CancellationTokenSource>();
 	private readonly refresh = this._register(new RunOnceScheduler(() => { void this.resolveSelection(); }, 60_000));
 	private selectionKey: string | undefined;
+	private resolving = false;
+	private refreshQueued = false;
 
 	constructor(
 		@ISessionsService private readonly sessions: ISessionsService,
@@ -189,6 +191,12 @@ export class GitHubService extends Disposable implements IGitHubService {
 	}
 
 	private async resolveSelection(): Promise<void> {
+		// Cancellation retires transport requests asynchronously. Session notifications
+		// must coalesce until that retirement finishes, rather than opening another batch.
+		if (this.resolving) {
+			this.refreshQueued = true;
+			return;
+		}
 		const selected = this.sessions.activeSelection;
 		if (selected?.kind !== 'session') {
 			return;
@@ -200,6 +208,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 		this.operation.value?.cancel();
 		this.operation.value = cancellation;
 		const token = cancellation.token;
+		this.resolving = true;
 		const accountsPromise = this.github.listAccounts(token);
 		const issueResolution = this.resolveSessionIssues(session.sessionId, accountsPromise, token);
 		try {
@@ -254,9 +263,15 @@ export class GitHubService extends Disposable implements IGitHubService {
 				this.log.error('sessions.github', 'Unable to resolve session pull requests', error);
 			}
 		} finally {
-			await issueResolution;
-			if (this.operation.value === cancellation && !this.isDisposed && !token.isCancellationRequested) {
-				this.refresh.schedule();
+			try { await issueResolution; }
+			finally {
+				this.resolving = false;
+				if (!this.isDisposed && this.refreshQueued) {
+					this.refreshQueued = false;
+					this.refresh.schedule(0);
+				} else if (this.operation.value === cancellation && !this.isDisposed && !token.isCancellationRequested) {
+					this.refresh.schedule();
+				}
 			}
 		}
 	}

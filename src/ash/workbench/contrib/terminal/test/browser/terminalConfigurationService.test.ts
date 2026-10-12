@@ -1,3 +1,6 @@
+import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
+import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
@@ -69,6 +72,9 @@ function createServices(owner: DisposableStore, useInstances = false) {
 	services.registerInstance(IExtensionService, { ...Disposable.None, terminalProfiles: [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	services.registerInstance(IConfigurationResolverService, { resolveWithEnvironment: async (env, folder, value) => value.replaceAll('${workspaceFolder}', folder?.uri.path ?? '').replace(/\$\{env:([^}]+)\}/g, (_match: string, key: string) => env[key] ?? '') } as IConfigurationResolverService);
 	services.registerInstance(IWorkspaceContextService, workspace);
+	const stored = new Map<string, string>();
+	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => { stored.set(key, value); } } as unknown as IStorageService);
+	services.registerInstance(IEnvironmentVariableService, owner.add(services.createInstance(EnvironmentVariableService)));
 	services.registerInstance(ITerminalProcessService, processes);
 	services.registerInstance(ITerminalService, useInstances
 		? owner.add(services.createInstance(TerminalService))
@@ -300,6 +306,69 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(resolver.getDefaultIcon().id, 'terminal');
 	});
 
+	test('shell icons follow launch programs and WSL distributions after profiles are renamed', async () => {
+		using owner = new DisposableStore();
+		const { services } = createServices(owner);
+		const resolver = services.get(ITerminalProfileResolverService);
+		const options = { os: OperatingSystem.Windows, remoteAuthority: undefined };
+		const cases: readonly { executable: string; args?: import('../../../../../platform/terminal/common/terminal.js').TerminalArguments; icon: string; }[] = [
+			{ executable: 'C:\\Windows\\System32\\wsl.exe', args: ['-d', 'Ubuntu'], icon: 'terminal-ubuntu' },
+			{ executable: 'C:/Windows/System32/WSL.EXE', args: ['--distribution', 'Ubuntu-24.04'], icon: 'terminal-ubuntu' },
+			{ executable: 'wsl.exe', args: '--user root --distribution "Ubuntu-24.04"', icon: 'terminal-ubuntu' },
+			{ executable: 'wsl.exe', args: '--cd "C:\\Work folder" -d Ubuntu', icon: 'terminal-ubuntu' },
+			{ executable: 'wsl.exe', args: String.raw`--cd "C:\Work\\" -d Ubuntu`, icon: 'terminal-ubuntu' },
+			{ executable: 'wsl.exe', args: String.raw`--cd "C:\Work\" -d Ubuntu`, icon: 'terminal' },
+			{ executable: 'wsl.exe', args: ['--cd', '-d', '--distribution', 'Ubuntu'], icon: 'terminal-ubuntu' },
+			{ executable: 'C:\\Users\\test\\AppData\\Local\\Microsoft\\WindowsApps\\ubuntu.exe', icon: 'terminal-ubuntu' },
+			{ executable: 'ubuntu2404.exe', icon: 'terminal-ubuntu' },
+			{ executable: 'C:\\Tools\\pwsh.exe', icon: 'terminal-powershell' },
+			{ executable: 'C:\\Windows\\cmd.exe', icon: 'terminal-cmd' },
+			{ executable: 'wsl.exe', args: ['-d', 'Debian'], icon: 'terminal' },
+			{ executable: 'wsl.exe', args: ['--exec', 'echo', '-d', 'Ubuntu'], icon: 'terminal' },
+			{ executable: 'wsl.exe', args: ['--', '-d', 'Ubuntu'], icon: 'terminal' },
+			{ executable: 'wsl.exe', args: ['echo', '-d', 'Ubuntu'], icon: 'terminal' },
+			{ executable: 'wsl.exe', args: ['--user', '-d', 'Ubuntu'], icon: 'terminal' },
+			{ executable: 'wsl.exe', args: '"--distribution Ubuntu"', icon: 'terminal' },
+			{ executable: 'wsl.exe', args: '--exec echo -d Ubuntu', icon: 'terminal' },
+			{ executable: 'wsl.exe', args: '-d "" echo Ubuntu', icon: 'terminal' },
+			{ executable: 'wsl.exe', icon: 'terminal' },
+			{ executable: '/bin/bash', args: ['-d', 'Ubuntu'], icon: 'terminal' },
+		];
+		for (const entry of cases) {
+			for (const name of ['Ubuntu', 'Renamed work shell']) {
+				const shell: import('../../../../../platform/terminal/common/terminal.js').IShellLaunchConfig = { name, executable: entry.executable, args: entry.args };
+				await resolver.resolveShellLaunchConfig(shell, options);
+				assert.equal(shell.icon?.id, entry.icon, `${name}: ${entry.executable} ${JSON.stringify(entry.args)}`);
+				assert.deepEqual(shell.args, entry.args ?? [], 'Icon inference must preserve the actual launch arguments');
+				const preview = { executable: entry.executable, args: entry.args, icon: undefined as typeof shell.icon };
+				resolver.resolveIcon(preview, OperatingSystem.Windows);
+				assert.equal(preview.icon?.id, shell.icon?.id, 'Profile menus and resolved launches must agree');
+			}
+		}
+	});
+
+	test('Ubuntu icon resolution uses resolved launch arguments and preserves explicit overrides', async () => {
+		using owner = new DisposableStore();
+		const { services, configuration, processes } = createServices(owner);
+		Object.assign(processes, { getEnvironment: async () => ({ HOME: 'C:\\Windows\\System32', DISTRO: 'Ubuntu-24.04' }) });
+		await configuration.updateValue('terminal.integrated.profiles.windows', {
+			'Work shell': { path: '${env:HOME}/wsl.exe', args: ['-d', '${env:DISTRO}'] },
+		});
+		await configuration.updateValue('terminal.integrated.defaultProfile.windows', 'Work shell');
+		const resolver = services.get(ITerminalProfileResolverService);
+		const options = { os: OperatingSystem.Windows, remoteAuthority: undefined };
+		const shell: import('../../../../../platform/terminal/common/terminal.js').IShellLaunchConfig = {};
+		await resolver.resolveShellLaunchConfig(shell, options);
+		assert.equal(shell.icon?.id, 'terminal-ubuntu');
+		assert.deepEqual(shell.args, ['-d', 'Ubuntu-24.04']);
+		const other: typeof shell = { args: ['-d', 'Debian'] };
+		await resolver.resolveShellLaunchConfig(other, options);
+		assert.equal(other.icon?.id, 'terminal');
+		const override: typeof shell = { icon: { id: 'terminal-git-bash' } };
+		await resolver.resolveShellLaunchConfig(override, options);
+		assert.equal(override.icon?.id, 'terminal-git-bash');
+	});
+
 	test('shell profile and environment resolution retain a single Session directory grant', async () => {
 		using owner = new DisposableStore();
 		const { services, workspace, processes } = createServices(owner);
@@ -375,7 +444,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceProfiles([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'raw', title: 'Raw shell',
-			invoke: async () => ({ options: { name: 'Raw shell', shellPath: 'C:\\Windows\\cmd.exe', shellArgs: '/d /s /c "echo ${env:PROFILE_VALUE}"' } }),
+			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => operation === 'getTerminalEnvironment' ? { persistent: true, map: [] } : ({ options: { name: 'Raw shell', shellPath: 'C:\\Windows\\cmd.exe', shellArgs: '/d /s /c "echo ${env:PROFILE_VALUE}"' } }),
 		}]);
 		await profiles.getContributedProfileProvider('acme.extension', 'raw')!.createContributedTerminalProfile({});
 		assert.deepEqual(launches[0].profile, { type: 'custom', name: 'Raw shell', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo environment value"' });
@@ -434,7 +503,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				launches.push(options);
 				if (options.config) {
 					child = owner.add(options.config.customPtyImplementation(1, 80, 24));
-					owner.add(child.onProcessData(data => writes.push(data))); owner.add(child.onProcessExit(code => exits.push(code)));
+					owner.add(child.onProcessData(data => { assert(typeof data === 'string'); writes.push(data); })); owner.add(child.onProcessExit(code => exits.push(code)));
 					await child.start();
 				}
 				return {};
@@ -443,6 +512,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const operations: string[] = [];
 		const invoke: import('../../../../api/browser/extensionHostLanguageBridge.js').ExtensionHostProviderInvoker = async (operation, payload, signal): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 			signal.throwIfAborted(); operations.push(operation);
+			if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
 			if (operation === 'createTerminalProfile') return custom ? { options: { name: 'Extension PTY' }, pty: { ptyId: 'pty.1', acceptsInput: true } } : { options: { name: 'Extension shell', shellPath: '/extension/shell', shellArgs: ['literal argument'], env: { PROFILE: 'value' } } };
 			if (operation === 'openTaskTerminal') return { events: [{ type: 'data', data: 'synchronous open output' }] };
 			if (operation === 'inputTaskTerminal') return { events: [{ type: 'data', data: `echo:${(payload as { data: string; }).data}` }] };
@@ -461,7 +531,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			assert.deepEqual(writes, ['synchronous open output', 'echo:typed']);
 			child!.dispose();
 			child = owner.add(launches[0]!.config!.customPtyImplementation(1, 100, 30));
-			owner.add(child.onProcessData(data => writes.push(data)));
+			owner.add(child.onProcessData(data => { assert(typeof data === 'string'); writes.push(data); }));
 			owner.add(child.onProcessExit(code => exits.push(code)));
 			await child.start();
 			assert.equal(operations.filter(operation => operation === 'createTerminalProfile').length, 2);
@@ -493,6 +563,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			invoke: async (operation, payload, signal): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 				signal.throwIfAborted();
 				operations.push({ operation, payload });
+				if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
 				if (operation === 'createTerminalProfile') return custom
 					? { options: { name: 'Extension PTY' }, pty: { ptyId: `pty.${++nextPty}`, acceptsInput: true } }
 					: { options: { name: 'Extension shell', shellPath: '/extension/shell', shellArgs: ['${env:PROFILE_VALUE}'], cwd: '${workspaceFolder}/run', env: { CALLER: '${env:PROFILE_VALUE}', REMOVED: null } } };

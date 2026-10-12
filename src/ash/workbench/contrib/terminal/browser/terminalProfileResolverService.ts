@@ -1,5 +1,6 @@
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
@@ -9,6 +10,7 @@ import { mergeEnvironments } from '../../../../platform/terminal/common/terminal
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
+import { IEnvironmentVariableService } from '../common/environmentVariable.js';
 import { ITerminalProfileResolverService, ITerminalProfileService, type IShellLaunchConfigResolveOptions } from '../../../services/terminal/common/terminal.js';
 
 /** Resolves caller-owned launch data against one initialized execution host and workspace generation. */
@@ -21,6 +23,7 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IConfigurationResolverService private readonly variables: IConfigurationResolverService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IEnvironmentVariableService private readonly environmentVariables: IEnvironmentVariableService,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.generation++));
@@ -31,7 +34,11 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 	getDefaultIcon(): ThemeIcon { return ThemeIcon.fromId('terminal'); }
 
 	resolveIcon(shellLaunchConfig: IShellLaunchConfig, os: OperatingSystem): void {
-		shellLaunchConfig.icon ??= shellLaunchConfig.executable ? this.getDefaultIcon() : this.profiles.getDefaultProfile(os)?.icon ?? this.getDefaultIcon();
+		const profile = shellLaunchConfig.executable ? undefined : this.profiles.getDefaultProfile(os);
+		const executable = shellLaunchConfig.executable ?? profile?.path;
+		shellLaunchConfig.icon ??= profile?.icon
+			?? (typeof executable === 'string' ? this._guessProfileIcon(executable, shellLaunchConfig.args ?? profile?.args) : undefined)
+			?? this.getDefaultIcon();
 	}
 
 	async getEnvironment(remoteAuthority: string | undefined): Promise<Readonly<Record<string, string>>> {
@@ -95,7 +102,9 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		mergeEnvironments(overrides, shell.env, options.os !== OperatingSystem.Windows);
 		const folder = this.workspace.getWorkspace().folders[0];
 		const resolve = (value: string) => this.variables.resolveWithEnvironment(environment, folder, value);
+		await this.environmentVariables.refreshCollections();
 		const env = Object.fromEntries(await Promise.all(Object.entries(overrides).map(async ([key, value]) => [key, value === null ? null : await resolve(value)])));
+		await this.environmentVariables.mergedCollection.applyToProcessEnvironment(env, environment, options.os !== OperatingSystem.Windows, resolve);
 		const cwd = shell.cwd ?? this.configuration.getValue<string>(`${TERMINAL_CONFIG_SECTION}.cwd`);
 		const resolvedCwd = cwd ? await resolve(cwd) : undefined;
 		const resolvedArgs = shell.args === undefined ? profile.args ?? [] : typeof shell.args === 'string' ? await resolve(shell.args) : await Promise.all(shell.args.map(resolve));
@@ -105,7 +114,7 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		shell.args = resolvedArgs;
 		shell.env = Object.freeze(env);
 		shell.cwd = resolvedCwd;
-		shell.icon ??= profile.icon ?? this.getDefaultIcon();
+		shell.icon ??= profile.icon ?? this._guessProfileIcon(executable, resolvedArgs) ?? this.getDefaultIcon();
 		shell.color ??= profile.color;
 		if (profile.overrideName && shell.name === undefined) shell.name = profile.profileName;
 	}
@@ -127,6 +136,25 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		return folders.length === 1 && folders[0]!.id.startsWith('session:') ? folders[0]!.id : undefined;
 	}
 
+	/** Uses execution-host launch data; profile and terminal titles are user-editable. */
+	private _guessProfileIcon(executable: string, args: TerminalArguments | undefined): ThemeIcon | undefined {
+		const program = executable.split(/[/\\]/).at(-1)!.replace(/\.exe$/i, '').toLowerCase();
+		if (/^ubuntu(?:\d{4})?$/.test(program)) return Lxicon.terminalUbuntu;
+		switch (program) {
+			case 'pwsh':
+			case 'powershell':
+				return Lxicon.terminalPowershell;
+			case 'cmd':
+				return Lxicon.terminalCmd;
+			case 'wsl': {
+				const distribution = wslDistribution(args);
+				return distribution && /ubuntu/i.test(distribution) ? Lxicon.terminalUbuntu : undefined;
+			}
+			default:
+				return undefined;
+		}
+	}
+
 	private assertAuthority(remoteAuthority: string | undefined): void {
 		if (this.isDisposed) throw new CancellationError();
 		const authority = this.workspace.getWorkspace().folders[0]?.uri.authority || undefined;
@@ -141,4 +169,71 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 	private assertCurrent(generation: number): void {
 		if (this.isDisposed || generation !== this.generation) throw new CancellationError();
 	}
+}
+
+function wslDistribution(args: TerminalArguments | undefined): string | undefined {
+	const argv = typeof args === 'string' ? windowsArguments(args) : args ?? [];
+	for (let index = 0; index < argv.length; index++) {
+		switch (argv[index]) {
+			case '-d':
+			case '--distribution':
+				return argv[index + 1];
+			case '--cd':
+			case '-u':
+			case '--user':
+			case '--shell-type':
+				index++;
+				break;
+			default:
+				// Exec, -- and positional commands end WSL option parsing. Their arguments
+				// may mention Ubuntu without selecting an Ubuntu distribution.
+				return undefined;
+		}
+	}
+	return undefined;
+}
+
+/** Reads a Windows command-line tail for icon inference without changing the launch string. */
+function windowsArguments(commandLine: string): string[] {
+	const argv: string[] = [];
+	let argument = '';
+	let quoted = false;
+	let started = false;
+	for (let index = 0; index < commandLine.length; index++) {
+		const character = commandLine[index];
+		if (!quoted && (character === ' ' || character === '\t')) {
+			if (started) argv.push(argument);
+			argument = '';
+			started = false;
+			continue;
+		}
+		started = true;
+		if (character === '\\') {
+			let backslashes = 1;
+			while (commandLine[index + 1] === '\\') {
+				backslashes++;
+				index++;
+			}
+			if (commandLine[index + 1] === '"') {
+				argument += '\\'.repeat(Math.floor(backslashes / 2));
+				if (backslashes % 2) {
+					argument += '"';
+					index++;
+				}
+			} else {
+				argument += '\\'.repeat(backslashes);
+			}
+		} else if (character === '"') {
+			if (quoted && commandLine[index + 1] === '"') {
+				argument += '"';
+				index++;
+			} else {
+				quoted = !quoted;
+			}
+		} else {
+			argument += character;
+		}
+	}
+	if (started) argv.push(argument);
+	return argv;
 }

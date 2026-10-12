@@ -15,6 +15,7 @@ export interface ITerminalConfiguration {
 	readonly cursorWidth: number;
 	readonly scrollback: number;
 	readonly minimumContrastRatio: number;
+	readonly showLinkHover: boolean;
 }
 
 export interface ISerializedTerminalInstanceContext {

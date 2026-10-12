@@ -1,4 +1,6 @@
 import { TerminalProcessExtHostProxy } from '../../contrib/terminal/browser/terminalProcessExtHostProxy.js';
+import { IEnvironmentVariableService } from '../../contrib/terminal/common/environmentVariable.js';
+import { deserializeEnvironmentVariableCollection } from '../../contrib/terminal/common/environmentVariableService.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
@@ -32,6 +34,7 @@ export class MainThreadTerminalService extends Disposable {
 		@IExtensionService private readonly extensions: IExtensionService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IEnvironmentVariableService private readonly environmentVariables: IEnvironmentVariableService,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
@@ -58,6 +61,11 @@ export class MainThreadTerminalService extends Disposable {
 			const controller = new AbortController();
 			lifetime.add(toDisposable(() => controller.abort()));
 			try {
+				lifetime.add(this.environmentVariables.registerCollectionProvider(extension.id, async () => {
+					const snapshot = record(await descriptor.invoke('getTerminalEnvironment', {}, controller.signal), ['persistent', 'map']);
+					if (typeof snapshot.persistent !== 'boolean') throw invalid();
+					return { persistent: snapshot.persistent, map: deserializeEnvironmentVariableCollection(snapshot.map) };
+				}));
 				lifetime.add(this.profiles.registerInternalContributedProfile({ extensionIdentifier: extension.id, id: descriptor.profileId, title: descriptor.title }));
 				lifetime.add(this.profiles.registerTerminalProfileProvider(extension.id, descriptor.profileId, {
 					createContributedTerminalProfile: async presentation => {

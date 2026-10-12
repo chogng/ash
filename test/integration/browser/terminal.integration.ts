@@ -1,3 +1,7 @@
+import { IHoverService, HoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import { IEnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariable.js';
+import { EnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariableService.js';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
@@ -76,6 +80,8 @@ setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
 	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => lifetime.add(services.createInstance(TerminalGroupService)));
 	if (!services.has(IStorageService)) services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', flushInterval: 0 })));
+	if (!services.has(IEnvironmentVariableService)) services.registerSingleton(IEnvironmentVariableService, () => lifetime.add(services.createInstance(EnvironmentVariableService)));
+	if (!services.has(IHoverService)) services.registerInstance(IHoverService, lifetime.add(new HoverService(services.get(IConfigurationService), lifetime.add(new BrowserContextViewService(document.body)), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
 	services.registerInstance(IExtensionService, { terminalProfiles: [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	services.registerInstance(IPathService, { path: Promise.resolve(posix), resolvedUserHome: URI.file('/home/test'), userHome: async () => URI.file('/home/test'), getPath: async () => posix, getOperatingSystem: async () => OperatingSystem.Linux, fileURI: async (path: string) => URI.file(path) } as unknown as IPathService);
 	services.registerInstance(IConfigurationResolverService, lifetime.add(services.createInstance(ConfigurationResolverService)));
@@ -142,6 +148,7 @@ const themeService = store.add(new TestThemeService(darkColorTheme));
 if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
 widgetServices.registerInstance(ITerminalConfigurationService, store.add(widgetServices.createInstance(TerminalConfigurationService)));
+widgetServices.registerInstance(IHoverService, store.add(new HoverService(widgetServices.get(IConfigurationService), store.add(new BrowserContextViewService(document.body)), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
 instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 const widget = instance.xterm!;
 widget.setVisible(true);
@@ -348,7 +355,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 				currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] },
 				activateByEvent: async (event: string) => {
 					if (event !== 'onTerminalProfile:shell') throw new Error(`Unexpected activation: ${event}`);
-					bridge.replaceProfiles([{ runtimeId: 'extension-runtime', packageDigest: digest, profileId: 'shell', title: 'Extension Shell', invoke: async (): Promise<import('../../../src/ash/platform/agentHost/common/extensionHostApi.js').JsonValue> => ({ options: { name: 'Extension Shell', shellPath: '${env:HOME}/extension-shell', shellArgs: ['${env:PROFILE_ARG}'], env: { EXTENSION: 'value' } } }) }]);
+					bridge.replaceProfiles([{ runtimeId: 'extension-runtime', packageDigest: digest, profileId: 'shell', title: 'Extension Shell', invoke: async (operation): Promise<import('../../../src/ash/platform/agentHost/common/extensionHostApi.js').JsonValue> => operation === 'getTerminalEnvironment' ? { persistent: true, map: [] } : ({ options: { name: 'Extension Shell', shellPath: '${env:HOME}/extension-shell', shellArgs: ['${env:PROFILE_ARG}'], env: { EXTENSION: 'value' } } }) }]);
 				},
 			});
 		}

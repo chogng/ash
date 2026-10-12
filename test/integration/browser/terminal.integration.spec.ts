@@ -1021,6 +1021,36 @@ test('configured terminal profile reaches the real picker and resolver with argv
 	expect(errors).toEqual([]);
 });
 
+test('renamed WSL profiles retain Ubuntu icons in the menu and created terminal', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?pane&profiles&browser&os=windows');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(async () => {
+		await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
+			'Work shell': { path: 'C:\\Windows\\System32\\wsl.exe', args: ['-d', 'Ubuntu-24.04'] },
+		});
+		window.ashTerminalPaneIntegration.panel(true);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+	for (const name of ['Work shell', 'Renamed shell']) {
+		if (name === 'Renamed shell') {
+			await page.evaluate(() => window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
+				'Renamed shell': { path: 'C:\\Windows\\System32\\wsl.exe', args: '--distribution "Ubuntu-24.04"' },
+			}));
+		}
+		await page.getByRole('button', { name: 'Select Terminal Profile', exact: true }).click();
+		const item = page.getByRole('menuitemcheckbox', { name, exact: true });
+		await expect(item.locator('svg[data-ash-icon-id="terminal-ubuntu"]')).toBeVisible();
+		await item.click();
+		const tab = page.getByRole('tab', { name, exact: true });
+		await expect(tab).toBeVisible();
+		await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-ubuntu');
+	}
+	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 test('Windows raw command line profile reaches the picker, resolver and next default without becoming argv', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -1275,7 +1305,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().some(write => write.data === 'x'))).toBe(true);
 		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToTerminalPanel'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 1, editorTabs: 0, originalScreen: true, target: 1 });
-		await expect(page.locator('.ash-terminal-widgets .xterm-rows')).toContainText('preserved editor output');
+		await expect(page.locator('.ash-terminal-widget-overlay .xterm-rows')).toContainText('preserved editor output');
 		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
 		await page.evaluate(() => window.ashTerminalEditorIntegration.close());
 		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().instances)).toBe(0);
@@ -1366,3 +1396,34 @@ test('terminal instance list restores its resized width after page reload', asyn
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
 	await expect.poll(() => column.evaluate(element => element.getBoundingClientRect().width)).toBe(resized);
 });
+
+for (const [theme, locale] of [['dark', 'en'], ['hcDark', 'en'], ['hcLight', 'zh-CN']] as const) {
+	test(`terminal URL hover uses screen geometry and shared Escape lifecycle in ${theme}/${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/terminal.html?browser&locale=${locale}`);
+		await page.evaluate(() => window.ashTerminalIntegration.start());
+		await page.evaluate(() => window.ashTerminalIntegration.ready());
+		await page.evaluate(theme => {
+			window.ashTerminalIntegration.theme(theme);
+			window.ashTerminalIntegration.write('https://example.com/terminal\r\n');
+		}, theme);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.snapshot(1000))).toContain('https://example.com/terminal');
+		const screen = await page.locator('.xterm-screen').boundingBox();
+		const dimensions = await page.evaluate(() => window.ashTerminalIntegration.dimensions());
+		await page.mouse.move(screen!.x + 6.5 * screen!.width / dimensions.cols, screen!.y + 0.5 * screen!.height / dimensions.rows);
+		await expect(page.locator('.ash-hover')).toContainText('https://example.com/terminal');
+		const anchor = await page.locator('.ash-terminal-link-hover-target').boundingBox();
+		expect(anchor!.x).toBeCloseTo(screen!.x, 0);
+		expect(anchor!.y).toBeCloseTo(screen!.y, 0);
+		await page.keyboard.press('Escape');
+		await expect(page.locator('.ash-hover')).toHaveCount(0);
+		await page.mouse.move(0, 0);
+		await page.evaluate(() => window.ashTerminalIntegration.configure('terminal.integrated.showLinkHover', false));
+		await page.mouse.move(screen!.x + 5.5 * screen!.width / dimensions.cols, screen!.y + 0.5 * screen!.height / dimensions.rows);
+		await expect(page.locator('.ash-hover')).toHaveCount(0);
+		await page.evaluate(() => window.ashTerminalIntegration.dispose());
+		await expect(page.locator('.ash-terminal-widget-overlay')).toHaveCount(0);
+		expect(errors).toEqual([]);
+	});
+}

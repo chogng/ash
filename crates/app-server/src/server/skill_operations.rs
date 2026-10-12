@@ -116,6 +116,14 @@ impl AppServer {
         let kind = skill_resource_kind_dto(resource.kind());
         let path = resource.path().display();
         let mime_type = skill_resource_mime_type(resource.path(), resource.bytes());
+        // Close and resource creation share this short lock; IO above never delays connection cleanup.
+        let state = connection
+            .state
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        if state.closed {
+            return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
+        }
         let metadata = self
             .resources
             .lock()

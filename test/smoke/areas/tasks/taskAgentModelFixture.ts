@@ -20,12 +20,15 @@ export class TaskAgentModelFixture {
 	private readonly server: Server;
 	private sequence = 0;
 	private followupStart = 0;
+	private action: string | undefined;
 	private directory: string | undefined;
 	private runId: string | undefined;
-	private expected: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded' = 'running';
+	private expected: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded' | 'preparing' | 'not-ready' = 'running';
 	private selectedLabel = taskLabel;
 	private pageSize: number | undefined;
 	private referenceRead = false;
+	private outputCursor = 0;
+	private statusSamples = 0;
 	readonly exchanges: { name?: string; arguments?: unknown; result?: unknown; answer?: string; }[] = [];
 	readonly errors: string[] = [];
 
@@ -45,7 +48,10 @@ export class TaskAgentModelFixture {
 				const action = body.input.filter(item => item.role === 'user').map(item => JSON.stringify(item).match(/TASK_FIXTURE_(RUN|CANCEL|RETRY|INSPECT)/)?.[1]).filter(Boolean).at(-1);
 				const cancel = action === 'CANCEL';
 				const inspect = action === 'INSPECT';
-				if ((cancel || inspect || action === 'RETRY') && !this.followupStart) this.followupStart = this.sequence + 1;
+				if (action !== this.action) {
+					if (this.action !== undefined) this.beginFollowup();
+					this.action = action;
+				}
 				const latest = body.input.filter(item => item.type === 'function_call_output' && Number(item.call_id?.split('-').at(-1)) >= this.followupStart).at(-1);
 				const call = latest && body.input.find(item => item.type === 'function_call' && item.call_id === latest.call_id);
 				const text = latest && (typeof latest.output === 'string' ? latest.output : latest.output!.map(part => part.text).join(''));
@@ -87,13 +93,17 @@ export class TaskAgentModelFixture {
 							break;
 						case 'tasks_status':
 							if (result.runId !== this.runId) throw new Error('Status returned another Run');
-							if ((result.status === 'failed' || result.status === 'canceled' || result.status === 'succeeded') && (this.expected === 'failed' || inspect)) {
-								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
+							if (this.expected === 'not-ready' && result.status === 'running' && result.terminalId) this.statusSamples++;
+							if (this.expected === 'not-ready' && result.ready) throw new Error('Background fixture became ready without an end pattern');
+							if (!cancel && this.expected === 'preparing' && result.status === 'running' && !result.terminalId && ++this.statusSamples >= 3) {
+								answer = 'WAITING ' + this.runId;
+							} else if ((result.status === 'failed' || result.status === 'canceled' || result.status === 'succeeded') && (this.expected === 'failed' || inspect)) {
+								next('tasks_output', { ...target(), cursor: this.outputCursor, max_characters: 65536 });
 							} else if (!cancel && !inspect && this.expected === 'succeeded' && result.status === 'succeeded') {
-								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
+								next('tasks_output', { ...target(), cursor: this.outputCursor, max_characters: 65536 });
 							} else if (result.status === 'failed' || result.status === 'succeeded') throw new Error('Fixture Task stopped unexpectedly: ' + JSON.stringify(result));
-							else if ((!cancel && !inspect && (this.expected === 'running' || (this.expected === 'ready' && result.ready)) && result.status === 'running' && result.terminalId) || (cancel && result.status === 'canceled')) {
-								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
+							else if ((!cancel && (!inspect || this.expected === 'not-ready') && (this.expected === 'running' || (this.expected === 'ready' && result.ready) || (this.expected === 'not-ready' && this.statusSamples >= 3)) && result.status === 'running' && result.terminalId) || (cancel && result.status === 'canceled')) {
+								next('tasks_output', { ...target(), cursor: this.outputCursor, max_characters: 65536 });
 							} else {
 								// Back off while the real PTY is starting; do not spin model requests.
 								await delay(150);
@@ -108,13 +118,15 @@ export class TaskAgentModelFixture {
 									next('tasks_output', { ...target(), cursor: 0, max_characters: this.pageSize });
 								} else if (result.hasMore || result.text) next('tasks_output', { ...target(), cursor: result.nextCursor, max_characters: this.pageSize });
 								else answer = 'OUTPUT_COMPLETE ' + this.runId;
-							} else if (this.expected === 'succeeded') answer = 'SUCCEEDED ' + this.runId;
+							} else if (cancel && this.expected === 'preparing') answer = 'CANCELED ' + this.runId;
+							else if (this.expected === 'not-ready' && (cancel || result.text.includes(taskMarker))) answer = (cancel ? 'CANCELED ' : 'NOT_READY ') + this.runId;
+							else if (this.expected === 'succeeded') answer = 'SUCCEEDED ' + this.runId;
 							else if (this.expected === 'failed') answer = 'FAILED ' + this.runId;
 							else if (inspect) answer = 'STOPPED ' + this.runId;
 							else if (result.text.includes(taskMarker)) answer = (cancel ? 'CANCELED ' : 'RUNNING ') + this.runId;
 							else {
 								await delay(150);
-								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
+								next('tasks_output', { ...target(), cursor: this.outputCursor, max_characters: 65536 });
 							}
 							break;
 						default: throw new Error('Unexpected model tool result: ' + JSON.stringify(call));
@@ -144,10 +156,10 @@ export class TaskAgentModelFixture {
 
 	get baseUrl(): string { return 'http://127.0.0.1:' + (this.server.address() as AddressInfo).port + '/v1'; }
 	selectDirectory(directory: string): void { this.directory = directory; }
-	expectOutcome(outcome: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded'): void { this.expected = outcome; }
-	beginFollowup(): void { this.followupStart = this.sequence + 1; }
+	expectOutcome(outcome: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded' | 'preparing' | 'not-ready'): void { this.expected = outcome; }
+	beginFollowup(): void { this.followupStart = this.sequence + 1; this.statusSamples = 0; }
 	selectTask(label: string): void { this.selectedLabel = label; }
-	readPages(size: number): void { this.pageSize = size; }
+	readPages(size: number, staleCursor?: number): void { this.pageSize = size; this.outputCursor = staleCursor ?? 0; this.referenceRead = staleCursor !== undefined; }
 	inspectRun(runId: string): void { this.runId = runId; this.beginFollowup(); }
 
 	async close(): Promise<void> {

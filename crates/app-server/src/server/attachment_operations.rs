@@ -99,6 +99,14 @@ impl AppServer {
                 ash_attachments::MAX_AUDIO_ATTACHMENT_BYTES,
             ),
         };
+        // Close and resource creation share this short lock; IO above never delays connection cleanup.
+        let state = connection
+            .state
+            .lock()
+            .map_err(|_| internal_attachment_error())?;
+        if state.closed {
+            return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
+        }
         let resource = self
             .resources
             .lock()

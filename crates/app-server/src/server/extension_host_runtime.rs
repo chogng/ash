@@ -1014,6 +1014,7 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
         RegistrationKind::TerminalProfileProvider { .. } => matches!(
             operation,
             "createTerminalProfile"
+                | "getTerminalEnvironment"
                 | "openTaskTerminal"
                 | "readTaskTerminal"
                 | "inputTaskTerminal"

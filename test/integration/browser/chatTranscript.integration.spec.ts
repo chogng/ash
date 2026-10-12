@@ -291,3 +291,25 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(errors).toEqual([]);
 	});
 }
+
+test('streamed workspace images reuse one authorized read and preserve a scrolled reading position after decoding', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/chatTranscript.html');
+	const text = Array.from({ length: 35 }, (_, index) => `Paragraph ${index}.`).join('\n\n') + '\n\n![Workspace image](file:///workspace/image.png)';
+	await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value, false), text);
+	const image = page.locator('[data-item-id="stream"] img');
+	await expect.poll(() => image.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(2);
+	const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
+	await viewport.evaluate(element => { element.scrollTop = 30; });
+	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(30);
+	await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value + '\n\nMore text.', false), text);
+	await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value + '\n\nMore text.\n\nDone.', true), text);
+	await expect.poll(() => image.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(2);
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.imageReadCount())).toBe(1);
+	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(30);
+	const url = await image.getAttribute('src');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+	expect(await page.evaluate(async url => { try { await fetch(url!); return false; } catch { return true; } }, url)).toBe(true);
+	expect(errors).toEqual([]);
+});

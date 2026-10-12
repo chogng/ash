@@ -70,7 +70,8 @@ services.registerSingleton(ICommandService, () => services.createInstance(Standa
 registerCodeEditorServices(services);
 services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
 const skillResourceRequests: unknown[] = [];
-const prompts = resources.add(new PromptsService({ onDidChangeSkills: Event.None,
+const prompts = resources.add(new PromptsService({
+	onDidChangeSkills: Event.None,
 	list: async () => ({ generation: 1, skills: [{ id: { source: 'user:review', name: 'review' }, description: 'Review', contentDigest: `sha256:${'a'.repeat(64)}`, enabled: true, compatible: true }] }),
 	read: async () => { throw new Error('Unexpected management read'); }, setEnabled: async () => { },
 	readTextResource: async (reference, path, _signal, sessionId) => {
@@ -132,7 +133,8 @@ root.style.cssText = 'display:flex;width:600px;height:400px';
 document.body.append(root);
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
 const accessibleView = resources.add(services.createInstance(AccessibleViewService));
-const list = resources.add(services.createInstance(ChatListWidget, root, {}));
+let imageReads = 0;
+const list = resources.add(services.createInstance(ChatListWidget, root, { imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } }));
 list.setVisible(true);
 const toolNotifications = resources.add(new Emitter<ServerNotification>());
 const toolService = createAppServerAgentThreadService({ onNotification: listener => toolNotifications.event(listener) } as AppServerProtocolClient);
@@ -178,6 +180,7 @@ declare global {
 			setCodeLineHeight(height: number): Promise<void>;
 			setTheme(value: 'dark' | 'light' | 'hc'): void;
 			refresh(): void;
+			imageReadCount(): number;
 			stream(value: string, complete: boolean): void;
 			showLongCode(): string;
 			showTool(): void;
@@ -215,6 +218,7 @@ window.ashChatTranscriptIntegration = {
 		const palette = value === 'dark' ? darkColorTheme : value === 'light' ? lightColorTheme : highContrastDarkColorTheme;
 		theme.setColorTheme(palette);
 	},
+	imageReadCount: () => imageReads,
 	stream: (value, complete) => list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]),
 	refresh: () => list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]),
 	showLongCode: () => {

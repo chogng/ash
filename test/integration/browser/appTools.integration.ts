@@ -1,3 +1,5 @@
+import { IEnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariable.js';
+import { EnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariableService.js';
 import { TaskService } from '../../../src/ash/workbench/contrib/tasks/browser/taskService.js';
 import { TasksViewPane } from '../../../src/ash/workbench/contrib/tasks/browser/tasksViewPane.js';
 import { IFileService, FileKind, FileNotFoundError } from '../../../src/ash/platform/files/common/files.js';
@@ -164,6 +166,7 @@ services.registerSingleton(ICommandService, () => new CommandService(services));
 services.registerSingleton(IConfigurationResolverService, () => services.createInstance(ConfigurationResolverService));
 services.registerInstance(IExtensionService, { terminalProfiles: [], onDidChange: Event.None, reload: async () => { }, activateByEvent: async () => { } } as unknown as IExtensionService);
 services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
+services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
 services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);

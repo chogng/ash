@@ -79,6 +79,9 @@ export class ChatListWidget extends DomWidget {
 			vertical: "auto",
 			tabIndex: -1,
 		}));
+		this._register(this.scrollable.onDidScroll(event => {
+			this.shouldFollow = event.current.maximumTop - event.current.top < 48;
+		}));
 		this.domNode = this.scrollable.element;
 		this.element.classList.add("ash-chat-list-widget", "ash-chat-transcript-scrollable");
 		this.transcript = this.scrollable.contentElement;
@@ -308,6 +311,7 @@ export class ChatListWidget extends DomWidget {
 				linkHandler: (target: string) => this.onDidRequestLink?.(target),
 				imageResourceLoader: this.imageResourceLoader,
 			}));
+			disposables.add(markdown.onDidChangeHeight(() => { if (this.visible) this.layout(this.shouldFollow ? undefined : this.readingAnchor()); this._onDidChangeContent.fire(); }));
 			markdownPart = markdown;
 			body.append(markdown.domNode);
 		} else {

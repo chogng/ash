@@ -1,5 +1,7 @@
 {
   "ash": {
+    "terminal.environment.invalidCollection": "终端环境变量集合无效。",
+    "terminal.config.showLinkHover": "指向终端链接时显示包含 URL 的悬浮提示。",
     "color.scmGraph.historyItemRefColor": "历史条目引用的颜色。",
     "color.scmGraph.historyItemRemoteRefColor": "历史条目远程引用的颜色。",
     "color.scmGraph.historyItemHoverLabelForeground": "历史条目悬停标签的前景色。",

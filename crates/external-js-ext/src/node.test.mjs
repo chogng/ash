@@ -500,3 +500,18 @@ test('terminal profile can inherit the execution host default shell without inve
 	assert.equal(result.status, 'success', JSON.stringify(result));
 	assert.deepEqual(result.body.body.payload, { options: { name: 'Default shell', env: { MODE: 'profile value' } } });
 });
+
+test('terminal environment collections expose immutable mutators through the admitted provider callback', async t => {
+	const h = await host(t, `const v = require('vscode');
+exports.activate = context => {
+ context.environmentVariableCollection.prepend('PATH', '/extension:');
+ context.environmentVariableCollection.append('PATH', ':after');
+ context.environmentVariableCollection.replace('MODE', 'extension');
+ context.environmentVariableCollection.persistent = false;
+ context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Environment shell' }) }));
+};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminalProfiles: [{ id: 'shell', title: 'Environment shell' }] } } });
+	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
+	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'getTerminalEnvironment', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	assert.deepEqual(result.body.body.payload, { persistent: false, map: [['PATH', { value: ':after', type: 2 }], ['MODE', { value: 'extension', type: 1 }]] });
+});

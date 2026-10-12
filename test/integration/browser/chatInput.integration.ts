@@ -92,7 +92,7 @@ import { IChatService } from '../../../src/ash/workbench/services/chat/common/ch
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { HoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
+import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
@@ -380,6 +380,7 @@ const terminalHost = document.createElement('div');
 document.body.append(terminalHost);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
 if (hasContextSources) services.registerInstance(ITerminalConfigurationService, resources.add(services.createInstance(TerminalConfigurationService)));
+if (hasContextSources) services.registerInstance(IHoverService, resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
 const terminalScreen = hasContextSources ? resources.add(services.createInstance(XtermTerminal, terminalHost, terminalInstance)) : undefined;
 terminalScreen?.write(`\x1b[32m${terminalSource}\x1b[0m\r\n`);
 const terminalInstances = hasContextSources ? [terminalInstance] : [];
