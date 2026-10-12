@@ -1,3 +1,11 @@
+import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
+import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
+import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
+import { SearchService } from '../../../src/ash/workbench/services/search/common/searchService.js';
+import { IContentSearchService } from '../../../src/ash/platform/search/common/search.js';
+import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import '../../../src/ash/workbench/common/theme.js';
 import '../../../src/ash/sessions/browser/media/chatViewPane.css';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
@@ -144,7 +152,7 @@ document.body.append(destinations);
 const recordDestination = (value: unknown): void => { destinations.textContent = JSON.stringify([...JSON.parse(destinations.textContent!), value]); };
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: URI | string) => { if (id === 'git.getRepositoryContexts') { return CommandsRegistry.getCommand(id)!(services); } recordDestination({ command: id, ...(resource !== undefined ? { resource: resource.toString() } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts') { return CommandsRegistry.getCommand(id)!(services); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
@@ -338,8 +346,19 @@ document.body.append(symbolReads);
 let symbolSource = 'before\nfunction attach() {\n  return 42;\n}\nafter';
 let terminalSource = 'context terminal ready';
 let searchSnapshot: { query: string; content: string; matchCount: number; } | undefined = hasContextSources ? { query: 'needle', content: '# Search: needle\n# File: file:///workspace/main.ts\n  2:1-2:7: needle', matchCount: 1 } : undefined;
+const reportShellHistory = new URLSearchParams(location.search).has('shellHistory');
+const disableCommandStorage = new URLSearchParams(location.search).has('disableCommandStorage');
 const terminalInstance: ITerminalInstance = {
-	...Disposable.None, id: 'context-shell', instanceId: 1, dirId: 'workspace', processId: 1, initialCwd: '/workspace', title: 'Shell',
+	...Disposable.None, id: 'context-shell', instanceId: 1, dirId: 'workspace', processId: 1, initialCwd: '/workspace', cwd: new URLSearchParams(location.search).get('terminalCwd') ?? undefined, title: 'Shell',
+	...(reportShellHistory ? {
+		shellIntegration: {
+			commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: disableCommandStorage,
+			commands: disableCommandStorage ? [] : [
+				{ commandId: 'first', status: 'succeeded' as const, exitCode: 0, command: 'echo 中文; "quoted"', isTrusted: true, cwd: '/workspace' },
+				{ commandId: 'second', status: 'failed' as const, exitCode: 9, command: 'unverified\ncommand', isTrusted: false, cwd: '/workspace/current' },
+			],
+		}
+	} : {}),
 	profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 	onDidWriteData: Event.None, onDidExit: Event.None, onDidChangeCommandStatus: Event.None, onDidChangeState: Event.None,
 	start: () => { }, clearBuffer: () => terminalScreen?.clearBuffer(), reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },
@@ -400,6 +419,21 @@ services.registerInstance(IFileService, {
 	readFile: async (resource: URI) => ({ resource, content: 'Workspace file content', revision: '1' }),
 } as unknown as IFileService);
 services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
+// Attachment Quick Access uses the same file-query owner as Search. This fixture
+// has no shared file models or content query scenario.
+services.registerInstance(IContentSearchService, { search: async () => { throw new Error('Chat context fixture does not run content searches'); } });
+services.registerInstance(IFileTextModelService, {
+	...Disposable.None,
+	onDidChangeEncoding: Event.None, onModelAdded: Event.None, onModelRemoved: Event.None, onModelLanguageChanged: Event.None,
+	getEncodingSupport: () => undefined, getModel: () => null, getModels: () => [], hasPendingSaveRecovery: () => false,
+	addSaveParticipant: () => Disposable.None, addSaveCompletionParticipant: () => Disposable.None,
+	waitForSaveRecovery: async () => { }, refresh: async () => { },
+	acquire: async () => { throw new Error('Chat context fixture has no shared file models'); },
+});
+services.registerInstance(ISearchService, services.createInstance(SearchService));
+services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+services.registerInstance(IPathService, services.createInstance(BrowserPathService));
+
 const submission = document.createElement('output');
 submission.setAttribute('aria-label', 'Submission');
 document.body.append(submission);

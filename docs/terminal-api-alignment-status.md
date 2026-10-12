@@ -1,5 +1,55 @@
 # Terminal API 对齐状态
 
+## 命令文本、历史和 capability 本批准入（2026-10-12）
+
+用户执行 Shell 命令 → 原 resolver/TerminalInstance/ShellIntegration → 原 Rust TerminalCommandStatusTracker 解码 E 和 nonce、保留有界完成历史及检测 capability → 原 PTY drainer/read/protocol adapter → 原 TerminalProcessManager 在屏幕解析确认后发布 snapshot → TerminalContext 使用命令历史与 capability → nonce/真实 Shell/复用/解析确认回归。
+
+VS Code 公开事实：E 的转义文本可在 C 前或 D 前发送；nonce 匹配才 isTrusted，缺省/不匹配仍有文本但不可信。Cwd 的 nonce 独立校验；HasRichCommandDetection 表示完整协议支持，Task 禁用命令存储。只补 Ash 当前 tracker、领域契约与真实消费者，不引入另一套 capability store、parser、历史 owner 或自动重执行。
+
+准确范围：Rust 的既有 terminal.rs、command_status.rs/tests、shell_integration.rs、profiles_tests.rs、service_tests.rs；exec-server-protocol terminal.rs/protocol_tests.rs；App Server protocol terminal.rs/registry.rs 与既有协议测试；app-server/server/terminal_operations.rs（均沿用用户明确保留的 owner）。双方有对应路径的 TS platform/terminal/common/terminal.ts、contrib/terminal/browser/terminalProcessManager.ts、terminalInstance.ts 与其 TerminalService 测试；此前批准的 Ash services/terminal/browser/terminal.ts、platform/terminal/browser/appServerTerminalProcessService.ts 及 local/SSH adapter 测试、contrib/chat/browser/actions/chatContext.ts（当前终端上下文消费者）。已有 test/integration/browser 的 terminal.integration.ts/spec、chatInput.integration.ts、chatContextActions.integration.spec.ts，以及本台账与 contrib/terminal/README.md；只改本批契约、snapshot 消费和回归 hunk，其他共享修改保留。没有 DOM/CSS/主题或新 UI label。
+
+## Shell integration 本批准入（2026-10-12）
+
+先 rebase origin/main，保留远端三个提交和原 Windows raw 参数提交，合并 Tasks/Output 的单注册入口；装配类型检查发现重复 MarkerService import/实例注册，收敛到已有唯一注册。当前 Shell 行为 → 原 resolver/TerminalService/TerminalInstance → exec-server 的既有 profile/ShellIntegration 与 TerminalCommandStatusTracker → 原 PTY drainer → 原 protocol adapter/TerminalProcessManager 解析确认 → 命令状态、当前 cwd 与 Chat terminal attachment → 定向 unit/真实 Bash/Zsh/PowerShell PTY/浏览器与复用回归。
+
+VS Code 公开协议事实：633 A/B 是 prompt/input 区域，C 是实际执行，D 的状态缺省保留未知；P;Cwd 使用反斜线与 xHH 转义。PowerShell prompt 上报 $? 的 0/1，不能用陈旧 LASTEXITCODE 代替；Bash/Zsh 保留实际状态。本批按这些事实独立实现；不复制上游脚本、addon 或 capability 状态，Rust tracker 继续拥有命令与 cwd，屏幕/解析确认/Task 完成仍由原 owner 承接。
+
+准确范围（TS 同路径局部变更；services/terminal 和 Chat context 是此前批准的领域契约/消费者归属；Rust 与协议为用户明确保留的既有 owner）：
+
+- `src/ash/sessions/browser/workbench.ts`（rebase 装配去重）
+- `src/ash/workbench/services/tasks/test/browser/taskService.test.ts`（共享工作树重复 mock import 只做编译去重，其余保留）
+- `crates/exec-server/src/terminal/command_status.rs`
+- `crates/exec-server/src/terminal/command_status_tests.rs`
+- `crates/exec-server/src/terminal/shell_integration.rs`
+- `crates/exec-server/src/terminal/profiles.rs`
+- `crates/exec-server/src/terminal/profiles_tests.rs`
+- `crates/exec-server/src/terminal/service_tests.rs`
+- `crates/exec-server/src/terminal.rs`
+- `crates/exec-server-protocol/src/terminal.rs`
+- `crates/exec-server-protocol/src/protocol_tests.rs`
+- `crates/app-server-protocol/src/protocol/terminal.rs`
+- `crates/app-server-protocol/src/protocol/registry.rs`
+- `crates/app-server/src/server/terminal_operations.rs`
+- `src/ash/platform/terminal/common/terminal.ts`
+- `src/ash/platform/terminal/browser/appServerTerminalProcessService.ts`
+- `src/ash/workbench/services/terminal/browser/terminal.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalProcessManager.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalInstance.ts`
+- `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts`
+- `src/ash/platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts`
+- `src/ash/workbench/contrib/chat/browser/actions/chatContext.ts`
+- `test/integration/browser/terminal.integration.ts`
+- `test/integration/browser/terminal.integration.spec.ts`
+- `test/integration/browser/chatContextActions.integration.spec.ts`
+- `test/integration/browser/chatInput.integration.ts`（terminal context cwd 数据，以及 rebase 后 AnythingQuickAccess 所需的既有 Search/Path 领域服务 fixture 装配）
+- `src/ash/workbench/contrib/terminal/README.md`
+
+本批结果：按真实 executable 为自定义 PowerShell/Bash/Zsh profile 注入；633 A/B 仅表示 prompt/input，C/D 由原 Rust tracker 产生执行记录与状态，缺省 D 保留未知完成。P;Cwd 解码反斜线和 xHH，支持 BEL/ST 与任意分块，非法/未知 OSC 保留原字节并限制未终止缓存。命令保存开始时的 cwd；最新 cwd 与输出序号通过原协议 adapter 和进程管理器传递，原屏幕解析完成后才更新，Chat terminal context 使用当前目录。进程信息保留退出前最后检测目录，未检测到时继续使用 OS 查询。复用重建原进程管理器、等待旧 PTY 释放，保留原实例/屏幕并隔离旧 cwd、事件和游标。
+
+Bash/Zsh 保留用户 prompt/startup、真实数值状态、多行与输入程序；Bash 登录配置由 wrapper 加载，已有 3.2 DEBUG trap 保留。PowerShell 仍以 $? 上报 0/1，保留用户 prompt/PSReadLine，不使用陈旧 LASTEXITCODE，真实 OS 退出单独报告。显式命令和 raw Windows 参数不改写；独立 Task 执行不消费 shell OSC，任务生命周期仍由 Task/PTY owner 完成。协议新增可选字段，旧 frame 可读，不迁移 resolver/PTY owner；cwd 不授予路径权限。命令文本/历史、nonce 可信命令文本与 Shell capability 仍未声明完成。
+
+验证：标准前端 unit/架构 8 文件 288 项通过；Terminal/AppTools/Testing Chromium 89 项与 Chat Context 44 项通过，包含真实 xterm 解析 gating、当前 cwd 附件及中英文既有消费者。rebase 后补齐 Chat fixture 的 Search/Path 领域服务依赖、保留结构化命令参数，并让异步 child picker 的键盘回归显式定位目标结果，继续验证 Ctrl+Enter。全浏览器 3496 文件、Renderer 3691、common 2328 与协议 1440 文件类型检查通过。`just verify` 的 exec-server terminal 40 项（真实 macOS Bash 3.2/Zsh/PowerShell 7.6.6，包含 login、自定义配置、set -u、用户 hooks、多行/空输入/Read-Host/中断、旧 LASTEXITCODE、退出 19 与转义目录）、App Server terminal 16 项、App Server 协议 128 项及其 3 项集成测试、exec-server 协议 8 项通过，四个包 check/test/all-targets deny-warnings 均通过。Windows MSVC exec-server all-targets deny-warnings 与 Linux exec-server 测试目标编译通过；本机 macOS，没有实跑 Windows ConPTY 或 Windows Bash/Zsh。协议/绑定由原生成器生成；本批 TS 13 文件与 Rust 12 文件精确格式、两份 Markdown 与当前工作树 `git diff HEAD --check` 通过。共享工作树的 Tasks/App Tools 与 UI scenario 其他修改保留，未 commit/push。
+
 ## Windows 原始 CommandLine 本批准入（2026-10-12）
 
 Windows profile/automation/Agent/Debug/Task → 原 profile resolver / TerminalTaskSystem → string 或 argv 的领域与生成传输契约 → 原 App Server/exec-server → 原 PTY/ConPTY owner → argv 正常引用，raw string 原样追加至已引用 executable。原实例 reuse/Relaunch 保存字符串而不按字符复制，数组保留不可变 argv 快照；非 Windows 在配置/resolver/执行边界拒绝 raw string。

@@ -27,6 +27,7 @@ pub use exec_server_protocol::terminal::TerminalCommandStatus;
 pub use exec_server_protocol::terminal::TerminalCommandStatusEvent;
 pub use exec_server_protocol::terminal::TerminalCreateRequest;
 pub use exec_server_protocol::terminal::TerminalCreateResult;
+pub use exec_server_protocol::terminal::TerminalCwd;
 pub use exec_server_protocol::terminal::TerminalExecution;
 pub use exec_server_protocol::terminal::TerminalLifecycle;
 pub use exec_server_protocol::terminal::TerminalOutputChunk;
@@ -39,6 +40,7 @@ pub use exec_server_protocol::terminal::TerminalReadResult;
 pub use exec_server_protocol::terminal::TerminalReconnectLease;
 pub use exec_server_protocol::terminal::TerminalResizeRequest;
 pub use exec_server_protocol::terminal::TerminalResolvedProfile;
+pub use exec_server_protocol::terminal::TerminalShellIntegration;
 pub use exec_server_protocol::terminal::TerminalSignal;
 pub use exec_server_protocol::terminal::TerminalWriteBinaryRequest;
 pub use exec_server_protocol::terminal::TerminalWriteRequest;
@@ -316,8 +318,16 @@ impl TerminalService {
             "terminal-{:x}",
             self.next_terminal_id.fetch_add(1, Ordering::Relaxed)
         );
+        let mode = if integration.is_some() {
+            profile.command_status_mode()
+        } else {
+            CommandStatusMode::Disabled
+        };
         let state = Arc::new(Mutex::new(TerminalState::new(
-            profile.command_status_mode(),
+            mode,
+            integration
+                .as_ref()
+                .and_then(|integration| integration.nonce.clone()),
         )));
         let process = spawn_output_drainers(&self.runtime, spawned, state.clone(), integration);
         sessions.insert(
@@ -468,13 +478,24 @@ impl TerminalService {
         let session = sessions
             .get(terminal_id)
             .expect("terminal ownership was just validated");
-        let cwd = session
-            .process
-            .current_working_directory()
-            .map_err(|_| TerminalError::OperationFailed)?;
+        let detected = session
+            .state
+            .lock()
+            .map_err(|_| TerminalError::Busy)?
+            .command_status
+            .cwd()
+            .map(|cwd| cwd.value.clone());
+        let cwd = match detected {
+            Some(cwd) => Some(cwd),
+            None => session
+                .process
+                .current_working_directory()
+                .map_err(|_| TerminalError::OperationFailed)?
+                .map(|path| path.to_string_lossy().into_owned()),
+        };
         Ok(TerminalProcessInfo {
             ready: session.ready.clone(),
-            cwd: cwd.map(|path| path.to_string_lossy().into_owned()),
+            cwd,
             rows: session.size.rows,
             cols: session.size.cols,
         })
@@ -665,12 +686,12 @@ struct TerminalState {
 }
 
 impl TerminalState {
-    fn new(command_status_mode: CommandStatusMode) -> Self {
+    fn new(command_status_mode: CommandStatusMode, nonce: Option<String>) -> Self {
         Self {
             chunks: VecDeque::new(),
             next_sequence: 0,
             output_bytes: 0,
-            command_status: TerminalCommandStatusTracker::new(command_status_mode),
+            command_status: TerminalCommandStatusTracker::new(command_status_mode, nonce),
             exited: false,
             output_closed: false,
             exit_code: None,
@@ -680,7 +701,7 @@ impl TerminalState {
 
 impl Default for TerminalState {
     fn default() -> Self {
-        Self::new(CommandStatusMode::Disabled)
+        Self::new(CommandStatusMode::Disabled, None)
     }
 }
 
@@ -712,6 +733,28 @@ fn spawn_output_drainers(
                         ParsedTerminalOutput::CommandStarted => {
                             let after_output_sequence = state.next_sequence;
                             state.command_status.start_active(after_output_sequence);
+                        }
+                        ParsedTerminalOutput::Cwd(value, trusted) => {
+                            let sequence = state.next_sequence;
+                            state.command_status.record_cwd(value, trusted, sequence);
+                        }
+                        ParsedTerminalOutput::CommandLine(command, trusted) => {
+                            let sequence = state.next_sequence;
+                            state
+                                .command_status
+                                .record_command_line(command, trusted, sequence);
+                        }
+                        ParsedTerminalOutput::PromptStart => {
+                            let sequence = state.next_sequence;
+                            state.command_status.record_prompt(sequence);
+                        }
+                        ParsedTerminalOutput::RichCommandDetection(rich) => {
+                            let sequence = state.next_sequence;
+                            state.command_status.record_rich_detection(rich, sequence);
+                        }
+                        ParsedTerminalOutput::CommandStorageDisabled => {
+                            let sequence = state.next_sequence;
+                            state.command_status.disable_command_storage(sequence);
                         }
                         ParsedTerminalOutput::CommandFinished(exit_code) => {
                             let after_output_sequence = state.next_sequence;
@@ -823,6 +866,8 @@ fn read_state(params: &TerminalReadRequest, state: &TerminalState) -> TerminalRe
         command_event_gap,
         exited: state.exited,
         exit_code: state.exit_code,
+        cwd: state.command_status.cwd().cloned(),
+        shell_integration: state.command_status.shell_integration(),
     }
 }
 

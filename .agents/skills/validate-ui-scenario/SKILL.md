@@ -105,6 +105,7 @@ module.exports = {
 | `scenarioPath`  | Optional source path for provenance; the runner does not fill it automatically.        |
 | `workspacePath` | Disposable synthetic folder to open.                                                   |
 | `userSettings`  | Settings seeded into the isolated Desktop profile before launch.                       |
+| `externalCodexHome` | Explicit absolute directory for a user-authorized real-model run through Ash’s read-only Codex connection. Default tests keep authentication isolated; do not copy or record credentials. |
 | `extraArgs`     | Desktop arguments; cannot override `--user-data-dir` or `--folder`.                    |
 | `stepPauseMs`   | Hold after each finished step, default `1000`; use `0` for timing-sensitive scenarios. |
 

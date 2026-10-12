@@ -1,4 +1,5 @@
 import { Emitter, Event } from '../../../../base/common/event.js';
+import { isLowSurrogate } from '../../../../base/common/strings.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { DeferredPromise, raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationError, getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
@@ -20,7 +21,7 @@ import type { IWorkspaceFolder } from '../../../../platform/workspace/common/wor
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverExpression, type Replacement, type IResolvedValue } from '../../../services/configurationResolver/common/configurationResolverExpression.js';
 import { type IOutputChannel, type OutputEntrySeverity } from '../../../services/output/common/output.js';
-import { ShellQuoting, type ITaskRun, type ITaskOutput, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../../../services/tasks/common/taskService.js';
+import { readTaskOutput, ShellQuoting, type ITaskRun, type ITaskOutput, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../../../services/tasks/common/taskService.js';
 import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalService } from '../../../services/terminal/browser/terminal.js';
 import { parseShellExecution } from '../../../services/tasks/common/workspaceTasks.js';
 import { parseProblemMatchers, type ProblemMatcher } from '../../../services/tasks/common/problemMatcher.js';
@@ -49,7 +50,6 @@ export class TerminalTaskSystem extends Disposable {
 	private readonly startEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly stateEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly runs = this._register(new DisposableMap<string, TaskRun>());
-	private readonly retainedRuns = new Map<string, { run: ITaskRun; createdAt: number; }>();
 	private variableSnapshots = new WeakMap<ITaskRun, readonly [Replacement, IResolvedValue][]>();
 	private readonly markerOwners = new Set<string>();
 	private readonly taskTerminals = new Map<string, TaskTerminal>();
@@ -75,21 +75,6 @@ export class TerminalTaskSystem extends Disposable {
 	}
 
 	public get activeRuns(): readonly ITaskRun[] { return [...this.runs].map(([, run]) => run).filter(run => run.status === 'running'); }
-	public get recentRuns(): readonly ITaskRun[] { this.pruneRuns(); return [...this.retainedRuns.values()].map(entry => entry.run); }
-	private retainRun(run: ITaskRun): void {
-		this.retainedRuns.set(run.runId, { run, createdAt: Date.now() });
-		this.pruneRuns();
-	}
-	private pruneRuns(): void {
-		const completed = [...this.retainedRuns].filter(([, entry]) => entry.run.status !== 'running');
-		let count = completed.length;
-		for (const [id, entry] of completed) {
-			if (Date.now() - entry.createdAt > 3_600_000 || count > 100) {
-				this.retainedRuns.delete(id);
-				count--;
-			}
-		}
-	}
 
 	private problemSearchDirectories(paths: ProblemMatcher['searchPaths'], taskFolder: IWorkspaceFolder): readonly ProblemSearchDirectory[] {
 		if (!paths) return [];
@@ -135,7 +120,6 @@ export class TerminalTaskSystem extends Disposable {
 	}
 
 	public cancelAll(): void {
-		this.retainedRuns.clear();
 		this.taskTerminals.clear();
 		this.variableSnapshots = new WeakMap();
 		for (const run of this.activeRuns) {
@@ -156,8 +140,7 @@ export class TerminalTaskSystem extends Disposable {
 		if (!task.command && task.dependsOn?.length) {
 			assertCurrent();
 			this.assertNotDisposed();
-			const run: ITaskRun = Object.freeze({ task, runId: runId ?? generateUuid(), terminalId: '', status: 'succeeded', exitCode: 0, onDidChangeStatus: Event.None, readOutput: (cursor: number) => ({ text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false }) });
-			this.retainRun(run);
+			const run: ITaskRun = Object.freeze({ task, runId: runId ?? generateUuid(), terminalId: '', status: 'succeeded', exitCode: 0, onDidChangeStatus: Event.None, readOutput: (cursor: number, limit: number) => readTaskOutput('', 0, cursor, limit) });
 			onStarted?.(run);
 			this.startEmitter.fire(run);
 			this.stateEmitter.fire(run);
@@ -358,10 +341,6 @@ export class TerminalTaskSystem extends Disposable {
 		const run = new TaskRun(task, terminal, collector, current => {
 			const exit = current.exitCode === undefined ? '' : ` (exit code ${current.exitCode})`;
 			this.log(current.status === 'failed' ? 'error' : current.status === 'canceled' ? 'warning' : 'information', `Task '${current.task.label}' ${current.status}${exit}.`);
-			if (current.status !== 'running') {
-				const retained = this.retainedRuns.get(current.runId);
-				if (retained) retained.createdAt = Date.now();
-			}
 			this.stateEmitter.fire(current);
 			// Retained runs keep their output artifact; completed runs no longer own listeners.
 			if (current.status !== 'running') this.runs.deleteAndDispose(current.terminalId);
@@ -374,7 +353,6 @@ export class TerminalTaskSystem extends Disposable {
 			await this.closeTerminal(terminal);
 		}, runId);
 		this.runs.set(terminal.id, run);
-		this.retainRun(run);
 		let slot: TaskTerminal | undefined;
 		if (panel !== 'new' && !task.presentation?.close) {
 			slot = { terminal, folderId: folder.id, taskId: task.id, panel, idle: false };
@@ -532,16 +510,15 @@ class TaskRun extends Disposable implements ITaskRun {
 		this.outputText += text;
 		this.outputEnd += text.length;
 		if (this.outputText.length > 1_048_576) {
-			this.outputText = this.outputText.slice(-1_048_576);
+			let start = this.outputText.length - 1_048_576;
+			if (isLowSurrogate(this.outputText.charCodeAt(start))) start++;
+			this.outputText = this.outputText.slice(start);
 			this.outputStart = this.outputEnd - this.outputText.length;
 		}
 	}
 	public get terminalId(): string { return this.terminal.id; }
 	public readOutput(cursor: number, maxCharacters: number): ITaskOutput {
-		if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isSafeInteger(maxCharacters) || maxCharacters < 1 || maxCharacters > 65_536 || cursor > this.outputEnd) throw new RangeError(localize('tasks.invalidOutputRange', 'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.'));
-		const start = Math.max(cursor, this.outputStart);
-		const end = Math.min(this.outputEnd, start + maxCharacters);
-		return { text: this.outputText.slice(start - this.outputStart, end - this.outputStart), cursor: start, nextCursor: end, truncated: cursor < this.outputStart, hasMore: end < this.outputEnd };
+		return readTaskOutput(this.outputText, this.outputStart, cursor, maxCharacters);
 	}
 	public get status(): TaskRunStatus { return this._status; }
 	public get exitCode(): number | undefined { return this._exitCode; }

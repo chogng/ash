@@ -11,7 +11,7 @@ import { INotificationService } from '../../../src/ash/platform/notification/com
 import { ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
-import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/test/common/testAppServerProtocol.js';
 import type { AppHostOperation } from '../../../.build/protocol/typescript/index.js';
 import { AppToolsHost } from '../../../src/ash/sessions/contrib/appTools/browser/appToolsHost.js';
@@ -60,6 +60,7 @@ class Transport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	private readonly pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; }>();
 	private nextId = 0;
+	readonly calls: AppHostOperation[] = [];
 	on(event: string, listener: (payload: unknown) => void): void { let listeners = this.listeners.get(event); if (!listeners) this.listeners.set(event, listeners = new Set()); listeners.add(listener); }
 	off(event: string, listener: (payload: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
 	private emit(event: string, payload: unknown): void { this.listeners.get(event)?.forEach(listener => listener(payload)); }
@@ -77,8 +78,10 @@ class Transport implements AppServerTransport {
 		const pending = this.pending.get(message.id);
 		if (pending) { this.pending.delete(message.id); if (message.error) pending.reject(new Error(message.error.message)); else pending.resolve(JSON.parse(message.result.json)); }
 	}
+	disconnect(): void { this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'Test app-server disconnect' }); }
 	cancelLast(): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: `host-${this.nextId}` } }) }); }
 	call(operation: AppHostOperation): Promise<unknown> {
+		this.calls.push(operation);
 		const id = `host-${++this.nextId}`;
 		return new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, method: 'app/request', params: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', operation } }) }); });
 	}
@@ -188,7 +191,8 @@ const taskService = resources.add(services.createInstance(TaskService));
 services.registerInstance(ITaskService, taskService);
 if (new URL(location.href).searchParams.has('taskTools')) {
 	const taskContainer = document.createElement('section'); document.body.append(taskContainer);
-	resources.add(services.createInstance(TasksViewPane, taskContainer, { id: 'ash.tasks.integration', title: 'Tasks' }));
+	const pane = resources.add(services.createInstance(TasksViewPane, taskContainer, { id: 'ash.tasks.integration', title: 'Tasks' }));
+	pane.setVisible(true);
 }
 const appTools = resources.add(new AppServerAppToolsHost(client, services.createInstance(AppToolsHost, document, undefined)));
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
@@ -196,6 +200,8 @@ declare global {
 	interface Window {
 		ashAppToolsIntegration: {
 			finishTask(code: number): void; changeTask(): void;
+			configureTasks(tasks: Record<string, unknown>[]): Promise<void>; runManualTask(label: string): Promise<string>; disconnectAppServer(): void;
+			readonly taskRuns: Array<{ runId: string; status: string; }>; readonly taskCancelRequests: number;
 			call(operation: AppHostOperation): Promise<unknown>; readonly opened: unknown[]; readonly openedUrls: string[];
 			cancelLast(): void; releaseTerminal(): void; disposeHost(): void; readonly closedTerminals: string[]; readonly terminalPending: boolean;
 			configureTerminal(values: Record<string, unknown>): Promise<void>; automaticCreation(): void; holdProfile(): void; releaseProfile(): void;
@@ -208,6 +214,11 @@ declare global {
 window.ashAppToolsIntegration = {
 	finishTask: code => { for (const task of taskProcessState.values()) { task.exited = true; task.exitCode = code; } },
 	changeTask: () => { taskSource = taskSource.replace('compiler', 'changed'); },
+	configureTasks: async tasks => { taskSource = JSON.stringify({ version: '2.0.0', tasks }); await taskService.refresh(); },
+	runManualTask: async label => { const task = (await taskService.refresh()).find(task => task.label === label)!; return (await taskService.run(task)).runId; },
+	disconnectAppServer: () => transport.disconnect(),
+	get taskRuns() { return taskService.runs.map(run => ({ runId: run.runId, status: run.status })); },
+	get taskCancelRequests() { return transport.calls.filter(operation => operation.type === 'tasksCancel').length; },
 	call: operation => transport.call(operation), opened, openedUrls, cancelLast: () => transport.cancelLast(), releaseTerminal: () => releaseTerminal?.(),
 	disposeHost: () => appTools.dispose(), closedTerminals, get terminalPending() { return releaseTerminal !== undefined; },
 	configureTerminal: async values => { for (const [key, value] of Object.entries(values)) await configuration.updateValue(key, value); },

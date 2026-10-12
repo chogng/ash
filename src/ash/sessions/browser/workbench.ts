@@ -1,4 +1,3 @@
-import { IMarkerService, MarkerService } from '../../platform/markers/common/markers.js';
 import { ISnippetsService } from '../../workbench/contrib/snippets/browser/snippets.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
@@ -340,7 +339,6 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(ITextResourcePropertiesService, () => services.createInstance(TextResourcePropertiesService));
 		// Shared inspectors create transient models; this window owns their registry and shutdown.
 		services.registerSingleton(IModelService, () => new ModelService(configurationService, services.get(ITextResourcePropertiesService), languageService, services.get(ILanguageFeaturesService), services.get(ILanguageConfigurationService)));
-		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		services.registerInstance(ICodeEditorService, this._register(new StandaloneCodeEditorService()));
 		this.logService = this._register(logger);
 		services.registerInstance(ILogService, this.logService);

@@ -56,6 +56,7 @@ export class EvidenceService {
 		workspacePath?: string,
 		userSettings?: Readonly<Record<string, JSONValue>>,
 		extraArgs?: readonly string[],
+		externalCodexHome?: string,
 	): Promise<string> {
 		if (this.currentRun) throw new Error(`Evidence run '${this.currentRun.id}' is already active.`);
 		if (source && !isHttpUrl(source)) throw new Error(`Evidence source must use HTTP or HTTPS: '${source}'.`);
@@ -63,7 +64,7 @@ export class EvidenceService {
 		const id = `${sanitizePathSegment(scenarioId)}-${startedAt.replace(/[:.]/gu, '-')}`;
 		const runPath = join(evidenceRoot, id);
 		await mkdir(runPath, { recursive: true });
-		const application = await this.applications.start({ runPath, workspacePath, userSettings, extraArgs });
+		const application = await this.applications.start({ runPath, workspacePath, userSettings, extraArgs, externalCodexHome });
 		const run: EvidenceRun = {
 			id,
 			scenarioId,

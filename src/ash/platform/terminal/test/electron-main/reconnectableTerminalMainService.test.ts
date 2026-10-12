@@ -186,6 +186,7 @@ class TestSupervisor {
 	successfulAttachments = 0;
 	invalidCreateLease = false;
 	output: Buffer | undefined;
+	cwd: { value: string; afterOutputSequence: number; isTrusted?: boolean; } | undefined;
 	readonly requests: RecordedRequest[] = [];
 	private readonly listeners = new Set<(state: AppServerConnectionState) => void>();
 
@@ -240,12 +241,19 @@ class TestSupervisor {
 					chunks: this.output ? [{ sequence: 1, dataBase64: this.output.toString("base64") }] : [],
 					nextSequence: this.output ? 1 : 0,
 					outputGap: false,
+					...(this.cwd ? {
+						cwd: this.cwd, shellIntegration: {
+							commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false,
+							commands: [{ sequence: 2, commandId: 'command-1', status: 'failed', exitCode: 7, afterOutputSequence: 2, cwd: '/invocation', command: 'echo 中文; "quoted"', isTrusted: false }], afterOutputSequence: 2,
+						}
+					} : {}),
 					commandEvents: this.output ? [{
 						sequence: 1,
 						commandId: "command-1",
 						status: "running",
 						exitCode: null,
 						afterOutputSequence: 1,
+						...(this.cwd ? { cwd: '/invocation', command: 'echo 中文; \"quoted\"', isTrusted: false } : {}),
 					}] : [],
 					nextCommandSequence: this.output ? 1 : 0,
 					commandEventGap: false,
@@ -292,4 +300,23 @@ for (const remote of [false, true]) test(`${remote ? 'SSH' : 'local'} terminal a
 		assert.equal(supervisor.requests.filter(request => request.method === 'terminal/create').length, before);
 		assert.equal(supervisor.successfulAttachments, 1);
 	}
+});
+
+for (const remote of [false, true]) test(`${remote ? 'SSH' : 'local'} shell read adapter preserves cwd ordering and invocation directory`, async () => {
+	const supervisor = new TestSupervisor();
+	supervisor.cwd = { value: 'C:\\work; with spaces', isTrusted: true, afterOutputSequence: 2 };
+	supervisor.output = Buffer.from('command output');
+	using adapter = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+	const service: ITerminalProcessService = remote ? adapter : new AppServerTerminalProcessService(supervisor as unknown as AppServerProtocolClient, {} as IAppServerApi);
+	await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+	const result = await service.read({ terminalId: 'terminal-1', afterSequence: 0, afterCommandSequence: 0, maxChunks: 128 });
+	assert.deepEqual(result.cwd, { value: 'C:\\work; with spaces', isTrusted: true, afterOutputSequence: 2 });
+	assert.equal(result.commandEvents[0].cwd, '/invocation');
+	assert.equal(result.commandEvents[0].exitCode, undefined);
+	assert.equal(result.commandEvents[0].afterOutputSequence, 1);
+	assert.equal(result.commandEvents[0].command, 'echo 中文; \"quoted\"');
+	assert.equal(result.commandEvents[0].isTrusted, false);
+	assert.equal(result.shellIntegration?.hasRichCommandDetection, true);
+	assert.deepEqual(result.shellIntegration?.commands[0], { sequence: 2, commandId: 'command-1', status: 'failed', exitCode: 7, afterOutputSequence: 2, cwd: '/invocation', command: 'echo 中文; \"quoted\"', isTrusted: false });
+	await service.close({ terminalId: 'terminal-1' });
 });

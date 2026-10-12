@@ -10,7 +10,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminal.js";
 import { TerminalService } from "../../browser/terminalService.js";
 import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
-import { ITerminalService, type ITerminalInstance } from "../../../../services/terminal/browser/terminal.js";
+import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from "../../../../services/terminal/browser/terminal.js";
 import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
 
 const DEFAULT_PROFILE = {
@@ -822,6 +822,84 @@ suite('TerminalService lifecycle', () => {
 		await waitFor(() => processes.readCursors.length === 2);
 		await service.closeTerminal(instance);
 		assert.deepEqual(processes.closeCalls, ['terminal-1', 'terminal-2']);
+	});
+
+	test('shell cwd and command completion wait for parsed output and preserve invocation cwd', async () => {
+		const firstCommit = deferred<void>();
+		const secondCommit = deferred<void>();
+		const secondRead = deferred<ITerminalProcessReadResult>();
+		const completed = { sequence: 2, commandId: 'command', status: 'failed' as const, exitCode: 17, afterOutputSequence: 2, cwd: '/invocation', command: 'cd /changed; false', isTrusted: true };
+		const integration = { commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [completed], afterOutputSequence: 2 };
+		const processes = new TestTerminalProcessService([readResult({
+			chunks: [{ sequence: 1, data: new TextEncoder().encode('before cd') }], nextSequence: 1,
+			commandEvents: [{ sequence: 1, commandId: 'command', status: 'running', exitCode: undefined, afterOutputSequence: 0, cwd: '/invocation' }, completed],
+			nextCommandSequence: 2, cwd: { value: '/changed; directory', afterOutputSequence: 2 }, shellIntegration: integration,
+		}), secondRead.promise]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const service = services.get(ITerminalService);
+		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, deferStart: true });
+		const output: string[] = [];
+		const commands: ITerminalCommandStatusEvent[] = [];
+		using data = instance.onDidWriteData(event => { output.push(new TextDecoder().decode(event.data)); event.writePromise = output.length === 1 ? firstCommit.promise : secondCommit.promise; });
+		using state = instance.onDidChangeCommandStatus(event => commands.push(event));
+		instance.start();
+		await waitFor(() => output.length === 1);
+		assert.equal(instance.cwd, undefined);
+		assert.equal(Boolean(instance.shellIntegration), false);
+		assert.equal(commands.length, 1);
+		firstCommit.resolve();
+		await waitFor(() => processes.readCursors.length === 2);
+		secondRead.resolve(readResult({ chunks: [{ sequence: 2, data: new TextEncoder().encode('after cd') }], nextSequence: 2, nextCommandSequence: 2, cwd: { value: '/changed; directory', afterOutputSequence: 2 }, exited: true, exitCode: 0 }));
+		await waitFor(() => output.length === 2);
+		assert.equal(instance.cwd, undefined);
+		assert.equal(Boolean(instance.shellIntegration), false);
+		assert.equal(commands.length, 1);
+		secondCommit.resolve();
+		await waitFor(() => instance.state === 'exited');
+		assert.equal(instance.cwd, '/changed; directory');
+		assert.equal(instance.initialCwd, '/backend/workspace');
+		assert.deepEqual(instance.shellIntegration?.commands, [{ commandId: 'command', status: 'failed', exitCode: 17, cwd: '/invocation', command: 'cd /changed; false', isTrusted: true }]);
+		assert.equal(instance.shellIntegration?.hasRichCommandDetection, true);
+		assert.deepEqual(commands, [{ commandId: 'command', status: 'running', exitCode: undefined, cwd: '/invocation' }, { commandId: 'command', status: 'failed', exitCode: 17, cwd: '/invocation', command: 'cd /changed; false', isTrusted: true }]);
+	});
+
+	for (const program of ['bash', 'zsh', 'pwsh']) test(`${program} reuse resets shell cwd and command cursors and ignores late metadata from the old PTY`, async () => {
+		const oldRead = deferred<ITerminalProcessReadResult>();
+		const newRead = deferred<ITerminalProcessReadResult>();
+		const release = deferred<void>();
+		const old = { sequence: 1, commandId: 'old', status: 'failed' as const, exitCode: 99, cwd: '/old', command: 'old command', isTrusted: true, afterOutputSequence: 0 };
+		const oldIntegration = { commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [old], afterOutputSequence: 0 };
+		const processes = new TestTerminalProcessService([readResult({ shellIntegration: oldIntegration }), oldRead.promise, newRead.promise]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const service = services.get(ITerminalService);
+		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'custom', name: program, path: [program], args: [] } });
+		await waitFor(() => processes.readCursors.length === 2);
+		assert.equal(instance.shellIntegration?.commands[0].command, 'old command');
+		processes.closeGates.push(release.promise);
+		const commands: ITerminalCommandStatusEvent[] = [];
+		using observer = instance.onDidChangeCommandStatus(event => commands.push(event));
+		const replacing = instance.reuseTerminal({ executable: program, args: [], cwd: '/replacement', deferStart: true });
+		await waitFor(() => processes.closeCalls.length === 1);
+		assert.equal(processes.createCalls.length, 1);
+		release.resolve(); await replacing;
+		oldRead.resolve(readResult({ shellIntegration: oldIntegration, cwd: { value: '/old', afterOutputSequence: 0 }, commandEvents: [{ sequence: 1, commandId: 'old', status: 'failed', exitCode: 99, cwd: '/old', afterOutputSequence: 0 }], nextCommandSequence: 1, exited: true, exitCode: 99 }));
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(instance.cwd, undefined);
+		assert.deepEqual(commands, []);
+		assert.equal(Boolean(instance.shellIntegration), false);
+		instance.start();
+		await waitFor(() => processes.readCursors.length === 3);
+		newRead.resolve(readResult({ shellIntegration: { ...oldIntegration, hasRichCommandDetection: false, commands: [] }, cwd: { value: '/replacement/current', afterOutputSequence: 0 }, commandEvents: [{ sequence: 1, commandId: 'new', status: 'completed', exitCode: undefined, cwd: '/replacement/current', afterOutputSequence: 0 }], nextCommandSequence: 1, exited: true }));
+		await waitFor(() => instance.state === 'exited');
+		assert.deepEqual(processes.readCursors, [0, 0, 0]);
+		assert.deepEqual(instance.shellIntegration?.commands, []);
+		assert.equal(instance.shellIntegration?.hasRichCommandDetection, false);
+		assert.equal(instance.cwd, '/replacement/current');
+		assert.deepEqual(commands, [{ commandId: 'new', status: 'completed', exitCode: undefined, cwd: '/replacement/current' }]);
+		assert.equal(service.activeInstance, instance);
+		assert.equal(service.instances.length, 1);
 	});
 
 	test('raw command line reuse waits for release and retains one instance through raw, argv and relaunch', async () => {

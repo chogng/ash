@@ -2012,6 +2012,8 @@ use crate::protocol::terminal::TerminalCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCreateResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalCwd;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalEnvironmentReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalEnvironmentReadResult;
@@ -2047,6 +2049,8 @@ use crate::protocol::terminal::TerminalReconnectLease;
 use crate::protocol::terminal::TerminalResizeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalSendSignalParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalShellIntegration;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalSignal;
 #[cfg(any(test, feature = "export"))]
@@ -6709,6 +6713,8 @@ typescript_bindings! {
     TerminalCommandStatus,
     TerminalCommandStatusEvent,
     TerminalReadResult,
+    TerminalCwd,
+    TerminalShellIntegration,
     TerminalCloseParams,
     TestingDiscoverParams,
     TestingPrepareDebugParams,

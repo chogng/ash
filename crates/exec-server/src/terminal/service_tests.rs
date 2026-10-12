@@ -363,23 +363,21 @@ fn terminal_request(lifecycle: TerminalLifecycle) -> TerminalCreateRequest {
 fn read_until(service: &TerminalService, terminal_id: &str, marker: &str) -> Vec<u8> {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut output = Vec::new();
+    let mut sequence = 0;
     while Instant::now() < deadline {
         let result = service
             .read(
                 1,
                 TerminalReadRequest {
                     terminal_id: terminal_id.to_owned(),
-                    after_sequence: 0,
+                    after_sequence: sequence,
                     after_command_sequence: 0,
                     max_chunks: 128,
                 },
             )
             .unwrap();
-        output = result
-            .chunks
-            .into_iter()
-            .flat_map(|chunk| chunk.data)
-            .collect();
+        sequence = result.next_sequence;
+        output.extend(result.chunks.into_iter().flat_map(|chunk| chunk.data));
         if output
             .windows(marker.len())
             .any(|window| window == marker.as_bytes())
@@ -413,8 +411,18 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
                 "export ZDOTDIR=\"$HOME/configured\"\n",
             )
             .unwrap();
-            std::fs::write(home.path().join("configured/.zshrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nprecmd() { return 0; }\nuser_precmd() { printf '%s\\n' \"$?\" >> \"$HOME/prompt-status\"; }\nprecmd_functions=(user_precmd)\n").unwrap();
-            std::fs::write(home.path().join(".bashrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nPROMPT_COMMAND='printf \"%s\\n\" \"$?\" >> \"$HOME/prompt-status\"'\n").unwrap();
+            std::fs::write(home.path().join("configured/.zshrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nprecmd() { return 0; }\nuser_precmd() { printf '%s\\n' \"$?\" >> \"$HOME/prompt-status\"; }\nprecmd_functions=(user_precmd)\nset -u\n").unwrap();
+            std::fs::write(home.path().join(".bashrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nPROMPT_COMMAND='printf \"%s\\n\" \"$?\" >> \"$HOME/prompt-status\"'\nset -u\n").unwrap();
+            std::fs::write(
+                home.path().join(".bash_profile"),
+                "export ASH_LOGIN_LOADED=yes\nsource \"$HOME/.bashrc\"\n",
+            )
+            .unwrap();
+            std::fs::write(
+                home.path().join("configured/.zprofile"),
+                "export ASH_LOGIN_LOADED=yes\n",
+            )
+            .unwrap();
             // A child test process isolates HOME/ZDOTDIR from parallel tests.
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["--exact", current.name().unwrap(), "--nocapture"])
@@ -428,7 +436,32 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
                 "{}: {output:?}",
                 profile.profile_id
             );
+            let login = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", current.name().unwrap(), "--nocapture"])
+                .env(CHILD, &profile.profile_id)
+                .env("ASH_SHELL_STATUS_TEST_LOGIN", "1")
+                .env("HOME", home.path())
+                .env("ZDOTDIR", home.path().join("startup"))
+                .output()
+                .unwrap();
+            assert!(
+                login.status.success(),
+                "login {}: {login:?}",
+                profile.profile_id
+            );
             if profile.profile_id == "bash" {
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", current.name().unwrap(), "--nocapture"])
+                    .env(CHILD, "bash")
+                    .env("ASH_SHELL_STATUS_TEST_HISTORY_OFF", "1")
+                    .env("HISTCONTROL", "ignorespace")
+                    .env("HOME", home.path())
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "disabled/ignored history: {output:?}"
+                );
                 let rc = home.path().join(".bashrc");
                 let mut script = std::fs::read_to_string(&rc).unwrap();
                 script.push_str("trap 'printf debug >> \"$HOME/debug-calls\"' DEBUG\n");
@@ -455,8 +488,29 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
                 env: None,
                 cwd: None,
                 execution: None,
-                profile: TerminalProfileSelection::Profile {
-                    profile_id: profile_id.clone(),
+                profile: TerminalProfileSelection::Custom {
+                    name: "Configured shell".into(),
+                    path: vec![if profile_id == "bash"
+                        && std::env::var_os("ASH_TEST_BASH").is_some()
+                    {
+                        std::env::var("ASH_TEST_BASH").unwrap()
+                    } else {
+                        service
+                            .profiles
+                            .resolve(&TerminalProfileSelection::Profile {
+                                profile_id: profile_id.clone(),
+                            })
+                            .unwrap()
+                            .program
+                            .clone()
+                    }],
+                    args: TerminalArguments::Argv(
+                        if std::env::var_os("ASH_SHELL_STATUS_TEST_LOGIN").is_some() {
+                            vec!["-l".into()]
+                        } else {
+                            Vec::new()
+                        },
+                    ),
                 },
                 ..terminal_request(TerminalLifecycle::ConnectionOwned)
             },
@@ -490,18 +544,70 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         return;
     }
 
+    if std::env::var_os("ASH_SHELL_STATUS_TEST_HISTORY_OFF").is_some() {
+        write_shell(&service, id, "printf 'ASH_HISTORY_READY\\n'\n");
+        wait_shell_events(&service, id, 2);
+        assert_eq!(
+            shell_status(&service, id).command_events[1].is_trusted,
+            Some(true)
+        );
+        write_shell(&service, id, " set +o history\n");
+        wait_shell_events(&service, id, 4);
+        assert_eq!(shell_status(&service, id).command_events[3].command, None);
+        write_shell(&service, id, "printf 'ASH_HISTORY_DISABLED\\n'\n");
+        wait_shell_events(&service, id, 6);
+        let history = shell_status(&service, id)
+            .shell_integration
+            .unwrap()
+            .commands;
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[2].command, None);
+        service.close(1, id).unwrap();
+        return;
+    }
+
     write_shell(&service, id, "printf '%s\\n' \\\n");
     read_until(&service, id, "ASH_CONTINUE> ");
     assert!(shell_status(&service, id).command_events.is_empty());
-    write_shell(&service, id, "\"CONFIG:$ASH_RC_LOADED\"\n");
+    write_shell(
+        &service,
+        id,
+        "\"CONFIG:$ASH_RC_LOADED\" \"LOGIN:${ASH_LOGIN_LOADED-no}\" \"UNICODE:中文🙂\"\n",
+    );
     wait_shell_events(&service, id, 2);
     read_until(&service, id, "CONFIG:yes\r\n");
     let success = shell_status(&service, id);
+    if std::env::var_os("ASH_SHELL_STATUS_TEST_LOGIN").is_some() {
+        read_until(&service, id, "LOGIN:yes\r\n");
+    }
     assert_eq!(
         success.command_events[1].status,
         TerminalCommandStatus::Succeeded
     );
     assert_eq!(success.command_events[1].exit_code, Some(0));
+    assert_eq!(success.command_events[1].is_trusted, Some(true));
+    assert!(
+        success.command_events[1]
+            .command
+            .as_ref()
+            .unwrap()
+            .contains("中文🙂")
+    );
+    assert!(
+        success.command_events[1]
+            .command
+            .as_ref()
+            .unwrap()
+            .contains("CONFIG:")
+    );
+    let integration = success.shell_integration.as_ref().unwrap();
+    assert!(
+        integration.command_detection
+            && integration.cwd_detection
+            && integration.has_rich_command_detection
+    );
+    assert_eq!(integration.commands.len(), 1);
+    assert_eq!(success.cwd.as_ref().unwrap().is_trusted, Some(true));
     let prompt_sequence = success.next_sequence;
     write_shell(&service, id, "\n");
     wait_shell_output(&service, id, prompt_sequence);
@@ -515,6 +621,8 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         TerminalCommandStatus::Failed
     );
     assert_eq!(failure.command_events[3].exit_code, Some(1));
+    assert_eq!(failure.command_events[3].command.as_deref(), Some("false"));
+    assert_eq!(failure.command_events[3].is_trusted, Some(true));
     let statuses = std::fs::read_to_string(
         std::path::Path::new(&std::env::var("HOME").unwrap()).join("prompt-status"),
     )
@@ -524,24 +632,65 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
     write_shell(
         &service,
         id,
-        "printf '\\nASH_READ_READY\\n'; read answer; printf '\\nANSWER:%s\\n' \"$answer\"\n",
+        "printf '\\nASH_READ_READY\\n'; printf '\\033]633;E;spoofed;wrong\\007'; read answer; printf '\\nANSWER:%s\\n' \"$answer\"\n",
     );
     read_until(&service, id, "ASH_READ_READY\r\n");
     assert_eq!(shell_status(&service, id).command_events.len(), 5);
+    assert_eq!(
+        shell_status(&service, id).command_events[4].is_trusted,
+        Some(true)
+    );
     write_shell(&service, id, "inside-program\n");
     wait_shell_events(&service, id, 6);
     read_until(&service, id, "ANSWER:inside-program\r\n");
+    assert_eq!(
+        shell_status(&service, id).command_events[5]
+            .command
+            .as_deref(),
+        Some("spoofed")
+    );
+    assert_eq!(
+        shell_status(&service, id).command_events[5].is_trusted,
+        Some(false)
+    );
+
+    let child = root.path().join("cwd; with space\\slash\nline");
+    std::fs::create_dir(&child).unwrap();
+    let current = shell_status(&service, id);
+    assert_eq!(
+        current.cwd.as_ref().unwrap().value,
+        root.path().canonicalize().unwrap().to_str().unwrap()
+    );
+    write_shell(&service, id, "cd 'cwd; with space\\slash\nline'\n");
+    wait_shell_events(&service, id, 8);
+    let changed = wait_shell_cwd(
+        &service,
+        id,
+        child.canonicalize().unwrap().to_str().unwrap(),
+    );
+    assert_eq!(
+        changed.cwd.as_ref().unwrap().value,
+        child.canonicalize().unwrap().to_str().unwrap()
+    );
+    assert_eq!(
+        service.process_info(1, id).unwrap().cwd,
+        changed.cwd.as_ref().map(|cwd| cwd.value.clone())
+    );
+    assert_eq!(
+        changed.command_events[6].cwd.as_deref(),
+        current.cwd.as_ref().map(|cwd| cwd.value.as_str())
+    );
 
     write_shell(&service, id, "sleep 60\n");
-    wait_shell_events(&service, id, 7);
+    wait_shell_events(&service, id, 9);
     write_shell(&service, id, "\u{3}");
-    wait_shell_events(&service, id, 8);
+    wait_shell_events(&service, id, 10);
     let interrupted = shell_status(&service, id);
     assert_eq!(
-        interrupted.command_events[7].status,
+        interrupted.command_events[9].status,
         TerminalCommandStatus::Failed
     );
-    assert_ne!(interrupted.command_events[7].exit_code, Some(0));
+    assert_ne!(interrupted.command_events[9].exit_code, Some(0));
     assert!(!interrupted.exited);
     let bytes = interrupted
         .chunks
@@ -554,12 +703,17 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
             .any(|bytes| bytes == b"]633;C" || bytes == b"]633;D")
     );
     write_shell(&service, id, "printf '\\nASH_EXIT_OUTPUT\\n'; exit 17\n");
-    wait_shell_events(&service, id, 10);
+    wait_shell_events(&service, id, 12);
     let mut exited = shell_status(&service, id);
     assert!(exited.exited);
-    assert_eq!(exited.command_events[9].exit_code, Some(17));
+    assert_eq!(exited.command_events[11].exit_code, Some(17));
+    assert_eq!(
+        exited.command_events[11].command.as_deref(),
+        Some("printf '\\nASH_EXIT_OUTPUT\\n'; exit 17")
+    );
+    assert_eq!(exited.shell_integration.as_ref().unwrap().commands.len(), 6);
     // Command events can describe output beyond the current bounded read page.
-    while exited.next_sequence < exited.command_events[9].after_output_sequence {
+    while exited.next_sequence < exited.command_events[11].after_output_sequence {
         let page = service
             .read(
                 1,
@@ -576,7 +730,7 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         exited.chunks.extend(page.chunks);
     }
     assert_eq!(
-        exited.command_events[9].after_output_sequence,
+        exited.command_events[11].after_output_sequence,
         exited.next_sequence
     );
     let output = exited
@@ -599,6 +753,26 @@ fn write_shell(service: &TerminalService, terminal_id: &str, data: &str) {
             },
         )
         .unwrap();
+}
+
+#[cfg(unix)]
+fn wait_shell_cwd(
+    service: &TerminalService,
+    terminal_id: &str,
+    expected: &str,
+) -> TerminalReadResult {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let result = shell_status(service, terminal_id);
+        if result.cwd.as_ref().is_some_and(|cwd| cwd.value == expected) {
+            return result;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "shell did not report cwd {expected:?}: {result:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 #[cfg(unix)]
@@ -707,9 +881,19 @@ function global:prompt {
     let root = tempfile::tempdir().unwrap();
     let service = terminal_service_for(root.path());
     let created = service
-        .create(1, terminal_request(TerminalLifecycle::ConnectionOwned))
+        .create(
+            1,
+            TerminalCreateRequest {
+                profile: TerminalProfileSelection::Custom {
+                    name: "Configured PowerShell".into(),
+                    path: vec![std::env::var("SHELL").unwrap()],
+                    args: TerminalArguments::Argv(vec!["-NoLogo".into()]),
+                },
+                ..terminal_request(TerminalLifecycle::ConnectionOwned)
+            },
+        )
         .unwrap();
-    assert_eq!(created.profile.profile_id, "powershell");
+    assert_eq!(created.profile.profile_id, "custom:Configured PowerShell");
     let id = &created.terminal_id;
     let mut observed = PowerShellObservation::default();
     observed.wait_for(&service, id, |state| state.prompt_count() >= 1);
@@ -720,11 +904,34 @@ function global:prompt {
         state.bytes.windows(2).any(|bytes| bytes == b">>")
     });
     assert!(observed.events.is_empty());
-    write_shell(&service, id, "'ASH_PS_READY')\r");
+    write_shell(&service, id, "'ASH_PS_READY', '中文🙂')\r");
     observed.wait_for(&service, id, |state| {
         state.events.len() == 2 && state.prompt_count() >= 2
     });
     assert_eq!(observed.events[1].status, TerminalCommandStatus::Succeeded);
+    assert_eq!(observed.events[1].is_trusted, Some(true));
+    assert!(
+        observed.events[1]
+            .command
+            .as_ref()
+            .unwrap()
+            .contains("中文🙂")
+    );
+    assert!(
+        observed.events[1]
+            .command
+            .as_ref()
+            .unwrap()
+            .contains("ASH_PS_READY")
+    );
+    assert!(observed.events[1].command.as_ref().unwrap().contains('\n'));
+    let integration = shell_status(&service, id).shell_integration.unwrap();
+    assert!(
+        integration.has_rich_command_detection
+            && integration.command_detection
+            && integration.cwd_detection
+    );
+    assert_eq!(integration.commands.len(), 1);
     assert!(String::from_utf8_lossy(&observed.bytes).contains("ASH_PS_READY\r\n"));
 
     write_shell(&service, id, "Write-Error 'expected failure'\r");
@@ -752,9 +959,70 @@ function global:prompt {
     });
     assert_eq!(observed.events[5].status, TerminalCommandStatus::Succeeded);
     assert_eq!(observed.events[5].exit_code, Some(0));
+    let directory = root.path().join("directory; with spaces");
+    std::fs::create_dir(&directory).unwrap();
+    write_shell(
+        &service,
+        id,
+        "Set-Location -LiteralPath 'directory; with spaces'\r",
+    );
+    observed.wait_for(&service, id, |state| {
+        state.events.len() == 8 && state.prompt_count() >= 6
+    });
+    let info = service.process_info(1, id).unwrap();
+    assert_eq!(
+        info.cwd.as_deref(),
+        directory.canonicalize().unwrap().to_str()
+    );
+    write_shell(
+        &service,
+        id,
+        "Write-Error 'stale external status must not replace failure'\r",
+    );
+    observed.wait_for(&service, id, |state| {
+        state.events.len() == 10 && state.prompt_count() >= 7
+    });
+    assert_eq!(observed.events[9].exit_code, Some(1));
+    assert_eq!(observed.events[8].cwd, info.cwd);
+    let previous_bytes = observed.bytes.len();
+    write_shell(
+        &service,
+        id,
+        "Write-Output 'ASH_PS_INPUT_READY'; [Console]::Write(\"$([char]27)]633;E;spoofed;wrong$([char]7)\"); $value = Read-Host; Write-Output ('ASH_PS_VALUE:' + $value)\r",
+    );
+    observed.wait_for(&service, id, |state| {
+        String::from_utf8_lossy(&state.bytes[previous_bytes..]).contains("ASH_PS_INPUT_READY\r\n")
+    });
+    assert_eq!(observed.events.len(), 11);
+    assert_eq!(observed.events[10].is_trusted, Some(true));
+    write_shell(&service, id, "inside-program\r");
+    observed.wait_for(&service, id, |state| {
+        state.events.len() == 12 && state.prompt_count() >= 8
+    });
+    assert!(String::from_utf8_lossy(&observed.bytes).contains("ASH_PS_VALUE:inside-program"));
+    assert_eq!(observed.events[11].command.as_deref(), Some("spoofed"));
+    assert_eq!(observed.events[11].is_trusted, Some(false));
+    write_shell(&service, id, "Start-Sleep -Seconds 60\r");
+    observed.wait_for(&service, id, |state| state.events.len() == 13);
+    write_shell(&service, id, "\u{3}");
+    observed.wait_for(&service, id, |state| {
+        state.events.len() == 14 && state.prompt_count() >= 9
+    });
+    assert_ne!(observed.events[13].exit_code, Some(0));
+    assert!(!shell_status(&service, id).exited);
     let calls =
         std::fs::read_to_string(std::path::Path::new(&home).join("readline-calls")).unwrap();
     assert!(calls.lines().count() >= 4);
+    write_shell(&service, id, "exit 19\r");
+    observed.wait_for(&service, id, |state| state.events.len() == 16);
+    let exited = shell_status(&service, id);
+    assert!(exited.exited);
+    assert_eq!(exited.exit_code, Some(19));
+    assert_eq!(observed.events[15].exit_code, Some(19));
+    assert_eq!(observed.events[15].command.as_deref(), Some("exit 19"));
+    assert_eq!(observed.events[15].is_trusted, Some(true));
+    assert_eq!(exited.shell_integration.unwrap().commands.len(), 8);
+    assert_eq!(service.process_info(1, id).unwrap().cwd, info.cwd);
     service.close(1, id).unwrap();
 }
 
@@ -1118,4 +1386,29 @@ fn custom_profile_resolution_and_creation_share_identity_argv_and_environment() 
     );
     assert!(String::from_utf8_lossy(&output).contains("profile:literal;$HOME:value with spaces"));
     service.close_owner(1);
+}
+
+#[cfg(unix)]
+#[test]
+fn task_process_execution_keeps_osc_output_without_creating_shell_command_state() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.profile = TerminalProfileSelection::Profile {
+        profile_id: "bash".into(),
+    };
+    request.execution = Some(TerminalExecution::Process {
+        program: "/bin/sh".into(),
+        args: TerminalArguments::Argv(vec![
+            "-c".into(),
+            "printf '\\033]633;P;Cwd=/spoof\\007\\033]633;C\\007\\033]633;D;0\\007DONE\\n'".into(),
+        ]),
+    });
+    let created = service.create(1, request).unwrap();
+    let output = read_until(&service, &created.terminal_id, "DONE\r\n");
+    assert!(output.windows(10).any(|bytes| bytes == b"633;P;Cwd="));
+    let state = shell_status(&service, &created.terminal_id);
+    assert!(state.command_events.is_empty());
+    assert!(state.cwd.is_none());
+    service.close(1, &created.terminal_id).unwrap();
 }

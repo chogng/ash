@@ -196,3 +196,33 @@ fn terminal_command_line_and_argv_preserve_their_wire_representation() {
         );
     }
 }
+
+#[test]
+fn terminal_read_cwd_is_optional_for_old_frames_and_preserves_command_context() {
+    let value = serde_json::json!({"terminal_id": "terminal", "chunks": [], "next_sequence": 4, "output_gap": false, "command_events": [{"sequence": 1, "command_id": "command", "status": "Completed", "exit_code": null, "after_output_sequence": 4}], "next_command_sequence": 1, "command_event_gap": false, "exited": false, "exit_code": null});
+    let mut read: terminal::TerminalReadResult = serde_json::from_value(value.clone()).unwrap();
+    assert!(read.cwd.is_none());
+    assert!(read.command_events[0].cwd.is_none());
+    assert_eq!(serde_json::to_value(&read).unwrap(), value);
+    read.cwd = Some(terminal::TerminalCwd {
+        value: "/changed; directory".into(),
+        is_trusted: Some(true),
+        after_output_sequence: 4,
+    });
+    read.command_events[0].cwd = Some("/invocation".into());
+    read.command_events[0].command = Some("echo 中文; echo \"quoted\"".into());
+    read.command_events[0].is_trusted = Some(false);
+    read.shell_integration = Some(terminal::TerminalShellIntegration {
+        command_detection: true,
+        cwd_detection: true,
+        has_rich_command_detection: true,
+        command_storage_disabled: false,
+        commands: read.command_events.clone(),
+        after_output_sequence: 4,
+    });
+    let encoded = serde_json::to_value(&read).unwrap();
+    assert_eq!(
+        serde_json::from_value::<terminal::TerminalReadResult>(encoded).unwrap(),
+        read
+    );
+}

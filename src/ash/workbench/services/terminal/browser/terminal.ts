@@ -24,6 +24,19 @@ export interface ITerminalCommandStatusEvent {
 	readonly commandId: string;
 	readonly status: TerminalCommandStatus;
 	readonly exitCode: number | undefined;
+	readonly cwd?: string;
+	readonly command?: string;
+	/** Command-text provenance only; no authority to execute or access paths. */
+	readonly isTrusted?: boolean;
+}
+
+/** Backend-owned completed history and detected Shell integration support. */
+export interface ITerminalShellIntegration {
+	readonly commandDetection: boolean;
+	readonly cwdDetection: boolean;
+	readonly hasRichCommandDetection: boolean;
+	readonly commandStorageDisabled: boolean;
+	readonly commands: readonly ITerminalCommandStatusEvent[];
 }
 
 /** One available shell profile exposed to Workbench callers. */
@@ -65,6 +78,8 @@ export interface ITerminalInstance extends IDisposable {
 	readonly dirId: string;
 	readonly processId: number;
 	readonly initialCwd: string;
+	readonly cwd?: string;
+	readonly shellIntegration?: ITerminalShellIntegration;
 	readonly title: string;
 	readonly profile: ITerminalProfile;
 	readonly state: TerminalInstanceState;

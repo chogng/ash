@@ -19,7 +19,7 @@ import { ILogService } from "../../../../platform/log/common/log.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ITerminalService } from "../../../services/terminal/browser/terminal.js";
 import { ITerminalProfileResolverService } from '../../../services/terminal/common/terminal.js';
-import { type ITaskRun, type ITaskDescription, type TaskRunStatus, ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, waitForTask } from "../../../services/tasks/common/taskService.js";
+import { readTaskOutput, type ITaskRun, type ITaskDescription, type TaskRunStatus, ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, waitForTask } from "../../../services/tasks/common/taskService.js";
 import { IMarkerService } from '../../../../platform/markers/common/markers.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from "../../../services/output/common/output.js";
@@ -48,7 +48,7 @@ interface TaskInstance {
 export class TaskService extends Disposable implements ITaskService {
 	private readonly changeTasksEmitter = this._register(new Emitter<readonly IWorkspaceTask[]>());
 	private taskSystem: TerminalTaskSystem | undefined;
-	private readonly scheduledRuns = new Map<string, { run: ITaskRun; controller: AbortController; operation: Promise<ITaskRun>; createdAt: number; }>();
+	private readonly retainedRuns = new Map<string, { run: ITaskRun; completedAt?: number; dispatch?: { controller: AbortController; operation: Promise<ITaskRun>; }; }>();
 	private latestRun: ITaskRun | undefined;
 	private readonly startEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly stateEmitter = this._register(new Emitter<ITaskRun>());
@@ -101,7 +101,7 @@ export class TaskService extends Disposable implements ITaskService {
 			this.pendingRuns.clear();
 			for (const dispatch of this.dispatches) dispatch.abort();
 			this.taskSystem?.cancelAll();
-			this.scheduledRuns.clear();
+			this.retainedRuns.clear();
 			this.latestRun = undefined;
 			this.activeRefresh?.abort();
 			this.refreshGeneration += 1;
@@ -115,17 +115,27 @@ export class TaskService extends Disposable implements ITaskService {
 			this.activeRefresh?.abort();
 			this.activeRefresh = undefined;
 			this.providers.clear();
+			this.retainedRuns.clear();
+			this.latestRun = undefined;
 		}));
 	}
 
 	get tasks(): readonly IWorkspaceTask[] { return this.currentTasks; }
 	get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === 'running'); }
-	get lastRun(): ITaskRun | undefined { return this.latestRun; }
+	get lastRun(): ITaskRun | undefined {
+		if (this.latestRun && !this.getRun(this.latestRun.runId)) this.latestRun = undefined;
+		return this.latestRun;
+	}
 	get runs(): readonly ITaskRun[] {
-		for (const [id, entry] of this.scheduledRuns) {
-			if (entry.run.status !== 'running' && (Date.now() - entry.createdAt > 3_600_000 || this.scheduledRuns.size > 100)) this.scheduledRuns.delete(id);
+		this.pruneRuns();
+		return [...this.retainedRuns.values()].map(entry => entry.run);
+	}
+	private pruneRuns(): void {
+		const completed = [...this.retainedRuns].filter(([, entry]) => entry.completedAt !== undefined).sort(([, a], [, b]) => a.completedAt! - b.completedAt!);
+		let count = completed.length;
+		for (const [id, entry] of completed) {
+			if (Date.now() - entry.completedAt! > 3_600_000 || count > 100) { this.retainedRuns.delete(id); count--; }
 		}
-		return [...(this.taskSystem?.recentRuns ?? []).filter(run => !this.scheduledRuns.has(run.runId)), ...[...this.scheduledRuns.values()].map(entry => entry.run)];
 	}
 	getRun(runId: string): ITaskRun | undefined { return this.runs.find(run => run.runId === runId); }
 
@@ -159,28 +169,25 @@ export class TaskService extends Disposable implements ITaskService {
 			get isReady() { return current?.isReady; },
 			get hasErrors() { return current?.hasErrors; },
 			onDidChangeStatus: emitter.event, completion: completion.p,
-			readOutput: (cursor, limit) => {
-				if (current) return current.readOutput(cursor, limit);
-				if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > preparationError.length || !Number.isSafeInteger(limit) || limit < 1 || limit > 65_536) throw new RangeError(localize('tasks.invalidOutputRange', 'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.'));
-				const end = Math.min(preparationError.length, cursor + limit);
-				return { text: preparationError.slice(cursor, end), cursor, nextCursor: end, truncated: false, hasMore: end < preparationError.length };
-			},
+			readOutput: (cursor, limit) => current ? current.readOutput(cursor, limit) : readTaskOutput(preparationError, 0, cursor, limit),
 		};
 		const abort = (): void => controller.abort();
 		signal.addEventListener('abort', abort, { once: true });
 		const operation = this.dispatch(task, controller.signal, false, undefined, expectedRevision, run.runId, value => { current = value; readyListener = value.onDidBecomeReady?.(() => readyEmitter.fire()); if (value.isReady) readyEmitter.fire(); });
-		this.scheduledRuns.set(run.runId, { run, controller, operation, createdAt: Date.now() });
+		this.retainedRuns.set(run.runId, { run, dispatch: { controller, operation } });
 		this.latestRun = run;
 		this.stateEmitter.fire(run);
 		void operation.then(async value => {
 			current = value;
-			const listener = value.onDidChangeStatus(value => { const retained = this.scheduledRuns.get(run.runId); if (retained && value !== 'running') retained.createdAt = Date.now(); emitter.fire(value); });
+			const listener = value.onDidChangeStatus(value => emitter.fire(value));
 			try { await completion.complete(await value.completion); }
 			finally { listener.dispose(); }
 		}, error => {
-			const retained = this.scheduledRuns.get(run.runId);
-			if (retained) retained.createdAt = Date.now();
-			preparationError = getErrorMessage(error).slice(0, 65_536);
+			const retained = this.retainedRuns.get(run.runId);
+			if (retained) { retained.completedAt = Date.now(); this.latestRun = run; }
+			this.pruneRuns();
+			const message = new TextDecoder().decode(new TextEncoder().encode(getErrorMessage(error)));
+			preparationError = readTaskOutput(message, 0, 0, 65_536).text;
 			status = controller.signal.aborted ? 'canceled' : 'failed';
 			emitter.fire(status);
 			this.stateEmitter.fire(run);
@@ -284,8 +291,18 @@ export class TaskService extends Disposable implements ITaskService {
 			// Discovery starts before UI Parts are registered. Execution is the first
 			// operation that needs the view owner, while subscriptions stay stable.
 			const system = this._register(this.instantiationService.createInstance(TerminalTaskSystem, this.output));
-			this._register(system.onDidStartTask(run => { this.latestRun = this.scheduledRuns.get(run.runId)?.run ?? run; this.startEmitter.fire(this.latestRun); }));
-			this._register(system.onDidStateChange(run => this.stateEmitter.fire(run)));
+			this._register(system.onDidStartTask(run => {
+				if (!this.retainedRuns.has(run.runId)) this.retainedRuns.set(run.runId, { run, completedAt: run.status === 'running' ? undefined : Date.now() });
+				this.latestRun = this.retainedRuns.get(run.runId)!.run;
+				this.pruneRuns();
+				this.startEmitter.fire(this.latestRun);
+			}));
+			this._register(system.onDidStateChange(run => {
+				const retained = this.retainedRuns.get(run.runId);
+				if (retained && run.status !== 'running' && retained.completedAt === undefined) retained.completedAt = Date.now();
+				this.pruneRuns();
+				this.stateEmitter.fire(retained?.run ?? run);
+			}));
 			this.taskSystem = system;
 		}
 		return this.taskSystem;
@@ -622,7 +639,7 @@ export class TaskService extends Disposable implements ITaskService {
 	}
 
 	async terminate(run: ITaskRun): Promise<void> {
-		const scheduled = this.scheduledRuns.get(run.runId);
+		const scheduled = this.retainedRuns.get(run.runId)?.dispatch;
 		if (scheduled) {
 			scheduled.controller.abort();
 			const actual = await scheduled.operation.catch(() => undefined);

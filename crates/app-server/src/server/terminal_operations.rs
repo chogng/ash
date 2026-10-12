@@ -390,33 +390,61 @@ fn read_to_dto(value: exec_server::terminal::TerminalReadResult) -> wire::Termin
         command_events: value
             .command_events
             .into_iter()
-            .map(|event| wire::TerminalCommandStatusEvent {
-                sequence: event.sequence,
-                command_id: event.command_id,
-                status: match event.status {
-                    exec_server::terminal::TerminalCommandStatus::Running => {
-                        wire::TerminalCommandStatus::Running
-                    }
-                    exec_server::terminal::TerminalCommandStatus::Completed => {
-                        wire::TerminalCommandStatus::Completed
-                    }
-                    exec_server::terminal::TerminalCommandStatus::Succeeded => {
-                        wire::TerminalCommandStatus::Succeeded
-                    }
-                    exec_server::terminal::TerminalCommandStatus::Failed => {
-                        wire::TerminalCommandStatus::Failed
-                    }
-                    exec_server::terminal::TerminalCommandStatus::Canceled => {
-                        wire::TerminalCommandStatus::Canceled
-                    }
-                },
-                exit_code: event.exit_code,
-                after_output_sequence: event.after_output_sequence,
-            })
+            .map(command_status_event)
             .collect(),
         next_command_sequence: value.next_command_sequence,
         command_event_gap: value.command_event_gap,
         exited: value.exited,
         exit_code: value.exit_code,
+        shell_integration: value.shell_integration.map(|integration| {
+            wire::TerminalShellIntegration {
+                command_detection: integration.command_detection,
+                cwd_detection: integration.cwd_detection,
+                has_rich_command_detection: integration.has_rich_command_detection,
+                command_storage_disabled: integration.command_storage_disabled,
+                commands: integration
+                    .commands
+                    .into_iter()
+                    .map(command_status_event)
+                    .collect(),
+                after_output_sequence: integration.after_output_sequence,
+            }
+        }),
+        cwd: value.cwd.map(|cwd| wire::TerminalCwd {
+            value: cwd.value,
+            is_trusted: cwd.is_trusted,
+            after_output_sequence: cwd.after_output_sequence,
+        }),
+    }
+}
+
+fn command_status_event(
+    event: exec_server::terminal::TerminalCommandStatusEvent,
+) -> wire::TerminalCommandStatusEvent {
+    wire::TerminalCommandStatusEvent {
+        sequence: event.sequence,
+        command_id: event.command_id,
+        status: match event.status {
+            exec_server::terminal::TerminalCommandStatus::Running => {
+                wire::TerminalCommandStatus::Running
+            }
+            exec_server::terminal::TerminalCommandStatus::Completed => {
+                wire::TerminalCommandStatus::Completed
+            }
+            exec_server::terminal::TerminalCommandStatus::Succeeded => {
+                wire::TerminalCommandStatus::Succeeded
+            }
+            exec_server::terminal::TerminalCommandStatus::Failed => {
+                wire::TerminalCommandStatus::Failed
+            }
+            exec_server::terminal::TerminalCommandStatus::Canceled => {
+                wire::TerminalCommandStatus::Canceled
+            }
+        },
+        exit_code: event.exit_code,
+        after_output_sequence: event.after_output_sequence,
+        cwd: event.cwd,
+        command: event.command,
+        is_trusted: event.is_trusted,
     }
 }

@@ -1,8 +1,9 @@
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { realpathSync, statSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 
 /** Keeps backend account and model-cache storage inside the test's temporary home. */
-export function createTestEnvironment(directory: string, source: Readonly<Record<string, string | undefined>>): Record<string, string> {
+export function createTestEnvironment(directory: string, source: Readonly<Record<string, string | undefined>>, externalCodexHome?: string): Record<string, string> {
 	const environment = Object.fromEntries(Object.entries(source).filter((entry): entry is [string, string] => entry[1] !== undefined));
 	// Product storage is isolated, but Cargo and rustup still use the host toolchain.
 	environment.CARGO_HOME = source.CARGO_HOME ?? join(source.HOME ?? homedir(), '.cargo');
@@ -11,5 +12,11 @@ export function createTestEnvironment(directory: string, source: Readonly<Record
 	environment.HOME = directory;
 	if (process.platform === 'win32') environment.USERPROFILE = directory;
 	delete environment.CODEX_HOME;
+	if (externalCodexHome !== undefined) {
+		if (!isAbsolute(externalCodexHome)) throw new Error('External Codex home must be absolute');
+		const home = realpathSync(externalCodexHome);
+		if (!statSync(home).isDirectory()) throw new Error('External Codex home must be a directory');
+		environment.CODEX_HOME = home;
+	}
 	return environment;
 }

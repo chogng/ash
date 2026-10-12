@@ -101,7 +101,7 @@ pub struct TerminalProcessReady {
     pub cwd: String,
 }
 
-/// Current backend-owned process properties; cwd is absent when unavailable or exited.
+/// Current backend-owned process properties; shell cwd is retained after exit when detected.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalProcessInfo {
     pub ready: TerminalProcessReady,
@@ -202,6 +202,15 @@ pub enum TerminalCommandStatus {
     Canceled,
 }
 
+/// Last shell-reported directory, ordered against the retained output stream.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TerminalCwd {
+    pub value: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_trusted: Option<bool>,
+    pub after_output_sequence: u64,
+}
+
 /// One ordered command lifecycle transition associated with PTY output.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalCommandStatusEvent {
@@ -209,6 +218,24 @@ pub struct TerminalCommandStatusEvent {
     pub command_id: String,
     pub status: TerminalCommandStatus,
     pub exit_code: Option<i32>,
+    pub after_output_sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    /// Only command-text provenance; this grants no execution or path authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_trusted: Option<bool>,
+}
+
+/// Detected protocol support and bounded completed commands owned by this PTY.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TerminalShellIntegration {
+    pub command_detection: bool,
+    pub cwd_detection: bool,
+    pub has_rich_command_detection: bool,
+    pub command_storage_disabled: bool,
+    pub commands: Vec<TerminalCommandStatusEvent>,
     pub after_output_sequence: u64,
 }
 
@@ -224,4 +251,8 @@ pub struct TerminalReadResult {
     pub command_event_gap: bool,
     pub exited: bool,
     pub exit_code: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<TerminalCwd>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell_integration: Option<TerminalShellIntegration>,
 }

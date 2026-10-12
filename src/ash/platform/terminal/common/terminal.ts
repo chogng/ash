@@ -125,6 +125,19 @@ export interface ITerminalProcessCommandStatusEvent {
 	readonly status: TerminalProcessCommandStatus;
 	readonly exitCode: number | undefined;
 	readonly afterOutputSequence: number;
+	readonly cwd?: string;
+	readonly command?: string;
+	readonly isTrusted?: boolean;
+}
+
+/** Detected support and retained completed commands from the original PTY owner. */
+export interface ITerminalProcessShellIntegration {
+	readonly commandDetection: boolean;
+	readonly cwdDetection: boolean;
+	readonly hasRichCommandDetection: boolean;
+	readonly commandStorageDisabled: boolean;
+	readonly commands: readonly ITerminalProcessCommandStatusEvent[];
+	readonly afterOutputSequence: number;
 }
 
 export interface ITerminalProcessReadResult {
@@ -137,6 +150,8 @@ export interface ITerminalProcessReadResult {
 	readonly commandEventGap: boolean;
 	readonly exited: boolean;
 	readonly exitCode: number | undefined;
+	readonly cwd?: { readonly value: string; readonly isTrusted?: boolean; readonly afterOutputSequence: number; };
+	readonly shellIntegration?: ITerminalProcessShellIntegration;
 }
 
 export interface ITerminalProcessCloseOptions {

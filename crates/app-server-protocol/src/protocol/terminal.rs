@@ -179,7 +179,7 @@ pub struct TerminalProcessReady {
     pub cwd: String,
 }
 
-/// Backend-owned properties. Current cwd is null when the OS cannot query it or the shell exited.
+/// Backend-owned properties. Shell-reported cwd survives exit; cwd is absent when unavailable.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalProcessInfo {
@@ -344,6 +344,18 @@ pub enum TerminalCommandStatus {
     Canceled,
 }
 
+/// Last shell-reported directory, ordered against the retained output stream.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalCwd {
+    pub value: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub is_trusted: Option<bool>,
+    #[ts(type = "number")]
+    pub after_output_sequence: u64,
+}
+
 /// One ordered command lifecycle transition associated with PTY output.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -353,6 +365,29 @@ pub struct TerminalCommandStatusEvent {
     pub command_id: String,
     pub status: TerminalCommandStatus,
     pub exit_code: Option<i32>,
+    #[ts(type = "number")]
+    pub after_output_sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub command: Option<String>,
+    /// Only command-text provenance; this grants no execution or path authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub is_trusted: Option<bool>,
+}
+
+/// Detected protocol support and bounded completed commands owned by this PTY.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalShellIntegration {
+    pub command_detection: bool,
+    pub cwd_detection: bool,
+    pub has_rich_command_detection: bool,
+    pub command_storage_disabled: bool,
+    pub commands: Vec<TerminalCommandStatusEvent>,
     #[ts(type = "number")]
     pub after_output_sequence: u64,
 }
@@ -372,6 +407,12 @@ pub struct TerminalReadResult {
     pub command_event_gap: bool,
     pub exited: bool,
     pub exit_code: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<TerminalCwd>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub shell_integration: Option<TerminalShellIntegration>,
 }
 
 /// Terminates and releases one terminal attached to the calling connection.
@@ -412,6 +453,30 @@ mod tests {
         ] {
             assert!(serde_json::from_value::<TerminalArguments>(invalid).is_err());
         }
+    }
+
+    #[test]
+    fn terminal_read_preserves_optional_cwd_and_unknown_command_exit_status() {
+        let original = serde_json::json!({"terminalId": "terminal", "chunks": [], "nextSequence": 4, "outputGap": false, "commandEvents": [{"sequence": 1, "commandId": "command", "status": "completed", "exitCode": null, "afterOutputSequence": 4}], "nextCommandSequence": 1, "commandEventGap": false, "exited": false, "exitCode": null});
+        let read: TerminalReadResult = serde_json::from_value(original.clone()).unwrap();
+        assert!(read.cwd.is_none());
+        assert!(read.shell_integration.is_none());
+        assert!(read.command_events[0].command.is_none());
+        assert!(read.command_events[0].is_trusted.is_none());
+        assert_eq!(serde_json::to_value(read).unwrap(), original);
+        let mut current = original;
+        current["cwd"] =
+            serde_json::json!({"value": "C:\\work; with spaces", "afterOutputSequence": 4});
+        current["commandEvents"][0]["cwd"] = serde_json::json!("C:\\invocation");
+        current["cwd"]["isTrusted"] = serde_json::json!(true);
+        current["commandEvents"][0]["command"] = serde_json::json!("echo 中文; \"quoted\"\nnext");
+        current["commandEvents"][0]["isTrusted"] = serde_json::json!(false);
+        current["shellIntegration"] = serde_json::json!({
+            "commandDetection": true, "cwdDetection": true, "hasRichCommandDetection": true,
+            "commandStorageDisabled": false, "commands": current["commandEvents"], "afterOutputSequence": 4,
+        });
+        let read: TerminalReadResult = serde_json::from_value(current.clone()).unwrap();
+        assert_eq!(serde_json::to_value(read).unwrap(), current);
     }
 
     #[test]

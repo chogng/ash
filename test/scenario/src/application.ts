@@ -18,6 +18,7 @@ export interface ApplicationLaunchOptions {
 	readonly workspacePath?: string;
 	readonly userSettings?: Readonly<Record<string, JSONValue>>;
 	readonly extraArgs?: readonly string[];
+	readonly externalCodexHome?: string;
 }
 
 export interface RunningApplication {
@@ -83,6 +84,7 @@ export class ApplicationService {
 				workspaceDirectory: options.workspacePath,
 				workspacePermissions: options.workspacePath ? 'development' : undefined,
 				extraArgs: options.extraArgs,
+				externalCodexHome: options.externalCodexHome,
 				recordVideo: { directory: videoDirectory, size: videoSize },
 				desktopDirectory: join(repositoryRoot, '.'),
 			});

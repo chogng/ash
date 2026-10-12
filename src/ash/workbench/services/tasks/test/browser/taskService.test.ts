@@ -2653,6 +2653,92 @@ suite('Agent Task runs through the shared execution owner', () => {
 		assert.equal(terminals.instances.length, 0);
 	});
 
+	test('pages complete Unicode code points and skips a pair clipped by output retention', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals } = assemble(resources, [{ label: 'Check', command: 'check' }]);
+		const run = await service.run((await service.refresh())[0]!);
+		terminals.instances[0]!.output('a😀b');
+		assert.deepEqual(run.readOutput(0, 2), { text: 'a', cursor: 0, nextCursor: 1, truncated: false, hasMore: true });
+		assert.deepEqual(run.readOutput(1, 1), { text: '😀', cursor: 1, nextCursor: 3, truncated: false, hasMore: true });
+		assert.deepEqual(run.readOutput(2, 2), { text: '😀', cursor: 1, nextCursor: 3, truncated: false, hasMore: true });
+		assert.equal(run.readOutput(3, 1).text, 'b');
+		terminals.instances[0]!.output('😀' + 'x'.repeat(1_048_575));
+		assert.deepEqual(run.readOutput(0, 1), { text: 'x', cursor: 6, nextCursor: 7, truncated: true, hasMore: true });
+		await service.terminate(run);
+	});
+
+	test('keeps the failed root Run ID visible after its dependency exits with an error', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals } = assemble(resources, [{ label: 'Prepare😀', command: 'prepare' }, { label: 'Check', command: 'check', dependsOn: 'Prepare😀' }]);
+		const task = (await service.refresh()).find(task => task.label === 'Check')!;
+		const started = new DeferredPromise<void>();
+		resources.add(service.onDidStartTask(() => { void started.complete(undefined); }));
+		const run = service.start(task, new AbortController().signal, (await service.describe(task)).revision);
+		await started.p;
+		terminals.instances[0]!.exit(1);
+		await assert.rejects(run.completion!, /Dependency/);
+		assert.equal(service.lastRun, run);
+		assert.equal(service.getRun(run.runId)!.status, 'failed');
+		let text = '';
+		for (let cursor = 0; ;) {
+			const page = run.readOutput(cursor, 1);
+			for (const char of page.text) assert.ok(char.codePointAt(0)! < 0xd800 || char.codePointAt(0)! > 0xdfff);
+			text += page.text;
+			if (!page.hasMore) break;
+			assert.ok(page.nextCursor > cursor);
+			cursor = page.nextCursor;
+		}
+		assert.match(text, /Prepare😀/);
+	});
+
+	test('validates cursors and budgets for a compound task with empty output', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals } = assemble(resources, [{ label: 'Prepare', command: 'prepare' }, { label: 'All', dependsOn: 'Prepare' }]);
+		const started = new DeferredPromise<void>();
+		resources.add(service.onDidStartTask(run => { if (run.task.label === 'Prepare') void started.complete(undefined); }));
+		const operation = service.run((await service.refresh()).find(task => task.label === 'All')!);
+		await started.p;
+		terminals.instances[0]!.exit(0);
+		const run = await operation;
+		assert.deepEqual(run.readOutput(0, 1), { text: '', cursor: 0, nextCursor: 0, truncated: false, hasMore: false });
+		for (const [cursor, limit] of [[1, 1], [-1, 1], [0, 0], [0, 65_537]]) assert.throws(() => run.readOutput(cursor!, limit!), RangeError);
+	});
+
+	test('retains at most 100 completed manual, Agent and preparation failures, without evicting active runs', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 10_000 });
+		try {
+			using resources = new DisposableStore();
+			const { service, terminals } = assemble(resources, [{ label: 'Watch', command: 'watch', presentation: { panel: 'new' } }, { label: 'Check', command: 'check', presentation: { panel: 'new' } }]);
+			const tasks = await service.refresh();
+			const watch = await service.run(tasks.find(task => task.label === 'Watch')!);
+			const check = tasks.find(task => task.label === 'Check')!;
+			const manual: ITaskRun[] = [];
+			for (let index = 0; index < 52; index++) {
+				const run = await service.run(check); manual.push(run);
+				mock.timers.tick(1);
+				terminals.instances.at(-1)!.exit(0);
+				await run.completion;
+			}
+			for (let index = 0; index < 51; index++) {
+				mock.timers.tick(1);
+				const failed = service.start(check, new AbortController().signal, '0'.repeat(64));
+				await assert.rejects(failed.completion!, /configuration changed/);
+			}
+			assert.equal(service.runs.length, 101);
+			assert.equal(service.getRun(watch.runId), watch);
+			assert.equal(service.getRun(manual[2]!.runId), undefined);
+			assert.equal(service.getRun(manual[3]!.runId), manual[3]);
+			mock.timers.tick(1);
+			terminals.instances[0]!.exit(0);
+			await watch.completion;
+			assert.equal(service.runs.length, 100);
+			assert.equal(service.getRun(watch.runId), watch, 'completion time, not start time, determines retention');
+			mock.timers.tick(3_600_001);
+			assert.deepEqual(service.runs, []);
+			assert.equal(service.lastRun, undefined);
+		} finally { mock.timers.reset(); }
+	});
+
 	test('keeps ready distinct from process exit and retires Run IDs with the workspace', async () => {
 		using resources = new DisposableStore();
 		const { service, terminals, workspace } = assemble(resources, [{ label: 'Watch', command: 'watch', isBackground: true, problemMatcher: { owner: 'watch', pattern: { regexp: '^(.*):(\\d+):(.*)$', file: 1, line: 2, message: 3 }, background: { activeOnStart: true, beginsPattern: '^begin$', endsPattern: '^ready$' } } }]);

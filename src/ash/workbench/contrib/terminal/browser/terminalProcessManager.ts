@@ -4,8 +4,8 @@ import { DeferredPromise, raceCancellationError, timeout } from '../../../../bas
 import { CancellationTokenSource, cancelOnDispose, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { ITerminalProcessService, type IProcessDataEvent, type ITerminalProcessCloseOptions, type ITerminalProcessCommandStatusEvent } from '../../../../platform/terminal/common/terminal.js';
-import type { ITerminalCommandStatusEvent } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalProcessService, type IProcessDataEvent, type ITerminalProcessCloseOptions, type ITerminalProcessCommandStatusEvent, type ITerminalProcessReadResult } from '../../../../platform/terminal/common/terminal.js';
+import type { ITerminalCommandStatusEvent, ITerminalShellIntegration } from '../../../services/terminal/browser/terminal.js';
 
 const INPUT_BATCH_DELAY_MILLIS = 8;
 const INPUT_BATCH_CHARACTERS = 16_384;
@@ -38,6 +38,12 @@ export class TerminalProcessManager extends Disposable {
 	private nextSequence = 0;
 	private nextCommandSequence = 0;
 	private pendingCommit: Promise<void> | undefined;
+	private pendingCwd: ITerminalProcessReadResult['cwd'];
+	private currentCwd: string | undefined;
+	private pendingShellIntegration: ITerminalProcessReadResult['shellIntegration'];
+	private currentShellIntegration: ITerminalShellIntegration | undefined;
+	public get shellIntegration(): ITerminalShellIntegration | undefined { return this.currentShellIntegration; }
+	public get cwd(): string | undefined { return this.currentCwd; }
 
 	public readonly onProcessError = this.processErrorEmitter.event;
 	public readonly onProcessData = this.processDataEmitter.event;
@@ -64,7 +70,7 @@ export class TerminalProcessManager extends Disposable {
 			// A queued screen write survives a transport interruption. Await it before
 			// resuming, without replaying bytes already handed to that same screen.
 			await this.waitForCommit(token);
-			this.emitCommandEventsThrough(this.nextSequence, token);
+			this.emitStateThrough(this.nextSequence, token);
 			while (!token.isCancellationRequested) {
 				const result = await raceCancellationError(this.processService.read({
 					...this.identity,
@@ -85,23 +91,25 @@ export class TerminalProcessManager extends Disposable {
 				if (result.outputGap) {
 					this.outputGapEmitter.fire();
 				}
+				if (result.cwd) this.pendingCwd = result.cwd;
+				if (result.shellIntegration) this.pendingShellIntegration = result.shellIntegration;
 				this.pendingCommandEvents.push(...result.commandEvents);
 				this.nextCommandSequence = result.nextCommandSequence;
-				this.emitCommandEventsThrough(this.nextSequence, token);
+				this.emitStateThrough(this.nextSequence, token);
 				for (const chunk of result.chunks) {
 					if (token.isCancellationRequested) {
 						return;
 					}
-					this.emitCommandEventsThrough(chunk.sequence - 1, token);
+					this.emitStateThrough(chunk.sequence - 1, token);
 					const event: IProcessDataEvent = { data: chunk.data, trackCommit: true };
 					this.processDataEmitter.fire(event);
 					this.nextSequence = chunk.sequence;
 					this.pendingCommit = event.writePromise;
 					await this.waitForCommit(token);
-					this.emitCommandEventsThrough(this.nextSequence, token);
+					this.emitStateThrough(this.nextSequence, token);
 				}
 				this.nextSequence = result.nextSequence;
-				this.emitCommandEventsThrough(this.nextSequence, token);
+				this.emitStateThrough(this.nextSequence, token);
 				if (token.isCancellationRequested) {
 					return;
 				}
@@ -255,10 +263,25 @@ export class TerminalProcessManager extends Disposable {
 		}
 	}
 
-	private emitCommandEventsThrough(sequence: number, token: CancellationToken): void {
+	private emitStateThrough(sequence: number, token: CancellationToken): void {
+		if (!token.isCancellationRequested && this.pendingCwd && this.pendingCwd.afterOutputSequence <= sequence) {
+			this.currentCwd = this.pendingCwd.value;
+			this.pendingCwd = undefined;
+		}
+		if (!token.isCancellationRequested && this.pendingShellIntegration && this.pendingShellIntegration.afterOutputSequence <= sequence) {
+			const integration = this.pendingShellIntegration;
+			this.currentShellIntegration = {
+				commandDetection: integration.commandDetection,
+				cwdDetection: integration.cwdDetection,
+				hasRichCommandDetection: integration.hasRichCommandDetection,
+				commandStorageDisabled: integration.commandStorageDisabled,
+				commands: integration.commands.map(commandStatusEvent),
+			};
+			this.pendingShellIntegration = undefined;
+		}
 		while (!token.isCancellationRequested && this.pendingCommandEvents.length > 0 && this.pendingCommandEvents[0]!.afterOutputSequence <= sequence) {
 			const event = this.pendingCommandEvents.shift()!;
-			this.commandStatusEmitter.fire({ commandId: event.commandId, status: event.status, exitCode: event.exitCode });
+			this.commandStatusEmitter.fire(commandStatusEvent(event));
 		}
 	}
 }
@@ -283,4 +306,13 @@ function takeUtf8Prefix(value: string, maximumBytes: number): string {
 
 function isHighSurrogate(codeUnit: number): boolean {
 	return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
+}
+
+function commandStatusEvent(event: ITerminalProcessCommandStatusEvent): ITerminalCommandStatusEvent {
+	return {
+		commandId: event.commandId, status: event.status, exitCode: event.exitCode,
+		...(event.cwd === undefined ? {} : { cwd: event.cwd }),
+		...(event.command === undefined ? {} : { command: event.command }),
+		...(event.isTrusted === undefined ? {} : { isTrusted: event.isTrusted }),
+	};
 }

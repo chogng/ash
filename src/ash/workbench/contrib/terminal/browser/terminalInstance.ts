@@ -142,6 +142,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	public get instanceId(): number { return this.instanceNumber; }
 
+	public get cwd(): string | undefined { return this.shellProcessManager?.cwd; }
+	public get shellIntegration() { return this.shellProcessManager?.shellIntegration; }
+
 	public get initialCwd(): string {
 		return this.processReady.cwd;
 	}

@@ -276,8 +276,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await add.press('Enter');
 		await picker.getByRole('option', { name: 'Pull Request…', exact: true }).click();
 		await picker.getByRole('combobox').fill('https://github.com/other/project/pull/27');
-		await expect(picker.getByRole('option')).toHaveCount(2);
-		await page.keyboard.press('Enter');
+		await picker.getByRole('option', { name: 'other/project/pull/27', exact: true }).click();
 		await expect(picker).toHaveCount(0);
 		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
 		const contexts = JSON.parse((await page.getByLabel('Submission').textContent())!) as { name: string; content: string; }[];
@@ -516,6 +515,9 @@ test('child context pickers go back one step and continue adding after Ctrl+Ente
 	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
 	await picker.getByRole('option', { name: 'Sessions…', exact: true }).click();
 	await picker.getByRole('combobox').fill('Earlier design');
+	await expect(picker.getByRole('option', { name: 'Earlier design', exact: true })).toBeVisible();
+	await page.keyboard.press('ArrowDown');
+	await expect(picker.getByRole('combobox')).toHaveAttribute('aria-activedescendant', (await picker.getByRole('option', { name: 'Earlier design', exact: true }).getAttribute('id'))!);
 	await page.keyboard.press('Control+Enter');
 	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
 	await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
@@ -529,6 +531,8 @@ test('child context pickers go back one step and continue adding after Ctrl+Ente
 	await picker.getByRole('option', { name: /team\/alpha workspace/ }).click();
 	await picker.getByRole('combobox').fill('#12');
 	await expect(picker.getByRole('option', { name: /#12 Attachment issue/ })).toBeVisible();
+	await page.keyboard.press('ArrowDown');
+	await expect(picker.getByRole('combobox')).toHaveAttribute('aria-activedescendant', (await picker.getByRole('option', { name: /#12 Attachment issue/ }).getAttribute('id'))!);
 	await page.keyboard.press('Control+Enter');
 	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
 	await expect(picker.getByRole('combobox')).toBeFocused();
@@ -570,6 +574,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
 		await picker.getByRole('combobox').fill('Shell');
 		await expect(picker.getByRole('option', { name: /Shell \/workspace/ })).toBeVisible();
+		await page.keyboard.press('ArrowDown');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('aria-activedescendant', (await picker.getByRole('option', { name: /Shell \/workspace/ }).getAttribute('id'))!);
 		await page.keyboard.press('Control+Enter');
 		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', chinese ? '搜索附件' : 'Search attachments');
 		// Stable terminal identity replaces its snapshot rather than creating a second chip.
@@ -580,6 +586,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await picker.getByRole('option', { name: chinese ? '符号…' : 'Symbols…', exact: true }).click();
 		await picker.getByRole('combobox').fill('attach');
 		await expect(picker.getByRole('option', { name: /attach/ })).toBeVisible();
+		await page.keyboard.press('ArrowDown');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('aria-activedescendant', (await picker.getByRole('option', { name: /attach/ }).getAttribute('id'))!);
 		await page.keyboard.press('Control+Enter');
 		await picker.getByRole('option', { name: chinese ? '搜索结果' : 'Search Results', exact: true }).click();
 		await expect(picker).toHaveCount(0);
@@ -660,11 +668,13 @@ for (const locale of ['en', 'zh-CN']) {
 		await picker.getByRole('option', { name: chinese ? '指令…' : 'Instructions…', exact: true }).click();
 		await picker.getByRole('combobox').fill('contracts');
 		await expect(picker.getByRole('option', { name: /API review/ })).toContainText(chinese ? '目录' : 'Directory');
+		await page.keyboard.press('ArrowDown');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('aria-activedescendant', (await picker.getByRole('option', { name: /API review/ }).getAttribute('id'))!);
 		await page.keyboard.press('Control+Enter');
 		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', chinese ? '搜索附件' : 'Search attachments');
 		await picker.getByRole('option', { name: chinese ? '指令…' : 'Instructions…', exact: true }).click();
 		await picker.getByRole('combobox').fill('review.md');
-		await page.keyboard.press('Enter');
+		await picker.getByRole('option', { name: /API review/ }).click();
 		const attachments = page.getByRole('list', { name: chinese ? '已添加的上下文' : 'Attached context' });
 		await expect(attachments.getByRole('listitem')).toHaveCount(1);
 		await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
@@ -717,6 +727,9 @@ for (const locale of ['en', 'zh-CN']) {
 		await picker.getByRole('combobox').fill('docs-server');
 		await expect(picker.getByRole('option', { name: /^connector_search(?:\s|$)/ })).toHaveCount(1);
 		await picker.getByRole('combobox').fill('connector_search');
+		await expect(picker.getByRole('option', { name: /^connector_search(?:\s|$)/ })).toBeVisible();
+		await page.keyboard.press('ArrowDown');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('aria-activedescendant', (await picker.getByRole('option', { name: /^connector_search(?:\s|$)/ }).getAttribute('id'))!);
 		await page.keyboard.press('Control+Enter');
 		await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 		await picker.getByRole('combobox').fill('source document');
@@ -725,7 +738,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const attachments = page.getByRole('list', { name: chinese ? '已添加的上下文' : 'Attached context' });
 		await expect(attachments.getByRole('listitem')).toHaveCount(2);
 		await attachments.getByRole('button', { name: chinese ? '打开 工具：read_file' : 'Open Tool: read_file', exact: true }).press('Enter');
-		await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify([{ command: 'workbench.action.openSettings', resource: 'tools' }]));
+		await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify([{ command: 'workbench.action.openSettings', resource: { section: 'tools' } }]));
 		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
 		const contexts = JSON.parse((await page.getByLabel('Submission').textContent())!);
 		expect(contexts.map((context: { content: string; }) => JSON.parse(context.content))).toEqual([
@@ -807,3 +820,38 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.keyboard.press('Escape');
 	});
 }
+
+test('terminal context uses shell cwd in the picker and attachment while retaining launch cwd fallback', async ({ page }) => {
+	await page.goto('/chatInput.html?contextSources=1&terminalCwd=%2Fworkspace%2Fcurrent%3Bfolder');
+	await page.waitForFunction(() => Boolean(window.ashChatInputIntegration));
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	const picker = page.getByRole('dialog');
+	await picker.getByRole('option', { name: 'Terminal…', exact: true }).click();
+	await picker.getByRole('combobox').fill('Shell');
+	await picker.getByRole('option', { name: /Shell \/workspace\/current;folder/ }).click();
+	await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+	await expect(page.getByLabel('Submission')).toHaveText(JSON.stringify([{ name: 'Terminal: Shell', content: 'Terminal: Shell\nDirectory: /workspace/current;folder\n\ncontext terminal ready' }]));
+});
+
+for (const storageDisabled of [false, true]) test(`terminal context retains command text, capability and trust with command storage disabled=${storageDisabled}`, async ({ page }) => {
+	await page.goto(`/chatInput.html?contextSources=1&shellHistory=1${storageDisabled ? '&disableCommandStorage=1' : ''}`);
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	const picker = page.getByRole('dialog');
+	await picker.getByRole('option', { name: 'Terminal…', exact: true }).click();
+	await picker.getByRole('option', { name: /Shell \/workspace/ }).click();
+	await expect(page.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(1);
+	await page.evaluate(() => window.ashChatInputIntegration.changeContextSources());
+	await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
+	await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+	const contexts = JSON.parse((await page.getByLabel('Submission').textContent())!) as { content: string; }[];
+	const output = 'Terminal: Shell\nDirectory: /workspace\n\ncontext terminal ready';
+	expect(contexts[0].content).toBe(output + (storageDisabled ? '' : '\n\n' + JSON.stringify({
+		hasRichCommandDetection: true, commands: [
+			{ commandId: 'first', status: 'succeeded', exitCode: 0, command: 'echo 中文; "quoted"', isTrusted: true, cwd: '/workspace' },
+			{ commandId: 'second', status: 'failed', exitCode: 9, command: 'unverified\ncommand', isTrusted: false, cwd: '/workspace/current' },
+		]
+	}, null, 2)));
+	await expect(page.getByLabel('Context error')).toHaveText('');
+});

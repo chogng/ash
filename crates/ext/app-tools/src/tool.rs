@@ -497,7 +497,7 @@ impl ActionPolicyService for AppToolPolicy {
             return Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
                 request.action().digest().clone(),
                 capabilities(name),
-                "Run the reviewed workspace task using the development terminal environment",
+                request.action().summary(),
             )));
         }
         Ok(ExecutionDecision::RunUnsandboxed {
@@ -556,8 +556,8 @@ fn definitions() -> Vec<ToolDefinition> {
         ),
         definition(
             "tasks_output",
-            "Read bounded output belonging to one Run ID. Use cursor=0 initially, then nextCursor. Cursors count UTF-16 characters; truncated reports an output gap. Output remains associated with the run when its terminal is reused.",
-            json!({"directory":string,"run_id":string,"cursor":{"type":"integer","minimum":0,"maximum":9007199254740991u64,"description":"UTF-16 character offset from nextCursor; start at zero."},"max_characters":{"type":"integer","minimum":1,"maximum":65536,"description":"Maximum UTF-16 characters to return, from 1 to 65536."}}),
+            "Read bounded output belonging to one Run ID. Use cursor=0 initially, then nextCursor. Cursors count UTF-16 code units; truncated reports an output gap. Output remains associated with the run when its terminal is reused.",
+            json!({"directory":string,"run_id":string,"cursor":{"type":"integer","minimum":0,"maximum":9007199254740991u64,"description":"UTF-16 code-unit offset from nextCursor; start at zero. A mid-pair cursor rounds back to the complete character."},"max_characters":{"type":"integer","minimum":1,"maximum":65536,"description":"UTF-16 code-unit budget, from 1 to 65536. Pages preserve complete code points; a budget of 1 may return a two-unit character to make progress."}}),
             &["directory", "run_id", "cursor", "max_characters"],
         ),
         definition(

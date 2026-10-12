@@ -32,6 +32,7 @@ export interface Scenario {
 	readonly workspacePath?: string;
 	readonly userSettings?: Readonly<Record<string, JSONValue>>;
 	readonly extraArgs?: readonly string[];
+	readonly externalCodexHome?: string;
 	readonly stepPauseMs?: number;
 	readonly steps: readonly ScenarioStep[];
 }
@@ -56,7 +57,7 @@ export async function runScenario(scenario: Scenario): Promise<{ readonly runPat
 	validateScenario(scenario);
 	const applications = new ApplicationService(options);
 	const evidence = new EvidenceService(applications);
-	const runPath = await evidence.start(scenario.id, scenario.title, scenario.source, scenario.scenarioPath, scenario.workspacePath, scenario.userSettings, scenario.extraArgs);
+	const runPath = await evidence.start(scenario.id, scenario.title, scenario.source, scenario.scenarioPath, scenario.workspacePath, scenario.userSettings, scenario.extraArgs, scenario.externalCodexHome);
 	console.log(`Evidence run: ${runPath}`);
 	const blockers: ScenarioBlocker[] = [];
 	let outcome: 'passed' | 'failed' | 'aborted' = 'passed';

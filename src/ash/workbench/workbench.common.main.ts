@@ -57,7 +57,6 @@ import './contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import './contrib/documentEditor/browser/documentEditor.contribution.js';
 import './contrib/academic/browser/academicEditor.contribution.js';
 import './contrib/debug/browser/debug.contribution.js';
-import { registerTasksView } from './contrib/tasks/browser/tasks.contribution.js';
 import './contrib/testing/browser/testing.contribution.js';
 import './api/browser/extensionHost.contribution.js';
 import './services/codebaseSymbols/browser/codebaseSymbolsServiceRegistration.js';
@@ -76,5 +75,3 @@ registerWorkbenchContribution(
 		accessor.get(ISyntaxApi),
 	) : Disposable.None,
 );
-
-registerTasksView();

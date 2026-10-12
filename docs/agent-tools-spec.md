@@ -649,8 +649,8 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
 
 `ash-app-tools` 提供 `tasks_list`、`tasks_run`、`tasks_status`、`tasks_output` 和 `tasks_cancel`。它们与会话管理、自动化分开：Task 定义和执行由窗口的 `ITaskService` 唯一拥有，进程沿现有 Terminal → exec-server 执行；Rust 只持有工具定义、调用身份、审批和宿主路由。
 
-调用方传绝对工作区 `directory`；运行使用发现结果的 `task_id` 与 `revision`，后续操作使用返回的 `runId`。后端验证当前 Session 的目录及命令授权，并向当前 Turn 绑定的唯一窗口发送 `app/request`。运行前读取静态执行配方，将任务及依赖命令纳入审批；运行时再次核对配置 revision。Code Mode 使用同一 Tool Registry 和审批路径。
+调用方传绝对工作区 `directory`；运行使用发现结果的 `task_id` 与 `revision`，后续操作使用返回的 `runId`。后端验证当前 Session 的目录及命令授权，并向当前 Turn 绑定的唯一窗口发送 `app/request`。运行前读取静态执行配方，将任务及依赖命令纳入审批，并在审批理由中展示同一配方摘要；审批后再次验证根目录及所有依赖 cwd 的当前命令权限，运行时再次核对配置 revision。Code Mode 使用同一 Tool Registry 和审批路径。
 
-Run ID 在依赖准备前产生。查询结果区分运行状态、退出码、后台 `ready`、诊断错误和 Terminal ID。输出使用 UTF-16 字符游标，单次最多读取 65,536 字符；每个 Run 保留最多 1,048,576 字符，淘汰旧输出时返回 `truncated` 与实际起始游标。输出属于 Run，终端复用不会将后续命令的输出并入旧 Run。
+Run ID 在依赖准备前产生。查询结果区分运行状态、退出码、后台 `ready`、诊断错误和 Terminal ID。输出游标是从 Run 开始累计的 UTF-16 代码单元偏移，不是 UTF-8 字节数。首次使用 `cursor=0`，后续必须使用响应的 `nextCursor`，不要自行按字节数或可见字符数累加。`max_characters` 为 1–65,536 的 UTF-16 读取预算；分页不会拆开代理对，预算为 1 且首个字符占两个代码单元时返回完整字符（两个单元）以保证前进。请求游标落在代理对中间时，响应 `cursor` 向前对齐到该字符的起点；除此之外，页尾向前收缩以满足预算。每个 Run 保留最多 1,048,576 个代码单元，淘汰时跳过整个被截断的字符，响应 `truncated=true` 与实际起始游标。空输出和复合 Task 也使用相同的游标范围校验。例如输出 `a😀b`，从 `cursor=0` 以预算 2 读取会返回 `a` 和 `nextCursor=1`；随后从 1 以预算 1 读取会返回完整 `😀` 和 `nextCursor=3`。输出属于 Run，终端复用不会将后续命令的输出并入旧 Run。
 
-本阶段支持本地文件夹内的静态 shell/process Task、包管理器脚本和 Cargo 入口及其静态依赖；仅允许工作区路径变量。扩展回调、其他动态变量及尚未支持的配置在发现结果中提供原因，仍可通过用户 Tasks 操作运行。记录限定于原窗口和工作区，完成后保留一小时、最多 100 条已完成记录；窗口切换工作区时失效。窗口与 app-server 连接关闭会取消该工具宿主启动的运行，用户手动启动的运行由原 TaskService 生命周期管理。不存在跨窗口、服务重启恢复或检查结果缓存。
+本阶段支持本地文件夹内的静态 shell/process Task、包管理器脚本和 Cargo 入口及其静态依赖；仅允许工作区路径变量。扩展回调、其他动态变量及尚未支持的配置在发现结果中提供原因，仍可通过用户 Tasks 操作运行。记录限定于原窗口和工作区，完成后保留一小时，窗口内的手动运行、Agent 运行和准备失败合计最多 100 条已完成记录，按完成时间淘汰；活动运行不占此限额；窗口切换工作区时失效。窗口与 app-server 连接关闭会取消该工具宿主启动的运行，用户手动启动的运行由原 TaskService 生命周期管理。不存在跨窗口、服务重启恢复或检查结果缓存。

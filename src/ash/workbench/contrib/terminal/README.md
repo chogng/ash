@@ -90,4 +90,8 @@ Agent 的 openTerminal App Tool 在原 AppToolsHost 采用 agentHostProfile，�
 
 参数契约支持 literal argv 数组和仅限 Windows 的原始 CommandLine 字符串。profile、automation、agentHost、扩展 TerminalProfile 与启动配置共用原 resolver；字符串按整体解析变量，保留引用、空值与空格，经本地/SSH adapter 和 App Server/exec-server 到原 ConPTY。数组继续由 PTY 引用，字符串仅追加在正确引用的 executable 后；执行边界拒绝非 Windows、NUL 与超长命令行。内部 exec-server 协议版本为 5，App Server schema 与 TypeScript 由同一生成器更新。
 
-Windows cmd/PowerShell/WSL/Nu task 以完整 CommandLine 创建进程；Windows Bash/Zsh/Fish 的 argv 保持数组，raw prefix 后的完整 Shell command 则按一个 Windows 参数引用。Tasks 的 shellArgs 仍只接受数组，可不指定 executable 而覆盖所选 profile；显式 executable 不注入默认命令标志。复用与 Relaunch 保留字符串和不可变 argv 快照，仍等待旧 PTY 释放并保留原实例、屏幕和环境覆盖 owner。URI 图标、完整 Shell integration/profile 检测、分组/分屏、编辑器终端和剩余 xterm/backend 链路仍待补齐。
+Windows cmd/PowerShell/WSL/Nu task 以完整 CommandLine 创建进程；Windows Bash/Zsh/Fish 的 argv 保持数组，raw prefix 后的完整 Shell command 则按一个 Windows 参数引用。Tasks 的 shellArgs 仍只接受数组，可不指定 executable 而覆盖所选 profile；显式 executable 不注入默认命令标志。复用与 Relaunch 保留字符串和不可变 argv 快照，仍等待旧 PTY 释放并保留原实例、屏幕和环境覆盖 owner。URI 图标、命令文本/历史与 Shell capability、分组/分屏、编辑器终端和剩余 xterm/backend 链路仍待补齐。
+
+Shell integration 沿用执行端 `ShellIntegration` 的注入生命周期与 `TerminalCommandStatusTracker`：按 executable 识别自定义 PowerShell/Bash/Zsh profile，消费 OSC 633 的 A/B/C/D 和转义的 P;Cwd。A/B 不创建执行记录，C 建立命令，D 保留真实退出码或未知状态；PowerShell 按 `$?` 上报 0/1，Bash/Zsh 保留数值状态。命令事件保存开始时的 cwd，当前 cwd 独立附带输出序号，经既有 adapter 传给 TerminalProcessManager，等待原 xterm 解析确认后更新；TerminalContext 使用当前 cwd，未检测到时回到启动目录。复用等待旧 PTY 释放，重建进程管理器并丢弃旧轮次的晚到数据，保留实例与屏幕。
+
+Bash/Zsh 保留用户启动文件与 prompt hooks，Bash 登录配置通过原 rc wrapper 加载；Bash 3.2 已有 DEBUG trap 时保留用户 trap，不强行提供执行边界。PowerShell 保留用户 prompt 与 PSReadLine 多行/读输入行为。显式命令、独立 Task execution 与原始 Windows shell 参数不注入或改写启动参数；Task 输出中的 OSC 不改变 shell 命令状态或 cwd。未知/无效 OSC 保留字节，未终止 OSC 的缓存有上限。cwd 是显示信息，不作为路径授权。

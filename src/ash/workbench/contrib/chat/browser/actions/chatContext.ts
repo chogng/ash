@@ -103,7 +103,7 @@ export class TerminalContext implements ChatContextSource {
 	}
 	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
 		const selected = await pickChatContextItem(this.quickInput, localize('chat.context.selectTerminal', 'Select a terminal to attach its selection or recent output'),
-			async query => filterQuickPickItems(this.terminals.instances.map(instance => ({ label: instance.title, description: instance.initialCwd, instance })), query), signal);
+			async query => filterQuickPickItems(this.terminals.instances.map(instance => ({ label: instance.title, description: instance.cwd ?? instance.initialCwd, instance })), query), signal);
 		if (!selected || selected.kind === 'back' || signal.aborted) { return undefined; }
 		const instance = selected.item.instance;
 		const view = this.views.getViewWithId<ITerminalView>(TERMINAL_VIEW_ID);
@@ -111,7 +111,9 @@ export class TerminalContext implements ChatContextSource {
 		if (signal.aborted) { return undefined; }
 		if (!output?.trim()) { throw new Error(localize('chat.context.terminalUnavailable', 'The terminal has closed or has no output to attach')); }
 		const name = localize('chat.context.terminalName', 'Terminal: {0}', instance.title);
-		const content = `Terminal: ${instance.title}\nDirectory: ${instance.initialCwd}\n\n${output}`;
+		const integration = instance.shellIntegration;
+		const commands = integration?.commandDetection && !integration.commandStorageDisabled ? integration.commands : [];
+		const content = `Terminal: ${instance.title}\nDirectory: ${instance.cwd ?? instance.initialCwd}\n\n${output}` + (commands.length ? `\n\n${JSON.stringify({ hasRichCommandDetection: integration!.hasRichCommandDetection, commands }, null, 2)}` : '');
 		return {
 			acceptInBackground: selected.background, attachment: {
 				id: `terminal:${instance.id}`, kind: 'terminal', name,

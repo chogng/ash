@@ -37,7 +37,7 @@ export class Workbench {
 	async waitForReady(): Promise<void> {
 		await waitForWindowLoad(this.page);
 		await this.element.waitFor({ state: "visible" });
-		await this.editors.waitForReady();
+		if (!await this.page.locator(".ash-sessions-window").isVisible()) await this.editors.waitForReady();
 		await this.waitForUiIdle();
 	}
 

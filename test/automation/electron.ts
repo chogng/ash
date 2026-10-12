@@ -16,6 +16,8 @@ export interface ElectronLaunchOptions {
 	readonly startupTimeout?: number;
 	readonly userDataDirectory: string;
 	readonly profileDirectory?: string;
+	/** Explicit opt-in for real-model scenarios; ordinary tests keep account storage isolated. */
+	readonly externalCodexHome?: string;
 	/** Public product configuration, selected before the profile daemon starts. */
 	readonly productServicesPath?: string;
 	readonly workspaceDirectory?: string;
@@ -48,7 +50,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	const electronExecutablePath = bundle
 		? process.platform === 'darwin' ? join(bundle, 'Contents', 'MacOS', 'Ash') : join(bundle, 'Ash.exe')
 		: createRequire(resolve(desktopDirectory, "package.json"))("electron") as string;
-	const environment = createTestEnvironment(options.userDataDirectory, options.environment ?? process.env);
+	const environment = createTestEnvironment(options.userDataDirectory, options.environment ?? process.env, options.externalCodexHome);
 	if (process.platform === 'win32') {
 		// Windows cannot begin a Jump List transaction without its destination stores
 		// beneath the isolated USERPROFILE. Keep Shell data inside the test home too.

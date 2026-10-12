@@ -1076,3 +1076,24 @@ test('extension terminal profile activates from the picker and persists as the n
 	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+test('shell cwd waits for the original xterm commit and remains available with retained command output', async ({ page }) => {
+	let release!: () => void;
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
+	try {
+		await page.goto('/terminal.html?stream&cwd&history');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().reads)).toEqual([0]);
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().cwd)).toBeUndefined();
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().shellIntegration)).toBeUndefined();
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().events)).toEqual([]);
+	} finally { release(); }
+	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().cwd)).toBe('/workspace/changed; directory');
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().shellIntegration)).toEqual({ commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [{ commandId: 'command', status: 'succeeded', exitCode: 0, cwd: '/workspace', command: 'echo 中文; printf \"quoted\"', isTrusted: true }] });
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().events)).toEqual(['succeeded', 'exit']);
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂\n\n[process exited with code 0]');
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+});

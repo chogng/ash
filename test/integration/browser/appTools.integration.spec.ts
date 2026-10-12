@@ -236,26 +236,120 @@ for (const locale of ['en', 'zh-CN']) {
 		const task = catalog.tasks.find(task => task.label === 'Check')!;
 		expect(task.revision).toHaveLength(64);
 		expect(catalog.tasks.find(task => task.label === 'Interactive')!.unavailableReason).toContain(locale === 'zh-CN' ? '需要扩展' : 'needs an extension');
+		const taskButton = page.locator('.ash-tasks-run').filter({ hasText: 'Check' });
+		await taskButton.focus();
 		const run = await page.evaluate(async task => await window.ashAppToolsIntegration.call({ type: 'tasksRun', directory: '/workspace', taskId: task.taskId, revision: task.revision! }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskRunSummary, task);
 		const status = () => page.evaluate(async runId => await window.ashAppToolsIntegration.call({ type: 'tasksStatus', directory: '/workspace', runId }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskRunSummary, run.runId);
 		await expect.poll(async () => (await status()).terminalId).toBe('terminal-instance-1');
 		const row = page.locator('[data-run-id="' + run.runId + '"]');
 		await expect(row).toContainText('Check');
+		await expect(taskButton).toBeFocused();
 		await expect(row).toHaveAttribute('data-terminal-id', 'terminal-instance-1');
 		await expect(row).toHaveAttribute('title', (locale === 'zh-CN' ? '运行 ID：' : 'Run ID: ') + run.runId);
-		await expect.poll(() => page.evaluate(async runId => (await window.ashAppToolsIntegration.call({ type: 'tasksOutput', directory: '/workspace', runId, cursor: 0, maxCharacters: 4096 }) as { text: string }).text, run.runId)).toContain('output for terminal-1');
+		await expect.poll(() => page.evaluate(async runId => (await window.ashAppToolsIntegration.call({ type: 'tasksOutput', directory: '/workspace', runId, cursor: 0, maxCharacters: 4096 }) as { text: string; }).text, run.runId)).toContain('output for terminal-1');
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(1);
 		for (let attempt = 0; attempt < 2; attempt++) {
-			const cancelled = await page.evaluate(async runId => await window.ashAppToolsIntegration.call({ type: 'tasksCancel', directory: '/workspace', runId }) as { status: string }, run.runId);
+			const cancelled = await page.evaluate(async runId => await window.ashAppToolsIntegration.call({ type: 'tasksCancel', directory: '/workspace', runId }) as { status: string; }, run.runId);
 			expect(cancelled.status).toBe('canceled');
 			await expect(row).toContainText(locale === 'zh-CN' ? '已取消' : 'Canceled');
 		}
 		expect((await status()).status).toBe('canceled');
+		await expect(taskButton).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(page.locator('.ash-tasks-run').filter({ hasText: 'Interactive' })).toBeFocused();
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-1']);
 		await page.evaluate(() => window.ashAppToolsIntegration.changeTask());
 		const stale = await page.evaluate(async task => { try { await window.ashAppToolsIntegration.call({ type: 'tasksRun', directory: '/workspace', taskId: task.taskId, revision: task.revision! }); return 'unexpected success'; } catch (error) { return String(error); } }, task);
 		expect(stale).toContain(locale === 'zh-CN' ? '已更改' : 'configuration changed');
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(1);
 		expect(errors).toEqual([]);
+	});
+}
+
+
+test('a dependency failure leaves the returned root Run ID visible and preserves keyboard focus', async ({ page }) => {
+	await page.goto('/appTools.html?taskTools=true');
+	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+	await page.evaluate(async () => {
+		window.ashAppToolsIntegration.automaticCreation();
+		await window.ashAppToolsIntegration.configureTasks([{ label: 'Prepare', command: 'prepare', presentation: { reveal: 'never' } }, { label: 'Root', command: 'root', dependsOn: 'Prepare', presentation: { reveal: 'never' } }]);
+	});
+	const button = page.locator('.ash-tasks-run').filter({ hasText: 'Root' });
+	await button.focus();
+	const runId = await page.evaluate(async () => {
+		const catalog = await window.ashAppToolsIntegration.call({ type: 'tasksList', directory: '/workspace' }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskCatalog;
+		const task = catalog.tasks.find(task => task.label === 'Root')!;
+		return (await window.ashAppToolsIntegration.call({ type: 'tasksRun', directory: '/workspace', taskId: task.taskId, revision: task.revision! }) as { runId: string; }).runId;
+	});
+	await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(1);
+	await page.evaluate(() => window.ashAppToolsIntegration.finishTask(1));
+	await expect(page.locator('[data-run-id="' + runId + '"]')).toContainText('Root — Failed');
+	await expect(button).toBeFocused();
+	expect(await page.evaluate(async runId => (await window.ashAppToolsIntegration.call({ type: 'tasksOutput', directory: '/workspace', runId, cursor: 0, maxCharacters: 4096 }) as { text: string; }).text, runId)).toContain("Dependency 'Prepare'");
+});
+
+test('disconnecting the application connection cancels its Agent run and preserves a manual run', async ({ page }) => {
+	await page.goto('/appTools.html?taskTools=true');
+	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+	const manual = await page.evaluate(async () => {
+		window.ashAppToolsIntegration.automaticCreation();
+		await window.ashAppToolsIntegration.configureTasks([{ label: 'Manual', command: 'manual', presentation: { reveal: 'never' } }, { label: 'Check', command: 'check', presentation: { reveal: 'never' } }]);
+		return window.ashAppToolsIntegration.runManualTask('Manual');
+	});
+	const agent = await page.evaluate(async () => {
+		const catalog = await window.ashAppToolsIntegration.call({ type: 'tasksList', directory: '/workspace' }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskCatalog;
+		const task = catalog.tasks.find(task => task.label === 'Check')!;
+		return (await window.ashAppToolsIntegration.call({ type: 'tasksRun', directory: '/workspace', taskId: task.taskId, revision: task.revision! }) as { runId: string; }).runId;
+	});
+	await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(2);
+	await expect(page.locator('[data-run-id="' + agent + '"]')).toHaveAttribute('data-terminal-id', 'terminal-instance-2');
+	await page.evaluate(() => window.ashAppToolsIntegration.disconnectAppServer());
+	await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-2']);
+	await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.taskRuns)).toEqual([{ runId: manual, status: 'running' }, { runId: agent, status: 'canceled' }]);
+});
+
+test('joining a manual run does not transfer disconnect cancellation ownership to the Agent', async ({ page }) => {
+	await page.goto('/appTools.html?taskTools=true');
+	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+	const manual = await page.evaluate(async () => {
+		window.ashAppToolsIntegration.automaticCreation();
+		await window.ashAppToolsIntegration.configureTasks([{ label: 'Check', command: 'check', runOptions: { instancePolicy: 'silent' }, presentation: { reveal: 'never' } }]);
+		return window.ashAppToolsIntegration.runManualTask('Check');
+	});
+	const agent = await page.evaluate(async () => {
+		const catalog = await window.ashAppToolsIntegration.call({ type: 'tasksList', directory: '/workspace' }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskCatalog;
+		const task = catalog.tasks[0]!;
+		return (await window.ashAppToolsIntegration.call({ type: 'tasksRun', directory: '/workspace', taskId: task.taskId, revision: task.revision! }) as { runId: string; }).runId;
+	});
+	expect(agent).toBe(manual);
+	await page.evaluate(() => window.ashAppToolsIntegration.disconnectAppServer());
+	expect(await page.evaluate(() => ({ runs: window.ashAppToolsIntegration.taskRuns, closed: window.ashAppToolsIntegration.closedTerminals, created: window.ashAppToolsIntegration.terminalCreations.length }))).toEqual({ runs: [{ runId: manual, status: 'running' }], closed: [], created: 1 });
+});
+
+for (const invalidation of ['disconnect', 'dispose', 'concurrent cancel'] as const) {
+	test(`a preparing Agent task releases its late PTY exactly once after ${invalidation}`, async ({ page }) => {
+		await page.goto('/appTools.html?taskTools=true');
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		const runId = await page.evaluate(async () => {
+			const catalog = await window.ashAppToolsIntegration.call({ type: 'tasksList', directory: '/workspace' }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskCatalog;
+			const task = catalog.tasks.find(task => task.label === 'Check')!;
+			return (await window.ashAppToolsIntegration.call({ type: 'tasksRun', directory: '/workspace', taskId: task.taskId, revision: task.revision! }) as { runId: string; }).runId;
+		});
+		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.terminalPending)).toBe(true);
+		const cancellation = page.evaluate(async ({ invalidation, runId }) => {
+			if (invalidation === 'disconnect') window.ashAppToolsIntegration.disconnectAppServer();
+			else if (invalidation === 'dispose') window.ashAppToolsIntegration.disposeHost();
+			else {
+				return Promise.all([1, 2].map(async () => await window.ashAppToolsIntegration.call({ type: 'tasksCancel', directory: '/workspace', runId }) as { status: string; }));
+			}
+			return undefined;
+		}, { invalidation, runId });
+		// Both inbound cancellations must be dispatched before the late handle is released.
+		if (invalidation === 'concurrent cancel') await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.taskCancelRequests)).toBe(2);
+		else await cancellation;
+		await page.evaluate(() => window.ashAppToolsIntegration.releaseTerminal());
+		if (invalidation === 'concurrent cancel') expect(await cancellation).toEqual([expect.objectContaining({ status: 'canceled' }), expect.objectContaining({ status: 'canceled' })]);
+		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-1']);
+		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.taskRuns)).toEqual([{ runId, status: 'canceled' }]);
 	});
 }

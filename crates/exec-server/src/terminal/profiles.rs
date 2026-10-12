@@ -94,6 +94,14 @@ impl TerminalProfileCatalog {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ShellKind {
+    PowerShell,
+    Bash,
+    Zsh,
+    Other,
+}
+
 #[derive(Clone)]
 pub(crate) struct TerminalProfileSpec {
     pub(crate) profile_id: String,
@@ -113,21 +121,29 @@ impl TerminalProfileSpec {
     }
 
     pub(crate) fn launch_args(&self) -> TerminalArguments {
-        match self.profile_id.as_str() {
-            "powershell" | "windows-powershell" => TerminalArguments::Argv(vec![
-                "-NoExit".into(),
-                "-Command".into(),
-                super::shell_integration::POWERSHELL.into(),
-            ]),
-            _ => self.args.clone(),
+        self.args.clone()
+    }
+
+    pub(crate) fn shell_kind(&self) -> ShellKind {
+        match Path::new(&self.program)
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "pwsh" | "powershell" => ShellKind::PowerShell,
+            "bash" => ShellKind::Bash,
+            "zsh" => ShellKind::Zsh,
+            _ => ShellKind::Other,
         }
     }
 
     pub(crate) fn command_status_mode(&self) -> CommandStatusMode {
-        match self.profile_id.as_str() {
-            "powershell" | "windows-powershell" => CommandStatusMode::ShellIntegration,
-            "zsh" | "bash" if !cfg!(windows) => CommandStatusMode::ShellIntegration,
-            _ => CommandStatusMode::Disabled,
+        match self.shell_kind() {
+            ShellKind::PowerShell => CommandStatusMode::ShellIntegration,
+            ShellKind::Bash | ShellKind::Zsh => CommandStatusMode::ShellIntegration,
+            ShellKind::Other => CommandStatusMode::Disabled,
         }
     }
 

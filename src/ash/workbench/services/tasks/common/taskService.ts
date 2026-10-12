@@ -3,6 +3,7 @@ import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
+import { isHighSurrogate, isLowSurrogate } from '../../../../base/common/strings.js';
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 export type WorkspaceTaskSource = "vscode" | "npm" | "pnpm" | "yarn" | "cargo" | "extension";
@@ -174,7 +175,7 @@ export interface ITaskRun {
 	readonly hasErrors?: boolean;
 	readonly onDidBecomeReady?: Event<void>;
 	readonly onDidChangeStatus: Event<TaskRunStatus>;
-	/** Run-scoped retained output survives terminal reuse. Cursors count UTF-16 characters. */
+	/** Cursors count UTF-16 code units; use nextCursor because pages preserve complete code points. */
 	readOutput(cursor: number, maxCharacters: number): ITaskOutput;
 }
 
@@ -184,6 +185,20 @@ export interface ITaskOutput {
 	readonly nextCursor: number;
 	readonly truncated: boolean;
 	readonly hasMore: boolean;
+}
+
+/** Keeps output pages serializable as UTF-8 strings across the application host boundary. */
+export function readTaskOutput(text: string, offset: number, cursor: number, maxCharacters: number): ITaskOutput {
+	const outputEnd = offset + text.length;
+	if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > outputEnd || !Number.isSafeInteger(maxCharacters) || maxCharacters < 1 || maxCharacters > 65_536) throw new RangeError(localize('tasks.invalidOutputRange', 'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.'));
+	let start = Math.max(cursor, offset) - offset;
+	if (isLowSurrogate(text.charCodeAt(start)) && isHighSurrogate(text.charCodeAt(start - 1))) start--;
+	let end = Math.min(text.length, start + maxCharacters);
+	if (isHighSurrogate(text.charCodeAt(end - 1)) && isLowSurrogate(text.charCodeAt(end))) {
+		// A one-unit budget must still make progress through a two-unit code point.
+		end += end - start === 1 ? 1 : -1;
+	}
+	return { text: text.slice(start, end), cursor: offset + start, nextCursor: offset + end, truncated: cursor < offset, hasMore: offset + end < outputEnd };
 }
 
 /** Static execution recipe reviewed before an Agent starts a configured task. */

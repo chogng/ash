@@ -68,7 +68,7 @@
     "test:smoke:ui:no-compile": "node test/smoke/run.ts electron-ui",
     "test:smoke:ui:debug": "pnpm run pretest:smoke:ui && node test/smoke/run.ts electron-ui --debug",
     "pretest:runners": "pnpm run scenario:compile",
-    "test:runners": "node --test build/processes.test.ts build/testRunners.test.ts build/smokeRunner.test.ts build/frontend.test.ts build/desktop/web.test.ts test/unit/mocha.test.ts",
+    "test:runners": "node --test build/processes.test.ts build/testEnvironment.test.ts build/testRunners.test.ts build/smokeRunner.test.ts build/frontend.test.ts build/desktop/web.test.ts test/unit/mocha.test.ts",
     "test:smoke:runner": "node --test build/smokeRunner.test.ts",
     "test:smoke:runner:product": "cross-env ASH_SMOKE_RUNNER_PRODUCT_TESTS=1 node --test --test-name-pattern='managed backend' build/smokeRunner.test.ts",
     "pretest:smoke:browser": "pnpm run build:web && bun check -p test/automation/tsconfig.json --all",

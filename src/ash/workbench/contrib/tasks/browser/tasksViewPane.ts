@@ -88,6 +88,9 @@ export class TasksViewPane extends ViewPane {
 	}
 
 	private render(): void {
+		const active = this.element.ownerDocument.activeElement;
+		const focusedButton = active instanceof this.element.ownerDocument.defaultView!.HTMLButtonElement && this.listElement.contains(active) ? active : undefined;
+		const focusedIndex = focusedButton ? [...this.listElement.querySelectorAll('button')].indexOf(focusedButton) : -1;
 		const refreshAction: IAction = {
 			id: "ash.tasks.refresh",
 			label: "Refresh Tasks",
@@ -101,6 +104,15 @@ export class TasksViewPane extends ViewPane {
 		this.renderedTasks = this.taskService.tasks;
 		const runs = [...this.taskService.activeRuns, ...(this.taskService.lastRun && this.taskService.lastRun.status !== 'running' ? [this.taskService.lastRun] : [])];
 		this.listElement.replaceChildren(...this.renderedTasks.map((task, index) => this.renderTask(task, index)), ...runs.map(run => this.renderRun(run)));
+		if (focusedButton) {
+			const buttons = [...this.listElement.querySelectorAll('button')];
+			const replacement = buttons.find(button => focusedButton.dataset.runId
+				? button.dataset.runId === focusedButton.dataset.runId
+				: button.dataset.taskId === focusedButton.dataset.taskId);
+			const target = replacement && !replacement.disabled ? replacement : buttons.slice(focusedIndex).find(button => !button.disabled) ?? [...buttons].reverse().find(button => !button.disabled);
+			if (target) target.focus({ preventScroll: true });
+			else { this.listElement.tabIndex = -1; this.listElement.focus({ preventScroll: true }); }
+		}
 		this.statusElement.textContent = this.error ?? (this.refreshing ? "Discovering workspace tasks…" : this.renderedTasks.length === 0 ? "No tasks found. Add .vscode/tasks.json, package.json scripts, or Cargo.toml." : `${this.renderedTasks.length} workspace ${this.renderedTasks.length === 1 ? "task" : "tasks"}.`);
 	}
 
@@ -111,6 +123,7 @@ export class TasksViewPane extends ViewPane {
 		button.type = "button";
 		button.className = "ash-tasks-run";
 		button.dataset.taskIndex = String(index);
+		button.dataset.taskId = task.id;
 		const label = h(this.element.ownerDocument, "span");
 		label.className = "ash-task-label";
 		label.textContent = task.label;
