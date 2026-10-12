@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use tree_sitter::Language;
 use tree_sitter::Parser;
 use tree_sitter::Query;
@@ -52,7 +55,7 @@ impl LanguageConfiguration {
     pub(crate) fn load(
         syntax_language: SyntaxLanguage,
         parser: &mut Parser,
-    ) -> Result<Self, SyntaxError> {
+    ) -> Result<Arc<Self>, SyntaxError> {
         let definition = definition(syntax_language);
         let language = definition.language;
         parser
@@ -61,6 +64,25 @@ impl LanguageConfiguration {
                 language: syntax_language,
                 source,
             })?;
+        // Queries are immutable; documents own their parsers and query cursors. Compiling
+        // these for every file makes directory refresh and watcher shutdown unbounded in practice.
+        static CONFIGURATIONS: [Mutex<Option<Arc<LanguageConfiguration>>>; 7] =
+            [const { Mutex::new(None) }; 7];
+        let index = match syntax_language {
+            SyntaxLanguage::Javascript | SyntaxLanguage::Javascriptreact => 0,
+            SyntaxLanguage::Json => 1,
+            SyntaxLanguage::Jsonc => 2,
+            SyntaxLanguage::Rust => 3,
+            SyntaxLanguage::Shell => 4,
+            SyntaxLanguage::Typescript => 5,
+            SyntaxLanguage::Typescriptreact => 6,
+        };
+        let mut cached = CONFIGURATIONS[index]
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(configuration) = &*cached {
+            return Ok(Arc::clone(configuration));
+        }
         let highlights = query(
             syntax_language,
             &language,
@@ -73,7 +95,9 @@ impl LanguageConfiguration {
             "tags",
             &definition.tags.join("\n"),
         )?;
-        Ok(Self { highlights, tags })
+        let configuration = Arc::new(Self { highlights, tags });
+        *cached = Some(Arc::clone(&configuration));
+        Ok(configuration)
     }
 }
 
@@ -107,3 +131,7 @@ fn query(
         source,
     })
 }
+
+#[cfg(test)]
+#[path = "language_tests.rs"]
+mod tests;

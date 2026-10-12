@@ -1,5 +1,6 @@
 use std::cmp::Reverse;
 use std::ops::Range;
+use std::sync::Arc;
 
 use tree_sitter::{InputEdit, Node, Parser, Point, Query, QueryCursor, StreamingIterator, Tree};
 
@@ -64,7 +65,7 @@ pub struct SyntaxDocument {
     line_index: LineIndex,
     parser: Parser,
     tree: Tree,
-    configuration: LanguageConfiguration,
+    configuration: Arc<LanguageConfiguration>,
     limits: AnalysisLimits,
 }
 
