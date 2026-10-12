@@ -408,9 +408,13 @@ impl ThreadEvent {
     pub fn history_prefixes(&self) -> impl Iterator<Item = &crate::HistoryPrefixRef> {
         match self {
             Self::HistoryPrefixBound { prefix, .. } => [Some(prefix), None],
-            Self::ThreadHistoryMoved { target, previous, .. } => [Some(&target.prefix), Some(&previous.prefix)],
+            Self::ThreadHistoryMoved {
+                target, previous, ..
+            } => [Some(&target.prefix), Some(&previous.prefix)],
             _ => [None, None],
-        }.into_iter().flatten()
+        }
+        .into_iter()
+        .flatten()
     }
     pub fn kind(&self) -> &'static str {
         match self {

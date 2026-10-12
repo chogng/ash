@@ -36,6 +36,10 @@ pub enum ExtensionHostActivationEventDto {
         #[schemars(length(min = 1, max = 128))]
         language_id: String,
     },
+    TerminalProfile {
+        #[schemars(length(min = 1, max = 256))]
+        profile_id: String,
+    },
     TaskType {
         #[schemars(length(min = 1, max = 128))]
         task_type: Option<String>,
@@ -414,6 +418,12 @@ pub enum ExtensionHostRegistrationKindDto {
         debugger_type: String,
         #[schemars(range(min = 1, max = 2))]
         trigger_kind: u8,
+    },
+    TerminalProfileProvider {
+        #[schemars(length(min = 1, max = 256))]
+        profile_id: String,
+        #[schemars(length(min = 1, max = 512))]
+        title: String,
     },
     TaskProvider {
         #[schemars(length(min = 1, max = 256))]

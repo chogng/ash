@@ -296,7 +296,7 @@ export const workspace = Object.freeze({
 });
 
 // Providers and explicit Tasks share one bounded PTY handle owner.
-function registerTaskCallbacks(registration, provider) {
+function registerPseudoterminalCallbacks(registration, provider) {
 	const terminals = new Map();
 	let sequence = 0;
 	function release(id) {
@@ -308,9 +308,38 @@ function registerTaskCallbacks(registration, provider) {
 		if (!state.closed) { state.closed = true; try { state.pty.close(); } catch (error) { failure ??= error; } }
 		if (failure) throw failure;
 	}
+	async function retainPty(pty) {
+		if (terminals.size >= 64) throw new Error('Pseudoterminal quota exceeded');
+		if (typeof pty?.onDidWrite !== 'function' || typeof pty.open !== 'function' || typeof pty.close !== 'function') throw new TypeError('CustomExecution requires a Pseudoterminal');
+		const id = `pty.${++sequence}`;
+		const state = { pty, listeners: [], events: [], bytes: 0, closed: false, opened: false };
+		function enqueue(event) {
+			if (state.events.length >= 1024 || state.bytes + JSON.stringify(event).length > 262144) {
+				state.events = [{ type: 'close', code: 1 }]; state.bytes = 0;
+				if (!state.closed) { state.closed = true; pty.close(); }
+				return;
+			}
+			state.bytes += JSON.stringify(event).length;
+			state.events.push(event);
+		}
+		terminals.set(id, state);
+		try {
+			state.listeners.push(pty.onDidWrite(data => { if (!state.closed) { if (typeof data !== 'string') throw new TypeError('Pseudoterminal output must be a string'); enqueue({ type: 'data', data }); } }));
+			if (pty.onDidClose) state.listeners.push(pty.onDidClose(code => {
+				if (!state.closed) {
+					if (code !== undefined && (!Number.isSafeInteger(code) || code < 0 || code > 2147483647)) throw new TypeError('Invalid custom task exit code');
+					enqueue({ type: 'close', code: code ?? null }); state.closed = true;
+				}
+			}));
+			if (pty.onDidChangeName) state.listeners.push(pty.onDidChangeName(name => { if (!state.closed && typeof name === 'string') enqueue({ type: 'name', name }); }));
+			if (state.listeners.some(listener => typeof listener?.dispose !== 'function')) throw new TypeError('Pseudoterminal events require disposable listeners');
+		} catch (error) { try { release(id); } finally { throw error; } }
+		return { ptyId: id, acceptsInput: typeof pty.handleInput === 'function' };
+	}
+
 	const handle = register({
 		...registration, operation: [
-			...(registration.kind === 'taskEvents' ? ['taskEvent'] : ['provideTasks', 'resolveTask']),
+			...(registration.kind === 'taskEvents' ? ['taskEvent'] : registration.kind === 'terminalProfileProvider' ? ['createTerminalProfile'] : ['provideTasks', 'resolveTask']),
 			'createTaskTerminal', 'openTaskTerminal', 'readTaskTerminal', 'inputTaskTerminal', 'resizeTaskTerminal', 'closeTaskTerminal',
 		],
 		async callback(context, payload, operation) {
@@ -320,34 +349,16 @@ function registerTaskCallbacks(registration, provider) {
 				const task = await provider.resolveTask?.(context, payload.task);
 				return task === undefined ? null : { task };
 			}
+			if (operation === 'createTerminalProfile') {
+				const profile = await provider.createTerminalProfile(context);
+				if (!profile) return { options: null };
+				const { pty, ...options } = profile;
+				if (context.cancellationToken.isCancellationRequested) { pty?.close(); return { options: null }; }
+				return pty ? { options, pty: await retainPty(pty) } : { options };
+			}
 			if (operation === 'createTaskTerminal') {
 				if (terminals.size >= 64 || typeof provider.createTaskTerminal !== 'function') throw new Error('Custom task terminal is unavailable');
-				const pty = await provider.createTaskTerminal(context, payload.executionId, payload.definition);
-				if (typeof pty?.onDidWrite !== 'function' || typeof pty.open !== 'function' || typeof pty.close !== 'function') throw new TypeError('CustomExecution requires a Pseudoterminal');
-				const id = `pty.${++sequence}`;
-				const state = { pty, listeners: [], events: [], bytes: 0, closed: false, opened: false };
-				function enqueue(event) {
-					if (state.events.length >= 1024 || state.bytes + JSON.stringify(event).length > 262144) {
-						state.events = [{ type: 'close', code: 1 }]; state.bytes = 0;
-						if (!state.closed) { state.closed = true; pty.close(); }
-						return;
-					}
-					state.bytes += JSON.stringify(event).length;
-					state.events.push(event);
-				}
-				terminals.set(id, state);
-				try {
-					state.listeners.push(pty.onDidWrite(data => { if (!state.closed) { if (typeof data !== 'string') throw new TypeError('Pseudoterminal output must be a string'); enqueue({ type: 'data', data }); } }));
-					if (pty.onDidClose) state.listeners.push(pty.onDidClose(code => {
-						if (!state.closed) {
-							if (code !== undefined && (!Number.isSafeInteger(code) || code < 0 || code > 2147483647)) throw new TypeError('Invalid custom task exit code');
-							enqueue({ type: 'close', code: code ?? null }); state.closed = true;
-						}
-					}));
-					if (pty.onDidChangeName) state.listeners.push(pty.onDidChangeName(name => { if (!state.closed && typeof name === 'string') enqueue({ type: 'name', name }); }));
-					if (state.listeners.some(listener => typeof listener?.dispose !== 'function')) throw new TypeError('Pseudoterminal events require disposable listeners');
-				} catch (error) { try { release(id); } finally { throw error; } }
-				return { ptyId: id, acceptsInput: typeof pty.handleInput === 'function' };
+				return retainPty(await provider.createTaskTerminal(context, payload.executionId, payload.definition));
 			}
 			const state = terminals.get(payload.ptyId);
 			if (operation === 'closeTaskTerminal') { release(payload.ptyId); return null; }
@@ -378,15 +389,22 @@ function registerTaskCallbacks(registration, provider) {
 	return disposable;
 }
 
+export const terminals = Object.freeze({
+	registerTerminalProfileProvider(registrationId, profileId, title, provider) {
+		if (typeof provider?.createTerminalProfile !== 'function' || typeof profileId !== 'string' || !profileId || typeof title !== 'string' || !title) throw new TypeError('Terminal profile providers require an ID, title and callback');
+		return registerPseudoterminalCallbacks({ registrationId, kind: 'terminalProfileProvider', profileId, title }, provider);
+	},
+});
+
 export const tasks = Object.freeze({
 	registerTaskEvents(registrationId, listener, createTaskTerminal) {
 		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Task events require an ID and listener');
 		if (createTaskTerminal !== undefined && typeof createTaskTerminal !== 'function') throw new TypeError('Custom task terminal requires a factory');
-		return registerTaskCallbacks({ registrationId, kind: 'taskEvents' }, { onTaskEvent: listener, createTaskTerminal });
+		return registerPseudoterminalCallbacks({ registrationId, kind: 'taskEvents' }, { onTaskEvent: listener, createTaskTerminal });
 	},
 	registerTaskProvider(registrationId, taskType, provider) {
 		if (typeof provider?.provideTasks !== 'function' || typeof taskType !== 'string' || !taskType) throw new TypeError('Task providers require a type and provideTasks');
-		return registerTaskCallbacks({ registrationId, kind: 'taskProvider', taskType }, provider);
+		return registerPseudoterminalCallbacks({ registrationId, kind: 'taskProvider', taskType }, provider);
 	},
 });
 

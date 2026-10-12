@@ -147,6 +147,7 @@ pub(crate) fn deployments(
             ExtensionCapability::LanguageProvider,
             ExtensionCapability::StatusBar,
             ExtensionCapability::TaskProvider,
+            ExtensionCapability::TerminalProfileProvider,
             ExtensionCapability::DebugAdapter,
         ];
         let binding = ExtensionsEditorExtensionBinding {
@@ -504,6 +505,16 @@ fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, Strin
             events.insert(format!("onLanguage:{id}"));
         }
     }
+    if let Some(entries) = manifest.pointer("/contributes/terminalProfiles") {
+        for entry in entries.as_array().ok_or("invalid terminal profiles")? {
+            let id = entry
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .filter(|id| valid_event_selector(id))
+                .ok_or("invalid terminal profile ID")?;
+            events.insert(format!("onTerminalProfile:{id}"));
+        }
+    }
     if let Some(entries) = manifest.pointer("/contributes/taskDefinitions") {
         for entry in entries.as_array().ok_or("invalid task definitions")? {
             let task_type = entry
@@ -665,6 +676,7 @@ enum ManifestActivationEvent {
     OnDebugType { debug_type: String },
     OnTaskType { task_type: String },
     OnTestProfile { profile_id: String },
+    OnTerminalProfile { profile_id: String },
 }
 
 impl ManifestActivationEvent {
@@ -675,6 +687,7 @@ impl ManifestActivationEvent {
             Self::OnLanguage { id } => format!("onLanguage:{id}"),
             Self::OnDemand { capability } => format!("onDemand:{}", capability.name()),
             Self::OnDebugType { debug_type } => format!("onDebugType:{debug_type}"),
+            Self::OnTerminalProfile { profile_id } => format!("onTerminalProfile:{profile_id}"),
             Self::OnTaskType { task_type } => format!("onTaskType:{task_type}"),
             Self::OnTestProfile { profile_id } => format!("onTestProfile:{profile_id}"),
         }
@@ -687,6 +700,7 @@ impl ManifestActivationEvent {
             Self::OnLanguage { .. } => Some(ManifestCapability::LanguageProvider),
             Self::OnDemand { capability } => Some(*capability),
             Self::OnDebugType { .. } => Some(ManifestCapability::DebugAdapter),
+            Self::OnTerminalProfile { .. } => Some(ManifestCapability::TerminalProfileProvider),
             Self::OnTaskType { .. } => Some(ManifestCapability::TaskProvider),
             Self::OnTestProfile { .. } => Some(ManifestCapability::TestProfileProvider),
         }
@@ -698,7 +712,9 @@ impl ManifestActivationEvent {
             Self::OnCommand { id } | Self::OnLanguage { id } => valid_event_selector(id),
             Self::OnDebugType { debug_type } => valid_event_selector(debug_type),
             Self::OnTaskType { task_type } => valid_event_selector(task_type),
-            Self::OnTestProfile { profile_id } => valid_event_selector(profile_id),
+            Self::OnTestProfile { profile_id } | Self::OnTerminalProfile { profile_id } => {
+                valid_event_selector(profile_id)
+            }
         }
     }
 }
@@ -718,6 +734,7 @@ enum ManifestCapability {
     LanguageProvider,
     DebugAdapter,
     TaskProvider,
+    TerminalProfileProvider,
     TestProfileProvider,
     DataChannel,
     LinkPresentationProvider,
@@ -732,6 +749,7 @@ impl ManifestCapability {
             Self::LanguageProvider => ExtensionCapability::LanguageProvider,
             Self::DebugAdapter => ExtensionCapability::DebugAdapter,
             Self::TaskProvider => ExtensionCapability::TaskProvider,
+            Self::TerminalProfileProvider => ExtensionCapability::TerminalProfileProvider,
             Self::TestProfileProvider => ExtensionCapability::TestProfileProvider,
             Self::DataChannel => ExtensionCapability::DataChannel,
             Self::LinkPresentationProvider => ExtensionCapability::LinkPresentationProvider,
@@ -746,6 +764,7 @@ impl ManifestCapability {
             Self::LanguageProvider => "languageProvider",
             Self::DebugAdapter => "debugAdapter",
             Self::TaskProvider => "taskProvider",
+            Self::TerminalProfileProvider => "terminalProfileProvider",
             Self::TestProfileProvider => "testProfileProvider",
             Self::DataChannel => "dataChannel",
             Self::LinkPresentationProvider => "linkPresentationProvider",

@@ -104,6 +104,10 @@ pub enum EditorExtensionActivationEvent {
         #[serde(rename = "debugType")]
         debug_type: String,
     },
+    OnTerminalProfile {
+        #[serde(rename = "profileId")]
+        profile_id: String,
+    },
     OnTaskType {
         #[serde(rename = "taskType")]
         task_type: String,
@@ -122,6 +126,9 @@ impl EditorExtensionActivationEvent {
             Self::OnLanguage { .. } => Some(EditorExtensionCapability::LanguageProvider),
             Self::OnDemand { capability } => Some(*capability),
             Self::OnDebugType { .. } => Some(EditorExtensionCapability::DebugAdapter),
+            Self::OnTerminalProfile { .. } => {
+                Some(EditorExtensionCapability::TerminalProfileProvider)
+            }
             Self::OnTaskType { .. } => Some(EditorExtensionCapability::TaskProvider),
             Self::OnTestProfile { .. } => Some(EditorExtensionCapability::TestProfileProvider),
         }
@@ -139,6 +146,7 @@ pub enum EditorExtensionCapability {
     CustomTextEditor,
     DebugAdapter,
     TaskProvider,
+    TerminalProfileProvider,
     TestProfileProvider,
     DataChannel,
     LinkPresentationProvider,

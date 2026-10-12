@@ -51,7 +51,7 @@ export function registerTerminalActions(): void {
 			} else {
 				await profiles.refreshAvailableProfiles();
 			}
-			if (typeof profileId !== 'string' || !profiles.availableProfiles.some(profile => profile.profileId === profileId)) {
+			if (typeof profileId !== 'string' || !profiles.availableProfiles.some(profile => profile.profileId === profileId) && !profiles.contributedProfiles.some(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`)) {
 				throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
 			}
 			await view.createTerminal(profileId);

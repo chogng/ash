@@ -727,6 +727,8 @@ export interface IRestoreMessageOptions {
 }
 
 export interface IAgentThreadService {
+	readHistoryState(params: { readonly sessionId: string; readonly threadId: string; }): Promise<AgentThreadHistoryState>;
+	moveHistory(params: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; readonly commandId: string; }): Promise<void>;
 	readContext(params: { readonly sessionId: string; readonly threadId: string; }): Promise<{ readonly context: AgentContextUsage; }>;
 	checkpoints(params: {
 		readonly sessionId: string;
@@ -745,6 +747,16 @@ export interface IAgentThreadService {
 		readonly afterSequence: number;
 	}): Promise<ThreadSubscription>;
 	unsubscribe(params: SessionReadParams & { readonly threadId: string; }): Promise<void>;
+}
+
+export interface AgentThreadHistoryState {
+	readonly sequence: number;
+	readonly canUndo: boolean;
+	readonly canRedo: boolean;
+}
+
+export class AgentThreadHistoryConflictError extends Error {
+	constructor() { super('Thread files changed after their checkpoint'); }
 }
 
 export interface AgentContextUsage {

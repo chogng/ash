@@ -28,6 +28,9 @@ import { initializeTestLocalization } from '../../../localization/test/common/lo
 import { URI } from '../../../../../base/common/uri.js';
 import { IDebugAdapterProcessService } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
+import { UriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentityService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
@@ -72,6 +75,7 @@ suite('DAP terminal availability', () => {
 			const submitted = new DeferredPromise<void>();
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
+				resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 				getConnectionState: async () => 'ready', onConnectionState: Event.None,
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
@@ -105,6 +109,7 @@ suite('DAP terminal availability', () => {
 			using resources = new DisposableStore();
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
+				resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -156,7 +161,8 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	const workspace = resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
 	const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
-		[IFileService, { onDidChangeFiles: Event.None } as IFileService],
+		[IFileService, new SyncDescriptor(FileService)],
+		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
 		[ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[IStorageService, storage],
 		[IDebugAdapterProcessService, processes],

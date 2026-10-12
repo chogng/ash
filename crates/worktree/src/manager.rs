@@ -1714,8 +1714,9 @@ fn copy_directory_entries(
         } else if metadata.file_type().is_symlink() {
             digest.update(b"symlink");
             let target = std::fs::read_link(&source_path)?;
-            digest.update((target.as_os_str().len() as u64).to_le_bytes());
-            digest.update(target.to_string_lossy().as_bytes());
+            let target_bytes = target.as_os_str().as_encoded_bytes();
+            digest.update((target_bytes.len() as u64).to_le_bytes());
+            digest.update(target_bytes);
             copy_symlink(&source_path, &target, &destination_path)?;
         } else if metadata.is_file() {
             digest.update(b"file");

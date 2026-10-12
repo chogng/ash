@@ -42,10 +42,13 @@ import { BrowserStorageService } from '../../../src/ash/workbench/services/stora
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { BrowserLifecycleService } from '../../../src/ash/workbench/services/lifecycle/browser/lifecycleService.js';
 import { MemoryTextFiles } from './memoryTextFiles.js';
+import { Event } from '../../../src/ash/base/common/event.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
-import { IChatService, type RestoreChatCheckpointOptions } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatService, ChatHistoryConflictError, type RestoreChatCheckpointOptions } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../../src/ash/workbench/browser/media/style.css';
+
+type MoveChatHistoryOptions = Parameters<IChatService['moveHistory']>[0];
 
 declare global {
 	interface Window {
@@ -55,6 +58,8 @@ declare global {
 			checkpointState(): { requests: RestoreChatCheckpointOptions[]; opened: string[]; };
 			switchChat(): void;
 			finishRestore(): void;
+			historyState(): { requests: MoveChatHistoryOptions[]; opened: string[]; };
+			dirtyFile(): Promise<void>;
 		};
 	}
 }
@@ -100,8 +105,11 @@ const editing = resources.add(services.createInstance(ChatEditingService));
 services.registerInstance(IChatEditingService, editing);
 let activeChat = { sessionId: 'session', threadId: 'source' };
 const restoreRequests: RestoreChatCheckpointOptions[] = [];
+const historyRequests: MoveChatHistoryOptions[] = [];
+let historySequence = 17;
+let canRedo = false;
 const opened: string[] = [];
-const restoring = parameters.has('restoreSlow') ? new DeferredPromise<void>() : undefined;
+const restoring = (parameters.has('restoreSlow') || parameters.has('historySlow')) ? new DeferredPromise<void>() : undefined;
 services.registerInstance(IChatSessionNavigationService, {
 	getActiveConversation: () => activeChat,
 	getConversations: () => [], appendToActiveDraft() { }, captureActiveDraft: async () => undefined,
@@ -109,6 +117,18 @@ services.registerInstance(IChatSessionNavigationService, {
 });
 // Durable message history is the external boundary of this UI fixture.
 services.registerInstance(IChatService, {
+	readHistoryState: async () => {
+		if (parameters.has('historyReadConflict')) throw new ChatHistoryConflictError();
+		if (parameters.has('historySlow')) await restoring?.p;
+		return { sequence: historySequence, canUndo: !canRedo && !parameters.has('historyBusy'), canRedo };
+	},
+	readThread: async () => ({ directory: { type: 'local', root: '/workspace' } }),
+	moveHistory: async (options: MoveChatHistoryOptions) => {
+		historyRequests.push(options);
+		if (parameters.has('historyConflict')) throw new ChatHistoryConflictError();
+		historySequence++;
+		canRedo = options.direction === 'undo';
+	},
 	readCheckpoints: async () => parameters.has('unavailable')
 		? [{ itemId: 'message', turnId: 'turn', sourceThreadId: 'source', files: 'unavailable', unavailableReason: 'No Git snapshot' }]
 		: [{ itemId: 'message', turnId: 'turn', sourceThreadId: 'source', files: 'git' }],
@@ -133,7 +153,7 @@ if (!parameters.has('reopen')) {
 }
 await editing.finishTurn({ threadId: 'readiness', turnId: 'readiness' }, 'completed');
 
-for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#review', 'chatEditing.reviewChanges'], ['#checkpoint', 'workbench.action.chat.restoreCheckpoint']] as const) {
+for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#review', 'chatEditing.reviewChanges'], ['#checkpoint', 'workbench.action.chat.restoreCheckpoint'], ['#undo', 'workbench.action.chat.undoEdit'], ['#redo', 'workbench.action.chat.redoEdit']] as const) {
 	resources.add(addDisposableListener(document.querySelector(selector)!, 'click', () => {
 		void commands.executeCommand(command).catch(error => {
 			document.querySelector('#error')!.textContent = String(error.message);
@@ -141,6 +161,18 @@ for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#revi
 	}));
 }
 window.ashChatEditingIntegration = {
+	historyState: () => ({ requests: historyRequests, opened }),
+	dirtyFile: async () => {
+		const reference = resources.add(await models.acquire({ resource: first }, new AbortController().signal));
+		resources.add(services.get(IWorkingCopyService).register({
+			...reference, backupKind: 'text',
+			get isDirty() { return reference.isDirty; },
+			onDidChangeContent: Event.map(reference.model.onDidChangeContent, () => undefined),
+			backup: () => reference.model.getText(),
+			restoreBackup: text => reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text }]),
+		}));
+		reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: 'unsaved user text' }]);
+	},
 	checkpointState: () => ({ requests: restoreRequests, opened }),
 	switchChat: () => { activeChat = { sessionId: 'other-session', threadId: 'other-thread' }; },
 	finishRestore: () => { void restoring?.complete(); },

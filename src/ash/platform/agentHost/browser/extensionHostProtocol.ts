@@ -302,6 +302,10 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		if (input.triggerKind !== 1 && input.triggerKind !== 2) throw new TypeError('Invalid Debug configuration trigger kind');
 		return Object.freeze({ kind, registrationId, debuggerType: boundedText(input.debuggerType, 'Extension Host Debug configuration type', 256), triggerKind: input.triggerKind });
 	}
+	if (kind === 'terminalProfileProvider') {
+		exactKeys(input, 'Extension Host terminal profile registration', ['kind', 'registrationId', 'profileId', 'title']);
+		return Object.freeze({ kind, registrationId, profileId: boundedText(input.profileId, 'Terminal profile ID', 256), title: boundedText(input.title, 'Terminal profile title', 512) });
+	}
 	if (kind === "taskProvider") {
 		exactKeys(input, "Extension Host Task provider registration", ["kind", "registrationId", "taskType"]);
 		return Object.freeze({ kind, registrationId, taskType: boundedText(input.taskType, "Extension Host Task type", 256) });

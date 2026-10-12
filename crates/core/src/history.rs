@@ -94,7 +94,14 @@ impl<'a> HistoryReader<'a> {
                                 .as_ref(),
                         ),
                         ThreadEvent::ThreadHistoryMoved { target, .. } => Some(
-                            self.snapshots.get(target.prefix.digest.as_str()).ok_or_else(|| CoreError::Journal("history cursor target was not resolved".into()))?.as_ref(),
+                            self.snapshots
+                                .get(target.prefix.digest.as_str())
+                                .ok_or_else(|| {
+                                    CoreError::Journal(
+                                        "history cursor target was not resolved".into(),
+                                    )
+                                })?
+                                .as_ref(),
                         ),
                         _ => None,
                     };

@@ -64,6 +64,12 @@ impl MessageCheckpointSource for GitTurnChangesRuntime {
         _: &ItemId,
         event_id: &str,
     ) -> Result<Box<dyn CheckpointCapture>, CoreError> {
+        if self
+            .history_restoration_pending(thread_id)
+            .map_err(CoreError::Journal)?
+        {
+            return Err(CoreError::WorkspaceCheckpointConflict);
+        }
         let binding = self.binding(thread_id).ok_or_else(|| {
             CoreError::Journal("message checkpoint requires a managed Thread directory".into())
         })?;
@@ -77,9 +83,18 @@ impl MessageCheckpointSource for GitTurnChangesRuntime {
                     .into(),
             }
         } else if binding.kind() == ManagedDirKind::Directory {
-            match self.dirs.worktrees.capture_directory_checkpoint(binding.dir()) {
-                Ok(digest) => WorkspaceCheckpoint::Directory { source_dir_id: self.dirs.id.to_string(), digest },
-                Err(error) => WorkspaceCheckpoint::Unavailable { reason: format!("Directory snapshot capture failed: {error}") },
+            match self
+                .dirs
+                .worktrees
+                .capture_directory_checkpoint(binding.dir())
+            {
+                Ok(digest) => WorkspaceCheckpoint::Directory {
+                    source_dir_id: self.dirs.id.to_string(),
+                    digest,
+                },
+                Err(error) => WorkspaceCheckpoint::Unavailable {
+                    reason: format!("Directory snapshot capture failed: {error}"),
+                },
             }
         } else {
             let targets = binding

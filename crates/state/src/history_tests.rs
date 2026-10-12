@@ -41,8 +41,15 @@ impl Drop for Capture {
     }
 }
 impl MessageCheckpointSource for Source {
-    fn restore(&self, _: &core_api::MoveThreadHistoryRequest, _: &WorkspaceCheckpoint, _: &WorkspaceCheckpoint) -> Result<Box<dyn core_api::WorkspaceRestoration>, CoreError> {
-        Err(CoreError::InvalidInput("this fixture does not restore files".into()))
+    fn restore(
+        &self,
+        _: &core_api::MoveThreadHistoryRequest,
+        _: &WorkspaceCheckpoint,
+        _: &WorkspaceCheckpoint,
+    ) -> Result<Box<dyn core_api::WorkspaceRestoration>, CoreError> {
+        Err(CoreError::InvalidInput(
+            "this fixture does not restore files".into(),
+        ))
     }
     fn capture(
         &self,
@@ -270,4 +277,66 @@ fn corrupted_shared_record_fails_recovery_instead_of_reading_the_live_parent() {
             .to_string()
             .contains("digest")
     );
+}
+
+#[test]
+fn version_14_prefix_index_migrates_without_rewriting_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("state.sqlite");
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    let root = root(&threads);
+    let turn = start(&threads, &root.thread_id).unwrap();
+    threads
+        .complete_turn(&root.thread_id, &turn.turn_id, "answer".into())
+        .unwrap();
+    let branch = threads
+        .restore_message(
+            &NoThreadWorktreeBinder,
+            core_api::RestoreMessageRequest {
+                command_id: CommandId::new("branch").unwrap(),
+                source_thread_id: root.thread_id.clone(),
+                item_id: threads.read_thread(&root.thread_id).unwrap().items[0]
+                    .item_id()
+                    .clone(),
+                boundary: ash_protocol::MessageBoundary::After,
+                title: "branch".into(),
+            },
+        )
+        .unwrap();
+    let bytes = serde_json::to_vec(&store.load(&branch.thread_id).unwrap()).unwrap();
+    drop(threads);
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection.execute_batch("ALTER TABLE thread_history_prefixes RENAME TO cursor_prefixes;
+        CREATE TABLE thread_history_prefixes (thread_id TEXT PRIMARY KEY REFERENCES thread_streams(thread_id), prefix_digest TEXT NOT NULL REFERENCES history_prefixes(digest));
+        INSERT INTO thread_history_prefixes SELECT thread_id, prefix_digest FROM cursor_prefixes;
+        DROP TABLE cursor_prefixes;
+        UPDATE ash_schema_migrations SET version = 14 WHERE component = 'event-store';").unwrap();
+    drop(connection);
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    assert_eq!(
+        serde_json::to_vec(&store.load(&branch.thread_id).unwrap()).unwrap(),
+        bytes
+    );
+    let threads = ThreadController::with_store(store);
+    let before = threads.read_thread(&branch.thread_id).unwrap();
+    let undone = threads
+        .move_thread_history(core_api::MoveThreadHistoryRequest {
+            command_id: CommandId::new("undo").unwrap(),
+            thread_id: branch.thread_id.clone(),
+            expected_sequence: before.sequence,
+            direction: ash_protocol::HistoryDirection::Undo,
+        })
+        .unwrap();
+    assert!(undone.items.is_empty());
+    let redone = threads
+        .move_thread_history(core_api::MoveThreadHistoryRequest {
+            command_id: CommandId::new("redo").unwrap(),
+            thread_id: branch.thread_id,
+            expected_sequence: undone.sequence,
+            direction: ash_protocol::HistoryDirection::Redo,
+        })
+        .unwrap();
+    assert_eq!(redone.items, before.items);
 }

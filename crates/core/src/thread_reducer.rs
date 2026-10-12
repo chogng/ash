@@ -548,22 +548,44 @@ pub(crate) fn reduce_thread_event_with_prefix(
         }
     }
     match &envelope.event {
-        ThreadEvent::ThreadHistoryMoved { direction, target, previous, .. } => {
-            let source = prefix_source.ok_or_else(|| CoreError::Journal("history cursor target is missing".into()))?;
-            let receipt = envelope.command.clone().ok_or_else(|| CoreError::Journal("history movement requires a command receipt".into()))?;
-            if envelope.schema_version < 26 || source.session_id != snapshot.session_id
-                || source.thread_id != target.prefix.source_thread_id || source.sequence != target.prefix.source_sequence
-                || previous.prefix.source_thread_id != snapshot.thread_id || previous.prefix.source_sequence != snapshot.sequence
-                || receipt.command != (ThreadCommand::MoveHistory { direction: *direction, expected_sequence: snapshot.sequence })
-                || snapshot.commands.iter().any(|command| command.receipt.command_id == receipt.command_id)
+        ThreadEvent::ThreadHistoryMoved {
+            direction,
+            target,
+            previous,
+            ..
+        } => {
+            let source = prefix_source
+                .ok_or_else(|| CoreError::Journal("history cursor target is missing".into()))?;
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("history movement requires a command receipt".into())
+            })?;
+            if envelope.schema_version < 26
+                || source.session_id != snapshot.session_id
+                || source.thread_id != target.prefix.source_thread_id
+                || source.sequence != target.prefix.source_sequence
+                || previous.prefix.source_thread_id != snapshot.thread_id
+                || previous.prefix.source_sequence != snapshot.sequence
+                || receipt.command
+                    != (ThreadCommand::MoveHistory {
+                        direction: *direction,
+                        expected_sequence: snapshot.sequence,
+                    })
+                || snapshot
+                    .commands
+                    .iter()
+                    .any(|command| command.receipt.command_id == receipt.command_id)
             {
                 return Err(CoreError::Journal("invalid history cursor movement".into()));
             }
             match direction {
-                ash_protocol::HistoryDirection::Undo => snapshot.history_redo.push(previous.clone()),
+                ash_protocol::HistoryDirection::Undo => {
+                    snapshot.history_redo.push(previous.clone())
+                }
                 ash_protocol::HistoryDirection::Redo => {
                     if snapshot.history_redo.pop().as_ref() != Some(target) {
-                        return Err(CoreError::Journal("redo target does not match the retained history".into()));
+                        return Err(CoreError::Journal(
+                            "redo target does not match the retained history".into(),
+                        ));
                     }
                 }
             }
@@ -575,13 +597,23 @@ pub(crate) fn reduce_thread_event_with_prefix(
             snapshot.user_time_contexts = source.user_time_contexts.clone();
             snapshot.message_checkpoints = source.message_checkpoints.clone();
             snapshot.history_sources = source.history_sources.clone();
-            snapshot.history_sources.insert(source.thread_id.clone(), target.prefix.clone());
+            snapshot
+                .history_sources
+                .insert(source.thread_id.clone(), target.prefix.clone());
             snapshot.context_checkpoints = source.context_checkpoints.clone();
             snapshot.context_overflow_recoveries = source.context_overflow_recoveries.clone();
             snapshot.context_calibrations = source.context_calibrations.clone();
-            snapshot.item_sequences = snapshot.items.iter().map(|item| (item.item_id().clone(), envelope.sequence)).collect();
+            snapshot.item_sequences = snapshot
+                .items
+                .iter()
+                .map(|item| (item.item_id().clone(), envelope.sequence))
+                .collect();
             snapshot.history_workspace = Some(target.workspace.clone());
-            snapshot.commands.push(ThreadCommandSnapshot { receipt, result: ThreadCommandResult::HistoryMoved, response_sequence: envelope.sequence });
+            snapshot.commands.push(ThreadCommandSnapshot {
+                receipt,
+                result: ThreadCommandResult::HistoryMoved,
+                response_sequence: envelope.sequence,
+            });
         }
         ThreadEvent::HistoryPrefixBound { prefix, .. } => {
             require_no_command(envelope)?;

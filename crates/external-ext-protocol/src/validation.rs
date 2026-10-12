@@ -72,6 +72,7 @@ pub(super) fn validate_registrations(
     let mut remote_prefixes = BTreeSet::new();
     let mut debugger_types = BTreeSet::new();
     let mut task_types = BTreeSet::new();
+    let mut terminal_profiles = BTreeSet::new();
     let mut test_profile_providers = BTreeSet::new();
     for registration in registrations {
         validate_identifier(&registration.registration_id)?;
@@ -254,6 +255,19 @@ pub(super) fn validate_registrations(
                     return Err(protocol_error("invalid Debug configuration trigger kind"));
                 }
                 ExtensionCapability::DebugAdapter
+            }
+            RegistrationKind::TerminalProfileProvider { profile_id, title } => {
+                validate_identifier(profile_id)?;
+                if !profile_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+                {
+                    return Err(protocol_error("terminal profile ID is invalid"));
+                }
+                require_unique(&mut terminal_profiles, profile_id, "terminal profile IDs")?;
+                validate_short_text(title, MAX_IDENTIFIER_BYTES, "terminal profile title")?;
+                validate_display_text(title, "terminal profile title")?;
+                ExtensionCapability::TerminalProfileProvider
             }
             RegistrationKind::TaskProvider { task_type } => {
                 validate_selector(task_type, "task type")?;

@@ -90,7 +90,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		onClosed: () => void,
 		private readonly onTitleChanged: () => void,
 		private custom: CustomTerminalProcessOptions | undefined,
-		private launch: Pick<ITerminalProcessCreateOptions, 'env' | 'cwd' | 'execution'> | undefined,
+		private launch: Pick<ITerminalProcessCreateOptions, 'env' | 'cwd' | 'execution' | 'profile'> | undefined,
 		private initialText: IShellLaunchConfig['initialText'],
 		private waitOnExit: IShellLaunchConfig['waitOnExit'],
 		private dimensions: ITerminalDimensions,
@@ -494,6 +494,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 					dimensions, onTitleChanged: this.onTitleChanged,
 				} : undefined;
 				this.launch = Object.freeze({
+					profile: { type: 'default' as const },
 					...(replacement.env === undefined ? {} : { env: Object.freeze({ ...replacement.env }) }),
 					...(replacement.cwd === undefined ? {} : { cwd: replacement.cwd }),
 					...(replacement.execution === undefined ? {} : { execution: replacement.execution.type === 'process' ? Object.freeze({ ...replacement.execution, args: Object.freeze([...replacement.execution.args]) }) : Object.freeze({ ...replacement.execution }) }),
@@ -522,7 +523,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				...this.launch,
 				rows: dimensions.rows,
 				cols: dimensions.cols,
-				profile: replacement ? { type: 'default' } : { type: 'profile', profileId: this._profile.profileId },
+				profile: this.launch?.profile ?? { type: 'profile', profileId: this._profile.profileId },
 			});
 			if (this.closed) {
 				await this.processService.close({ ...processWorkspaceFolder(this.processWorkspaceFolderId), terminalId: created.terminalId });
@@ -532,7 +533,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.processReady = created.ready;
 			this.connectionPersistence = created.connectionPersistence;
 			this.processCloseTask = undefined;
-			this._profile = created.profile;
+			this._profile = { ...created.profile, icon: replacement?.icon ?? this._profile.icon, color: replacement?.color ?? this._profile.color };
 			this.shellLifetime.clear();
 			this.createShellProcessManager();
 			this._exitCode = undefined;

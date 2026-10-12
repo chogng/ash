@@ -277,6 +277,7 @@ pub enum ExtensionCapability {
     CustomTextEditor,
     DebugAdapter,
     TaskProvider,
+    TerminalProfileProvider,
     TestProfileProvider,
     DataChannel,
     LinkPresentationProvider,
@@ -434,6 +435,10 @@ pub enum RegistrationKind {
     },
     TaskProvider {
         task_type: String,
+    },
+    TerminalProfileProvider {
+        profile_id: String,
+        title: String,
     },
     TestProfileProvider {
         provider_id: String,

@@ -24,7 +24,7 @@ use std::io::Write;
 
 const MAX_FRAME: usize = 32 * 1024 * 1024;
 const MAX_ARCHIVE: u64 = 8 * 1024 * 1024 * 1024;
-const VERSION: u32 = 3;
+const VERSION: u32 = 4;
 
 // Column order is part of this versioned data contract. SQL identifiers only come from this
 // list, so a remote archive cannot add a table, execute SQL, or import account credentials.
@@ -383,7 +383,7 @@ impl SqliteThreadStore {
         else {
             return Err(error("invalid history archive header"));
         };
-        if !matches!(version, 2 | VERSION) {
+        if !matches!(version, 2 | 3 | VERSION) {
             return Err(error("unsupported history archive version"));
         }
         let source = ContentDigest::new(source).map_err(error)?;
@@ -702,7 +702,7 @@ fn validate_store(store: &SqliteThreadStore) -> Result<(), ThreadStoreError> {
     // retention or parentage than the original records describe.
     connection.execute_batch(
         "CREATE TEMP TABLE expected_prefix_links (prefix_digest TEXT, child_digest TEXT, PRIMARY KEY(prefix_digest, child_digest));
-         CREATE TEMP TABLE expected_thread_prefixes (thread_id TEXT PRIMARY KEY, prefix_digest TEXT);",
+         CREATE TEMP TABLE expected_thread_prefixes (thread_id TEXT, prefix_digest TEXT, PRIMARY KEY(thread_id, prefix_digest));",
     ).map_err(error)?;
     let mut statement = connection.prepare(
         "SELECT thread_id, record_json, digest FROM thread_events JOIN history_records ON record_digest = digest",

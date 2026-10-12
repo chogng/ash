@@ -615,6 +615,7 @@ fn run_engine(
                                     | "documentEvent"
                                     | "taskEvent"
                                     | "debugEvent"
+                                    | "createTerminalProfile"
                                     | "provideTasks"
                                     | "resolveTask"
                                     | "createDebugAdapterDescriptor"

@@ -39,36 +39,105 @@ fn history_cursor_undo_redo_survives_restart_and_new_requests_clear_redo() {
     let (store, threads, root) = fixture();
     for input in ["first", "second"] {
         let id = turn(&threads, &root.thread_id, input);
-        threads.complete_turn(&root.thread_id, &id, format!("{input} answer")).unwrap();
+        threads
+            .complete_turn(&root.thread_id, &id, format!("{input} answer"))
+            .unwrap();
     }
     let original = threads.read_thread(&root.thread_id).unwrap();
     let request = |command: &str, direction, sequence| core_api::MoveThreadHistoryRequest {
-        command_id: CommandId::new(command).unwrap(), thread_id: root.thread_id.clone(), direction, expected_sequence: sequence,
+        command_id: CommandId::new(command).unwrap(),
+        thread_id: root.thread_id.clone(),
+        direction,
+        expected_sequence: sequence,
     };
-    let undone = threads.move_thread_history(request("undo-one", ash_protocol::HistoryDirection::Undo, original.sequence)).unwrap();
+    let undone = threads
+        .move_thread_history(request(
+            "undo-one",
+            ash_protocol::HistoryDirection::Undo,
+            original.sequence,
+        ))
+        .unwrap();
     assert_eq!(undone.thread_id, root.thread_id);
     assert_eq!(undone.turns.len(), 1);
     assert_eq!(undone.items.len(), 2);
-    assert_eq!(threads.move_thread_history(request("undo-one", ash_protocol::HistoryDirection::Undo, original.sequence)).unwrap(), undone);
-    assert!(threads.move_thread_history(request("stale", ash_protocol::HistoryDirection::Undo, original.sequence)).is_err());
+    assert_eq!(
+        threads
+            .move_thread_history(request(
+                "undo-one",
+                ash_protocol::HistoryDirection::Undo,
+                original.sequence
+            ))
+            .unwrap(),
+        undone
+    );
+    assert!(
+        threads
+            .move_thread_history(request(
+                "stale",
+                ash_protocol::HistoryDirection::Undo,
+                original.sequence
+            ))
+            .is_err()
+    );
     let restarted = ThreadController::with_store(store.clone());
     assert_eq!(restarted.read_thread(&root.thread_id).unwrap(), undone);
     let state = restarted.thread_history_state(&root.thread_id).unwrap();
     assert!(state.can_undo && state.can_redo);
-    let empty = restarted.move_thread_history(request("undo-two", ash_protocol::HistoryDirection::Undo, state.sequence)).unwrap();
+    let empty = restarted
+        .move_thread_history(request(
+            "undo-two",
+            ash_protocol::HistoryDirection::Undo,
+            state.sequence,
+        ))
+        .unwrap();
     assert!(empty.turns.is_empty());
-    assert!(!restarted.thread_history_state(&root.thread_id).unwrap().can_undo);
-    let first = restarted.move_thread_history(request("redo-one", ash_protocol::HistoryDirection::Redo, empty.sequence)).unwrap();
-    let final_state = restarted.move_thread_history(request("redo-two", ash_protocol::HistoryDirection::Redo, first.sequence)).unwrap();
+    assert!(
+        !restarted
+            .thread_history_state(&root.thread_id)
+            .unwrap()
+            .can_undo
+    );
+    let first = restarted
+        .move_thread_history(request(
+            "redo-one",
+            ash_protocol::HistoryDirection::Redo,
+            empty.sequence,
+        ))
+        .unwrap();
+    let final_state = restarted
+        .move_thread_history(request(
+            "redo-two",
+            ash_protocol::HistoryDirection::Redo,
+            first.sequence,
+        ))
+        .unwrap();
     assert_eq!(final_state.items, original.items);
     assert_eq!(final_state.usage, original.usage);
-    let undone = restarted.move_thread_history(request("undo-again", ash_protocol::HistoryDirection::Undo, final_state.sequence)).unwrap();
+    let undone = restarted
+        .move_thread_history(request(
+            "undo-again",
+            ash_protocol::HistoryDirection::Undo,
+            final_state.sequence,
+        ))
+        .unwrap();
     let branch = turn(&restarted, &root.thread_id, "new request");
-    assert!(!restarted.thread_history_state(&root.thread_id).unwrap().can_redo);
-    restarted.complete_turn(&root.thread_id, &branch, "new answer".into()).unwrap();
+    assert!(
+        !restarted
+            .thread_history_state(&root.thread_id)
+            .unwrap()
+            .can_redo
+    );
+    restarted
+        .complete_turn(&root.thread_id, &branch, "new answer".into())
+        .unwrap();
     let after_branch = restarted.read_thread(&root.thread_id).unwrap();
     assert_eq!(after_branch.turns.len(), undone.turns.len() + 1);
-    assert!(after_branch.items.iter().all(|item| !matches!(item, ThreadItem::UserMessage { text, .. } if text == "second")));
+    assert!(
+        after_branch
+            .items
+            .iter()
+            .all(|item| !matches!(item, ThreadItem::UserMessage { text, .. } if text == "second"))
+    );
     let reopened = ThreadController::with_store(store);
     assert_eq!(reopened.read_thread(&root.thread_id).unwrap(), after_branch);
 }
@@ -79,10 +148,20 @@ fn running_turn_prevents_history_movement() {
     let id = turn(&threads, &root.thread_id, "running");
     let state = threads.thread_history_state(&root.thread_id).unwrap();
     assert!(!state.can_undo && !state.can_redo);
-    assert!(threads.move_thread_history(core_api::MoveThreadHistoryRequest {
-        command_id: CommandId::new("undo-running").unwrap(), thread_id: root.thread_id.clone(), expected_sequence: state.sequence, direction: ash_protocol::HistoryDirection::Undo,
-    }).is_err());
-    assert_eq!(threads.read_thread(&root.thread_id).unwrap().turns[0].turn_id, id);
+    assert!(
+        threads
+            .move_thread_history(core_api::MoveThreadHistoryRequest {
+                command_id: CommandId::new("undo-running").unwrap(),
+                thread_id: root.thread_id.clone(),
+                expected_sequence: state.sequence,
+                direction: ash_protocol::HistoryDirection::Undo,
+            })
+            .is_err()
+    );
+    assert_eq!(
+        threads.read_thread(&root.thread_id).unwrap().turns[0].turn_id,
+        id
+    );
 }
 
 fn turn(threads: &ThreadController, thread: &ThreadId, text: &str) -> TurnId {

@@ -64,6 +64,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly terminalProfiles: readonly { readonly id: string; readonly title: string; readonly icon?: string; readonly color?: string; }[];
 		readonly localizations: readonly ILocalizationContribution[];
 		readonly configuration: readonly IConfigurationNode[];
 		readonly submenus: readonly { id: string; label: string; placements: readonly { menu: string; when?: string; group?: string; }[]; }[];
@@ -130,6 +131,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		version,
 		displayName,
 		contributes: Object.freeze({
+			terminalProfiles: parseTerminalProfiles(contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
 			configuration: parseConfigurations(contributes.configuration),
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
@@ -186,15 +188,15 @@ function parseConfigurations(value: unknown): readonly IConfigurationNode[] {
 			const scope = schema.scope === undefined ? ConfigurationScope.WINDOW : typeof schema.scope === 'string' ? scopes[schema.scope] : undefined;
 			if (scope === undefined) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", key));
 			if (schema.ashBinding !== undefined) {
-    const binding = record(schema.ashBinding, 'extension setting binding');
-    for (const field of ['readCommand', 'writeCommand', 'property']) requiredString(binding[field], 'extension setting binding ' + field, 256);
-    const setting = record(schema.ashSetting, 'extension setting presentation');
-    requiredString(setting.title, 'setting title', 32768); requiredString(setting.description, 'setting description', 32768);
-    if (setting.valueType === 'number') { if (typeof setting.minimum !== 'number' || typeof setting.maximum !== 'number' || setting.minimum > setting.maximum) throw new TypeError('Invalid setting range'); }
-    else if (setting.valueType === 'select') { if (!Array.isArray(setting.options) || setting.options.length > 128) throw new TypeError('Invalid setting options'); for (const option of setting.options) { const entry = record(option, 'setting option'); requiredString(entry.label, 'setting option label', 32768); if (!['string', 'boolean'].includes(typeof entry.value)) throw new TypeError('Invalid setting option value'); } }
-    else if (setting.valueType !== 'boolean' && setting.valueType !== 'text') throw new TypeError('Invalid setting presentation');
-   }
-   properties[key] = Object.freeze({ ...schema, scope }) as IConfigurationPropertySchema;
+				const binding = record(schema.ashBinding, 'extension setting binding');
+				for (const field of ['readCommand', 'writeCommand', 'property']) requiredString(binding[field], 'extension setting binding ' + field, 256);
+				const setting = record(schema.ashSetting, 'extension setting presentation');
+				requiredString(setting.title, 'setting title', 32768); requiredString(setting.description, 'setting description', 32768);
+				if (setting.valueType === 'number') { if (typeof setting.minimum !== 'number' || typeof setting.maximum !== 'number' || setting.minimum > setting.maximum) throw new TypeError('Invalid setting range'); }
+				else if (setting.valueType === 'select') { if (!Array.isArray(setting.options) || setting.options.length > 128) throw new TypeError('Invalid setting options'); for (const option of setting.options) { const entry = record(option, 'setting option'); requiredString(entry.label, 'setting option label', 32768); if (!['string', 'boolean'].includes(typeof entry.value)) throw new TypeError('Invalid setting option value'); } }
+				else if (setting.valueType !== 'boolean' && setting.valueType !== 'text') throw new TypeError('Invalid setting presentation');
+			}
+			properties[key] = Object.freeze({ ...schema, scope }) as IConfigurationPropertySchema;
 		}
 		if (node.allOf !== undefined && !Array.isArray(node.allOf)) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'allOf'));
 		return Object.freeze({ ...(typeof node.id === 'string' ? { id: node.id } : {}), ...(typeof node.title === 'string' ? { title: node.title } : {}), properties: Object.freeze(properties), ...(Array.isArray(node.allOf) ? { allOf: Object.freeze(node.allOf.map(parseNode)) } : {}) });
@@ -594,14 +596,14 @@ function parseIcons(value: unknown): readonly ExtensionIconContribution[] {
 }
 
 function parseViewsWelcome(value: unknown): ExtensionManifest['contributes']['viewsWelcome'] {
- if (value === undefined) return [];
- if (!Array.isArray(value) || value.length > 128) throw new TypeError('Invalid view welcome contributions');
- return value.map(value => {
-  const entry = record(value, 'view welcome contribution');
-  const result = { view: requiredString(entry.view, 'welcome view', 256), contents: welcomeContents(entry.contents), when: entry.when === undefined ? undefined : requiredString(entry.when, 'welcome condition', 2048), precondition: entry.precondition === undefined ? undefined : requiredString(entry.precondition, 'welcome precondition', 2048), group: entry.group === undefined ? undefined : requiredString(entry.group, 'welcome group', 256), order: entry.order as number | undefined };
-  if (result.order !== undefined && !Number.isFinite(result.order)) throw new TypeError('Invalid welcome order');
-  return Object.freeze(result);
- });
+	if (value === undefined) return [];
+	if (!Array.isArray(value) || value.length > 128) throw new TypeError('Invalid view welcome contributions');
+	return value.map(value => {
+		const entry = record(value, 'view welcome contribution');
+		const result = { view: requiredString(entry.view, 'welcome view', 256), contents: welcomeContents(entry.contents), when: entry.when === undefined ? undefined : requiredString(entry.when, 'welcome condition', 2048), precondition: entry.precondition === undefined ? undefined : requiredString(entry.precondition, 'welcome precondition', 2048), group: entry.group === undefined ? undefined : requiredString(entry.group, 'welcome group', 256), order: entry.order as number | undefined };
+		if (result.order !== undefined && !Number.isFinite(result.order)) throw new TypeError('Invalid welcome order');
+		return Object.freeze(result);
+	});
 }
 
 function welcomeContents(value: unknown): string { if (typeof value !== 'string' || !value.trim() || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid view welcome contents'); return value; }
@@ -625,4 +627,21 @@ function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['
 		});
 		return { id, label: requiredString(entry.label, 'submenu label', 512), placements: contributions };
 	});
+}
+
+function parseTerminalProfiles(value: unknown): ExtensionManifest['contributes']['terminalProfiles'] {
+	if (value === undefined) return Object.freeze([]);
+	if (!Array.isArray(value) || value.length > 128) throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
+	const ids = new Set<string>();
+	return Object.freeze(value.map(candidate => {
+		const profile = record(candidate, 'Terminal profile');
+		if (typeof profile.id !== 'string' || !/^[\w.-]{1,256}$/.test(profile.id) || ids.has(profile.id)
+			|| typeof profile.title !== 'string' || !profile.title.trim() || profile.title.length > 256 || /[\u0000-\u001f\u007f]/.test(profile.title)
+			|| profile.icon !== undefined && (typeof profile.icon !== 'string' || !/^[\w-]{1,256}$/.test(profile.icon))
+			|| profile.color !== undefined && (typeof profile.color !== 'string' || !/^[\w.]{1,256}$/.test(profile.color))) {
+			throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
+		}
+		ids.add(profile.id);
+		return Object.freeze({ id: profile.id, title: profile.title, icon: profile.icon as string | undefined, color: profile.color as string | undefined });
+	}));
 }

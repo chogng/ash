@@ -13,7 +13,10 @@ import { ITerminalProcessService } from '../../../../platform/terminal/common/te
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { ITerminalConfigurationService, ITerminalService } from './terminal.js';
-import { ITerminalProfileService } from '../common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../common/terminal.js';
+import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
+import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
+import { BrowserTerminalProfileResolverService } from './terminalProfileResolverService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { TerminalConfigurationService } from './terminalConfigurationService.js';
 import { TerminalProfileService } from './terminalProfileService.js';
@@ -39,8 +42,14 @@ registerWorkbenchServiceContribution({
 
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileService,
-	dependencies: [ITerminalService, ITerminalProcessService, IConfigurationService, IWorkspaceContextService],
+	dependencies: [ITerminalService, ITerminalProcessService, IConfigurationService, IWorkspaceContextService, IExtensionService],
 	install: context => context.register(context.container.createInstance(TerminalProfileService)),
+});
+
+registerWorkbenchServiceContribution({
+	service: ITerminalProfileResolverService,
+	dependencies: [ITerminalProfileService, ITerminalProcessService, IConfigurationService, IConfigurationResolverService, IWorkspaceContextService],
+	install: context => context.register(context.container.createInstance(BrowserTerminalProfileResolverService)),
 });
 
 export { TERMINAL_VIEW_ID } from "../common/terminal.js";

@@ -28,7 +28,10 @@ pub enum MessageBoundary {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub enum HistoryDirection { Undo, Redo }
+pub enum HistoryDirection {
+    Undo,
+    Redo,
+}
 
 /// Immutable conversation and file state used by the same Thread's history cursor.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

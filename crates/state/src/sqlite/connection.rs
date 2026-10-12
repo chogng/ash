@@ -11,7 +11,7 @@ use std::path::Path;
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 14;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 15;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -150,6 +150,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         | Some(11)
         | Some(12)
         | Some(13)
+        | Some(14)
         | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
@@ -217,6 +218,13 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         if locked_version.is_some() {
             super::history::migrate_records(&transaction)?;
         }
+    }
+    if locked_version.is_some_and(|version| version < 15) {
+        // A Thread history cursor retains both its destination and its Redo source.
+        transaction.execute_batch("ALTER TABLE thread_history_prefixes RENAME TO old_thread_history_prefixes;
+            CREATE TABLE thread_history_prefixes (thread_id TEXT NOT NULL REFERENCES thread_streams(thread_id), prefix_digest TEXT NOT NULL REFERENCES history_prefixes(digest), PRIMARY KEY(thread_id, prefix_digest));
+            INSERT INTO thread_history_prefixes SELECT thread_id, prefix_digest FROM old_thread_history_prefixes;
+            DROP TABLE old_thread_history_prefixes;").map_err(sql_error)?;
     }
     if locked_version.is_some_and(|version| version < 8) {
         let has_record_version = {

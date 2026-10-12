@@ -1,4 +1,6 @@
 import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agentService.js';
+import { AppServerRemoteError } from '../common/appServerError.js';
+import { AgentThreadHistoryConflictError } from '../common/agentService.js';
 import type {
 	AgentResponse as AgentResponseDto,
 	Thread as ThreadDto,
@@ -60,6 +62,8 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 
 export function createDisconnectedAgentThreadService(unavailable: UnavailableOperation): IAgentThreadService {
 	return {
+		readHistoryState: () => unavailable('thread.readHistoryState'),
+		moveHistory: () => unavailable('thread.moveHistory'),
 		readContext: () => unavailable('thread.readContext'),
 		checkpoints: () => unavailable('thread.checkpoints'),
 		restoreMessage: () => unavailable('thread.restoreMessage'),
@@ -139,6 +143,25 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient): IAgentThreadService {
 	return {
+		readHistoryState: async params => {
+			try {
+				const result = await appServerRequest(connection, 'session/thread/history', params);
+				return { sequence: result.sequence, canUndo: result.canUndo, canRedo: result.canRedo };
+			} catch (error) {
+				if (error instanceof AppServerRemoteError && error.errorName === 'ThreadHistoryConflict') { throw new AgentThreadHistoryConflictError(); }
+				throw error;
+			}
+		},
+		moveHistory: async params => {
+			try {
+				sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest({ sessionId: params.sessionId, commandId: params.commandId }, {
+					type: 'moveThreadHistory', threadId: params.threadId, expectedSequence: params.expectedSequence, direction: params.direction,
+				})));
+			} catch (error) {
+				if (error instanceof AppServerRemoteError && error.errorName === 'ThreadHistoryConflict') { throw new AgentThreadHistoryConflictError(); }
+				throw error;
+			}
+		},
 		readContext: async params => {
 			const { context } = await appServerRequest(connection, 'context/read', { scope: { type: 'thread', ...params }, detail: 'usage' });
 			return {

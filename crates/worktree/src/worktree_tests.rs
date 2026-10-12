@@ -1049,26 +1049,57 @@ async fn directory_checkpoints_restore_exact_files_after_the_original_copy_is_de
     let settings = WorktreeSettings::defaults(&temporary.path().join("profile"));
     let manager = WorktreeManager::new(settings.clone());
     let digest = manager.capture_directory_checkpoint(&source).unwrap();
-    assert_eq!(manager.capture_directory_checkpoint(&source).unwrap(), digest);
+    assert_eq!(
+        manager.capture_directory_checkpoint(&source).unwrap(),
+        digest
+    );
     fs::remove_dir_all(&source).unwrap();
     let reopened = WorktreeManager::new(settings);
-    let restored = reopened.provision(&ManagedDirProvisionRequest {
-        source: ManagedDirSource::DirectoryCheckpoint { source_directory: source, digest },
-        target: ManagedDirTarget::SourceHead,
-        repository_targets: BTreeMap::new(),
-        source_dir_id: "source".into(),
-        owner: thread_owner("restored"),
-    }).await.unwrap();
-    assert_eq!(fs::read(restored.dir().join("binary")).unwrap(), [0, 255, 0, 1]);
-    assert_eq!(fs::read(restored.dir().join("text")).unwrap(), b"\xef\xbb\xbfline\r\n");
+    let restored = reopened
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirectoryCheckpoint {
+                source_directory: source,
+                digest,
+            },
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
+            source_dir_id: "source".into(),
+            owner: thread_owner("restored"),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        fs::read(restored.dir().join("binary")).unwrap(),
+        [0, 255, 0, 1]
+    );
+    assert_eq!(
+        fs::read(restored.dir().join("text")).unwrap(),
+        b"\xef\xbb\xbfline\r\n"
+    );
     assert!(restored.dir().join("empty").is_dir());
     assert!(!restored.dir().join(".git").exists());
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        assert_eq!(fs::symlink_metadata(restored.dir().join("link")).unwrap().file_type().is_symlink(), true);
-        assert_eq!(fs::read_link(restored.dir().join("link")).unwrap(), Path::new("text"));
-        assert_eq!(fs::metadata(restored.dir().join("text")).unwrap().permissions().mode() & 0o777, 0o750);
+        assert_eq!(
+            fs::symlink_metadata(restored.dir().join("link"))
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            true
+        );
+        assert_eq!(
+            fs::read_link(restored.dir().join("link")).unwrap(),
+            Path::new("text")
+        );
+        assert_eq!(
+            fs::metadata(restored.dir().join("text"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o750
+        );
     }
 }
 
@@ -1236,7 +1267,23 @@ async fn streamed_directory_copy_preserves_contents_permissions_and_baseline_dig
     permissions.set_readonly(true);
     fs::set_permissions(source.join("large.bin"), permissions).unwrap();
     let mut digest = sha2::Sha256::new();
-    digest.update(b"large.bin\0file");
+    digest.update(("large.bin".len() as u64).to_le_bytes());
+    digest.update(b"large.bin\0");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        digest.update(
+            fs::metadata(source.join("large.bin"))
+                .unwrap()
+                .permissions()
+                .mode()
+                .to_le_bytes(),
+        );
+    }
+    #[cfg(not(unix))]
+    digest.update([1]);
+    digest.update(b"file");
+    digest.update((bytes.len() as u64).to_le_bytes());
     digest.update(&bytes);
     digest.update([0]);
     let manager = WorktreeManager::new(WorktreeSettings::defaults(

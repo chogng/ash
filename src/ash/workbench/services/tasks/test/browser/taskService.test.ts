@@ -552,6 +552,7 @@ suite('TaskService terminal availability', () => {
 			const root = URI.file('/workspace');
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
+				resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 				getConnectionState: async () => 'ready', onConnectionState: Event.None,
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async options => {
@@ -611,6 +612,7 @@ suite('TaskService terminal availability', () => {
 			const root = URI.file('/workspace');
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
+				resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -678,6 +680,7 @@ suite('Task terminal reuse policies', () => {
 		const closed: string[] = [];
 		const closing = { wait: async (_id: string): Promise<void> => { } };
 		services.registerInstance(ITerminalProcessService, {
+			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async options => {
@@ -1321,6 +1324,7 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	const parent = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, placeholderTerminals);
 	const services = parent.createChild(new ServiceCollection([ITerminalProcessService, {
+			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 		getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None,
 		getEnvironment: async () => ({}), listProfiles: async () => [],
 		create: async () => { throw new Error('CustomExecution must not spawn a backend shell'); },
@@ -1371,6 +1375,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	const parent = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, placeholderTerminals);
 	const services = parent.createChild(new ServiceCollection([ITerminalProcessService, {
+			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 		getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None,
 		getEnvironment: async () => ({}), listProfiles: async () => [],
 		create: async () => { throw new Error('CustomExecution must not spawn a backend shell'); },
@@ -1514,6 +1519,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 		const created: unknown[] = [];
 		const closed: string[] = [];
 		services.registerInstance(ITerminalProcessService, {
+			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async options => {
@@ -1566,6 +1572,7 @@ suite('Extension task execution lifecycle', () => {
 				const producerCalls: string[] = [];
 				const writes: unknown[] = [];
 				const processes: ITerminalProcessService = {
+				resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getEnvironment: async () => ({}),
 					listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -1743,6 +1750,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 				}));
 				const launches: unknown[] = [];
 				services.registerInstance(ITerminalProcessService, {
+			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getEnvironment: async () => ({ MODE: `mode-${++environmentReads}`, EXTRA: 'new-variable' }),
 					listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -1849,6 +1857,7 @@ suite('Task instance limits through the execution owners', () => {
 					return index;
 				};
 				services.registerInstance(ITerminalProcessService, {
+			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 					create: async () => ({ ready: { pid: 1234, cwd: '/instances' }, terminalId: `process-${await prepare()}`, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
@@ -1976,6 +1985,7 @@ suite('Task instance policies through the execution owners', () => {
 			creations: 0, closed: [] as string[], close: async (_id: string): Promise<void> => { },
 		};
 		services.registerInstance(ITerminalProcessService, {
+			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async () => ({ ready: { pid: ++peer.creations, cwd: '/policy' }, terminalId: `policy-${peer.creations}`, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),

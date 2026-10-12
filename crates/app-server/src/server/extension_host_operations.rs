@@ -127,6 +127,9 @@ impl AppServer {
             ExtensionHostActivationEventDto::Language { language_id } => {
                 valid_text(language_id, 128)
             }
+            ExtensionHostActivationEventDto::TerminalProfile { profile_id } => {
+                valid_text(profile_id, 256)
+            }
             ExtensionHostActivationEventDto::TaskType { task_type } => task_type
                 .as_ref()
                 .is_none_or(|task_type| valid_text(task_type, 128)),
@@ -150,6 +153,9 @@ impl AppServer {
             }
             ExtensionHostActivationEventDto::Language { language_id } => {
                 ActivationEvent::Language(language_id)
+            }
+            ExtensionHostActivationEventDto::TerminalProfile { profile_id } => {
+                ActivationEvent::TerminalProfile(profile_id)
             }
             ExtensionHostActivationEventDto::TaskType { task_type } => {
                 ActivationEvent::TaskType(task_type)
@@ -547,6 +553,9 @@ fn registration_dto(
                 debugger_type,
                 trigger_kind,
             },
+            RegistrationKind::TerminalProfileProvider { profile_id, title } => {
+                ExtensionHostRegistrationKindDto::TerminalProfileProvider { profile_id, title }
+            }
             RegistrationKind::TaskProvider { task_type } => {
                 ExtensionHostRegistrationKindDto::TaskProvider { task_type }
             }

@@ -2,9 +2,10 @@ import type { IView } from "../../../common/views.js";
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution } from '../../../../platform/terminal/common/terminal.js';
+import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection } from '../../../../platform/terminal/common/terminal.js';
 import type { XtermTerminal } from './xterm/xtermTerminal.js';
 import type { ITerminalConfiguration } from '../common/terminal.js';
+import type { ThemeIcon } from '../../../../base/common/themables.js';
 
 export interface ITerminalConfigurationService extends IDisposable {
 	readonly config: Readonly<ITerminalConfiguration>;
@@ -37,18 +38,20 @@ export interface ITerminalProfile {
 	readonly profileId: string;
 	readonly title: string;
 	readonly isDefault: boolean;
+	readonly icon?: ThemeIcon;
+	readonly color?: string;
 }
 
 /** Explicit profile selection for a new terminal. */
-export type ITerminalProfileSelection =
-	| { readonly type: "default"; }
-	| { readonly type: "profile"; readonly profileId: string; };
+export type ITerminalProfileSelection = TerminalProcessProfileSelection;
 
 /** Complete caller-facing input for creating one terminal. */
 export type ITerminalCreateOptions = {
 	readonly dirId?: string;
 	readonly dimensions: ITerminalDimensions;
 	readonly title?: string;
+	readonly icon?: ThemeIcon;
+	readonly color?: string;
 	readonly env?: Readonly<Record<string, string | null>>;
 	readonly cwd?: string;
 	readonly execution?: TerminalProcessExecution;

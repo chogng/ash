@@ -96,3 +96,55 @@ test('a checkpoint result does not steal focus from a chat selected during resto
 	await expect(page.locator('.ash-aria-status').filter({ hasText: 'Checkpoint restored in a new chat.' })).toHaveCount(1);
 	expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().opened)).toEqual([]);
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`history Undo and Redo preserve the Thread and announce keyboard actions (${locale})`, async ({ page }) => {
+		await page.goto(`/chatEditing.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		const undo = page.getByRole('button', { name: 'Undo last request', exact: true });
+		await undo.focus();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('.ash-aria-status').filter({ hasText: locale === 'en' ? 'were undone' : '已撤销上一个请求' })).toHaveCount(1);
+		await expect(undo).toBeFocused();
+		await page.getByRole('button', { name: 'Redo last request', exact: true }).focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.historyState())).toEqual({
+			requests: [
+				{ sessionId: 'session', threadId: 'source', expectedSequence: 17, direction: 'undo' },
+				{ sessionId: 'session', threadId: 'source', expectedSequence: 18, direction: 'redo' },
+			], opened: [],
+		});
+	});
+	test(`history protects dirty working copies and explains backend conflicts (${locale})`, async ({ page }) => {
+		await page.goto(`/chatEditing.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await page.evaluate(() => window.ashChatEditingIntegration.dirtyFile());
+		await page.getByRole('button', { name: 'Undo last request', exact: true }).click();
+		await expect(page.getByRole('status', { name: 'Review error' })).toContainText(locale === 'en' ? 'Save or revert unsaved files' : '尚未保存的文件');
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.historyState().requests)).toEqual([]);
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.snapshot().texts[0])).toBe('unsaved user text');
+		await page.goto(`/chatEditing.html?locale=${locale}&historyConflict`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await page.getByRole('button', { name: 'Undo last request', exact: true }).click();
+		await expect(page.getByRole('status', { name: 'Review error' })).toContainText(locale === 'en' ? 'Their changes were kept' : '其更改已保留');
+		await page.goto(`/chatEditing.html?locale=${locale}&historyReadConflict`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await page.getByRole('button', { name: 'Undo last request', exact: true }).click();
+		await expect(page.getByRole('status', { name: 'Review error' })).toContainText(locale === 'en' ? 'Their changes were kept' : '其更改已保留');
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.historyState().requests)).toEqual([]);
+	});
+}
+
+test('history action waits for idle and does not act on a chat changed during lookup', async ({ page }) => {
+	await page.goto('/chatEditing.html?historyBusy');
+	await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+	await page.getByRole('button', { name: 'Undo last request', exact: true }).click();
+	await expect(page.getByRole('status', { name: 'Review error' })).toContainText('Wait for the current request');
+	expect(await page.evaluate(() => window.ashChatEditingIntegration.historyState().requests)).toEqual([]);
+	await page.goto('/chatEditing.html?historySlow');
+	await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+	await page.getByRole('button', { name: 'Undo last request', exact: true }).click();
+	await page.evaluate(() => { window.ashChatEditingIntegration.switchChat(); window.ashChatEditingIntegration.finishRestore(); });
+	await expect(page.locator('.ash-aria-status').filter({ hasText: 'were undone' })).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashChatEditingIntegration.historyState())).toEqual({ requests: [], opened: [] });
+});

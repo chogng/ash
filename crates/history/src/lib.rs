@@ -20,13 +20,20 @@ pub fn repository_checkpoints(
             origin: ash_protocol::ThreadOrigin::Message { workspace, .. },
             ..
         } => vec![workspace],
-        ash_protocol::ThreadEvent::ThreadHistoryMoved { target, previous, .. } => vec![&target.workspace, &previous.workspace],
+        ash_protocol::ThreadEvent::ThreadHistoryMoved {
+            target, previous, ..
+        } => vec![&target.workspace, &previous.workspace],
         _ => Vec::new(),
     };
-    workspaces.into_iter().flat_map(|workspace| match workspace {
-        ash_protocol::WorkspaceCheckpoint::Git { repositories, .. } => repositories.as_slice(),
-        ash_protocol::WorkspaceCheckpoint::NoFiles | ash_protocol::WorkspaceCheckpoint::Directory { .. } | ash_protocol::WorkspaceCheckpoint::Unavailable { .. } => &[],
-    }).collect()
+    workspaces
+        .into_iter()
+        .flat_map(|workspace| match workspace {
+            ash_protocol::WorkspaceCheckpoint::Git { repositories, .. } => repositories.as_slice(),
+            ash_protocol::WorkspaceCheckpoint::NoFiles
+            | ash_protocol::WorkspaceCheckpoint::Directory { .. }
+            | ash_protocol::WorkspaceCheckpoint::Unavailable { .. } => &[],
+        })
+        .collect()
 }
 
 pub use record::created_thread_agent_id;

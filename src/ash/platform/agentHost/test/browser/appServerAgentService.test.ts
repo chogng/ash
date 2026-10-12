@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { AppServerRemoteError } from '../../common/appServerError.js';
+import { AgentThreadHistoryConflictError } from '../../common/agentService.js';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
 import { createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
 
@@ -16,6 +18,12 @@ test('message checkpoints and restoration use the existing typed session protoco
 							turnId: 'turn',
 							sourceThreadId: 'source',
 							workspace: { type: 'git', sourceDirId: 'dir', repositories: [] }
+						},
+						{
+							itemId: 'directory-message',
+							turnId: 'turn',
+							sourceThreadId: 'source',
+							workspace: { type: 'directory', sourceDirId: 'dir', digest: 'sha256:' + 'a'.repeat(64) }
 						},
 						{
 							itemId: 'no-files',
@@ -37,6 +45,7 @@ test('message checkpoints and restoration use the existing typed session protoco
 	const api = createAppServerAgentThreadService(connection);
 	assert.deepEqual(await api.checkpoints({ sessionId: 'session', threadId: 'source' }), [
 		{ itemId: 'git-message', turnId: 'turn', sourceThreadId: 'source', files: 'git' },
+		{ itemId: 'directory-message', turnId: 'turn', sourceThreadId: 'source', files: 'directory' },
 		{ itemId: 'no-files', turnId: 'turn', sourceThreadId: 'source', files: 'noFiles' },
 		{
 			itemId: 'unavailable',
@@ -133,4 +142,29 @@ test('Thread context inspection keeps its scope and converts usage at the Agent 
 		}
 	});
 	assert.deepEqual(requests, [{ method: 'context/read', params: { scope: { type: 'thread', sessionId: 'session-a', threadId: 'thread-b' }, detail: 'usage' } }]);
+});
+
+test('history actions use the same Thread and exact sequence and map structured file conflicts', async () => {
+	const requests: unknown[] = [];
+	let conflict = false;
+	const service = createAppServerAgentThreadService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			if (conflict) throw new AppServerRemoteError(-32010, 'localized backend diagnostic', { kind: 'ThreadHistoryConflict' });
+			if (definition.method === 'session/thread/history') return { sequence: 17, canUndo: true, canRedo: false };
+			return { type: 'thread', value: { session: { sessionId: 'session' }, threadId: 'thread' } };
+		},
+	} as unknown as AppServerProtocolClient);
+	assert.deepEqual(await service.readHistoryState({ sessionId: 'session', threadId: 'thread' }), { sequence: 17, canUndo: true, canRedo: false });
+	const options = { sessionId: 'session', threadId: 'thread', commandId: 'undo', direction: 'undo' as const, expectedSequence: 17 };
+	await service.moveHistory(options);
+	assert.deepEqual(requests[1], {
+		method: 'session/request', params: {
+			sessionId: 'session', commandId: 'undo',
+			request: { type: 'moveThreadHistory', threadId: 'thread', direction: 'undo', expectedSequence: 17 },
+		},
+	});
+	conflict = true;
+	await assert.rejects(service.moveHistory({ ...options, commandId: 'redo', direction: 'redo' }), AgentThreadHistoryConflictError);
+	await assert.rejects(service.readHistoryState({ sessionId: 'session', threadId: 'thread' }), AgentThreadHistoryConflictError);
 });

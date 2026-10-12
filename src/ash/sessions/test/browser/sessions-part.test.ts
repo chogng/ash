@@ -178,6 +178,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async setModelVisible() { },
 		async listSlashCommands() { return []; },
 		async readCheckpoints() { return []; },
+		async readHistoryState() { return { sequence: 0, canUndo: false, canRedo: false }; },
+		async moveHistory() { throw new Error('History is not configured in this fixture'); },
 		async restoreCheckpoint() { throw new Error('Checkpoint restore is not configured in this fixture'); },
 		async readThread() { throw new Error("No active Thread"); },
 		async subscribeThread() { throw new Error("No active Thread"); },

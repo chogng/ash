@@ -1,12 +1,16 @@
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { IChatService, type ChatCheckpoint } from '../../../../services/chat/common/chatService.js';
+import { IChatService, ChatHistoryConflictError, type ChatCheckpoint } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 
 registerAction2(class RestoreCheckpointAction extends Action2 {
 	constructor() {
@@ -58,3 +62,46 @@ registerAction2(class RestoreCheckpointAction extends Action2 {
 		status(localize('chat.restoreCheckpoint.done', 'Checkpoint restored in a new chat.'));
 	}
 });
+
+for (const direction of ['undo', 'redo'] as const) {
+	registerAction2(class MoveChatHistoryAction extends Action2 {
+		constructor() {
+			super({
+				id: direction === 'undo' ? 'workbench.action.chat.undoEdit' : 'workbench.action.chat.redoEdit',
+				title: direction === 'undo' ? localize2('chatEditing.history.undo', 'Chat: Undo Last Request') : localize2('chatEditing.history.redo', 'Chat: Redo Last Request'),
+				f1: true,
+			});
+		}
+
+		public override async run(accessor: ServicesAccessor): Promise<void> {
+			const navigation = accessor.get(IChatSessionNavigationService);
+			const source = navigation.getActiveConversation();
+			if (!source) { return; }
+			const chat = accessor.get(IChatService);
+			const notifications = accessor.get(INotificationService);
+			try {
+				const [history, read] = await Promise.all([chat.readHistoryState(source.sessionId, source.threadId), chat.readThread(source.sessionId, source.threadId)]);
+				const current = navigation.getActiveConversation();
+				if (current?.sessionId !== source.sessionId || current.threadId !== source.threadId) { return; }
+				if (!(direction === 'undo' ? history.canUndo : history.canRedo)) {
+					notifications.info(localize('chatEditing.history.unavailable', 'No request is available for this history action. Wait for the current request to finish.'));
+					return;
+				}
+				const directory = read.directory;
+				const root = directory ? (directory.type === 'local' ? URI.file(directory.root) : createSshRemoteWorkspaceUri(directory.host, directory.root)) : undefined;
+				if (root && accessor.get(IWorkingCopyService).getAll().some(copy => copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, root))) {
+					notifications.info(localize('chatEditing.history.dirty', 'Save or revert unsaved files in this chat directory before changing its history.'));
+					return;
+				}
+				await chat.moveHistory({ ...source, expectedSequence: history.sequence, direction });
+			} catch (error) {
+				if (error instanceof ChatHistoryConflictError) {
+					notifications.error(localize('chatEditing.history.conflict', 'Files changed after the recorded checkpoint. Their changes were kept. Review them before changing this chat history.'));
+					return;
+				}
+				throw error;
+			}
+			status(direction === 'undo' ? localize('chatEditing.history.undone', 'The last request and its file changes were undone.') : localize('chatEditing.history.redone', 'The request and its file changes were restored.'));
+		}
+	});
+}

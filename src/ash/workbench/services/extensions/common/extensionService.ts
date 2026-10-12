@@ -5,6 +5,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 import type { ExtensionThemeSource } from "./extensionTheme.js";
 import type { ExtensionDebugAdapterSource } from "./extensionDebugAdapter.js";
 import type { ExtensionFileTemplateSource, ExtensionFileTemplateDefinition } from "./extensionFileTemplate.js";
+import type { IExtensionTerminalProfile } from '../../../../platform/terminal/common/terminal.js';
 export type { ExtensionDebugAdapterContribution, ExtensionGrammarContribution, ExtensionLanguageContribution, ExtensionManifest, ExtensionSnippetContribution, ExtensionThemeContribution } from "./extensionManifest.js";
 export type { ExtensionDebugAdapterDefinition, ExtensionDebugAdapterSource } from "./extensionDebugAdapter.js";
 export type { ExtensionThemeCatalog, ExtensionThemeDefinition, ExtensionThemeSource, ExtensionThemeTokenColorRule, ExtensionThemeTokenColorSettings } from "./extensionTheme.js";
@@ -65,6 +66,7 @@ export interface ExtensionSnippetActivation {
 
 /** Workbench-owned extension lifecycle and declarative contribution boundary. */
 export interface IExtensionService extends IDisposable {
+	readonly terminalProfiles: readonly IExtensionTerminalProfile[];
 	readonly currentCatalog: ExtensionCatalog;
 	readonly themes: ExtensionThemeSource;
 	readonly fileTemplates: ExtensionFileTemplateSource;

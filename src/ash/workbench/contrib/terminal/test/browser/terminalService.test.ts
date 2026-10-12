@@ -126,6 +126,24 @@ test("TerminalService batches input, coalesces resize, and releases terminals", 
 	assert.equal(service.activeInstance, undefined);
 });
 
+test('TerminalService relaunch retains custom candidates, literal argv, environment and presentation', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using services = terminalServices(processes, folderWorkspaceContext());
+	const terminals = services.get(ITerminalService);
+	const path = ['/missing/shell', '/execution/shell'];
+	const args = ['literal;$HOME'];
+	const env = { PROFILE: 'original value', REMOVED: null };
+	const terminal = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'custom', name: 'Custom shell', path, args }, env, cwd: '/workspace/subdirectory', icon: { id: 'terminal-git-bash' }, color: 'terminal.ansiGreen' });
+	path[1] = '/changed/shell'; args[0] = 'changed'; env.PROFILE = 'changed';
+	processes.emitConnectionState('crashed');
+	await waitFor(() => terminal.state === 'disconnected');
+	processes.emitConnectionState('ready');
+	await terminals.relaunchTerminal(terminal, { rows: 30, cols: 100 });
+	assert.deepEqual(processes.createCalls[1], { rows: 30, cols: 100, profile: { type: 'custom', name: 'Custom shell', path: ['/missing/shell', '/execution/shell'], args: ['literal;$HOME'] }, env: { PROFILE: 'original value', REMOVED: null }, cwd: '/workspace/subdirectory' });
+	assert.equal(terminal.profile.icon?.id, 'terminal-git-bash');
+	assert.equal(terminal.profile.color, 'terminal.ansiGreen');
+});
+
 test("TerminalService keeps multiple instances and safely relaunches after a crash", async () => {
 	const processService = new TestTerminalProcessService([]);
 	using services = terminalServices(processService, folderWorkspaceContext());
@@ -306,6 +324,7 @@ suite('Terminal process identity and raw input', () => {
 });
 
 class TestTerminalProcessService implements ITerminalProcessService {
+	async resolveProfile(): Promise<import("../../../../../platform/terminal/common/terminal.js").ITerminalResolvedProfile> { return { profile: DEFAULT_PROFILE, executable: "cmd.exe", args: [] }; }
 	profileListCalls = 0;
 	readonly createCalls: ITerminalProcessCreateOptions[] = [];
 	readonly writeCalls: Array<{ terminalId: string; data: string | Uint8Array; }> = [];

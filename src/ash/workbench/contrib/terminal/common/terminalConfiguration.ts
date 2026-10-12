@@ -64,6 +64,41 @@ for (const platform of ['linux', 'osx', 'windows']) {
 		get description() { return localize('terminal.config.defaultProfileDescription', 'Default interactive terminal profile name on {0}. An unavailable name uses the execution host default.', platform); },
 	};
 }
+const environmentSchema = {
+	type: 'object' as const, maxProperties: 128,
+	patternProperties: { '^[^=\\u0000]{1,256}$': { type: ['string', 'null'] as const, maxLength: 32768 } }, additionalProperties: false,
+};
+const profileSchema = {
+	type: 'object' as const, additionalProperties: false,
+	properties: {
+		path: { anyOf: [{ type: 'string' as const, minLength: 1, maxLength: 32768 }, { type: 'array' as const, minItems: 1, maxItems: 32, items: { type: 'string' as const, minLength: 1, maxLength: 32768 } }] },
+		source: { type: 'string' as const, enum: ['PowerShell', 'Git Bash'] },
+		args: { type: 'array' as const, maxItems: 1024, items: { type: 'string' as const, maxLength: 32768 } },
+		env: environmentSchema, overrideName: { type: 'boolean' as const },
+		icon: { type: 'string' as const, pattern: '^[a-zA-Z0-9_-]{1,256}$' },
+		color: { type: 'string' as const, pattern: '^[a-zA-Z0-9_.]{1,256}$' },
+		extensionIdentifier: { type: 'string' as const, minLength: 1, maxLength: 256 },
+		id: { type: 'string' as const, minLength: 1, maxLength: 256 }, title: { type: 'string' as const, minLength: 1, maxLength: 256 },
+	},
+	oneOf: [{ required: ['path'] }, { required: ['source'] }, { required: ['extensionIdentifier', 'id', 'title'] }],
+};
+for (const platform of ['linux', 'osx', 'windows']) {
+	properties[`${TERMINAL_CONFIG_SECTION}.profiles.${platform}`] = {
+		type: 'object', default: {}, maxProperties: 128,
+		patternProperties: { '^[^\\u0000-\\u001f\\u007f]{1,256}$': { anyOf: [{ type: 'null' }, profileSchema] } }, additionalProperties: false,
+		get description() { return localize('terminal.profile.configurationDescription', 'Terminal profiles on {0}. Define executable paths, literal arguments and environment overrides. Set a discovered profile to null to hide it.', platform); },
+	};
+	properties[`${TERMINAL_CONFIG_SECTION}.env.${platform}`] = {
+		...environmentSchema, default: {}, get description() { return localize('terminal.profile.environmentDescription', 'Environment overrides for new terminals on {0}. Null removes an inherited variable.', platform); },
+	};
+	for (const kind of ['automationProfile', 'agentHostProfile']) {
+		properties[`${TERMINAL_CONFIG_SECTION}.${kind}.${platform}`] = {
+			anyOf: [{ type: 'null' }, { ...profileSchema, required: ['path'] }], default: null,
+			get description() { return localize('terminal.profile.executionDescription', 'Shell profile for {0} on {1}. An empty value uses the interactive default.', kind, platform); },
+		};
+	}
+}
+properties[`${TERMINAL_CONFIG_SECTION}.cwd`] = { type: 'string', default: '', maxLength: 32768, get description() { return localize('terminal.profile.cwdDescription', 'Starting directory of a new terminal. Execution authorization still applies.'); } };
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({
 	add: [{ id: 'terminal', scope: ConfigurationScope.WINDOW, properties }], remove: [],
 });

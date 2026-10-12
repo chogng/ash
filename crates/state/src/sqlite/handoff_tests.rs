@@ -789,3 +789,74 @@ fn retained_prefix_and_its_attachment_survive_source_thread_removal() {
         .unwrap();
     assert!(snapshot.items.iter().any(|item| matches!(item, ThreadItem::UserImageAttachment { attachment, .. } if attachment.content_digest == digest)));
 }
+
+#[test]
+fn undo_redo_prefixes_survive_collection_and_history_handoff() {
+    let source_dir = tempfile::tempdir().unwrap();
+    let source = store(source_dir.path());
+    let controller = ThreadController::with_store(source.clone());
+    let root = thread(&controller, "history", None);
+    for name in ["first", "second"] {
+        let mut request = turn_request();
+        request.command_id = CommandId::new(name).unwrap();
+        let turn = controller.start_turn(&root.thread_id, request).unwrap();
+        controller
+            .complete_turn(&root.thread_id, &turn.turn_id, name.into())
+            .unwrap();
+    }
+    let original = controller.read_thread(&root.thread_id).unwrap();
+    for name in ["undo-first", "undo-second"] {
+        let state = controller.thread_history_state(&root.thread_id).unwrap();
+        controller
+            .move_thread_history(core_api::MoveThreadHistoryRequest {
+                thread_id: root.thread_id.clone(),
+                command_id: CommandId::new(name).unwrap(),
+                direction: ash_protocol::HistoryDirection::Undo,
+                expected_sequence: state.sequence,
+            })
+            .unwrap();
+    }
+    assert!(
+        controller
+            .read_thread(&root.thread_id)
+            .unwrap()
+            .items
+            .is_empty()
+    );
+    let unrelated = thread(&controller, "unrelated", None);
+    source.delete_session(&unrelated.session_id).unwrap();
+    let connection = Connection::open(source.path()).unwrap();
+    assert_eq!(
+        connection
+            .query_row::<u32, _, _>(
+                "SELECT COUNT(*) FROM thread_history_prefixes WHERE thread_id = ?1",
+                [root.thread_id.as_str()],
+                |row| row.get(0)
+            )
+            .unwrap(),
+        4
+    );
+    let target_dir = tempfile::tempdir().unwrap();
+    let target = store(target_dir.path());
+    let attachments = MemoryAttachmentStore::default();
+    let archive = export(&source, &target, &attachments);
+    target
+        .import_history("build-host", &attachments, archive.as_slice())
+        .unwrap();
+    let imported = ThreadController::with_store(target.clone());
+    for name in ["redo-first", "redo-second"] {
+        let state = imported.thread_history_state(&root.thread_id).unwrap();
+        imported
+            .move_thread_history(core_api::MoveThreadHistoryRequest {
+                thread_id: root.thread_id.clone(),
+                command_id: CommandId::new(name).unwrap(),
+                direction: ash_protocol::HistoryDirection::Redo,
+                expected_sequence: state.sequence,
+            })
+            .unwrap();
+    }
+    assert_eq!(
+        imported.read_thread(&root.thread_id).unwrap().items,
+        original.items
+    );
+}

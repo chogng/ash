@@ -1,12 +1,14 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { TabList, type TabListDropPosition } from '../../../../base/browser/ui/tablist/tabList.js';
 import { Emitter } from '../../../../base/common/event.js';
+import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { TerminalActiveInstanceStateContext, TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
 import { ITerminalService, type ITerminalInstance } from './terminal.js';
 import { openContextMenu } from './terminalContextMenu.js';
@@ -23,6 +25,7 @@ export const enum TerminalTabsListSizes {
 /** Owns terminal row identity, input and rendering; geometry belongs to the tabbed view. */
 export class TerminalTabList extends TabList<ITerminalInstance> {
 	private readonly instanceListeners = this._register(new DisposableMap<ITerminalInstance, IDisposable>());
+	private readonly labels = new Map<ITerminalInstance, IconLabel>();
 	private readonly focused = this._register(new Emitter<void>());
 	public readonly onDidFocusInstance = this.focused.event;
 	private draggedTerminal: ITerminalInstance | undefined;
@@ -97,7 +100,16 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		this.setTabs(this.terminals.instances.map(instance => ({
 			id: instance.id, value: instance, label: instance.title, tooltip: instance.title,
 			icon: terminalProfileIcon(instance.profile), state: instance.state, tabId: `${instance.id}-tab`,
+			renderLabel: (container: HTMLElement) => {
+				const label = new IconLabel(container, { label: instance.title, icon: terminalProfileIcon(instance.profile) });
+				this.labels.set(instance, label);
+				return toDisposable(() => { this.labels.delete(instance); label.dispose(); });
+			},
 		})), this.terminals.activeInstance?.id);
+		for (const [instance, label] of this.labels) {
+			label.setLabel(instance.title, undefined, { icon: terminalProfileIcon(instance.profile) });
+			label.iconElement.style.color = instance.profile.color ? `var(${colorCssVariable(instance.profile.color)})` : '';
+		}
 	}
 
 	public layout(_height?: number, width = this.element.clientWidth): void {

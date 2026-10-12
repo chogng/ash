@@ -1,3 +1,11 @@
+import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
+import { IConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/common/configurationResolver.js';
+import { ConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/browser/configurationResolverService.js';
+import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
+import { posix } from '../../../src/ash/base/common/path.js';
+import { ITerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
+import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
+import { MainThreadTerminalService } from '../../../src/ash/workbench/api/browser/mainThreadTerminalService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
@@ -57,6 +65,12 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const store = new DisposableStore();
+function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
+	services.registerInstance(IExtensionService, { terminalProfiles: [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
+	services.registerInstance(IPathService, { path: Promise.resolve(posix), resolvedUserHome: URI.file('/home/test'), userHome: async () => URI.file('/home/test'), getPath: async () => posix, getOperatingSystem: async () => OperatingSystem.Linux, fileURI: async (path: string) => URI.file(path) } as unknown as IPathService);
+	services.registerInstance(IConfigurationResolverService, lifetime.add(services.createInstance(ConfigurationResolverService)));
+}
+
 const writes: string[] = [];
 const binaryWrites: number[][] = [];
 const resizes: ITerminalDimensions[] = [];
@@ -245,6 +259,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		let profiles = 0;
 		let creates = 0;
 		const createdProfiles: string[] = [];
+		const launches: { profile: unknown; env: unknown; cwd: unknown; }[] = [];
 		const availableProfiles = new URLSearchParams(location.search).has('profiles') ? [instance.profile, { profileId: 'bash', title: 'Bash', isDefault: false }] : [instance.profile];
 		let release: (() => void) | undefined;
 		let pending: Promise<void> = Promise.resolve();
@@ -268,10 +283,12 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			createTerminal: async options => {
 				creates++;
 				const profileId = options.profile?.type === 'profile' ? options.profile.profileId : undefined;
-				const selected = availableProfiles.find(profile => profile.profileId === profileId) ?? instance.profile;
+				const selected = options.profile?.type === 'custom' ? { profileId: `custom:${options.profile.name}`, title: options.profile.name, isDefault: false }
+					: availableProfiles.find(profile => profile.profileId === profileId) ?? instance.profile;
 				createdProfiles.push(selected.profileId);
+				launches.push({ profile: options.profile, env: options.env, cwd: options.cwd });
 				const createdInstance = instances.length === 0 ? instance : createFixtureInstance(`test-terminal-${creates}`);
-				Object.assign(createdInstance, { profile: selected, title: selected.title });
+				Object.assign(createdInstance, { profile: { ...selected, icon: options.icon, color: options.color }, title: selected.title });
 				instances.push(createdInstance);
 				activeInstance = createdInstance;
 				const clear = createdInstance.clearBuffer.bind(createdInstance);
@@ -302,9 +319,29 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
 		services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: workspaceChanged.event, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null });
 		if (new URLSearchParams(location.search).has('profiles')) services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService()));
-		services.registerInstance(ITerminalProcessService, { operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None } as ITerminalProcessService);
+		services.registerInstance(ITerminalProcessService, {
+			operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None,
+			getEnvironment: async () => ({ HOME: '/home/test', PROFILE_ARG: 'literal;$HOME' }),
+			resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? [...profile.args] : [] }),
+		} as unknown as ITerminalProcessService);
+		setupTerminalFixtureServices(services, lifetime);
 		const profileService = lifetime.add(services.createInstance(TerminalProfileService));
 		services.registerInstance(ITerminalProfileService, profileService);
+		const resolver = lifetime.add(services.createInstance(BrowserTerminalProfileResolverService));
+		services.registerInstance(ITerminalProfileResolverService, resolver);
+		if (new URLSearchParams(location.search).has('extensionProfiles')) {
+			const digest = `sha256:${'a'.repeat(64)}`;
+			const extension = services.get(IExtensionService);
+			const bridge = lifetime.add(services.createInstance(MainThreadTerminalService));
+			Object.assign(extension, {
+				terminalProfiles: [{ extensionIdentifier: 'acme.extension', id: 'shell', title: 'Extension Shell', options: { icon: { id: 'terminal-git-bash' }, color: 'terminal.ansiGreen' } }],
+				currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] },
+				activateByEvent: async (event: string) => {
+					if (event !== 'onTerminalProfile:shell') throw new Error(`Unexpected activation: ${event}`);
+					bridge.replaceProfiles([{ runtimeId: 'extension-runtime', packageDigest: digest, profileId: 'shell', title: 'Extension Shell', invoke: async (): Promise<import('../../../src/ash/platform/agentHost/common/extensionHostApi.js').JsonValue> => ({ options: { name: 'Extension Shell', shellPath: '${env:HOME}/extension-shell', shellArgs: ['${env:PROFILE_ARG}'], env: { EXTENSION: 'value' } } }) }]);
+				},
+			});
+		}
 		const pane = lifetime.add(new TerminalViewPane(root, { id: 'terminal', title: 'Terminal' }, terminals, Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
 			onDidChangePartVisibility: visibility.event,
 			isPartVisible: () => visible,
@@ -324,12 +361,13 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getWorkspace: () => workspace,
 			getWorkbenchState: () => 2,
 			getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
-		}, services, profileService));
+		}, services, profileService, resolver, services.get(ITerminalProcessService)));
 		root.append(pane.partTitleProjection.actions!);
 		if (new URLSearchParams(location.search).has('browser')) pane.layout(root.clientHeight - pane.partTitleProjection.actions!.offsetHeight, 0, root.clientWidth);
 		return {
 			configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
 			createdProfiles: () => [...createdProfiles],
+			launches: () => [...launches],
 			defaultProfile: () => profileService.getDefaultProfile()?.profileId,
 			operations: () => ({ cleared, closed, relaunched }),
 			menuActions: () => menu.getMenuActions(MenuId.TerminalInstanceContext).flatMap(([, actions]) => actions.map(action => action.label)),
@@ -378,6 +416,7 @@ declare global {
 		ashTerminalPaneIntegration: {
 			configure(key: string, value: unknown): Promise<void>;
 			createdProfiles(): readonly string[];
+			launches(): readonly { profile: unknown; env: unknown; cwd: unknown; }[];
 			defaultProfile(): string | undefined;
 			dispose(): void;
 			command(id: string, argument?: unknown): Promise<unknown>;
@@ -420,7 +459,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 			getConnectionState: async () => 'ready',
 			onConnectionState: () => Disposable.None,
-			getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
+			resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? [...profile.args] : [] }), getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
 			create: async () => {
 				const terminalId = `backend-${nextProcess++}`;
 				calls.push(`create:${terminalId}`);
@@ -442,6 +481,8 @@ if (new URLSearchParams(location.search).has('assembly')) {
 			}),
 		};
 		const install = (container: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService): void => {
+			container.registerInstance(ICommandService, widgetServices.get(ICommandService));
+			setupTerminalFixtureServices(container, resources);
 			installWorkbenchServiceContributions({ container, register: value => resources.add(value), blockRestorationUntil: () => { } });
 		};
 		const services = [0, 1].map(() => {
@@ -465,7 +506,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		for (const service of services) { await service.closeTerminal(service.instances[0]); }
 		let missingDependency = '';
 		const missing = resources.add(new InstantiationService(new ServiceCollection([IWorkspaceContextService, workspace])));
-		try { install(missing); }
+		try { installWorkbenchServiceContributions({ container: missing, register: value => resources.add(value), blockRestorationUntil: () => { } }); }
 		catch (error) { missingDependency = String(error); }
 		return { isolated, output, calls, missingDependency, remaining: services.map(service => service.instances.length) };
 	};
@@ -500,6 +541,7 @@ if (new URLSearchParams(location.search).has('embedder')) {
 		[IWorkspaceContextService, workspace],
 		[ITerminalProcessService, { getEnvironment: async () => ({}), listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend, getConnectionState: async () => 'crashed', onConnectionState: Event.None }],
 	)));
+	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	let hostWidget: XtermTerminal;
@@ -577,7 +619,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	if (overflow) await widgetServices.get(IConfigurationService).updateValue('terminal.integrated.scrollback', 5000);
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
-		getEnvironment: async () => ({}), listProfiles: async () => [profile],
+		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? [...profile.args] : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => ({ terminalId: 'stream-shell', ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
 		write: async () => { },
 		resize: async () => { },
@@ -605,6 +647,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	};
 	const workspace = store.add(new WorkspaceContextService({ id: 'stream', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	let screen: XtermTerminal | undefined;
@@ -684,7 +727,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	let sequence = 0;
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
-		getEnvironment: async () => ({}), listProfiles: async () => [profile],
+		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? [...profile.args] : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => ({ terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
 		write: async options => {
 			writes.push(typeof options.data === 'string' ? options.data : [...options.data]);
@@ -701,6 +744,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	};
 	const workspace = store.add(new WorkspaceContextService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	store.add(terminals.onDidCreateInstance(instance => {

@@ -984,3 +984,65 @@ test('terminal profile commands select, cancel and apply the saved default to th
 	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'bash', 'bash', 'shell']);
 	expect(errors).toEqual([]);
 });
+
+test('configured terminal profile reaches the real picker and resolver with argv, env, cwd and themed metadata', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?pane&profiles&browser&locale=zh-CN');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(async () => {
+		await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.linux', {
+			'自定义 Shell': { path: ['/missing/shell', '${env:HOME}/shell'], args: ['${env:PROFILE_ARG}', 'with spaces'], env: { PROFILE: '${workspaceFolder}', REMOVED: null }, icon: 'terminal-git-bash', color: 'terminal.ansiGreen' },
+		});
+		await window.ashTerminalPaneIntegration.configure('terminal.integrated.cwd', '${workspaceFolder}/subdirectory');
+		window.ashTerminalPaneIntegration.panel(true);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
+	const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
+	await expect(picker).toBeFocused();
+	await picker.fill('自定义 Shell');
+	await picker.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
+		profile: { type: 'custom', name: '自定义 Shell', path: ['/home/test/shell'], args: ['literal;$HOME', 'with spaces'] },
+		env: { PROFILE: '/workspace', REMOVED: null }, cwd: '/workspace/subdirectory',
+	});
+	const tab = page.getByRole('tab', { name: '自定义 Shell', exact: true });
+	await expect(tab).toBeVisible();
+	await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
+	expect(await tab.locator('.ash-icon-label-icon').evaluate(element => (element as HTMLElement).style.color)).toBe('var(--ash-terminal-ansiGreen)');
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
+	const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
+	await expect(defaults).toBeFocused(); await defaults.fill('自定义 Shell'); await defaults.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('custom:自定义 Shell');
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(3);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('extension terminal profile activates from the picker and persists as the next default', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?pane&profiles&browser&extensionProfiles&locale=zh-CN');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
+	const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
+	await expect(picker).toBeFocused(); await picker.fill('Extension Shell'); await picker.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
+		profile: { type: 'custom', name: 'Extension Shell', path: ['/home/test/extension-shell'], args: ['literal;$HOME'] }, env: { EXTENSION: 'value' }, cwd: undefined,
+	});
+	const tab = page.getByRole('tab', { name: 'Extension Shell', exact: true });
+	await expect(tab).toBeVisible();
+	await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
+	const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
+	await expect(defaults).toBeFocused(); await defaults.fill('Extension Shell'); await defaults.press('Enter');
+	await expect(defaults).toHaveCount(0);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'custom:Extension Shell', 'custom:Extension Shell']);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	expect(errors).toEqual([]);
+});

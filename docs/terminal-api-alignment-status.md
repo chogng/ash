@@ -8,7 +8,37 @@
 
 补充准入：browser/terminalInstance.ts（双方同路径）保存 custom profile 的首次启动快照，Relaunch 沿原实例路径重用。已存在的 TerminalProcessService typed fixtures 只补新 resolveProfile 端口；精确路径 services/tasks/test/browser/taskService.test.ts、services/debug/test/browser/{debugTerminalLauncher.test.ts,debugService.test.ts}、services/terminal/test/common/embedderTerminalService.test.ts、contrib/terminal/test/browser/terminalTitleActions.test.ts、test/integration/browser/chatInput.integration.ts。
 
+扩展切片追加准入：platform/terminal/common/terminal.ts 承接扩展 profile 元数据，extensions/common/{extensionService.ts,extensionManifest.ts} 与 extensions/browser/appServerExtensionService.ts（既有扩展归属）解析并发布声明；terminalProfileService 只拥有 provider 注册与调用寿命。api/browser/mainThreadTerminalService.ts 为上游同路径缺失，api/browser/mainThreadExtensionApi.ts 接入现有注册 batch；platform/agentHost/common/extensionHostApi.ts 与 browser/extensionHostProtocol.ts 只接有界注册 DTO。Rust external-ext-protocol/src/{lib.rs,validation.rs,protocol_tests.rs}、app-server-protocol/src/protocol/{extension_host.rs,extension_packages.rs}、app-server/src/server/extension_host_runtime/{source.rs,projection.rs}、external-js-ext/src/{host.mjs,vscode.js,node.test.mjs,runtime.rs,package.rs} 接入原宿主 capability/调用/取消/撤权，禁止新执行宿主。配套 api/test/browser/mainThreadExtensionApi.test.ts、services/extensions/test/common/extensionService.test.ts 与 platform/agentHost/test/browser/extensionHostProtocol.test.ts；终端现有 accessibility 帮助追加本批命令说明并更新中文。仅实际依赖需要的 paths 才写入，其他路径仍只读。
+
+补充准入：platform/terminal/common/terminalEnvironment.ts（上游同路径缺失）由 resolver 调用，拥有环境覆盖合并与 Windows 大小写语义；terminal/browser/terminalIcon.ts 与 terminalTabsList.ts 仅消费 profile 的现有主题图标/颜色端口。
+
+补充准入：crates/plugin/src/manifest/editor_extension.rs、crates/app-server/src/{extension_packages_editor_extensions.rs,server/extension_host_runtime.rs,server/extension_host_operations.rs} 与 services/extensionHost/browser/appServerExtensionHostService.ts 接入精确 onTerminalProfile 激活和 provider capability，不扩大既有任意操作白名单。api/browser/extensionHostWorkflowBridge.ts 仅将现有 PTY handle 操作归为共享伪终端机制，不新增 Task 执行副本。
+
+补充准入：crates/plugin/src/manifest/validation.rs 的闭合 activation enum 校验同步新变体，保持 capability ceiling 验证。
+
+补充准入：services/extensionHost/browser/extensionHostServiceRegistration.ts 显式声明其 Terminal 领域依赖，保证组合安装顺序。
+
+补充准入：services/extensionHost/common/extensionHostService.ts 的注册 kind 闭合枚举同步 terminalProfileProvider；测试入口为实际存在的 services/extensionHost/test/browser/appServerExtensionHostService.test.ts。
+
+补充准入：contrib/folding/test/browser/folding.contribution.test.ts 的 typed IExtensionService fixture 同步只读 terminalProfiles 空列表，不改变 folding 行为。
+
+验证补充准入：base/common/jsonSchema.ts（双方同路径）仅补已有 patternProperties 的验证执行。settings.json → ConfigurationRegistry → 唯一 JSON schema 校验器 → profile 名称和 env 键命中规则后验证对应值，未命中的键仍受 additionalProperties 约束；由现有 terminalConfigurationService.test.ts 从真实配置写入入口验证接受有效定义、拒绝无效名称/混合定义/参数。不增加配置旁路。
+
+验证补充准入：crates/app-server/src/server/extension_host_runtime/source_tests.rs 在现有 ActivationPlan owner 上验证精确 onTerminalProfile 匹配与能力按需激活；debugTerminalLauncher.test.ts 只补 rebase 后 DebugService 所需的真实 FileService/UriIdentityService 装配，保持原 DAP 断言。
+
 扩展 provider 后续切片先核对已有 extension runtime 注册/激活/调用/撤权 owner，再锁定准确 paths；不提前添加空 registry 或虚构 provider。完整 browser 差异清单沿上一批台账，按当前入口依赖闭合推进，不以缺失文件清单作为空模块创建队列。共享工作树的 Chat/Sessions rebase 冲突保持不动。
+
+本批实现结果：自定义 profile 进入正式 `terminal/profile/resolve` / `terminal/create` 协议，Rust 在原目录授权与环境 owner 上验证名称、path 候选、argv 并挑选真实 executable；执行端解析不启动 PTY。Renderer 不使用本机路径或环境代替远端事实。`terminalEnvironment.ts` 与 `terminalProfileResolverService.ts` 已有实际消费者，覆盖变量、全局/profile/调用方 env 覆盖、cwd、默认/automation/agentHost shell、图标和异步失效；默认/扩展选择、工具栏与实例创建走同一 profile owner，首次启动数组/环境快照不可由调用方后续修改，Relaunch 保留它们。
+
+扩展沿现有 Plugin/VSIX → capability ceiling → `onTerminalProfile:{id}` 激活 → 原宿主 `window.registerTerminalProfileProvider` / `TerminalProfile` → MainThread 注册 batch → ProfileService / TerminalService。普通 shell 与自定义配置共用 resolver 和原 Rust PTY；Pseudoterminal 复用现有有界 opaque handle，不保存 Tasks 业务状态。注册绑定当前包 digest、runtime incarnation 和 activation generation，注销关闭活动的扩展 PTY；关闭移除实例引用，Relaunch 再调用 provider 获取新 handle，工作区变化释放晚到 handle。标准 API 可省略 shellPath/argv 使用执行端默认配置。主题图标/颜色进入实例列表并保留到 Relaunch，无效图标使用终端默认图标。
+
+验证期间修正配置底座中已声明但未执行的 `patternProperties`，有效自定义/扩展配置现在可写入，无效名称、env 键、混合定义和无 path 参数被配置边界拒绝。补齐中文配置/错误/帮助文案，并保留原无障碍视图、键盘选择与 Escape 取消链。Rebase 已完成：当前 `5e1472793` 包含 `origin/main` 的 `fba2c6c44`，没有冲突；未提交修改及其他工作继续保留。未执行 commit/push。
+
+本批验证：正常前端 unit 7 文件 224 项通过；收尾后 configuration/profile 与 extension-host 两套 60 项通过（18+42），含真实 batch 绑定/撤销、晚到 handle 的关闭、旧 PTY 退出后获取新 handle、不可变 custom Relaunch 快照，新增生命周期套件启用 disposable 泄漏检查。Chromium Terminal 全量 56 项通过，最后 profile 三项再次通过；自定义和扩展从真实 Quick Input/默认命令经过真实 resolver，断言 backend 请求的 argv/env/cwd、主题 SVG 和中文 UI。真实 Node 宿主 21 项通过，包含标准 API、默认 shell、省略 argv、同步 open/input 输出、幂等关闭和重建 handle。Rust exec-server 的 terminal 32 项、external-ext-protocol 40 项、App Server profile/激活 2 项、App Server protocol terminal 4 项通过；相关六个 crate 的全 targets deny-warnings 检查通过。生成协议成功，Renderer 3671 文件、protocol 1438 文件类型检查通过。本批 42 个 TS/JS 文件格式检查通过；本批中文缺词为零，全仓仍缺范围外 color.editorGutter.itemBackground。没有新增依赖。
+
+首次校验发现 patternProperties 未执行、独立 assembly fixture 先创建 resolver 导致缺依赖报错入口改变，以及 rebase 后 Debug fixture 缺 UriIdentityService。均在实际 owner/fixture 装配中修正，保留原创建/输出/关闭/输入确认断言。扩展真实注册测试校验实际 manifest digest、使用既有 realm CommandRegistry 并启用泄漏检查，未绕过包校验或忽略泄漏。
+
+当前 browser 生产 `.ts`/`.css` 同路径 22、上游缺失 43、仅 Ash 0；platform/terminal 同路径 2、已批准 Ash 专属适配器 3、上游缺失 44。数字只描述文件关系。Windows 原始命令行字符串、URI 图标、完整自动发现/集成、分组/分屏、编辑区及其他剩余 browser/xterm/backend 链仍待补；argv 数组已真实执行。automation/agentHost resolver 策略端口已实现，但不将 Tasks/Debug/Agent 业务 owner 的后续接入记为完成。本机 macOS / Chromium 与 Node 宿主验证不等于 Windows/Linux 或真实 SSH 场景通过。
 
 ## 配置与 Profile 本批准入（2026-10-11）
 
@@ -19,7 +49,6 @@
 准入路径：common/{terminal.ts,terminalConfiguration.ts}、browser/{terminal.ts,terminalConfigurationService.ts,terminalProfileService.ts,terminalProfileQuickpick.ts,terminal.contribution.ts,terminalActions.ts,terminalView.ts,xterm/xtermTerminal.ts}。其中 terminalConfiguration.ts 和三个 browser 服务/选择器为上游同路径缺失，其余为双方同路径；既有文件只改设置契约、DI、配置订阅和 profile 入口。platform/terminal/common/terminal.ts 补执行端 OS 只读契约；已批准保留的 browser/{appServerTerminalProcessService,reconnectableTerminalProcessService,disconnectedTerminalProcessService}.ts 仅映射现有初始化 OS，不改 Rust/生成协议。允许测试 terminal/test/browser/{terminalConfigurationService.test.ts,terminalTitleActions.test.ts}、platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts、test/integration/browser/{terminal.integration.ts,terminal.integration.spec.ts,chatInput.integration.ts}、中文 workbench.json，以及本文和 Terminal README。
 
 settings.json 继续由现有配置系统保存与合并；外观和 defaultProfile.{linux,osx,windows} 使用对应 WINDOW scope，不写 legacy configuration.json；先消费已验证有效值，无额外值仓库或迁移。profile 的 path/args/env、自定义和扩展 profile、自动化 shell、完整 resolver API 尚未闭合，不创建空模块。
-
 
 本批实现结果：三个缺失 browser 文件与 common/terminalConfiguration.ts 已进入真实生产链；配置/schema owner、连接适配器、实例屏幕、命令面板、View 与工具栏均已接线。屏幕消费 10 项外观设置，空终端字体继承 editor.fontFamily；line 光标映射 xterm bar。有效配置变化原地更新并 fit，不替换屏幕或复制输出。相应默认值为 macOS 字号 12／其他平台 14、回滚 1000、光标不闪烁。小于现有缓冲区的回滚值按 xterm 语义移除超限旧行。
 
@@ -33,21 +62,20 @@ ProfileService 合并并发发现请求；工作区/连接变化撤回可用列�
 
 当前 browser 生产同路径文件为 21，上游缺失 44，仅 Ash 0；common 本轮补 terminalConfiguration.ts。以下旧批次目录数字是该批次时的快照。仅在 macOS Chromium 上验证交互，未验证真实跨 OS SSH 或 VoiceOver 实际读出。
 
-
 ## Browser 列表、菜单与尺寸调度（2026-10-11）
 
 用户切换／拖动终端列表、打开实例菜单或调整面板 → `TerminalViewPane` → `TerminalTabbedView`／`TerminalTabList`、当前窗口命令、`XtermTerminal` → 实例身份与原 `TerminalService`／进程管理器 → 指定实例操作与最终屏幕／PTY 尺寸。实例集合、活动项和进程状态仍只有原服务／实例 owner；本批独立实现三个缺失 browser 文件，未新建 backend、分组或配置状态。
 
-| 准确路径（相对 `src/ash`） | 存在关系与本批动作 | 生产入口／可观察结果 |
-| --- | --- | --- |
-| `workbench/contrib/terminal/browser/terminalTabsList.ts` | 上游同路径缺失；迁入现有 TabList 的终端行渲染、监听、激活、关闭、拖动与窄模式 | Tabbed View 经 DI 创建；保留原实例身份与键盘导航，列表菜单支持鼠标和 Shift+F10 |
-| `workbench/contrib/terminal/browser/terminalContextMenu.ts` | 上游同路径缺失；实例上下文只保存数值身份，命令转发与菜单执行生命周期独立实现 | 实例列表菜单；活动项变化后仍操作捕获目标，异步动作结束后释放 runner |
-| `workbench/contrib/terminal/browser/terminalResizeDebouncer.ts` | 上游同路径缺失；一份待调度尺寸负责屏幕重排，使用原 scheduler／idle 基础能力 | xterm fit；大 normal 缓冲区即刻调整行数，合并列重排，focus 前 flush，dispose 取消 |
-| `workbench/contrib/terminal/browser/terminalTabbedView.ts` | 双方已有；退出列表交互／行监听 owner，只保留 SplitView 几何、可见性与宽度吸附 | View → 唯一列表；旧列表实现和重复事件订阅退出 |
-| `workbench/contrib/terminal/browser/terminalActions.ts`、`terminalMenus.ts` | 双方已有；新增目标实例菜单及既有 Focus/Clear/Kill/Relaunch 的目标上下文解析 | 原标题命令不带上下文的行为保留；带上下文的命令直接定位原实例，失效或非法身份拒绝 |
-| `workbench/contrib/terminal/browser/{terminal.ts,terminalInstance.ts}`、`common/terminal.ts` | 双方已有；只增加被菜单使用的标准 instanceId 与序列化上下文 | instanceId 从原实例编号派生，不是 OS PID，也不另存身份状态 |
-| `base/common/marshallingIds.ts`、`platform/actions/common/actions.ts` | 双方已有；只补 `TerminalContext` 标识及 `TerminalInstanceContext` MenuId | 现有命令序列化与 MenuService；下层不导入贡献 |
-| `workbench/contrib/terminal/browser/xterm/xtermTerminal.ts` | 双方已有；fit 提议尺寸交给新调度器，最终 resize 仍由原实例／管理器执行 | 解析后的屏幕与 scrollback 保留，未改变输入确认、读取或后端租约 |
+| 准确路径（相对 `src/ash`）                                                                   | 存在关系与本批动作                                                            | 生产入口／可观察结果                                                              |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `workbench/contrib/terminal/browser/terminalTabsList.ts`                                     | 上游同路径缺失；迁入现有 TabList 的终端行渲染、监听、激活、关闭、拖动与窄模式 | Tabbed View 经 DI 创建；保留原实例身份与键盘导航，列表菜单支持鼠标和 Shift+F10    |
+| `workbench/contrib/terminal/browser/terminalContextMenu.ts`                                  | 上游同路径缺失；实例上下文只保存数值身份，命令转发与菜单执行生命周期独立实现  | 实例列表菜单；活动项变化后仍操作捕获目标，异步动作结束后释放 runner               |
+| `workbench/contrib/terminal/browser/terminalResizeDebouncer.ts`                              | 上游同路径缺失；一份待调度尺寸负责屏幕重排，使用原 scheduler／idle 基础能力   | xterm fit；大 normal 缓冲区即刻调整行数，合并列重排，focus 前 flush，dispose 取消 |
+| `workbench/contrib/terminal/browser/terminalTabbedView.ts`                                   | 双方已有；退出列表交互／行监听 owner，只保留 SplitView 几何、可见性与宽度吸附 | View → 唯一列表；旧列表实现和重复事件订阅退出                                     |
+| `workbench/contrib/terminal/browser/terminalActions.ts`、`terminalMenus.ts`                  | 双方已有；新增目标实例菜单及既有 Focus/Clear/Kill/Relaunch 的目标上下文解析   | 原标题命令不带上下文的行为保留；带上下文的命令直接定位原实例，失效或非法身份拒绝  |
+| `workbench/contrib/terminal/browser/{terminal.ts,terminalInstance.ts}`、`common/terminal.ts` | 双方已有；只增加被菜单使用的标准 instanceId 与序列化上下文                    | instanceId 从原实例编号派生，不是 OS PID，也不另存身份状态                        |
+| `base/common/marshallingIds.ts`、`platform/actions/common/actions.ts`                        | 双方已有；只补 `TerminalContext` 标识及 `TerminalInstanceContext` MenuId      | 现有命令序列化与 MenuService；下层不导入贡献                                      |
+| `workbench/contrib/terminal/browser/xterm/xtermTerminal.ts`                                  | 双方已有；fit 提议尺寸交给新调度器，最终 resize 仍由原实例／管理器执行        | 解析后的屏幕与 scrollback 保留，未改变输入确认、读取或后端租约                    |
 
 配套准入范围为终端 Tabs／标题动作单测、Tasks 的 FakeTerminalInstance（仅增加数值身份）、`test/integration/browser/terminal.integration{,.spec}.ts`、Chat 输入的实例 fixture（仅身份字段）、既有终端无障碍帮助、中文 `workbench.json`、本台账与 Terminal README。保护共享工作树的其他修改。没有批量复制上游代码、DOM、CSS 或创建没有本地消费者的文件。
 
@@ -65,15 +93,15 @@ ProfileService 合并并发发现请求；工作区/连接变化撤回可用列�
 
 本批后生产 `.ts`／`.css` 同路径文件 18 个，上游缺失 47 个，仅 Ash 0 个。下面是完整路径调查；文件存在不表示公开 API 完整，调查项也不是无调用方文件的创建队列。
 
-| 职责链 | 仍缺的准确路径（相对 terminal/browser） |
-| --- | --- |
-| 实例创建／分组分屏 | `terminalInstanceService.ts`、`terminalGroupService.ts`、`terminalGroup.ts` |
-| 配置／profile／命令基础（最新剩余） | `terminalProfileResolverService.ts`、`terminalCommands.ts`、`terminalEscapeSequences.ts`、`terminalEvents.ts` |
-| 编辑区承载／身份 | `terminalEditingService.ts`、`terminalEditorService.ts`、`terminalEditor.ts`、`terminalEditorInput.ts`、`terminalEditorSerializer.ts`、`terminalUri.ts` |
-| 状态、提示与图标 | `terminalStatusList.ts`、`terminalTooltip.ts`、`terminalIcons.ts`、`terminalIconPicker.ts`、`terminalTabsChatEntry.ts`、`widgets/terminalHoverWidget.ts`、`widgets/widgetManager.ts`、`widgets/widgets.ts`、`media/widgets.css`、`media/xterm.css` |
-| xterm 扩展职责 | `xterm-private.d.ts`、`xterm/decorationAddon.ts`、`xterm/decorationStyles.ts`、`xterm/lineDataEventAddon.ts`、`xterm/markNavigationAddon.ts`、`xterm/terminalFontRendering.css`、`xterm/terminalFontRendering.ts`、`xterm/xtermAddonImporter.ts` |
-| 后端／运行环境／Agent | `baseTerminalBackend.ts`、`remoteTerminalBackend.ts`、`remotePty.ts`、`terminalProcessExtHostProxy.ts`、`detachedTerminal.ts`、`environmentVariableInfo.ts`、`terminal.web.contribution.ts`、`agentHostTerminalService.ts`、`agentHostPty.ts`、`agentHostOutputChannel.ts`、`ahpTerminalCommandSource.ts`、`chatTerminalCommandMirror.ts` |
-| 上游浏览器路径测试辅助 | `terminalTestHelpers.ts`（尚无本地生产消费者，不能按缺失数预建） |
+| 职责链                              | 仍缺的准确路径（相对 terminal/browser）                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 实例创建／分组分屏                  | `terminalInstanceService.ts`、`terminalGroupService.ts`、`terminalGroup.ts`                                                                                                                                                                                                                                                               |
+| 配置／profile／命令基础（最新剩余） | `terminalCommands.ts`、`terminalEscapeSequences.ts`、`terminalEvents.ts`                                                                                                                                                                                                                                                                  |
+| 编辑区承载／身份                    | `terminalEditingService.ts`、`terminalEditorService.ts`、`terminalEditor.ts`、`terminalEditorInput.ts`、`terminalEditorSerializer.ts`、`terminalUri.ts`                                                                                                                                                                                   |
+| 状态、提示与图标                    | `terminalStatusList.ts`、`terminalTooltip.ts`、`terminalIcons.ts`、`terminalIconPicker.ts`、`terminalTabsChatEntry.ts`、`widgets/terminalHoverWidget.ts`、`widgets/widgetManager.ts`、`widgets/widgets.ts`、`media/widgets.css`、`media/xterm.css`                                                                                        |
+| xterm 扩展职责                      | `xterm-private.d.ts`、`xterm/decorationAddon.ts`、`xterm/decorationStyles.ts`、`xterm/lineDataEventAddon.ts`、`xterm/markNavigationAddon.ts`、`xterm/terminalFontRendering.css`、`xterm/terminalFontRendering.ts`、`xterm/xtermAddonImporter.ts`                                                                                          |
+| 后端／运行环境／Agent               | `baseTerminalBackend.ts`、`remoteTerminalBackend.ts`、`remotePty.ts`、`terminalProcessExtHostProxy.ts`、`detachedTerminal.ts`、`environmentVariableInfo.ts`、`terminal.web.contribution.ts`、`agentHostTerminalService.ts`、`agentHostPty.ts`、`agentHostOutputChannel.ts`、`ahpTerminalCommandSource.ts`、`chatTerminalCommandMirror.ts` |
+| 上游浏览器路径测试辅助              | `terminalTestHelpers.ts`（尚无本地生产消费者，不能按缺失数预建）                                                                                                                                                                                                                                                                          |
 
 后续沿现有入口分别闭合：创建／profile 选择先补配置和可信 profile 契约；分屏先确定实例创建与分组 owner，再接列表和屏幕几何；编辑区终端接现有 Editor 服务；状态／提示和 xterm 贡献从真实实例状态、解析与命令事件接入。现有分页轮询适配器与三处已批准 Ash 专属适配器不等于完整上游 backend／child-process 事件契约；Agent／remote 文件也不因路径缺失而提前创建。
 

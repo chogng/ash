@@ -102,6 +102,12 @@ export interface ExtensionHostTaskProviderRegistration extends ExtensionHostRegi
 	readonly taskType: string;
 }
 
+export interface ExtensionHostTerminalProfileProviderRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'terminalProfileProvider';
+	readonly profileId: string;
+	readonly title: string;
+}
+
 export interface ExtensionHostDebugAdapterTrackerRegistration extends ExtensionHostRegistrationBase {
 	readonly kind: 'debugAdapterTracker';
 	readonly debuggerType: string;
@@ -155,9 +161,9 @@ export interface ExtensionHostSCMRegistration extends ExtensionHostRegistrationB
 	readonly providers: readonly JsonValue[];
 }
 
-export type ExtensionHostRegistration = ExtensionHostSCMRegistration | ExtensionHostRemoteConnectionResolverRegistration | ExtensionHostRemoteAuthorityResolverRegistration | ExtensionHostWorkspaceEventsRegistration | ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostDebugConfigurationProviderRegistration | ExtensionHostDebugAdapterTrackerRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTaskEventsRegistration | ExtensionHostDebugEventsRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+export type ExtensionHostRegistration = ExtensionHostTerminalProfileProviderRegistration | ExtensionHostSCMRegistration | ExtensionHostRemoteConnectionResolverRegistration | ExtensionHostRemoteAuthorityResolverRegistration | ExtensionHostWorkspaceEventsRegistration | ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostDebugConfigurationProviderRegistration | ExtensionHostDebugAdapterTrackerRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTaskEventsRegistration | ExtensionHostDebugEventsRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
-export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'taskType'; readonly taskType: string | null; } | { readonly type: 'debug'; readonly phase: 'start' | 'initialConfigurations' | 'dynamicConfigurations' | 'resolveConfiguration'; readonly debugType: string | null; } | { readonly type: 'startupFinished'; } | { readonly type: 'resolveAuthority'; readonly authorityPrefix: string; };
+export type ExtensionHostActivationEvent = { readonly type: 'terminalProfile'; readonly profileId: string; } | { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'taskType'; readonly taskType: string | null; } | { readonly type: 'debug'; readonly phase: 'start' | 'initialConfigurations' | 'dynamicConfigurations' | 'resolveConfiguration'; readonly debugType: string | null; } | { readonly type: 'startupFinished'; } | { readonly type: 'resolveAuthority'; readonly authorityPrefix: string; };
 export interface ExtensionHostInitialization {
 	readonly language?: string;
 	readonly localization?: { readonly uri: string; readonly bundle: Readonly<Record<string, string>>; readonly package: Readonly<Record<string, string>>; };

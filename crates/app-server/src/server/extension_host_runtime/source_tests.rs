@@ -394,3 +394,23 @@ fn wildcard_activation_matches_the_first_window_bound_startup_event() {
     assert!(plan.matches(&super::ActivationEvent::StartupFinished));
     assert!(plan.matches(&super::ActivationEvent::Command("early.command".into())));
 }
+
+#[test]
+fn terminal_profile_activation_matches_declared_identity_and_demand_capability() {
+    use super::ActivationEvent;
+    use super::ActivationPlan;
+
+    let declared = ActivationPlan {
+        events: vec!["onTerminalProfile:acme.shell".into()],
+        commands: vec![],
+    };
+    assert!(declared.matches(&ActivationEvent::TerminalProfile("acme.shell".into())));
+    assert!(!declared.matches(&ActivationEvent::TerminalProfile("other.shell".into())));
+    assert!(!declared.matches(&ActivationEvent::TaskType(None)));
+    let demand = ActivationPlan {
+        events: vec!["onDemand:terminalProfileProvider".into()],
+        commands: vec![],
+    };
+    assert!(demand.matches(&ActivationEvent::TerminalProfile("acme.shell".into())));
+    assert!(!demand.matches(&ActivationEvent::Command("acme.shell".into())));
+}

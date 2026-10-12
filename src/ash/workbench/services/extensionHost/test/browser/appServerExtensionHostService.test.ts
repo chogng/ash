@@ -1,3 +1,7 @@
+import { ITerminalProfileService, ITerminalProfileResolverService } from '../../../../contrib/terminal/common/terminal.js';
+import { ITerminalService } from '../../../../contrib/terminal/browser/terminal.js';
+import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
+import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
 import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
@@ -29,13 +33,14 @@ import { IDebugService, type IDebugConfigurationProvider, type DebugConfiguratio
 import { DebugAdapterFactoriesRegistry } from '../../../debug/common/debugAdapterFactory.js';
 import { IHostService } from '../../../host/browser/host.js';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
@@ -83,6 +88,8 @@ import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
+
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
@@ -935,11 +942,15 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	throw new Error("Timed out waiting for Extension Host state");
 }
 
-function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, debug = new ProviderSink<IDebugConfigurationProvider>(), remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }): InstantiationService {
+function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, debug = new ProviderSink<IDebugConfigurationProvider>(), remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }, extensionApi?: IExtensionApi): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
 	services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
-	services.registerSingleton(IExtensionService, () => new TestExtensionService());
+	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi));
+	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None } as ITerminalProcessService);
+	services.registerInstance(ITerminalService, { ...Disposable.None, getProfiles: async () => [] } as unknown as ITerminalService);
+	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
+	services.registerInstance(ITerminalProfileResolverService, {} as ITerminalProfileResolverService);
 	services.registerInstance(IExtensionHostApi, api);
 	// These registrations exercise host callbacks without opening editor UI.
 	services.registerInstance(IEditorService, { openEditor: async () => assert.fail('Unexpected editor open') } as unknown as IEditorService);
@@ -1152,9 +1163,10 @@ test('Debug configuration callbacks receive the canonical folder and retire with
 	await assert.rejects(async () => provider.resolveDebugConfiguration!(folder, config, new AbortController().signal));
 });
 
-test('task discovery and debug phases activate only matching dormant extension owners', async () => {
+test('task discovery, debug and terminal profile phases activate only matching dormant extension owners', async () => {
 	for (const { declarations, ignored, event, expected } of [
 		{ declarations: ['onTaskType:build'], ignored: 'onTaskType:test', event: 'onTaskType', expected: { type: 'taskType', taskType: 'build' } },
+		{ declarations: ['onTerminalProfile:shell'], ignored: 'onTerminalProfile:other', event: 'onTerminalProfile:shell', expected: { type: 'terminalProfile', profileId: 'shell' } },
 		{ declarations: ['onTaskType'], ignored: 'onDebug', event: 'onTaskType', expected: { type: 'taskType', taskType: null } },
 		{ declarations: ['onDebugResolve:node'], ignored: 'onDebugResolve:python', event: 'onDebugResolve:node', expected: { type: 'debug', phase: 'resolveConfiguration', debugType: 'node' } },
 		{ declarations: ['onDebugInitialConfigurations'], ignored: 'onDebugDynamicConfigurations', event: 'onDebugInitialConfigurations', expected: { type: 'debug', phase: 'initialConfigurations', debugType: null } },
@@ -1414,4 +1426,34 @@ test('Remote extension cancellation and revocation cannot open a window', async 
 	pendingResult.resolve({ connectionName: 'build' });
 	await assert.rejects(pending);
 	await assert.rejects(api.clientHandler!({ operation: 'openRemoteConnection', authority: 'ssh+build' }, new AbortController().signal, source), /revoked/);
+});
+
+
+suite('Extension terminal profile registration lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('commits the exact package provider into TerminalProfileService and retires it with the host', async () => {
+		const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'terminalProfileProvider', registrationId: 'shell', profileId: 'shell', title: 'Extension Shell' }]));
+		api.invocationResult = Promise.resolve({ options: null });
+		using languages = new LanguageFeaturesService();
+		const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0', contributes: { terminalProfiles: [{ id: 'shell', title: 'Extension Shell', icon: 'terminal-git-bash' }] } });
+		const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
+		const extensionApi: IExtensionApi = {
+			resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'user', manifestSha256, packageSha256: DIGEST, manifestJson }] }),
+		};
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+		const extensions = services.get(IExtensionService);
+		await extensions.start();
+		using host = services.createInstance(AppServerExtensionHostService, CommandsRegistry, 1_000);
+		await host.start();
+		const profiles = services.get(ITerminalProfileService);
+		assert.equal(profiles.contributedProfiles.find(profile => profile.id === 'shell')?.options?.icon?.id, 'terminal-git-bash');
+		await profiles.getContributedProfileProvider('acme.demo', 'shell')!.createContributedTerminalProfile({});
+		assert.equal(api.invocations.at(-1)?.operation, 'createTerminalProfile');
+		assert.equal(api.invocations.at(-1)?.registrationId, 'shell');
+		api.emitConnection('stopped');
+		await assert.rejects(profiles.getContributedProfileProvider('acme.demo', 'shell')!.createContributedTerminalProfile({}));
+		assert.equal(api.invocations.length, 1);
+	});
 });

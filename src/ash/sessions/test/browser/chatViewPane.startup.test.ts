@@ -200,6 +200,8 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		setModelVisible: () => pending as Promise<void>,
 		listSlashCommands: () => pending as Promise<readonly SlashCommandDefinition[]>,
 		readCheckpoints: async () => [],
+		readHistoryState: async () => ({ sequence: 0, canUndo: false, canRedo: false }),
+		moveHistory: async () => { throw new Error('History is not configured in this fixture'); },
 		restoreCheckpoint: async () => { throw new Error('Checkpoint restore is not configured in this fixture'); },
 		readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<ThreadRead>,
 		subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) => pending as Promise<ThreadSubscription>,

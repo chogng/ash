@@ -22,7 +22,7 @@ pub struct TerminalProfileListResult {
     pub profiles: Vec<TerminalProfile>,
 }
 
-/// Reads selected values from the authorized execution environment without spawning a process.
+/// Reads named values or the filtered execution environment without spawning a process.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalEnvironmentReadParams {
@@ -41,7 +41,7 @@ pub struct TerminalEnvironmentReadResult {
     pub values: std::collections::BTreeMap<String, String>,
 }
 
-/// Selects either the server default or one previously listed authorized profile.
+/// Selects the server default, a discovered profile, or an execution-host-validated custom shell.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type", deny_unknown_fields)]
 pub enum TerminalProfileSelection {
@@ -411,5 +411,25 @@ mod tests {
             )
             .is_err()
         );
+        let request: TerminalEnvironmentReadParams =
+            serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(request.names.is_none());
+        assert_eq!(
+            serde_json::to_value(request).unwrap(),
+            serde_json::json!({})
+        );
+    }
+
+    #[test]
+    fn terminal_profile_resolution_preserves_candidates_and_literal_arguments() {
+        let value = serde_json::json!({
+            "dirId": "workspace",
+            "profile": {"type": "custom", "name": "Custom shell", "path": ["/missing/shell", "/bin/sh"], "args": ["with spaces", "literal;$HOME"]}
+        });
+        let request: TerminalProfileResolveParams = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), value);
+        assert!(serde_json::from_value::<TerminalProfileResolveParams>(serde_json::json!({
+            "profile": {"type": "custom", "name": "Custom shell", "path": ["/bin/sh"], "args": [], "execution": {"type": "process"}}
+        })).is_err());
     }
 }

@@ -1011,6 +1011,15 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "resolveDebugConfiguration"
                 | "resolveDebugConfigurationWithSubstitutedVariables"
         ),
+        RegistrationKind::TerminalProfileProvider { .. } => matches!(
+            operation,
+            "createTerminalProfile"
+                | "openTaskTerminal"
+                | "readTaskTerminal"
+                | "inputTaskTerminal"
+                | "resizeTaskTerminal"
+                | "closeTaskTerminal"
+        ),
         RegistrationKind::TaskProvider { .. } => matches!(
             operation,
             "provideTasks"

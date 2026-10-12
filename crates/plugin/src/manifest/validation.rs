@@ -309,7 +309,8 @@ fn validate_activation_event(
         EditorExtensionActivationEvent::OnTaskType { task_type } => {
             validate_activation_selector(task_type, &extension.id)
         }
-        EditorExtensionActivationEvent::OnTestProfile { profile_id } => {
+        EditorExtensionActivationEvent::OnTestProfile { profile_id }
+        | EditorExtensionActivationEvent::OnTerminalProfile { profile_id } => {
             validate_activation_selector(profile_id, &extension.id)
         }
     }

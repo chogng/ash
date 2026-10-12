@@ -2029,7 +2029,9 @@ use crate::protocol::terminal::TerminalProcessReady;
 use crate::protocol::terminal::TerminalProfile;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfileListResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfileResolveParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfileResolveResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfileSelection;
@@ -2322,6 +2324,7 @@ use ash_protocol::FrozenAgentDefinitionRef;
 use ash_protocol::FrozenSkillActivation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::HistoryPrefixRef;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ThreadHistoryState;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::HookEvent;

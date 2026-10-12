@@ -1,6 +1,7 @@
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { Event } from '../../../base/common/event.js';
 import type { OperatingSystem } from '../../../base/common/platform.js';
+import type { ThemeIcon } from '../../../base/common/themables.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type TerminalProcessConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
@@ -20,6 +21,40 @@ export interface ITerminalResolvedProfile {
 	readonly profile: ITerminalProcessProfile;
 	readonly executable: string;
 	readonly args: readonly string[];
+}
+
+export interface ITerminalProfileObject {
+	readonly path?: string | readonly string[];
+	readonly source?: 'PowerShell' | 'Git Bash';
+	readonly args?: readonly string[];
+	readonly env?: Readonly<Record<string, string | null>>;
+	readonly overrideName?: boolean;
+	readonly icon?: string;
+	readonly color?: string;
+}
+
+/** A configured or execution-host-discovered shell, before invocation variables are resolved. */
+export interface ITerminalProfile extends ITerminalProcessProfile {
+	readonly profileName: string;
+	readonly path: string | readonly string[];
+	readonly args?: readonly string[];
+	readonly env?: Readonly<Record<string, string | null>>;
+	readonly overrideName?: boolean;
+	readonly icon?: ThemeIcon;
+	readonly color?: string;
+	readonly isAutoDetected?: boolean;
+}
+
+export interface ICreateContributedTerminalProfileOptions {
+	readonly icon?: ThemeIcon;
+	readonly color?: string;
+}
+
+export interface IExtensionTerminalProfile {
+	readonly extensionIdentifier: string;
+	readonly id: string;
+	readonly title: string;
+	readonly options?: ICreateContributedTerminalProfileOptions;
 }
 
 export type TerminalProcessExecution =
@@ -129,9 +164,11 @@ export type WaitOnExitValue = boolean | string | ((exitCode: number) => string);
 
 /** Launch information shared with providers that supply their own terminal output. */
 export interface IShellLaunchConfig {
-	executable?: string;
+	executable?: string | readonly string[];
 	args?: readonly string[];
-	readonly name?: string;
+	name?: string;
+	icon?: ThemeIcon;
+	color?: string;
 	readonly isFeatureTerminal?: boolean;
 	/** Displayed before process output; strings include a trailing newline. */
 	readonly initialText?: string | { text: string; trailingNewLine: boolean; };

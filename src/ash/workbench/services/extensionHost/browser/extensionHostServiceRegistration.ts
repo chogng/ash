@@ -1,3 +1,5 @@
+import { ITerminalService } from '../../../contrib/terminal/browser/terminal.js';
+import { ITerminalProfileService, ITerminalProfileResolverService } from '../../../contrib/terminal/common/terminal.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../extensions/common/extensionService.js';
@@ -16,7 +18,7 @@ import { IViewsService } from '../../views/common/viewsService.js';
 
 registerWorkbenchServiceContribution({
 	service: IExtensionHostService,
-	dependencies: [IConfigurationService, IWorkspaceContextService, IExtensionService, IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService, IQuickInputService, IViewsService],
+	dependencies: [ITerminalService, ITerminalProfileService, ITerminalProfileResolverService, IConfigurationService, IWorkspaceContextService, IExtensionService, IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService, IQuickInputService, IViewsService],
 	install: context => {
 		const service = context.register(context.container.createInstance(AppServerExtensionHostService, CommandsRegistry, 30_000));
 		const ready = service.start();

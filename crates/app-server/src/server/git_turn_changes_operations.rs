@@ -362,6 +362,10 @@ impl AppServer {
                     .map_err(|error| operation_error(error.to_string()))
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let visible = runtime.list(&params.session_id, &params.thread_id).map_err(operation_error)?;
+        if records.iter().any(|record| !visible.iter().any(|active| active.change_set_id == record.change_set_id)) {
+            return Err(operation_error("commit selection is outside the current Thread history".into()));
+        }
         for record in &mut records {
             record.commit_state = CommitState::Queued;
             record.revision += 1;

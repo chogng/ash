@@ -1003,3 +1003,52 @@ fn remote_authorities_are_bounded_and_credentials_are_not_part_of_the_request() 
         .is_err()
     );
 }
+
+#[test]
+fn terminal_profile_registration_requires_capability_and_unique_bounded_identity() {
+    let mut activation = activation();
+    let registration = json!({"registrationId":"profile", "kind":"terminalProfileProvider", "profileId":"acme.shell", "title":"Acme shell"});
+    let request = ExtensionHostRequest {
+        context: RequestContext::new(1, 1, 1),
+        request: HostRequestKind::Activate(activation.clone()),
+    };
+    assert_command_registration_rejected(&request, registration.clone());
+    activation.capabilities = vec![ExtensionCapability::TerminalProfileProvider];
+    let request = ExtensionHostRequest {
+        context: request.context,
+        request: HostRequestKind::Activate(activation),
+    };
+    let descriptor: RegistrationDescriptor = serde_json::from_value(registration.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&descriptor).unwrap(), registration);
+    let response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![descriptor.clone()],
+        })),
+    };
+    response
+        .validate_for(&request, &ProtocolLimits::default())
+        .unwrap();
+    let mut duplicate = descriptor.clone();
+    duplicate.registration_id = "second-registration".into();
+    let duplicate_response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![descriptor, duplicate],
+        })),
+    };
+    assert!(
+        duplicate_response
+            .validate_for(&request, &ProtocolLimits::default())
+            .is_err()
+    );
+    let mut invalid = registration.clone();
+    invalid["profileId"] = json!("invalid/profile");
+    assert_command_registration_rejected(&request, invalid);
+    let mut invalid = registration.clone();
+    invalid["title"] = json!("x".repeat(513));
+    assert_command_registration_rejected(&request, invalid);
+    let mut invalid = registration;
+    invalid["shellPath"] = json!("/untrusted/shell");
+    assert!(serde_json::from_value::<RegistrationDescriptor>(invalid).is_err());
+}

@@ -65,7 +65,7 @@
     "chatEditing.stale": "修改内容已变化，请重新审核。",
     "chatEditing.verbosity": "Agent 修改无障碍帮助",
     "chatEditing.verbosityDescription": "审核 Agent 修改时提示如何打开无障碍帮助。",
-    "chatEditing.help": "审阅智能体更改\n使用左右方向键在工具栏操作之间移动。上一处和下一处可定位每个更改。可以接受或拒绝当前更改或文件。文件操作作为一个原子更改集审阅。共享文件更改会影响所有参与编辑的对话。接受全部和拒绝全部仅适用于所选对话，共享更改需要单独审阅。出现倒计时时，可以取消自动接受以继续审阅。使用“恢复检查点”可在记录的消息边界创建新对话和目录。重新打开工作区后会恢复待审阅更改，自动接受仍保持暂停。按 Escape 返回编辑器。使用“审阅智能体更改”命令选择对话并审阅已关闭或删除的文件。",
+    "chatEditing.help": "审阅智能体更改\n使用左右方向键在工具栏操作之间移动。上一处和下一处可定位每个更改。可以接受或拒绝当前更改或文件。文件操作作为一个原子更改集审阅。共享文件更改会影响所有参与编辑的对话。接受全部和拒绝全部仅适用于所选对话，共享更改需要单独审阅。出现倒计时时，可以取消自动接受以继续审阅。使用“恢复检查点”可在记录的消息边界创建新对话和目录，“文件”会随之切换。“撤销上一个请求”和“重做上一个请求”可移动当前对话历史并恢复文件。请先保存尚未保存的文件。发送新请求会清空重做历史。重新打开工作区后会恢复待审阅更改，自动接受仍保持暂停。按 Escape 返回编辑器。使用“审阅智能体更改”命令选择对话并审阅已关闭或删除的文件。",
     "network.http.title": "HTTP 兼容模式",
     "network.verbosity": "网络设置无障碍帮助",
     "network.verbosityDescription": "在网络设置中提示如何打开无障碍帮助。",
@@ -661,7 +661,14 @@
     "chatEditing.storageFailed": "无法恢复或保存智能体审阅：{0}",
     "chatEditing.noRecovery": "此文件操作没有恢复快照。请在关闭窗口前完成审阅。",
     "chatEditing.recoveryConflict": "智能体编辑后有文件发生了更改。其更改已保留；请先审阅文件，再拒绝此更改集。",
-    "chatEditing.restoreCancelled": "未恢复此更改集。它仍可供审阅。"
+    "chatEditing.restoreCancelled": "未恢复此更改集。它仍可供审阅。",
+    "chatEditing.history.undo": "对话：撤销上一个请求",
+    "chatEditing.history.redo": "对话：重做上一个请求",
+    "chatEditing.history.unavailable": "没有可执行此历史操作的请求。请等待当前请求完成。",
+    "chatEditing.history.dirty": "更改对话历史前，请先保存或还原此对话目录中尚未保存的文件。",
+    "chatEditing.history.conflict": "记录检查点后文件发生了更改。其更改已保留。请先审阅文件，再更改此对话历史。",
+    "chatEditing.history.undone": "已撤销上一个请求及其文件更改。",
+    "chatEditing.history.redone": "已恢复请求及其文件更改。"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

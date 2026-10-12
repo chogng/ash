@@ -291,9 +291,16 @@ impl GitTurnChangesRuntime {
                 .map_err(|error| error.to_string())?;
             self.publish(&refreshed);
         }
-        self.store
+        let visible = self.threads.read_thread(thread_id).map_err(|error| error.to_string())?.turns.into_iter().map(|turn| turn.turn_id).collect::<std::collections::BTreeSet<_>>();
+        Ok(self.store
             .list_for_thread(thread_id)
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?.into_iter().filter(|record| visible.contains(&record.turn_id)).collect())
+    }
+
+    pub(super) fn history_files_ready(&self, thread: &ThreadId) -> Result<bool, String> {
+        Ok(self.store.list_for_thread(thread).map_err(|error| error.to_string())?.iter().all(|record| {
+            record.capture_state != CaptureState::Open && !matches!(record.commit_state, CommitState::Queued | CommitState::Committing)
+        }))
     }
 
     pub(super) fn retry_message(

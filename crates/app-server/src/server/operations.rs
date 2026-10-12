@@ -1072,7 +1072,19 @@ impl AppServer {
     pub(super) fn thread_history_state(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::session::MessageCheckpointsParams = decode(params)?;
         self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
-        result(&self.agent_runtime().thread_history_state(&params.thread_id).map_err(core_error)?)
+        let has_directory = self.session_view(&params.session_id)?.execution_target.is_some();
+        let mut state = self.agent_runtime().thread_history_state(&params.thread_id).map_err(core_error)?;
+        if let Some(runtime) = &self.git_turn_changes {
+            if runtime.history_restoration_pending(&params.thread_id).map_err(|_| RpcError::new(-32010, AppServerErrorName::CoreOperationFailed))? {
+                return Err(core_error(core_api::CoreError::WorkspaceCheckpointConflict));
+            }
+            if (has_directory && runtime.binding(&params.thread_id).is_none())
+                || !runtime.history_files_ready(&params.thread_id).map_err(|_| RpcError::new(-32010, ash_app_server_protocol::protocol::error::AppServerErrorName::CoreOperationFailed))? {
+                state.can_undo = false;
+                state.can_redo = false;
+            }
+        }
+        result(&state)
     }
 
     fn fork_session_thread_request(

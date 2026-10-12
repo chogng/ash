@@ -53,8 +53,9 @@ import type { ApprovalMode } from '../../../../platform/agentHost/common/approva
 
 export type { ModelCatalogEntry } from "./modelCatalog.js";
 
-import type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint } from '../../../../platform/agentHost/common/agentService.js';
+import type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint, AgentThreadHistoryState } from '../../../../platform/agentHost/common/agentService.js';
 export type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint } from '../../../../platform/agentHost/common/agentService.js';
+export { AgentThreadHistoryConflictError as ChatHistoryConflictError } from '../../../../platform/agentHost/common/agentService.js';
 
 /** Identifies the reply that produced a document edit, independently of the visible Chat. */
 export interface ChatEditSource {
@@ -216,6 +217,8 @@ export interface TurnChangesUpdate {
 
 /** Frontend Chat operations, catalogs, and Thread update lifecycle. */
 export interface IChatService {
+	readHistoryState(sessionId: SessionId, threadId: ThreadId): Promise<AgentThreadHistoryState>;
+	moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; }): Promise<void>;
 	readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]>;
 	/** Creates an independent Thread and directory from the backend's immutable checkpoint. */
 	restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }>;

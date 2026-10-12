@@ -94,6 +94,14 @@ export class ChatService extends Disposable implements IChatService {
 		return this.threadApi.checkpoints({ sessionId, threadId });
 	}
 
+	async readHistoryState(sessionId: SessionId, threadId: ThreadId) {
+		return this.threadApi.readHistoryState({ sessionId, threadId });
+	}
+
+	async moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; }): Promise<void> {
+		await this.threadApi.moveHistory({ ...options, commandId: createUuid() });
+	}
+
 	async restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }> {
 		return this.threadApi.restoreMessage({ ...options, commandId: createUuid() });
 	}

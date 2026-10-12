@@ -82,7 +82,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 				'',
 				{ pid: -1, cwd: '' },
 				name,
-				{ profileId: `embedder-${instanceNumber}`, title: name, isDefault: false },
+				{ profileId: `embedder-${instanceNumber}`, title: name, isDefault: false, icon: options.icon ?? options.config.icon, color: options.color ?? options.config.color },
 				'connectionOwned',
 				name,
 				() => this.connectionState,
@@ -124,6 +124,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		const execution = options.execution === undefined ? undefined : Object.freeze(options.execution.type === 'process'
 			? { ...options.execution, args: Object.freeze([...options.execution.args]) }
 			: { ...options.execution });
+		const profile = options.profile.type === 'custom' ? Object.freeze({ ...options.profile, path: Object.freeze([...options.profile.path]), args: Object.freeze([...options.profile.args]) }) : Object.freeze({ ...options.profile });
 		const launch = Object.freeze({
 			...(environment === undefined ? {} : { env: environment }),
 			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
@@ -133,7 +134,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			...processWorkspaceFolder(processWorkspaceFolderId),
 			rows: options.dimensions.rows,
 			cols: options.dimensions.cols,
-			profile: options.profile,
+			profile,
 			...(environment === undefined ? {} : { env: environment }),
 			...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
 			...(execution === undefined ? {} : { execution }),
@@ -152,14 +153,14 @@ export class TerminalService extends Disposable implements ITerminalService {
 			created.terminalId,
 			created.ready,
 			options.title ?? terminalProfileTitle(created.profile),
-			created.profile,
+			{ ...created.profile, icon: options.icon, color: options.color },
 			created.connectionPersistence,
 			options.title,
 			() => this.connectionState,
 			() => this.removeInstance(instance),
 			() => this._onDidChangeInstances.fire(),
 			undefined,
-			launch,
+			Object.freeze({ ...launch, profile: profile.type === 'custom' ? profile : { type: 'profile' as const, profileId: created.profile.profileId } }),
 			options.initialText,
 			options.waitOnExit,
 			options.dimensions,

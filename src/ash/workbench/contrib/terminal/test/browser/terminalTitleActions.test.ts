@@ -1,3 +1,5 @@
+import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
+import { ITerminalProfileResolverService } from '../../common/terminal.js';
 import { ITerminalProfileService } from '../../common/terminal.js';
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
@@ -254,7 +256,9 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	});
 	services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None } as ITerminalProcessService);
+	services.registerInstance(IExtensionService, { terminalProfiles: [], onDidChange: Event.None } as unknown as IExtensionService);
 	services.registerInstance(ITerminalProfileService, resources.add(services.createInstance(TerminalProfileService)));
+	services.registerInstance(ITerminalProfileResolverService, { resolveShellLaunchConfig: async () => { throw new Error('Unexpected shell resolution'); } } as unknown as ITerminalProfileResolverService);
 	services.registerInstance(IWorkbenchLayoutService, resources.add(services.createInstance(WorkbenchLayout, browserEnvironment.window.document.body, { initialDimension: new Dimension(800, 600) })));
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as import('../../../../services/preferences/common/preferences.js').IPreferencesService);
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));

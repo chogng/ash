@@ -237,10 +237,22 @@ function validateNode(node: JsonValueNode, schema: JsonSchema, issues: JsonSchem
 		seen.add(property.key);
 		if (!property.valueNode) continue;
 		const propertySchema = schema.properties?.[property.key];
-		if (propertySchema) {
-			validateNode(property.valueNode, propertySchema, issues, rootSchema);
-			continue;
+		if (propertySchema) validateNode(property.valueNode, propertySchema, issues, rootSchema);
+		let matched = propertySchema !== undefined;
+		for (const [expression, patternSchema] of Object.entries(schema.patternProperties ?? {})) {
+			let pattern: RegExp;
+			try {
+				pattern = new RegExp(expression, 'u');
+			} catch {
+				issues.push(issue('Schema contains an invalid regular expression', property.keyNode));
+				continue;
+			}
+			if (pattern.test(property.key)) {
+				matched = true;
+				validateNode(property.valueNode, patternSchema, issues, rootSchema);
+			}
 		}
+		if (matched) continue;
 		if (schema.additionalProperties === false) issues.push(issue(`Property '${property.key}' is not permitted`, property.keyNode));
 		if (typeof schema.additionalProperties === 'object') validateNode(property.valueNode, schema.additionalProperties, issues, rootSchema);
 	}

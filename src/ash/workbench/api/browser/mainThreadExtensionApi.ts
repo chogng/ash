@@ -1,3 +1,4 @@
+import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration } from './mainThreadTerminalService.js';
 import { MainThreadLocalization } from './mainThreadLocalization.js';
 import { extensionMenuId } from '../../services/extensions/common/extensionMenus.js';
 import { MainThreadSCM } from './mainThreadSCM.js';
@@ -67,6 +68,7 @@ interface ExtensionContributionSet {
 	readonly debugTrackers: readonly IDebugAdapterTrackerFactory[];
 	readonly tests: readonly TestProfileProvider[];
 	readonly remoteResolvers: readonly RemoteConnectionResolver[];
+	readonly terminalProfiles: readonly ExtensionTerminalProfileRegistration[];
 	readonly issues: readonly ExtensionApiIssue[];
 	readonly controller: AbortController;
 }
@@ -116,6 +118,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly backendApi: MainThreadExtensionBackend;
 	private editorsApi: MainThreadEditors | undefined;
 	private readonly taskApi: MainThreadTask;
+	private readonly terminalApi: MainThreadTerminalService;
 	private readonly debugApi: MainThreadDebugService;
 	private readonly remoteSources = new Map<string, ExtensionHostRuntime>();
 
@@ -146,6 +149,7 @@ export class MainThreadExtensionApi extends Disposable {
 		super();
 		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
+		this.terminalApi = this._register(instantiation.createInstance(MainThreadTerminalService));
 		this.configurationApi = this._register(instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.workspaceApi = this._register(instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		// Host adapters validate callback messages; editor contracts stay in the Workbench.
@@ -355,6 +359,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.configurationApi.clear();
 		this.workspaceApi.clear();
 		this.taskApi.clear();
+		this.terminalApi.replaceProfiles([]);
 		this.debugApi.clear();
 		this.diagnostics.clear();
 		this.statusbar.clear();
@@ -394,6 +399,7 @@ export class MainThreadExtensionApi extends Disposable {
 			debugTrackers: Object.freeze(contributions.flatMap(entry => entry.debugTrackers)),
 			tests: Object.freeze(contributions.flatMap(entry => entry.tests)),
 			remoteResolvers: Object.freeze(contributions.flatMap(entry => entry.remoteResolvers)),
+			terminalProfiles: Object.freeze(contributions.flatMap(entry => entry.terminalProfiles)),
 			issues: Object.freeze(contributions.flatMap(entry => entry.issues)),
 		});
 	}
@@ -416,6 +422,7 @@ export class MainThreadExtensionApi extends Disposable {
 		const debugTrackers: IDebugAdapterTrackerFactory[] = [];
 		const tests: TestProfileProvider[] = [];
 		const remoteResolvers: RemoteConnectionResolver[] = [];
+		const terminalProfiles: ExtensionTerminalProfileRegistration[] = [];
 		const issues: ExtensionApiIssue[] = [];
 		const taskProviders = new Map<string, Map<string, string>>();
 		for (const runtime of snapshot.extensions) {
@@ -507,6 +514,10 @@ export class MainThreadExtensionApi extends Disposable {
 					if (unsupported.length > 0) issues.push(unsupportedLanguageIssue(runtime, registration, unsupported));
 					continue;
 				}
+				if (registration.kind === 'terminalProfileProvider') {
+					terminalProfiles.push({ runtimeId: runtime.id, packageDigest: runtime.packageDigest, profileId: registration.profileId, title: registration.title, invoke });
+					continue;
+				}
 				if (registration.kind === "taskProvider") {
 					tasks.push(createExtensionHostTaskProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace, registration.taskType));
 					continue;
@@ -531,7 +542,7 @@ export class MainThreadExtensionApi extends Disposable {
 				debugAdapters.push(createExtensionHostDebugAdapterFactory(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace));
 			}
 		}
-		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), debugAdapters: Object.freeze(debugAdapters), debugConfigurations: Object.freeze(debugConfigurations), debugTrackers: Object.freeze(debugTrackers), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), issues: Object.freeze(issues), controller });
+		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), debugAdapters: Object.freeze(debugAdapters), debugConfigurations: Object.freeze(debugConfigurations), debugTrackers: Object.freeze(debugTrackers), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), terminalProfiles: Object.freeze(terminalProfiles), issues: Object.freeze(issues), controller });
 	}
 
 	private registrationInvoker(runtime: ExtensionHostRuntime, registration: ExtensionHostRegistration, generationSignal: AbortSignal): ExtensionHostProviderInvoker {
@@ -575,6 +586,7 @@ export class MainThreadExtensionApi extends Disposable {
 			debugTrackers: !sameContributions(previous?.debugTrackers, next.debugTrackers),
 			tests: !sameContributions(previous?.tests, next.tests),
 			remoteResolvers: !sameContributions(previous?.remoteResolvers, next.remoteResolvers),
+			terminalProfiles: !sameContributions(previous?.terminalProfiles, next.terminalProfiles),
 		};
 		try {
 			if (changed.commands) this.commandRegistration.replace(next.commands);
@@ -585,6 +597,7 @@ export class MainThreadExtensionApi extends Disposable {
 			if (changed.debugTrackers) this.debugTrackerRegistration.replace(next.debugTrackers);
 			if (changed.tests) this.testRegistration.replace(next.tests);
 			if (changed.remoteResolvers) this.remoteRegistration.replace(next.remoteResolvers);
+			if (changed.terminalProfiles) this.terminalApi.replaceProfiles(next.terminalProfiles);
 		} catch (error) {
 			try {
 				if (changed.commands) this.commandRegistration.replace(previous?.commands ?? []);
@@ -595,6 +608,7 @@ export class MainThreadExtensionApi extends Disposable {
 				if (changed.debugTrackers) this.debugTrackerRegistration.replace(previous?.debugTrackers ?? []);
 				if (changed.tests) this.testRegistration.replace(previous?.tests ?? []);
 				if (changed.remoteResolvers) this.remoteRegistration.replace(previous?.remoteResolvers ?? []);
+				if (changed.terminalProfiles) this.terminalApi.replaceProfiles(previous?.terminalProfiles ?? []);
 				this.activeContributions = previous;
 			} catch (rollbackError) {
 				this.commandRegistration.replace([]);
@@ -606,6 +620,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.debugTrackerRegistration.replace([]);
 				this.testRegistration.replace([]);
 				this.remoteRegistration.replace([]);
+				this.terminalApi.replaceProfiles([]);
 				this.activeContributions = undefined;
 				this.retireContributions(previous, undefined, rollbackError);
 				throw new AggregateError([error, rollbackError], "Extension Host contribution commit and rollback both failed");
@@ -635,6 +650,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.debugTrackerRegistration.replace([]);
 		this.testRegistration.replace([]);
 		this.remoteRegistration.replace([]);
+		this.terminalApi.replaceProfiles([]);
 		this.remoteSources.clear();
 		this.retireContributions(active, undefined, "Extension Host authority was revoked");
 	}

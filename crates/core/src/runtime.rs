@@ -711,10 +711,16 @@ impl AgentRuntime for Runtime<'_> {
     ) -> Result<Vec<MessageCheckpoint>, CoreError> {
         self.threads.message_checkpoints(thread_id)
     }
-    fn move_thread_history(&self, request: core_api::MoveThreadHistoryRequest) -> Result<ThreadView, CoreError> {
+    fn move_thread_history(
+        &self,
+        request: core_api::MoveThreadHistoryRequest,
+    ) -> Result<ThreadView, CoreError> {
         self.threads.move_thread_history(request).map(Into::into)
     }
-    fn thread_history_state(&self, thread_id: &ThreadId) -> Result<ash_protocol::ThreadHistoryState, CoreError> {
+    fn thread_history_state(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<ash_protocol::ThreadHistoryState, CoreError> {
         self.threads.thread_history_state(thread_id)
     }
     fn restore_session(&self, session_id: &SessionId) -> Result<ThreadView, CoreError> {

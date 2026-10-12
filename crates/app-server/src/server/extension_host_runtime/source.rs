@@ -157,6 +157,7 @@ pub(in crate::server) enum ActivationEvent {
     Command(String),
     Language(String),
     TaskType(Option<String>),
+    TerminalProfile(String),
     Debug {
         phase: DebugActivationPhase,
         debug_type: Option<String>,
@@ -198,6 +199,10 @@ impl ActivationPlan {
                 .events
                 .iter()
                 .any(|event| event == "onLanguage" || event == &format!("onLanguage:{language}")),
+            ActivationEvent::TerminalProfile(id) => self.events.iter().any(|event| {
+                event == &format!("onTerminalProfile:{id}")
+                    || event == "onDemand:terminalProfileProvider"
+            }),
             ActivationEvent::TaskType(task_type) => self.events.iter().any(|event| {
                 event == "onTaskType"
                     || event == "onDemand:taskProvider"
@@ -424,6 +429,9 @@ fn activation_event(event: &EditorExtensionActivationEvent) -> String {
         EditorExtensionActivationEvent::OnDebugType { debug_type } => {
             format!("onDebugType:{debug_type}")
         }
+        EditorExtensionActivationEvent::OnTerminalProfile { profile_id } => {
+            format!("onTerminalProfile:{profile_id}")
+        }
         EditorExtensionActivationEvent::OnTaskType { task_type } => {
             format!("onTaskType:{task_type}")
         }
@@ -444,6 +452,9 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         EditorExtensionCapability::CustomTextEditor => ExtensionCapability::CustomTextEditor,
         EditorExtensionCapability::DebugAdapter => ExtensionCapability::DebugAdapter,
         EditorExtensionCapability::TaskProvider => ExtensionCapability::TaskProvider,
+        EditorExtensionCapability::TerminalProfileProvider => {
+            ExtensionCapability::TerminalProfileProvider
+        }
         EditorExtensionCapability::TestProfileProvider => ExtensionCapability::TestProfileProvider,
         EditorExtensionCapability::DataChannel => ExtensionCapability::DataChannel,
         EditorExtensionCapability::LinkPresentationProvider => {
@@ -462,6 +473,7 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::CustomTextEditor => "customTextEditor",
         EditorExtensionCapability::DebugAdapter => "debugAdapter",
         EditorExtensionCapability::TaskProvider => "taskProvider",
+        EditorExtensionCapability::TerminalProfileProvider => "terminalProfileProvider",
         EditorExtensionCapability::TestProfileProvider => "testProfileProvider",
         EditorExtensionCapability::DataChannel => "dataChannel",
         EditorExtensionCapability::LinkPresentationProvider => "linkPresentationProvider",

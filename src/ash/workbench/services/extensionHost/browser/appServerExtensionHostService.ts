@@ -304,6 +304,10 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 }
 
 function selectActivationEvent(declarations: readonly string[], event: string): ExtensionHostActivationEvent | undefined {
+	if (event.startsWith('onTerminalProfile:')) {
+		const profileId = event.slice('onTerminalProfile:'.length);
+		if (declarations.includes(event) || declarations.includes('onDemand:terminalProfileProvider')) return { type: 'terminalProfile', profileId };
+	}
 	if (event === 'onTaskType' || event.startsWith('onTaskType:')) {
 		const requested = event === 'onTaskType' ? undefined : event.slice('onTaskType:'.length);
 		const declared = declarations.find(value => value.startsWith('onTaskType:'));

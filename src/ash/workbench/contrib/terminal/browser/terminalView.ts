@@ -4,7 +4,8 @@ import {
 	TerminalActiveInstanceInTitleContext,
 	TerminalActiveInstanceStateContext,
 } from '../common/terminalContextKey.js';
-import { ITerminalProfileService, TerminalCommandId } from '../common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService, TerminalCommandId } from '../common/terminal.js';
+import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { terminalProfileIcon } from "./terminalIcon.js";
 import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
@@ -53,14 +54,16 @@ export class TerminalViewPane extends ViewPane {
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@ITerminalProfileService private readonly profileService: ITerminalProfileService,
+		@ITerminalProfileResolverService private readonly profileResolver: ITerminalProfileResolverService,
+		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 	) {
 		super(container, options);
 		this.terminalService = terminalService;
 		this.element.classList.add("ash-terminal-view");
 		this.setHeaderVisible(false);
 		this.titleActions = this._register(instantiation.createInstance(TerminalTitleActions, this.headerActionsElement));
-		this.titleActions.setProfiles(profileService.availableProfiles);
-		this._register(profileService.onDidChangeAvailableProfiles(profiles => this.titleActions.setProfiles(profiles)));
+		this.updateProfiles();
+		this._register(profileService.onDidChangeAvailableProfiles(() => this.updateProfiles()));
 
 		this.contentElement.classList.add("ash-terminal-content");
 		this.statusElement = h(container.ownerDocument, "div");
@@ -149,10 +152,10 @@ export class TerminalViewPane extends ViewPane {
 		try {
 			await this.profileService.refreshAvailableProfiles();
 			if (this.isDisposed) return;
-			this.titleActions.setProfiles(this.profileService.availableProfiles);
+			this.updateProfiles();
 		} catch {
 			if (this.isDisposed) return;
-			this.titleActions.setProfiles(this.profileService.availableProfiles);
+			this.updateProfiles();
 		} finally {
 			this.initializing = false;
 		}
@@ -176,11 +179,25 @@ export class TerminalViewPane extends ViewPane {
 			if (profileId === undefined) {
 				if (!this.profileService.availableProfiles.length) await this.profileService.refreshAvailableProfiles();
 				if (this.isDisposed) return;
-				profileId = this.profileService.getDefaultProfile()?.profileId;
 			}
+			const contributed = profileId === undefined ? await this.profileService.getContributedDefaultProfile({}) : this.profileService.contributedProfiles.find(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`);
+			if (contributed) {
+				const provider = this.profileService.getContributedProfileProvider(contributed.extensionIdentifier, contributed.id);
+				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', contributed.title));
+				await provider.createContributedTerminalProfile(contributed.options ?? {});
+				return;
+			}
+			const profile = profileId === undefined ? this.profileService.getDefaultProfile() : this.profileService.availableProfiles.find(profile => profile.profileId === profileId);
+			const os = this.processes.operatingSystem;
+			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
+			const shell: IShellLaunchConfig = profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color } : {};
+			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: this.workspaceContext.getWorkspace().folders[0]?.uri.authority || undefined });
+			if (this.isDisposed) return;
 			await this.terminalService.createTerminal({
 				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
-				profile: profileId ? { type: "profile", profileId } : { type: "default" },
+				title: profile?.overrideName ? profile.profileName : undefined,
+				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
+				env: shell.env, cwd: shell.cwd, icon: shell.icon, color: shell.color,
 			});
 		} catch (error) {
 			if (!this.isDisposed) {
@@ -194,6 +211,10 @@ export class TerminalViewPane extends ViewPane {
 				this.updateInstances();
 			}
 		}
+	}
+
+	private updateProfiles(): void {
+		this.titleActions.setProfiles([...this.profileService.availableProfiles, ...this.profileService.contributedProfiles.map(profile => ({ profileId: `extension:${profile.extensionIdentifier}/${profile.id}`, title: profile.title, isDefault: this.profileService.getDefaultProfileName() === profile.title }))]);
 	}
 
 	public async relaunchActive(): Promise<void> {

@@ -1,5 +1,5 @@
 import { createSCMApi } from './scm.js';
-import { languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource, ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError } from './host.mjs';
+import { languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, terminals as ashTerminals, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource, ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError } from './host.mjs';
 
 // This is the public editor contract inside the confined process. Editor models and UI
 // remain with the initiating client; this module owns only extension callback lifetimes.
@@ -1241,6 +1241,7 @@ export function createApi(configuration, initialization) {
 		editors: Object.freeze({ request: payload => request({ operation: 'editorOperation', payload }, 'value').then(result => result.value) }),
 	});
 	const api = contract('vscode', {
+		TerminalProfile: class TerminalProfile { constructor(options) { this.options = options; } },
 		ash: ashApi,
 		env: contract('env', { get language() { return windowFacts().language ?? 'en'; } }),
 		l10n: contract('l10n', {
@@ -1487,6 +1488,34 @@ export function createApi(configuration, initialization) {
 			},
 		}),
 		window: contract('window', {
+			registerTerminalProfileProvider(id, provider) {
+				const declaration = configuration.manifest?.contributes?.terminalProfiles?.find(profile => profile.id === id);
+				if (!declaration || typeof provider?.provideTerminalProfile !== 'function') throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
+				const handle = ashTerminals.registerTerminalProfileProvider(`vscode.terminalProfile.${++providerSequence}`, id, declaration.title, {
+					createTerminalProfile: context => invoke(async () => {
+						const profile = await provider.provideTerminalProfile(context.cancellationToken);
+						if (profile === undefined || profile === null) return undefined;
+						const options = profile.options;
+						if (!options || typeof options !== 'object') throw new TypeError('provideTerminalProfile must return a TerminalProfile');
+						const result = { name: options.name ?? declaration.title };
+						if (options.pty) result.pty = options.pty;
+						else {
+							if (options.shellPath !== undefined) {
+								if (typeof options.shellPath !== 'string' || !options.shellPath) throw new TypeError('Terminal profile shellPath must be a nonempty string');
+								result.shellPath = options.shellPath;
+							}
+							if (options.shellArgs !== undefined && !Array.isArray(options.shellArgs)) throw new TypeError('Terminal profile shellArgs must be an array');
+							if (options.shellArgs !== undefined) result.shellArgs = options.shellArgs;
+							if (options.cwd !== undefined) result.cwd = typeof options.cwd === 'string' ? options.cwd : options.cwd.fsPath;
+							if (options.env !== undefined) result.env = options.env;
+						}
+						if (options.iconPath?.id) result.icon = options.iconPath.id;
+						if (options.color?.id) result.color = options.color.id;
+						return result;
+					}),
+				});
+				return new Disposable(() => handle.dispose());
+			},
 			createOutputChannel,
 			get activeTextEditor() { return activeEditor; },
 			registerCustomEditorProvider,

@@ -1498,7 +1498,20 @@
     "prompt.skill.compatibility": "可选。运行环境要求，最多 500 个字符。",
     "prompt.skill.metadata": "可选。元数据名称到字符串值的映射。",
     "prompt.skill.allowedTools": "可选。以空格分隔的工具名称。工具执行仍遵循当前权限与工具目录。",
-    "prompt.skill.field": "Skill 字段"
+    "prompt.skill.field": "Skill 字段",
+    "terminal.profile.duplicate": "终端配置已注册：{0}",
+    "terminal.profile.providerUnavailable": "终端配置提供程序不可用：{0}",
+    "terminal.profile.invalidProviderResult": "终端配置提供程序的响应无效。",
+    "terminal.profile.agentHostShell": "Agent 宿主 Shell",
+    "terminal.profile.automationShell": "自动化 Shell",
+    "terminal.profile.shell": "Shell",
+    "terminal.profile.targetMismatch": "未选择请求的终端执行宿主。",
+    "terminal.profile.configurationDescription": "{0} 的终端配置。定义可执行文件路径、字面参数和环境变量覆盖。将已发现的配置设为 null 可隐藏它。",
+    "terminal.profile.environmentDescription": "{0} 上新终端的环境变量覆盖。null 会移除继承的变量。",
+    "terminal.profile.executionDescription": "{1} 上用于 {0} 的 Shell 配置。留空时使用交互式默认配置。",
+    "terminal.profile.cwdDescription": "新终端的起始目录。仍需通过执行授权。",
+    "terminal.accessibility.profiles": "“使用配置新建终端”会打开可搜索的列表，包含已发现、自定义和扩展配置。使用方向键和 Enter 选择，Escape 取消。“选择默认终端配置”应用于以后新建的终端。重新启动会保留原 Shell 配置。选择扩展配置时会激活其提供程序。",
+    "terminal.profile.invalidDeclaration": "终端配置声明无效。"
   },
   "ash.menu": {
     "file": "文件",
