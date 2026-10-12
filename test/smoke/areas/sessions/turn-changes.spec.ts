@@ -61,6 +61,13 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const a = await create('Selected files A', process.platform === 'win32' ? 'echo const value = 42;>main.ts & echo remaining A>remaining.txt' : "printf 'const value = 42;\\n' > main.ts; printf 'remaining A\\n' > remaining.txt");
 		const b = await create('Selected files B', process.platform === 'win32' ? 'echo separate B>other-session.txt' : "printf 'separate B\\n' > other-session.txt");
 		const page = await workbench.openAgentsWindow(target.kind);
+		await application.evaluate(({ BrowserWindow }) => {
+			const debug = globalThis as unknown as { ashChangesRendererExits: unknown[]; };
+			debug.ashChangesRendererExits = [];
+			for (const window of BrowserWindow.getAllWindows()) {
+				window.webContents.once('render-process-gone', (_event, details) => debug.ashChangesRendererExits.push(details));
+			}
+		});
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 		const open = async (name: string): Promise<void> => {
 			await page.locator('.ash-sessions-list-item').filter({ hasText: name }).click();
@@ -109,5 +116,8 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		expect(await git('show', 'HEAD:other-session.txt')).toBe('separate B');
 		expect(await git('ls-tree', '--name-only', 'HEAD')).not.toContain('remaining.txt');
 		expect(await git('rev-list', '--count', 'HEAD')).toBe('3');
+	} catch (error) {
+		console.log('Changes renderer exit', await application.evaluate(() => (globalThis as unknown as { ashChangesRendererExits: unknown[]; }).ashChangesRendererExits));
+		throw error;
 	} finally { client.dispose(); incoming.dispose(); closed.dispose(); await frames.close(); launcher.dispose(); }
 });

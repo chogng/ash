@@ -103,7 +103,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(IMenuService, menus ?? new MenuService(inputResources.add(new CommandService(services)), services.get(IContextKeyService)));
-	services.registerInstance(IContextMenuService, contextMenus ?? { showContextMenu: () => {} } as unknown as IContextMenuService);
+	services.registerInstance(IContextMenuService, contextMenus ?? { showContextMenu: () => { } } as unknown as IContextMenuService);
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
@@ -346,6 +346,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices);
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
+	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
@@ -560,10 +561,10 @@ test("Chat title and history switching retain conversations and drafts", async (
 		assert.ok(chatPane.querySelector(":scope > .ash-chat-input-part"));
 		const inputToolbar = chatPane.querySelector<HTMLElement>(".ash-chat-input-toolbars");
 		assert.equal(inputToolbar?.getAttribute("role"), "toolbar");
+		assert.ok(chatPane.querySelector(".ash-chat-secondary-input-toolbar [data-action-id='ash.chat.input.attach']"));
 		assert.deepEqual(
 			[...inputToolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map((item) => item.dataset.actionId),
 			[
-				"ash.chat.input.attach",
 				"ash.chat.input.mode",
 				"ash.chat.input.model",
 				"ash.chat.input.mic",
@@ -641,6 +642,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		return input;
 	});
 	typeChatText(dom.window, composerInputs[0], "First draft");
+	pane.addContext({ id: "first-context", kind: "file", name: "first.txt", resolve: async () => ({ name: "first.txt", content: "First context" }) });
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, false);
 	assert.equal(firstChatPane.querySelector("[data-action-id='ash.chat.input.voice']"), null);
 
@@ -655,17 +657,20 @@ test("Chat title and history switching retain conversations and drafts", async (
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	assert.equal(composerInputs[0]?.value, "First draft");
 	assert.equal(composerInputs[1]?.value, "Second draft");
+	assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ["first.txt"]);
 
 	assert.equal(title.querySelector('.ash-tab-close-action'), null);
 	assert.deepEqual(fake.stopRequests, []);
 	const pendingDraft = sessions.createUntitledSession();
 	const draftInput = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) textarea')!;
 	typeChatText(dom.window, draftInput, 'Unsent draft');
+	pane.addContext({ id: 'unsent-context', kind: 'file', name: 'draft.txt', resolve: async () => ({ name: 'draft.txt', content: 'Draft context' }) });
 	await chooseConversation(pane, dom, 1);
 	assert.equal(sessions.active?.session.sessionId, 'session-1');
 	await chooseConversation(pane, dom, 0);
 	assert.equal(sessions.activeUntitledSession?.untitledSessionId, pendingDraft.untitledSessionId);
 	assert.equal(draftInput.value, 'Unsent draft');
+	assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ['draft.txt']);
 	assert.equal(composerInputs[0]?.value, 'First draft');
 	assert.equal(composerInputs[1]?.value, 'Second draft');
 	assert.deepEqual(fake.stopRequests, []);

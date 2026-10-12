@@ -27,6 +27,7 @@ import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityC
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
@@ -52,7 +53,7 @@ const { BrowserLayoutService } = await import("../../../platform/layout/browser/
 
 suiteTeardown(() => browserEnvironment.window.close());
 
-test("opens a local Chat tab before the backend session request settles", () => {
+test("opens a local Chat conversation before the backend session request settles", () => {
 	const document = browserEnvironment.window.document;
 	const escaped: unknown[] = [];
 	using errors = toDisposable(errorHandler.addListener(error => escaped.push(error)));
@@ -63,6 +64,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
