@@ -28,7 +28,7 @@ Local Refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `../zed`, `../warp`
 - Do not split Rust files solely to reduce line count.
 - Validate inputs at user, configuration, plugin, persistence, process, worker, IPC, RPC and network boundaries. Do not revalidate typed same-process values already normalized by their owning boundary.
 - Do not use `native` or `projection` in names.
-- Comments explain reasons, constraints, lifetimes or API rules that are not evident from code.
+- Write comments to reduce the reader's reasoning burden, especially for contracts, lifetimes, complex logic and design reasons; avoiding useless comments does not mean writing fewer comments. Do not merely restate code, and update comments when behavior changes.
 - Use the client's NLS for changed product-owned user-visible text, including accessibility text; update translations and verify at least one non-default language. Parameterize dynamic text; do not translate command IDs, protocol fields, paths or user content.
 - If the requested UI style conflicts with an applicable skill, ask the user before implementing it.
 - Use `✅` and `❌` only for binary judgments.
