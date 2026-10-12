@@ -23,8 +23,7 @@ import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../../editor/common/model/textModel.js";
 import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditorRegistry.js";
-import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider } from "./chatCommandCompletion.js";
-import { createChatSkillCompletionProvider } from "./chatSkillCompletion.js";
+import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider, createChatSkillCompletionProvider } from "./editor/chatInputCompletions.js";
 
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 // The input container owns the inset; editor heights exclude it to avoid applying it twice.

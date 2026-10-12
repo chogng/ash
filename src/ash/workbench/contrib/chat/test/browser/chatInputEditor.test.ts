@@ -23,8 +23,7 @@ const { ChatInputEditor: CoworkChatInputEditor } = await import('../../../../../
 await import('../../browser/chat.shared.contribution.js');
 const { ChatInputConfiguration } = await import('../../common/constants.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
-const { createChatCommandCompletionProvider } = await import("../../browser/widget/input/chatCommandCompletion.js");
-const { createChatSkillCompletionProvider } = await import("../../browser/widget/input/chatSkillCompletion.js");
+const { createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import("../../browser/widget/input/editor/chatInputCompletions.js");
 const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
 const { Position } = await import("../../../../../editor/common/core/position.js");

@@ -8,7 +8,10 @@ import './chat.shared.contribution.js';
 import './aiCustomization/aiCustomizationManagement.contribution.js';
 import { registerHookActions } from './promptSyntax/hookActions.js';
 import './actions/chatSpeechToTextActions.js';
-import './chatEditing/chatEditing.contribution.js';
+import './chatEditing/chatEditingEditorActions.js';
+import { IChatEditingService } from '../common/editing/chatEditingService.js';
+import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
+import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay.js';
 import { registerSkillActions } from './promptSyntax/skillActions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import "../common/widget/chatColors.js";
@@ -18,6 +21,9 @@ import { ChatInputEditors } from "./widget/input/chatInputEditorRegistry.js";
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from './speechToText/chatSpeechToTextService.js';
 import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
+
+registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
 
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);

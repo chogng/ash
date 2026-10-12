@@ -5,7 +5,7 @@
 | 源码文件 | Ash | VS Code | 同路径 | 仅 Ash | 仅 VS Code |
 | -------- | --: | ------: | -----: | -----: | ---------: |
 | 首次审计 |  95 |     965 |     72 |     23 |        893 |
-| 当前     | 105 |     965 |     83 |     22 |        882 |
+| 当前  |      103 |      965 |     84 |     19 |        881 |
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
@@ -61,12 +61,12 @@ Skill 链为 `ExtensionsEditor` / 文件编辑器 → `PromptsService.parseNew` 
 
 本轮验证：19 项定向 unit、11 项 Chromium integration、2 项 Electron UI 启动/底部布局回归通过；覆盖 en/zh-CN、真实键盘补全与 Hover、复制、Undo、只读拒绝、新文件、字体/换行/选区、dark/light/HC、消息移除、provider 链接、Scope 切换和过期读取。Renderer 检查及产品构建通过；新增 CSS stylelint 为 0 错误，完整 Chat CSS ownership audit 未发现相同或品牌替换式上游 CSS、新品牌或上游 root；格式和 diff check 通过。
 
-## 等待准确路径决定的迁移
+## 已确认的职责迁移
 
-- `browser/widget/input/chatCommandCompletion.ts` 与 `chatSkillCompletion.ts`：现有生产调用各 2 个文件。拟将两种 Stanza provider 合并到上游对应 `browser/widget/input/editor/chatInputCompletions.ts`，保留 catalog 和选区行为，同批迁移生产与测试 import。
-- `browser/chatEditing/chatEditing.contribution.ts`：2 个生产入口。拟把服务和 overlay 注册移回 `browser/chat.contribution.ts`；Sessions 已装载该入口，移除其重复 import。
+- `browser/widget/input/chatCommandCompletion.ts` 与 `chatSkillCompletion.ts`：现有生产调用各 2 个文件。已将两种 Stanza provider 合并到上游对应 `browser/widget/input/editor/chatInputCompletions.ts`，保留 catalog 和选区行为，同批迁移生产与测试 import。
+- `browser/chatEditing/chatEditing.contribution.ts`：2 个生产入口。已把服务和 overlay 注册移回 `browser/chat.contribution.ts`；Sessions 已装载该入口，移除其重复 import。
 
-三旧路径均由 Git 跟踪；完整迁移预览在 `.build/chat-alignment/owner-migration-preview.patch`。尚未收到准确删除确认，因此没有删除、隐藏或改动候选及其调用链。新增语音平台归属的决定见下方语音设计。
+用户已确认删除上述三个准确旧路径，现已完成迁移并删除；Git 可恢复。迁移后旧路径引用为零；11 项 Chat/Cowork 补全单元测试、Renderer 类型检查、格式和 diff check 通过。浏览器验证尚被 `test/integration/browser/diff.integration.ts:340` 的已有 `entry.group` 联合类型错误阻断，未计为通过。新增语音平台归属也已确认，见下方语音设计。
 
 ## 实际验证
 
@@ -96,9 +96,9 @@ Workbench 与 Sessions 注入同一平台契约，New Chat / Cowork 使用共享
 
 已继续核实：`crates/voice-agent` 已能桥接授权人类房间音频与 `model-provider::VoiceModelSession`，但它不执行工具，尚未接入 App Server、Core 任务授权或 Chat 线程。其模型事件没有响应代次，打断播放后需要新建模型会话才能安全恢复播报。现有 `platform/call` 属于多人通话，`platform/dictation` 属于文字回填，两者的既有职责继续保留。
 
-下层设计供用户决定：新增 `src/ash/platform/voice/common/voiceService.ts`（前端异步 start/stop/interrupt、会话状态与转写的领域契约）和 `src/ash/platform/voice/browser/appServerVoiceService.ts`（生成协议适配）；App Server 的 `voice_operations.rs` 使用现有 `voice-agent` / `model-provider` / 音频运行时。标准 Chat 的语音状态、播放和操作落到上游对应的 `common/voiceClient/voiceClientService.ts`、`common/voicePlaybackService.ts`、`electron-browser/actions/voiceChatActions.ts`。
+用户已确认下层设计：新增 `src/ash/platform/voice/common/voiceService.ts`（前端异步 start/stop/interrupt、会话状态与转写的领域契约）和 `src/ash/platform/voice/browser/appServerVoiceService.ts`（生成协议适配）；App Server 的 `voice_operations.rs` 使用现有 `voice-agent` / `model-provider` / 音频运行时。标准 Chat 的语音状态、播放和操作落到上游对应的 `common/voiceClient/voiceClientService.ts`、`common/voicePlaybackService.ts`、`electron-browser/actions/voiceChatActions.ts`。
 
-start 绑定调用连接、目标 Thread 和媒体代次；stop 只关闭该会话，interrupt 淘汰该代次的待播及迟到音频。房间成员变化、断线、关闭和重启均释放麦克风与模型连接。任务委托仅经 Core 的现有授权入口执行，混音转写不推断请求人；文本记录进入现有线程 owner，不创建另一套 Chat 历史。验证需覆盖真实媒体桥、协议模拟供应商、迟到音频、权限与 Core 委托；真实账户音频质量与计费另作验收。新增 Ash 平台 owner 尚未获准确路径决定，当前未创建这些文件或启用按钮。
+start 绑定调用连接、目标 Thread 和媒体代次；stop 只关闭该会话，interrupt 淘汰该代次的待播及迟到音频。房间成员变化、断线、关闭和重启均释放麦克风与模型连接。任务委托仅经 Core 的现有授权入口执行，混音转写不推断请求人；文本记录进入现有线程 owner，不创建另一套 Chat 历史。验证需覆盖真实媒体桥、协议模拟供应商、迟到音频、权限与 Core 委托；真实账户音频质量与计费另作验收。两个 Ash 平台 owner 已获准确路径确认；当前继续核对房间权限、媒体释放与 Core 线程接入；尚未创建这些文件或启用按钮。
 
 ### Prompt 语法与响应内容
 

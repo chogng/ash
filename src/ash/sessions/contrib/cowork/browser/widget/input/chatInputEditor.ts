@@ -19,7 +19,7 @@ import { Range } from "../../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../../editor/common/model/textModel.js";
 import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditorTypes.js";
 import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider } from "./chatCommandCompletion.js";
-import { createChatSkillCompletionProvider } from "../../../../../../workbench/contrib/chat/browser/widget/input/chatSkillCompletion.js";
+import { createChatSkillCompletionProvider } from "../../../../../../workbench/contrib/chat/browser/widget/input/editor/chatInputCompletions.js";
 
 const CHAT_INPUT_LINE_HEIGHT = 20;
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });

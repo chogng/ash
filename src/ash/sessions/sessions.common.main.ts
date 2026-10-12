@@ -15,7 +15,6 @@ import '../workbench/api/browser/mainThreadUriOpeners.js';
 import '../workbench/contrib/github/browser/githubLinkPresentation.contribution.js';
 import '../workbench/contrib/github/browser/github.contribution.js';
 import '../workbench/contrib/bulkEdit/browser/bulkEditService.js';
-import '../workbench/contrib/chat/browser/chatEditing/chatEditing.contribution.js';
 import '../workbench/contrib/trace/browser/trace.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/cowork/browser/cowork.contribution.js';
