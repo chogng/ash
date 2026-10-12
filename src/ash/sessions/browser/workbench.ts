@@ -76,7 +76,9 @@ import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
-import { h, type IDimension } from "../../base/browser/dom.js";
+import { addDisposableListener, h, type IDimension } from "../../base/browser/dom.js";
+import { errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { mainWindow } from '../../base/browser/window.js';
 import type { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { ExtensionsViewPane, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
@@ -101,7 +103,6 @@ import { ILanguageConfigurationService } from '../../editor/common/languages/lan
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { IModelService } from '../../editor/common/services/model.js';
-import { MarkerService, IMarkerService } from '../../platform/markers/common/markers.js';
 import { ModelService } from '../../editor/common/services/modelService.js';
 import { ITextResourcePropertiesService } from '../../editor/common/services/textResourceConfiguration.js';
 import { TextResourcePropertiesService } from '../../workbench/services/textresourceProperties/common/textResourcePropertiesService.js';
@@ -336,7 +337,6 @@ export abstract class Workbench extends Disposable {
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
 		services.registerInstance(ILanguageFeaturesService, this._register(new LanguageFeaturesService()));
-		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		services.registerSingleton(ITextResourcePropertiesService, () => services.createInstance(TextResourcePropertiesService));
 		// Shared inspectors create transient models; this window owns their registry and shutdown.
 		services.registerSingleton(IModelService, () => new ModelService(configurationService, services.get(ITextResourcePropertiesService), languageService, services.get(ILanguageFeaturesService), services.get(ILanguageConfigurationService)));
@@ -344,6 +344,23 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ICodeEditorService, this._register(new StandaloneCodeEditorService()));
 		this.logService = this._register(logger);
 		services.registerInstance(ILogService, this.logService);
+		// Window errors must terminate at the host logger. The default handler rethrows,
+		// which sends the growing error message back through WorkbenchWindow indefinitely.
+		const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
+		const handleError = (error: unknown): void => {
+			const message = error instanceof Error ? error.stack || error.message : getErrorMessage(error);
+			if (message) logger.error('runtime', message);
+		};
+		setUnexpectedErrorHandler(handleError);
+		this._register(toDisposable(() => {
+			if (errorHandler.getUnexpectedErrorHandler() === handleError) setUnexpectedErrorHandler(previousErrorHandler);
+		}));
+		if (ownerWindow === mainWindow) {
+			this._register(addDisposableListener<PromiseRejectionEvent>(ownerWindow, 'unhandledrejection', event => {
+				onUnexpectedError(event.reason);
+				event.preventDefault();
+			}));
+		}
 		services.registerInstance(IHostColorSchemeService, this._register(options.createHostColorSchemeService(services)));
 		const themeService = this.themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);

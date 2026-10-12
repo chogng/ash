@@ -13,7 +13,6 @@ adapters own App Server DTO conversion; Workbench and Sessions consume the share
 domain contracts. The Sessions provider owns the mapping into `ISession` and
 `IChat`, while `languageModels` owns model picker state for both windows.
 
-
 Web embedders load `sessions.web.main.internal.ts` after initializing localization,
 then call `create(container, profile)` and retain its disposable handle. The Web
 entry loads shared and browser contributions; `browser/web.factory.ts` owns the

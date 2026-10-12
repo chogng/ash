@@ -19,7 +19,6 @@ import {
 import "../contrib/chat/browser/chat.contribution.js";
 import { registerProblemsView } from "../contrib/problems/browser/problems.contribution.js";
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
-import { registerTasksView } from '../contrib/tasks/browser/tasks.contribution.js';
 import { registerOutputView } from '../contrib/output/browser/output.contribution.js';
 import { Lxicon } from "../../base/common/lxicons.js";
 import { registerAction2 } from '../../platform/actions/common/actions.js';
@@ -95,7 +94,6 @@ registerSCMViews();
 registerProblemsView();
 registerRemoteViews();
 registerTerminalView();
-registerTasksView();
 registerOutputView();
 registerAction2(OpenFolderAction);
 registerAction2(OpenFolderViaWorkspaceAction);

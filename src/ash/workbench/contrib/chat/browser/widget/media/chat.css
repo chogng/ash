@@ -176,7 +176,7 @@
 	border: var(--ash-strokeThickness) solid
 		var(--ash-chat-input-border, var(--ash-input-border));
 	border-radius: var(--ash-chat-input-radius, var(--ash-cornerRadius-large));
-	background: var(--ash-editor-widgetBackground);
+	background: var(--ash-input-background);
 }
 
 .ash-chat-input-container.focused {

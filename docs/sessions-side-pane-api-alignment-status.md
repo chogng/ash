@@ -12,10 +12,10 @@
 | ------------------------------------- | ---------: | -----: | ---------: |
 | `contrib/files/`                      |          3 |      0 |          0 |
 | `contrib/editor/`                     |          6 |      0 |          5 |
-| `contrib/changes/`                    |         20 |      0 |         14 |
+| `contrib/changes/`                    |         27 |      0 |          7 |
 | `contrib/layout/`                     |          5 |      1 |          9 |
 | 下列限定的 Part、挂载器和布局服务契约 |          0 |      7 |          8 |
-| 合计                                  |         34 |      8 |         36 |
+| 合计                                  |         41 |      8 |         29 |
 
 用户选择保留类似 Workbench 的按组件分目录结构，`parts/editor/` 与 `parts/auxiliarybar/` 不平铺。以下原始文件集合差异用于定位职责；有明确职责对应的异路径文件不作为缺陷计数。同路径也不代表公开契约或行为已全部对齐。
 
@@ -51,6 +51,13 @@ contrib/changes/browser/media/changesSummaryWidget.css
 contrib/changes/browser/media/checksWidget.css
 contrib/changes/browser/media/createPullRequest.css
 contrib/changes/common/pullRequestCreation.ts
+contrib/changes/browser/changesViewService.ts
+contrib/changes/common/changesViewService.ts
+contrib/changes/browser/changesViewRenderer.ts
+contrib/changes/browser/changesViewActions.ts
+contrib/changes/browser/media/changesViewActions.css
+contrib/changes/browser/createPullRequestChatRequest.ts
+contrib/changes/common/createPullRequestPreferences.ts
 contrib/layout/browser/baseSessionLayoutController.ts
 contrib/layout/browser/desktop/desktopDetailPanelCoordinator.ts
 contrib/layout/browser/desktop/desktopDockedTabsCoordinator.ts
@@ -96,16 +103,9 @@ contrib/editor/common/diffEditorOptionsService.ts
 contrib/changes/browser/changesActions.ts
 contrib/changes/browser/changesEditorLabels.ts
 contrib/changes/browser/changesMultiDiffSourceResolver.ts
-contrib/changes/browser/changesViewActions.ts
-contrib/changes/browser/changesViewRenderer.ts
-contrib/changes/browser/changesViewService.ts
 contrib/changes/browser/changesetReviewActions.ts
-contrib/changes/browser/createPullRequestChatRequest.ts
-contrib/changes/browser/media/changesViewActions.css
 contrib/changes/browser/media/sessionChangesEditorInput.css
 contrib/changes/browser/sessionChangesService.ts
-contrib/changes/common/changesViewService.ts
-contrib/changes/common/createPullRequestPreferences.ts
 contrib/changes/common/sessionChangesService.ts
 contrib/layout/browser/chatLayoutOwnerKeys.ts
 contrib/layout/browser/desktop/desktopDraftSessionStrategy.ts
@@ -155,56 +155,56 @@ contrib/layout/common/sessionEditorWorkingSet.ts
 
 ### Changes 能力补齐
 
-列表仍以 ChatService 的不可变 Turn 账本为业务来源。以下入口已经接入真实生产调用链，未复制上游实现，也未新增平行业务状态：
+Turn 内容、修订和提交状态继续由 ChatService 与后端账本拥有。以下入口已走生产调用链，UI 状态不改写账本证据：
 
-| 用户入口                                          | 对应文件与唯一 owner                                                                                                      | 当前行为                                                                                                                                                                       |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 列表刷新与失败重试                                | `changesView.ts`、`changesSummaryWidget.ts` 及对应 CSS                                                                    | 展示文件更改数和增删摘要；刷新保留同一会话的选择和焦点，加载期间禁用预览，失败清除过期行并提供重试                                                                             |
-| Sync changes、Publish branch、Review working tree | `sessionSyncChanges.ts`、`media/changesActions.css` → 可选 Git 扩展命令                                                   | 按会话目录筛选仓库，多仓库由用户选择；操作显式传入仓库 ID，分支或 remote 改变、切换会话、pull 失败都阻止后续 push                                                              |
-| Checks 展开与结果链接                             | `checksViewModel.ts`、`checksWidget.ts`、`checksActions.ts` 及 CSS → 既有 GitHub API                                      | 读取关联开放 PR 的当前 head 的全部分页 check runs 和 commit statuses；账户或会话切换取消旧读取，隐藏视图释放模型，普通刷新保留链接焦点                                         |
-| Create pull request                               | `createPullRequestContextView.ts`、`createPullRequestWidget.ts`、`common/pullRequestCreation.ts` 及 CSS → 既有 GitHub API | 只读准备表单，编辑标题、描述、目标分支、Draft 和仓库允许的自动合并方式；提交前核对 local head、remote 与账户；创建后附加到发起会话，后续附加或自动合并失败作为已创建结果的警告 |
-| PR 表单 Help / Accessible View                    | `sessionsChangesAccessibilityHelp.ts`、`common/changes.ts`                                                                | 读取 live 表单内容，显示字段值和 Draft 状态，关闭后恢复原控件焦点；列表帮助覆盖新增动作                                                                                        |
+| 用户入口                      | 唯一 owner 与当前行为                                                                                                                                                                                                   |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 列表、摘要、失败重试          | ChangesViewPane 从账本读取文件；同一会话刷新保留焦点和选择，失败清除旧行，隐藏后忽略迟到结果。                                                                                                                          |
+| Turn 筛选、List / Tree        | changesViewRenderer 独立构建按 Turn 和目录分组的树，重复路径可独立选择。changesViewActions 注册显示模式命令，ChangesViewService 保存展示状态。                                                                          |
+| 逐文件审阅                    | 标记绑定 Session、Thread、ChangeSet、文件和具体 revision；只保留在当前窗口，修订变化不会继承标记，也不改变提交条件。                                                                                                    |
+| 视图恢复                      | profile UI state 保存显示模式；窗口内分别保存会话、Turn 筛选和模式的选区、焦点、折叠及滚动快照。Checks 折叠状态按会话恢复。                                                                                             |
+| Sync / Publish / working tree | Git 命令绑定会话目录下的确切仓库；pull 后重新核对 branch / remote，失败或切换会话阻止后续 push。Git 提供方返回真实 upstream 和未提交计数，命令边界验证非负安全整数；旧提供方缺失的计数不显示为 0。                      |
+| CI checks                     | 可取消地读取关联开放 PR 当前 head 的全部分页 checks 和 commit statuses；账号变更清除旧数据，隐藏释放读取，普通刷新保留链接焦点。                                                                                        |
+| 直接创建 PR                   | 准备与写入分离；提交前重核 local head、remote、账号和工作目录。创建后附加到发起会话，附加 / 自动合并失败仅作为已创建结果的警告；不同 published head 不启用自动合并。                                                    |
+| Agent 创建 PR                 | createPullRequestChatRequest 在准备上下文复核后向发起 Thread 提交用户显示的字段。空闲 Thread 使用 startTurn，活动 Turn 使用 queueTurn，沿用正常权限。档案状态检查和准备失败不会提交；无法确认写入结果时禁用同表单重试。 |
+| PR 表单偏好                   | profile UI state 仅保存 Draft、合并方式和主操作，不保存标题、正文、路径或账号。恢复时受当前仓库能力限制，未支持的合并方式及 Agent 入口不会恢复为有效操作。                                                              |
+| Help / Accessible View        | 使用实际表单、树和状态内容，中英文覆盖新增控制。键盘支持树折叠、文件选择、表单焦点循环和取消后的焦点恢复。                                                                                                              |
 
-PR 创建一旦发出，其完成归属发起会话，关闭表单不会把结果改附到另一个会话。结果不确定时禁止在同一表单重复提交；发布分支与 local head 不同的实际结果提示审阅并不启用自动合并。业务操作由平台 GitHub 服务执行，未引入新的 transport DTO。
+ChangesViewService 当前只拥有上述展示状态及修订绑定的 read marker；它不是上游 provider changeset / isolation / feedback 的聚合服务。`reviewedFilesObs` 由树和无障碍内容消费，没有第二份业务账本。Agent 请求成功只表示任务已提交，不表示 PR 已创建，也不提供后台合并策略。
 
-当前契约是 Ash Turn 账本和可选 Git/GitHub 提供方的独立适配，不能称为上游全部 API、模型和布局完全对齐。以下 14 个文件仍没有对应的完整本地契约；不创建占位文件：
+共享 multi-diff 的来源替换会取消旧模型的就绪等待；等待捕获所属代次的取消信号，防止已经释放的模型让编辑器一直停在 pending。SessionChangesEditor 在加载子比较前提供视口，并传递宿主输入取消信号。Turn / commit 源、来源操作和内容标签仍在已确认的共享 Sessions core 中，服务 Code 和 Cowork。
 
-- `changesViewService.ts`、`common/changesViewService.ts`、`sessionChangesService.ts`、`common/sessionChangesService.ts`：上游 provider changeset、Git 状态、隔离模式与审阅状态的聚合契约仍不同；Ash 的账本、会话选择、Details 路由及比较输入已有各自 owner。
-- `changesMultiDiffSourceResolver.ts`、`changesEditorLabels.ts`：Turn / commit 多文件来源与标签仍由已确认的共享 Sessions core 拥有，服务 Code、Cowork 和共享比较；不能将 core 反向迁入 contribution。
-- `changesViewRenderer.ts`、`changesViewActions.ts`、`media/changesViewActions.css`、`media/sessionChangesEditorInput.css`：上游层级 changeset 树、显示模式及其专用操作契约未实现；当前 Turn 行 DOM 继续由 view 拥有，通用比较操作由共享 Editor 提供。
-- `changesActions.ts`、`changesetReviewActions.ts`：持久化 reviewed-file 状态和 provider changeset 操作没有对应的 Turn 领域接口。
-- `createPullRequestChatRequest.ts`、`common/createPullRequestPreferences.ts`：上游创建 PR 的 agent 请求 metadata、agent merge 策略和偏好契约未接入；本次只提供现有 GitHub API 能执行的人工创建与自动合并。
+### 剩余契约边界
 
-Checks 目前提供状态及结果链接。工作流重跑、日志/annotation 读取和 Fix CI agent 请求缺少当前领域接口，未伪造可点击入口。Git 仓库上下文不提供 incoming/outgoing 数量，因此 Sync 不显示虚构的计数。
+文件集合中仍缺少七个上游路径；同路径文件也不等于全部公开成员或行为已对齐：
+
+- `sessionChangesService.ts`、`common/sessionChangesService.ts`：上游 session URI / provider changeset 编辑器 facade 与 Ash 的 Session / Thread 身份及稳定 EditorInput owner 不同，没有另造一份身份服务。
+- `changesMultiDiffSourceResolver.ts`、`changesEditorLabels.ts`：已有共享 core 的实际来源和标签 owner；未将其反向迁入 contribution 或增加转调外壳。
+- `changesActions.ts`、`changesetReviewActions.ts`：当前提供不可变 Turn 预览 / 提交与窗口内审阅标记；后端没有跨客户端持久化 reviewed-file 和通用 provider changeset operation 契约。
+- `media/sessionChangesEditorInput.css`：现有 input 是稳定资源身份，没有对应上游 label DOM；未创建没有命中对象的样式文件。
+
+已接入的 IChangesViewService / renderer 是基于 Turn 的实际展示端口，尚不提供上游 transient changeset、隔离、反馈评论和 provider operation API。PR 已支持直接创建、Agent 请求、Draft、auto-merge 和有效偏好；agent merge policy 的持续执行与 request metadata 仍需后端工作流契约。CI 的 rerun、logs / annotations 与 Fix CI 请求仍没有完整领域端口。
+
+### Terminal、启动装配与 fixture
+
+扩展宿主注册已迁到 `workbench/api/browser/extensionHost.contribution.ts`，保留依赖就绪顺序；旧 `services/extensionHost/browser/extensionHostServiceRegistration.ts` 按用户确认的准确路径删除。后续 Terminal contract 收敛至 Workbench services 后，API 入口消费这些领域契约，层级检查包含类型引用和唯一 service identifier owner。
+
+Sessions 集成 fixture 移除全局 Plugin 服务 mock，使用产品现有的 disconnected API 和窗口拥有的唯一 Plugin 实例。连接后的 AppTools 使用共享 Task / Terminal 服务，Sessions 入口装配 Task、Output 和窗口 Marker registry。Task / Output 的视图注册由 Code 与 Sessions 分别选择其注册表，避免导入服务时重复注册另一种窗口的命令；Output 的 reveal contribution 在两种 Sessions 入口装载。`registerOutputView(registry)` 是本轮实际窗口调用的 Ash 装配端口，服务实现及业务状态 owner 没有迁移。
 
 ## 验证与当前完成范围
 
-Changes 当前有 20 个生产文件，Files 的三个文件保持原样。新增的 12 个 Changes 文件均有上游同路径及本地生产调用方；没有文件移动或删除。剩余 14 个路径的契约差异见前表，未将其计为已实现。
+Changes 当前有 27 个生产 TS / CSS 文件，均有上游同路径及实际调用方。文件缺失从 14 个减少到七个，以上边界未计为已实现。
 
-定向单测共 14 个通过，覆盖列表的中英文内容、选择与焦点、失败重试、显隐释放、二进制比较、Checks 分页与账户取消、Git 同步的仓库绑定与中断、PR 编辑值保留、重复提交阻止及迟到结果。最后的无障碍内容关闭保护及表单改动分别定向重跑通过。运行入口：
+使用原 tsconfig.test.json 的编译选项和 ambient typings 对 11 个受影响测试文件定向编译，并通过既有 unit runner 执行：75 项通过，包含 21 项 Changes / Git context、17 项共享 multi-diff、37 项层级及架构检查。全量单测准备阶段曾被并行的 Chat 未完成字段修改阻塞；未修改或绕过其业务代码。
 
-```sh
-pnpm test:unit \
-  --run src/ash/sessions/test/browser/changesView.test.ts \
-  --run src/ash/sessions/contrib/changes/test/browser/sessionChangesEditor.test.ts \
-  --run src/ash/sessions/contrib/changes/test/browser/checksViewModel.test.ts \
-  --run src/ash/sessions/contrib/changes/test/browser/sessionSyncChanges.test.ts \
-  --run src/ash/sessions/contrib/changes/test/browser/createPullRequestWidget.test.ts
+Changes 浏览器七项覆盖筛选、模式切换、折叠、选区与会话恢复、修订 / 会话审阅隔离、Git 计数、PR 直接创建及 Agent 提交 / 排队、偏好能力限制、焦点、中英文和主题。完整 Sessions fixture 11 项已通过，Changes 短窗格布局场景已通过。最终执行 Changes、Sessions 和 viewpaneLayout 三个浏览器文件，共 31 项全部通过（包含 renderer 错误处理回归）。
 
-pnpm test:browser:integration changes.integration.spec.ts viewpaneLayout.integration.spec.ts --project=chromium
+七个 Changes CSS 通过 stylelint；CSS ownership audit 的完全相同、品牌替换等价、上游品牌引用、产品 root 和新增品牌引用均为零。
 
-pnpm run test:smoke:ui test/smoke/areas/sessions/turn-changes.spec.ts --grep 'starts disabled'
-```
+`pnpm typecheck:renderer` 通过，包含 3,690 个 renderer 文件和 common 检查。相关 35 个 TS / JS 文件通过格式检查，所触及的 diff 通过空白检查。
 
-相关浏览器场景 17 个通过，其中最终 Changes / PR 五个场景在最后改动后单独重跑通过。覆盖键盘、取消及账户切换焦点恢复、异步刷新链接焦点、真实 DOM 与计算样式、窄窗口、浅色/深色/高对比度、中英文、编辑后的 PR 创建和会话附加、实际发布 head 不同时禁止自动合并。
+实际 Electron 启动 smoke 和完整提交 / 会话隔离 E2E 已通过。扩展场景连续 3 次完成 A 会话部分提交、B 会话完整提交、返回 A 提交剩余文件；核对两份 Turn 账本均为 committed、三个文件内容和 4 个 Git 提交，并继续验证比较显隐、折叠恢复和已提交文件不可再次预览。测试的运行时错误检查未降低。
 
-Electron smoke 的一个实际 Changes 场景通过。此前启动失败暴露了 Sessions common entry 未加载共享配置解析服务；已补上 `sessions.common.main.ts` 的装配 import，让现有 Terminal profile resolver 的依赖闭合。此修复没有新增服务实现。
+renderer exitCode 5 已通过 minidump 和匹配 Electron 44.4.5 的官方符号定位：Blink 在处理异常消息时触发 partition_alloc::internal::OnNoMemoryInternal。最初异常来自 Sessions 未加载标准 editor.all，Changes 折叠未改动区域时缺少 Diff Editor breadcrumbs 注册；默认错误处理器重新抛出带栈的异常，经 WorkbenchWindow 再次送回，导致消息递归膨胀。Sessions 入口现加载现有标准能力集合；Workbench 的窗口错误和 rejected promise 终止于现有日志服务，窗口释放时恢复原处理器。真实浏览器回归验证两类错误各记录一次、窗口仍可操作、正式 shutdown 后恢复处理器。原生诊断开关和临时输出已移除。
 
-`pnpm typecheck:renderer` 通过；本次 20 个相关 TypeScript 文件通过格式检查，六个 Changes CSS 文件通过 stylelint。CSS ownership audit 结果为：完全相同、品牌替换等价、上游品牌引用、上游产品 root 和新增品牌引用均为零。
-
-全局验证仍有两项既有问题：
-
-- `test/architecture/layer-boundaries.test.ts` 的 11 项中 10 项通过，服务实现不得依赖 contribution 的一项失败；现有 `workbench/services/extensionHost/browser/extensionHostServiceRegistration.ts` 导入了 Terminal 的 browser/common contribution 契约，本次未修改该模块。
-- 扩大到 `sessions.integration.spec.ts` 的四个页面场景在 fixture 启动时因 `pluginManagementService` 重复注册失败，未进入页面断言；其 fixture 全局单例与 Sessions 既有显式注册冲突。Changes 独立场景和实际 Electron 启动不受该 fixture 问题阻塞。
-
-未执行与上游窗口逐项配对的完整场景，因此这里报告的是已接入并验证的 Ash 能力，不宣称上游全部 API、审阅模型或 UI 行为完全对齐。
+本轮定向单测及架构测试 54 项通过，renderer / automation 类型与 5 个触及 TS 文件格式检查通过。尚未执行上游窗口的配对全场景，不宣称上游全部 API 和 UI 行为已完全对齐。

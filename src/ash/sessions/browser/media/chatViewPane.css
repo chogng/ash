@@ -7,8 +7,7 @@
 .ash-chat-view {
 	display: flex;
 	flex-direction: column;
-	/* Empty and retained conversations share the editor surface below the title. */
-	background: var(--ash-editor-background);
+	background: var(--ash-auxiliaryBar-background);
 }
 
 .ash-chat-body {
@@ -115,6 +114,7 @@
 
 .ash-chat-pane-host > .ash-chat {
 	height: 100%;
+	background: var(--ash-auxiliaryBar-background);
 }
 
 .ash-chat-pane-host > .ash-chat[hidden] {

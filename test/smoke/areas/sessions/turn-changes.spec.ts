@@ -61,13 +61,6 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const a = await create('Selected files A', process.platform === 'win32' ? 'echo const value = 42;>main.ts & echo remaining A>remaining.txt' : "printf 'const value = 42;\\n' > main.ts; printf 'remaining A\\n' > remaining.txt");
 		const b = await create('Selected files B', process.platform === 'win32' ? 'echo separate B>other-session.txt' : "printf 'separate B\\n' > other-session.txt");
 		const page = await workbench.openAgentsWindow(target.kind);
-		await application.evaluate(({ BrowserWindow }) => {
-			const debug = globalThis as unknown as { ashChangesRendererExits: unknown[]; };
-			debug.ashChangesRendererExits = [];
-			for (const window of BrowserWindow.getAllWindows()) {
-				window.webContents.once('render-process-gone', (_event, details) => debug.ashChangesRendererExits.push(details));
-			}
-		});
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 		const open = async (name: string): Promise<void> => {
 			await page.locator('.ash-sessions-list-item').filter({ hasText: name }).click();
@@ -116,8 +109,21 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		expect(await git('show', 'HEAD:other-session.txt')).toBe('separate B');
 		expect(await git('ls-tree', '--name-only', 'HEAD')).not.toContain('remaining.txt');
 		expect(await git('rev-list', '--count', 'HEAD')).toBe('3');
-	} catch (error) {
-		console.log('Changes renderer exit', await application.evaluate(() => (globalThis as unknown as { ashChangesRendererExits: unknown[]; }).ashChangesRendererExits));
-		throw error;
+		await open('Selected files A');
+		await expect(rows).toHaveCount(2);
+		await rows.filter({ hasText: 'main.ts' }).click();
+		await expect(changes.getByRole('button', { name: 'Preview selected changes', exact: true })).toBeDisabled();
+		await rows.filter({ hasText: 'remaining.txt' }).click();
+		await changes.getByRole('button', { name: 'Preview selected changes', exact: true }).click();
+		await message.fill('commit remaining A');
+		await message.press('Enter');
+		await expect(page.locator('.ash-sessions-frame-end[data-part="editor"]')).toContainText('remaining A');
+		await page.getByRole('button', { name: 'Commit this preview', exact: true }).click();
+		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], a)).changeSets[0]?.commitState).toBe('committed');
+		expect((await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]?.commitState).toBe('committed');
+		expect(await git('show', 'HEAD:remaining.txt')).toBe('remaining A');
+		expect(await git('show', 'HEAD:main.ts')).toBe('const value = 42;');
+		expect(await git('show', 'HEAD:other-session.txt')).toBe('separate B');
+		expect(await git('rev-list', '--count', 'HEAD')).toBe('4');
 	} finally { client.dispose(); incoming.dispose(); closed.dispose(); await frames.close(); launcher.dispose(); }
 });

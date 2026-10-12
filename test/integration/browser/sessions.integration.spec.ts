@@ -1,4 +1,6 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+const runtimeErrors = new WeakMap<Page, string[]>();
 
 async function expectActivityIconSize(navigation: Locator, size: number, horizontal = false): Promise<void> {
 	await expect.poll(() => navigation.evaluate(element => element.classList.contains('horizontal'))).toBe(horizontal);
@@ -45,6 +47,9 @@ async function expectActivityIconSize(navigation: Locator, size: number, horizon
 
 test.beforeEach(async ({ page }) => {
 	const errors: string[] = [];
+	const consoleErrors: string[] = [];
+	runtimeErrors.set(page, consoleErrors);
+	page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/sessions.html');
 	await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
@@ -52,6 +57,29 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(async ({ page }) => {
 	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.errors)).toEqual([]);
+	expect(runtimeErrors.get(page)).toEqual([]);
+});
+
+test('Sessions reports browser errors and rejected promises once without rethrowing', async ({ page }) => {
+	const messages: string[] = [];
+	page.on('console', message => {
+		if (message.type() === 'error' && message.text().includes('sessions-runtime-probe')) messages.push(message.text());
+	});
+	await page.evaluate(() => {
+		setTimeout(() => { throw new Error('sessions-runtime-probe exception'); }, 0);
+		void Promise.reject(new Error('sessions-runtime-probe rejection'));
+	});
+	await expect.poll(() => page.evaluate(() => [...window.ashSessionsIntegration.errors].sort())).toEqual([
+		'Error: sessions-runtime-probe exception',
+		'Error: sessions-runtime-probe rejection',
+	]);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(page.locator('.ash-editor-title-control').getByRole('tab', { name: 'Changes', exact: true })).toBeVisible();
+	expect(messages).toHaveLength(2);
+	expect(runtimeErrors.get(page)).toEqual(messages);
+	runtimeErrors.get(page)!.splice(0);
+	expect(await page.evaluate(() => window.ashSessionsIntegration.takeErrors().length)).toBe(2);
+	expect(await page.evaluate(() => window.ashSessionsIntegration.disposeAndCheckErrorHandler())).toBe(true);
 });
 
 test('Sessions navigation icons and surface controls follow the selected component', async ({ page }) => {

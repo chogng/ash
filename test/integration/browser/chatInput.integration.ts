@@ -1,3 +1,5 @@
+import '../../../src/ash/workbench/common/theme.js';
+import '../../../src/ash/sessions/browser/media/chatViewPane.css';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { IMenuService, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';

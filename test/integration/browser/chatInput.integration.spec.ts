@@ -45,6 +45,13 @@ for (const locale of ['en', 'zh-CN']) {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			await page.locator('main').evaluate(element => {
 				element.classList.add('ash-chat');
+				const view = element.ownerDocument.createElement('div');
+				view.className = 'ash-chat-view';
+				const host = element.ownerDocument.createElement('div');
+				host.className = 'ash-chat-pane-host';
+				element.before(view);
+				view.append(host);
+				host.append(element);
 				element.style.height = 'auto';
 				element.style.marginTop = '420px';
 			});
@@ -74,16 +81,17 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(footer.getByText('Models & providers', { exact: true })).toHaveCount(0);
 			await expect(status).toHaveCount(0);
 			const composerBackground = {
-				light: 'rgb(243, 243, 243)', dark: 'rgb(37, 37, 38)',
+				light: 'rgb(255, 255, 255)', dark: 'rgb(49, 49, 49)',
 				hcLight: 'rgb(255, 255, 255)', hcDark: 'rgb(0, 0, 0)',
 			}[theme]!;
 			await expect(page.locator('.ash-chat-input-container')).toHaveCSS('background-color', composerBackground);
-			const conversationBackground = { light: 'rgb(255, 255, 255)', dark: 'rgb(30, 30, 30)', hcLight: 'rgb(255, 255, 255)', hcDark: 'rgb(0, 0, 0)' }[theme]!;
+			const conversationBackground = { light: 'rgb(248, 248, 248)', dark: 'rgb(37, 37, 38)', hcLight: 'rgb(255, 255, 255)', hcDark: 'rgb(0, 0, 0)' }[theme]!;
 			await expect(page.locator('main')).toHaveCSS('background-color', conversationBackground);
-			await page.locator('main').evaluate(element => { element.style.setProperty('--ash-editor-background', 'rgb(250, 245, 240)'); });
+			await expect(page.locator('.ash-chat-view')).toHaveCSS('background-color', conversationBackground);
+			await page.locator('main').evaluate(element => { element.style.setProperty('--ash-auxiliaryBar-background', 'rgb(250, 245, 240)'); });
 			await expect(page.locator('main')).toHaveCSS('background-color', 'rgb(250, 245, 240)');
 			await expect(page.locator('.ash-chat-input-container')).toHaveCSS('background-color', composerBackground);
-			await page.locator('main').evaluate(element => { element.style.removeProperty('--ash-editor-background'); });
+			await page.locator('main').evaluate(element => { element.style.removeProperty('--ash-auxiliaryBar-background'); });
 
 			const composer = await page.locator('.ash-chat-input-container').boundingBox();
 			const footerBounds = await footer.boundingBox();
