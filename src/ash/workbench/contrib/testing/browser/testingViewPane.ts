@@ -13,7 +13,7 @@ import { WorkbenchObjectTree } from '../../../../platform/list/browser/listServi
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, ITestingService } from '../../../services/testing/common/testingService.js';
-import { ITerminalService } from '../../terminal/browser/terminal.js';
+import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';

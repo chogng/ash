@@ -1,7 +1,7 @@
 import type { Icon } from "../../../../base/common/icon.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
-import type { ITerminalProfile } from "./terminal.js";
+import type { ITerminalProfile } from "../../../services/terminal/browser/terminal.js";
 
 /** Selects the product icon for a trusted terminal profile identity. */
 export function terminalProfileIcon(profile: Pick<ITerminalProfile, "profileId" | "icon"> | undefined): Icon {

@@ -19,7 +19,7 @@ import { IDebugService, type IDebugSession, type DebugSessionState } from '../..
 import { IMarkerService, MarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
-import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../../terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../../../services/terminal/browser/terminal.js';
 import { ITaskService, type ITaskRun } from '../../../../services/tasks/common/taskService.js';
 
 suite('Accessibility signal production contributions', () => {

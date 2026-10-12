@@ -30,6 +30,12 @@ export class AppServerAppToolsHost extends Disposable {
 
 	private async execute(operation: AppHostOperation, signal: AbortSignal): Promise<unknown> {
 		switch (operation.type) {
+			case 'tasksList': return this.host.listTasks(operation.directory, signal);
+			case 'tasksDescribe': return this.host.describeTask(operation.directory, operation.taskId, operation.revision, signal);
+			case 'tasksRun': return this.host.runTask(operation.directory, operation.taskId, operation.revision, signal);
+			case 'tasksStatus': return this.host.taskStatus(operation.directory, operation.runId);
+			case 'tasksOutput': return this.host.taskOutput(operation.directory, operation.runId, operation.cursor, operation.maxCharacters);
+			case 'tasksCancel': return this.host.cancelTask(operation.directory, operation.runId);
 			case 'openFile':
 				await this.host.openFile(URI.file(operation.path), operation.line ?? undefined);
 				return { opened: true, path: operation.path };

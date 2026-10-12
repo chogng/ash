@@ -3,6 +3,7 @@ import { registerWorkbenchServiceContribution } from '../../../browser/workbench
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalTaskSystem } from './terminalTaskSystem.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -11,12 +12,14 @@ import { DeferredPromise, raceCancellationError } from '../../../../base/common/
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { URI } from "../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, IFileService } from "../../../../platform/files/common/files.js";
 import { ILogService } from "../../../../platform/log/common/log.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { ITerminalService } from "../../terminal/browser/terminal.js";
-import { type ITaskRun, ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, waitForTask } from "../../../services/tasks/common/taskService.js";
+import { ITerminalService } from "../../../services/terminal/browser/terminal.js";
+import { ITerminalProfileResolverService } from '../../../services/terminal/common/terminal.js';
+import { type ITaskRun, type ITaskDescription, type TaskRunStatus, ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, waitForTask } from "../../../services/tasks/common/taskService.js";
 import { IMarkerService } from '../../../../platform/markers/common/markers.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from "../../../services/output/common/output.js";
@@ -45,6 +48,8 @@ interface TaskInstance {
 export class TaskService extends Disposable implements ITaskService {
 	private readonly changeTasksEmitter = this._register(new Emitter<readonly IWorkspaceTask[]>());
 	private taskSystem: TerminalTaskSystem | undefined;
+	private readonly scheduledRuns = new Map<string, { run: ITaskRun; controller: AbortController; operation: Promise<ITaskRun>; createdAt: number; }>();
+	private latestRun: ITaskRun | undefined;
 	private readonly startEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly stateEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly providers = new Map<string, OwnedTaskProvider>();
@@ -72,6 +77,7 @@ export class TaskService extends Disposable implements ITaskService {
 	readonly onDidChangeTaskRun = this.stateEmitter.event;
 
 	constructor(
+		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IFileService private readonly fileService: IFileService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ILogService private readonly logService: ILogService,
@@ -95,6 +101,8 @@ export class TaskService extends Disposable implements ITaskService {
 			this.pendingRuns.clear();
 			for (const dispatch of this.dispatches) dispatch.abort();
 			this.taskSystem?.cancelAll();
+			this.scheduledRuns.clear();
+			this.latestRun = undefined;
 			this.activeRefresh?.abort();
 			this.refreshGeneration += 1;
 			this.loaded = false;
@@ -111,8 +119,97 @@ export class TaskService extends Disposable implements ITaskService {
 	}
 
 	get tasks(): readonly IWorkspaceTask[] { return this.currentTasks; }
-	get activeRuns(): readonly ITaskRun[] { return this.taskSystem?.activeRuns ?? []; }
-	get lastRun(): ITaskRun | undefined { return this.taskSystem?.lastRun; }
+	get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === 'running'); }
+	get lastRun(): ITaskRun | undefined { return this.latestRun; }
+	get runs(): readonly ITaskRun[] {
+		for (const [id, entry] of this.scheduledRuns) {
+			if (entry.run.status !== 'running' && (Date.now() - entry.createdAt > 3_600_000 || this.scheduledRuns.size > 100)) this.scheduledRuns.delete(id);
+		}
+		return [...(this.taskSystem?.recentRuns ?? []).filter(run => !this.scheduledRuns.has(run.runId)), ...[...this.scheduledRuns.values()].map(entry => entry.run)];
+	}
+	getRun(runId: string): ITaskRun | undefined { return this.runs.find(run => run.runId === runId); }
+
+	start(task: IWorkspaceTask, signal: AbortSignal, expectedRevision: string): ITaskRun {
+		this.assertNotDisposed();
+		if (signal.aborted) throw new CancellationError();
+		if (this.activeRuns.length >= 32) throw new Error(localize('tasks.agentRunLimit', 'This window already has 32 running tasks. Wait for a task to finish before starting another.'));
+		const controller = new AbortController();
+		const emitter = new Emitter<TaskRunStatus>();
+		const completion = new DeferredPromise<number | undefined>();
+		void completion.p.catch(() => undefined);
+		let current: ITaskRun | undefined;
+		let preparationError = '';
+		let status: TaskRunStatus = 'running';
+		const run: ITaskRun = {
+			runId: generateUuid(), task,
+			get terminalId() { return current?.terminalId ?? ''; },
+			get processId() { return current?.processId; },
+			get status() { return current?.status ?? status; },
+			get exitCode() { return current?.exitCode; },
+			get isReady() { return current?.isReady; },
+			get hasErrors() { return current?.hasErrors; },
+			onDidChangeStatus: emitter.event, completion: completion.p,
+			readOutput: (cursor, limit) => {
+				if (current) return current.readOutput(cursor, limit);
+				if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > preparationError.length || !Number.isSafeInteger(limit) || limit < 1 || limit > 65_536) throw new RangeError('Invalid task output cursor or limit');
+				const end = Math.min(preparationError.length, cursor + limit);
+				return { text: preparationError.slice(cursor, end), cursor, nextCursor: end, truncated: false, hasMore: end < preparationError.length };
+			},
+		};
+		const abort = (): void => controller.abort();
+		signal.addEventListener('abort', abort, { once: true });
+		const operation = this.dispatch(task, controller.signal, false, undefined, expectedRevision, run.runId, value => { current = value; });
+		this.scheduledRuns.set(run.runId, { run, controller, operation, createdAt: Date.now() });
+		this.latestRun = run;
+		this.startEmitter.fire(run);
+		void operation.then(async value => {
+			current = value;
+			const listener = value.onDidChangeStatus(value => { const retained = this.scheduledRuns.get(run.runId); if (retained && value !== 'running') retained.createdAt = Date.now(); emitter.fire(value); });
+			try { await completion.complete(await value.completion); }
+			finally { listener.dispose(); }
+		}, error => {
+			const retained = this.scheduledRuns.get(run.runId);
+			if (retained) retained.createdAt = Date.now();
+			preparationError = getErrorMessage(error).slice(0, 65_536);
+			status = controller.signal.aborted ? 'canceled' : 'failed';
+			emitter.fire(status);
+			this.stateEmitter.fire(run);
+			void completion.error(error);
+		}).catch(error => { void completion.error(error); }).finally(() => { signal.removeEventListener('abort', abort); emitter.dispose(); });
+		return run;
+	}
+
+	async describe(task: IWorkspaceTask): Promise<ITaskDescription> {
+		this.assertNotDisposed();
+		const recipe: IWorkspaceTask[] = [];
+		const commands: { command: string; cwd: string; }[] = [];
+		const visiting = new Set<string>();
+		const visited = new Set<string>();
+		const visit = (candidate: IWorkspaceTask): void => {
+			if (visiting.has(candidate.id)) throw new Error(localize('tasks.dependencyCycle', "Task '{0}' has a circular dependency.", candidate.label));
+			if (visited.has(candidate.id)) return;
+			const folder = this.workspace.getWorkspace().folders.find(folder => candidate.dirId === folder.id);
+			if (!folder || folder.uri.scheme !== 'file') throw new Error(localize('tasks.agentLocalTaskRequired', 'Agent task execution requires a task in a local workspace folder.'));
+			const configuration = JSON.stringify({ command: candidate.command, execution: candidate.execution, cwd: candidate.cwd, env: candidate.environment, matchers: candidate.problemMatchers });
+			if (candidate.providerId || candidate.execution?.type === 'custom' || candidate.unsupportedFeatures?.length || [...configuration.matchAll(/\$\{([^}]+)\}/g)].some(match => !['workspaceFolder', 'workspaceFolderBasename'].includes(match[1]!))) {
+				throw new Error(localize('tasks.agentStaticTaskRequired', "Task '{0}' needs an extension or interactive variables. Run it from the Tasks view.", candidate.label));
+			}
+			const resolve = (value: string): string => value.replaceAll('${workspaceFolder}', folder.uri.fsPath).replaceAll('${workspaceFolderBasename}', folder.uri.path.replace(/\/+$/, '').split('/').at(-1) ?? '');
+			visiting.add(candidate.id);
+			for (const dependency of taskDependencies(candidate, this.currentTasks)) visit(dependency);
+			visiting.delete(candidate.id);
+			visited.add(candidate.id);
+			recipe.push(candidate);
+			if (candidate.command) commands.push({ command: resolve(candidate.command), cwd: resolve(candidate.cwd ?? folder.uri.fsPath) });
+		};
+		const current = resolveKnownTask(task, this.currentTasks);
+		visit(current);
+		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId)!;
+		const bytes = new TextEncoder().encode(JSON.stringify({ directory: folder.uri.toString(), recipe, terminal: this.configuration.getValue('terminal') }));
+		const digest = await crypto.subtle.digest('SHA-256', bytes);
+		const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+		return { taskId: current.id, label: current.label, directory: folder.uri.fsPath, revision, commands };
+	}
 
 	private async resolveDefaultBuildTask(): Promise<string | undefined> {
 		if (this.isDisposed) return undefined;
@@ -167,7 +264,7 @@ export class TaskService extends Disposable implements ITaskService {
 			// Discovery starts before UI Parts are registered. Execution is the first
 			// operation that needs the view owner, while subscriptions stay stable.
 			const system = this._register(this.instantiationService.createInstance(TerminalTaskSystem, this.output));
-			this._register(system.onDidStartTask(run => this.startEmitter.fire(run)));
+			this._register(system.onDidStartTask(run => { this.latestRun = this.scheduledRuns.get(run.runId)?.run ?? run; this.startEmitter.fire(this.latestRun); }));
 			this._register(system.onDidStateChange(run => this.stateEmitter.fire(run)));
 			this.taskSystem = system;
 		}
@@ -280,7 +377,7 @@ export class TaskService extends Disposable implements ITaskService {
 		return run;
 	}
 
-	private async dispatch(task: IWorkspaceTask, signal?: AbortSignal, provided = false, previous?: ITaskRun): Promise<ITaskRun> {
+	private async dispatch(task: IWorkspaceTask, signal?: AbortSignal, provided = false, previous?: ITaskRun, expectedRevision?: string, runId?: string, onStarted?: (run: ITaskRun) => void): Promise<ITaskRun> {
 		// Read the current configuration at dispatch, including changes a file watcher has not delivered yet.
 		const workspaceGeneration = this.workspaceGeneration;
 		// Plugin notifications may arrive after the mutation response. Refresh the
@@ -292,7 +389,8 @@ export class TaskService extends Disposable implements ITaskService {
 		const tasks = await (signal ? raceCancellationError(refresh, signal) : refresh);
 		if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
 		const generation = this.catalogGeneration;
-		const currentTask = provided ? task : previous
+		const terminalConfiguration = JSON.stringify(this.configuration.getValue('terminal'));
+		const currentTask = provided ? task : previous || expectedRevision !== undefined
 			? resolveKnownTask(tasks.find(candidate => candidate.id === task.id) ?? task, tasks)
 			: resolveKnownTask(task, tasks);
 		const controller = new AbortController();
@@ -310,6 +408,7 @@ export class TaskService extends Disposable implements ITaskService {
 		const visiting = new Set<string>();
 		const assertCurrent = (): void => {
 			if (signal?.aborted) throw new CancellationError();
+			if (expectedRevision !== undefined && JSON.stringify(this.configuration.getValue('terminal')) !== terminalConfiguration) throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
 			if (controller.signal.aborted && controller.signal.reason instanceof CancellationError) throw controller.signal.reason;
 			if (controller.signal.aborted || generation !== this.catalogGeneration || workspaceGeneration !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
 		};
@@ -349,11 +448,7 @@ export class TaskService extends Disposable implements ITaskService {
 			}
 			this.getTaskSystem().validate(candidate);
 			visiting.add(candidate.id);
-			const dependencies = (candidate.dependsOn ?? []).map(reference => {
-				const matches = tasks.filter(value => (value.id === reference || value.label === reference) && (value.dirId === candidate.dirId || value.dirId === undefined));
-				if (matches.length !== 1) throw new Error(localize('tasks.dependencyUnavailable', "Dependency '{0}' of task '{1}' is missing or ambiguous.", reference, candidate.label));
-				return matches[0]!;
-			});
+			const dependencies = taskDependencies(candidate, tasks);
 			for (const dependency of dependencies) await validate(dependency);
 			visiting.delete(candidate.id);
 			graph.set(candidate.id, dependencies);
@@ -361,6 +456,10 @@ export class TaskService extends Disposable implements ITaskService {
 		};
 		const execute = (candidate: IWorkspaceTask): Promise<ITaskRun> => {
 			candidate = resolvedTasks.get(candidate.id)!;
+			if (expectedRevision !== undefined && candidate.cwd === undefined) {
+				const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === candidate.dirId)!;
+				candidate = { ...candidate, cwd: folder.uri.fsPath };
+			}
 			const existing = pending.get(candidate.id);
 			if (existing) return existing;
 			const preceding = this.capacityDecisions.get(candidate.id) ?? Promise.resolve();
@@ -413,6 +512,7 @@ export class TaskService extends Disposable implements ITaskService {
 						if (!folder) throw new Error(`Task '${candidate.label}' has no available workspace folder`);
 						const run = await this.getTaskSystem().run(candidate, folder, assertCurrent, controller.signal, previousRuns.get(candidate.id), run => {
 							reservation.run = run;
+							if (candidate.id === currentTask.id) onStarted?.(run);
 							this.runOrder.set(run, reservation.order);
 						});
 						started.push(run);
@@ -438,6 +538,8 @@ export class TaskService extends Disposable implements ITaskService {
 			return operation;
 		};
 		try {
+			if (expectedRevision !== undefined && (await this.describe(currentTask)).revision !== expectedRevision) throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
+			assertCurrent();
 			await validate(currentTask);
 			const run = await execute(currentTask);
 			if (!this.dependencyRuns.has(run)) this.dependencyRuns.set(run, started.filter(value => value !== run));
@@ -457,7 +559,7 @@ export class TaskService extends Disposable implements ITaskService {
 
 	private taskInstances(taskId: string): TaskInstance[] {
 		const instances: TaskInstance[] = [...(this.pendingRuns.get(taskId) ?? [])].map(reservation => ({ reservation, run: reservation.run, order: reservation.order }));
-		for (const run of this.activeRuns) {
+		for (const run of this.taskSystem?.activeRuns ?? []) {
 			if (run.task.id === taskId && !instances.some(instance => instance.run === run)) instances.push({ run, reservation: undefined, order: this.runOrder.get(run)! });
 		}
 		return instances.sort((first, second) => first.order - second.order);
@@ -500,6 +602,13 @@ export class TaskService extends Disposable implements ITaskService {
 	}
 
 	async terminate(run: ITaskRun): Promise<void> {
+		const scheduled = this.scheduledRuns.get(run.runId);
+		if (scheduled) {
+			scheduled.controller.abort();
+			const actual = await scheduled.operation.catch(() => undefined);
+			if (actual) { await this.taskSystem?.terminate(actual); await Promise.all((this.dependencyRuns.get(actual) ?? []).map(dependency => this.taskSystem?.terminate(dependency))); }
+			return;
+		}
 		await this.taskSystem?.terminate(run);
 		await Promise.all((this.dependencyRuns.get(run) ?? []).map(dependency => this.taskSystem?.terminate(dependency)));
 	}
@@ -734,6 +843,14 @@ function errorMessage(error: unknown): string {
 
 registerWorkbenchServiceContribution({
 	service: ITaskService,
-	dependencies: [IFileService, IWorkspaceContextService, ITerminalService, IOutputService, ILogService, IConfigurationResolverService, IMarkerService, IModelService, IPathService, IExtensionService],
+	dependencies: [IFileService, IWorkspaceContextService, ITerminalService, ITerminalProfileResolverService, IOutputService, ILogService, IConfigurationService, IConfigurationResolverService, IMarkerService, IModelService, IPathService, IExtensionService],
 	install: context => context.register(context.container.createInstance(TaskService)),
 });
+
+function taskDependencies(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]): readonly IWorkspaceTask[] {
+	return (task.dependsOn ?? []).map(reference => {
+		const matches = tasks.filter(value => (value.id === reference || value.label === reference) && (value.dirId === task.dirId || value.dirId === undefined));
+		if (matches.length !== 1) throw new Error(localize('tasks.dependencyUnavailable', "Dependency '{0}' of task '{1}' is missing or ambiguous.", reference, task.label));
+		return matches[0]!;
+	});
+}

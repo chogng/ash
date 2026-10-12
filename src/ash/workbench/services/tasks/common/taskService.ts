@@ -157,6 +157,7 @@ export type TaskRunStatus = "running" | "completed" | "succeeded" | "failed" | "
 
 /** One task execution projected through an integrated Terminal instance. */
 export interface ITaskRun {
+	readonly runId: string;
 	readonly task: IWorkspaceTask;
 	readonly terminalId: string;
 	/** Custom executions have no operating-system process. */
@@ -173,6 +174,25 @@ export interface ITaskRun {
 	readonly hasErrors?: boolean;
 	readonly onDidBecomeReady?: Event<void>;
 	readonly onDidChangeStatus: Event<TaskRunStatus>;
+	/** Run-scoped retained output survives terminal reuse. Cursors count UTF-16 characters. */
+	readOutput(cursor: number, maxCharacters: number): ITaskOutput;
+}
+
+export interface ITaskOutput {
+	readonly text: string;
+	readonly cursor: number;
+	readonly nextCursor: number;
+	readonly truncated: boolean;
+	readonly hasMore: boolean;
+}
+
+/** Static execution recipe reviewed before an Agent starts a configured task. */
+export interface ITaskDescription {
+	readonly taskId: string;
+	readonly label: string;
+	readonly directory: string;
+	readonly revision: string;
+	readonly commands: readonly { readonly command: string; readonly cwd: string; }[];
 }
 
 /** Discovers workspace tasks and executes only a caller-selected task. */
@@ -180,6 +200,7 @@ export interface ITaskService extends IDisposable {
 	readonly tasks: readonly IWorkspaceTask[];
 	readonly activeRuns: readonly ITaskRun[];
 	readonly lastRun: ITaskRun | undefined;
+	readonly runs: readonly ITaskRun[];
 	readonly onDidChangeTasks: Event<readonly IWorkspaceTask[]>;
 	readonly onDidStartTask: Event<ITaskRun>;
 	readonly onDidChangeTaskRun: Event<ITaskRun>;
@@ -187,6 +208,10 @@ export interface ITaskService extends IDisposable {
 	registerTaskProvider(provider: TaskProvider): IDisposable;
 	registerTaskProviders(providers: readonly TaskProvider[]): TaskProviderRegistration;
 	refresh(): Promise<readonly IWorkspaceTask[]>;
+	/** Returns immediately while dependencies and execution are prepared by the same owner. */
+	start(task: IWorkspaceTask, signal: AbortSignal, expectedRevision: string): ITaskRun;
+	describe(task: IWorkspaceTask): Promise<ITaskDescription>;
+	getRun(runId: string): ITaskRun | undefined;
 	run(task: IWorkspaceTask, signal?: AbortSignal): Promise<ITaskRun>;
 	/** Reruns an owned execution through current catalog validation and its retained variable policy. */
 	rerun(terminalInstanceId: string): Promise<ITaskRun | undefined>;

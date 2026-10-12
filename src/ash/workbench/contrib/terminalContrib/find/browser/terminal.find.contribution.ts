@@ -10,9 +10,9 @@ import { IInstantiationService, type ServicesAccessor } from '../../../../../pla
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
-import { ITerminalService, type ITerminalContribution, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../../services/terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
-import type { XtermTerminal } from '../../../terminal/browser/xterm/xtermTerminal.js';
+
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import { TerminalFindCommandId } from '../common/terminal.find.js';
@@ -40,7 +40,7 @@ export class TerminalFindContribution extends Disposable implements ITerminalCon
 		return this.widget.value ??= this.rendererServices.createInstance(TerminalFindWidget, this.context.instance);
 	}
 
-	public xtermReady(xterm: XtermTerminal): void {
+	public xtermReady(xterm: IXtermTerminal): void {
 		const scope = this._register(this.contextKeys.createScoped(xterm.element));
 		this.rendererServices = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
 		const focused = TerminalContextKeys.focus.bindTo(scope);

@@ -1,12 +1,12 @@
 # Terminal 界面与贡献
 
-此目录拥有终端实例契约、窗口内实例管理及界面。Shell 进程和授权由 Rust 后端拥有，经 [platform/terminal](../../../platform/terminal/README.md) 的进程契约访问；contribution 不导入生成协议。
+此目录拥有终端服务实现、窗口内实例管理及界面。跨领域服务契约由 [services/terminal](../../services/terminal/README.md) 拥有；Shell 进程和授权由 Rust 后端拥有，经 [platform/terminal](../../../platform/terminal/README.md) 的进程契约访问；contribution 不导入生成协议。
 
 | Owner                                                      | 职责                                                                                                        |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `browser/terminal.contribution.ts`                         | 实例服务、View 与动作/菜单的装载入口，以及 find、links、voice、accessibility、clipboard 贡献                |
 | `browser/terminalMainContribution.ts`                      | BlockRestore 时订阅宿主 PTY 创建通知，交给实例服务并显示 View                                               |
-| `browser/terminal.ts`                                      | `ITerminalService`、实例、profile、尺寸及前端事件契约                                                       |
+| `browser/terminal.ts`                                      | contribution 内部屏幕配置服务契约；实例与 profile/resolver 契约归 services/terminal                         |
 | `common/terminalConfiguration.ts`                          | 消费中的终端设置 schema、默认值、scope、settings UI 元数据；有效值和持久化属于配置系统                      |
 | `browser/terminalConfigurationService.ts`                  | 读取有效屏幕配置及编辑器字体继承，通知保留的 xterm 实时更新                                                 |
 | `browser/terminalProfileService.ts`                        | 合并执行端发现、自定义与扩展 profile；默认选择、provider 注册、按需激活和连接/工作区失效                    |
@@ -78,8 +78,14 @@ Browser 列表职责已从 Tabbed View 迁回 `terminalTabsList.ts`，View 仍�
 
 配置链已消费字体、字号、字/行间距、两种光标样式、光标闪烁/宽度、回滚与最小对比度。屏幕首次初始化和配置变化都使用有效值；更新保留屏幕及输出，字体变化触发 fit。当前默认值与 VS Code 对应字段一致（macOS 字号 12、其他平台 14、回滚 1000、光标不闪烁）；回滚缩小时由 xterm 丢弃超限旧行。
 
-交互式新建通过执行端 OS 的 `terminal.integrated.defaultProfile.{linux,osx,windows}` 解析可信 profile 名称为 ID；无效名称退回后端默认项。命令面板支持使用 profile 新建和保存默认 profile；工具栏订阅同一列表 owner。Tasks/Debug 使用原后端读取端口和明确创建参数；已有实例 Relaunch 保存原 profile。自定义 path 候选、argv、env、cwd 与 automation/agentHost profile 已由 resolver 接入。环境按全局、profile、调用方顺序合并，null 删除继承变量，Windows 按大小写不敏感的键覆盖；变量由原 ConfigurationResolverService 解析，执行端 terminal/profile/resolve 验证实际可执行文件。Relaunch 保存首次启动的不可变配置与图标/颜色。
+交互式新建通过执行端 OS 的 `terminal.integrated.defaultProfile.{linux,osx,windows}` 解析可信 profile 名称为 ID；无效名称退回后端默认项。命令面板支持使用 profile 新建和保存默认 profile；工具栏订阅同一列表 owner。Tasks/Debug 与 Agent 的 openTerminal App Tool 通过现有 resolver 选择各自的启动策略；已有实例 Relaunch 保存原 profile。自定义 path 候选、argv、env、cwd 与 automation/agentHost profile 已由 resolver 接入。环境按全局、profile、调用方顺序合并，null 删除继承变量，Windows 按大小写不敏感的键覆盖；变量由原 ConfigurationResolverService 解析，执行端 terminal/profile/resolve 验证实际可执行文件。Relaunch 保存首次启动的不可变配置与图标/颜色。
 
 扩展通过标准 `window.registerTerminalProfileProvider` / `TerminalProfile` 声明并注册配置。原 Extension Host 负责 capability、精确激活、调用取消和注册撤销；`api/browser/mainThreadTerminalService.ts` 将回调交给同一个 profile/实例 owner。普通 shell 进入真实后端 PTY；Pseudoterminal 使用原有有界 handle 流，接收 open/input/resize/read/close，实例关闭移除 provider 的引用。重新启动重新调用 provider 获取新 handle；关闭或宿主撤权不会复用旧 handle。工作区变化使晚到的创建失效并释放资源。
 
-当前 argv 契约为字符串数组；Windows 原始命令行字符串、URI 图标、完整 Shell integration/profile 检测、分组/分屏、编辑器终端和剩余 xterm/backend 链路仍待补齐。automation/agentHost resolver 端口已经实现，Tasks/Debug/Agent 的业务策略接入不在本批；Tasks/Debug 继续使用原执行配置。没有创建缺乏消费者的 browser 文件。
+Tasks 的 Shell 执行已接入 resolver：按任务目录的执行端 OS 选择 automationProfile，空配置回到交互式默认 profile；参数引用规则由真实 executable 的 shell 类型决定。环境依次继承执行端基础环境、`terminal.integrated.env.{linux,osx,windows}`、实际所选 profile env、任务 env；全局与 profile 值由原 ConfigurationResolverService 使用执行端环境解析，任务已解析的值保留现有变量语义。Windows 的键覆盖忽略大小写，null 保留删除指令直到执行端应用；Linux/macOS 区分大小写。显式 Shell 与 Process task 也继承全局 env，不选择 automation profile；CustomExecution 保留自己的 PTY owner。已有命令参数时不重复添加 `-c`、`/c` 或 `-Command`。共享／专用终端复用重新读取当前配置，完整替换 executable/argv/env，已移除的全局/profile 键不再留在下一轮启动快照；等待旧 PTY 释放前复制调用方启动数据，屏幕和实例身份仍被保留。
+
+DAP runInTerminal 使用 automationProfile，空配置回到交互式默认 profile。Debug 按实际 executable 判断 POSIX／PowerShell／cmd 引用规则；保留 profile argv、环境和主题 metadata，并在 resolver 解析配置后应用 DAP 的字面量 env/cwd，避免展开适配器传来的变量表达式。创建完成且 stdin 被进程确认后才回复 shellProcessId；Debug session、工作区或执行连接失效时停止启动／输入并释放晚到 PTY。
+
+Agent 的 openTerminal App Tool 在原 AppToolsHost 采用 agentHostProfile，空配置回到交互默认 profile；全局/profile 环境、cwd、argv 和主题 metadata 均由同一 resolver 解析，再交给原 TerminalService。取消、Host 释放、工作区／执行连接变化会使旧启动失效；晚到 PTY 或无法打开 View 的实例由该请求关闭。App Server adapter 继续拥有 request/connection 取消，窗口 Host 继续拥有执行入口与显示，实例和 Rust PTY owner 保持唯一。
+
+当前 argv 契约为字符串数组；Windows 原始命令行字符串、URI 图标、完整 Shell integration/profile 检测、分组/分屏、编辑器终端和剩余 xterm/backend 链路仍待补齐。没有创建缺乏消费者的 browser 文件。

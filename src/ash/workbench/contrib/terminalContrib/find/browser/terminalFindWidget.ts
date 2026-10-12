@@ -10,8 +10,8 @@ import { localize } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import type { ITerminalInstance } from '../../../terminal/browser/terminal.js';
-import type { XtermTerminal } from '../../../terminal/browser/xterm/xtermTerminal.js';
+import type { ITerminalInstance, IXtermTerminal } from '../../../../services/terminal/browser/terminal.js';
+
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import './media/terminalFind.css';
 
@@ -26,7 +26,7 @@ export class TerminalFindWidget extends Disposable {
 	private readonly regex: Button;
 	private readonly previous: Button;
 	private readonly next: Button;
-	private readonly screen: XtermTerminal;
+	private readonly screen: IXtermTerminal;
 	private searchGeneration = 0;
 	private invalidRegex = false;
 

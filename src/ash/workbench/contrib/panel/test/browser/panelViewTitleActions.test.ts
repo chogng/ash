@@ -12,7 +12,7 @@ import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import type { ITaskService } from "../../../../../workbench/services/tasks/common/taskService.js";
-import type { ITerminalService } from "../../../terminal/browser/terminal.js";
+import type { ITerminalService } from "../../../../services/terminal/browser/terminal.js";
 import type { IViewsService } from "../../../../../workbench/services/views/common/viewsService.js";
 
 test("Output projects channel selection and active-channel clearing into the Panel title", async () => {
@@ -72,7 +72,7 @@ test("Tasks projects its refresh action into the Panel title", async () => {
 	let refreshCount = 0;
 	const tasks = {
 		tasks: [],
-		activeRuns: [],
+		runs: [], start: () => { throw new Error('Not used'); }, describe: async () => { throw new Error('Not used'); }, getRun: () => undefined, activeRuns: [],
 		lastRun: undefined,
 		onDidChangeTasks: Event.None,
 		onDidStartTask: Event.None,

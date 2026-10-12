@@ -11,7 +11,7 @@ import { test, suiteTeardown } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
-import type { ITerminalInstance } from "../../../../contrib/terminal/browser/terminal.js";
+import type { ITerminalInstance } from "../../../terminal/browser/terminal.js";
 import { TestingService } from "../../browser/testingService.js";
 
 const uriIdentityServices = new TestUriIdentityServices();
@@ -84,6 +84,10 @@ function task(id: string, label: string, group: IWorkspaceTask["group"]): IWorks
 }
 
 class FakeTaskService extends Disposable implements ITaskService {
+	start(): never { throw new Error('Agent task start is outside this fixture'); }
+	async describe(): Promise<never> { throw new Error('Agent task description is outside this fixture'); }
+	getRun(): undefined { return undefined; }
+
 	async rerun(): Promise<undefined> { return undefined; }
 	async runProvidedTask(): Promise<never> { throw new Error('Provided task execution is outside this fixture'); }
 	private readonly tasksEmitter = this._register(new Emitter<readonly IWorkspaceTask[]>());
@@ -104,6 +108,9 @@ class FakeTaskService extends Disposable implements ITaskService {
 }
 
 class FakeTaskRun extends Disposable implements ITaskRun {
+	readonly runId = 'fixture-run';
+	readOutput(cursor: number) { return { text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false }; }
+
 	private readonly emitter = this._register(new Emitter<TaskRunStatus>());
 	readonly onDidChangeStatus = this.emitter.event;
 	readonly terminalId = 'task-terminal';

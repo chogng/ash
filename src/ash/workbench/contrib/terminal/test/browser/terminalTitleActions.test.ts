@@ -1,6 +1,6 @@
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
-import { ITerminalProfileResolverService } from '../../common/terminal.js';
-import { ITerminalProfileService } from '../../common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
+
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
@@ -15,7 +15,7 @@ import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { ITerminalInstance } from "../../browser/terminal.js";
+import type { ITerminalInstance } from "../../../../services/terminal/browser/terminal.js";
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -211,7 +211,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 test('Terminal View lends its actual title toolbar to Panel and retains it through switching', async () => {
 	const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
 	const { registerTestComponentServices } = await import('../../../../test/common/testEditorServices.js');
-	const { ITerminalService } = await import('../../browser/terminal.js');
+	const { ITerminalService } = await import('../../../../services/terminal/browser/terminal.js');
 	const { TerminalViewPane } = await import('../../browser/terminalView.js');
 	const { IWorkbenchLayoutService } = await import('../../../../services/layout/browser/layoutService.js');
 	const { WorkspaceContextService } = await import('../../../../services/workspaces/browser/workspaceContextService.js');
@@ -310,7 +310,7 @@ suite('Terminal context command lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('Terminal context commands resolve captured and serialized identities through the current window', async () => {
 		const { InstanceContext } = await import('../../browser/terminalContextMenu.js');
-		const { ITerminalService } = await import('../../browser/terminal.js');
+		const { ITerminalService } = await import('../../../../services/terminal/browser/terminal.js');
 		const { Disposable } = await import('../../../../../base/common/lifecycle.js');
 		const effects: unknown[] = [];
 		const create = (instanceId: number) => ({

@@ -1,6 +1,6 @@
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
-import { ITerminalProfileResolverService } from '../../common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../../api/browser/mainThreadTerminalService.js';
 import assert from 'node:assert/strict';
@@ -18,42 +18,63 @@ import { ITerminalProcessService } from '../../../../../platform/terminal/common
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
-import { ITerminalProfileService } from '../../common/terminal.js';
-import { ITerminalService, type ITerminalProfile } from '../../browser/terminal.js';
+
+import { ITerminalService, type ITerminalProfile } from '../../../../services/terminal/browser/terminal.js';
 import { TerminalConfigurationService } from '../../browser/terminalConfigurationService.js';
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
 import { TerminalProfileQuickpick } from '../../browser/terminalProfileQuickpick.js';
+import { TerminalService } from '../../browser/terminalService.js';
+import type { ITerminalProcessCreateOptions, ITerminalProcessCloseOptions } from '../../../../../platform/terminal/common/terminal.js';
 
 const shells = [
 	{ profileId: 'host-default', title: 'Host shell', isDefault: true },
 	{ profileId: 'pwsh', title: 'PowerShell', isDefault: false },
 ];
 
-function createServices(owner: DisposableStore) {
+function createServices(owner: DisposableStore, useInstances = false) {
 	const services = owner.add(new InstantiationService());
 	const configuration = owner.add(new WorkbenchConfigurationService());
 	const connection = owner.add(new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 	const workspace = owner.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
 	let calls = 0;
+	const launches: ITerminalProcessCreateOptions[] = [];
+	const closed: ITerminalProcessCloseOptions[] = [];
 	let read: () => Promise<readonly ITerminalProfile[]> = async () => shells;
 	const processes = {
 		operatingSystem: OperatingSystem.Windows as OperatingSystem | undefined, onConnectionState: connection.event,
+		listProfiles: async () => shells,
 		getEnvironment: async () => ({ HOME: '/execution/home', PATH: '/execution/bin', PROFILE_VALUE: 'environment value' }),
 		resolveProfile: async (selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({
 			profile: selection.type === 'custom' ? { profileId: `custom:${selection.name}`, title: selection.name, isDefault: false } : shells.find(profile => selection.type === 'profile' && selection.profileId === profile.profileId) ?? shells[0]!,
 			executable: selection.type === 'custom' ? selection.path.at(-1)! : '/execution/bin/shell', args: selection.type === 'custom' ? [...selection.args] : [],
 		}),
+		getConnectionState: async () => 'ready',
+		create: async (options: ITerminalProcessCreateOptions) => {
+			launches.push(options);
+			return {
+				terminalId: `process-${launches.length}`, ready: { pid: 42, cwd: options.cwd ?? '/workspace' },
+				profile: shells[0], connectionPersistence: 'connectionOwned',
+			};
+		},
+		read: async ({ terminalId }: { terminalId: string; }) => ({
+			terminalId, chunks: [{ sequence: 1, data: new TextEncoder().encode('shell output') }],
+			nextSequence: 1, outputGap: false, commandEvents: [], nextCommandSequence: 0,
+			commandEventGap: false, exited: true, exitCode: 0,
+		}),
+		close: async (options: ITerminalProcessCloseOptions) => { closed.push(options); },
 	} as unknown as ITerminalProcessService;
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IExtensionService, { ...Disposable.None, terminalProfiles: [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	services.registerInstance(IConfigurationResolverService, { resolveWithEnvironment: async (env, folder, value) => value.replaceAll('${workspaceFolder}', folder?.uri.path ?? '').replace(/\$\{env:([^}]+)\}/g, (_match: string, key: string) => env[key] ?? '') } as IConfigurationResolverService);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(ITerminalProcessService, processes);
-	services.registerInstance(ITerminalService, { ...Disposable.None, getProfiles: () => { calls++; return read(); } } as ITerminalService);
+	services.registerInstance(ITerminalService, useInstances
+		? owner.add(services.createInstance(TerminalService))
+		: { ...Disposable.None, getProfiles: () => { calls++; return read(); } } as ITerminalService);
 	const profiles = owner.add(services.createInstance(TerminalProfileService));
 	services.registerInstance(ITerminalProfileService, profiles);
 	services.registerInstance(ITerminalProfileResolverService, owner.add(services.createInstance(BrowserTerminalProfileResolverService)));
-	return { services, configuration, profiles, processes, workspace, connection, calls: () => calls, setRead: (fn: typeof read) => { read = fn; } };
+	return { services, configuration, profiles, processes, workspace, connection, launches, closed, calls: () => calls, setRead: (fn: typeof read) => { read = fn; } };
 }
 
 function installPicker(owner: DisposableStore, services: InstantiationService) {
@@ -320,12 +341,12 @@ suite('Terminal configuration and interactive profiles', () => {
 		const { services, profiles } = createServices(owner);
 		const digest = `sha256:${'a'.repeat(64)}`;
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', name: 'extension', publisher: 'acme', version: '1.0.0', displayName: 'Extension', sourceKind: 'user', manifestSha256: digest, packageSha256: digest }] } });
-		const launches: import('../../browser/terminal.js').ITerminalCreateOptions[] = [];
+		const launches: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions[] = [];
 		const writes: string[] = [];
 		const exits: (number | undefined)[] = [];
 		let child: import('../../../../../platform/terminal/common/terminal.js').ITerminalChildProcess | undefined;
 		Object.assign(services.get(ITerminalService), {
-			createTerminal: async (options: import('../../browser/terminal.js').ITerminalCreateOptions) => {
+			createTerminal: async (options: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions) => {
 				launches.push(options);
 				if (options.config) {
 					child = owner.add(options.config.customPtyImplementation(1, 80, 24));
@@ -365,6 +386,64 @@ suite('Terminal configuration and interactive profiles', () => {
 		bridge.replaceProfiles([]);
 		assert.equal(profiles.getContributedProfileProvider('acme.extension', 'test'), undefined);
 		if (custom) { assert.deepEqual(exits, [undefined, undefined]); assert.equal(operations.filter(operation => operation === 'closeTaskTerminal').length, 2); }
+	});
+
+	for (const custom of [false, true]) test(`shared terminal contracts connect an extension ${custom ? 'PTY' : 'shell'} to the original instance and release owners`, async () => {
+		using owner = new DisposableStore();
+		const { services, configuration, profiles, launches, closed } = createServices(owner, true);
+		const terminals = services.get(ITerminalService);
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		await configuration.updateValue('terminal.integrated.env.windows', { GLOBAL: 'global', REMOVED: 'remove me' });
+		const output: string[] = [];
+		const exits: (number | undefined)[] = [];
+		owner.add(terminals.onDidCreateInstance(instance => {
+			owner.add(instance.onDidWriteData(event => output.push(new TextDecoder().decode(event.data))));
+			owner.add(instance.onDidExit(code => exits.push(code)));
+		}));
+		const operations: { operation: string; payload: unknown; }[] = [];
+		let nextPty = 0;
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceProfiles([{
+			runtimeId: 'runtime', packageDigest: digest, profileId: 'test', title: 'Extension',
+			invoke: async (operation, payload, signal): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+				signal.throwIfAborted();
+				operations.push({ operation, payload });
+				if (operation === 'createTerminalProfile') return custom
+					? { options: { name: 'Extension PTY' }, pty: { ptyId: `pty.${++nextPty}`, acceptsInput: true } }
+					: { options: { name: 'Extension shell', shellPath: '/extension/shell', shellArgs: ['${env:PROFILE_VALUE}'], cwd: '${workspaceFolder}/run', env: { CALLER: '${env:PROFILE_VALUE}', REMOVED: null } } };
+				if (operation === 'openTaskTerminal') return { events: [{ type: 'data', data: 'PTY output' }, { type: 'close', code: 0 }] };
+				assert.equal(operation, 'closeTaskTerminal');
+				return null;
+			},
+		}]);
+		await profiles.getContributedProfileProvider('acme.extension', 'test')!.createContributedTerminalProfile({});
+		const instance = terminals.activeInstance!;
+		assert.equal(terminals.instances[0], instance);
+		await waitFor(() => instance.state === 'exited');
+		assert.deepEqual(output, [custom ? 'PTY output' : 'shell output']);
+		assert.deepEqual(exits, [0]);
+		assert.equal(instance.title, custom ? 'Extension PTY' : 'Extension shell');
+		if (custom) {
+			assert.deepEqual(launches, []);
+			await terminals.relaunchTerminal(instance, { cols: 100, rows: 30 });
+			await waitFor(() => output.length === 2 && instance.state === 'exited');
+			assert.equal(terminals.instances.length, 1);
+			assert.equal(terminals.activeInstance, instance);
+			assert.deepEqual(output, ['PTY output', 'PTY output']);
+			assert.deepEqual(exits, [0, 0]);
+			assert.deepEqual(operations.filter(value => value.operation === 'closeTaskTerminal').map(value => value.payload), [{ ptyId: 'pty.1' }, { ptyId: 'pty.2' }]);
+		} else {
+			assert.deepEqual(launches, [{
+				rows: 24, cols: 80, profile: { type: 'custom', name: 'Extension shell', path: ['/extension/shell'], args: ['environment value'] },
+				env: { GLOBAL: 'global', REMOVED: null, CALLER: 'environment value' }, cwd: '/workspace/run',
+			}]);
+		}
+		bridge.replaceProfiles([]);
+		assert.equal(profiles.getContributedProfileProvider('acme.extension', 'test'), undefined);
+		await terminals.closeTerminal(instance);
+		assert.deepEqual(terminals.instances, []);
+		assert.deepEqual(closed, custom ? [] : [{ terminalId: 'process-1' }]);
 	});
 
 	test('extension profile abandons a late PTY result after the workspace changes', async () => {

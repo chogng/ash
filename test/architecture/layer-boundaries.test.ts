@@ -37,6 +37,59 @@ test("Workbench service implementations do not depend on Workbench contributions
 	assert.deepEqual(violations, []);
 });
 
+test("Terminal service contracts cannot reach contribution implementations through type imports or re-exports", () => {
+	const terminalRoot = join(sourceRoot, "workbench/services/terminal");
+	const contributionRoot = join(sourceRoot, "workbench/contrib");
+	const violations: string[] = [];
+	for (const entry of productionTypeScriptFiles(terminalRoot)) {
+		const visited = new Set<string>();
+		const visit = (file: string): void => {
+			if (visited.has(file)) return;
+			visited.add(file);
+			for (const target of localImports(file)) {
+				if (target.startsWith(contributionRoot) || entry.includes(`${sep}common${sep}`) && target.includes(`${sep}browser${sep}`)) {
+					violations.push(`${sourceName(entry)} via ${sourceName(file)} -> ${sourceName(target)}`);
+				} else if (target.startsWith(sourceRoot) && existsSync(target)) {
+					visit(target);
+				}
+			}
+		};
+		visit(entry);
+	}
+	assert.deepEqual(violations, []);
+});
+
+test("Terminal domain service identifiers have one owner", () => {
+	const owners = new Map([
+		["ITerminalService", "workbench/services/terminal/browser/terminal.ts"],
+		["ITerminalProfileService", "workbench/services/terminal/common/terminal.ts"],
+		["ITerminalProfileResolverService", "workbench/services/terminal/common/terminal.ts"],
+	]);
+	const declarations = new Map([...owners.keys()].map(name => [name, {
+		identifiers: [] as string[], contracts: [] as string[], reexports: [] as string[],
+	}]));
+	for (const file of productionTypeScriptFiles(sourceRoot)) {
+		const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+		source.forEachChild(node => {
+			if (ts.isInterfaceDeclaration(node)) declarations.get(node.name.text)?.contracts.push(sourceName(file));
+			if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+				for (const exported of node.exportClause.elements) declarations.get(exported.name.text)?.reexports.push(sourceName(file));
+			}
+			if (ts.isExportDeclaration(node) && !node.exportClause && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+				const target = resolve(dirname(file), node.moduleSpecifier.text.replace(/\.js$/u, ".ts"));
+				for (const [name, owner] of owners) {
+					if (target === join(sourceRoot, owner)) declarations.get(name)!.reexports.push(sourceName(file));
+				}
+			}
+			if (!ts.isVariableStatement(node)) return;
+			for (const declaration of node.declarationList.declarations) {
+				if (ts.isIdentifier(declaration.name)) declarations.get(declaration.name.text)?.identifiers.push(sourceName(file));
+			}
+		});
+	}
+	for (const [name, owner] of owners) assert.deepEqual(declarations.get(name), { identifiers: [owner], contracts: [owner], reexports: [] }, name);
+});
+
 test("Workbench production imports do not depend on Sessions", () => {
 	const sessionsRoot = join(sourceRoot, "sessions");
 	const violations = productionTypeScriptFiles(join(sourceRoot, "workbench"))
@@ -116,11 +169,16 @@ function localImports(file: string): string[] {
 	const source = readFileSync(file, "utf8");
 	const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 	const targets: string[] = [];
-	sourceFile.forEachChild(node => {
-		if (!ts.isImportDeclaration(node) || !ts.isStringLiteral(node.moduleSpecifier) || !node.moduleSpecifier.text.startsWith(".")) return;
-		const target = resolve(dirname(file), node.moduleSpecifier.text.replace(/\.js$/u, ".ts"));
-		targets.push(target);
-	});
+	const visit = (node: ts.Node): void => {
+		const module = ts.isImportDeclaration(node) || ts.isExportDeclaration(node) ? node.moduleSpecifier
+			: ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) ? node.argument.literal
+				: ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword ? node.arguments[0] : undefined;
+		if (module && ts.isStringLiteral(module) && module.text.startsWith(".")) {
+			targets.push(resolve(dirname(file), module.text.replace(/\.js$/u, ".ts")));
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(sourceFile);
 	return targets;
 }
 

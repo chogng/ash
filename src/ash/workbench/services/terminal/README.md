@@ -1,6 +1,8 @@
 # Terminal services 边界
 
-此目录拥有 [embedderTerminalService.ts](common/embedderTerminalService.ts)：宿主提供输出 PTY，通过 `IEmbedderTerminalService.createTerminal` 发起创建；contribution 尚未订阅时保留请求，窗口释放时关闭未接入的 PTY。服务只拥有创建通知与宿主 PTY 生命周期，实例列表和屏幕由 [Terminal contribution](../../contrib/terminal/README.md) 管理。
+此目录拥有跨领域 Terminal 服务契约：[common/terminal.ts](common/terminal.ts) 定义 profile/provider 与 resolver 端口，[browser/terminal.ts](browser/terminal.ts) 定义窗口实例、创建参数、事件与 `IXtermTerminal` 浏览器屏幕端口。Extension Host、Tasks、Debug、Agent 和终端功能消费同一份服务标识与契约；契约不导入 contribution 或具体 xterm 实现。服务实现、安装注册、实例列表和屏幕仍由 [Terminal contribution](../../contrib/terminal/README.md) 管理，Rust PTY 继续经平台进程服务访问。
+
+[embedderTerminalService.ts](common/embedderTerminalService.ts) 拥有宿主输出 PTY 的创建通知：宿主通过 `IEmbedderTerminalService.createTerminal` 发起创建；contribution 尚未订阅时保留请求，窗口释放时关闭未接入的 PTY。
 
 Web 宿主从 [Web API](../../browser/web.api.ts) 返回的 `window.createTerminal` 发起请求 → embedder 服务 → [TerminalMainContribution](../../contrib/terminal/browser/terminalMainContribution.ts) → `ITerminalService.createTerminal` 的 `customPtyImplementation` → 同一个窗口实例列表与 Terminal View。实例先公布再打开 PTY，保留界面订阅前的同步输出和退出事件；`onDidChangeName` 更新标题，退出码 `0` 原样保留。显式关闭或窗口释放会释放 PTY 和监听，宿主已通知退出时不重复关闭。
 

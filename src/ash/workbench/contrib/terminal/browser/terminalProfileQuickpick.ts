@@ -3,7 +3,8 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { localize } from '../../../../nls.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { ITerminalProfileService, TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
+import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
+import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 
 interface ProfileItem extends IQuickPickItem { readonly profileId: string; }
 

@@ -71,6 +71,120 @@ test('cancelling an application request preserves the connection and releases a 
 	expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'listSections' }))).toEqual({ sections: [] });
 });
 
+for (const platform of ['linux', 'osx', 'windows']) {
+	test(`Agent terminal resolves agentHost policy on ${platform} through the existing PTY owner`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/appTools.html?os=${platform}`);
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		await page.evaluate(async platform => {
+			await window.ashAppToolsIntegration.configureTerminal({
+				[`terminal.integrated.profiles.${platform}`]: { Interactive: { path: '/interactive/shell' } },
+				[`terminal.integrated.defaultProfile.${platform}`]: 'Interactive',
+				[`terminal.integrated.automationProfile.${platform}`]: { path: '/automation/shell' },
+				[`terminal.integrated.agentHostProfile.${platform}`]: { path: platform === 'windows' ? 'C:\\tools\\pwsh.exe' : '${env:HOME}/agent/bash', args: ['-l', '${env:BASE}'], env: { MODE: 'agent', PROFILE: '${env:BASE}', REMOVED: null } },
+				[`terminal.integrated.env.${platform}`]: { MODE: 'global', GLOBAL: '${env:HOME}', REMOVED: 'global' },
+				'terminal.integrated.cwd': '${workspaceFolder}/shell work',
+			});
+			window.ashAppToolsIntegration.automaticCreation();
+		}, platform);
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'openTerminal' }))).toEqual({ opened: true, terminalId: 'terminal-instance-1' });
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.profileSelections)).toContainEqual({ type: 'custom', name: 'Agent host shell', path: [platform === 'windows' ? 'C:\\tools\\pwsh.exe' : '/execution/home/agent/bash'], args: ['-l', 'inherited'] });
+		expect(await page.evaluate(() => ({ created: window.ashAppToolsIntegration.terminalCreations, active: window.ashAppToolsIntegration.activeTerminal, views: window.ashAppToolsIntegration.terminalViews }))).toEqual({
+			created: [{ rows: 24, cols: 80, profile: { type: 'custom', name: 'Agent host shell', path: [platform === 'windows' ? 'C:\\tools\\pwsh.exe' : '/execution/home/agent/bash'], args: ['-l', 'inherited'] }, env: { MODE: 'agent', GLOBAL: '/execution/home', REMOVED: null, PROFILE: 'inherited' }, cwd: platform === 'windows' ? 'C:\\workspace/shell work' : '/workspace/shell work' }],
+			active: 'terminal-instance-1', views: [{ id: 'ash.terminal', focus: true }],
+		});
+		expect(errors).toEqual([]);
+	});
+}
+
+test('an empty Agent profile falls back to the configured interactive shell and Chinese profile identity', async ({ page }) => {
+	await page.goto('/appTools.html?locale=zh-CN');
+	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+	await page.evaluate(async () => {
+		await window.ashAppToolsIntegration.configureTerminal({
+			'terminal.integrated.profiles.linux': { '交互 Shell': { path: '/interactive/fish', args: ['--interactive'], env: { MODE: 'interactive' } } },
+			'terminal.integrated.defaultProfile.linux': '交互 Shell',
+			'terminal.integrated.automationProfile.linux': { path: '/wrong/automation' },
+			'terminal.integrated.agentHostProfile.linux': null,
+		});
+		window.ashAppToolsIntegration.automaticCreation();
+	});
+	expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'openTerminal' }))).toEqual({ opened: true, terminalId: 'terminal-instance-1' });
+	expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalCreations[0].profile)).toEqual({ type: 'custom', name: '交互 Shell', path: ['/interactive/fish'], args: ['--interactive'] });
+});
+
+for (const invalidation of ['cancel', 'workspace', 'connection', 'dispose'] as const) {
+	test(`Agent terminal resolution handles ${invalidation} without creating a PTY or opening its view`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/appTools.html');
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		await page.evaluate(() => window.ashAppToolsIntegration.holdProfile());
+		const pending = page.evaluate(async () => {
+			try { await window.ashAppToolsIntegration.call({ type: 'openTerminal' }); return 'accepted'; }
+			catch (error) { return String(error); }
+		});
+		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.profilePending)).toBe(true);
+		await page.evaluate(invalidation => {
+			if (invalidation === 'cancel') window.ashAppToolsIntegration.cancelLast();
+			if (invalidation === 'workspace') window.ashAppToolsIntegration.changeWorkspace();
+			if (invalidation === 'connection') window.ashAppToolsIntegration.disconnectTerminal();
+			if (invalidation === 'dispose') window.ashAppToolsIntegration.disposeHost();
+			window.ashAppToolsIntegration.releaseProfile();
+		}, invalidation);
+		expect(await pending).toMatch(/cancelled/i);
+		expect(await page.evaluate(() => ({ created: window.ashAppToolsIntegration.terminalCreations, views: window.ashAppToolsIntegration.terminalViews }))).toEqual({ created: [], views: [] });
+		expect(errors).toEqual([]);
+	});
+}
+
+for (const invalidation of ['workspace', 'connection'] as const) {
+	test(`Agent terminal creation releases its late PTY after ${invalidation} without opening its view`, async ({ page }) => {
+		await page.goto('/appTools.html');
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		const pending = page.evaluate(async () => {
+			try { await window.ashAppToolsIntegration.call({ type: 'openTerminal' }); return 'accepted'; }
+			catch (error) { return String(error); }
+		});
+		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.terminalPending)).toBe(true);
+		await page.evaluate(invalidation => {
+			if (invalidation === 'workspace') window.ashAppToolsIntegration.changeWorkspace();
+			else window.ashAppToolsIntegration.disconnectTerminal();
+			window.ashAppToolsIntegration.releaseTerminal();
+		}, invalidation);
+		expect(await pending).toMatch(/cancelled/i);
+		await expect.poll(() => page.evaluate(() => ({ closed: window.ashAppToolsIntegration.closedTerminals, active: window.ashAppToolsIntegration.activeTerminal, views: window.ashAppToolsIntegration.terminalViews }))).toEqual({ closed: ['terminal-1'], active: undefined, views: [] });
+	});
+}
+
+test('Agent terminal startup reports resolver failure and an unavailable host without creating a PTY', async ({ page }) => {
+	await page.goto('/appTools.html?locale=zh-CN');
+	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+	await page.evaluate(() => window.ashAppToolsIntegration.failProfile());
+	expect(await page.evaluate(async () => {
+		try { await window.ashAppToolsIntegration.call({ type: 'openTerminal' }); return 'accepted'; }
+		catch (error) { return String(error); }
+	})).toContain('Profile executable unavailable');
+	await page.evaluate(() => window.ashAppToolsIntegration.unavailableHost());
+	expect(await page.evaluate(async () => {
+		try { await window.ashAppToolsIntegration.call({ type: 'openTerminal' }); return 'accepted'; }
+		catch (error) { return String(error); }
+	})).toContain('终端执行端尚未就绪');
+	expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalCreations)).toEqual([]);
+});
+
+test('Agent terminal releases its PTY when the terminal view cannot open', async ({ page }) => {
+	await page.goto('/appTools.html');
+	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+	await page.evaluate(() => { window.ashAppToolsIntegration.automaticCreation(); window.ashAppToolsIntegration.failView(); });
+	expect(await page.evaluate(async () => {
+		try { await window.ashAppToolsIntegration.call({ type: 'openTerminal' }); return 'accepted'; }
+		catch (error) { return String(error); }
+	})).toContain('Terminal view unavailable');
+	expect(await page.evaluate(() => ({ closed: window.ashAppToolsIntegration.closedTerminals, active: window.ashAppToolsIntegration.activeTerminal }))).toEqual({ closed: ['terminal-1'], active: undefined });
+});
+
 test('disposing the application adapter releases its host and rejects late terminal completion', async ({ page }) => {
 	await page.goto('/appTools.html');
 	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
@@ -110,3 +224,37 @@ test('sidebar headings and celebration particles resolve typography in every the
 		await expect(page.locator('.ash-app-confetti')).toHaveCount(0);
 	}
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Agent task tools share Run IDs, output and cancellation with Tasks and Terminal in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/appTools.html?taskTools=true&locale=' + locale);
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		await page.evaluate(() => window.ashAppToolsIntegration.automaticCreation());
+		const catalog = await page.evaluate(async () => await window.ashAppToolsIntegration.call({ type: 'tasksList', directory: '/workspace' }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskCatalog);
+		const task = catalog.tasks.find(task => task.label === 'Check')!;
+		expect(task.revision).toHaveLength(64);
+		expect(catalog.tasks.find(task => task.label === 'Interactive')!.unavailableReason).toContain(locale === 'zh-CN' ? '需要扩展' : 'needs an extension');
+		const run = await page.evaluate(async task => await window.ashAppToolsIntegration.call({ type: 'tasksRun', directory: '/workspace', taskId: task.taskId, revision: task.revision! }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskRunSummary, task);
+		const status = () => page.evaluate(async runId => await window.ashAppToolsIntegration.call({ type: 'tasksStatus', directory: '/workspace', runId }) as import('../../../src/ash/sessions/services/appTools/browser/appTools.js').TaskRunSummary, run.runId);
+		await expect.poll(async () => (await status()).terminalId).toBe('terminal-instance-1');
+		const row = page.locator('[data-run-id="' + run.runId + '"]');
+		await expect(row).toContainText('Check');
+		await expect(row).toHaveAttribute('data-terminal-id', 'terminal-instance-1');
+		await expect(row).toHaveAttribute('title', (locale === 'zh-CN' ? '运行 ID：' : 'Run ID: ') + run.runId);
+		await expect.poll(() => page.evaluate(async runId => (await window.ashAppToolsIntegration.call({ type: 'tasksOutput', directory: '/workspace', runId, cursor: 0, maxCharacters: 4096 }) as { text: string }).text, run.runId)).toContain('output for terminal-1');
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(1);
+		for (let attempt = 0; attempt < 2; attempt++) {
+			const cancelled = await page.evaluate(async runId => await window.ashAppToolsIntegration.call({ type: 'tasksCancel', directory: '/workspace', runId }) as { status: string }, run.runId);
+			expect(cancelled.status).toBe('canceled');
+		}
+		expect((await status()).status).toBe('canceled');
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-1']);
+		await page.evaluate(() => window.ashAppToolsIntegration.changeTask());
+		const stale = await page.evaluate(async task => { try { await window.ashAppToolsIntegration.call({ type: 'tasksRun', directory: '/workspace', taskId: task.taskId, revision: task.revision! }); return 'unexpected success'; } catch (error) { return String(error); } }, task);
+		expect(stale).toContain(locale === 'zh-CN' ? '已更改' : 'configuration changed');
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(1);
+		expect(errors).toEqual([]);
+	});
+}

@@ -5,7 +5,7 @@ import { getFlatContextMenuActions } from '../../../../platform/actions/browser/
 import type { IMenu } from '../../../../platform/actions/common/actions.js';
 import type { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import type { ISerializedTerminalInstanceContext } from '../common/terminal.js';
-import type { ITerminalInstance } from './terminal.js';
+import type { ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 
 /** Menu contexts retain identity without retaining the instance's screen or process. */
 export class InstanceContext {

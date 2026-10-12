@@ -5,7 +5,7 @@ import { CancellationTokenSource, cancelOnDispose, type CancellationToken } from
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { ITerminalProcessService, type IProcessDataEvent, type ITerminalProcessCloseOptions, type ITerminalProcessCommandStatusEvent } from '../../../../platform/terminal/common/terminal.js';
-import type { ITerminalCommandStatusEvent } from './terminal.js';
+import type { ITerminalCommandStatusEvent } from '../../../services/terminal/browser/terminal.js';
 
 const INPUT_BATCH_DELAY_MILLIS = 8;
 const INPUT_BATCH_CHARACTERS = 16_384;

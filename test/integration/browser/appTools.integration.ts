@@ -1,3 +1,14 @@
+import { TaskService } from '../../../src/ash/workbench/contrib/tasks/browser/taskService.js';
+import { TasksViewPane } from '../../../src/ash/workbench/contrib/tasks/browser/tasksViewPane.js';
+import { IFileService, FileKind, FileNotFoundError } from '../../../src/ash/platform/files/common/files.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
+import { IOutputService } from '../../../src/ash/workbench/services/output/common/output.js';
+import { IMarkerService, MarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { IModelService } from '../../../src/ash/editor/common/services/model.js';
+import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
@@ -12,7 +23,26 @@ import { BrowserStorageService } from '../../../src/ash/workbench/services/stora
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalService } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
+import { TerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalService.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import { TerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileService.js';
+import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
+import { ITerminalProcessService, type ITerminalProcessCreateOptions, type TerminalProcessProfileSelection } from '../../../src/ash/platform/terminal/common/terminal.js';
+import { OperatingSystem } from '../../../src/ash/base/common/platform.js';
+import { URI } from '../../../src/ash/base/common/uri.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { IConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/common/configurationResolver.js';
+import { ConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/browser/configurationResolverService.js';
+import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
+import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
@@ -37,7 +67,13 @@ class Transport implements AppServerTransport {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) { queueMicrotask(() => this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: 'app-tools', workspaceRoot: '/' })); return; }
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) return;
 		const message = JSON.parse((payload as { frame: string; }).frame);
-		if (message.method === 'initialize') { queueMicrotask(() => this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: message.id, result: createTestInitializeResult() }) })); return; }
+		if (message.method === 'initialize') {
+			const initialization = createTestInitializeResult();
+			const platform = new URL(location.href).searchParams.get('os');
+			const result = { ...initialization, serverInfo: { ...initialization.serverInfo, operatingSystem: platform === 'windows' ? 'windows' : platform === 'osx' ? 'mac' : 'linux', userHome: platform === 'windows' ? 'C:\\Users\\test' : initialization.serverInfo.userHome } };
+			queueMicrotask(() => this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: message.id, result }) }));
+			return;
+		}
 		const pending = this.pending.get(message.id);
 		if (pending) { this.pending.delete(message.id); if (message.error) pending.reject(new Error(message.error.message)); else pending.resolve(JSON.parse(message.result.json)); }
 	}
@@ -63,7 +99,15 @@ const changes = resources.add(new Emitter<void>());
 const opened: unknown[] = [];
 const openedUrls: string[] = [];
 let releaseTerminal: (() => void) | undefined;
+let releaseProfile: (() => void) | undefined;
+let automaticCreation = false;
+let holdProfile = false;
+let profileFailure = false;
+let viewFailure = false;
 const closedTerminals: string[] = [];
+const terminalCreations: ITerminalProcessCreateOptions[] = [];
+const profileSelections: TerminalProcessProfileSelection[] = [];
+const terminalViews: Array<{ id: string; focus: boolean | undefined; }> = [];
 const sessions = [1, 2].map(id => ({ sessionId: `session-${id}`, title: `Task ${id}`, status: 'active', chats: [{ threadId: `thread-${id}`, status: 'active', origin: { type: 'root' } }] }));
 const management = { sessions, state: 'ready' } as unknown as ISessionsManagementService;
 const view = { activeSelection: undefined, visibleSelections: [], onDidChange: changes.event, openNewSession: () => { }, openSession: (sessionId: string) => opened.push(sessionId) } as unknown as ISessionsService;
@@ -71,14 +115,105 @@ const container = document.createElement('main');
 document.body.append(container);
 resources.add(new SessionsList(container, management, view, 'Tasks', 'New task', { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups));
 const services = resources.add(new InstantiationService());
+const platform = new URL(location.href).searchParams.get('os') ?? 'linux';
+const workspace = resources.add(new WorkspaceContextService({ id: 'app-tools', uri: platform === 'windows' ? URI.from({ scheme: 'file', path: '/c:/workspace' }) : URI.file('/workspace') }));
+const configuration = resources.add(new WorkbenchConfigurationService());
+const terminalConnection = resources.add(new Emitter<import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
+let executionOS: OperatingSystem | undefined = platform === 'windows' ? OperatingSystem.Windows : platform === 'osx' ? OperatingSystem.Macintosh : OperatingSystem.Linux;
+const taskProcessState = new Map<string, { exited: boolean; exitCode: number | undefined; }>();
+const terminalProcesses: ITerminalProcessService = {
+	get operatingSystem() { return executionOS; },
+	onConnectionState: terminalConnection.event, getConnectionState: async () => 'ready',
+	getEnvironment: async () => ({ HOME: '/execution/home', BASE: 'inherited' }),
+	listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }],
+	resolveProfile: async selection => {
+		profileSelections.push(selection);
+		if (holdProfile) {
+			holdProfile = false;
+			await new Promise<void>(resolve => { releaseProfile = resolve; });
+		}
+		if (profileFailure) throw new Error('Profile executable unavailable');
+		return {
+			profile: { profileId: selection.type === 'custom' ? `custom:${selection.name}` : 'bash', title: selection.type === 'custom' ? selection.name : 'Bash', isDefault: selection.type !== 'custom' },
+			executable: selection.type === 'custom' ? selection.path[0]! : '/bin/bash', args: selection.type === 'custom' ? [...selection.args] : [],
+		};
+	},
+	create: async options => {
+		terminalCreations.push(options);
+		const terminalId = `terminal-${terminalCreations.length}`;
+		if (options.execution) taskProcessState.set(terminalId, { exited: false, exitCode: undefined });
+		if (!automaticCreation) await new Promise<void>(resolve => { releaseTerminal = resolve; });
+		return { terminalId, ready: { pid: terminalCreations.length, cwd: options.cwd ?? '/workspace' }, profile: { profileId: options.profile.type === 'custom' ? `custom:${options.profile.name}` : 'bash', title: options.profile.type === 'custom' ? options.profile.name : 'Bash', isDefault: false }, connectionPersistence: 'connectionOwned' };
+	},
+	read: async options => {
+		const task = taskProcessState.get(options.terminalId);
+		return { terminalId: options.terminalId, chunks: task && options.afterSequence === 0 ? [{ sequence: 1, data: new TextEncoder().encode('output for ' + options.terminalId + '\n') }] : [], nextSequence: task ? 1 : 0, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, outputGap: false, exited: task?.exited ?? false, exitCode: task?.exitCode };
+	},
+	write: async () => { throw new Error('Opening a terminal must not send command input'); },
+	resize: async () => { }, close: async options => { closedTerminals.push(options.terminalId); },
+};
+const renderer = createDisconnectedRendererApi();
+services.registerInstance(IPathService, new BrowserPathService({ ...renderer, hasAppServer: true, appServer: { ...renderer.appServer, operatingSystem: executionOS } }, workspace));
+services.registerInstance(IWorkspaceContextService, workspace);
+services.registerInstance(IConfigurationService, configuration);
+services.registerInstance(ITerminalProcessService, terminalProcesses);
+services.registerSingleton(ICommandService, () => new CommandService(services));
+services.registerSingleton(IConfigurationResolverService, () => services.createInstance(ConfigurationResolverService));
+services.registerInstance(IExtensionService, { terminalProfiles: [], onDidChange: Event.None, reload: async () => { }, activateByEvent: async () => { } } as unknown as IExtensionService);
+services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
+services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
 services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);
-services.registerInstance(ITerminalService, { createTerminal: () => new Promise(resolve => { releaseTerminal = () => resolve({ id: 'terminal-1' }); }), setActiveInstance: () => { }, closeTerminal: async (terminal: { id: string; }) => { closedTerminals.push(terminal.id); } } as unknown as ITerminalService);
-services.registerInstance(IViewsService, { openView: async () => { } } as unknown as IViewsService);
+const terminals = resources.add(services.createInstance(TerminalService));
+services.registerInstance(ITerminalService, terminals);
+services.registerInstance(IViewsService, { openView: async (id: string, focus: boolean | undefined) => { if (viewFailure) throw new Error('Terminal view unavailable'); terminalViews.push({ id, focus }); } } as unknown as IViewsService);
 services.registerInstance(IChatSessionNavigationService, { openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as IChatSessionNavigationService);
 services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
+let taskSource = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'compiler', presentation: { reveal: 'never' } }, { label: 'Interactive', command: '${input:value}' }] });
+services.registerInstance(IFileService, { onDidChangeFiles: Event.None,
+	stat: async (resource: URI) => { if (!resource.path.endsWith('/.vscode/tasks.json')) throw new FileNotFoundError(resource); return { kind: FileKind.File }; },
+	readFile: async (resource: URI) => { if (!resource.path.endsWith('/.vscode/tasks.json')) throw new FileNotFoundError(resource); return { content: taskSource }; },
+} as unknown as import('../../../src/ash/platform/files/common/files.js').IFileService);
+services.registerInstance(ILogService, new NullLoggerService());
+services.registerInstance(IOutputService, { createChannel: () => Object.assign(toDisposable(() => { }), { appendLine() { } }) } as unknown as import('../../../src/ash/workbench/services/output/common/output.js').IOutputService);
+services.registerInstance(IMarkerService, resources.add(new MarkerService()));
+services.registerInstance(IModelService, { getModel: () => null } as unknown as import('../../../src/ash/editor/common/services/model.js').IModelService);
+services.registerInstance(IFileSearchService, { glob: async () => ({ matches: [] }) } as unknown as import('../../../src/ash/platform/search/common/fileSearch.js').IFileSearchService);
+services.registerInstance(IQuickInputService, { createQuickPick: () => { throw new Error('No interaction expected'); } } as unknown as import('../../../src/ash/platform/quickinput/common/quickInput.js').IQuickInputService);
+services.registerInstance(INotificationService, { warning() { }, error() { } } as unknown as import('../../../src/ash/platform/notification/common/notification.js').INotificationService);
+
+const taskService = resources.add(services.createInstance(TaskService));
+services.registerInstance(ITaskService, taskService);
+if (new URL(location.href).searchParams.has('taskTools')) {
+	const taskContainer = document.createElement('section'); document.body.append(taskContainer);
+	resources.add(services.createInstance(TasksViewPane, taskContainer, { id: 'ash.tasks.integration', title: 'Tasks' }));
+}
 const appTools = resources.add(new AppServerAppToolsHost(client, services.createInstance(AppToolsHost, document, undefined)));
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-declare global { interface Window { ashAppToolsIntegration: { call(operation: AppHostOperation): Promise<unknown>; readonly opened: unknown[]; readonly openedUrls: string[]; cancelLast(): void; releaseTerminal(): void; disposeHost(): void; readonly closedTerminals: string[]; readonly terminalPending: boolean; }; } }
-window.ashAppToolsIntegration = { call: operation => transport.call(operation), opened, openedUrls, cancelLast: () => transport.cancelLast(), releaseTerminal: () => releaseTerminal?.(), disposeHost: () => appTools.dispose(), closedTerminals, get terminalPending() { return releaseTerminal !== undefined; } };
+declare global {
+	interface Window {
+		ashAppToolsIntegration: {
+			finishTask(code: number): void; changeTask(): void;
+			call(operation: AppHostOperation): Promise<unknown>; readonly opened: unknown[]; readonly openedUrls: string[];
+			cancelLast(): void; releaseTerminal(): void; disposeHost(): void; readonly closedTerminals: string[]; readonly terminalPending: boolean;
+			configureTerminal(values: Record<string, unknown>): Promise<void>; automaticCreation(): void; holdProfile(): void; releaseProfile(): void;
+			readonly profilePending: boolean; readonly terminalCreations: ITerminalProcessCreateOptions[]; readonly profileSelections: TerminalProcessProfileSelection[];
+			readonly terminalViews: Array<{ id: string; focus: boolean | undefined; }>; readonly activeTerminal: string | undefined;
+			changeWorkspace(): void; disconnectTerminal(): void; failProfile(): void; unavailableHost(): void; failView(): void;
+		};
+	}
+}
+window.ashAppToolsIntegration = {
+	finishTask: code => { for (const task of taskProcessState.values()) { task.exited = true; task.exitCode = code; } },
+	changeTask: () => { taskSource = taskSource.replace('compiler', 'changed'); },
+	call: operation => transport.call(operation), opened, openedUrls, cancelLast: () => transport.cancelLast(), releaseTerminal: () => releaseTerminal?.(),
+	disposeHost: () => appTools.dispose(), closedTerminals, get terminalPending() { return releaseTerminal !== undefined; },
+	configureTerminal: async values => { for (const [key, value] of Object.entries(values)) await configuration.updateValue(key, value); },
+	automaticCreation: () => { automaticCreation = true; }, holdProfile: () => { holdProfile = true; }, releaseProfile: () => releaseProfile?.(),
+	get profilePending() { return releaseProfile !== undefined; }, terminalCreations, profileSelections, terminalViews,
+	get activeTerminal() { return terminals.activeInstance?.id; },
+	changeWorkspace: () => workspace.updateWorkspace({ id: 'changed', uri: URI.file('/changed') }),
+	disconnectTerminal: () => terminalConnection.fire('crashed'), failProfile: () => { profileFailure = true; }, unavailableHost: () => { executionOS = undefined; },
+	failView: () => { viewFailure = true; },
+};

@@ -1,7 +1,11 @@
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
+import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
+import { BrowserTerminalProfileResolverService } from '../../../../contrib/terminal/browser/terminalProfileResolverService.js';
 import { IEditorService } from '../../../editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../editor/common/editorGroupsService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
-import { ConfigurationRegistry, ConfigurationScope } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationRegistry, ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -64,7 +68,7 @@ import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileS
 import { IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
-import { ITerminalService } from "../../../../contrib/terminal/browser/terminal.js";
+import { ITerminalService } from "../../../terminal/browser/terminal.js";
 import { DebugAdapterFactoryRegistry, createStaticDebugAdapterFactory } from "../../common/debugAdapterFactory.js";
 import { DebugService } from "../../../../contrib/debug/browser/debugService.js";
 import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
@@ -330,6 +334,11 @@ class FakeFileService implements IFileSystemProvider {
 }
 
 class FakeTaskService extends Disposable implements ITaskService {
+	readonly runs: ITaskRun[] = [];
+	start(): never { throw new Error('Agent task start is outside this fixture'); }
+	async describe(): Promise<never> { throw new Error('Agent task description is outside this fixture'); }
+	getRun(): undefined { return undefined; }
+
 	async rerun(): Promise<undefined> { return undefined; }
 	async runProvidedTask(): Promise<never> { throw new Error('Provided task execution is outside this fixture'); }
 	readonly tasks: readonly IWorkspaceTask[] = Object.freeze([task("prepare"), task("build"), task("cleanup")]);
@@ -342,7 +351,7 @@ class FakeTaskService extends Disposable implements ITaskService {
 	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
 	async refresh() { return this.tasks; }
-	async run(taskValue: IWorkspaceTask): Promise<ITaskRun> { this.ran.push(taskValue.label); const run = { task: taskValue, terminalId: "task-terminal", status: "succeeded" as const, exitCode: 0, onDidChangeStatus: Event.None }; this.lastRun = run; return run; }
+	async run(taskValue: IWorkspaceTask): Promise<ITaskRun> { this.ran.push(taskValue.label); const run = { task: taskValue, runId: 'fixture-run', readOutput: (cursor: number) => ({ text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false }), terminalId: "task-terminal", status: "succeeded" as const, exitCode: 0, onDidChangeStatus: Event.None }; this.lastRun = run; return run; }
 	async terminate() { }
 }
 
@@ -451,13 +460,30 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
 }
 
+function registerTerminalProfiles(services: InstantiationService): void {
+	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
+	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
+}
+
+async function resolveTerminalProfile(selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) {
+	const profileId = selection.type === 'profile' ? selection.profileId : selection.type === 'custom' ? `custom:${selection.name}` : 'shell';
+	return {
+		profile: { profileId, title: selection.type === 'custom' ? selection.name : profileId, isDefault: selection.type === 'default' },
+		executable: selection.type === 'custom' ? selection.path[0]! : /powershell|pwsh/.test(profileId) ? `/tools/${profileId}.exe` : `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
+		args: selection.type === 'custom' ? [...selection.args] : [],
+	};
+}
+
 function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { editor?: IEditorService; groups?: IEditorGroupsService; configuration?: IConfigurationService; executionOS?: OperatingSystem; }): DebugService {
 	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, testPathService(workspace, options?.executionOS)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, owner.add(createTestFileService(files))],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
 		[IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[IDebugAdapterProcessService, processes],
-		[ITerminalProcessService, { getEnvironment: async () => ({ HOME: '/execution/home' }) }], [ITerminalService, terminals],
+		[ITerminalProcessService, {
+			operatingSystem: options?.executionOS ?? OperatingSystem.Linux, onConnectionState: Event.None,
+			getEnvironment: async () => ({ HOME: '/execution/home' }), listProfiles: () => terminals.getProfiles(), resolveProfile: resolveTerminalProfile,
+		}], [ITerminalService, terminals],
 		[IStorageService, storage],
 		[ITaskService, tasks],
 		[IDebugAdapterFactorySource, adapters],
@@ -470,6 +496,7 @@ function createDebugService(owner: DisposableStore, files: IFileSystemProvider, 
 	if (quickInput) services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IEditorService, options?.editor ?? { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IEditorGroupsService, options?.groups ?? {} as IEditorGroupsService);
+	registerTerminalProfiles(services);
 	return services.createInstance(DebugService);
 }
 
@@ -543,6 +570,9 @@ test('DebugService saveBeforeStart policies select files and active untitled Sav
 		using processes = new FakeDebugAdapterProcessService();
 		using adapters = new DebugAdapterFactoryRegistry();
 		const registry = new ConfigurationRegistry();
+		for (const definition of Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getRegisteredConfigurations().filter(definition => definition.key.startsWith('terminal.integrated.'))) {
+			registry.registerConfiguration({ key: definition.key, defaultValue: definition.defaultValue, parse: definition.parse, serialize: definition.serialize, scope: definition.scope, schema: definition.schema });
+		}
 		registry.registerConfiguration({ key: 'debug.saveBeforeStart', defaultValue: policy === 'cancelUntitled' ? 'allEditorsInActiveGroup' : policy, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, parse: value => String(value) });
 		const configuration = resources.add(new WorkbenchConfigurationService({ registry }));
 		const calls: unknown[] = [];
@@ -846,7 +876,7 @@ for (const result of ['succeeded', 'failed'] as const) {
 		tasks.run = async task => {
 			tasks.ran.push(task.label);
 			void entered.complete(undefined);
-			return { task, terminalId: 'build', get status() { return buildResult; }, get exitCode() { return buildResult === 'succeeded' ? 0 : buildResult === 'failed' ? 1 : undefined; }, onDidChangeStatus: buildStatus.event };
+			return { task, runId: 'fixture-run', readOutput: (cursor: number) => ({ text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false }), terminalId: 'build', get status() { return buildResult; }, get exitCode() { return buildResult === 'succeeded' ? 0 : buildResult === 'failed' ? 1 : undefined; }, onDidChangeStatus: buildStatus.event };
 		};
 		let descriptors = 0;
 		using registration = adapters.registerFactories([{ type: 'hosted', label: 'Hosted', sourceId: 'host', createDebugAdapterDescriptor: async () => { descriptors++; assert.equal(buildResult, 'succeeded'); return { program: 'compiled-adapter', arguments: [] }; } }]);
@@ -1381,6 +1411,7 @@ suite('Extension debug session lifecycle', () => {
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 			services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
+			registerTerminalProfiles(services);
 			registerTestWorkbenchInteractionServices(resources, services);
 			services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 			const processes = resources.add(new FakeDebugAdapterProcessService());
@@ -1458,6 +1489,7 @@ suite('Extension debug session lifecycle', () => {
 				services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
+				registerTerminalProfiles(services);
 				registerTestWorkbenchInteractionServices(resources, services);
 				services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 				const processes = resources.add(new FakeDebugAdapterProcessService());
@@ -1744,6 +1776,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 	services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
 	services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 	services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
+	registerTerminalProfiles(services);
 	registerTestWorkbenchInteractionServices(resources, services);
 	services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 	const processes = resources.add(new FakeDebugAdapterProcessService());
@@ -2040,6 +2073,7 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 			services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
+			registerTerminalProfiles(services);
 			services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 			const peer = resources.add(new FakeDebugAdapterProcessService());
 			services.registerInstance(IDebugAdapterProcessService, peer);

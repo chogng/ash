@@ -10,7 +10,7 @@ import { ITerminalProcessService } from '../../../../../platform/terminal/common
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TerminalService } from '../../../../contrib/terminal/browser/terminalService.js';
 import { TerminalMainContribution } from '../../../../contrib/terminal/browser/terminalMainContribution.js';
-import { ITerminalService, type ITerminalInstance } from '../../../../contrib/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../browser/terminal.js';
 import { TERMINAL_VIEW_ID } from '../../../../contrib/terminal/common/terminal.js';
 import { IViewsService } from '../../../views/common/viewsService.js';
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';

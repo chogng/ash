@@ -12,7 +12,8 @@ import { IQuickInputService, type IQuickPickItem } from "../../../../../platform
 import { computeLinks } from "../../../../../editor/common/languages/linkComputer.js";
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
 import { localize } from "../../../../../nls.js";
-import { ITerminalConfigurationService, type ITerminalCommandStatusEvent, type ITerminalDimensions, type ITerminalInstance } from "../terminal.js";
+import { ITerminalConfigurationService } from "../terminal.js";
+import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance, IXtermTerminal } from "../../../../services/terminal/browser/terminal.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
 import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';
@@ -24,7 +25,7 @@ import { contrastBorder, focusBorder } from '../../../../../platform/theme/commo
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
-export class XtermTerminal extends Disposable {
+export class XtermTerminal extends Disposable implements IXtermTerminal {
 	readonly element: HTMLDivElement;
 	private terminal: Terminal | undefined;
 	private fitAddon: FitAddon | undefined;

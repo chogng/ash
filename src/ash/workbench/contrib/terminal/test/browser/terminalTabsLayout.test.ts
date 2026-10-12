@@ -8,10 +8,10 @@ import { IMenuService } from '../../../../../platform/actions/common/actions.js'
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { ITerminalService } from '../../browser/terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../../../services/terminal/browser/terminal.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import type { ITerminalInstance } from '../../browser/terminal.js';
+
 import assert from "node:assert/strict";
 import { test, suite, suiteTeardown } from "mocha";
 import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../base/test/common/utils.js";

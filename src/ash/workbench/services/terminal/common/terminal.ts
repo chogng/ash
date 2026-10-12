@@ -1,0 +1,55 @@
+import type { Event } from '../../../../base/common/event.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { ICreateContributedTerminalProfileOptions, IExtensionTerminalProfile, IShellLaunchConfig, ITerminalProfile } from '../../../../platform/terminal/common/terminal.js';
+import type { OperatingSystem } from '../../../../base/common/platform.js';
+import type { ThemeIcon } from '../../../../base/common/themables.js';
+
+/** Available trusted shells and the effective interactive default in this window. */
+export interface ITerminalProfileService extends IDisposable {
+	readonly availableProfiles: readonly ITerminalProfile[];
+	readonly contributedProfiles: readonly IExtensionTerminalProfile[];
+	readonly profilesReady: Promise<void>;
+	readonly onDidChangeAvailableProfiles: Event<readonly ITerminalProfile[]>;
+	refreshAvailableProfiles(): Promise<void>;
+	getPlatformKey(): Promise<'linux' | 'osx' | 'windows'>;
+	getDefaultProfileName(): string | undefined;
+	getDefaultProfile(os?: OperatingSystem): ITerminalProfile | undefined;
+	getContributedDefaultProfile(shellLaunchConfig: IShellLaunchConfig): Promise<IExtensionTerminalProfile | undefined>;
+	registerContributedProfile(args: IRegisterContributedProfileArgs): Promise<void>;
+	registerInternalContributedProfile(profile: IExtensionTerminalProfile): IDisposable;
+	getContributedProfileProvider(extensionIdentifier: string, id: string): ITerminalProfileProvider | undefined;
+	registerTerminalProfileProvider(extensionIdentifier: string, id: string, provider: ITerminalProfileProvider): IDisposable;
+	overrideDefaultProfile(extensionIdentifier: string, id: string): IDisposable;
+}
+
+export const ITerminalProfileService = createServiceIdentifier<ITerminalProfileService>('terminalProfileService');
+
+export interface IRegisterContributedProfileArgs extends IExtensionTerminalProfile {
+	readonly options: ICreateContributedTerminalProfileOptions;
+}
+
+export interface ITerminalProfileProvider {
+	createContributedTerminalProfile(options: ICreateContributedTerminalProfileOptions): Promise<void>;
+}
+
+export interface IShellLaunchConfigResolveOptions {
+	readonly remoteAuthority: string | undefined;
+	readonly os: OperatingSystem;
+	readonly allowAutomationShell?: boolean;
+	readonly allowAgentHostShell?: boolean;
+}
+
+export interface ITerminalProfileResolverService {
+	readonly defaultProfileName: string | undefined;
+	resolveIcon(shellLaunchConfig: IShellLaunchConfig, os: OperatingSystem): void;
+	resolveShellLaunchConfig(shellLaunchConfig: IShellLaunchConfig, options: IShellLaunchConfigResolveOptions): Promise<void>;
+	getDefaultProfile(options: IShellLaunchConfigResolveOptions): Promise<ITerminalProfile>;
+	getDefaultShell(options: IShellLaunchConfigResolveOptions): Promise<string>;
+	getDefaultShellArgs(options: IShellLaunchConfigResolveOptions): Promise<readonly string[]>;
+	getDefaultIcon(): ThemeIcon;
+	getEnvironment(remoteAuthority: string | undefined): Promise<Readonly<Record<string, string>>>;
+}
+
+export const ITerminalProfileResolverService = createServiceIdentifier<ITerminalProfileResolverService>('terminalProfileResolverService');
+

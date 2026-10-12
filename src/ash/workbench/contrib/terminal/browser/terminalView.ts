@@ -4,7 +4,8 @@ import {
 	TerminalActiveInstanceInTitleContext,
 	TerminalActiveInstanceStateContext,
 } from '../common/terminalContextKey.js';
-import { ITerminalProfileResolverService, ITerminalProfileService, TerminalCommandId } from '../common/terminal.js';
+import { TerminalCommandId } from '../common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { terminalProfileIcon } from "./terminalIcon.js";
 import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
@@ -24,8 +25,8 @@ import { AppServerRemoteError } from "../../../../platform/agentHost/common/appS
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
-import { type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService } from "./terminal.js";
-import type { XtermTerminal } from "./xterm/xtermTerminal.js";
+import { type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type IXtermTerminal } from "../../../services/terminal/browser/terminal.js";
+
 import { TerminalTabbedView } from "./terminalTabbedView.js";
 import "./media/terminal.css";
 import { h } from "../../../../base/browser/dom.js";
@@ -315,7 +316,7 @@ function terminalErrorMessage(error: unknown, fallback: string): string {
 class TerminalViewItem extends Disposable {
 	constructor(
 		readonly instance: ITerminalInstance,
-		readonly widget: XtermTerminal,
+		readonly widget: IXtermTerminal,
 		onDidChangeState: () => void,
 	) {
 		super();

@@ -10,7 +10,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminal.js";
 import { TerminalService } from "../../browser/terminalService.js";
 import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
-import { ITerminalService, type ITerminalInstance } from "../../browser/terminal.js";
+import { ITerminalService, type ITerminalInstance } from "../../../../services/terminal/browser/terminal.js";
 import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
 
 const DEFAULT_PROFILE = {
@@ -801,7 +801,15 @@ suite('TerminalService lifecycle', () => {
 		const output: string[] = [];
 		using listener = instance.onDidWriteData(event => output.push(new TextDecoder().decode(event.data)));
 		processes.closeGates.push(release.promise);
-		const replacing = instance.reuseTerminal({ name: 'Replacement', env: { NEW: 'new', OLD: null }, cwd: '/workspace/new', execution: { type: 'process', program: 'second', args: ['$HOME', ''] }, deferStart: true });
+		const executable = ['/custom/shell'];
+		const args = ['-l'];
+		const execution = { type: 'process' as const, program: 'second', args: ['$HOME', ''] };
+		const env = { NEW: 'new', OLD: null };
+		const replacing = instance.reuseTerminal({ name: 'Replacement', executable, args, env, cwd: '/workspace/new', execution, deferStart: true });
+		executable[0] = '/changed/shell';
+		args.push('-changed');
+		execution.args[0] = 'changed';
+		env.NEW = 'changed';
 		await waitFor(() => processes.closeCalls.length === 1);
 		assert.equal(processes.createCalls.length, 1, 'the replacement cannot overlap an unacknowledged old process');
 		release.resolve();
@@ -809,7 +817,7 @@ suite('TerminalService lifecycle', () => {
 		oldRead.resolve(readResult({ chunks: [{ sequence: 1, data: new TextEncoder().encode('OLD_OUTPUT') }], nextSequence: 1, exited: true, exitCode: 99 }));
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.deepEqual({ output, state: instance.state, exitCode: instance.exitCode, id: instance.id, title: instance.title, pid: instance.processId, reads: processes.readCursors, instances: service.instances.length }, { output: [], state: 'running', exitCode: undefined, id: 'terminal-instance-1', title: 'Replacement', pid: 1002, reads: [0], instances: 1 });
-		assert.deepEqual(processes.createCalls[1], { rows: 24, cols: 80, profile: { type: 'default' }, env: { NEW: 'new', OLD: null }, cwd: '/workspace/new', execution: { type: 'process', program: 'second', args: ['$HOME', ''] } });
+		assert.deepEqual(processes.createCalls[1], { rows: 24, cols: 80, profile: { type: 'custom', name: 'Replacement', path: ['/custom/shell'], args: ['-l'] }, env: { NEW: 'new', OLD: null }, cwd: '/workspace/new', execution: { type: 'process', program: 'second', args: ['$HOME', ''] } });
 		instance.start();
 		await waitFor(() => processes.readCursors.length === 2);
 		await service.closeTerminal(instance);

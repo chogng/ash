@@ -3,7 +3,7 @@ import { IConfigurationResolverService } from '../../../src/ash/workbench/servic
 import { ConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/browser/configurationResolverService.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import { posix } from '../../../src/ash/base/common/path.js';
-import { ITerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../src/ash/workbench/api/browser/mainThreadTerminalService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
@@ -12,7 +12,7 @@ import { InMemoryConfigurationService } from '../../../src/ash/platform/configur
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { TerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
-import { ITerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
+
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ITerminalProcessService } from '../../../src/ash/platform/terminal/common/terminal.js';
 import { OperatingSystem } from '../../../src/ash/base/common/platform.js';
@@ -38,7 +38,7 @@ import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/termina
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalDimensions, type ITerminalInstance } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
@@ -52,7 +52,7 @@ import { extUri } from '../../../src/ash/base/common/resources.js';
 import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
-import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { TerminalHasActiveInstanceContext } from '../../../src/ash/workbench/contrib/terminal/common/terminalContextKey.js';
@@ -75,10 +75,10 @@ const writes: string[] = [];
 const binaryWrites: number[][] = [];
 const resizes: ITerminalDimensions[] = [];
 let nextFixtureInstance = 0;
-function createFixtureInstance(id: string): ITerminalInstance {
+function createFixtureInstance(id: string) {
 	let screen: XtermTerminal | undefined;
 	let ready: Promise<XtermTerminal | undefined> | undefined;
-	const fixture: ITerminalInstance = {
+	const fixture = {
 		...Disposable.None,
 		id,
 		instanceId: ++nextFixtureInstance,
@@ -122,7 +122,7 @@ function createFixtureInstance(id: string): ITerminalInstance {
 			ready = undefined;
 		},
 		detachFromElement: () => { screen?.setVisible(false); screen?.element.remove(); },
-	};
+	} satisfies ITerminalInstance;
 	return fixture;
 }
 const instance = createFixtureInstance('test-terminal');
@@ -544,7 +544,7 @@ if (new URLSearchParams(location.search).has('embedder')) {
 	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
-	let hostWidget: XtermTerminal;
+	let hostWidget: import('../../../src/ash/workbench/services/terminal/browser/terminal.js').IXtermTerminal;
 	let completeHost!: () => void;
 	const hostReady = new Promise<void>(resolve => { completeHost = resolve; });
 	services.registerInstance(IViewsService, {
@@ -553,7 +553,7 @@ if (new URLSearchParams(location.search).has('embedder')) {
 				terminals.activeInstance!.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 				hostWidget = terminals.activeInstance!.xterm!;
 				hostWidget.setVisible(true);
-				await hostWidget.initialize();
+				await terminals.activeInstance!.xtermReadyPromise;
 			}
 			hostWidget.focus();
 			completeHost();
@@ -650,7 +650,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
-	let screen: XtermTerminal | undefined;
+	let screen: import('../../../src/ash/workbench/services/terminal/browser/terminal.js').IXtermTerminal | undefined;
 	const deferred = new URLSearchParams(location.search).has('deferred');
 	const observed: number[] = [];
 	store.add(terminals.onDidCreateInstance(instance => {
@@ -668,7 +668,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 		status: () => ({ reads, events, closes, state: terminal.state, remaining: terminals.instances.length }),
 		start: async () => {
 			if (!screen) { terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!); screen = terminal.xterm!; screen.setVisible(true); }
-			await screen.initialize(); screen.focus();
+			await terminal.xtermReadyPromise; screen.focus();
 		},
 		observed: () => new TextDecoder().decode(new Uint8Array(observed)),
 		snapshot: () => screen?.getBufferText(100_000, new AbortController().signal) ?? Promise.resolve(undefined),

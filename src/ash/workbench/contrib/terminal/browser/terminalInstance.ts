@@ -14,7 +14,7 @@ import {
 	type TerminalProcessConnectionState,
 } from '../../../../platform/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import type { ITerminalCommandStatusEvent, ITerminalContribution, ITerminalDimensions, ITerminalInstance, ITerminalProfile, TerminalInstanceState } from './terminal.js';
+import type { ITerminalCommandStatusEvent, ITerminalContribution, ITerminalDimensions, ITerminalInstance, ITerminalProfile, TerminalInstanceState } from '../../../services/terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from './terminalExtensions.js';
 import { TerminalProcessManager } from './terminalProcessManager.js';
 import { XtermTerminal } from './xterm/xtermTerminal.js';
@@ -387,7 +387,16 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	public reuseTerminal(shell: IShellLaunchConfig): Promise<void> {
 		if (this.closed || this.isDisposed) return Promise.reject(new CancellationError());
 		if (this.relaunchTask) return Promise.reject(new CancellationError());
-		this.relaunchTask = this.performRelaunch(this.dimensions, shell).finally(() => { this.relaunchTask = undefined; });
+		// Release can wait on the old PTY. Capture caller-owned launch data before
+		// yielding so later task preparation cannot change this replacement.
+		const replacement = {
+			...shell,
+			executable: typeof shell.executable === 'string' ? shell.executable : shell.executable && Object.freeze([...shell.executable]),
+			args: shell.args && Object.freeze([...shell.args]),
+			env: shell.env && Object.freeze({ ...shell.env }),
+			execution: shell.execution?.type === 'process' ? Object.freeze({ ...shell.execution, args: Object.freeze([...shell.execution.args]) }) : shell.execution,
+		};
+		this.relaunchTask = this.performRelaunch(this.dimensions, replacement).finally(() => { this.relaunchTask = undefined; });
 		return this.relaunchTask;
 	}
 
@@ -494,7 +503,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 					dimensions, onTitleChanged: this.onTitleChanged,
 				} : undefined;
 				this.launch = Object.freeze({
-					profile: { type: 'default' as const },
+					profile: replacement.executable ? Object.freeze({
+						type: 'custom' as const, name: replacement.name ?? this._profile.title,
+						path: Object.freeze(typeof replacement.executable === 'string' ? [replacement.executable] : [...replacement.executable]),
+						args: Object.freeze([...(replacement.args ?? [])]),
+					}) : { type: 'default' as const },
 					...(replacement.env === undefined ? {} : { env: Object.freeze({ ...replacement.env }) }),
 					...(replacement.cwd === undefined ? {} : { cwd: replacement.cwd }),
 					...(replacement.execution === undefined ? {} : { execution: replacement.execution.type === 'process' ? Object.freeze({ ...replacement.execution, args: Object.freeze([...replacement.execution.args]) }) : Object.freeze({ ...replacement.execution }) }),

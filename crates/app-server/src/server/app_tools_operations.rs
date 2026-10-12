@@ -23,6 +23,12 @@ use core_api::CoreError;
 use serde_json::Value;
 use serde_json::json;
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum TaskDirectoryAccess {
+    Read,
+    Execute,
+}
+
 impl AppToolHost for AppServer {
     fn execute(
         &self,
@@ -55,6 +61,12 @@ impl AppToolHost for AppServer {
             AppToolOperation::AutomationUpdate { operation } => self.execute_app_automation(operation, &command_id, context)?,
             other => {
                 let operation = match other {
+                    AppToolOperation::TasksList { directory } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Read)?; AppHostOperation::TasksList { directory } }
+                    AppToolOperation::TasksDescribe { directory, task_id, revision } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Execute)?; AppHostOperation::TasksDescribe { directory, task_id, revision } }
+                    AppToolOperation::TasksRun { directory, task_id, revision } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Execute)?; AppHostOperation::TasksRun { directory, task_id, revision } }
+                    AppToolOperation::TasksStatus { directory, run_id } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Read)?; AppHostOperation::TasksStatus { directory, run_id } }
+                    AppToolOperation::TasksOutput { directory, run_id, cursor, max_characters } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Read)?; AppHostOperation::TasksOutput { directory, run_id, cursor, max_characters } }
+                    AppToolOperation::TasksCancel { directory, run_id } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Execute)?; AppHostOperation::TasksCancel { directory, run_id } }
                     AppToolOperation::OpenInAsh { target } => match target {
                         OpenTarget::File { path, line } => { self.validate_app_path(&path, context)?; AppHostOperation::OpenFile { path, line } }
                         OpenTarget::Browser { url } => {
@@ -84,6 +96,54 @@ impl AppToolHost for AppServer {
 }
 
 impl AppServer {
+    fn validate_task_directory(
+        &self,
+        directory: &str,
+        context: &AppToolContext,
+        access: TaskDirectoryAccess,
+    ) -> Result<String, CoreError> {
+        if matches!(
+            self.session_view(&context.session_id)
+                .map_err(rpc_error)?
+                .execution_target,
+            Some(ash_protocol::SessionExecutionTarget::Ssh { .. })
+        ) {
+            return Err(CoreError::Policy(
+                "IDE task execution is only available for local execution targets".into(),
+            ));
+        }
+        if !std::path::Path::new(directory).is_absolute() {
+            return Err(CoreError::Policy("task directory must be absolute".into()));
+        }
+        let dir = ash_file_access::Dir::open_local(directory)
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let path = dir.canonical_path();
+        let runtime = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !runtime
+            .dir_grants
+            .list(&context.session_id)
+            .iter()
+            .any(|entry| {
+                entry
+                    .permissions()
+                    .allows(ash_file_access::Permission::ReadFiles)
+                    && (access == TaskDirectoryAccess::Read
+                        || entry
+                            .permissions()
+                            .allows(ash_file_access::Permission::ExecuteCommands))
+                    && path.starts_with(entry.dir().canonical_path())
+            })
+        {
+            return Err(CoreError::Policy(
+                "task directory is outside the caller's granted capabilities".into(),
+            ));
+        }
+        Ok(path.to_string_lossy().into_owned())
+    }
+
     fn validate_app_path(&self, path: &str, context: &AppToolContext) -> Result<(), CoreError> {
         let path = std::path::Path::new(path);
         if !path.is_absolute() {
@@ -222,7 +282,7 @@ impl AppServer {
                     session_id: context.session_id.clone(),
                     thread_id: context.thread_id.clone(),
                     turn_id: context.turn_id.clone(),
-                    operation,
+                    operation: operation.clone(),
                 },
                 cancellation,
             )
@@ -232,7 +292,43 @@ impl AppServer {
                 "application host response exceeds 1 MiB".into(),
             ));
         }
-        serde_json::from_str(&response.json).map_err(json_error)
+        let value: Value = serde_json::from_str(&response.json).map_err(json_error)?;
+        if let AppHostOperation::TasksDescribe {
+            directory,
+            task_id,
+            revision,
+        } = operation
+        {
+            let recipe: app_tools::TaskRecipe =
+                serde_json::from_value(value.clone()).map_err(json_error)?;
+            if self.validate_task_directory(
+                &recipe.directory,
+                context,
+                TaskDirectoryAccess::Read,
+            )? != directory
+                || recipe.task_id != task_id
+                || recipe.revision != revision
+            {
+                return Err(CoreError::Policy(
+                    "task execution recipe identity changed".into(),
+                ));
+            }
+            if recipe.commands.len() > 256 {
+                return Err(CoreError::Execution(
+                    "task execution recipe exceeds 256 commands".into(),
+                ));
+            }
+            for command in recipe.commands {
+                if command.command.is_empty()
+                    || command.command.len() > 32_768
+                    || command.command.contains('\0')
+                {
+                    return Err(CoreError::Policy("invalid task command".into()));
+                }
+                self.validate_task_directory(&command.cwd, context, TaskDirectoryAccess::Execute)?;
+            }
+        }
+        Ok(value)
     }
 }
 

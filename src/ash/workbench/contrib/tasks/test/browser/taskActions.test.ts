@@ -55,7 +55,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 			const errors: string[] = [];
 			const tasks: ITaskService = {
 				rerun: async () => undefined,
-				get tasks() { return catalog; }, activeRuns: [], lastRun: undefined,
+				get tasks() { return catalog; }, runs: [], start: () => { throw new Error('Not used'); }, describe: async () => { throw new Error('Not used'); }, getRun: () => undefined, activeRuns: [], lastRun: undefined,
 				onDidChangeTasks: changes.event, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
 				registerTaskProvider: () => Disposable.None,
 				registerTaskProviders: () => ({ dispose() { }, [Symbol.dispose]() { }, replace() { } }),
@@ -63,7 +63,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				run: async task => {
 					executed.push(task);
 					if (failure) throw new Error('Unsupported execution setting');
-					return { task, terminalId: 'terminal', status: 'running', exitCode: undefined, onDidChangeStatus: Event.None };
+					return { task, runId: 'fixture-run', readOutput: (cursor: number) => ({ text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false }), terminalId: 'terminal', status: 'running', exitCode: undefined, onDidChangeStatus: Event.None };
 				},
 				runProvidedTask: async () => { throw new Error('Provided task execution is not expected in this fixture'); },
 				terminate: async () => { }, dispose() { }, [Symbol.dispose]() { },

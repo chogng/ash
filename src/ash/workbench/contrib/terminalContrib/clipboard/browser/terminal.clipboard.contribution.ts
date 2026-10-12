@@ -9,16 +9,16 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { ITerminalService, type ITerminalContribution, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../../services/terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
-import type { XtermTerminal } from '../../../terminal/browser/xterm/xtermTerminal.js';
+
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
 
 /** Clipboard operations retain their initiating instance across asynchronous host reads. */
 export class TerminalClipboardContribution extends Disposable implements ITerminalContribution {
 	public static readonly ID = 'terminal.clipboard';
-	private screen: XtermTerminal | undefined;
+	private screen: IXtermTerminal | undefined;
 	private inputGeneration = 0;
 
 	constructor(
@@ -37,7 +37,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		return instance.getContribution<TerminalClipboardContribution>(TerminalClipboardContribution.ID);
 	}
 
-	public xtermReady(screen: XtermTerminal): void {
+	public xtermReady(screen: IXtermTerminal): void {
 		this.screen = screen;
 		const textarea = screen.raw.textarea!;
 		const scope = this._register(this.contextKeys.createScoped(textarea));

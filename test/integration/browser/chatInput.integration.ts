@@ -14,7 +14,7 @@ import { ILanguageFeaturesService } from '../../../src/ash/editor/common/service
 import { LanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeaturesService.js';
 import { registerCodebaseSymbolsWorkspaceSymbolProvider } from '../../../src/ash/workbench/services/codebaseSymbols/browser/codebaseSymbolsWorkspaceSymbolProvider.js';
 import type { ICodebaseSymbolsService } from '../../../src/ash/platform/codebaseSymbols/common/codebaseSymbolsService.js';
-import { ITerminalService, type ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { TERMINAL_VIEW_ID } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';

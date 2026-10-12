@@ -1,7 +1,7 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, type IAccessibleViewContentProvider } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import type { ITerminalInstance } from '../../../terminal/browser/terminal.js';
+import type { ITerminalInstance } from '../../../../services/terminal/browser/terminal.js';
 
 export class TerminalAccessibilityHelpProvider extends Disposable implements IAccessibleViewContentProvider {
 	public readonly id = AccessibleViewProviderId.TerminalHelp;

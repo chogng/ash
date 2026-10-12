@@ -1,3 +1,4 @@
+import { localize } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
@@ -7,7 +8,7 @@ import { type ITaskRun, ITaskService, type IWorkspaceTask } from "../../../servi
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { TERMINAL_VIEW_ID } from "../../terminal/common/terminal.js";
 import { IViewsService } from "../../../services/views/common/viewsService.js";
-import { ITerminalService } from "../../terminal/browser/terminal.js";
+import { ITerminalService } from "../../../services/terminal/browser/terminal.js";
 
 /** Code-owned task catalog and execution status view. */
 export class TasksViewPane extends ViewPane {
@@ -98,7 +99,7 @@ export class TasksViewPane extends ViewPane {
 		};
 		this.titleActions.updateActions([refreshAction]);
 		this.renderedTasks = this.taskService.tasks;
-		const runs = this.taskService.lastRun ? [this.taskService.lastRun] : [];
+		const runs = [...this.taskService.activeRuns, ...(this.taskService.lastRun && this.taskService.lastRun.status !== 'running' ? [this.taskService.lastRun] : [])];
 		this.listElement.replaceChildren(...this.renderedTasks.map((task, index) => this.renderTask(task, index)), ...runs.map(run => this.renderRun(run)));
 		this.statusElement.textContent = this.error ?? (this.refreshing ? "Discovering workspace tasks…" : this.renderedTasks.length === 0 ? "No tasks found. Add .vscode/tasks.json, package.json scripts, or Cargo.toml." : `${this.renderedTasks.length} workspace ${this.renderedTasks.length === 1 ? "task" : "tasks"}.`);
 	}
@@ -131,7 +132,14 @@ export class TasksViewPane extends ViewPane {
 		button.type = "button";
 		button.className = "ash-task-run-button";
 		button.dataset.terminalId = run.terminalId;
-		button.textContent = `Last: ${run.task.label} — ${run.status}${run.exitCode === undefined ? "" : ` (${run.exitCode})`}`;
+		button.dataset.runId = run.runId;
+		button.title = localize('tasks.runIdentity', 'Run ID: {0}', run.runId);
+		button.disabled = !run.terminalId;
+		const labels = {
+			running: localize('tasks.runRunning', 'Running'), completed: localize('tasks.runCompleted', 'Completed'),
+			succeeded: localize('tasks.runSucceeded', 'Succeeded'), failed: localize('tasks.runFailed', 'Failed'), canceled: localize('tasks.runCanceled', 'Canceled'),
+		};
+		button.textContent = localize('tasks.runSummary', '{0} — {1}{2}', run.task.label, labels[run.status], run.exitCode === undefined ? '' : localize('tasks.runExitCode', ' (exit code {0})', run.exitCode));
 		item.append(button);
 		return item;
 	}

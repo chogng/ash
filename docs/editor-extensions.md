@@ -888,6 +888,7 @@ Open VSX 安装与基础 JS 执行已接入，不表示全部扩展 API、平台
 - 取消不代表副作用撤销；超时或断线后的写入结果必须保留明确结果或结果不确定语义。
 - 请求、响应和 registration 绑定扩展、声明的状态 scope、调用客户端、激活代次与当前运行实例；共享 Provider 不因 UI 请求而复制状态，恢复不重用旧身份或授权。
 - Workbench 消费领域类型，transport DTO 留在 adapter；各 contribution 由自己的领域 registry 拥有。
+- Extension Host 服务注册和 MainThread Terminal bridge 消费 `workbench/services/terminal` 的 profile/resolver 与浏览器实例契约；服务层不导入 Terminal contribution 或具体 xterm 实现。原 Terminal contribution 注册并实现服务，resolver、窗口实例和 Rust/扩展 PTY 的生命周期继续由现有 owner 管理。
 - 扩展业务、核心机制与客户端交互各有唯一 owner。服务商认证和 API 可以由 TS/JS 或 Rust 扩展提供，秘密存储和最终授权仍由核心服务管理。
 - 包完整性、声明式资源可读和代码可执行分别检查；共享产品 UI 不合并这些授权。
 

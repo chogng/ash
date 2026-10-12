@@ -27,7 +27,11 @@ import { IStorageService, StorageScope, StorageTarget } from "../../../../platfo
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { Memento } from "../../../common/memento.js";
 import { ITaskService, waitForTask } from "../../../services/tasks/common/taskService.js";
-import { type ITerminalProfile, ITerminalService } from "../../terminal/browser/terminal.js";
+import { ITerminalService } from "../../../services/terminal/browser/terminal.js";
+import { ITerminalProfileResolverService, type IShellLaunchConfigResolveOptions } from '../../../services/terminal/common/terminal.js';
+import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import { mergeEnvironments } from '../../../../platform/terminal/common/terminalEnvironment.js';
+import { OperatingSystem } from '../../../../base/common/platform.js';
 import { DebugAdapterSession } from "../../../services/debug/browser/debugAdapterSession.js";
 import { DebugAdapterFactoriesRegistry, IDebugAdapterFactorySource, type DebugAdapterFactorySource } from "../../../services/debug/common/debugAdapterFactory.js";
 import { type IResolvedDebugConfiguration, type IDebugStackFrame, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession } from "../../../services/debug/common/debugService.js";
@@ -94,6 +98,7 @@ export class DebugService extends Disposable implements IDebugService {
 	private activeSessionId: string | undefined;
 	private refreshGeneration = 0;
 	private workspaceGeneration = 0;
+	private terminalGeneration = 0;
 	private readonly pendingDescriptors = new Set<AbortController>();
 	private readonly descriptorOwners = new Map<AbortController, Set<object>>();
 	private readonly preparingSessions = new Map<string, IDebugSession>();
@@ -117,6 +122,8 @@ export class DebugService extends Disposable implements IDebugService {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IDebugAdapterProcessService private readonly processes: IDebugAdapterProcessService | undefined,
 		@ITerminalService private readonly terminals: ITerminalService,
+		@ITerminalProfileResolverService private readonly terminalProfiles: ITerminalProfileResolverService,
+		@ITerminalProcessService private readonly terminalProcesses: ITerminalProcessService,
 		@IStorageService storage: IStorageService,
 		@ITaskService private readonly tasks: ITaskService,
 		@IDebugAdapterFactorySource private readonly adapters: DebugAdapterFactorySource,
@@ -132,6 +139,7 @@ export class DebugService extends Disposable implements IDebugService {
 	) {
 		super();
 		this.debugger = instantiationService.createInstance(Debugger);
+		this._register(terminalProcesses.onConnectionState(() => this.terminalGeneration++));
 		// Session changes include state changes; inactive debugging must leave F6 available for region navigation.
 		const debugState = CONTEXT_DEBUG_STATE.bindTo(contextKeys);
 		this._register(this.onDidChangeSession(session => debugState.set(session?.state ?? 'inactive')));
@@ -509,7 +517,24 @@ export class DebugService extends Disposable implements IDebugService {
 			processService: this.processes,
 			workspace: root, breakpoints: () => this.currentBreakpoints,
 			additionalBreakpoints: () => [...this.currentFunctionBreakpoints, ...this.currentDataBreakpoints, ...this.currentInstructionBreakpoints],
-			runInTerminal: value => runDebuggeeInTerminal(this.terminals, value, current.dirId ?? undefined),
+			runInTerminal: value => {
+				const terminalGeneration = this.terminalGeneration;
+				const assertCurrent = (): void => {
+					if (this.isDisposed || workspaceGeneration !== this.workspaceGeneration || terminalGeneration !== this.terminalGeneration
+						|| !initializingSession || this.getSession(initializingSession.id) !== initializingSession
+						|| ['terminated', 'error'].includes(initializingSession.state)) {
+						throw new CancellationError();
+					}
+				};
+				assertCurrent();
+				const os = this.terminalProcesses.operatingSystem;
+				if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
+				return runDebuggeeInTerminal(
+					this.terminals, this.terminalProfiles,
+					{ os, remoteAuthority: root?.authority || undefined, allowAutomationShell: true },
+					value, assertCurrent, current.dirId ?? undefined,
+				);
+			},
 			startDebugging: value => this.startChildSession(initializingSession!, value),
 			updateBreakpoints: updates => { if (acceptsBreakpointEvents()) this.acceptBreakpointUpdates(updates); },
 			addBreakpoint: (source, line, column) => {
@@ -1173,18 +1198,37 @@ interface RunInTerminalArguments {
 }
 
 /** Launches a DAP-requested debuggee through the existing integrated terminal boundary. */
-async function runDebuggeeInTerminal(terminalService: ITerminalService, value: unknown, dirId?: string): Promise<Readonly<{ shellProcessId: number; }>> {
+async function runDebuggeeInTerminal(
+	terminalService: ITerminalService,
+	profiles: ITerminalProfileResolverService,
+	options: IShellLaunchConfigResolveOptions,
+	value: unknown,
+	assertCurrent: () => void,
+	dirId?: string,
+): Promise<Readonly<{ shellProcessId: number; }>> {
 	const request = parseRunInTerminalArguments(value);
 	if (request.kind === "external") throw new Error("External debug terminals are not supported; use an integrated terminal");
-	const profiles = await terminalService.getProfiles();
-	const profile = preferredProfile(profiles);
-	const terminal = await terminalService.createTerminal({ dirId, dimensions: { rows: 30, cols: 120 }, profile: { type: "profile", profileId: profile.profileId }, title: request.title ?? "Debug", env: request.env });
-	if (terminal.state !== 'running') {
-		await terminalService.closeTerminal(terminal);
-		throw new Error(localize('debug.terminalUnavailable', 'The terminal is unavailable. The debug command was not sent. Restart debugging.'));
-	}
+	const profile = await profiles.getDefaultProfile(options);
+	assertCurrent();
+	const shell: IShellLaunchConfig = { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color };
+	await profiles.resolveShellLaunchConfig(shell, options);
+	assertCurrent();
+	// DAP environment and cwd are literal adapter data. Resolve configuration
+	// first, then apply these values without interpreting variable expressions.
+	const env: Record<string, string | null> = {};
+	mergeEnvironments(env, shell.env, options.os !== OperatingSystem.Windows);
+	mergeEnvironments(env, request.env, options.os !== OperatingSystem.Windows);
+	const executable = typeof shell.executable === 'string' ? shell.executable : shell.executable![0]!;
+	const terminal = await terminalService.createTerminal({
+		dirId, dimensions: { rows: 30, cols: 120 },
+		profile: { type: 'custom', name: profile.profileName, path: [executable], args: shell.args ?? [] },
+		title: request.title ?? localize('debug.terminalTitle', 'Debug'), env, cwd: request.cwd ?? shell.cwd, icon: shell.icon, color: shell.color,
+	});
 	try {
-		await terminal.sendText(terminalCommand(request, profile), true);
+		assertCurrent();
+		if (terminal.state !== 'running') throw new Error(localize('debug.terminalUnavailable', 'The terminal is unavailable. The debug command was not sent. Restart debugging.'));
+		await terminal.sendText(terminalCommand(request, executable), true);
+		assertCurrent();
 	} catch (error) {
 		// Preserve the dispatch error even if the unavailable transport also rejects close.
 		await terminalService.closeTerminal(terminal).catch(() => { });
@@ -1203,8 +1247,8 @@ function parseRunInTerminalArguments(value: unknown): RunInTerminalArguments {
 	return Object.freeze({ kind, title: optionalString(input.title, "runInTerminal title", 256), cwd: optionalString(input.cwd, "runInTerminal cwd", 4096), args, env, argsCanBeInterpretedByShell: input.argsCanBeInterpretedByShell === true });
 }
 
-function terminalCommand(request: RunInTerminalArguments, profile: ITerminalProfile): string {
-	const shell = shellKind(profile.profileId);
+function terminalCommand(request: RunInTerminalArguments, executable: string): string {
+	const shell = shellKind(executable);
 	const command = request.argsCanBeInterpretedByShell ? request.args.join(" ") : request.args.map(argument => quote(argument, shell)).join(" ");
 	const prefix = shell === "powershell" ? powershellPrefix(request) : shell === "cmd" ? cmdPrefix(request) : posixPrefix(request);
 	return prefix ? `${prefix}${command}` : command;
@@ -1235,15 +1279,10 @@ function quote(value: string, shell: "powershell" | "cmd" | "posix"): string {
 	return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-function preferredProfile(profiles: readonly ITerminalProfile[]): ITerminalProfile {
-	const profile = profiles.find(candidate => /^(?:powershell|pwsh)$/i.test(candidate.profileId)) ?? profiles.find(candidate => candidate.isDefault) ?? profiles[0];
-	if (!profile) throw new Error("No terminal profile is available for the debuggee");
-	return profile;
-}
-
-function shellKind(profileId: string): "powershell" | "cmd" | "posix" {
-	if (/^(?:powershell|pwsh)$/i.test(profileId)) return "powershell";
-	if (/^(?:cmd|command-prompt)$/i.test(profileId)) return "cmd";
+function shellKind(executable: string): "powershell" | "cmd" | "posix" {
+	const basename = executable.split(/[\\/]/).at(-1)!.replace(/\.exe$/i, '');
+	if (/^(?:powershell|pwsh)$/i.test(basename)) return "powershell";
+	if (/^(?:cmd|command-prompt)$/i.test(basename)) return "cmd";
 	return "posix";
 }
 
@@ -1296,7 +1335,12 @@ registerWorkbenchServiceContribution({
 
 registerWorkbenchServiceContribution({
 	service: IDebugService,
-	dependencies: [IExtensionService, IFileService, IWorkspaceContextService, IDebugAdapterProcessService, ITerminalService, IStorageService, ITaskService, IDebugAdapterFactorySource, ILogService, IConfigurationResolverService, IConfigurationService, IEditorService, IEditorGroupsService],
+	dependencies: [
+		IExtensionService, IFileService, IWorkspaceContextService, IDebugAdapterProcessService,
+		ITerminalService, ITerminalProfileResolverService, ITerminalProcessService,
+		IStorageService, ITaskService, IDebugAdapterFactorySource, ILogService, IConfigurationResolverService,
+		IConfigurationService, IEditorService, IEditorGroupsService,
+	],
 	install: context => {
 		const service = context.register(context.container.createInstance(DebugService));
 		context.container.registerInstance(IDebugConsoleService, context.register(new DebugConsoleService(service)));

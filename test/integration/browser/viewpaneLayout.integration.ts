@@ -37,7 +37,7 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { type ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
 import { type IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import { type ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { type ITerminalService } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { type ITunnelService } from '../../../src/ash/platform/tunnel/common/tunnel.js';
 import { type IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
 import '../../../src/ash/workbench/contrib/tasks/browser/media/tasks.css';

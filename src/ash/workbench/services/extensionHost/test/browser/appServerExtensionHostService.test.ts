@@ -1,5 +1,5 @@
-import { ITerminalProfileService, ITerminalProfileResolverService } from '../../../../contrib/terminal/common/terminal.js';
-import { ITerminalService } from '../../../../contrib/terminal/browser/terminal.js';
+import { ITerminalProfileService, ITerminalProfileResolverService } from '../../../terminal/common/terminal.js';
+import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';

@@ -9,8 +9,9 @@ import { ConfigurationTarget, IConfigurationService } from '../../../../platform
 import { ITerminalProcessService, type ITerminalProfile, type ITerminalProfileObject, type IExtensionTerminalProfile, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
-import { ITerminalProfileService, TERMINAL_CONFIG_SECTION, type IRegisterContributedProfileArgs, type ITerminalProfileProvider } from '../common/terminal.js';
-import { ITerminalService } from './terminal.js';
+import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
+import { ITerminalProfileService, type IRegisterContributedProfileArgs, type ITerminalProfileProvider } from '../../../services/terminal/common/terminal.js';
+import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
 
 type ProfileDefinition = ITerminalProfileObject | (IExtensionTerminalProfile & Pick<ITerminalProfileObject, 'icon' | 'color'>) | null;
 

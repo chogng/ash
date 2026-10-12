@@ -10,7 +10,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { TerminalActiveInstanceStateContext, TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
-import { ITerminalService, type ITerminalInstance } from './terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 import { openContextMenu } from './terminalContextMenu.js';
 import { terminalProfileIcon } from './terminalIcon.js';
 

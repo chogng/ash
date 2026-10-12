@@ -4,7 +4,7 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore, Disposable } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ITerminalService } from '../../../../contrib/terminal/browser/terminal.js';
+import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { IViewsService } from '../../../views/common/viewsService.js';
 import { ITaskService, type IWorkspaceTask } from '../../common/taskService.js';
 import { TasksViewPane } from '../../../../contrib/tasks/browser/tasksViewPane.js';
@@ -16,7 +16,7 @@ test('Tasks view clears an execution error when external configuration updates i
 	const tasks: ITaskService = {
 		rerun: async () => undefined,
 		runProvidedTask: async () => { throw new Error('Provided task execution is outside this fixture'); },
-		get tasks() { return catalog; }, activeRuns: [], lastRun: undefined,
+		get tasks() { return catalog; }, runs: [], start: () => { throw new Error('Not used'); }, describe: async () => { throw new Error('Not used'); }, getRun: () => undefined, activeRuns: [], lastRun: undefined,
 		onDidChangeTasks: changes.event, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
 		registerTaskProvider: () => Disposable.None,
 		registerTaskProviders: () => ({ dispose() { }, [Symbol.dispose]() { }, replace() { } }),

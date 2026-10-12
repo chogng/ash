@@ -90,3 +90,85 @@ fn managed_policy_does_not_accept_foreign_authority() {
             .is_err()
     );
 }
+
+#[test]
+fn task_tools_validate_identity_revision_and_bounded_output() {
+    let definitions = definitions();
+    for name in [
+        "tasks_list",
+        "tasks_run",
+        "tasks_status",
+        "tasks_output",
+        "tasks_cancel",
+    ] {
+        assert!(
+            definitions
+                .iter()
+                .any(|definition| definition.name.as_str() == name)
+        );
+    }
+    assert!(
+        !definitions
+            .iter()
+            .any(|definition| definition.name.as_str() == "tasks_describe")
+    );
+    let arguments = json!({"directory":"/repo","task_id":"check","revision":"a".repeat(64)});
+    assert!(AppToolService::operation(&call("tasks_run", arguments.clone())).is_ok());
+    assert!(
+        AppToolService::new(Arc::new(Host))
+            .prepare(&call("tasks_run", arguments))
+            .is_err()
+    );
+    for (cursor, maximum) in [(0, 0), (0, 65537), (9007199254740992u64, 1)] {
+        assert!(
+            AppToolService::operation(&call(
+                "tasks_output",
+                json!({"directory":"/repo","run_id":"run","cursor":cursor,"max_characters":maximum})
+            ))
+            .is_err()
+        );
+    }
+    assert!(
+        AppToolService::operation(&call(
+            "tasks_run",
+            json!({"directory":"/repo","task_id":"check","revision":"stale"})
+        ))
+        .is_err()
+    );
+}
+
+#[test]
+fn configured_task_execution_requires_reviewed_authority() {
+    let request = ActionReviewRequest::new(
+        ResolvedAction::new(
+            ActionDigest::from_canonical_bytes(b"exact task recipe"),
+            ActionKind::SystemOperation,
+            "Run check in /repo",
+            capabilities("tasks_run"),
+        ),
+        ActionProvenance::new(ActionSource::BuiltInTool, "tasks_run"),
+        SandboxCompatibility::NotApplicable {
+            reason: "development terminal".into(),
+        },
+        ActionPolicyRevision::new(POLICY_REVISION),
+    );
+    assert!(matches!(
+        AppToolPolicy
+            .decide(
+                &request,
+                &ash_async_utils::CancellationSource::new().token()
+            )
+            .unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
+    assert_eq!(
+        request
+            .action()
+            .required_capabilities()
+            .iter()
+            .next()
+            .unwrap()
+            .kind(),
+        &CapabilityKind::ProcessSpawn
+    );
+}

@@ -2,8 +2,8 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, type IAccessibleViewContentProvider } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import type { ITerminalInstance } from '../../../terminal/browser/terminal.js';
-import type { XtermTerminal } from '../../../terminal/browser/xterm/xtermTerminal.js';
+import type { ITerminalInstance, IXtermTerminal } from '../../../../services/terminal/browser/terminal.js';
+
 
 /** Reads the displayed buffer; process output and parser replies are not a second transcript. */
 export class TerminalAccessibleBufferProvider extends Disposable implements IAccessibleViewContentProvider {
@@ -13,7 +13,7 @@ export class TerminalAccessibleBufferProvider extends Disposable implements IAcc
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeContent = this.changed.event;
 
-	constructor(private readonly instance: ITerminalInstance, private readonly screen: XtermTerminal) {
+	constructor(private readonly instance: ITerminalInstance, private readonly screen: IXtermTerminal) {
 		super();
 		const parsed = screen.raw.onWriteParsed(() => this.changed.fire());
 		const resized = screen.raw.onResize(() => this.changed.fire());

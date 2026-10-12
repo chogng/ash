@@ -643,3 +643,14 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
 2. 若模型基础 instructions 确实引用了该契约，同步 `ash-models-manager` 中对应资产与 revision；
 3. [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的组装快照和行为测试；
 4. 运行对应的现有单元/集成测试；只有启用版本化模型 benchmark 时，才补充 T1/T2 对比。
+
+
+## 既有开发 Task
+
+`ash-app-tools` 提供 `tasks_list`、`tasks_run`、`tasks_status`、`tasks_output` 和 `tasks_cancel`。它们与会话管理、自动化分开：Task 定义和执行由窗口的 `ITaskService` 唯一拥有，进程沿现有 Terminal → exec-server 执行；Rust 只持有工具定义、调用身份、审批和宿主路由。
+
+调用方传绝对工作区 `directory`；运行使用发现结果的 `task_id` 与 `revision`，后续操作使用返回的 `runId`。后端验证当前 Session 的目录及命令授权，并向当前 Turn 绑定的唯一窗口发送 `app/request`。运行前读取静态执行配方，将任务及依赖命令纳入审批；运行时再次核对配置 revision。Code Mode 使用同一 Tool Registry 和审批路径。
+
+Run ID 在依赖准备前产生。查询结果区分运行状态、退出码、后台 `ready`、诊断错误和 Terminal ID。输出使用 UTF-16 字符游标，单次最多读取 65,536 字符；每个 Run 保留最多 1,048,576 字符，淘汰旧输出时返回 `truncated` 与实际起始游标。输出属于 Run，终端复用不会将后续命令的输出并入旧 Run。
+
+本阶段支持本地文件夹内的静态 shell/process Task、包管理器脚本和 Cargo 入口及其静态依赖；仅允许工作区路径变量。扩展回调、其他动态变量及尚未支持的配置在发现结果中提供原因，仍可通过用户 Tasks 操作运行。记录限定于原窗口和工作区，完成后保留一小时、最多 100 条已完成记录；窗口切换工作区时失效。窗口与 app-server 连接关闭会取消该工具宿主启动的运行，用户手动启动的运行由原 TaskService 生命周期管理。不存在跨窗口、服务重启恢复或检查结果缓存。

@@ -4,7 +4,7 @@ import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js'
 import { ITerminalProcessService, type TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminal.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import type { ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService } from "./terminal.js";
+import type { ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService } from "../../../services/terminal/browser/terminal.js";
 import { TerminalInstance } from './terminalInstance.js';
 
 /** Browser Workbench owner of terminal instances and their process lifecycle. */

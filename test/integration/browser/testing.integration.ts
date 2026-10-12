@@ -19,7 +19,7 @@ import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/w
 import { TestingService } from '../../../src/ash/workbench/services/testing/browser/testingService.js';
 import { TestExecutionService, TestDebugService } from '../../../src/ash/workbench/services/testing/test/common/testExecutionService.js';
 import { type ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
-import { type ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { type ITerminalService } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { type IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { type IEditorService, type EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { TestingViewPane } from '../../../src/ash/workbench/contrib/testing/browser/testingViewPane.js';
@@ -40,13 +40,16 @@ const copies = store.add(uriIdentityServices.createInstance(BrowserWorkingCopySe
 let scriptRuns = 0;
 const tasks: ITaskService = {
 	...Disposable.None,
-	tasks: [{ id: 'script', label: 'cargo test', group: 'test', command: 'cargo test', source: 'cargo' }], activeRuns: [], lastRun: undefined,
+	tasks: [{ id: 'script', label: 'cargo test', group: 'test', command: 'cargo test', source: 'cargo' }], runs: [], activeRuns: [], lastRun: undefined,
 	onDidChangeTasks: Event.None, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
 	registerTaskProvider: () => toDisposable(() => { }),
 	registerTaskProviders: () => Object.assign(toDisposable(() => { }), { replace: () => { } }),
 	rerun: async () => { throw new Error('Rerunning is outside this fixture'); },
 	runProvidedTask: async () => { throw new Error('Extension tasks are outside this fixture'); },
 	refresh: async () => tasks.tasks,
+	start: () => { throw new Error('Starting task runs is outside this fixture'); },
+	describe: async () => { throw new Error('Task descriptions are outside this fixture'); },
+	getRun: () => undefined,
 	run: async () => { scriptRuns++; throw new Error('Script invoked'); }, terminate: async () => { },
 };
 const debug = store.add(new TestDebugService());

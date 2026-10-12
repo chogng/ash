@@ -236,3 +236,144 @@ fn regular_wire_clients_cannot_declare_application_window_authority() {
     );
     assert!(initialized.get("error").is_none(), "{initialized}");
 }
+
+#[test]
+fn development_task_tools_review_and_dispatch_on_the_bound_window() {
+    let directory_root = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let root = directory_root.path().canonicalize().unwrap();
+    let directory = root.to_string_lossy().into_owned();
+    let revision = "a".repeat(64);
+    let model = model(vec![
+        ("tasks_list", json!({"directory":directory})),
+        (
+            "tasks_run",
+            json!({"directory":directory,"task_id":"check","revision":revision}),
+        ),
+        (
+            "tasks_status",
+            json!({"directory":directory,"run_id":"shared-run"}),
+        ),
+        (
+            "tasks_output",
+            json!({"directory":directory,"run_id":"shared-run","cursor":0,"max_characters":4096}),
+        ),
+        (
+            "tasks_cancel",
+            json!({"directory":directory,"run_id":"shared-run"}),
+        ),
+    ]);
+    let server = crate::open_app_server(
+        crate::AppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_agent_model_service(model.clone())
+            .with_dir_root(&root),
+    )
+    .unwrap()
+    .into_shared();
+    let mut owner = server.product_host_connection();
+    let mut other = server.product_host_connection();
+    let capability = json!({"appTools":{"version":1,"agents":true,"desktop":true},"dirPermissionsHost":{"version":1}});
+    for connection in [&mut owner, &mut other] {
+        let initialized = super::call(
+            &server,
+            connection,
+            json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"task-tools-test","version":"1"},"capabilities":capability}}),
+        );
+        assert!(initialized.get("error").is_none(), "{initialized}");
+    }
+    let session = super::create_session(&server, &mut owner, 2, "task-tools-session");
+    let session_id =
+        ash_protocol::SessionId::new(session["result"]["session"]["sessionId"].as_str().unwrap())
+            .unwrap();
+    let granted = super::call(
+        &server,
+        &mut owner,
+        json!({"jsonrpc":"2.0","id":20,"method":"session/dirs/add","params":{"sessionId":session_id,"path":directory,"permissions":["readFiles","executeCommands"]}}),
+    );
+    assert!(granted.get("error").is_none(), "{granted}");
+    let thread = super::create_thread(
+        &server,
+        &mut owner,
+        3,
+        "task-tools-thread",
+        session_id.as_str(),
+        1,
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let started = super::call(
+        &server,
+        &mut owner,
+        json!({"jsonrpc":"2.0","id":4,"method":"session/request","params":{"commandId":"task-tools-turn","sessionId":session_id,"request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"approvalMode":"bypassPermissions","input":[{"type":"text","text":"Run the existing check task"}]}}}),
+    );
+    assert!(started.get("error").is_none(), "{started}");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut operations = Vec::new();
+    while model.calls.load(Ordering::Relaxed) < 6 {
+        for frame in server.connection_notifications(&owner).drain() {
+            let request: Value = serde_json::from_str(&frame).unwrap();
+            if request["method"] != "app/request" {
+                continue;
+            }
+            let operation = &request["params"]["operation"];
+            assert_eq!(request["params"]["threadId"], thread_id);
+            assert_eq!(operation["directory"], directory);
+            operations.push(operation["type"].as_str().unwrap().to_string());
+            let result = match operation["type"].as_str().unwrap() {
+                "tasksList" => json!({"tasks":[{"taskId":"check","revision":revision}],"runs":[]}),
+                "tasksDescribe" => {
+                    json!({"taskId":"check","label":"Check","directory":directory,"revision":revision,"commands":[{"command":"compiler","cwd":directory}]})
+                }
+                "tasksRun" => json!({"runId":"shared-run","taskId":"check","status":"running"}),
+                "tasksStatus" => json!({"runId":"shared-run","status":"running","ready":false}),
+                "tasksOutput" => {
+                    json!({"text":"shared execution output","cursor":0,"nextCursor":23,"truncated":false,"hasMore":false})
+                }
+                "tasksCancel" => json!({"runId":"shared-run","status":"canceled"}),
+                unexpected => panic!("unexpected host operation {unexpected}"),
+            };
+            let response =
+                json!({"jsonrpc":"2.0","id":request["id"],"result":{"json":result.to_string()}});
+            assert!(
+                server
+                    .client_host
+                    .handle_response(other.connection_id, response.clone())
+                    .is_err()
+            );
+            assert!(
+                server
+                    .client_host
+                    .handle_response(owner.connection_id, response)
+                    .unwrap()
+            );
+        }
+        assert!(
+            Instant::now() < deadline,
+            "task tools did not complete: {operations:?}"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    super::wait_for_latest_turn(&server, thread_id, ash_protocol::TurnStatus::Completed);
+    assert_eq!(
+        operations
+            .iter()
+            .filter(|operation| *operation == "tasksRun")
+            .count(),
+        1
+    );
+    assert!(
+        operations
+            .iter()
+            .any(|operation| operation == "tasksDescribe")
+    );
+    assert!(
+        operations
+            .iter()
+            .any(|operation| operation == "tasksCancel")
+    );
+    assert!(
+        serde_json::to_string(&*model.output.lock().unwrap())
+            .unwrap()
+            .contains("shared execution output")
+    );
+}

@@ -1,3 +1,6 @@
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
+import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
+import { BrowserTerminalProfileResolverService } from '../../../../contrib/terminal/browser/terminalProfileResolverService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IFileSearchService, type FileSearchResult } from '../../../../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
@@ -43,7 +46,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../../contrib/terminal/browser/terminal.js";
+import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../terminal/browser/terminal.js";
 import { TaskService } from "../../../../contrib/tasks/browser/taskService.js";
 import '../../../../contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
@@ -346,7 +349,8 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	resize(_dimensions: ITerminalDimensions): void { }
 	async close(): Promise<void> { this.state = "exited"; }
 	command(event: ITerminalCommandStatusEvent): void { this.commandEmitter.fire(event); }
-	output(value: string): void { this.dataEmitter.fire({ data: new TextEncoder().encode(value), trackCommit: false }); }
+	output(value: string): void { this.outputBytes(new TextEncoder().encode(value)); }
+	outputBytes(data: Uint8Array): void { this.dataEmitter.fire({ data, trackCommit: false }); }
 	exit(code: number | undefined): void { this.exitCode = code; this.state = 'exited'; this.exitEmitter.fire(code); }
 }
 
@@ -357,16 +361,321 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
 }
 
+function registerTaskProfiles(services: InstantiationService): void {
+	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
+	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
+}
+
+async function resolveTaskProfile(selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) {
+	const profileId = selection.type === 'profile' ? selection.profileId : selection.type === 'custom' ? `custom:${selection.name}` : 'shell';
+	return {
+		profile: { profileId, title: selection.type === 'custom' ? selection.name : profileId, isDefault: selection.type === 'default' },
+		executable: selection.type === 'custom' ? selection.path[0]! : profileId === 'command-prompt' ? 'C:\\Windows\\cmd.exe' : `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
+		args: selection.type === 'custom' ? [...selection.args] : [],
+	};
+}
+
 function taskServices(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, terminals: ITerminalService, os = OperatingSystem.Linux): InstantiationService {
 	const parent = workbenchInstantiationService(owner);
 	registerTestWorkbenchInteractionServices(owner, parent);
-	const services = parent.createChild(new ServiceCollection([IFileService, owner.add(createTestFileService(files))], [IWorkspaceContextService, workspace], [IPathService, testPathService(workspace, os)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)], [ITerminalProcessService, { getEnvironment: async () => ({ HOME: '/execution/home' }) }], [ITerminalService, terminals], [ILogService, new NullLoggerService()]), owner);
+	const services = parent.createChild(new ServiceCollection(
+		[IFileService, owner.add(createTestFileService(files))], [IWorkspaceContextService, workspace],
+		[IPathService, testPathService(workspace, os)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[ITerminalProcessService, {
+			operatingSystem: os, onConnectionState: Event.None,
+			getEnvironment: async () => ({ HOME: '/execution/home' }),
+			listProfiles: () => terminals.getProfiles(), resolveProfile: resolveTaskProfile,
+		}],
+		[ITerminalService, terminals], [ILogService, new NullLoggerService()],
+	), owner);
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 	services.registerInstance(IMarkerService, owner.add(new MarkerService()));
 	registerTestExtensionService(owner, services);
+	registerTaskProfiles(services);
 	return services;
 }
+
+suite('Task shell profiles through execution owners', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	function assemble(owner: DisposableStore, os = OperatingSystem.Linux, executionOptions = {}) {
+		const root = URI.file('/workspace');
+		const workspace = owner.add(new WorkspaceContextService({ id: 'workspace', uri: root }));
+		const document = {
+			version: '2.0.0', tasks: [
+				{ label: 'Shell', type: 'shell', command: 'compiler', args: ['two words', { value: '$HOME', quoting: 'strong' }], options: { env: { mode: 'task', REMOVED: null }, ...executionOptions }, presentation: { reveal: 'never' } },
+				{ label: 'Process', type: 'process', command: 'compiler', args: ['literal argument'], presentation: { reveal: 'never' } },
+			]
+		};
+		const fakeTerminals = owner.add(new FakeTerminalService());
+		const parent = taskServices(owner, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, fakeTerminals, os);
+		const creations: import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreateOptions[] = [];
+		const reads = new Map<string, DeferredPromise<ITerminalProcessReadResult>>();
+		const closes: string[] = [];
+		const processes: ITerminalProcessService = {
+			operatingSystem: os, onConnectionState: Event.None, getConnectionState: async () => 'ready',
+			getEnvironment: async () => ({ HOME: '/execution/home' }),
+			listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }],
+			resolveProfile: resolveTaskProfile,
+			create: async options => {
+				creations.push(options);
+				const terminalId = `task-${creations.length}`;
+				reads.set(terminalId, new DeferredPromise<ITerminalProcessReadResult>());
+				return { terminalId, profile: (await resolveTaskProfile(options.profile)).profile, ready: { pid: creations.length, cwd: options.cwd ?? '/workspace' }, connectionPersistence: 'connectionOwned' };
+			},
+			read: options => reads.get(options.terminalId)!.p,
+			write: async () => { throw new Error('Tasks must execute through process creation'); },
+			resize: async () => { }, close: async options => { closes.push(options.terminalId); },
+		};
+		const services = parent.createChild(new ServiceCollection([ITerminalProcessService, processes]), owner);
+		const terminals = owner.add(services.createInstance(TerminalService));
+		services.registerInstance(ITerminalService, terminals);
+		registerTaskProfiles(services);
+		const tasks = owner.add(services.createInstance(TaskService));
+		const configuration = services.get(IConfigurationService);
+		const platform = os === OperatingSystem.Windows ? 'windows' : os === OperatingSystem.Macintosh ? 'osx' : 'linux';
+		const finish = async (run: ITaskRun) => {
+			const terminalId = `task-${run.processId}`;
+			await reads.get(terminalId)!.complete({ terminalId, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, outputGap: false, exited: true, exitCode: 0 });
+			await run.completion;
+		};
+		return { tasks, terminals, configuration, processes, creations, closes, platform, workspace, finish };
+	}
+
+	for (const os of [OperatingSystem.Linux, OperatingSystem.Macintosh, OperatingSystem.Windows]) {
+		test(`automation profiles select executable, argv and environment on execution OS ${os} and update reused terminals`, async () => {
+			using owner = new DisposableStore();
+			const { tasks, terminals, configuration, creations, platform, finish } = assemble(owner, os);
+			const executable = os === OperatingSystem.Windows ? 'C:\\tools\\pwsh.exe' : '/tools/bash';
+			await configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, { path: executable, args: os === OperatingSystem.Windows ? ['-NoLogo', '-Command'] : ['-l', '-c'], env: { MODE: '${env:HOME}', PROFILE: 'first', REMOVED: 'profile' } });
+			const task = (await tasks.refresh()).find(task => task.label === 'Shell')!;
+			const first = await tasks.run(task!);
+			assert.deepEqual({ profile: creations[0].profile, execution: creations[0].execution, env: creations[0].env }, {
+				profile: { type: 'custom', name: 'Automation shell', path: [executable], args: os === OperatingSystem.Windows ? ['-NoLogo', '-Command'] : ['-l', '-c'] },
+				execution: { type: 'process', program: executable, args: os === OperatingSystem.Windows ? ['-NoLogo', '-Command', "compiler 'two words' '$HOME'"] : ['-l', '-c', "compiler 'two words' '$HOME'"] },
+				env: os === OperatingSystem.Windows ? { MODE: 'task', PROFILE: 'first', REMOVED: null } : { MODE: '/execution/home', PROFILE: 'first', REMOVED: null, mode: 'task' },
+			});
+			await finish(first);
+			await configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, { path: '/other/fish', args: [], env: { PROFILE: 'second' } });
+			const second = await tasks.run(task!);
+			assert.deepEqual({ ids: [first.terminalId, second.terminalId], instances: terminals.instances.length, profile: creations[1].profile, execution: creations[1].execution, env: creations[1].env }, {
+				ids: [first.terminalId, first.terminalId], instances: 1,
+				profile: { type: 'custom', name: 'Task: Shell', path: ['/other/fish'], args: [] },
+				execution: { type: 'process', program: '/other/fish', args: ['-c', "compiler 'two words' '$HOME'"] },
+				env: { PROFILE: 'second', mode: 'task', REMOVED: null },
+			});
+			await finish(second);
+			await configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, null);
+			const third = await tasks.run(task!);
+			assert.deepEqual({ id: third.terminalId, profile: creations[2].profile, execution: creations[2].execution, env: creations[2].env }, {
+				id: first.terminalId, profile: { type: 'custom', name: 'Task: Shell', path: ['/bin/bash'], args: [] },
+				execution: { type: 'shell', commandLine: "compiler 'two words' '$HOME'" }, env: { mode: 'task', REMOVED: null },
+			});
+			await finish(third);
+		});
+	}
+
+	for (const os of [OperatingSystem.Linux, OperatingSystem.Macintosh, OperatingSystem.Windows]) {
+		test(`global terminal environment precedes profile and task overrides and is replaced on reuse for execution OS ${os}`, async () => {
+			using owner = new DisposableStore();
+			const taskEnvironment = {
+				mode: 'task', path: 'task path', HOME: null, DELETE_GLOBAL: null, DELETE_PROFILE: null,
+				REVIVED: 'task revived', TASK_ONLY: '${env:HOME}', LITERAL: '${command:tasks.environment.literal}',
+			};
+			const { tasks, terminals, configuration, creations, closes, platform, finish } = assemble(owner, os, { env: taskEnvironment });
+			owner.add(CommandsRegistry.register('tasks.environment.literal', () => '${command:tasks.environment.literal}-$HOME'));
+			await configuration.updateValue(`terminal.integrated.env.${platform}`, {
+				Mode: 'global', Path: '${env:HOME}/global', GLOBAL_ONLY: '${env:HOME}/global only',
+				DELETE_GLOBAL: 'global', DELETE_PROFILE: 'global', PROFILE_WINS: 'global',
+				PROFILE_DELETES: 'global', PROFILE_REVIVES: null, REVIVED: null, GLOBAL_NULL: null,
+			});
+			const otherPlatform = platform === 'windows' ? 'linux' : 'windows';
+			await configuration.updateValue(`terminal.integrated.env.${otherPlatform}`, { WRONG_OS: 'not inherited' });
+			await configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, {
+				path: os === OperatingSystem.Windows ? 'C:\\tools\\pwsh.exe' : '/tools/bash',
+				env: {
+					MODE: 'profile', PATH: 'profile path', DELETE_PROFILE: 'profile', PROFILE_WINS: 'profile',
+					PROFILE_DELETES: null, PROFILE_REVIVES: 'profile revived', REVIVED: 'profile', PROFILE_ONLY: '${env:HOME}/profile',
+				},
+			});
+			const task = (await tasks.refresh()).find(task => task.label === 'Shell')!;
+			const first = await tasks.run(task);
+			const firstEnvironment = {
+				...(os === OperatingSystem.Windows ? { Mode: 'task', Path: 'task path' }
+					: { Mode: 'global', Path: '/execution/home/global', MODE: 'profile', PATH: 'profile path', mode: 'task', path: 'task path' }),
+				GLOBAL_ONLY: '/execution/home/global only', HOME: null, DELETE_GLOBAL: null, DELETE_PROFILE: null,
+				PROFILE_WINS: 'profile', PROFILE_DELETES: null, PROFILE_REVIVES: 'profile revived', REVIVED: 'task revived',
+				GLOBAL_NULL: null, PROFILE_ONLY: '/execution/home/profile', TASK_ONLY: '/execution/home', LITERAL: '${command:tasks.environment.literal}-$HOME',
+			};
+			assert.deepEqual(creations[0].env, firstEnvironment);
+			assert.equal(Object.isFrozen(creations[0].env), true);
+			const instance = terminals.activeInstance;
+			await finish(first);
+			await configuration.updateValue(`terminal.integrated.env.${platform}`, { CURRENT_GLOBAL: '${env:HOME}/new', REVIVED: null });
+			await configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, null);
+			const second = await tasks.run(task);
+			assert.equal(second.terminalId, first.terminalId);
+			assert.equal(terminals.activeInstance, instance);
+			assert.equal(terminals.instances.length, 1);
+			assert.deepEqual(closes, ['task-1']);
+			assert.deepEqual(creations[1].env, {
+				CURRENT_GLOBAL: '/execution/home/new', REVIVED: 'task revived', mode: 'task', path: 'task path',
+				HOME: null, DELETE_GLOBAL: null, DELETE_PROFILE: null, TASK_ONLY: '/execution/home', LITERAL: '${command:tasks.environment.literal}-$HOME',
+			});
+			assert.deepEqual(creations[0].env, firstEnvironment);
+			await finish(second);
+			await configuration.updateValue(`terminal.integrated.env.${platform}`, undefined);
+			const third = await tasks.rerun(second.terminalId);
+			assert.ok(third);
+			assert.equal(third.terminalId, first.terminalId);
+			assert.deepEqual(creations[2].env, { ...taskEnvironment, TASK_ONLY: '/execution/home', LITERAL: '${command:tasks.environment.literal}-$HOME' });
+			await finish(third);
+		});
+	}
+
+	for (const kind of ['shell', 'process'] as const) {
+		test(`explicit ${kind} execution inherits Windows global env without an automation profile or duplicate environment keys`, async () => {
+			using owner = new DisposableStore();
+			const { tasks, configuration, processes, creations, finish } = assemble(owner, OperatingSystem.Windows);
+			await configuration.updateValue('terminal.integrated.env.windows', { Path: '${env:HOME}/global', GONE: 'global', GLOBAL_ONLY: 'inherited' });
+			await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: 'C:\\automation\\pwsh.exe', env: { PROFILE_ONLY: 'not selected' } });
+			processes.resolveProfile = async () => { throw new Error('Explicit execution must not select an automation profile'); };
+			const execution = kind === 'shell'
+				? { type: 'shell' as const, command: 'compiler', args: [], options: { executable: 'C:\\explicit\\cmd.exe', shellArgs: ['/c'] } }
+				: { type: 'process' as const, program: 'compiler', args: ['literal argument'] };
+			const run = await tasks.runProvidedTask('environment', {
+				id: 'explicit', label: 'Explicit', group: 'build', execution,
+				environment: { path: 'first task path', PATH: 'last task path', gone: null, TASK_ONLY: '${env:HOME}' },
+				presentation: { reveal: 'never' },
+			}, new AbortController().signal);
+			assert.deepEqual(creations[0].env, { Path: 'last task path', GONE: null, GLOBAL_ONLY: 'inherited', TASK_ONLY: '/execution/home' });
+			assert.deepEqual(creations[0].execution, kind === 'shell'
+				? { type: 'process', program: 'C:\\explicit\\cmd.exe', args: ['/c', 'compiler'] } : execution);
+			await finish(run);
+		});
+	}
+
+	test('explicit task shell options and process execution take precedence over automation profiles', async () => {
+		using owner = new DisposableStore();
+		const { tasks, configuration, processes, creations, finish } = assemble(owner, OperatingSystem.Linux, { shell: { executable: '/explicit/sh', args: ['-c'] } });
+		await configuration.updateValue('terminal.integrated.automationProfile.linux', { path: '/automation/bash' });
+		processes.resolveProfile = async () => { throw new Error('Explicit tasks must not resolve a default profile'); };
+		const catalog = await tasks.refresh();
+		const shell = catalog.find(task => task.label === 'Shell')!;
+		const process = catalog.find(task => task.label === 'Process')!;
+		const first = await tasks.run(shell!);
+		assert.deepEqual(creations[0].execution, { type: 'process', program: '/explicit/sh', args: ['-c', "compiler 'two words' '$HOME'"] });
+		await finish(first);
+		const second = await tasks.run(process!);
+		assert.deepEqual({ profile: creations[1].profile, execution: creations[1].execution }, { profile: { type: 'default' }, execution: { type: 'process', program: 'compiler', args: ['literal argument'] } });
+		await finish(second);
+	});
+
+	test('interactive custom defaults identify quoting by executable and preserve profile arguments', async () => {
+		using owner = new DisposableStore();
+		const { tasks, configuration, creations, finish } = assemble(owner, OperatingSystem.Windows);
+		await configuration.updateValue('terminal.integrated.profiles.windows', { 'Build shell': { path: 'C:\\tools\\cmd.exe', args: ['/d', '/s', '/c'], env: { PROFILE: '${env:HOME}' } } });
+		await configuration.updateValue('terminal.integrated.defaultProfile.windows', 'Build shell');
+		const first = await tasks.run((await tasks.refresh()).find(task => task.label === 'Shell')!);
+		assert.deepEqual({ profile: creations[0].profile, execution: creations[0].execution, env: creations[0].env }, {
+			profile: { type: 'custom', name: 'Build shell', path: ['C:\\tools\\cmd.exe'], args: ['/d', '/s', '/c'] },
+			execution: { type: 'process', program: 'C:\\tools\\cmd.exe', args: ['/d', '/s', '/c', 'compiler "two words" "$HOME"'] },
+			env: { PROFILE: '/execution/home', mode: 'task', REMOVED: null },
+		});
+		await finish(first);
+	});
+
+	test('command-only provider tasks run through the automation shell without command input', async () => {
+		using owner = new DisposableStore();
+		const { tasks, configuration, creations, finish } = assemble(owner);
+		await configuration.updateValue('terminal.integrated.automationProfile.linux', { path: '/automation/bash', args: ['-l'] });
+		owner.add(tasks.registerTaskProvider({ id: 'command-only', provideTasks: () => [{ id: 'command', label: 'Command only', command: 'compiler --version', group: 'build', presentation: { reveal: 'never' } }] }));
+		const run = await tasks.run((await tasks.refresh()).find(task => task.label === 'Command only')!);
+		assert.deepEqual(creations[0].execution, { type: 'process', program: '/automation/bash', args: ['-l', '-c', 'compiler --version'] });
+		await finish(run);
+	});
+
+	for (const invalidation of ['cancel', 'workspace', 'backend rejection'] as const) {
+		test(`pending global environment resolution handles ${invalidation} without spawning or publishing a task`, async () => {
+			using owner = new DisposableStore();
+			const { tasks, configuration, processes, creations, workspace } = assemble(owner);
+			await configuration.updateValue('terminal.integrated.env.linux', { GLOBAL: '${env:HOME}' });
+			const entered = new DeferredPromise<void>();
+			const release = new DeferredPromise<void>();
+			processes.getEnvironment = async () => {
+				await entered.complete();
+				await release.p;
+				if (invalidation === 'backend rejection') throw new Error('Execution environment unavailable');
+				return { HOME: '/execution/home' };
+			};
+			const task = (await tasks.refresh()).find(task => task.label === 'Process')!;
+			const cancellation = new AbortController();
+			const started: ITaskRun[] = [];
+			owner.add(tasks.onDidStartTask(run => started.push(run)));
+			const pending = tasks.run(task, cancellation.signal);
+			const rejected = assert.rejects(pending, invalidation === 'backend rejection' ? /Execution environment unavailable/ : isCancellationError);
+			await entered.p;
+			if (invalidation === 'cancel') cancellation.abort();
+			if (invalidation === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+			await release.complete();
+			await rejected;
+			assert.deepEqual({ creations, started, runs: tasks.activeRuns }, { creations: [], started: [], runs: [] });
+		});
+	}
+
+	test('custom task PTYs keep their execution owner and do not resolve global terminal environment', async () => {
+		using owner = new DisposableStore();
+		const { tasks, configuration, processes, creations } = assemble(owner);
+		await configuration.updateValue('terminal.integrated.env.linux', { UNUSED: '${env:HOME}' });
+		processes.getEnvironment = async () => { throw new Error('A custom PTY must not read the process environment'); };
+		const written = owner.add(new Emitter<string>());
+		const opened = new DeferredPromise<void>();
+		let opens = 0;
+		let closes = 0;
+		const run = await tasks.runProvidedTask('custom-environment', {
+			id: 'custom', label: 'Custom', group: 'build', presentation: { reveal: 'never' },
+			execution: {
+				type: 'custom', callback: () => ({
+					onDidWrite: written.event,
+					open: () => { opens++; written.fire('custom output'); void opened.complete(); }, close: () => { closes++; },
+				}),
+			},
+		}, new AbortController().signal);
+		await opened.p;
+		assert.deepEqual({ creations, opens, status: run.status, output: run.readOutput(0, 100).text }, { creations: [], opens: 1, status: 'running', output: 'custom output' });
+		await tasks.terminate(run);
+		assert.equal(closes, 1);
+	});
+
+
+	for (const invalidation of ['cancel', 'workspace', 'backend rejection'] as const) {
+		test(`pending shell resolution handles ${invalidation} without a PTY or started task`, async () => {
+			using owner = new DisposableStore();
+			const { tasks, configuration, processes, creations, workspace } = assemble(owner);
+			await configuration.updateValue('terminal.integrated.automationProfile.linux', { path: '/automation/bash' });
+			const entered = new DeferredPromise<void>();
+			const release = new DeferredPromise<void>();
+			processes.resolveProfile = async selection => {
+				if (selection.type === 'custom') { await entered.complete(undefined); await release.p; }
+				if (invalidation === 'backend rejection' && selection.type === 'custom') throw new Error('Executable unavailable on execution host');
+				return resolveTaskProfile(selection);
+			};
+			const task = (await tasks.refresh()).find(task => task.label === 'Shell')!;
+			const cancellation = new AbortController();
+			const started: ITaskRun[] = [];
+			owner.add(tasks.onDidStartTask(run => started.push(run)));
+			const pending = tasks.run(task, cancellation.signal);
+			const rejected = assert.rejects(pending, invalidation === 'backend rejection' ? /Executable unavailable/ : isCancellationError);
+			await entered.p;
+			if (invalidation === 'cancel') cancellation.abort();
+			if (invalidation === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+			await release.complete(undefined);
+			await rejected;
+			assert.deepEqual({ creations, started, runs: tasks.activeRuns }, { creations: [], started: [], runs: [] });
+		});
+	}
+});
 
 for (const canceled of [false, true]) {
 	test(`search matcher completion waits for resource lookup and cancellation acknowledgment ${canceled}`, async () => {
@@ -421,10 +730,12 @@ test('background search readiness waits for diagnostics before launching a depen
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
-	const document = { version: '2.0.0', tasks: [
-		{ label: 'Watch', type: 'process', command: 'compiler', isBackground: true, problemMatcher: { fileLocation: 'search', severity: 'warning', pattern: { regexp: '^(.+):(\\d+):(\\d+) (.+)$', file: 1, line: 2, column: 3, message: 4 }, background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' } } },
-		{ label: 'After search', command: 'after', dependsOn: 'Watch' },
-	] };
+	const document = {
+		version: '2.0.0', tasks: [
+			{ label: 'Watch', type: 'process', command: 'compiler', isBackground: true, problemMatcher: { fileLocation: 'search', severity: 'warning', pattern: { regexp: '^(.+):(\\d+):(\\d+) (.+)$', file: 1, line: 2, column: 3, message: 4 }, background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' } } },
+			{ label: 'After search', command: 'after', dependsOn: 'Watch' },
+		]
+	};
 	const baseServices = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 	const requested = new DeferredPromise<void>();
 	const reply = new DeferredPromise<FileSearchResult>();
@@ -552,7 +863,8 @@ suite('TaskService terminal availability', () => {
 			const root = URI.file('/workspace');
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
-				resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+				operatingSystem: OperatingSystem.Linux,
+				resolveProfile: resolveTaskProfile,
 				getConnectionState: async () => 'ready', onConnectionState: Event.None,
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 				create: async options => {
@@ -577,6 +889,7 @@ suite('TaskService terminal availability', () => {
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			const terminals = resources.add(services.createInstance(TerminalService));
 			services.registerInstance(ITerminalService, terminals);
+			registerTaskProfiles(services);
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
 			const tasks = resources.add(services.createInstance(TaskService));
@@ -612,7 +925,8 @@ suite('TaskService terminal availability', () => {
 			const root = URI.file('/workspace');
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
-				resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+				operatingSystem: OperatingSystem.Linux,
+				resolveProfile: resolveTaskProfile,
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
 				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -640,6 +954,7 @@ suite('TaskService terminal availability', () => {
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			const terminals = resources.add(services.createInstance(TerminalService));
 			services.registerInstance(ITerminalService, terminals);
+			registerTaskProfiles(services);
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
 			const tasks = resources.add(services.createInstance(TaskService));
@@ -680,7 +995,8 @@ suite('Task terminal reuse policies', () => {
 		const closed: string[] = [];
 		const closing = { wait: async (_id: string): Promise<void> => { } };
 		services.registerInstance(ITerminalProcessService, {
-			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+			operatingSystem: OperatingSystem.Linux,
+			resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async options => {
@@ -697,6 +1013,7 @@ suite('Task terminal reuse policies', () => {
 		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
 		const terminals = owner.add(services.createInstance(TerminalService));
 		services.registerInstance(ITerminalService, terminals);
+		registerTaskProfiles(services);
 		const tasks = owner.add(services.createInstance(TaskService));
 		const finish = async (run: ITaskRun): Promise<void> => {
 			const id = `process-${run.processId! - 1000}`;
@@ -1200,14 +1517,18 @@ test('provider shell execution selects the execution host profile and cancellati
 	await service.terminate(run);
 });
 
-test('missing task shells report the selected locale and create no terminal', async () => {
+test('an unknown task execution OS reports the selected locale and creates no terminal', async () => {
 	using localization = toDisposable(resetNlsResolver);
 	initializeTestLocalization('zh-CN');
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	terminals.getProfiles = async () => [];
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
-	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Shell', command: 'compiler', args: ['file name'] }] }) }), workspace, terminals).createInstance(TaskService);
+	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Shell', command: 'compiler', args: ['file name'] }] }) }), workspace, terminals);
+	const paths = Object.create(services.get(IPathService)) as IPathService;
+	paths.getOperatingSystem = async () => undefined;
+	const dispatch = services.createChild(new ServiceCollection([IPathService, paths]), resources);
+	using service = dispatch.createInstance(TaskService);
 	await assert.rejects(service.run((await service.refresh())[0]), /没有可用于执行此任务的 shell/);
 	assert.equal(terminals.instances.length, 0);
 });
@@ -1324,7 +1645,8 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	const parent = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, placeholderTerminals);
 	const services = parent.createChild(new ServiceCollection([ITerminalProcessService, {
-			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+		operatingSystem: OperatingSystem.Linux,
+		resolveProfile: async () => { throw new Error('CustomExecution must not resolve a shell'); },
 		getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None,
 		getEnvironment: async () => ({}), listProfiles: async () => [],
 		create: async () => { throw new Error('CustomExecution must not spawn a backend shell'); },
@@ -1335,6 +1657,7 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 	}]), resources);
 	const terminals = resources.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
+	registerTaskProfiles(services);
 	using service = services.createInstance(TaskService);
 	using writes = new Emitter<string>();
 	using exits = new Emitter<number>();
@@ -1375,7 +1698,8 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	const parent = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, placeholderTerminals);
 	const services = parent.createChild(new ServiceCollection([ITerminalProcessService, {
-			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+		operatingSystem: OperatingSystem.Linux,
+		resolveProfile: async () => { throw new Error('CustomExecution must not resolve a shell'); },
 		getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None,
 		getEnvironment: async () => ({}), listProfiles: async () => [],
 		create: async () => { throw new Error('CustomExecution must not spawn a backend shell'); },
@@ -1386,6 +1710,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 	}]), resources);
 	const terminals = resources.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
+	registerTaskProfiles(services);
 	using service = services.createInstance(TaskService);
 	const opened = new DeferredPromise<void>();
 	const input = new DeferredPromise<void>();
@@ -1519,7 +1844,8 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 		const created: unknown[] = [];
 		const closed: string[] = [];
 		services.registerInstance(ITerminalProcessService, {
-			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+			operatingSystem: OperatingSystem.Linux,
+			resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async options => {
@@ -1531,6 +1857,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 		});
 		services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 		services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
+		registerTaskProfiles(services);
 		const tasks = resources.add(services.createInstance(TaskService));
 		resources.add(tasks.registerTaskProvider({
 			id: 'builder', type: 'builder', provideTasks: () => placement === 'provided' ? [{ id: 'provided', label: 'TypeScript', group: 'build', definition: { type: 'builder', target: 'ts' }, presentation: { focus: false } }] : [],
@@ -1572,7 +1899,8 @@ suite('Extension task execution lifecycle', () => {
 				const producerCalls: string[] = [];
 				const writes: unknown[] = [];
 				const processes: ITerminalProcessService = {
-				resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+					operatingSystem: OperatingSystem.Linux,
+					resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getEnvironment: async () => ({}),
 					listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -1587,6 +1915,7 @@ suite('Extension task execution lifecycle', () => {
 				services.registerInstance(ITerminalProcessService, processes);
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
+				registerTaskProfiles(services);
 				const tasks = resources.add(services.createInstance(TaskService));
 				services.registerInstance(ITaskService, tasks);
 				resources.add(tasks.registerTaskProvider(createExtensionHostTaskProvider('builder', async (operation, payload): Promise<JsonValue> => {
@@ -1750,7 +2079,8 @@ suite('Task rerun variable policy through the execution owners', () => {
 				}));
 				const launches: unknown[] = [];
 				services.registerInstance(ITerminalProcessService, {
-			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+					operatingSystem: OperatingSystem.Linux,
+					resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getEnvironment: async () => ({ MODE: `mode-${++environmentReads}`, EXTRA: 'new-variable' }),
 					listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
@@ -1764,6 +2094,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				const terminals = resources.add(services.createInstance(TerminalService));
 				services.registerInstance(ITerminalService, terminals);
+				registerTaskProfiles(services);
 				const tasks = resources.add(services.createInstance(TaskService));
 				const definitions: unknown[] = [];
 				const task = {
@@ -1857,7 +2188,8 @@ suite('Task instance limits through the execution owners', () => {
 					return index;
 				};
 				services.registerInstance(ITerminalProcessService, {
-			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+					operatingSystem: OperatingSystem.Linux,
+					resolveProfile: resolveTaskProfile,
 					getConnectionState: async () => 'ready', onConnectionState: Event.None,
 					getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 					create: async () => ({ ready: { pid: 1234, cwd: '/instances' }, terminalId: `process-${await prepare()}`, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
@@ -1867,6 +2199,7 @@ suite('Task instance limits through the execution owners', () => {
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				const terminals = resources.add(services.createInstance(TerminalService));
 				services.registerInstance(ITerminalService, terminals);
+				registerTaskProfiles(services);
 				const tasks = resources.add(services.createInstance(TaskService));
 				if (kind === 'custom') resources.add(tasks.registerTaskProvider({
 					id: 'instances', provideTasks: () => [{
@@ -1985,7 +2318,8 @@ suite('Task instance policies through the execution owners', () => {
 			creations: 0, closed: [] as string[], close: async (_id: string): Promise<void> => { },
 		};
 		services.registerInstance(ITerminalProcessService, {
-			resolveProfile: async () => { throw new Error("Unexpected interactive profile resolution"); },
+			operatingSystem: OperatingSystem.Linux,
+			resolveProfile: resolveTaskProfile,
 			getConnectionState: async () => 'ready', onConnectionState: Event.None,
 			getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
 			create: async () => ({ ready: { pid: ++peer.creations, cwd: '/policy' }, terminalId: `policy-${peer.creations}`, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
@@ -1995,6 +2329,7 @@ suite('Task instance policies through the execution owners', () => {
 		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
 		const terminals = owner.add(services.createInstance(TerminalService));
 		services.registerInstance(ITerminalService, terminals);
+		registerTaskProfiles(services);
 		const tasks = owner.add(services.createInstance(TaskService));
 		return { services, workspace, tasks, terminals, dom, quickInput, peer };
 	}
@@ -2123,5 +2458,91 @@ suite('Task instance policies through the execution owners', () => {
 		assert.equal(closes, 1);
 		assert.deepEqual(tasks.activeRuns, [replacement]);
 		await tasks.terminate(replacement);
+	});
+});
+
+suite('Agent Task runs through the shared execution owner', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	function assemble(resources: DisposableStore, tasks: Record<string, unknown>[]) {
+		const root = URI.file('/project');
+		const workspace = resources.add(new WorkspaceContextService({ id: 'workspace', uri: root }));
+		const documents = { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks }) };
+		const terminals = resources.add(new FakeTerminalService());
+		const services = taskServices(resources, new FakeFileService(root, documents), workspace, terminals);
+		const service = resources.add(services.createInstance(TaskService));
+		return { service, terminals, documents, workspace };
+	}
+
+	test('returns a Run ID while dependencies run and cancels the same execution tree', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals } = assemble(resources, [{ label: 'Prepare', command: 'prepare' }, { label: 'Check', command: 'check', dependsOn: 'Prepare' }]);
+		const task = (await service.refresh()).find(task => task.label === 'Check')!;
+		const description = await service.describe(task);
+		assert.deepEqual(description.commands.map(command => command.command), ['prepare', 'check']);
+		const started = new DeferredPromise<void>();
+		resources.add(service.onDidStartTask(run => { if (run.task.label === 'Prepare') void started.complete(undefined); }));
+		const run = service.start(task, new AbortController().signal, description.revision);
+		assert.equal(service.getRun(run.runId), run);
+		assert.equal(service.lastRun, run);
+		await started.p;
+		assert.equal(run.terminalId, '', 'root has an identity before its dependencies finish');
+		assert.equal(terminals.instances.length, 1);
+		await service.terminate(run);
+		await assert.rejects(run.completion!, isCancellationError);
+		assert.equal(run.status, 'canceled');
+		assert.equal(terminals.instances[0]!.state, 'exited');
+		assert.equal(service.activeRuns.length, 0);
+		await service.terminate(run);
+	});
+
+	test('retains bounded output by Run ID across terminal reuse and reports output gaps', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals } = assemble(resources, [{ label: 'Check', command: 'check' }]);
+		const task = (await service.refresh())[0]!;
+		const first = await service.run(task);
+		const terminal = terminals.instances[0]!;
+		terminal.output('first output\n');
+		terminal.outputBytes(new Uint8Array([0xe4]));
+		terminal.outputBytes(new Uint8Array([0xb8, 0xad]));
+		terminal.exit(0);
+		await first.completion;
+		await Promise.resolve();
+		const second = await service.run(task);
+		assert.notEqual(first.runId, second.runId);
+		assert.equal(first.terminalId, second.terminalId);
+		terminal.output('x'.repeat(1_048_576 + 100));
+		assert.equal(service.getRun(first.runId)!.readOutput(0, 65_536).text, 'first output\n中');
+		const output = service.getRun(second.runId)!.readOutput(0, 4);
+		assert.deepEqual(output, { text: 'xxxx', cursor: 100, nextCursor: 104, truncated: true, hasMore: true });
+		assert.equal(second.readOutput(output.nextCursor, 4).truncated, false);
+		assert.throws(() => second.readOutput(-1, 4), RangeError);
+		await service.terminate(second);
+	});
+
+	test('rejects changed recipes before spawn and returns a queryable preparation failure', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals, documents } = assemble(resources, [{ label: 'Check', command: 'check' }]);
+		const task = (await service.refresh())[0]!;
+		const description = await service.describe(task);
+		documents['.vscode/tasks.json'] = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'changed' }] });
+		const run = service.start(task, new AbortController().signal, description.revision);
+		await assert.rejects(run.completion!, /configuration changed/);
+		assert.equal(service.getRun(run.runId)!.status, 'failed');
+		assert.match(run.readOutput(0, 65_536).text, /configuration changed/);
+		assert.equal(terminals.instances.length, 0);
+	});
+
+	test('keeps ready distinct from process exit and retires Run IDs with the workspace', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals, workspace } = assemble(resources, [{ label: 'Watch', command: 'watch', isBackground: true, problemMatcher: { owner: 'watch', pattern: { regexp: '^(.*):(\\d+):(.*)$', file: 1, line: 2, message: 3 }, background: { activeOnStart: true, beginsPattern: '^begin$', endsPattern: '^ready$' } } }]);
+		const task = (await service.refresh())[0]!;
+		const run = await service.run(task);
+		terminals.instances[0]!.output('ready\n');
+		assert.equal(run.isReady, true);
+		assert.equal(service.getRun(run.runId)!.status, 'running');
+		await service.terminate(run);
+		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+		assert.equal(service.getRun(run.runId), undefined);
 	});
 });

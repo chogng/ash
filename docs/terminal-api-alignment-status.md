@@ -1,5 +1,122 @@
 # Terminal API 对齐状态
 
+## Tasks 全局终端环境本批准入（2026-10-12）
+
+运行/复用 Task → TaskService / TerminalTaskSystem → 原 IConfigurationService 有效设置、ITerminalProfileResolverService profile 选择、IConfigurationResolverService 变量解析与 platform mergeEnvironments → 原 TerminalService/TerminalInstance → 原执行端环境和 PTY owner。基础环境仍由执行端拥有；窗口全局 env、实际所选 profile env、任务 env 按顺序覆盖，null 继续作为删除指令传到执行端。Task 变量已解析的值保持字面量，复用重新读取并替换完整 env，不保存第二份配置状态。
+
+准确准入：`src/ash/workbench/contrib/tasks/browser/terminalTaskSystem.ts`（双方同路径，环境准备和配置 DI）；`browser/taskService.ts`（双方同路径，只补显式配置依赖）；`src/ash/workbench/services/tasks/test/browser/taskService.test.ts`（现有真实执行链测试）；`src/ash/workbench/contrib/terminal/README.md` 与本文。平台环境合并、resolver、Terminal 实现只读；没有新公开 API、DOM、CSS、协议或执行 owner。目录审计：Tasks 生产同路径 4、上游缺失 17、已存在 Ash 专属 taskActions/tasks.contribution/tasksViewPane/tasks.css 4；Terminal browser 同路径 22、上游缺失 43、Ash 专属 0。仅修改上述闭合切片。
+
+## Testing 浏览器 Tasks fixture 验证收尾（2026-10-12）
+
+`test/integration/browser/testing.integration.ts` 的 typed Tasks fixture 补齐 `runs`、`start`、`describe`、`getRun`：无已拥有执行时返回空列表/undefined；场景未使用的启动与描述入口明确报错，原 `run` 的脚本调用计数和 Testing 执行分离行为保持。TaskService、TerminalService、resolver 与 PTY owner 沿用现有实现。
+
+标准 `pnpm test:browser:integration testing.integration.spec.ts appTools.integration.spec.ts --project=chromium` 的全浏览器类型检查通过，随后 25 项 Chromium 回归全部通过（Testing 5、App Tools 20），包含键盘/最小面板布局、脚本与测试分离、取消/断连、调试、中文，以及 Agent task Run ID/输出/取消与 Tasks/Terminal 共用 owner。fixture 格式检查和 git diff --check 通过。此前记录的全浏览器 Tasks fixture 类型阻塞已解除；未 commit/push。
+
+## Extension Host → Terminal 领域契约本批准入（2026-10-12）
+
+扩展注册/调用 → ExtensionHostServiceRegistration 与 MainThreadTerminalService → services/terminal 的唯一领域契约 → 原 TerminalProfileService、BrowserTerminalProfileResolverService、TerminalService 与 TerminalInstance → 原进程端口/Rust PTY 或 incarnation-owned 扩展 PTY → 注册/创建/输出/撤销行为测试与架构检查。
+
+新增 `workbench/services/terminal/common/terminal.ts` 和 `browser/terminal.ts` 属于 Ash 专属路径：上游仍将这些契约放在 contribution，但 Ash 已要求 services 不反向依赖 contributions，本次用户明确要求按正确分层收敛领域契约。两文件只承接有实际调用方的 profile/resolver 与浏览器 instance/service 契约，不移动实现、配置状态、注册入口或 PTY owner。浏览器屏幕公开 `IXtermTerminal` 端口，实际 XtermTerminal 仍在原 contribution；common 不导入 DOM/browser。原 contribution 契约文件保留屏幕配置、命令和 view ID，不做服务契约 re-export 或第二份服务 ID。
+
+精确准入路径（其余既有 TS 文件为同路径消费者/实现，services extensionHost 注册文件为既有 Ash 专属 owner；测试只调整真实装配与验证）：
+
+- `docs/editor-extensions.md`
+- `src/ash/sessions/contrib/appTools/browser/appToolsHost.ts`
+- `src/ash/workbench/api/browser/mainThreadTerminalService.ts`
+- `src/ash/workbench/contrib/accessibilitySignals/browser/accessibilitySignal.contribution.ts`
+- `src/ash/workbench/contrib/accessibilitySignals/test/browser/accessibilitySignal.contribution.test.ts`
+- `src/ash/workbench/contrib/chat/browser/actions/chatContext.ts`
+- `src/ash/workbench/contrib/debug/browser/debugService.ts`
+- `src/ash/workbench/contrib/panel/test/browser/panelViewTitleActions.test.ts`
+- `src/ash/workbench/contrib/tasks/browser/taskService.ts`
+- `src/ash/workbench/contrib/tasks/browser/tasksViewPane.ts`
+- `src/ash/workbench/contrib/tasks/browser/terminalTaskSystem.ts`
+- `src/ash/workbench/contrib/terminal/README.md`
+- `src/ash/workbench/contrib/terminal/browser/terminal.contribution.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminal.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalActions.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalContextMenu.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalExtensions.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalIcon.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalInstance.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalMainContribution.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalProcessManager.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalProfileQuickpick.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalProfileService.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalService.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalTabbedView.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalTabsList.ts`
+- `src/ash/workbench/contrib/terminal/browser/terminalView.ts`
+- `src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.ts`
+- `src/ash/workbench/contrib/terminal/common/terminal.ts`
+- `src/ash/workbench/contrib/terminal/test/browser/terminalConfigurationService.test.ts`
+- `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts`
+- `src/ash/workbench/contrib/terminal/test/browser/terminalTabsLayout.test.ts`
+- `src/ash/workbench/contrib/terminal/test/browser/terminalTitleActions.test.ts`
+- `src/ash/workbench/contrib/terminalContrib/accessibility/browser/terminal.accessibility.contribution.ts`
+- `src/ash/workbench/contrib/terminalContrib/accessibility/browser/terminalAccessibilityHelp.ts`
+- `src/ash/workbench/contrib/terminalContrib/accessibility/browser/terminalAccessibleBufferProvider.ts`
+- `src/ash/workbench/contrib/terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts`
+- `src/ash/workbench/contrib/terminalContrib/find/browser/terminal.find.contribution.ts`
+- `src/ash/workbench/contrib/terminalContrib/find/browser/terminalFindAccessibilityHelp.ts`
+- `src/ash/workbench/contrib/terminalContrib/find/browser/terminalFindWidget.ts`
+- `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.ts`
+- `src/ash/workbench/contrib/testing/browser/testingViewPane.ts`
+- `src/ash/workbench/services/debug/test/browser/debugService.test.ts`
+- `src/ash/workbench/services/debug/test/browser/debugTerminalLauncher.test.ts`
+- `src/ash/workbench/services/extensionHost/browser/extensionHostServiceRegistration.ts`
+- `src/ash/workbench/services/extensionHost/test/browser/appServerExtensionHostService.test.ts`
+- `src/ash/workbench/services/tasks/test/browser/taskService.test.ts`
+- `src/ash/workbench/services/tasks/test/browser/tasksViewPane.test.ts`
+- `src/ash/workbench/services/terminal/README.md`
+- `src/ash/workbench/services/terminal/browser/terminal.ts`
+- `src/ash/workbench/services/terminal/common/terminal.ts`
+- `src/ash/workbench/services/terminal/test/common/embedderTerminalService.test.ts`
+- `src/ash/workbench/services/testing/test/browser/testingService.test.ts`
+- `test/architecture/layer-boundaries.test.ts`
+- `test/integration/browser/appTools.integration.ts`
+- `test/integration/browser/chatInput.integration.ts`
+- `test/integration/browser/terminal.integration.ts`
+- `test/integration/browser/testing.integration.ts`
+- `test/integration/browser/viewpaneLayout.integration.ts`
+
+本批结果：ExtensionHostServiceRegistration 和 MainThreadTerminalService 不再依赖 Terminal contribution 契约。三项服务标识字符串与原安装依赖保持一致，所有生产/测试消费者迁到唯一服务契约；旧路径无服务声明、alias 或 re-export。`IXtermTerminal` 只声明现有屏幕消费者使用的端口，真实屏幕初始化仍由 TerminalInstance 负责，测试从实例的 xtermReadyPromise 等待它；未开放具体实现的内部初始化或写入方法。配置、provider 注册、resolver、窗口实例、进程管理器以及 Rust/扩展 PTY 的业务状态和释放仍在原 owner。
+
+目录复核：services/terminal 生产同路径 1、Ash 专属 2、上游缺失 0；contrib/terminal/browser 同路径 22、Ash 专属 0、上游缺失 43；common 同路径 4、Ash 专属 0、上游缺失 11。公开 API 是当前消费者使用的切片，未声称完成完整 VS Code terminal/xterm 契约。
+
+验证：正常 `pnpm test:unit` 入口 9 文件 270 项通过，含架构 13、Extension Host 42、profile/configuration 20、TerminalService 49、DAP 19、Tasks 110、标题 5、Tabs 4、embedder 8。新增 2 项经过真实 ProfileService/resolver/TerminalService/TerminalInstance，从扩展创建 Shell/PTY 到输出、退出、原实例 Relaunch 和准确关闭；原工作区失效与扩展撤销场景保持通过，套件启用 disposable 泄漏检查。架构检查同时覆盖 type import、dynamic import、re-export 的分层方向、服务契约的传递依赖及唯一 service identifier/contract owner，未加例外。收尾后 DebugService 77 与架构 13 再次通过；本批共验证 347 项不同单测。57 个 TS 文件格式检查与 git diff --check 通过；未 commit/push。
+
+Renderer 3675 文件类型检查通过；Terminal Chromium 56 项通过，含中文与无障碍、查找/剪贴板/链接、配置、picker、resolver 和实例装配。浏览器定向编译继承原配置，2136 文件通过，并使用原 browser runner 构建/运行。全浏览器编译曾被共享工作树范围外 `test/integration/browser/testing.integration.ts` 的 Tasks fixture 新接口缺口阻塞；未改其 Tasks 行为或放宽编译选项。最初全 unit/Renderer 编译也遇到同一共享 Tasks/App Tools 迁移未同步的类型，后续完整 unit/Renderer 已通过；当前验证分别记录，不把定向通过记为全浏览器类型检查通过。
+
+## Debug／Agent 启动策略本批准入（2026-10-12）
+
+DAP runInTerminal → DebugService → ITerminalProfileResolverService 的 automation 策略 → 原 TerminalService / Rust PTY owner → 实际 shell 的引用规则、profile argv/env 与 DAP literal env/cwd、输入确认及失效清理 → 真实 DAP reverse request 测试。
+
+Agent openTerminal App Tool → 现有 AppServerAppToolsHost → AppToolsHost → 同一 resolver 的 agentHost 策略 → 原 TerminalService / Rust PTY owner → 当前执行端的 argv/env/cwd、终端显示及取消／工作区／连接失效清理 → 既有 App Tools browser integration。用户本请求确认沿用已有 Agent 入口和 owner；AppToolsHost 为既有 Ash 专属窗口执行适配器，仅承接该入口，不新建协议、执行宿主或 backend shell-session owner。
+
+准入路径：workbench/contrib/debug/browser/debugService.ts（双方同路径，仅启动策略、显式 DI 依赖和当前请求的失效检查）；sessions/contrib/appTools/browser/appToolsHost.ts（Ash 专属，用户请求沿用的既有 Agent 窗口执行 owner，仅 openTerminal 策略与寿命）；services/debug/test/browser/{debugTerminalLauncher,debugService}.test.ts、test/integration/browser/appTools.integration{,.spec}.ts（现有行为测试及 typed 装配）；中文 workbench.json（必要 NLS）、Terminal README 和本文。其他路径只读；前一批 Tasks/TerminalInstance 未提交变化保留。
+
+只读范围：debug/browser 双方同路径 6、上游缺失 53；Ash 专属 debugActions、debugConsoleViewPane、debugViewPane 和三个 CSS 均不修改。appTools 的既有 Host/CSS、服务契约与 App Server adapter 均为 Ash 专属；只更改已请求的 Host 启动职责，CSS／契约／transport adapter 不变。没有新 DOM、样式、命令或持久状态；继续现有终端无障碍帮助及焦点链。
+
+本批结果：Debug runInTerminal 采用 automationProfile，Agent openTerminal 采用 agentHostProfile，空配置均沿 resolver 回到交互式默认 shell。两条链共用原 ProfileService、resolver、TerminalService 与 Rust PTY，保留 executable/argv/env/cwd 和 profile metadata。Debug 不再额外偏好 PowerShell，也不依据自定义 profile ID 判定引用规则；配置先解析，再以 DAP 字面量 env/cwd 覆盖，Windows 环境键忽略大小写，null 保留删除语义。stdin 确认后才返回真实 shellProcessId。Session／Host／工作区／执行连接失效使 pending resolution/create/input 失效；晚到 PTY 被关闭，Agent 无法打开 View 时也释放对应实例。连接／工作区订阅由原 owner 的 disposable store 释放，没有新执行 registry 或请求状态副本。
+
+验证：标准 unit 入口的 DebugService 77、真实 DAP terminal 19、Tasks 110、TerminalService 49、profile/configuration 18 共 273 项通过；DAP terminal 收尾后 19 项再次通过，新增生命周期套件启用 disposable 泄漏检查。Chromium Terminal 56 项通过，App Tools 最终 18 项通过（新增 12 项，含三种执行端 OS、Agent 优先与交互回退、取消／Host／工作区／连接失效、晚到 PTY 和 View 失败释放）；Windows fixture 的 initialize OS 与 userHome 使用对应目标的路径格式。Renderer 3673 文件、完整 unit/browser 编译与 6 个修改 TS 文件格式检查通过，git diff --check 通过。Debug 默认标题新增 NLS 键并补中文，中文 DAP 标题和 Agent 未就绪错误经过行为测试。
+
+架构检查实际运行 test/architecture/layer-boundaries.test.ts：10 项通过、1 项失败，失败列出 services/extensionHost/browser/extensionHostServiceRegistration.ts → contrib/terminal/browser/terminal.ts 与 contrib/terminal/common/terminal.ts 两条既有依赖；已核对 HEAD 同样存在，该批未修改该文件或放宽检查。此依赖已在本文顶部的后续领域契约批次修复。Workbench → Sessions 检查通过，没有新反向依赖。Windows/Linux 是前端执行端契约验证，未执行相应 OS 的真实 PTY／SSH 产品场景。保留前一批未提交修改；未 commit/push。
+
+## Tasks 自动化 Shell 本批准入（2026-10-12）
+
+运行 Shell task → TaskService / TerminalTaskSystem → 既有 ITerminalProfileResolverService.getDefaultProfile（allowAutomationShell）→ ProfileService / 执行端 resolve owner → 按执行端 shell 引用参数、继承 profile 环境并创建或复用原 PTY → TaskService 真实派发及 TerminalInstance 复用测试。
+
+本批生产路径均为双方同路径：contrib/tasks/browser/terminalTaskSystem.ts 只改 Shell 选择、执行参数、环境和复用启动数据；contrib/tasks/browser/taskService.ts 只声明 resolver 注册依赖；contrib/terminal/browser/terminalInstance.ts 只让复用启动数据中的 executable/args 成为新 profile 快照，并在等待旧进程关闭前冻结调用方数组与环境。测试路径 services/tasks/test/browser/taskService.test.ts 与 contrib/terminal/test/browser/terminalService.test.ts 为 Ash 既有测试 owner，覆盖真实 TaskService → resolver → TerminalService → process boundary 与等待释放时的不可变启动快照，不增加生产 API。文档只更新 Terminal README 和本文。没有 DOM、CSS、焦点或新命令变化，复用现有任务/终端无障碍链。
+
+只读目录审计：tasks 生产 TS/CSS 双方同路径 4、上游缺失 17；仅 Ash 的 tasks.css、taskActions.ts、tasks.contribution.ts、tasksViewPane.ts 不在本批修改范围。terminal/browser 双方同路径 22、上游缺失 43、仅 Ash 0。没有新增文件或删除操作。Debug/Agent 策略与全局终端环境的 Tasks 接入仍属后续切片。
+
+本批结果：Shell task 和仅 command 的 provider task 进入现有 automation resolver；执行端 OS、实际 executable 的引用规则、profile argv/env、任务环境覆盖与 null 删除语义已到达真实 TerminalService 创建边界。显式任务 executable 和 Process/CustomExecution 的策略保留。任务复用替换当前解析结果，移除旧 profile 环境；automation 清空后回到交互默认 shell。TerminalInstance 在等待旧进程释放前冻结 path、argv、execution argv 与环境，复用保留实例和屏幕。没有新增运行宿主、协议或公开 API。
+
+验证：标准 `pnpm test:unit` 定向入口 177 项通过（Tasks 110、TerminalService 49、configuration/profile 18），新增 9 项覆盖三种执行端 OS 的选择／参数／环境／复用、显式优先、按 executable 引用、自定义默认、command-only provider、取消／工作区切换／解析失败；生命周期测试启用 disposable 泄漏检查。标准 Renderer 检查 3671 文件通过；标准 Chromium Terminal 回归最终全量 56 项通过，含中文命令和无障碍帮助。首轮浏览器 resize/dispose 场景出现一次 xterm 异步 dimensions 错误；该场景随后独立重复 3 次与完整重跑均通过，没有据此修改样式或放宽断言。5 个修改 TS 文件格式检查和 git diff --check 通过。本批复用既有 NLS 文案，中文无 shell 错误经过真实 TaskService 验证；没有新增译文键。Windows/Linux 为前端执行端契约测试，未运行对应 OS 的真实 PTY 或 SSH 场景。未 commit/push。
+
 ## 自定义 / 扩展 Profile 与 Resolver 本批准入（2026-10-11）
 
 用户选择自定义 profile → 现有配置系统、ProfileService / Quickpick / View → terminalProfileResolverService.ts → 执行端 terminal/profile/resolve 验证并选择 executable，原 TerminalService/Rust PTY owner 创建 → 保留 argv/env/cwd、准确 profile 身份、Relaunch 原启动快照 → 后端 profile/实际 PTY 与前端 resolver/创建行为测试。创建授权、私有环境过滤、输出/尺寸/恢复沿原 owner，不将 custom profile 假装成 task process。

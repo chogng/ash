@@ -8,7 +8,8 @@ import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProfile
 import { mergeEnvironments } from '../../../../platform/terminal/common/terminalEnvironment.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
-import { ITerminalProfileResolverService, ITerminalProfileService, TERMINAL_CONFIG_SECTION, type IShellLaunchConfigResolveOptions } from '../common/terminal.js';
+import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService, type IShellLaunchConfigResolveOptions } from '../../../services/terminal/common/terminal.js';
 
 /** Resolves caller-owned launch data against one initialized execution host and workspace generation. */
 export class BrowserTerminalProfileResolverService extends Disposable implements ITerminalProfileResolverService {

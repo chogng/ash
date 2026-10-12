@@ -5,14 +5,14 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TerminalCommandId, TERMINAL_VIEW_ID } from '../common/terminal.js';
-import { ITerminalProfileService } from '../common/terminal.js';
+import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
-import { ITerminalService } from './terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 import type { TerminalViewPane } from './terminalView.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
 import { InstanceContext } from './terminalContextMenu.js';
-import type { ITerminalInstance } from './terminal.js';
+
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {

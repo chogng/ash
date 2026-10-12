@@ -1,5 +1,5 @@
 import type { Constructor } from '../../../../platform/instantiation/common/descriptors.js';
-import type { ITerminalContribution, ITerminalInstance } from './terminal.js';
+import type { ITerminalContribution, ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 
 export interface ITerminalContributionContext {
 	readonly instance: ITerminalInstance;

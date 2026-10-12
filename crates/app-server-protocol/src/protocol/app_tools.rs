@@ -32,6 +32,34 @@ pub struct AppHostRequestParams {
     deny_unknown_fields
 )]
 pub enum AppHostOperation {
+    TasksList {
+        directory: String,
+    },
+    TasksDescribe {
+        directory: String,
+        task_id: String,
+        revision: String,
+    },
+    TasksRun {
+        directory: String,
+        task_id: String,
+        revision: String,
+    },
+    TasksStatus {
+        directory: String,
+        run_id: String,
+    },
+    TasksOutput {
+        directory: String,
+        run_id: String,
+        #[ts(type = "number")]
+        cursor: u64,
+        max_characters: u32,
+    },
+    TasksCancel {
+        directory: String,
+        run_id: String,
+    },
     OpenFile {
         path: String,
         line: Option<u32>,

@@ -1,12 +1,17 @@
 import { Emitter, Event } from '../../../../base/common/event.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { DeferredPromise, raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationError, getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IMarkerService } from '../../../../platform/markers/common/markers.js';
 import { IFileSearchService } from '../../../../platform/search/common/fileSearch.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IPathService } from '../../../../platform/path/common/pathService.js';
+import { OperatingSystem } from '../../../../base/common/platform.js';
+import { mergeEnvironments } from '../../../../platform/terminal/common/terminalEnvironment.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
@@ -15,13 +20,14 @@ import type { IWorkspaceFolder } from '../../../../platform/workspace/common/wor
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverExpression, type Replacement, type IResolvedValue } from '../../../services/configurationResolver/common/configurationResolverExpression.js';
 import { type IOutputChannel, type OutputEntrySeverity } from '../../../services/output/common/output.js';
-import { ShellQuoting, type ITaskRun, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../../../services/tasks/common/taskService.js';
-import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalService } from '../../terminal/browser/terminal.js';
+import { ShellQuoting, type ITaskRun, type ITaskOutput, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../../../services/tasks/common/taskService.js';
+import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalService } from '../../../services/terminal/browser/terminal.js';
 import { parseShellExecution } from '../../../services/tasks/common/workspaceTasks.js';
 import { parseProblemMatchers, type ProblemMatcher } from '../../../services/tasks/common/problemMatcher.js';
 import { WatchingProblemCollector } from '../common/problemCollectors.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
+import { ITerminalProfileResolverService } from '../../../services/terminal/common/terminal.js';
 import { WorkbenchViewContainerId } from '../../../common/views.js';
 
 interface TaskTerminal {
@@ -43,7 +49,7 @@ export class TerminalTaskSystem extends Disposable {
 	private readonly startEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly stateEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly runs = this._register(new DisposableMap<string, TaskRun>());
-	private _lastRun: ITaskRun | undefined;
+	private readonly retainedRuns = new Map<string, { run: ITaskRun; createdAt: number; }>();
 	private variableSnapshots = new WeakMap<ITaskRun, readonly [Replacement, IResolvedValue][]>();
 	private readonly markerOwners = new Set<string>();
 	private readonly taskTerminals = new Map<string, TaskTerminal>();
@@ -60,13 +66,30 @@ export class TerminalTaskSystem extends Disposable {
 		@IViewsService private readonly views: IViewsService,
 		@IFileSearchService private readonly fileSearch: IFileSearchService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IPathService private readonly paths: IPathService,
+		@ITerminalProfileResolverService private readonly profiles: ITerminalProfileResolverService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		this._register(terminals.onDidDisposeInstance(terminal => this.taskTerminals.delete(terminal.id)));
 	}
 
 	public get activeRuns(): readonly ITaskRun[] { return [...this.runs].map(([, run]) => run).filter(run => run.status === 'running'); }
-	public get lastRun(): ITaskRun | undefined { return this._lastRun; }
+	public get recentRuns(): readonly ITaskRun[] { this.pruneRuns(); return [...this.retainedRuns.values()].map(entry => entry.run); }
+	private retainRun(run: ITaskRun): void {
+		this.retainedRuns.set(run.runId, { run, createdAt: Date.now() });
+		this.pruneRuns();
+	}
+	private pruneRuns(): void {
+		const completed = [...this.retainedRuns].filter(([, entry]) => entry.run.status !== 'running');
+		let count = completed.length;
+		for (const [id, entry] of completed) {
+			if (Date.now() - entry.createdAt > 3_600_000 || count > 100) {
+				this.retainedRuns.delete(id);
+				count--;
+			}
+		}
+	}
 
 	private problemSearchDirectories(paths: ProblemMatcher['searchPaths'], taskFolder: IWorkspaceFolder): readonly ProblemSearchDirectory[] {
 		if (!paths) return [];
@@ -112,9 +135,9 @@ export class TerminalTaskSystem extends Disposable {
 	}
 
 	public cancelAll(): void {
+		this.retainedRuns.clear();
 		this.taskTerminals.clear();
 		this.variableSnapshots = new WeakMap();
-		this._lastRun = undefined;
 		for (const run of this.activeRuns) {
 			void this.terminate(run).catch(error => this.log('error', errorMessage(error)));
 		}
@@ -129,12 +152,12 @@ export class TerminalTaskSystem extends Disposable {
 		super.disposeCore();
 	}
 
-	public async run(task: IWorkspaceTask, folder: IWorkspaceFolder, assertCurrent: () => void, signal?: AbortSignal, previousRun?: ITaskRun, onStarted?: (run: ITaskRun) => void): Promise<ITaskRun> {
+	public async run(task: IWorkspaceTask, folder: IWorkspaceFolder, assertCurrent: () => void, signal?: AbortSignal, previousRun?: ITaskRun, onStarted?: (run: ITaskRun) => void, runId?: string): Promise<ITaskRun> {
 		if (!task.command && task.dependsOn?.length) {
 			assertCurrent();
 			this.assertNotDisposed();
-			const run: ITaskRun = Object.freeze({ task, terminalId: '', status: 'succeeded', exitCode: 0, onDidChangeStatus: Event.None });
-			this._lastRun = run;
+			const run: ITaskRun = Object.freeze({ task, runId: runId ?? generateUuid(), terminalId: '', status: 'succeeded', exitCode: 0, onDidChangeStatus: Event.None, readOutput: (cursor: number) => ({ text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false }) });
+			this.retainRun(run);
 			onStarted?.(run);
 			this.startEmitter.fire(run);
 			this.stateEmitter.fire(run);
@@ -173,32 +196,77 @@ export class TerminalTaskSystem extends Disposable {
 		const searchDirectories = new Map(runtimeMatchers.map(matcher => [matcher, this.problemSearchDirectories(matcher.searchPaths, folder)]));
 		let execution: TerminalProcessExecution | undefined;
 		let profile: ITerminalProfileSelection = { type: 'default' };
+		let launch: IShellLaunchConfig | undefined;
+		let os: OperatingSystem | undefined;
+		const configuredEnvironments = this.configuration.getValue<
+			Readonly<Record<string, Readonly<Record<string, string | null>>>>
+		>('terminal.integrated.env') ?? {};
+		const needsProfile = resolved.execution === undefined
+			|| resolved.execution.type === 'shell' && !resolved.execution.options?.executable;
+		const needsEnvironment = Object.values(configuredEnvironments).some(env => Object.keys(env).length > 0)
+			|| Object.keys(resolved.env ?? {}).length > 0;
+		if (resolved.execution?.type !== 'custom' && (needsProfile || needsEnvironment)) {
+			const platform = this.paths.getOperatingSystem(folder.uri);
+			os = await (signal ? raceCancellationError(platform, signal) : platform);
+			assertCurrent();
+			this.assertNotDisposed();
+			if (os === undefined) throw new Error(localize('tasks.shellUnavailable', 'No shell is available to execute this task.'));
+		}
 		if (resolved.execution?.type === 'process') {
 			execution = resolved.execution;
-		} else if (resolved.execution?.type === 'shell') {
+		} else if (resolved.execution?.type === 'shell' || resolved.execution === undefined) {
 			// Variable results may contain spaces or shell metacharacters. Preserve
 			// their argument boundaries until the actual shell has been selected.
-			const shell = parseShellExecution(resolved.execution);
+			const shell = resolved.execution ? parseShellExecution(resolved.execution) : { type: 'shell' as const, command: resolved.command, args: [] };
 			const executable = shell.options?.executable;
 			let shellName: string;
+			let shellPath: string;
 			if (executable) {
+				shellPath = executable;
 				shellName = executable.split(/[\\/]/).at(-1)!.replace(/\.exe$/i, '').toLowerCase();
+				launch = { executable, args: shell.options?.shellArgs };
 			} else {
-				const discovery = this.terminals.getProfiles();
-				const profiles = await (signal ? raceCancellationError(discovery, signal) : discovery);
+				const resolution = this.profiles.getDefaultProfile({ os: os!, remoteAuthority: folder.uri.authority || undefined, allowAutomationShell: true });
+				const selected = await (signal ? raceCancellationError(resolution, signal) : resolution);
 				assertCurrent();
-				const selected = profiles.find(candidate => candidate.isDefault);
-				if (!selected) throw new Error(localize('tasks.shellUnavailable', 'No shell is available to execute this task.'));
-				profile = { type: 'profile', profileId: selected.profileId };
-				shellName = selected.profileId;
+				this.assertNotDisposed();
+				const path = typeof selected.path === 'string' ? selected.path : selected.path[0]!;
+				shellPath = path;
+				profile = selected.isAutoDetected
+					? { type: 'profile', profileId: selected.profileId }
+					: { type: 'custom', name: selected.profileName, path: [path], args: selected.args ?? [] };
+				launch = { executable: path, args: shell.options?.shellArgs ?? selected.args, env: selected.env ?? {} };
+				shellName = path.split(/[\\/]/).at(-1)!.replace(/\.exe$/i, '').toLowerCase();
 			}
-			const commandLine = shellCommandLine(shell, shellName);
-			execution = executable ? {
-				type: 'process', program: executable,
-				args: [...(shell.options?.shellArgs ?? shellInvocationArguments(shellName)), commandLine],
+			const commandLine = resolved.execution ? shellCommandLine(shell, shellName) : resolved.command;
+			execution = executable || profile.type === 'custom' || launch.args?.length || shell.options?.shellArgs !== undefined ? {
+				type: 'process', program: shellPath,
+				args: taskShellArguments(shellName, launch.args ?? [], commandLine),
 			} : { type: 'shell', commandLine };
-		} else if (resolved.execution === undefined) {
-			execution = { type: 'shell', commandLine: resolved.command };
+		}
+		let environment = resolved.env;
+		if (os !== undefined) {
+			const resolution = (async () => {
+				const platform = os === OperatingSystem.Windows ? 'windows' : os === OperatingSystem.Macintosh ? 'osx' : 'linux';
+				const caseSensitive = os !== OperatingSystem.Windows;
+				const env: Record<string, string | null> = {};
+				mergeEnvironments(env, configuredEnvironments[platform], caseSensitive);
+				mergeEnvironments(env, launch?.env, caseSensitive);
+				if (Object.keys(env).length) {
+					const inherited = await this.profiles.getEnvironment(folder.uri.authority || undefined);
+					for (const [key, value] of Object.entries(env)) {
+						env[key] = value === null ? null : await this.resolver.resolveWithEnvironment(inherited, folder, value);
+					}
+				}
+				// Task variables have already been resolved, including command results
+				// that may contain variable syntax intended as literal text.
+				mergeEnvironments(env, resolved.env, caseSensitive);
+				return Object.keys(env).length || resolved.env !== undefined || launch?.env !== undefined
+					? Object.freeze(env) : undefined;
+			})();
+			environment = await (signal ? raceCancellationError(resolution, signal) : resolution);
+			assertCurrent();
+			this.assertNotDisposed();
 		}
 		this.log('information', `Starting task '${task.label}' (${task.id}).`);
 		const commandText = execution?.type === 'process' ? [execution.program, ...execution.args].map(value => JSON.stringify(value)).join(' ') : execution?.commandLine;
@@ -245,7 +313,7 @@ export class TerminalTaskSystem extends Disposable {
 				deferStart: true,
 				waitOnExit,
 				...(initialText === undefined ? {} : { initialText }),
-				...(resolved.env === undefined ? {} : { env: resolved.env }),
+				...(environment === undefined ? {} : { env: environment }),
 				...(resolved.cwd === undefined ? {} : { cwd: resolved.cwd }),
 				...(execution === undefined ? {} : { execution }),
 			};
@@ -253,6 +321,7 @@ export class TerminalTaskSystem extends Disposable {
 				terminal = reusable.terminal;
 				if (task.presentation?.clear) terminal.clearBuffer();
 				await terminal.reuseTerminal(options.config ? { ...options.config, name: options.title, deferStart: true } : {
+					executable: launch?.executable, args: launch?.args,
 					name: options.title, env: options.env, cwd: options.cwd, execution: options.execution, initialText: options.initialText, waitOnExit: options.waitOnExit, deferStart: true,
 				});
 				this.terminals.setActiveInstance(terminal);
@@ -290,7 +359,9 @@ export class TerminalTaskSystem extends Disposable {
 			this.log(current.status === 'failed' ? 'error' : current.status === 'canceled' ? 'warning' : 'information', `Task '${current.task.label}' ${current.status}${exit}.`);
 			this.stateEmitter.fire(current);
 			if (current.status !== 'running') {
-				// The result remains readable through lastRun; completed runs no longer own listeners.
+				// Retained runs keep their output artifact; completed runs no longer own listeners.
+				const retained = this.retainedRuns.get(current.runId);
+				if (retained) retained.createdAt = Date.now();
 				this.runs.deleteAndDispose(current.terminalId);
 			}
 		}, pty?.releaseCompletion, () => {
@@ -300,8 +371,9 @@ export class TerminalTaskSystem extends Disposable {
 		}, async error => {
 			this.log('error', errorMessage(error));
 			await this.closeTerminal(terminal);
-		});
+		}, runId);
 		this.runs.set(terminal.id, run);
+		this.retainRun(run);
 		let slot: TaskTerminal | undefined;
 		if (panel !== 'new' && !task.presentation?.close) {
 			slot = { terminal, folderId: folder.id, taskId: task.id, panel, idle: false };
@@ -323,7 +395,6 @@ export class TerminalTaskSystem extends Disposable {
 			}
 		}, () => { if (slot && this.taskTerminals.get(terminal.id) === slot) this.taskTerminals.delete(terminal.id); });
 		this.variableSnapshots.set(run, [...expression.resolved()]);
-		this._lastRun = run;
 		onStarted?.(run);
 		this.startEmitter.fire(run);
 		try {
@@ -404,6 +475,10 @@ export class TerminalTaskSystem extends Disposable {
 }
 
 class TaskRun extends Disposable implements ITaskRun {
+	private outputText = '';
+	private readonly outputDecoder = new TextDecoder();
+	private outputStart = 0;
+	private outputEnd = 0;
 	private readonly changeEmitter = this._register(new Emitter<TaskRunStatus>());
 	private commandId: string | undefined;
 	private _status: TaskRunStatus = 'running';
@@ -415,7 +490,7 @@ class TaskRun extends Disposable implements ITaskRun {
 	public readonly onDidChangeStatus: Event<TaskRunStatus> = this.changeEmitter.event;
 	private collectionCompletion: Promise<void> | undefined;
 
-	constructor(public readonly task: IWorkspaceTask, public readonly terminal: ITerminalInstance, private readonly collector: WatchingProblemCollector, private readonly onChange: (run: TaskRun) => void, private readonly customRelease?: Promise<void>, onError?: () => void, onBackgroundProblem?: () => void, onCollectionError?: (error: unknown) => Promise<void>) {
+	constructor(public readonly task: IWorkspaceTask, public readonly terminal: ITerminalInstance, private readonly collector: WatchingProblemCollector, private readonly onChange: (run: TaskRun) => void, private readonly customRelease?: Promise<void>, onError?: () => void, onBackgroundProblem?: () => void, onCollectionError?: (error: unknown) => Promise<void>, public readonly runId: string = generateUuid()) {
 		super();
 		this.processId = terminal.processId > 0 && task.execution?.type !== 'custom' ? terminal.processId : undefined;
 		this.processCompletion = this.processId === undefined ? undefined : this.completion;
@@ -434,7 +509,10 @@ class TaskRun extends Disposable implements ITaskRun {
 			this.fail(false);
 			this.completeExecution(undefined);
 		}));
-		this._register(terminal.onDidWriteData(event => collector.accept(event.data)));
+		this._register(terminal.onDidWriteData(event => {
+			this.appendOutput(this.outputDecoder.decode(event.data, { stream: true }));
+			collector.accept(event.data);
+		}));
 		this._register(terminal.onDidChangeCommandStatus(event => this.acceptCommandStatus(event)));
 		this._register(terminal.onDidExit(exitCode => {
 			if (this._status === 'running') {
@@ -449,7 +527,21 @@ class TaskRun extends Disposable implements ITaskRun {
 		}));
 	}
 
+	private appendOutput(text: string): void {
+		this.outputText += text;
+		this.outputEnd += text.length;
+		if (this.outputText.length > 1_048_576) {
+			this.outputText = this.outputText.slice(-1_048_576);
+			this.outputStart = this.outputEnd - this.outputText.length;
+		}
+	}
 	public get terminalId(): string { return this.terminal.id; }
+	public readOutput(cursor: number, maxCharacters: number): ITaskOutput {
+		if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isSafeInteger(maxCharacters) || maxCharacters < 1 || maxCharacters > 65_536 || cursor > this.outputEnd) throw new RangeError('Invalid task output cursor or limit');
+		const start = Math.max(cursor, this.outputStart);
+		const end = Math.min(this.outputEnd, start + maxCharacters);
+		return { text: this.outputText.slice(start - this.outputStart, end - this.outputStart), cursor: start, nextCursor: end, truncated: cursor < this.outputStart, hasMore: end < this.outputEnd };
+	}
 	public get status(): TaskRunStatus { return this._status; }
 	public get exitCode(): number | undefined { return this._exitCode; }
 	public get isReady(): boolean { return this.task.isBackground === true && this.collector.isReady; }
@@ -458,8 +550,8 @@ class TaskRun extends Disposable implements ITaskRun {
 	public get hasProblems(): boolean { return this.collector.hasProblems; }
 	public get onDidBecomeReady(): Event<void> { return this.collector.onDidBecomeReady; }
 
-	public cancel(): void { this.stopCollection(); this.setStatus('canceled', undefined); }
-	public fail(canceled: boolean): void { this.stopCollection(); this.setStatus(canceled ? 'canceled' : 'failed', undefined); }
+	public cancel(): void { this.appendOutput(this.outputDecoder.decode()); this.stopCollection(); this.setStatus('canceled', undefined); }
+	public fail(canceled: boolean): void { this.appendOutput(this.outputDecoder.decode()); this.stopCollection(); this.setStatus(canceled ? 'canceled' : 'failed', undefined); }
 
 	private stopCollection(): void {
 		const pending = this.collector.hasPendingResolutions;
@@ -475,6 +567,7 @@ class TaskRun extends Disposable implements ITaskRun {
 	}
 	public finish(exitCode: number | undefined, status: TaskRunStatus = exitCode === undefined ? 'completed' : exitCode === 0 ? 'succeeded' : 'failed'): void {
 		if (this._status !== 'running' || this.collectionCompletion) return;
+		this.appendOutput(this.outputDecoder.decode());
 		this.collector.done();
 		if (this.collector.hasPendingResolutions) {
 			// Keep the run and collector alive until asynchronous resources are
@@ -520,6 +613,13 @@ function shellInvocationArguments(shellName: string): readonly string[] {
 	if (shellName === 'cmd' || shellName === 'command-prompt') return ['/d', '/s', '/c'];
 	if (['powershell', 'windows-powershell', 'pwsh'].includes(shellName)) return ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command'];
 	return ['-c'];
+}
+
+function taskShellArguments(shellName: string, args: readonly string[], commandLine: string): readonly string[] {
+	// Profiles may already include a command flag; adding a second one would
+	// turn the intended command into a shell option instead of executing it.
+	const commandFlag = shellName === 'cmd' ? /^\/c$/i : ['powershell', 'pwsh'].includes(shellName) ? /^-command$/i : /^-[il]*c[il]*$/;
+	return [...args, ...(args.some(arg => commandFlag.test(arg)) ? [] : shellInvocationArguments(shellName)), commandLine];
 }
 
 function shellCommandLine(execution: TaskShellExecution, shellName: string): string {

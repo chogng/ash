@@ -7,8 +7,8 @@ import { localize } from '../../../nls.js';
 import { ITerminalProcessService, type ITerminalChildProcess, type IProcessProperty, type IProcessReadyEvent, ProcessPropertyType, type IShellLaunchConfig } from '../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
-import { ITerminalService, type ITerminalInstance } from '../../contrib/terminal/browser/terminal.js';
-import { ITerminalProfileResolverService, ITerminalProfileService } from '../../contrib/terminal/common/terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../services/terminal/browser/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../../services/terminal/common/terminal.js';
 import type { ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 

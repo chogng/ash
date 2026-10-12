@@ -4,9 +4,9 @@ import { IAccessibleViewService, AccessibleViewType, AccessibilityVerbositySetti
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ITerminalService, type ITerminalContribution, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../../services/terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
-import type { XtermTerminal } from '../../../terminal/browser/xterm/xtermTerminal.js';
+
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import { TerminalAccessibilityHelpProvider } from './terminalAccessibilityHelp.js';
 import { TerminalAccessibleBufferProvider } from './terminalAccessibleBufferProvider.js';
@@ -20,7 +20,7 @@ export class TerminalAccessibleViewContribution extends Disposable implements IT
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) { super(); }
 
-	public xtermReady(screen: XtermTerminal): void {
+	public xtermReady(screen: IXtermTerminal): void {
 		const updateLabel = (): void => {
 			const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Terminal);
 			screen.raw.textarea?.setAttribute('aria-label', [localize('terminal.accessibility.input', 'Terminal input'), hint].filter(Boolean).join('. '));
