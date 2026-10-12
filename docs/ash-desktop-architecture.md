@@ -207,7 +207,10 @@ Desktop 主进程创建应用后启动异步启动任务，不在 ESM 顶层等�
 窗口设置，再进入可被窗口否决的正常退出。
 `AshApplication.startupAfterReady()` 断言 Ready 前置条件，并在创建业务窗口前
 完成 App Server gate。gate 成功后才创建 Workbench；主窗口在 `ready-to-show` 前保持隐藏，
-启动过程不创建额外的 splash 窗口。gate 失败时，Retry/Quit 对话框允许 supervisor
+启动过程不创建额外的 splash 窗口。主窗口和 Web 页面在启动入口应用主题快照，
+首次有效布局后由 splash contribution 移除占位；快照按产品窗口和工作区隔离，
+尺寸变化时只复用颜色。主题和布局服务保留实时状态的唯一所有权。
+gate 失败时，Retry/Quit 对话框允许 supervisor
 回到 stopped 后重新初始化，或按正常退出生命周期关闭应用。
 
 Electron 自动化共用 `test/automation/playwrightElectron.ts` 的进程启动、诊断和退出管理。
@@ -595,6 +598,8 @@ Renderer 不复制 Rust 状态机。Session 没有 sequence；`session/changed` 
 ### 6.1 Editor 宿主
 
 `EditorParts` 是跨浏览器窗口的协调面，主窗口和每个辅助窗口各自拥有一个 `EditorPart`；每个 `EditorPart` 使用二维 `SerializableGrid` 管理稳定 ID 的 `EditorGroup`，每个 group 管理 tabs、preview/pinned、pane 生命周期、活动状态和 JSON-safe view state。`EditorInput` 表示待打开资源，`IEditorPane` 定义编辑器真正共享的创建、输入、取消、布局、可见性、聚焦与释放语义，`EditorPaneRegistry` 负责默认匹配、候选枚举和显式 `Reopen With` 选择。具体产品装配规则由 [`workbench-modes.md`](workbench-modes.md) 负责。
+
+跨编辑器联动滚动由 `workbench/contrib/scrollLocking` 的 `SyncScroll` 管理。`BrowserEditorService.visibleEditorPanes` 从 Editor Part 获取可见分组的活动 pane 和模态 pane；pane 通过 `IEditorPaneWithScrolling` 提供滚动事件与坐标读写。开启联动或可见集合变化时记录各 pane 的基准位置，后续滚动按双轴位移保留位置差，坐标与边界约束仍由各编辑器控件拥有。并排 pane 展开为两个参与者，Diff pane 通过 modified 控件参与，其内部同步仍由 Diff 拥有。按住快捷键的释放、失焦与服务释放由 `WorkbenchKeybindingService.enableKeybindingHoldMode` 管理；`SyncScroll` 恢复临时切换前的状态，并保留期间发生的显式切换。
 
 打开新输入时，旧 pane 保持可见，直到新 pane 的异步 `setInput()` 成功；首次打开失败时，group 提供可重试、可关闭的错误 pane，严格文本检测发现二进制或非 UTF-8 内容时还可切换到只读 Binary Editor。被后续打开或普通内容替代时，宿主中止 `AbortSignal` 并释放候选 pane。dirty close 由 Workbench 统一执行 Save / Don't Save / Cancel，工作区切换与跨窗口关闭先完成全局预检再变更状态。
 

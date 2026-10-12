@@ -18,6 +18,7 @@ import { type IContextMenuMenuDelegate, type IContextMenuService, IContextViewSe
 /** Transforms menu contributions and delegates browser rendering to one handler. */
 export class BrowserContextMenuService extends Disposable
 	implements IContextMenuService {
+	readonly contextMenuStyle = 'custom';
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	private readonly handler: ContextMenuHandler;

@@ -51,6 +51,7 @@ export default defineConfig({
 				dialog: resolve(import.meta.dirname, "dialog.html"),
 				onboarding: resolve(import.meta.dirname, 'onboarding.html'),
 				link: resolve(import.meta.dirname, 'link.html'),
+				url: resolve(import.meta.dirname, 'url.html'),
 				releaseNotes: resolve(import.meta.dirname, 'releaseNotes.html'),
 				webview: resolve(import.meta.dirname, 'webview.html'),
 				terminal: resolve(import.meta.dirname, "terminal.html"),

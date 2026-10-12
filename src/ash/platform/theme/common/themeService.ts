@@ -22,6 +22,23 @@ export interface IPartsSplash {
 		readonly background: string;
 		readonly foreground: string;
 	};
+	readonly layoutInfo?: {
+		readonly width: number;
+		readonly height: number;
+		readonly partBounds: readonly (IPartsSplashPartBounds & {
+			readonly background: string;
+			readonly borderRadius: number;
+			readonly borderColor?: string;
+			readonly borderWidth?: number;
+		})[];
+	};
+}
+
+export interface IPartsSplashPartBounds {
+	readonly top: number;
+	readonly left: number;
+	readonly width: number;
+	readonly height: number;
 }
 
 /** Persistence and IPC accept only resolved, opaque colors, never arbitrary CSS. */
@@ -33,7 +50,37 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 	if (typeof background !== 'string' || typeof foreground !== 'string' || !/^#[0-9a-f]{6}$/i.test(background) || !/^#[0-9a-f]{6}$/i.test(foreground)) {
 		throw new TypeError('Invalid window splash colors');
 	}
-	return { baseTheme: value.baseTheme as ColorScheme, colorInfo: { background, foreground } };
+	let layoutInfo: IPartsSplash['layoutInfo'];
+	if (value.layoutInfo !== undefined) {
+		const layout = value.layoutInfo;
+		if (!isRecord(layout) || !validSize(layout.width) || !validSize(layout.height) || !Array.isArray(layout.partBounds) || layout.partBounds.length > 16) {
+			throw new TypeError('Invalid window splash layout');
+		}
+		const width = layout.width;
+		const height = layout.height;
+		const partBounds = layout.partBounds.map(part => {
+			if (!isRecord(part) || !validSize(part.width) || !validSize(part.height) || !validOffset(part.left) || !validOffset(part.top)
+				|| part.left + part.width > width + 1 || part.top + part.height > height + 1 || !validOffset(part.borderRadius)
+				|| part.borderRadius > Math.min(part.width, part.height) / 2 || typeof part.background !== 'string' || !/^#[0-9a-f]{6}$/i.test(part.background)
+				|| (part.borderColor !== undefined && (typeof part.borderColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(part.borderColor)))
+				|| ((part.borderColor === undefined) !== (part.borderWidth === undefined))
+				|| (part.borderWidth !== undefined && (!validSize(part.borderWidth) || part.borderWidth > 4))) {
+				throw new TypeError('Invalid window splash part bounds');
+			}
+			return { top: part.top, left: part.left, width: part.width, height: part.height, background: part.background, borderRadius: part.borderRadius,
+				...(part.borderColor === undefined ? {} : { borderColor: part.borderColor, borderWidth: part.borderWidth as number }) };
+		});
+		layoutInfo = { width, height, partBounds };
+	}
+	return { baseTheme: value.baseTheme as ColorScheme, colorInfo: { background, foreground }, ...(layoutInfo ? { layoutInfo } : {}) };
+}
+
+function validSize(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 32768;
+}
+
+function validOffset(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 32768;
 }
 
 export type ThemeColors = Readonly<Record<ColorIdentifier, string>>;

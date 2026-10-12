@@ -1,3 +1,4 @@
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import { applyEdits, setProperty } from '../../../../base/common/jsonEdit.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -21,6 +22,7 @@ export async function configureOpenerTrustedDomainsHandler(
 	type TrustChoice = IQuickPickItem & { readonly pattern?: string; };
 	using store = new DisposableStore();
 	const picker = store.add(quickInput.createQuickPick<TrustChoice>());
+	picker.sortByLabel = false;
 	picker.ariaLabel = picker.placeholder = localize('url.trust.choose', 'Choose which domains to trust');
 	const choices: TrustChoice[] = [
 		{ label: localize('url.trust.origin', 'Trust {0}', url.origin), pattern: url.origin },
@@ -50,4 +52,3 @@ export async function configureOpenerTrustedDomainsHandler(
 	await trustedDomains.setTrustedDomains(updated, content);
 	return trustedDomains.isValid(resource);
 }
-import type { CancellationToken } from '../../../../base/common/cancellation.js';

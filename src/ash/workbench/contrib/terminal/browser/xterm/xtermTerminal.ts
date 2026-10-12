@@ -15,6 +15,7 @@ import { localize } from "../../../../../nls.js";
 import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../terminal.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
+import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Color } from '../../../../../base/common/color.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
@@ -33,6 +34,13 @@ export class XtermTerminal extends Disposable {
 	private readonly alternateScroll = new AlternateScrollMode();
 	private readonly commandDecorations = new Map<string, TerminalCommandDecoration>();
 	private visible = false;
+	private readonly resizeDebouncer: TerminalResizeDebouncer = this._register(new TerminalResizeDebouncer(
+		() => this.visible,
+		() => this.terminal ? this : undefined,
+		(cols, rows) => this.applyDimensions(cols, rows),
+		cols => this.applyDimensions(cols, this.raw.rows),
+		rows => this.applyDimensions(this.raw.cols, rows),
+	));
 	private readonly linkPicker = this._register(new MutableDisposable<DisposableStore>());
 	private searchAddon: SearchAddon | undefined;
 	private searchInitialization: Promise<SearchAddon> | undefined;
@@ -143,6 +151,7 @@ export class XtermTerminal extends Disposable {
 
 	focus(): void {
 		if (!this.visible || this.isDisposed) return;
+		this.resizeDebouncer.flush();
 		this.focusSource = this.element.ownerDocument.activeElement;
 		this.terminal?.focus();
 	}
@@ -305,10 +314,16 @@ export class XtermTerminal extends Disposable {
 		if (!this.visible || !this.fitAddon || this.isDisposed) return;
 		if (this.element.clientWidth <= 0 || this.element.clientHeight <= 0) return;
 		try {
-			this.fitAddon.fit();
+			const dimensions = this.fitAddon.proposeDimensions();
+			if (dimensions) void this.resizeDebouncer.resize(Math.min(512, dimensions.cols), Math.min(512, dimensions.rows), false);
 		} catch {
 			return;
 		}
+	}
+
+	private applyDimensions(cols: number, rows: number): void {
+		if (this.isDisposed || !this.terminal || cols === this.terminal.cols && rows === this.terminal.rows) return;
+		this.terminal.resize(cols, rows);
 		this.instance.resize(this.dimensions());
 	}
 

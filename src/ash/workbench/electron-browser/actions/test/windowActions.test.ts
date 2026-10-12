@@ -13,6 +13,7 @@ import { CommandService } from '../../../services/commands/common/commandService
 test('desktop dialog and shell routes reject malformed requests', async () => {
 	const operations: unknown[] = [];
 	const routes = nativeHostIpcRoutes({
+		getTitleBarStyle: () => 'custom',
 		isAdmin: async () => false,
 		performDialogOperation: operation => { operations.push(operation); },
 		performShellCommand: async operation => operation,
@@ -66,6 +67,7 @@ test('desktop window commands reach the window host', async () => {
 	let zoom = 0;
 	let alwaysOnTop = false;
 	services.registerInstance(INativeHostService, {
+		getTitleBarStyle: async () => 'custom',
 		isAdmin: async () => false,
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 		openExternal: async () => { throw new Error('unused'); },

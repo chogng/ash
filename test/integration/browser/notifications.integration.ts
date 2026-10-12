@@ -48,7 +48,7 @@ services.registerInstance(IMenuService, services.createInstance(MenuService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 services.registerInstance(IKeybindingService, {
 	inChordMode: false, onDidUpdateKeybindings: Event.None,
-	getKeybindings: () => [], registerSchemaContribution: () => Disposable.None,
+	getKeybindings: () => [], enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => Disposable.None,
 	resolveKeybinding() { throw new Error('No keybinding in this fixture'); },
 	resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 });

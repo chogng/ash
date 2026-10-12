@@ -4,7 +4,7 @@ test('locked scrolling preserves offsets through real wheel input and keeps diff
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/scrollLocking.html');
-	await expect.poll(() => page.evaluate(() => window.ashScrollLockingIntegration?.read().length)).toBe(3);
+	await expect.poll(async () => ({ count: await page.evaluate(() => window.ashScrollLockingIntegration?.read().length), errors })).toEqual({ count: 3, errors: [] });
 	await page.evaluate(async () => {
 		const h = window.ashScrollLockingIntegration;
 		h.scroll(0, 100, 20); h.scroll(1, 300, 80); h.scroll(2, 500, 100);
@@ -12,7 +12,7 @@ test('locked scrolling preserves offsets through real wheel input and keeps diff
 	});
 	const locked = page.getByRole('button', { name: 'Scrolling Locked', exact: true });
 	await expect(locked).toBeVisible();
-	await page.locator('.stanza-editor').first().hover();
+	await page.locator('.stanza-editor:visible').first().hover({ position: { x: 180, y: 180 } });
 	await page.mouse.wheel(0, 80);
 	await expect.poll(() => page.evaluate(() => window.ashScrollLockingIntegration.read()[0].scrollTop)).toBeGreaterThan(100);
 	const positions = await page.evaluate(() => window.ashScrollLockingIntegration.read());

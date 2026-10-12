@@ -316,6 +316,8 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 }
 
 class FakeTerminalInstance extends Disposable implements ITerminalInstance {
+	private static nextInstanceId = 1;
+	readonly instanceId = FakeTerminalInstance.nextInstanceId++;
 	clearBuffer(): void { }
 	async reuseTerminal(config: IShellLaunchConfig): Promise<void> { this.title = config.name ?? this.title; this.execution = config.execution; this.state = 'running'; this.exitCode = undefined; }
 	execution: TerminalProcessExecution | undefined;

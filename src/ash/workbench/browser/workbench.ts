@@ -1,5 +1,3 @@
-import { PartsSplash } from '../contrib/splash/browser/partsSplash.js';
-import { ISplashStorageService } from '../contrib/splash/browser/splash.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
@@ -1183,7 +1181,6 @@ export class Workbench extends Disposable {
 		const paneRestoration = this.restoreActiveViewContainers();
 		lifecycleService.phase = LifecyclePhase.Ready;
 		contributions.advance(WorkbenchPhase.BlockRestore);
-		if (services.has(ISplashStorageService)) this._register(services.createInstance(PartsSplash));
 		layoutService.layout();
 		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
 		if (createWindow) {

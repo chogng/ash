@@ -21,7 +21,7 @@ import { ITextModelService } from '../../../../../editor/common/services/resolve
 import { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../../../platform/agentHost/common/appServerTransport.js';
 import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type AppServerServerRequestMethod, type ServerRequestParams, type ServerRequestResult } from '../../../../../../../.build/protocol/typescript/index.js';
-import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileService, type IFileWriteRequest, type FileExistingTargetBehavior } from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileWriteRequest, type FileExistingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser/browserTextResourceStore.js';
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
@@ -33,6 +33,14 @@ import { AppServerTextDocumentHost } from '../../browser/appServerTextDocumentHo
 import { ChatEditingService } from '../../../../contrib/chat/browser/chatEditing/chatEditingServiceImpl.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
+import { JSDOM } from 'jsdom';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../storage/browser/storageService.js';
+import { ILifecycleService } from '../../../lifecycle/common/lifecycle.js';
+import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleService.js';
+import { ILogService } from '../../../../../platform/log/common/log.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../notification/common/notificationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
@@ -151,19 +159,33 @@ class Files extends Disposable implements IFileSystemProvider {
 	public async delete(resource: URI): Promise<void> { this.contents.delete(resource.toString()); }
 }
 
-async function fixture() {
+class TestLifecycleService extends AbstractLifecycleService { }
+
+async function fixture(options: { contents?: ReadonlyMap<string, string>; backend?: Storage; } = {}) {
 	const lifetime = new DisposableStore();
 	const files = lifetime.add(new Files());
+	for (const [resource, content] of options.contents ?? []) { files.contents.set(resource, content); }
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	const backend = options.backend ?? dom.window.localStorage;
+	const storage = lifetime.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'agent-reviews', backend, flushInterval: 0 }));
 	const models = lifetime.add(uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(lifetime.add(createTestTextFileService(files))), {}));
 	const workingCopies = lifetime.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 	const configuration = lifetime.add(new InMemoryConfigurationService());
 	const dialogs = new TestDialogService();
-	const bulk = lifetime.add(new BulkEditService(models, workingCopies, lifetime.add(createTestFileService(files)), configuration, dialogs));
+	const fileService = lifetime.add(createTestFileService(files));
+	const bulk = lifetime.add(new BulkEditService(models, workingCopies, fileService, configuration, dialogs));
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerInstance(IBulkEditService, bulk);
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IWorkingCopyService, workingCopies);
+	services.registerInstance(IFileService, fileService);
+	services.registerInstance(IStorageService, storage);
+	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
+	const lifecycle = lifetime.add(services.createInstance(TestLifecycleService, undefined));
+	services.registerInstance(ILifecycleService, lifecycle);
+	const notifications = lifetime.add(new NotificationService());
+	services.registerInstance(INotificationService, notifications);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	const cues: string[] = [];
 	services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => Disposable.None });
@@ -173,7 +195,7 @@ async function fixture() {
 	lifetime.add(toDisposable(() => client.dispose()));
 	lifetime.add(services.createInstance(AppServerTextDocumentHost, client, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
 	await client.connect();
-	return { files, models, workingCopies, services, transport, client, editing, bulk, configuration, cues, ...toDisposable(() => lifetime.dispose()) };
+	return { files, models, workingCopies, services, transport, client, editing, bulk, configuration, cues, storage, backend, lifecycle, notifications, ...toDisposable(() => { lifetime.dispose(); dom.window.close(); }) };
 }
 
 async function snapshot(transport: Transport, resource: URI): Promise<string> {

@@ -117,7 +117,7 @@ let pane: IEditorPane | undefined;
 services.registerInstance(IEditorService, {
 	save: async () => { throw new Error('Saving is outside this fixture'); },
 	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
-	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
+	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], visibleEditorPanes: [],
 	openEditor: async input => {
 		if (pane) { pane.dispose(); }
 		const descriptor = EditorPanes.getEditorPane(input)!;

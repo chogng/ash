@@ -2896,7 +2896,7 @@ window.ashStandaloneIntegration = {
 			save: async () => { throw new Error('Saving is outside this fixture'); },
 			saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 			onDidActiveEditorChange: EventUtils.None, onDidVisibleEditorsChange: EventUtils.None,
-			activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { },
+			activeEditor: undefined, visibleEditors: [], visibleEditorPanes: [], focusActiveEditor: () => { },
 			openEditor: async input => {
 				const host = h(document, 'div');
 				host.id = 'action-preview-diff';

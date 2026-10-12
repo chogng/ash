@@ -60,7 +60,7 @@ export class SnippetsService extends Disposable implements ISnippetsService {
 				this.changeEmitter.fire();
 			},
 			rollback: () => {
-				if (this.isDisposed) {
+				if (this.isDisposed || this.files === previous) {
 					return;
 				}
 				this.files = previous;

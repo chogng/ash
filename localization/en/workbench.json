@@ -1,5 +1,6 @@
 {
   "ash": {
+    "url.trust.editorHelp": "Manage Trusted Domains in the Command Palette opens a JSONC array of domain rules. Save to apply changes; remove rules to revoke trust. Invalid rules and stale saves are rejected. Untrusted web links ask before opening. Use Tab to choose Open, Copy, Configure Trusted Domains, or Cancel, Enter to select, and Escape to cancel.",
     "url.trust.conflict": "Trusted domains changed. Reload the document before saving.",
     "url.trust.invalidDocument": "Trusted domains must be a JSONC array of at most 1024 domain patterns, within 64 KiB.",
     "url.trust.invalidPattern": "Invalid trusted domain pattern: {0}",

@@ -10,6 +10,7 @@ import { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnCha
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
 import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
 import type { ResolvedChatContext } from '../common/chatContextService.js';
+import type { ChatCheckpoint, RestoreChatCheckpointOptions } from '../common/chatService.js';
 
 interface SharedThreadSubscription {
 	readonly generation: number;
@@ -83,6 +84,20 @@ export class ChatService extends Disposable implements IChatService {
 	async listSlashCommands(): Promise<readonly SlashCommandDefinition[]> {
 		const commands = await this.appServerApi.getSlashCommands();
 		return commands.map((command) => ({ ...command }));
+	}
+
+	async readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]> {
+		const result = await this.threadApi.checkpoints({ sessionId, threadId });
+		return result.checkpoints.map(checkpoint => ({
+			itemId: checkpoint.itemId, turnId: checkpoint.turnId, sourceThreadId: checkpoint.sourceThreadId,
+			files: checkpoint.workspace.type,
+			...(checkpoint.workspace.type === 'unavailable' ? { unavailableReason: checkpoint.workspace.reason } : {}),
+		}));
+	}
+
+	async restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }> {
+		const result = await this.threadApi.restoreMessage({ ...options, commandId: createUuid() });
+		return { sessionId: result.session.sessionId, threadId: result.threadId };
 	}
 
 	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {

@@ -8,7 +8,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import type { TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../../nls.js';
-import type { IModifiedFileEntry, IModifiedFileEntryChangeHunk } from '../../common/editing/chatEditingService.js';
+import type { IModifiedFileEntry, IModifiedFileEntryChangeHunk, ISnapshotEntry } from '../../common/editing/chatEditingService.js';
 
 interface ReviewHunk extends IModifiedFileEntryChangeHunk {
 	readonly originalStart: number;
@@ -32,14 +32,29 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	public isBusy = false;
 	private readonly computer = new DefaultLinesDiffComputer();
 
-	constructor(public readonly modifiedURI: URI, private readonly reference: TextModelReference, private readonly complete: () => void, notify: () => void) {
+	constructor(public readonly modifiedURI: URI, private readonly reference: TextModelReference, private readonly complete: () => void, notify: () => void, snapshot?: ISnapshotEntry) {
 		super();
 		this._register(reference);
 		this._register(this.onDidChange(notify));
 		this.id = crypto.randomUUID();
 		this.resources = [modifiedURI];
 		this.originalText = this.previousText = reference.model.getText();
+		if (snapshot) {
+			this.originalText = snapshot.original;
+			this.changes = this.computeChanges(snapshot.original, snapshot.current);
+			this.previousText = snapshot.current;
+			// Changes made while this window was closed belong to the user. Rebase
+			// the review baseline instead of overwriting the current file on reopen.
+			this.adoptUserEdits(this.computeChanges(snapshot.current, reference.model.getText()).map(change => ({
+				start: change.originalStart, end: change.originalEnd, text: change.modifiedText,
+			})));
+			this.updateDiff();
+		}
 		this._register(reference.model.onDidChangeContent(event => this.handleModelChange(event)));
+	}
+
+	public createSnapshot(): ISnapshotEntry {
+		return { resource: this.modifiedURI, original: this.originalText, current: this.reference.model.getText() };
 	}
 
 	public get hunks(): readonly ReviewHunk[] { return this.changes; }
@@ -113,7 +128,13 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		if (!isAgentEdit) {
 			// User edits outside Agent hunks update the baseline. Editing an Agent hunk
 			// adopts that hunk, so Reject never discards the user's replacement.
-			const edits = event.changes.map(change => ({ start: change.rangeOffset, end: change.rangeOffset + change.rangeLength, text: change.text }));
+			this.adoptUserEdits(event.changes.map(change => ({ start: change.rangeOffset, end: change.rangeOffset + change.rangeLength, text: change.text })));
+		}
+		this.updateDiff();
+		if (!this.isBusy && this.changes.length === 0) { this.complete(); }
+	}
+
+	private adoptUserEdits(edits: { start: number; end: number; text: string; }[]): void {
 			const groups: { start: number; end: number; edits: typeof edits; }[] = [];
 			for (const edit of edits.sort((a, b) => a.start - b.start)) {
 				let start = edit.start;
@@ -144,9 +165,6 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 				const end = this.originalOffset(group.end, true);
 				this.originalText = this.originalText.slice(0, start) + text + this.originalText.slice(end);
 			}
-		}
-		this.updateDiff();
-		if (!this.isBusy && this.changes.length === 0) { this.complete(); }
 	}
 
 	private originalOffset(offset: number, end: boolean): number {
@@ -164,25 +182,29 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 
 	private updateDiff(): void {
 		const current = this.reference.model.getText();
-		const originalLines = this.originalText.split('\n');
+		this.changes = this.computeChanges(this.originalText, current);
+		this.previousText = current;
+		this.changed.fire();
+	}
+
+	private computeChanges(original: string, current: string): readonly ReviewHunk[] {
+		const originalLines = original.split('\n');
 		const modifiedLines = current.split('\n');
 		const diff = this.computer.computeDiff(originalLines, modifiedLines, { ignoreTrimWhitespace: false, computeMoves: false, maxComputationTimeMs: 0 });
-		this.changes = diff.changes.map(change => {
+		return diff.changes.map(change => {
 			let originalStart = lineOffset(originalLines, change.original.startLineNumber);
 			const originalEnd = lineOffset(originalLines, change.original.endLineNumberExclusive);
 			let modifiedStart = lineOffset(modifiedLines, change.modified.startLineNumber);
 			const modifiedEnd = lineOffset(modifiedLines, change.modified.endLineNumberExclusive);
 			// The final newline belongs to the preceding line when a hunk reaches EOF.
-			if (originalStart === this.originalText.length || modifiedStart === current.length) {
-				if (this.originalText[originalStart - 1] === '\n') { originalStart -= this.originalText[originalStart - 2] === '\r' ? 2 : 1; }
+			if (originalStart === original.length || modifiedStart === current.length) {
+				if (original[originalStart - 1] === '\n') { originalStart -= original[originalStart - 2] === '\r' ? 2 : 1; }
 				if (current[modifiedStart - 1] === '\n') { modifiedStart -= current[modifiedStart - 2] === '\r' ? 2 : 1; }
 			}
 			const start = this.reference.model.getPositionAt(modifiedStart);
 			const end = this.reference.model.getPositionAt(modifiedEnd);
-			return { originalStart, originalEnd, modifiedStart, modifiedEnd, range: Range.fromPositions(start, end), originalText: this.originalText.slice(originalStart, originalEnd), modifiedText: current.slice(modifiedStart, modifiedEnd) };
+			return { originalStart, originalEnd, modifiedStart, modifiedEnd, range: Range.fromPositions(start, end), originalText: original.slice(originalStart, originalEnd), modifiedText: current.slice(modifiedStart, modifiedEnd) };
 		});
-		this.previousText = current;
-		this.changed.fire();
 	}
 }
 

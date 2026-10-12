@@ -37,7 +37,7 @@ export class SyncScroll extends Disposable implements IWorkbenchContribution {
 		});
 		registerAction2(class extends Action2 {
 			constructor() {
-				super({ id: holdCommand, title: localize('scrollLocking.hold', 'Hold Locked Scrolling Across Editors'),  });
+				super({ id: holdCommand, title: localize('scrollLocking.hold', 'Hold Locked Scrolling Across Editors') });
 			}
 			run(accessor: ServicesAccessor): void {
 				SyncScroll.instances.get(accessor.get(IEditorService))?.hold(accessor.get(IKeybindingService));

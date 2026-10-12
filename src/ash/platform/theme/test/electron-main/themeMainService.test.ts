@@ -1,3 +1,4 @@
+import { windowSplashIpcRoutes } from '../../../native/electron-main/nativeHostIpc.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -61,5 +62,27 @@ test('Main publishes distinct OS schemes and restores the saved frame color befo
 		await restored.close();
 		next.dispose(); main.dispose();
 		assert.equal(listeners.size, 0);
+	} finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+
+test('window splash IPC uses the host scope and preserves validated geometry across persistence', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-splash-ipc-'));
+	try {
+		const state = await StateService.create(join(directory, 'state.json'));
+		try {
+			using main = new ThemeMainService({ shouldUseDarkColors: false, shouldUseHighContrastColors: false, on: () => undefined, removeListener: () => undefined }, state);
+			let scope = 'workbench:first';
+			const backgrounds: string[] = [];
+			const [read, write] = windowSplashIpcRoutes(main, () => scope, color => backgrounds.push(color));
+			const snapshot = { baseTheme: ColorScheme.Dark, colorInfo: { background: '#123456', foreground: '#ffffff' }, layoutInfo: { width: 1024, height: 768, partBounds: [{ left: 0, top: 0, width: 300, height: 700, background: '#abcdef', borderRadius: 6 }] } };
+			assert.throws(() => read.validate({ scope: 'sessions:first' }), /no arguments/);
+			await write.invoke(write.validate({ ...snapshot, scope: 'sessions:first' }));
+			assert.deepEqual(await read.invoke(read.validate(undefined)), snapshot);
+			assert.deepEqual(backgrounds, ['#123456']);
+			scope = 'sessions:first';
+			assert.equal((await read.invoke(read.validate(undefined)) as { colorInfo: { background: string; }; }).colorInfo.background, '#ffffff');
+			assert.equal(state.getItem('windowSplash.sessions:first'), undefined);
+		} finally { await state.close(); }
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });

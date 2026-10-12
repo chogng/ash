@@ -21,6 +21,8 @@ export interface ITextEditorControl extends IEditorControl {
 	getScrollTop?(): number;
 	getScrollLeft?(): number;
 	setScrollPosition?(position: IEditorPaneScrollPosition): void;
+	setScrollTop?(scrollTop: number): void;
+	setScrollLeft?(scrollLeft: number): void;
 }
 
 /** Owns the status reported by a text editor to the Workbench. */
@@ -39,7 +41,13 @@ export abstract class AbstractTextEditor<T extends ITextEditorControl> extends E
 	}
 
 	setScrollPosition(position: IEditorPaneScrollPosition): void {
-		this.getControl()?.setScrollPosition?.(position);
+		const control = this.getControl();
+		if (control?.setScrollPosition) {
+			control.setScrollPosition(position);
+		} else {
+			control?.setScrollTop?.(position.scrollTop);
+			if (position.scrollLeft !== undefined) control?.setScrollLeft?.(position.scrollLeft);
+		}
 	}
 
 	getStatus(): EditorPaneStatus {

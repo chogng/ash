@@ -50,6 +50,7 @@ interface ISystemMenuPopup {
 /** Desktop implementation backed by Electron's system Menu. */
 export class NativeContextMenuService extends Disposable
 	implements IContextMenuService {
+	readonly contextMenuStyle = 'system';
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	private readonly api: INativeContextMenuApi;
@@ -298,6 +299,7 @@ function toErrorMessage(error: unknown): string {
 
 /** Uses the chosen menu style while keeping menus clear of right-hand triggers. */
 export class ElectronContextMenuService extends Disposable implements IContextMenuService {
+	get contextMenuStyle(): 'custom' | 'system' { return this.usesSystemMenu ? 'system' : 'custom'; }
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	private readonly systemMenu: NativeContextMenuService;

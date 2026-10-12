@@ -563,3 +563,62 @@ function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[
 	if (primaryIndex === 0) return Object.freeze([...items]);
 	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }
+
+test('completion placeholder navigation selects all text typed one character at a time', () => {
+	using model = new TextModel('fn');
+	using editor = editorAt(model, new Position(1, 3));
+	using store = createLanguageCompletionStore(model);
+	using session = new SuggestModel(store, editor);
+	assert.equal(store.accept({
+		requestId: 1,
+		textModel: model,
+		modelVersion: model.version,
+		value: {
+			position: new Position(1, 3),
+			items: [{ ...completion('function', 'function', false, new Range(1, 1, 1, 3)), insertText: '${1:name}(${2:value})$0', insertTextFormat: LanguageCompletionInsertTextFormat.Snippet }],
+			isIncomplete: false,
+		},
+	}), LanguageResultAcceptance.Applied);
+	assert.equal(session.acceptSelected(), true);
+	for (const character of 'Widget') {
+		editor.executeEdits('type', [{ range: editor.getSelection()!, text: character }], edits => edits.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
+	}
+	const snippet = SnippetController2.get(editor)!;
+	snippet.next();
+	assert.deepEqual(editor.getSelection(), new Selection(1, 8, 1, 13));
+	snippet.prev();
+	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 1, 7));
+	assert.equal(model.getText(), 'Widget(value)');
+});
+
+test('adjacent empty placeholders track only the active input and keep later ranges separate', () => {
+	using model = new TextModel('x');
+	using editor = editorAt(model, new Position(1, 2));
+	using store = createLanguageCompletionStore(model);
+	using session = new SuggestModel(store, editor);
+	assert.equal(store.accept({
+		requestId: 1,
+		textModel: model,
+		modelVersion: model.version,
+		value: {
+			position: new Position(1, 2),
+			items: [{ ...completion('adjacent', 'adjacent', false, new Range(1, 1, 1, 2)), insertText: '$1$2$0', insertTextFormat: LanguageCompletionInsertTextFormat.Snippet }],
+			isIncomplete: false,
+		},
+	}), LanguageResultAcceptance.Applied);
+	assert.equal(session.acceptSelected(), true);
+	for (const character of 'one') {
+		editor.executeEdits('type', [{ range: editor.getSelection()!, text: character }], edits => edits.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
+	}
+	const snippet = SnippetController2.get(editor)!;
+	snippet.next();
+	assert.deepEqual(editor.getSelection(), new Selection(1, 4, 1, 4));
+	for (const character of 'two') {
+		editor.executeEdits('type', [{ range: editor.getSelection()!, text: character }], edits => edits.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
+	}
+	snippet.prev();
+	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 1, 4));
+	snippet.next();
+	assert.deepEqual(editor.getSelection(), new Selection(1, 4, 1, 7));
+	assert.equal(model.getText(), 'onetwo');
+});

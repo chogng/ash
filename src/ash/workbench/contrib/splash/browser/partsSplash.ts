@@ -1,6 +1,7 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Color } from '../../../../base/common/color.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IThemeService, type IPartsSplash } from '../../../../platform/theme/common/themeService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ILifecycleService, LifecyclePhase } from '../../../services/lifecycle/common/lifecycle.js';
 import { ISplashStorageService, removePartsSplash } from './splash.js';
@@ -8,6 +9,7 @@ import { ISplashStorageService, removePartsSplash } from './splash.js';
 /** Captures the live owners' rendering state after restoration, and retires the startup DOM. */
 export class PartsSplash extends Disposable {
 	static readonly ID = 'workbench.contrib.partsSplash';
+	private readonly saveSoon = this._register(new RunOnceScheduler(() => { void this.save(); }, 100));
 
 	constructor(
 		@IThemeService private readonly themeService: IThemeService,
@@ -19,27 +21,65 @@ export class PartsSplash extends Disposable {
 		this._register(layoutService.onDidLayoutMainContainer(dimension => {
 			if (dimension.width > 0 && dimension.height > 0) {
 				removePartsSplash(layoutService.mainContainer.ownerDocument);
+				if (lifecycleService.phase >= LifecyclePhase.Restored) this.saveSoon.schedule();
 			}
 		}));
 		this._register(themeService.onDidColorThemeChange(() => {
-			if (lifecycleService.phase >= LifecyclePhase.Restored) this.save();
+			if (lifecycleService.phase >= LifecyclePhase.Restored) this.saveSoon.schedule();
+		}));
+		this._register(toDisposable(() => removePartsSplash(layoutService.mainContainer.ownerDocument)));
+		this._register(lifecycleService.onWillShutdown(event => {
+			if (lifecycleService.phase >= LifecyclePhase.Restored) {
+				this.saveSoon.cancel();
+				event.join(this.save(), 'Startup rendering cache');
+			}
 		}));
 		void lifecycleService.when(LifecyclePhase.Restored).then(() => {
-			if (!this.isDisposed) this.save();
+			if (!this.isDisposed) void this.save();
 		});
 	}
 
-	private save(): void {
+	private save(): Promise<void> {
 		const theme = this.themeService.getColorTheme();
 		const background = theme.getColor('workbench.background') ?? theme.getColor('editor.background');
 		const foreground = theme.getColor('foreground');
-		if (!background || !foreground) return;
-		void this.storage.saveWindowSplash({
+		if (!background || !foreground) return Promise.resolve();
+		return this.storage.saveWindowSplash({
 			baseTheme: theme.colorScheme,
 			colorInfo: {
 				background: Color.Format.CSS.formatHex(background),
 				foreground: Color.Format.CSS.formatHex(foreground),
 			},
+			...this.captureLayout(background),
 		}).catch(error => console.error('Could not save startup rendering state', error));
+	}
+
+	private captureLayout(background: Color): Pick<IPartsSplash, 'layoutInfo'> {
+		const root = this.layoutService.mainContainer;
+		const ownerWindow = root.ownerDocument.defaultView;
+		if (!ownerWindow || ownerWindow.innerWidth <= 0 || ownerWindow.innerHeight <= 0) return {};
+		const partBounds: NonNullable<IPartsSplash['layoutInfo']>['partBounds'][number][] = [];
+		// Part creates these shell nodes; the layout owner places them before publishing its event.
+		for (const element of root.querySelectorAll<HTMLElement>('.ash-workbench-part')) {
+			if (element.hidden || element.parentElement?.closest('.ash-workbench-part')) continue;
+			const rect = element.getBoundingClientRect();
+			const left = Math.max(0, rect.left);
+			const top = Math.max(0, rect.top);
+			const width = Math.min(ownerWindow.innerWidth, rect.right) - left;
+			const height = Math.min(ownerWindow.innerHeight, rect.bottom) - top;
+			if (width <= 0 || height <= 0) continue;
+			const style = ownerWindow.getComputedStyle(element);
+			if (style.visibility === 'hidden') continue;
+			const fill = Color.Format.CSS.parse(style.backgroundColor)?.flatten(background) ?? background;
+			const borderWidth = Number.parseFloat(style.borderTopWidth);
+			const border = borderWidth > 0 ? Color.Format.CSS.parse(style.borderTopColor)?.flatten(fill) : undefined;
+			partBounds.push({
+				left, top, width, height,
+				background: Color.Format.CSS.formatHex(fill),
+				borderRadius: Math.min(Number.parseFloat(style.borderTopLeftRadius) || 0, width / 2, height / 2),
+				...(border ? { borderColor: Color.Format.CSS.formatHex(border), borderWidth } : {}),
+			});
+		}
+		return partBounds.length ? { layoutInfo: { width: ownerWindow.innerWidth, height: ownerWindow.innerHeight, partBounds } } : {};
 	}
 }

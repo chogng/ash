@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { suite, test } from 'mocha';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { OpenerService } from '../../../../../editor/browser/services/openerService.js';
@@ -9,19 +10,29 @@ import { ICodeEditorService } from '../../../../../editor/browser/services/codeE
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { FileRevisionConflictError, IFileService } from '../../../../../platform/files/common/files.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
+import { MainThreadEditors } from '../../../../api/browser/mainThreadEditors.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { NativeWindow } from '../../../../electron-browser/window.js';
+import { INativeHostService } from '../../../../common/services.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
+import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
+import { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { ITrustedDomainService } from '../../common/trustedDomainService.js';
 import { TRUSTED_DOMAINS_URI } from '../../browser/trustedDomains.js';
@@ -37,11 +48,12 @@ class URLFixture extends Disposable {
 	readonly opened: string[] = [];
 	readonly copied: string[] = [];
 	readonly editors: string[] = [];
+	lastInput: string | undefined;
 	readonly opener: OpenerService;
 	readonly trustedDomains: ITrustedDomainService;
 	readonly host;
 
-	constructor() {
+	constructor(inputTarget?: string) {
 		super();
 		this._register(toDisposable(() => this.dom.window.close()));
 		this.services.registerInstance(IStorageService, this.storage);
@@ -49,7 +61,10 @@ class URLFixture extends Disposable {
 		this.services.registerInstance(IDialogService, this.dialogs);
 		this.services.registerInstance(IFileService, this.files);
 		this.services.registerInstance(IClipboardService, { writeText: async (value: string) => { this.copied.push(value); } } as IClipboardService);
-		this.services.registerInstance(IQuickInputService, { createQuickPick: () => { throw new Error('Unexpected domain picker'); } } as unknown as IQuickInputService);
+		this.services.registerInstance(IQuickInputService, {
+			input: async (options: { value?: string; }) => { this.lastInput = options.value; return inputTarget; },
+			createQuickPick: () => { throw new Error('Unexpected domain picker'); },
+		});
 		this.services.registerInstance(IEditorService, { openEditor: async (input: { resource: URI; }) => { this.editors.push(input.resource.toString()); } } as unknown as IEditorService);
 		this.services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
 		this.services.registerSingleton(ICommandService, () => this.services.createInstance(StandaloneCommandService));
@@ -114,6 +129,21 @@ suite('Workbench external link trust', () => {
 		assert.equal(fixture.notifications.getNotifications().length, 1);
 	});
 
+	test('complete-value limits and external storage edits do not broaden prior trust', async () => {
+		using fixture = new URLFixture();
+		await fixture.trustedDomains.setTrustedDomains('["https://before.test"]');
+		await assert.rejects(fixture.trustedDomains.setTrustedDomains(JSON.stringify(Array.from({ length: 1025 }, () => '*'))), /1024/);
+		await assert.rejects(fixture.trustedDomains.setTrustedDomains(`// ${'中'.repeat(30_000)}\n["*"]`), /64 KiB/);
+		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://outside.test')), false);
+		const scopeKey = 'ash.storage.application';
+		const document = JSON.parse(fixture.dom.window.localStorage.getItem(scopeKey)!);
+		document.entries['http.linkProtectionTrustedDomains'].value = '["https://after.test"]';
+		fixture.dom.window.dispatchEvent(new fixture.dom.window.StorageEvent('storage', { key: scopeKey, newValue: JSON.stringify(document) }));
+		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://before.test')), false);
+		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://after.test')), true);
+		assert.throws(() => (fixture.trustedDomains.trustedDomains as string[]).push('*'), TypeError);
+	});
+
 	test('the management command and file router share the same document and reject stale saves', async () => {
 		using fixture = new URLFixture();
 		await fixture.services.get(ICommandService).executeCommand('workbench.action.manageTrustedDomain');
@@ -127,22 +157,18 @@ suite('Workbench external link trust', () => {
 		await assert.rejects(fixture.files.writeFile({ resource: TRUSTED_DOMAINS_URI, content: '[false]' }), /pattern/);
 		assert.equal((await fixture.files.readFile(TRUSTED_DOMAINS_URI)).content, content);
 		fixture.host.dispose();
-		await assert.rejects(fixture.files.readFile(TRUSTED_DOMAINS_URI));
+		assert.throws(() => fixture.files.readFile(TRUSTED_DOMAINS_URI));
 	});
 
 	test('Open URL preserves the user input and allows contributed openers after the validator approves it', async () => {
-		using fixture = new URLFixture();
 		const target = 'https://input.test/docs?q=a%26b#topic';
-		let previousInput: string | undefined;
-		fixture.services.registerInstance(IQuickInputService, {
-			input: async options => { previousInput = options.value; return target; },
-		} as IQuickInputService);
+		using fixture = new URLFixture(target);
 		await fixture.trustedDomains.setTrustedDomains('["https://input.test"]');
 		const contributed: string[] = [];
 		using handler = fixture.opener.registerExternalOpener({ openExternal: async href => { contributed.push(href); return true; } });
 		await fixture.services.get(ICommandService).executeCommand('workbench.action.url.openUrl');
 		assert.deepEqual(contributed, [target]);
-		assert.equal(previousInput, '');
+		assert.equal(fixture.lastInput, '');
 		assert.equal(fixture.storage.get('workbench.action.url.openUrl.lastInput', StorageScope.WORKSPACE), target);
 		assert.deepEqual(fixture.opened, []);
 	});
@@ -159,5 +185,54 @@ suite('Workbench external link trust', () => {
 		assert.equal(await pending, false);
 		assert.equal(await fixture.opener.open('mailto:person@host.test'), true);
 		assert.deepEqual(fixture.opened, ['mailto:person@host.test']);
+	});
+
+	test('extension openExternal requests pass through the contribution before the host opens them', async () => {
+		using fixture = new URLFixture();
+		// Other editor operations are outside this host request and must remain unused.
+		fixture.services.registerInstance(IEditorPart, {} as IEditorPart);
+		fixture.services.registerInstance(IWorkspaceOpenService, {} as IWorkspaceOpenService);
+		fixture.services.registerInstance(IWorkingCopyService, {} as IWorkingCopyService);
+		fixture.services.registerInstance(ITextFileService, {} as ITextFileService);
+		const extensionHost = fixture.services.createInstance(MainThreadEditors);
+		const request = { method: 'openExternal', uri: 'https://extension.test/docs' };
+		const cancelled = extensionHost.handle(request, new AbortController().signal);
+		assert.deepEqual(fixture.opened, []);
+		fixture.dialogs.model.dialogs[0]!.close({ button: DialogResult.Cancel });
+		await cancelled;
+		assert.deepEqual(fixture.opened, []);
+		const allowed = extensionHost.handle(request, new AbortController().signal);
+		fixture.dialogs.model.dialogs[0]!.close({ button: DialogResult.Primary, buttonIndex: 0 });
+		await allowed;
+		assert.deepEqual(fixture.opened, ['https://extension.test/docs']);
+	});
+
+	test('the desktop external-URI event reaches the same validator and releases its subscription with the window', async () => {
+		using fixture = new URLFixture();
+		using links = new Emitter<string>();
+		using configuration = new InMemoryConfigurationService();
+		fixture.services.registerInstance(IConfigurationService, configuration);
+		fixture.services.registerInstance(INativeHostService, {
+			onDidRequestOpenExternalUri: links.event,
+			onDidChangeZoomLevel: Event.None,
+			getZoomLevel: async () => 0,
+			setZoomLevel: async () => { },
+		} as unknown as INativeHostApi);
+		using window = fixture.services.createInstance(NativeWindow);
+		links.fire('https://desktop.test/docs');
+		assert.deepEqual(fixture.opened, []);
+		fixture.dialogs.model.dialogs[0]!.close({ button: DialogResult.Cancel });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(fixture.opened, []);
+		let accepted!: () => void;
+		const opened = new Promise<void>(resolve => { accepted = resolve; });
+		fixture.opener.setDefaultExternalOpener({ openExternal: async target => { fixture.opened.push(target); accepted(); return true; } });
+		links.fire('https://desktop.test/docs');
+		fixture.dialogs.model.dialogs[0]!.close({ button: DialogResult.Primary, buttonIndex: 0 });
+		await opened;
+		assert.deepEqual(fixture.opened, ['https://desktop.test/docs']);
+		window.dispose();
+		links.fire('https://ignored.test');
+		assert.equal(fixture.dialogs.model.dialogs.length, 0);
 	});
 });

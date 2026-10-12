@@ -1,3 +1,4 @@
+import '../../workbench/contrib/url/browser/url.contribution.js';
 import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
 import { ElectronUpdateService } from '../../platform/update/electron-browser/updateService.js';
@@ -190,4 +191,3 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		throw error;
 	}
 }
-import '../../workbench/contrib/url/browser/url.contribution.js';

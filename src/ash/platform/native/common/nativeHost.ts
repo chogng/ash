@@ -1,9 +1,11 @@
-import type { IColorScheme } from '../../window/common/window.js';
+import type { TitleBarStyleConfiguration, IColorScheme } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../sessions/common/sessionApi.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import type { FileFilter, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
+
+export const NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL = 'ash:native-host:get-title-bar-style';
 
 export const NATIVE_HOST_IS_ADMIN_CHANNEL = 'ash:native-host:is-admin';
 
@@ -126,6 +128,8 @@ export interface IOpenAgentsWindowOptions {
 
 /** Window-scoped native capabilities exposed to an Electron renderer. */
 export interface INativeHostApi {
+	/** The frame style used to create this window, independently of saved settings. */
+	getTitleBarStyle(): Promise<TitleBarStyleConfiguration>;
 	isAdmin(): Promise<boolean>;
 	getOSColorScheme(): Promise<IColorScheme>;
 	onDidChangeColorScheme(listener: (scheme: IColorScheme) => void): DisposableHandle;

@@ -1,3 +1,4 @@
+import { isMacintosh } from '../../../../../base/common/platform.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -201,6 +202,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(INotificationService, { error: (error: unknown) => { throw error; } } as unknown as INotificationService);
 	using service = services.createInstance(ElectronContextMenuService, api);
+	assert.equal(service.contextMenuStyle, isMacintosh ? 'system' : 'custom');
 	const events: string[] = [];
 	using shown = service.onDidShowContextMenu(() => events.push("show"));
 	using hidden = service.onDidHideContextMenu(() => events.push("hide"));
@@ -212,6 +214,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 	finishPopup({});
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 	await configurationService.updateValue("window.menuStyle", "custom");
+	assert.equal(service.contextMenuStyle, 'custom');
 	service.showContextMenu({
 		getAnchor: () => environment.window.document.querySelector("button")!,
 		getActions: () => [action],
@@ -279,7 +282,7 @@ class SystemMenuFixture extends Disposable {
 		services.registerInstance(IKeybindingService, {
 			inChordMode: false, onDidUpdateKeybindings: Event.None,
 			getKeybindings: () => [],
-		enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => Disposable.None,
+			enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => Disposable.None,
 			resolveKeybinding() { throw new Error('No binding in this fixture'); },
 			resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 		});

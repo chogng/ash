@@ -15,6 +15,7 @@ export class TerminalAccessibilityHelpProvider extends Disposable implements IAc
 			localize('terminal.accessibility.overview', 'The terminal sends typed input to its running process. <keybinding:editor.action.accessibleView> opens the retained screen and scrollback as read-only text.'),
 			localize('terminal.accessibility.find', '<keybinding:workbench.action.terminal.focusFind> opens Find. Enter and Shift+Enter navigate its matches. Escape returns focus to the terminal.'),
 			localize('terminal.accessibility.clipboard', '<keybinding:workbench.action.terminal.copySelection> copies selected terminal text. <keybinding:workbench.action.terminal.paste> pastes clipboard text into the active running terminal. Without a selection, Ctrl+C is sent to the process.'),
+			localize('terminal.accessibility.tabsMenu', 'In the terminal instance list, arrow keys move focus and Enter activates a terminal. Shift+F10 opens the focused terminal menu. Its focus, clear, relaunch and kill actions apply to that terminal even if the active terminal changes. Escape closes the menu and restores focus.'),
 			localize('terminal.accessibility.reuse', 'A completed task waits for a character key or Enter to close its terminal. Workbench shortcuts remain available. presentation.showReuseMessage controls the reuse notice. A new task terminal displays a close notice.'),
 			localize('terminal.accessibility.close', 'Escape closes accessibility help or the accessible view and returns focus to the terminal.'),
 		].join('\n\n');

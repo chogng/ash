@@ -3,6 +3,7 @@ import type { AdvisorConfig, AdvisorConfigureResult, CollaborationMode, AgentRol
 import type { ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult } from '../../../../../.build/protocol/typescript/index.js';
 import type { ReasoningEffort } from '../../../../../.build/protocol/typescript/index.js';
 import type { QueueEnqueueParams, QueueListParams, QueueListResult, QueuedMessage } from '../../../../../.build/protocol/typescript/index.js';
+import type { MessageCheckpointsParams, MessageCheckpointsResult } from '../../../../../.build/protocol/typescript/index.js';
 
 export type SessionMode = CollaborationMode;
 
@@ -107,6 +108,8 @@ export interface IModelApi {
 }
 
 export interface IThreadApi {
+	checkpoints(params: MessageCheckpointsParams): Promise<MessageCheckpointsResult>;
+	restoreMessage(params: SessionOperationInput<'restoreMessage'>): Promise<SessionThreadResult>;
 	readTrace(params: SessionTraceReadParams): Promise<SessionTraceReadResult>;
 	readTraceDiagnostics(params: SessionTraceDiagnosticsReadParams): Promise<SessionTraceDiagnosticsReadResult>;
 	readTracePayload(params: SessionTracePayloadReadParams): Promise<SessionTracePayloadReadResult>;

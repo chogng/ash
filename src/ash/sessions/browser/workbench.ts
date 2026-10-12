@@ -1,5 +1,3 @@
-import { PartsSplash } from '../../workbench/contrib/splash/browser/partsSplash.js';
-import { ISplashStorageService } from '../../workbench/contrib/splash/browser/splash.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
@@ -723,7 +721,6 @@ export abstract class Workbench extends Disposable {
 			["auxiliarybar", auxiliarybar],
 			['panel', panel],
 		]);
-		if (services.has(ISplashStorageService)) this._register(services.createInstance(PartsSplash));
 		layout.createWorkbenchLayout(parts);
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
@@ -741,10 +738,10 @@ export abstract class Workbench extends Disposable {
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys));
-		this.layoutService.layout();
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
+		this.layoutService.layout();
 		const entryLayout = services.get(ISessionsLayoutService);
 		this.lifecycleService.phase = LifecyclePhase.Ready;
 		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady]).then(() => this.initialize(view, configurationService, ownerWindow, entryLayout, contributions, storage, recoveredDrafts));

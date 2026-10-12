@@ -1,6 +1,17 @@
+import { mock } from 'node:test';
+import { TerminalResizeDebouncer } from '../../browser/terminalResizeDebouncer.js';
+import type { XtermTerminal } from '../../browser/xterm/xtermTerminal.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { ITerminalService } from '../../browser/terminal.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import type { ITerminalInstance, ITerminalService } from '../../browser/terminal.js';
+import type { ITerminalInstance } from '../../browser/terminal.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -37,7 +48,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	const parent = h(dom.window.document, 'main');
 	using changed = new Emitter<void>();
 	const createInstance = (id: string): ITerminalInstance => ({
-		...Disposable.None, id, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
+		...Disposable.None, id, instanceId: id === 'one' ? 1 : 2, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
 		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
 		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async sendText() { }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { },
@@ -49,7 +60,17 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
 		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, closeTerminal: async () => { },
 	};
-	using layout = new TerminalTabbedView(parent, terminals);
+	using services = new InstantiationService();
+	using context = new ContextKeyService();
+	using commands = new CommandService(services);
+	services.registerInstance(ITerminalService, terminals);
+	services.registerInstance(IContextKeyService, context);
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IMenuService, new MenuService(commands, context));
+	services.registerInstance(IContextMenuService, {
+		onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { },
+	});
+	using layout = services.createInstance(TerminalTabbedView, parent);
 	const tabs = layout.element.querySelector<HTMLElement>('.ash-terminal-tabs')!;
 	dom.window.document.body.append(layout.element);
 	layout.layout(1_000, 200);
@@ -94,4 +115,73 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	assert.equal(layout.element.querySelector(":scope > .ash-sash"), hiddenSash);
 	assert.equal(layout.element.querySelector(":scope > .ash-sash")?.getAttribute("aria-label"), "Resize terminal instance list");
 	dom.window.close();
+});
+
+
+test('Terminal screen resize coalesces columns, applies rows immediately and flushes explicitly', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const calls: unknown[] = [];
+		const screen = { isDisposed: false, raw: { buffer: { normal: { length: 400 } } } } as unknown as XtermTerminal;
+		using resize = new TerminalResizeDebouncer(() => true, () => screen,
+			(cols, rows) => calls.push(['both', cols, rows]), cols => calls.push(['x', cols]), rows => calls.push(['y', rows]));
+		await resize.resize(90, 30, false);
+		await resize.resize(100, 40, false);
+		assert.deepEqual(calls, [['y', 30], ['y', 40]]);
+		mock.timers.tick(99);
+		assert.deepEqual(calls, [['y', 30], ['y', 40]]);
+		mock.timers.tick(1);
+		assert.deepEqual(calls, [['y', 30], ['y', 40], ['x', 100]]);
+		await resize.resize(110, 45, false);
+		resize.flush();
+		assert.deepEqual(calls.slice(-2), [['y', 45], ['x', 110]]);
+		await resize.resize(120, 50, true);
+		mock.timers.tick(200);
+		assert.deepEqual(calls.at(-1), ['both', 120, 50]);
+	} finally { mock.timers.reset(); }
+});
+
+test('Terminal screen resize keeps the latest hidden dimensions and releases idle work', async () => {
+	let idle: (() => void) | undefined;
+	let canceled = 0;
+	const targetWindow = {
+		requestIdleCallback: (work: () => void) => { idle = work; return 1; },
+		cancelIdleCallback: () => { idle = undefined; canceled++; },
+	};
+	const screen = {
+		isDisposed: false, raw: { buffer: { normal: { length: 400 } } },
+		element: { ownerDocument: { defaultView: targetWindow } },
+	} as unknown as XtermTerminal;
+	const calls: unknown[] = [];
+	using resize = new TerminalResizeDebouncer(() => false, () => screen,
+		(cols, rows) => calls.push([cols, rows]), () => assert.fail('Unexpected horizontal-only resize'), () => assert.fail('Unexpected vertical-only resize'));
+	await resize.resize(90, 30, false);
+	await resize.resize(100, 40, false);
+	assert.deepEqual(calls, []);
+	assert.ok(idle);
+	idle();
+	assert.deepEqual(calls, [[100, 40]]);
+	await resize.resize(110, 50, false);
+	resize.dispose();
+	assert.equal(idle, undefined);
+	assert.equal(canceled, 2);
+	resize.flush();
+	assert.deepEqual(calls, [[100, 40]]);
+});
+
+test('Terminal screen resize cancels pending work after disposal and tolerates disposal in a callback', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const calls: unknown[] = [];
+		const screen = { isDisposed: false, raw: { buffer: { normal: { length: 400 } } } } as unknown as XtermTerminal;
+		const resize = new TerminalResizeDebouncer(() => true, () => screen,
+			() => assert.fail('Unexpected immediate resize'), cols => calls.push(cols), () => { });
+		await resize.resize(90, 30, false);
+		resize.dispose();
+		mock.timers.tick(200);
+		assert.deepEqual(calls, []);
+		using reentrant = new TerminalResizeDebouncer(() => true, () => screen, () => { }, () => assert.fail('Disposed owner resized'), () => reentrant.dispose());
+		await reentrant.resize(100, 40, false);
+		mock.timers.tick(200);
+	} finally { mock.timers.reset(); }
 });

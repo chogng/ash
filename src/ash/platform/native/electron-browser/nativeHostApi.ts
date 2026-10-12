@@ -2,6 +2,7 @@ import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import {
 	NATIVE_HOST_IS_ADMIN_CHANNEL,
+	NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
 	NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL,
 	validateColorScheme,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
@@ -24,6 +25,7 @@ import {
 	validateSaveDialogResult,
 } from '../common/nativeHost.js';
 import {
+	parseTitleBarStyle,
 	WINDOW_OPERATION_CHANNEL,
 	WINDOW_ZOOM_CHANGED_CHANNEL,
 	WINDOW_OPEN_EXTERNAL_URI_CHANNEL,
@@ -35,6 +37,7 @@ import { normalizeExternalUrl } from '../../opener/common/opener.js';
 export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
 	const colors = mainProcessService.getChannel('colorScheme');
 	return {
+		getTitleBarStyle: async () => parseTitleBarStyle(await invoke<unknown>(NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL)),
 		async isAdmin(): Promise<boolean> {
 			const value = await invoke<unknown>(NATIVE_HOST_IS_ADMIN_CHANNEL);
 			if (typeof value !== 'boolean') { throw new TypeError('Invalid desktop privilege result'); }

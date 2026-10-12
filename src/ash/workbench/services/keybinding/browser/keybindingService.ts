@@ -389,13 +389,11 @@ export class WorkbenchKeybindingService
 		return this.resolver.lookupKeybinding(command, context);
 	}
 
-	/**
-	 * Dispatches one native event and returns whether a keybinding consumed it.
-	 */
 	enableKeybindingHoldMode(commandId: string): Promise<void> | undefined {
 		const invocation = this.currentDispatch;
-		if (!invocation || invocation.command !== commandId || invocation.event.type === 'keyup') return undefined;
-		if (this.holdMode) return this.holdMode.promise;
+		if (!invocation || invocation.command !== commandId || invocation.event.type !== 'keydown') return undefined;
+		if (this.holdMode?.event === invocation.event) return this.holdMode.promise;
+		this.finishHoldMode();
 		let finish!: () => void;
 		const promise = new Promise<void>(resolve => { finish = resolve; });
 		this.holdMode = { event: invocation.event, promise, finish };
@@ -408,8 +406,9 @@ export class WorkbenchKeybindingService
 		held?.finish();
 	}
 
+	/** Dispatches one native event and returns whether a keybinding consumed it. */
 	dispatchEvent(browserEvent: KeyboardEvent): boolean {
-		if (this.holdMode && sameKeyboardKey(this.holdMode.event, browserEvent)) {
+		if (this.holdMode && keyboardEventWindow(this.holdMode.event, this.ownerWindow) === keyboardEventWindow(browserEvent, this.ownerWindow) && sameKeyboardKey(this.holdMode.event, browserEvent)) {
 			browserEvent.preventDefault();
 			browserEvent.stopPropagation();
 			return true;
@@ -469,7 +468,7 @@ export class WorkbenchKeybindingService
 	/** Dispatches a modifier-only binding after the key is released unused. */
 	dispatchKeyupEvent(browserEvent: KeyboardEvent): boolean {
 		const held = this.holdMode?.event;
-		if (held && (sameKeyboardKey(held, browserEvent)
+		if (held && keyboardEventWindow(held, this.ownerWindow) === keyboardEventWindow(browserEvent, this.ownerWindow) && (sameKeyboardKey(held, browserEvent)
 			|| (held.ctrlKey && !browserEvent.ctrlKey)
 			|| (held.altKey && !browserEvent.altKey)
 			|| (held.shiftKey && !browserEvent.shiftKey)
@@ -537,6 +536,7 @@ export class WorkbenchKeybindingService
 			case KeybindingResolveKind.Command:
 				this.leaveChordMode();
 				event.stop();
+				const previousDispatch = this.currentDispatch;
 				this.currentDispatch = { command: result.command, event: browserEvent };
 				try {
 					void this.commandService.executeCommand(result.command, ...result.args)
@@ -545,7 +545,7 @@ export class WorkbenchKeybindingService
 							this.notificationService.warning(getErrorMessage(error));
 						});
 				} finally {
-					this.currentDispatch = undefined;
+					this.currentDispatch = previousDispatch;
 				}
 				return true;
 

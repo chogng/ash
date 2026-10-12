@@ -7,6 +7,9 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TerminalCommandId, TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { ITerminalService } from './terminal.js';
 import type { TerminalViewPane } from './terminalView.js';
+import { MarshalledId } from '../../../../base/common/marshallingIds.js';
+import { InstanceContext } from './terminalContextMenu.js';
+import type { ITerminalInstance } from './terminal.js';
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
@@ -23,8 +26,7 @@ export function registerTerminalActions(): void {
 		override run(accessor: ServicesAccessor, instanceId?: unknown): Promise<boolean> {
 			if (instanceId !== undefined) {
 				const terminals = accessor.get(ITerminalService);
-				const instance = terminals.instances.find(instance => instance.id === instanceId);
-				if (!instance) { throw new Error(localize('terminal.context.closed', 'This terminal has been closed')); }
+				const instance = resolveInstance(accessor, instanceId)!;
 				terminals.setActiveInstance(instance);
 			}
 			return accessor.get(IViewsService).focusView(TERMINAL_VIEW_ID);
@@ -39,9 +41,37 @@ export function registerTerminalActions(): void {
 		}
 		return terminalView(accessor).createTerminal(profileId);
 	});
-	CommandsRegistry.register(TerminalCommandId.Relaunch, accessor => terminalView(accessor).relaunchActive());
-	CommandsRegistry.register(TerminalCommandId.Kill, accessor => terminalView(accessor).killActive());
-	CommandsRegistry.register(TerminalCommandId.Clear, accessor => terminalView(accessor).clearActive());
+	CommandsRegistry.register(TerminalCommandId.Relaunch, async (accessor, context) => {
+		if (context === undefined) return terminalView(accessor).relaunchActive();
+		const instance = resolveInstance(accessor, context)!;
+		if (instance.state === 'running' || instance.state === 'reconnecting') return;
+		await accessor.get(ITerminalService).relaunchTerminal(instance, instance.xterm?.dimensions() ?? { cols: 80, rows: 24 });
+	});
+	CommandsRegistry.register(TerminalCommandId.Kill, (accessor, context) => context === undefined
+		? terminalView(accessor).killActive() : accessor.get(ITerminalService).closeTerminal(resolveInstance(accessor, context)!));
+	CommandsRegistry.register(TerminalCommandId.Clear, (accessor, context) => {
+		if (context === undefined) return terminalView(accessor).clearActive();
+		resolveInstance(accessor, context)!.clearBuffer();
+	});
+}
+
+/** Validate command contexts once, then resolve identity through the invoking window's owner. */
+function resolveInstance(accessor: ServicesAccessor, context: unknown): ITerminalInstance | undefined {
+	const terminals = accessor.get(ITerminalService);
+	if (context === undefined) return terminals.activeInstance;
+	let instance: ITerminalInstance | undefined;
+	if (typeof context === 'string') {
+		instance = terminals.instances.find(instance => instance.id === context);
+	} else {
+		const id = context instanceof InstanceContext ? context.instanceId : context && typeof context === 'object'
+			&& '$mid' in context && context.$mid === MarshalledId.TerminalContext && 'instanceId' in context ? context.instanceId : undefined;
+		if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
+			throw new TypeError(localize('terminal.context.invalid', 'Invalid terminal instance context'));
+		}
+		instance = terminals.instances.find(instance => instance.instanceId === id);
+	}
+	if (!instance) throw new Error(localize('terminal.context.closed', 'This terminal has been closed'));
+	return instance;
 }
 
 function terminalView(accessor: ServicesAccessor): TerminalViewPane {

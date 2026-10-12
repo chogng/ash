@@ -52,6 +52,8 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		services.registerInstance(IThemeService, themes);
 		registerTestComponentServices(services, environment.window.document);
 		services.registerInstance(INativeHostService, {
+			getTitleBarStyle: async () => 'custom',
+			getTitleBarStyle: async () => 'custom',
 			isAdmin: async () => false,
 			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 			openExternal: async () => { throw new Error('unused'); },

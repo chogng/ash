@@ -5,7 +5,7 @@ import type { ExtensionSnippetFile } from '../../../../services/extensions/commo
 import { SnippetFile } from '../../browser/snippetsFile.js';
 
 function resource(content: string): ExtensionSnippetFile {
-	return { content, extensionId: 'ash.demo', source: 'Demo', languageIds: ['typescript', 'javascript'], location: toExtensionResourceURI({ generation: 1, extensionId: 'ash.demo', path: 'snippets/demo.json' }) };
+	return { content, extensionId: 'ash.demo', languageIds: ['typescript', 'javascript'], location: toExtensionResourceURI({ generation: 1, extensionId: 'ash.demo', path: 'snippets/demo.json' }) };
 }
 
 test('snippet files parse JSONC, multiline bodies and descriptions, scopes and absent prefixes', () => {

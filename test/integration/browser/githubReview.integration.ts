@@ -161,7 +161,7 @@ services.registerInstance(IEditorPart, { get activePane() { return pane; } } as 
 services.registerInstance(IEditorService, {
 	save: async () => { throw new Error('Saving is outside this fixture'); },
 	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
-	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async input => {
+	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], visibleEditorPanes: [], openEditor: async input => {
 		if (pane) { pane.dispose(); }
 		const createdPane = await EditorPanes.getEditorPane(input)!.create({ instantiationService: services });
 		pane = createdPane;

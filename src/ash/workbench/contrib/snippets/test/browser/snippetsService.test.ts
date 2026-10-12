@@ -2,6 +2,7 @@ import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'mocha';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -16,7 +17,7 @@ import { SuggestModel } from '../../../../../editor/contrib/suggest/browser/sugg
 import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
 import { EditorContributionInstantiation } from '../../../../../editor/browser/editorExtensions.js';
 import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
-import type { ExtensionCatalog, ExtensionDescriptor } from '../../../../../platform/extensions/common/extensionApi.js';
+import type { ExtensionCatalog, ExtensionDescriptor, ExtensionResourceRequest } from '../../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -25,8 +26,10 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../comm
 import { AppServerExtensionService } from '../../../../services/extensions/browser/appServerExtensionService.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import type { ITextMateService } from '../../../../services/textMate/common/textMateService.js';
+import type { TextMateGrammarDefinition, TextMateGrammarRegistration } from '../../../../services/textMate/common/textMateGrammarRegistry.js';
 import { TextMateGrammarService } from '../../../../services/textMate/common/textMateGrammarService.js';
 import { createEmptyTestLanguagePacks } from '../../../../services/localization/test/common/localizationTestUtils.js';
+import { SnippetsService } from '../../browser/snippetsService.js';
 import { ISnippetsService } from '../../browser/snippets.js';
 import '../../browser/snippets.contribution.js';
 
@@ -93,6 +96,81 @@ test('refresh replaces snippets once, preserves a failed generation, and removes
 	assert.deepEqual(fixture.reads, [1, 2, 3]);
 });
 
+test('a later contribution commit failure retains both snippets and file-template defaults', async () => {
+	let invalid = false;
+	using fixture = createFixture({ Class: { prefix: 'class', body: 'old($1)$0', isFileTemplate: true } }, false, () => ({
+		'snippets.transactionCount': { type: 'integer', default: invalid ? 'invalid' : 1 },
+	}));
+	await fixture.extensions.start();
+	const committed = fixture.extensions.currentCatalog;
+	const providerCatalog = fixture.features.completionProvider.providerCatalog;
+	invalid = true;
+	fixture.replace({ Class: { prefix: 'class', body: 'candidate($1)$0', isFileTemplate: true } });
+	await assert.rejects(fixture.extensions.reload(), /snippets.transactionCount/);
+	assert.equal(fixture.extensions.currentCatalog, committed);
+	assert.equal(fixture.features.completionProvider.providerCatalog, providerCatalog);
+	assert.deepEqual(fixture.snippets.getSnippetsSync('typescript').map(snippet => snippet.body), ['old($1)$0']);
+	assert.deepEqual(fixture.extensions.fileTemplates.currentCatalog.templates.map(template => template.body), ['old()']);
+});
+
+test('the public contribution boundary replays an unchanged snapshot to a replacement snippet owner', async () => {
+	using fixture = createFixture({ Log: { prefix: 'log', body: 'log($1)$0' } }, true);
+	await fixture.extensions.start();
+	const replacement = fixture.replaceOwner();
+	assert.deepEqual(replacement.getSnippetsSync('typescript'), []);
+	await fixture.extensions.reload();
+	assert.deepEqual(replacement.getSnippetsSync('typescript').map(snippet => snippet.body), ['log($1)$0']);
+	assert.deepEqual(replacement.getSnippetsSync('javascript').map(snippet => snippet.body), ['log($1)$0']);
+	assert.deepEqual(fixture.requests, [
+		{ generation: 1, extensionId: 'ash.snippets', path: 'snippets/demo.json' },
+		{ generation: 1, extensionId: 'ash.snippets', path: 'snippets/demo.json' },
+	]);
+	await fixture.extensions.reload();
+	assert.equal(fixture.requests.length, 2);
+	assert.equal(fixture.features.completionProvider.providerCatalog.providers.length, 1);
+});
+
+for (const stage of ['resource', 'preparation'] as const) {
+	test(`a snippet owner replaced during ${stage} loading receives only the final committed generation`, async () => {
+		using fixture = createFixture({ Log: { prefix: 'log', body: 'old($1)$0' } });
+		await fixture.extensions.start();
+		fixture.replace({ Log: { prefix: 'log', body: 'latest($1)$0' } });
+		const gate = fixture.pauseNext(stage);
+		const reload = fixture.extensions.reload();
+		await gate.entered;
+		try {
+			const replacement = fixture.replaceOwner();
+			const observations: number[] = [];
+			using listener = fixture.extensions.onDidChange(catalog => observations.push(catalog.generation));
+			gate.release();
+			await reload;
+			assert.deepEqual(replacement.getSnippetsSync('typescript').map(snippet => snippet.body), ['latest($1)$0']);
+			assert.deepEqual(observations, [2]);
+			assert.deepEqual(fixture.reads, [1, 2, 2]);
+		} finally {
+			gate.release();
+			await reload;
+		}
+	});
+}
+
+for (const failure of [new Error('Snippet resource unavailable'), Uint8Array.of(0xc3, 0x28)]) {
+	test(`the public resource boundary preserves the last usable snippets after ${failure instanceof Error ? 'read failure' : 'invalid UTF-8'}`, async () => {
+		using fixture = createFixture({ Log: { prefix: 'log', body: 'old($1)$0' } });
+		await fixture.extensions.start();
+		const catalog = fixture.extensions.currentCatalog;
+		const providers = fixture.features.completionProvider.providerCatalog;
+		fixture.replace({ Log: { prefix: 'log', body: 'next($1)$0' } });
+		fixture.nextResource(failure);
+		await assert.rejects(fixture.extensions.reload(), failure instanceof Error ? failure : TypeError);
+		assert.equal(fixture.extensions.currentCatalog, catalog);
+		assert.equal(fixture.features.completionProvider.providerCatalog, providers);
+		assert.deepEqual(fixture.snippets.getSnippetsSync('typescript').map(snippet => snippet.body), ['old($1)$0']);
+		await fixture.extensions.reload();
+		assert.deepEqual(fixture.snippets.getSnippetsSync('typescript').map(snippet => snippet.body), ['next($1)$0']);
+	});
+}
+
 test('scope lists, alternate prefixes and punctuation retain their own ranges and stable identities', async () => {
 	using fixture = createFixture({
 		Log: { prefix: ['log', 'loop'], scope: 'typescript, javascript', body: '$1' },
@@ -145,7 +223,7 @@ test('production creation rejects missing required services and duplicate snippe
 	assert.throws(() => fixture.services.createInstance(descriptor), /already registered/);
 });
 
-function createFixture(initial: Record<string, unknown>, duplicateResource = false) {
+function createFixture(initial: Record<string, unknown>, duplicateResource = false, configurationProperties?: () => Record<string, unknown>) {
 	const resources = new DisposableStore();
 	const grammars = resources.add(new TextMateGrammarService());
 	const languages = resources.add(new LanguageService());
@@ -155,15 +233,33 @@ function createFixture(initial: Record<string, unknown>, duplicateResource = fal
 	let contents = initial;
 	let present = true;
 	const reads: number[] = [];
+	const requests: ExtensionResourceRequest[] = [];
+	let nextResource: Uint8Array | Error | undefined;
+	const gates = new Map<'resource' | 'preparation', { entered: DeferredPromise<void>; release: DeferredPromise<void>; }>();
 	const extensions = resources.add(new AppServerExtensionService({
 		api: {
 			list: async (): Promise<ExtensionCatalog> => ({ generation, extensions: present ? [descriptor()] : [], diagnostics: [] }),
 			resources: new ExtensionResourceLoaderService(async request => {
 				reads.push(request.generation);
-				return new TextEncoder().encode(JSON.stringify(contents));
+				requests.push(request);
+				const value = nextResource ?? new TextEncoder().encode(JSON.stringify(contents));
+				nextResource = undefined;
+				await pause('resource');
+				if (value instanceof Error) throw value;
+				return value;
 			}),
 		},
-		textMateService: { grammars } as unknown as ITextMateService,
+		textMateService: {
+			grammars: {
+				registerGrammars: grammars.registerGrammars.bind(grammars),
+				whenReady: grammars.whenReady.bind(grammars),
+				prepareGrammars: async (registration: TextMateGrammarRegistration, definitions: readonly TextMateGrammarDefinition[]) => {
+					const prepared = await grammars.prepareGrammars(registration, definitions);
+					await pause('preparation');
+					return prepared;
+				},
+			}
+		} as unknown as ITextMateService,
 		languageService: languages,
 		languageConfigurationService: features.languageConfigurationService,
 	}, createEmptyTestLanguagePacks()));
@@ -175,17 +271,41 @@ function createFixture(initial: Record<string, unknown>, duplicateResource = fal
 	const contributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.snippets']));
 	contributions.advance(WorkbenchPhase.BlockStartup);
 	return {
-		extensions, features, services, snippets, contributions, reads,
+		extensions, features, services, snippets, contributions, reads, requests,
+		nextResource(value: Uint8Array | Error): void { nextResource = value; },
+		pauseNext(stage: 'resource' | 'preparation'): { entered: Promise<void>; release(): void; } {
+			const gate = { entered: new DeferredPromise<void>(), release: new DeferredPromise<void>() };
+			gates.set(stage, gate);
+			return { entered: gate.entered.p, release: () => { void gate.release.complete(); } };
+		},
+		replaceOwner(): ISnippetsService {
+			(snippets as SnippetsService).dispose();
+			contributions.dispose();
+			const scope = resources.add(services.createChild(new ServiceCollection([ISnippetsService, registration])));
+			const replacement = scope.get(ISnippetsService);
+			const host = resources.add(WorkbenchContributionsRegistry.createHost(scope, error => { throw error; }, ['workbench.contrib.snippets']));
+			host.advance(WorkbenchPhase.BlockStartup);
+			return replacement;
+		},
 		get contents() { return contents; },
 		replace(next: Record<string, unknown>): void { contents = next; generation++; },
 		remove(): void { present = false; generation++; },
 		[Symbol.dispose](): void { resources.dispose(); },
 	};
 
+	async function pause(stage: 'resource' | 'preparation'): Promise<void> {
+		const gate = gates.get(stage);
+		if (!gate) return;
+		gates.delete(stage);
+		await gate.entered.complete();
+		await gate.release.p;
+	}
+
 	function descriptor(): ExtensionDescriptor {
 		const manifestJson = JSON.stringify({
 			name: 'snippets', publisher: 'ash', version: `1.0.${generation}`, contributes: {
 				languages: [{ id: 'typescript' }, { id: 'javascript' }],
+				configuration: { properties: configurationProperties?.() ?? {} },
 				snippets: duplicateResource ? [{ language: ['typescript', 'javascript'], path: 'snippets/demo.json' }, { language: 'typescript', path: 'snippets/demo.json' }] : [{ language: 'typescript', path: 'snippets/demo.json' }],
 			}
 		});

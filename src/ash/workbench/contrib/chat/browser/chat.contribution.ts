@@ -9,6 +9,7 @@ import './aiCustomization/aiCustomizationManagement.contribution.js';
 import { registerHookActions } from './promptSyntax/hookActions.js';
 import './actions/chatSpeechToTextActions.js';
 import './chatEditing/chatEditingEditorActions.js';
+import './chatEditing/chatEditingActions.js';
 import { IChatEditingService } from '../common/editing/chatEditingService.js';
 import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
 import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay.js';

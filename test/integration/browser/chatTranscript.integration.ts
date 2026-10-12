@@ -69,6 +69,7 @@ services.registerInstance(IEditorPart, { get activePane() { return { getControl:
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
 	get activeEditor() { return { resource: activeResource }; },
+	visibleEditorPanes: [],
 	get visibleEditors() { return [{ resource: activeResource }]; },
 	openEditor: async input => {
 		const model = await services.get(IUntitledTextEditorService).resolve({ untitledResource: input.resource });

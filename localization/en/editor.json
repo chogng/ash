@@ -1,5 +1,6 @@
 {
   "ash": {
+    "scrollLocking.diffHelp": "<keybinding:workbench.action.toggleLockedScrolling> toggles locked scrolling across visible editors while preserving their relative positions. A comparison participates through its modified side; its two sides keep their existing synchronization. Bind Hold Locked Scrolling Across Editors to temporarily toggle the state until the shortcut is released or the window loses focus. Activate the Scrolling Locked status bar entry to disable it.",
     "diffEditor.statusBar.help": "The status bar follows the focused side of the comparison. Activate the position entry to go to a line or column. Use Left and Right arrows in the status bar and Enter to run an action. Indentation, encoding, line endings, and language actions open a picker; Escape cancels it. Reopen with Encoding suggests a detected encoding. Default encoding and automatic detection can be configured per language. Line endings can only be changed on a writable side, and the change can be undone.",
     "diffEditor.foldUnchanged": "Collapse unchanged region",
     "diffEditor.collapsedLines": "Collapsed {0} unchanged lines",

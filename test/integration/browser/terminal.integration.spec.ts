@@ -809,3 +809,120 @@ for (const failed of [false, true]) {
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
 }
+
+
+test('terminal browser list menu keeps its captured instance after active selection changes', async ({ page }) => {
+	await page.goto('/terminal.html?pane');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(async () => { window.ashTerminalPaneIntegration.panel(true); });
+	await expect(page.locator('.xterm')).toHaveCount(1);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+	const tabs = page.getByRole('tablist', { name: 'Terminal instances' });
+	await expect(tabs.getByRole('tab')).toHaveCount(2);
+	const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
+	await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[0]!);
+	await tabs.getByRole('tab').first().click({ button: 'right' });
+	await expect(page.getByRole('menu')).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Relaunch Terminal', exact: true })).toHaveCount(0);
+	await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[1]!);
+	await page.getByRole('menuitem', { name: 'Clear Terminal', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.operations().cleared)).toEqual([ids[0]]);
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.activeId())).toBe(ids[1]);
+	await tabs.getByRole('tab').first().click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Kill Terminal', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.operations().closed)).toEqual([ids[0]]);
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.ids())).toEqual([ids[1]]);
+	await expect(page.locator('.ash-terminal-tabs')).toBeHidden();
+	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+});
+
+test('terminal browser list menu supports keyboard dismissal and Chinese labels', async ({ page }) => {
+	await page.goto('/terminal.html?pane&locale=zh-CN');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+	await expect(page.locator('.xterm')).toHaveCount(1);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+	const tab = page.getByRole('tablist', { name: '终端实例' }).getByRole('tab').first();
+	await tab.focus();
+	await tab.press('Shift+F10');
+	await expect(page.getByRole('menu')).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: '聚焦终端', exact: true })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: '清除终端', exact: true })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: '终止终端', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(tab).toBeFocused();
+	await tab.press('ArrowDown');
+	await expect(page.getByRole('tablist', { name: '终端实例' }).getByRole('tab').last()).toBeFocused();
+	await page.keyboard.press('Enter');
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.activeId())).toBe((await page.evaluate(() => window.ashTerminalPaneIntegration.ids()))[1]);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+});
+
+test('terminal browser list menu relaunches its exited target and survives asynchronous execution', async ({ page }) => {
+	await page.goto('/terminal.html?pane&exited');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+	await expect(page.locator('.xterm')).toHaveCount(1);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+	const first = page.getByRole('tablist', { name: 'Terminal instances' }).getByRole('tab').first();
+	const id = (await page.evaluate(() => window.ashTerminalPaneIntegration.ids()))[0]!;
+	await page.evaluate(() => window.ashTerminalPaneIntegration.hold());
+	await first.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Relaunch Terminal', exact: true }).click();
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.operations().relaunched)).toEqual([id]);
+	await page.evaluate(() => { window.ashTerminalPaneIntegration.release(); window.ashTerminalPaneIntegration.dispose(); });
+});
+
+test('terminal browser resize preserves scrollback while coalescing horizontal reflow', async ({ page }) => {
+	await page.goto('/terminal.html');
+	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
+	await page.evaluate(async () => {
+		window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready();
+		window.ashTerminalIntegration.write(Array.from({ length: 320 }, (_, index) => `line-${index}\r\n`).join(''));
+		await window.ashTerminalIntegration.snapshot(100_000);
+	});
+	const result = await page.evaluate(() => {
+		const before = window.ashTerminalIntegration.dimensions();
+		const root = document.querySelector<HTMLElement>('#terminal')!;
+		root.style.width = '900px'; root.style.height = '430px';
+		window.ashTerminalIntegration.fit();
+		return { before, immediate: window.ashTerminalIntegration.dimensions() };
+	});
+	expect(result.immediate.cols).toBe(result.before.cols);
+	expect(result.immediate.rows).toBeGreaterThan(result.before.rows);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.dimensions().cols)).toBeGreaterThan(result.before.cols);
+	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(100_000))).toContain('line-319');
+	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(100_000))).toContain('line-0');
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});
+
+test('terminal browser resize flushes before focus and cancels pending work on disposal', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html');
+	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
+	await page.evaluate(async () => {
+		window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready();
+		window.ashTerminalIntegration.write('retained\r\n'.repeat(320)); await window.ashTerminalIntegration.snapshot(100_000);
+	});
+	await page.clock.install();
+	const sizes = await page.evaluate(() => {
+		const root = document.querySelector<HTMLElement>('#terminal')!;
+		const before = window.ashTerminalIntegration.dimensions();
+		root.style.width = '950px'; window.ashTerminalIntegration.fit();
+		const queued = window.ashTerminalIntegration.dimensions();
+		window.ashTerminalIntegration.start();
+		return { before, queued, focused: window.ashTerminalIntegration.dimensions() };
+	});
+	expect(sizes.queued.cols).toBe(sizes.before.cols);
+	expect(sizes.focused.cols).toBeGreaterThan(sizes.before.cols);
+	const writes = await page.evaluate(() => {
+		document.querySelector<HTMLElement>('#terminal')!.style.width = '800px'; window.ashTerminalIntegration.fit();
+		window.ashTerminalIntegration.dispose(); return [...window.ashTerminalIntegration.resizes];
+	});
+	await page.clock.runFor(250);
+	expect(await page.evaluate(() => window.ashTerminalIntegration.resizes)).toEqual(writes);
+	expect(errors).toEqual([]);
+});

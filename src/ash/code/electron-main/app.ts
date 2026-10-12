@@ -1297,6 +1297,7 @@ export class AshApplication extends Disposable {
 			this.windowsMainService.fileOpenResponseIpcRoute(window),
 			...windowSplashIpcRoutes(this.themeMainService, () => `workbench:${workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 			...nativeHostIpcRoutes({
+				getTitleBarStyle: () => titleBarStyle,
 				...this.windowHostOperations(window, windowControlsOverlay),
 				openWindow: async options => {
 					const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
@@ -1548,6 +1549,7 @@ export class AshApplication extends Disposable {
 						windowOperationIpcRoute(this.windowsMainService, window),
 						...windowSplashIpcRoutes(this.themeMainService, () => `sessions:${session.workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 						...nativeHostIpcRoutes({
+							getTitleBarStyle: () => titleBarStyle,
 							...this.windowHostOperations(window, windowControlsOverlay),
 							openWindow: async options => {
 								const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };

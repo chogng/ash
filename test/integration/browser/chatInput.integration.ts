@@ -331,7 +331,7 @@ let symbolSource = 'before\nfunction attach() {\n  return 42;\n}\nafter';
 let terminalSource = 'context terminal ready';
 let searchSnapshot: { query: string; content: string; matchCount: number; } | undefined = hasContextSources ? { query: 'needle', content: '# Search: needle\n# File: file:///workspace/main.ts\n  2:1-2:7: needle', matchCount: 1 } : undefined;
 const terminalInstance: ITerminalInstance = {
-	...Disposable.None, id: 'context-shell', dirId: 'workspace', processId: 1, initialCwd: '/workspace', title: 'Shell',
+	...Disposable.None, id: 'context-shell', instanceId: 1, dirId: 'workspace', processId: 1, initialCwd: '/workspace', title: 'Shell',
 	profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 	onDidWriteData: Event.None, onDidExit: Event.None, onDidChangeCommandStatus: Event.None, onDidChangeState: Event.None,
 	start: () => { }, clearBuffer: () => terminalScreen?.clearBuffer(), reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },

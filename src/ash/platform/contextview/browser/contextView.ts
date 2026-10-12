@@ -39,6 +39,8 @@ export type IContextMenuMenuDelegate = {
 
 /** Window-scoped context-menu service. */
 export interface IContextMenuService extends IContextMenuProvider {
+	/** Selected implementation, when the provider exposes its menu style. */
+	readonly contextMenuStyle?: 'custom' | 'system';
 	readonly onDidShowContextMenu: Event<void>;
 	readonly onDidHideContextMenu: Event<void>;
 

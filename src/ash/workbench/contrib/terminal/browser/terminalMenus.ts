@@ -8,6 +8,19 @@ import { TerminalCreatingContext, TerminalHasActiveInstanceContext, TerminalActi
 
 /** Registers terminal menus once for the renderer; enablement comes from each window's context. */
 export function setupTerminalMenus(): void {
+	for (const item of [
+		{ id: TerminalCommandId.Focus, title: localize2('terminal.context.focus', 'Focus Terminal') },
+		{ id: TerminalCommandId.Clear, title: localize2('terminal.context.clear', 'Clear Terminal') },
+		{
+			id: TerminalCommandId.Relaunch, title: localize2('terminal.context.relaunch', 'Relaunch Terminal'), when: ContextKeyExpr.and(
+				ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'running'), ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'reconnecting'))
+		},
+		{ id: TerminalCommandId.Kill, title: localize2('terminal.context.kill', 'Kill Terminal') },
+	]) {
+		MenusRegistry.appendMenuItem(MenuId.TerminalInstanceContext, {
+			command: { id: item.id, title: item.title }, when: item.when, group: '1_terminal',
+		});
+	}
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 		command: {
 			id: TerminalCommandId.Focus,

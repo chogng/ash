@@ -20,6 +20,23 @@ export interface ChatEditSource {
 
 export type ChatEditOutcome = 'completed' | 'failed' | 'interrupted';
 
+/** A backend-owned message boundary and its file restoration availability. */
+export interface ChatCheckpoint {
+	readonly itemId: string;
+	readonly turnId: string;
+	readonly sourceThreadId: ThreadId;
+	readonly files: 'git' | 'noFiles' | 'unavailable';
+	readonly unavailableReason?: string;
+}
+
+export interface RestoreChatCheckpointOptions {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly itemId: string;
+	readonly boundary: 'before' | 'after';
+	readonly title: string;
+}
+
 export interface ModelRef {
 	readonly provider: string;
 	readonly model: string;
@@ -476,6 +493,9 @@ export interface TurnChangesUpdate {
 
 /** Frontend Chat operations, catalogs, and Thread update lifecycle. */
 export interface IChatService {
+	readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]>;
+	/** Creates an independent Thread and directory from the backend's immutable checkpoint. */
+	restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }>;
 	/** Session invalidation also discovers Threads that have not yet been subscribed. */
 	readonly onDidChangeSession: Event<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean; }>;
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;

@@ -86,7 +86,6 @@
     "targetsUrl": "HTTPS 包地址",
     "trustedRoot": "受信任的根 JSON",
     "add": "添加",
-    "languageFilter": "{0} · {1}",
     "manageBuiltInExtensions": "管理内置编辑器扩展",
     "builtInFilter": "内置",
     "enabledState": "已启用",

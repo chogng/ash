@@ -88,6 +88,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
 	private languageConfigurationRegistrations = new DisposableStore();
 	private snippetHandler: ((files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation) | undefined;
+	private snippetOwnerRevision = 0;
+	private activeSnippetOwnerRevision = 0;
 	private readonly problemMatcherRegistration = this._register(registerProblemMatcherContributions({ matchers: [], patterns: [] }));
 	private readonly debugAdapterFactoryRegistration: DebugAdapterFactoryRegistration;
 	private readonly themeRegistry: ExtensionThemeRegistry;
@@ -228,10 +230,16 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this.assertNotDisposed();
 		if (this.snippetHandler) throw new Error('A snippet contribution owner is already registered');
 		this.snippetHandler = handler;
+		this.snippetOwnerRevision++;
+		if (this.loading) this.reloadQueued = true;
 		return toDisposable(() => {
 			if (this.snippetHandler !== handler) return;
 			this.snippetHandler = undefined;
-			if (!this.isDisposed) this.fileTemplateRegistry.replace([]);
+			this.snippetOwnerRevision++;
+			if (!this.isDisposed) {
+				if (this.loading) this.reloadQueued = true;
+				this.fileTemplateRegistry.replace([]);
+			}
 		});
 	}
 
@@ -273,10 +281,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		try {
 			const transportCatalog = await this.options.api.list("refresh");
 			if (this.isDisposed) return;
+			const snippetOwnerRevision = this.snippetOwnerRevision;
 			// Frozen package digests identify every resource in this snapshot. An
 			// unchanged scan must preserve factory identities and pending Debug launches.
 			const signature = getNLSLanguage() + '\0' + JSON.stringify(transportCatalog);
-			if (signature === this.activeCatalogSignature) return;
+			if (signature === this.activeCatalogSignature && snippetOwnerRevision === this.activeSnippetOwnerRevision) return;
 			const catalog = projectExtensionCatalog(transportCatalog);
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
@@ -364,7 +373,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					if (this.isDisposed) return;
 					snippetResources.push(Object.freeze({
 						extensionId: extension.id,
-						source: extension.displayName,
 						location: toExtensionResourceURI({ generation: catalog.generation, extensionId: extension.id, path: snippet.path }),
 						languageIds: snippet.language,
 						content,
@@ -411,6 +419,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					grammars.push(definition);
 				}
 			}
+			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
+				this.reloadQueued = true;
+				return;
+			}
 			if (snippetResources.length > 0 && !this.snippetHandler) {
 				throw new Error('Extension snippets require a registered snippet contribution owner');
 			}
@@ -433,6 +445,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			const previousGrammars = this.activeGrammars;
 			const preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);
 			if (this.isDisposed) return;
+			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
+				this.reloadQueued = true;
+				return;
+			}
 			try {
 				runWithBufferedEvents(() => {
 					preparedGrammars.commit();
@@ -452,6 +468,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					this.activeDebugAdapterFactories = Object.freeze([...debugAdapterFactories]);
 					this.catalog = catalog;
 					this.activeCatalogSignature = signature;
+					this.activeSnippetOwnerRevision = snippetOwnerRevision;
 					this.changeEmitter.fire(catalog);
 				});
 			} catch (error) {

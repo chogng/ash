@@ -176,6 +176,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		isModelVisible() { return true; },
 		async setModelVisible() { },
 		async listSlashCommands() { return []; },
+		async readCheckpoints() { return []; },
+		async restoreCheckpoint() { throw new Error('Checkpoint restore is not configured in this fixture'); },
 		async readThread() { throw new Error("No active Thread"); },
 		async subscribeThread() { throw new Error("No active Thread"); },
 		async unsubscribeThread() { },

@@ -50,7 +50,7 @@ export class SnippetSession extends Disposable {
 		try {
 			this.groups = Object.freeze(snippet.placeholderGroups.map(group => Object.freeze({
 				index: group.index,
-				ranges: Object.freeze(starts.flatMap(start => group.placeholders.map(placeholder =>
+				ranges: starts.flatMap(start => group.placeholders.map(placeholder =>
 					model.trackRange(
 						Range.fromPositions(
 							model.positionAt(start + placeholder.startOffset),
@@ -58,7 +58,7 @@ export class SnippetSession extends Disposable {
 						),
 						TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 					)
-				))),
+				)),
 				...(group.choices ? { choices: group.choices } : {}),
 			})));
 			this.transforms = Object.freeze(starts.flatMap(start => (snippet.transforms ?? []).map(transform => Object.freeze({
@@ -124,6 +124,7 @@ export class SnippetSession extends Disposable {
 			this.synchronizeTransforms(this.groups[this.currentGroupIndex]!);
 			this.editor.pushUndoStop();
 			this.currentGroupIndex += 1;
+			this.updateGroupStickiness(-1);
 			this.editor.setSelections(this.finalRanges.map(range => Selection.fromPositions(range.range.getEndPosition())));
 			return true;
 		}
@@ -167,7 +168,24 @@ export class SnippetSession extends Disposable {
 	private selectGroup(index: number): void {
 		const group = this.groups[index];
 		if (!group) throw new RangeError("Language completion snippet tabstop index is outside its session");
+		this.updateGroupStickiness(index);
 		this.editor.setSelections(group.ranges.map(range => Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition())));
+	}
+
+	private updateGroupStickiness(activeIndex: number): void {
+		for (const [index, group] of this.groups.entries()) {
+			// Only the active placeholder owns text typed at its edges. Inactive
+			// neighbors must not absorb those edits when navigation returns to them.
+			const stickiness = index === activeIndex && group.index !== 0
+				? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges
+				: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges;
+			for (const [rangeIndex, tracked] of group.ranges.entries()) {
+				if (tracked.stickiness === stickiness) continue;
+				const range = tracked.range;
+				tracked.dispose();
+				group.ranges[rangeIndex] = this.model.trackRange(range, stickiness);
+			}
+		}
 	}
 
 	private selectRelativeChoice(delta: number): boolean {
@@ -234,7 +252,7 @@ export class SnippetSession extends Disposable {
 
 interface SnippetTrackedGroup {
 	readonly index: number;
-	readonly ranges: readonly TrackedRange[];
+	readonly ranges: TrackedRange[];
 	readonly choices?: readonly string[];
 }
 

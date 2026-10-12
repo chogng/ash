@@ -14,7 +14,7 @@ export interface ISplashStorageService {
 
 export function browserSplashStorageKey(ownerWindow: Window): string {
 	const query = new URLSearchParams(ownerWindow.location.search);
-	return `ash.partsSplash:${ownerWindow.location.pathname}:${query.get('folder') ?? ''}:${query.get('workspace') ?? ''}:${query.get('remoteAuthority') ?? ''}`;
+	return `ash.partsSplash:${ownerWindow.location.pathname}:${JSON.stringify([query.get('folder'), query.get('workspace'), query.get('remoteAuthority')])}`;
 }
 
 export function readBrowserPartsSplash(ownerWindow: Window): IPartsSplash {
@@ -49,13 +49,33 @@ export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): 
 	element.inert = true;
 	Object.assign(element.style, {
 		position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '10000',
+		forcedColorAdjust: splash.baseTheme === ColorScheme.HighContrastDark || splash.baseTheme === ColorScheme.HighContrastLight ? 'none' : 'auto',
 		backgroundColor: splash.colorInfo.background,
 	});
+	const layout = splash.layoutInfo;
+	const ownerWindow = ownerDocument.defaultView;
+	// A viewport or zoom change invalidates geometry while leaving the cached colors useful.
+	if (layout && ownerWindow && Math.abs(layout.width - ownerWindow.innerWidth) < 1 && Math.abs(layout.height - ownerWindow.innerHeight) < 1) {
+		for (const part of layout.partBounds) {
+			const region = ownerDocument.createElement('div');
+			Object.assign(region.style, {
+				position: 'absolute', left: `${part.left}px`, top: `${part.top}px`,
+				width: `${part.width}px`, height: `${part.height}px`, boxSizing: 'border-box',
+				backgroundColor: part.background, borderRadius: `${part.borderRadius}px`,
+				...(part.borderColor ? { border: `${part.borderWidth}px solid ${part.borderColor}` } : {}),
+			});
+			element.append(region);
+		}
+	}
 	ownerDocument.body.append(element);
 	ownerDocument.defaultView?.performance.mark('ash.splash.shown');
 }
 
 export function removePartsSplash(ownerDocument: Document): void {
-	ownerDocument.getElementById('ash-parts-splash')?.remove();
+	const element = ownerDocument.getElementById('ash-parts-splash');
+	if (element) {
+		element.remove();
+		ownerDocument.defaultView?.performance.mark('ash.splash.removed');
+	}
 	ownerDocument.querySelector('.ash-initial-shell-colors')?.remove();
 }

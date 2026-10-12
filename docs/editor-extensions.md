@@ -812,6 +812,9 @@ Manifest、配置、snippet、theme 和 debugger 解析及注册组成一条失�
 补全接受沿用 editor 的 `SuggestModel`，占位符导航与释放沿用 `SnippetController2`、`SnippetSession`。
 Workbench 在启动扩展装载前创建 snippet owner；扩展服务不导入 contribution 实现。现有文件模板
 目录仍由扩展服务发布，使用同一次 snippet 解析的结果，模板应用行为留待后续迁移。
+snippet owner 更换后，下一次刷新会重新交付资源，即使扩展快照没有变化；装载期间更换 owner
+会丢弃旧 owner 的候选提交，并由刷新队列装载到最新 owner。资源读取或 UTF-8 解码失败发生在
+领域提交之前，保留上一批可用的片段与补全注册。
 
 ### 6.2 可执行调用与故障恢复
 

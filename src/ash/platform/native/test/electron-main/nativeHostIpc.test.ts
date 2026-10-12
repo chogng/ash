@@ -25,6 +25,12 @@ test('shell command IPC reaches the system host and rejects an unsupported insta
 	}
 });
 
+test('window frame reads use the creation value and reject renderer arguments', async () => {
+	const route = nativeHostIpcRoutes({ getTitleBarStyle: () => 'custom' } as INativeHostMainService).find(route => route.channel === 'ash:native-host:get-title-bar-style')!;
+	assert.throws(() => route.validate({ titleBarStyle: 'system' }), /no arguments/);
+	assert.equal(await route.invoke(route.validate(undefined)), 'custom');
+});
+
 test('desktop privilege reads use the desktop process and accept no renderer arguments', async () => {
 	if (process.platform !== 'win32') {
 		assert.equal(await isAdmin(), process.geteuid!() === 0);
@@ -97,6 +103,7 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 		},
 	});
 	const routes = nativeHostIpcRoutes({
+		getTitleBarStyle: () => 'custom',
 		showOpenDialog: options => dialogs.showOpenDialog(options, window),
 		showSaveDialog: options => dialogs.showSaveDialog(options, window),
 		performDialogOperation: operation => dialogs.perform(window, operation),
@@ -124,6 +131,7 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 			registerChannel: () => { throw new Error('Unexpected channel registration'); },
 		};
 		const host = createNativeHostApi(mainProcess);
+		assert.equal(await host.getTitleBarStyle(), 'custom');
 		const open = { title: 'Import', properties: ['openFile', 'multiSelections', 'showHiddenFiles'] as const, securityScopedBookmarks: true };
 		const save = { title: 'Export', nameFieldLabel: 'Name', showsTagField: false, properties: ['showOverwriteConfirmation'] as const, securityScopedBookmarks: true };
 		assert.deepEqual(await host.showOpenDialog({ ...open, properties: [...open.properties] }), { canceled: false, filePaths: ['/one.md', '/two.md'], bookmarks: ['first', 'second'] });

@@ -46,7 +46,11 @@ export function openContextMenu(
 	let executing = false;
 	let hidden = false;
 	runner.onWillRun(() => { executing = true; });
-	runner.onDidRun(() => { executing = false; if (hidden) runner.dispose(); });
+	runner.onDidRun(() => {
+		executing = false;
+		// Let the host finish its notification and execution cleanup listeners first.
+		if (hidden) queueMicrotask(() => runner.dispose());
+	});
 	try {
 		contextMenuService.showContextMenu({
 			getAnchor: () => ({ x: event.clientX, y: event.clientY, targetWindow }),

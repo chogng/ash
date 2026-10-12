@@ -12,6 +12,7 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { KeybindingRegistry } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
@@ -27,6 +28,7 @@ import { createDiffEditorInput, DIFF_EDITOR_ID, isDiffEditorInput } from '../../
 import { BrowserEditorService } from '../../../src/ash/workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
 import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
 import { IStatusbarService, StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
@@ -40,11 +42,13 @@ import '../../../src/ash/workbench/contrib/scrollLocking/browser/scrollLocking.c
 const resources = new DisposableStore();
 const root = document.createElement('div');
 root.className = 'stanza-workbench';
+root.style.cssText = 'position:relative;width:1200px;height:450px;display:flex;flex-direction:column';
 document.body.append(root);
 const services = resources.add(createTestEditorServices());
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
 services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+services.registerInstance(INotificationService, resources.add(new NotificationService()));
 const contexts = services.get(IContextKeyService);
 const registry = new KeybindingRegistry();
 const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator }));
@@ -54,8 +58,8 @@ const keys = resources.add(services.createInstance(WorkbenchKeybindingService, {
 services.registerInstance(IKeybindingService, keys);
 resources.add(registry.registerKeybindingRule({ command: 'workbench.action.holdLockedScrolling', keybinding: Keybinding.single(physicalKey('KeyL', { ctrlKey: true })) }));
 resources.add(registry.registerKeybindingRule({ command: 'workbench.action.toggleLockedScrolling', keybinding: Keybinding.single(physicalKey('KeyL', { ctrlKey: true, shiftKey: true })) }));
-registerCodeEditorServices(services);
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root, contextKeyService: contexts, configurationService: services.get(IConfigurationService) })));
+registerCodeEditorServices(services);
 resources.add(bindColorTheme(services.get(IThemeService), root));
 const store: ITextResourceStore = {
 	onDidChange: Event.None,

@@ -8,6 +8,7 @@ import type {
 } from "../../ipc/electron-main/trustedIpcRouter.js";
 import {
 	NATIVE_HOST_IS_ADMIN_CHANNEL,
+	NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
 	NATIVE_HOST_PICK_FILE_CHANNEL,
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
@@ -43,10 +44,11 @@ import {
 	validateRevealFilePath,
 } from "../common/nativeHost.js";
 
-import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions } from '../../window/common/window.js';
+import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration } from '../../window/common/window.js';
 
 /** Main-process implementation of native operations for one window. */
 export interface INativeHostMainService {
+	getTitleBarStyle(): TitleBarStyleConfiguration;
 	isAdmin(): Promise<boolean>;
 	performDialogOperation(operation: NativeDialogOperation): unknown;
 	performShellCommand(operation: ShellCommandOperation): Promise<string>;
@@ -69,6 +71,14 @@ export function nativeHostIpcRoutes(
 	service: INativeHostMainService,
 ): readonly IpcRoute<unknown, unknown>[] {
 	return [
+		{
+			channel: NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
+			validate: value => {
+				if (value !== undefined) { throw new TypeError('Window title bar reads accept no arguments'); }
+				return undefined;
+			},
+			invoke: () => service.getTitleBarStyle(),
+		},
 		{
 			channel: NATIVE_HOST_IS_ADMIN_CHANNEL,
 			validate: value => {

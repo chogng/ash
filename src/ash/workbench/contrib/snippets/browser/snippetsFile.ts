@@ -11,7 +11,6 @@ export class Snippet {
 		public readonly prefix: string,
 		public readonly description: string,
 		public readonly body: string,
-		public readonly source: string,
 		public readonly snippetIdentifier: string,
 	) {
 		Object.freeze(this);
@@ -42,7 +41,7 @@ export class SnippetFile {
 			const declaredScopes = entry.scope === undefined ? undefined : textList(entry.scope, `${entryOwner}.scope`, 128).flatMap(scope => scope.split(',').map(language => language.trim()));
 			const scopes = Object.freeze(resource.languageIds.filter(language => !declaredScopes || declaredScopes.includes(language)));
 			for (const prefix of new Set(prefixes)) {
-				snippets.push(new Snippet(entry.isFileTemplate === true, scopes, name, prefix, description, body, resource.source, JSON.stringify([resource.extensionId, resource.location.path, name, prefix])));
+				snippets.push(new Snippet(entry.isFileTemplate === true, scopes, name, prefix, description, body, JSON.stringify([resource.extensionId, resource.location.path, name, prefix])));
 			}
 		}
 		this.data = Object.freeze(snippets);

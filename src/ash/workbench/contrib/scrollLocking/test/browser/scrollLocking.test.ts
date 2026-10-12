@@ -115,9 +115,9 @@ test('locked scrolling keeps its baseline when a target clamps and rebuilds it f
 test('locked scrolling expands side-by-side panes and deduplicates visible targets', async () => {
 	using resources = new DisposableStore();
 	const a = pane(resources, { scrollTop: 10 });
-	const primary = pane(resources, { scrollTop: 200 });
-	const secondary = pane(resources, { scrollTop: 400 });
 	const { services, commands, replace } = setup(resources, [a]);
+	const primary = services.createInstance(ScrollPane, { scrollTop: 200 }, 1000);
+	const secondary = services.createInstance(ScrollPane, { scrollTop: 400 }, 1000);
 	const pair = resources.add(services.get(IInstantiationService).createInstance(SideBySideEditor, 'test.pair', secondary, primary));
 	replace([a, pair, primary]);
 	await commands.executeCommand('workbench.action.toggleLockedScrolling');

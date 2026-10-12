@@ -50,12 +50,14 @@ const store = new DisposableStore();
 const writes: string[] = [];
 const binaryWrites: number[][] = [];
 const resizes: ITerminalDimensions[] = [];
+let nextFixtureInstance = 0;
 function createFixtureInstance(id: string): ITerminalInstance {
 	let screen: XtermTerminal | undefined;
 	let ready: Promise<XtermTerminal | undefined> | undefined;
 	const fixture: ITerminalInstance = {
 		...Disposable.None,
 		id,
+		instanceId: ++nextFixtureInstance,
 		dirId: 'workspace',
 		processId: 1234,
 		initialCwd: '/backend/workspace',
@@ -128,6 +130,7 @@ window.ashTerminalIntegration = {
 		return completion === widget.initialize();
 	},
 	ready: async () => { await completion; },
+	dimensions: () => ({ cols: widget.raw.cols, rows: widget.raw.rows }),
 	dispose: () => store.dispose(),
 };
 
@@ -143,6 +146,7 @@ declare global {
 			write(text: string): void;
 			start(): boolean;
 			ready(): Promise<void>;
+			dimensions(): ITerminalDimensions;
 			dispose(): void;
 		};
 	}
@@ -207,6 +211,11 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		const workspaceChanged = lifetime.add(new Emitter<import('../../../src/ash/platform/workspace/common/workspace.js').IWorkspaceChangeEvent>());
 		const created = lifetime.add(new Emitter<ITerminalInstance>());
 		const instancesChanged = lifetime.add(new Emitter<void>());
+		const activeChanged = lifetime.add(new Emitter<ITerminalInstance | undefined>());
+		const disposed = lifetime.add(new Emitter<ITerminalInstance>());
+		const cleared: number[] = [];
+		const closed: number[] = [];
+		const relaunched: number[] = [];
 		const context = lifetime.add(new ContextKeyService());
 		AppServerAvailableContext.bindTo(context).set(true);
 		const services = lifetime.add(widgetServices.createChild());
@@ -221,6 +230,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		let release: (() => void) | undefined;
 		let pending: Promise<void> = Promise.resolve();
 		const instances: ITerminalInstance[] = new URLSearchParams(location.search).has('existing') ? [instance] : [];
+		let activeInstance = instances.at(-1);
 		const workspace = { id: 'workspace', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }] };
 		const setPanel = (value: boolean): void => {
 			visible = value;
@@ -230,24 +240,31 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		const terminals: ITerminalService = {
 			...Disposable.None,
 			instances,
-			get activeInstance() { return instances.at(-1); },
+			get activeInstance() { return activeInstance; },
 			onDidCreateInstance: created.event,
-			onDidDisposeInstance: Event.None,
+			onDidDisposeInstance: disposed.event,
 			onDidChangeInstances: instancesChanged.event,
-			onDidChangeActiveInstance: Event.None,
+			onDidChangeActiveInstance: activeChanged.event,
 			getProfiles: async () => { profiles++; await pending; return [instance.profile]; },
 			createTerminal: async () => {
 				creates++;
 				const createdInstance = instances.length === 0 ? instance : createFixtureInstance(`test-terminal-${creates}`);
 				instances.push(createdInstance);
+				activeInstance = createdInstance;
+				const clear = createdInstance.clearBuffer.bind(createdInstance);
+				createdInstance.clearBuffer = () => { cleared.push(createdInstance.instanceId); clear(); };
 				created.fire(createdInstance);
 				instancesChanged.fire();
 				return createdInstance;
 			},
-			relaunchTerminal: async () => { await pending; },
-			setActiveInstance: () => { },
-			moveTerminal: () => { },
-			closeTerminal: async () => { },
+			relaunchTerminal: async instance => { relaunched.push(instance.instanceId); await pending; },
+			setActiveInstance: instance => { activeInstance = instance; activeChanged.fire(instance); },
+			moveTerminal: (instance, index) => { const current = instances.indexOf(instance); instances.splice(current, 1); instances.splice(index, 0, instance); instancesChanged.fire(); },
+			closeTerminal: async instance => {
+				closed.push(instance.instanceId); instances.splice(instances.indexOf(instance), 1);
+				if (activeInstance === instance) activeInstance = instances.at(-1);
+				disposed.fire(instance); activeChanged.fire(activeInstance); instancesChanged.fire();
+			},
 		};
 		services.registerInstance(ITerminalService, terminals);
 		let transcript!: (text: string, isFinal: boolean) => void;
@@ -260,13 +277,6 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		registerTestDictationOnboarding(services);
 		services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
-		services.registerInstance(IContextMenuService, {
-			onDidShowContextMenu: Event.None,
-			onDidHideContextMenu: Event.None,
-			showContextMenu: () => { },
-			hideContextMenu: () => { },
-
-		});
 		const pane = lifetime.add(new TerminalViewPane(root, { id: 'terminal', title: 'Terminal' }, terminals, Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
 			onDidChangePartVisibility: visibility.event,
 			isPartVisible: () => visible,
@@ -289,6 +299,10 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		}, services));
 		root.append(pane.partTitleProjection.actions!);
 		return {
+			operations: () => ({ cleared, closed, relaunched }),
+			ids: () => instances.map(instance => instance.instanceId),
+			activate: id => terminals.setActiveInstance(instances.find(instance => instance.instanceId === id)),
+			activeId: () => terminals.activeInstance?.instanceId,
 			snapshot: () => pane.getTerminalOutput(instance, 100_000, new AbortController().signal),
 			counts: () => ({ profiles, creates }),
 			command: (id: string, argument?: unknown) => commands.executeCommand(id, argument),
@@ -329,6 +343,12 @@ declare global {
 			dispose(): void;
 		}[];
 		ashTerminalPaneIntegration: {
+			dispose(): void;
+			command(id: string, argument?: unknown): Promise<unknown>;
+			operations(): { cleared: readonly number[]; closed: readonly number[]; relaunched: readonly number[]; };
+			ids(): readonly number[];
+			activate(id: number): void;
+			activeId(): number | undefined;
 			snapshot(): Promise<string | undefined>;
 			counts(): { profiles: number; creates: number; };
 			transcript(text: string, final: boolean): void;

@@ -28,7 +28,10 @@ export function normalizeURLPattern(pattern: string): string {
 	if (rawPath.split('/').some(segment => /^\.{1,2}$/u.test(segment.replace(/%2e/giu, '.')))) {
 		throw new TypeError('Invalid trusted domain pattern');
 	}
-	const host = anyPort ? `${url.hostname}:*` : url.host;
+	const port = /:(\d+)$/u.exec(authority)?.[1];
+	// A scheme-less :443 rule also applies to HTTP, where 443 is not the default.
+	const host = anyPort ? `${url.hostname}:*`
+		: !explicitScheme && port ? `${url.hostname}:${Number(port)}` : url.host;
 	return explicitScheme ? `${url.protocol}//${host}${url.pathname}` : `${host}${url.pathname}`;
 }
 

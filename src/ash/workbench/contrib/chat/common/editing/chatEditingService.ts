@@ -13,6 +13,12 @@ export interface IModifiedFileEntryChangeHunk {
 	readonly modifiedText: string;
 }
 
+export interface ISnapshotEntry {
+	readonly resource: URI;
+	readonly original: string;
+	readonly current: string;
+}
+
 /** A review baseline, not a second editable document. File operations retain their atomic batch. */
 export interface IModifiedFileEntry extends IDisposable {
 	readonly id: string;

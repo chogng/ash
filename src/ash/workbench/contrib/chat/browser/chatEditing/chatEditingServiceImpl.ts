@@ -16,6 +16,13 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import type { ChatEditSource, ChatEditOutcome } from '../../../../services/chat/common/chatService.js';
 import { autoAcceptDelaySetting } from '../../common/constants.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { FileNotFoundError, IFileService } from '../../../../../platform/files/common/files.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
+import { ChatEditingSessionStorage, type StoredFileReview, type StoredReviewEntry } from './chatEditingSessionStorage.js';
+import { WorkspaceEditConflictError } from '../../../../../editor/browser/services/bulkEditService.js';
+import type { LanguageWorkspaceEditEntry } from '../../../../../editor/common/languages.js';
 
 interface ReviewTurn {
 	readonly source: ChatEditSource;
@@ -43,9 +50,31 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	public readonly onDidChangeAutoAccept = this.autoAcceptChanged.event;
 	private readonly entryReviews = new Map<IModifiedFileEntry, EntryReview>();
 	private readonly countdown = this._register(new RunOnceScheduler(() => this.tick(), 1000));
+	private readonly persistence: ChatEditingSessionStorage;
+	private initialized = false;
+	private restorationFailed = false;
+	private readonly saveReview = this._register(new RunOnceScheduler(() => {
+		void this.operations.schedule(() => this.saveReviews()).catch(onUnexpectedError);
+	}, 100));
 
-	constructor(@IBulkEditService private readonly bulkEdits: IBulkEditService, @ITextModelResourceService private readonly models: ITextModelResourceService, @IConfigurationService private readonly configuration: IConfigurationService, @IAccessibilitySignalService private readonly signals: IAccessibilitySignalService) {
+	constructor(
+		@IBulkEditService private readonly bulkEdits: IBulkEditService,
+		@ITextModelResourceService private readonly models: ITextModelResourceService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
+		@IFileService private readonly files: IFileService,
+		@IInstantiationService instantiation: IInstantiationService,
+		@ILifecycleService lifecycle: ILifecycleService,
+		@INotificationService private readonly notifications: INotificationService,
+	) {
 		super();
+		this.persistence = instantiation.createInstance(ChatEditingSessionStorage);
+		this._register(this.onDidChange(() => { if (this.initialized && !this.applyingEdits) { this.saveReview.schedule(); } }));
+		this._register(lifecycle.onWillShutdown(event => {
+			this.saveReview.cancel();
+			event.join(this.operations.schedule(() => this.storeState()), 'Agent reviews');
+		}));
+		void this.operations.schedule(() => this.restoreState()).catch(onUnexpectedError);
 		this._register(toDisposable(() => { this.operations.clearPending(); this.entryReviews.clear(); }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(autoAcceptDelaySetting)) {
@@ -58,7 +87,10 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	public get entries(): readonly IModifiedFileEntry[] { return [...this.reviews].map(([, entry]) => entry); }
 
 	public applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<IBulkEditResult> {
-		return this.operations.schedule(() => this.applyEdit(edit, signal, source));
+		return this.operations.schedule(async () => {
+			try { return await this.applyEdit(edit, signal, source); }
+			finally { await this.saveReviews(); }
+		});
 	}
 
 	private async applyEdit(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<IBulkEditResult> {
@@ -111,6 +143,19 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 					documents.add(entry);
 				}
 			}
+			const originalFiles = new Map<string, string | null>();
+			if (atomic) {
+				for (const resource of resources.values()) { originalFiles.set(resource.toString(), await this.readFile(resource)); }
+				for (const entry of previous.values()) {
+					if (entry instanceof ChatEditingFileOperationEntry) {
+						for (const file of entry.fileSnapshots ?? []) { originalFiles.set(file.resource, file.original); }
+					} else if (entry instanceof ChatEditingModifiedDocumentEntry) {
+						const snapshot = entry.createSnapshot();
+						const bom = originalFiles.get(snapshot.resource.toString())?.startsWith('\uFEFF') ? '\uFEFF' : '';
+						originalFiles.set(snapshot.resource.toString(), bom + snapshot.original);
+					}
+				}
+			}
 			const result = await this.bulkEdits.apply(edit, { token: signal, showPreview: false });
 			if (result.isApplied && atomic) {
 				for (const entry of documents) { entry.endAgentEdit(); }
@@ -120,7 +165,13 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 					const entry = this.reviews.deleteAndLeak(key);
 					if (entry) { this.entryReviews.delete(entry); retained.push(entry); }
 				}
-				const entry = new ChatEditingFileOperationEntry([...resources.values()], result.undo, retained, () => this.remove(entry.id), () => this.changed.fire());
+				let fileSnapshots: StoredFileReview[] | undefined;
+				try {
+					fileSnapshots = await Promise.all([...resources.values()].map(async resource => ({
+						resource: resource.toString(), original: originalFiles.get(resource.toString())!, current: await this.readFile(resource),
+					})));
+				} catch (error) { this.reportStorageError(error); }
+				const entry = new ChatEditingFileOperationEntry([...resources.values()], result.undo, retained, () => this.remove(entry.id), () => this.changed.fire(), fileSnapshots);
 				this.reviews.set(entry.id, entry);
 			}
 			if (result.isApplied) {
@@ -147,7 +198,8 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		this.cancelAutoAccept(entry);
 		return this.operations.schedule(async () => {
 			this.requireEntry(entry, contributors);
-			await entry.accept(hunk);
+			try { await entry.accept(hunk); }
+			finally { await this.saveReviews(); }
 			void this.signals.playSignal(AccessibilitySignal.editsKept);
 		});
 	}
@@ -157,7 +209,8 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		this.cancelAutoAccept(entry);
 		return this.operations.schedule(async () => {
 			this.requireEntry(entry, contributors);
-			await entry.reject(hunk);
+			try { await entry.reject(hunk); }
+			finally { await this.saveReviews(); }
 			void this.signals.playSignal(AccessibilitySignal.editsUndone);
 		});
 	}
@@ -199,10 +252,12 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		return this.operations.schedule(async () => {
 			this.assertNotDisposed();
 			const selected = select();
-			for (const entry of selected) {
-				this.cancelAutoAccept(entry);
-				if (accept) { await entry.accept(); } else { await entry.reject(); }
-			}
+			try {
+				for (const entry of selected) {
+					this.cancelAutoAccept(entry);
+					if (accept) { await entry.accept(); } else { await entry.reject(); }
+				}
+			} finally { await this.saveReviews(); }
 			if (selected.length) { void this.signals.playSignal(accept ? AccessibilitySignal.editsKept : AccessibilitySignal.editsUndone); }
 		});
 	}
@@ -281,6 +336,94 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		this.scheduleTick();
 		this.changed.fire();
 	}
+
+	private async readFile(resource: URI): Promise<string | null> {
+		try { return (await this.files.readFile(resource)).content; }
+		catch (error) { if (error instanceof FileNotFoundError) { return null; } throw error; }
+	}
+
+	private reportStorageError(error: unknown): void {
+		this.notifications.error(localize('chatEditing.storageFailed', 'Could not restore or save Agent reviews: {0}', String(error)));
+	}
+
+	private async saveReviews(): Promise<void> {
+		this.saveReview.cancel();
+		try { await this.storeState(); }
+		catch (error) { this.reportStorageError(error); }
+	}
+
+	private async storeState(): Promise<void> {
+		if (!this.initialized || this.restorationFailed || this.isDisposed) { return; }
+		const entries: StoredReviewEntry[] = this.entries.map(entry => {
+			const sources = [...this.entryReviews.get(entry)!.turns.values()].map(turn => ({ ...turn.source, outcome: turn.outcome }));
+			if (entry instanceof ChatEditingModifiedDocumentEntry) {
+				const snapshot = entry.createSnapshot();
+				return { kind: 'text', resource: snapshot.resource.toString(), original: snapshot.original, current: snapshot.current, sources };
+			}
+			if (entry instanceof ChatEditingFileOperationEntry && entry.fileSnapshots) {
+				return { kind: 'files', files: entry.fileSnapshots, sources };
+			}
+			throw new Error(localize('chatEditing.noRecovery', 'The file operation has no recovery snapshot. Review it before closing the window.'));
+		});
+		await this.persistence.storeState({ version: 1, entries });
+	}
+
+	private async restoreState(): Promise<void> {
+		try {
+			const saved = this.persistence.restoreState();
+			for (const snapshot of saved?.entries ?? []) {
+				if (this.isDisposed) { return; }
+				let entry: IModifiedFileEntry;
+				let key: string;
+				if (snapshot.kind === 'text') {
+					const resource = URI.parse(snapshot.resource);
+					const reference = await this.models.acquire({ resource }, new AbortController().signal);
+					if (this.isDisposed) { reference.dispose(); return; }
+					key = extUriBiasedIgnorePathCase.getComparisonKey(resource);
+					const document = new ChatEditingModifiedDocumentEntry(resource, reference, () => this.remove(key), () => this.changed.fire(), { resource, original: snapshot.original, current: snapshot.current });
+					if (document.hunks.length === 0) { document.dispose(); continue; }
+					entry = document;
+				} else {
+					const files = snapshot.files;
+					const operation = new ChatEditingFileOperationEntry(files.map(file => URI.parse(file.resource)), () => this.restoreFiles(files), [], () => this.remove(operation.id), () => this.changed.fire(), files);
+					entry = operation;
+					key = operation.id;
+				}
+				this.reviews.set(key, entry);
+				this.entryReviews.set(entry, {
+					turns: new Map(snapshot.sources.map(source => [JSON.stringify([source.threadId, source.turnId]), { source, outcome: source.outcome }])),
+					cancelled: true, deadline: undefined, revision: 0,
+				});
+			}
+			this.synchronizeSessions();
+		} catch (error) {
+			// Preserve unreadable saved data rather than overwriting it with a partial restore.
+			this.restorationFailed = true;
+			this.reportStorageError(error);
+		} finally {
+			this.initialized = true;
+			this.changed.fire();
+		}
+	}
+
+	private async restoreFiles(files: readonly StoredFileReview[]): Promise<void> {
+		for (const file of files) {
+			if (await this.readFile(URI.parse(file.resource)) !== file.current) {
+				throw new WorkspaceEditConflictError(localize('chatEditing.recoveryConflict', 'A file changed after the Agent edit. Its changes were kept; review the file before rejecting this change set.'));
+			}
+		}
+		const entries = files.flatMap<LanguageWorkspaceEditEntry>(file => {
+			const resource = URI.parse(file.resource);
+			if (file.original === file.current) { return []; }
+			return file.original === null
+				? [{ kind: 'delete', resource, missing: 'error', mode: 'fileOrEmptyDirectory' }]
+				: [{ kind: 'create', resource, contents: file.original, existing: file.current === null ? 'error' : 'overwrite' }];
+		});
+		if (entries.length > 0) {
+			const result = await this.bulkEdits.apply({ entries }, { showPreview: false });
+			if (!result.isApplied) { throw new Error(localize('chatEditing.restoreCancelled', 'The change set was not restored. It remains available for review.')); }
+		}
+	}
 }
 
 /** A disposable view of service-owned entries; it never owns another text baseline. */
@@ -331,7 +474,7 @@ class ChatEditingFileOperationEntry extends Disposable implements IModifiedFileE
 	private reverted = false;
 	private readonly remaining: IModifiedFileEntry[];
 
-	constructor(public readonly resources: readonly URI[], private readonly undo: () => Promise<void>, previous: readonly IModifiedFileEntry[], private readonly complete: () => void, notify: () => void) {
+	constructor(public readonly resources: readonly URI[], private readonly undo: () => Promise<void>, previous: readonly IModifiedFileEntry[], private readonly complete: () => void, notify: () => void, public readonly fileSnapshots?: readonly StoredFileReview[]) {
 		super();
 		this._register(this.onDidChange(notify));
 		for (const entry of previous) { this._register(entry); }

@@ -51,7 +51,6 @@ export interface ExtensionServiceFailure {
 /** Generation-bound text resources delivered to the snippet domain owner. */
 export interface ExtensionSnippetFile {
 	readonly extensionId: string;
-	readonly source: string;
 	readonly location: URI;
 	readonly languageIds: readonly string[];
 	readonly content: string;
@@ -78,7 +77,7 @@ export interface IExtensionService extends IDisposable {
 	activateByEvent(event: string, signal?: AbortSignal): Promise<void>;
 	/** The executable host owns this registration; declaration-only hosts have no handler. */
 	registerActivationHandler(handler: (event: string, signal?: AbortSignal) => Promise<void>): IDisposable;
-	/** The snippet owner validates resources before any contribution generation is committed. */
+	/** The sole snippet owner validates generation-bound resources before commit. A replacement receives the current snapshot on the next reload; in-flight loads drain to the latest owner. */
 	registerSnippetHandler(handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation): IDisposable;
 }
 

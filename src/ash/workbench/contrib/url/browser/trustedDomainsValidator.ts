@@ -1,3 +1,4 @@
+import { cancelOnDispose } from '../../../../base/common/cancellation.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
@@ -51,4 +52,3 @@ export class OpenerValidatorContributions extends Disposable {
 		return !this.isDisposed && decision.result === true;
 	}
 }
-import { cancelOnDispose } from '../../../../base/common/cancellation.js';

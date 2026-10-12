@@ -1,5 +1,6 @@
 {
   "ash": {
+    "url.trust.editorHelp": "在命令面板选择“管理可信域名”，可打开包含域名规则的 JSONC 数组。保存后应用更改；删除规则可撤销信任。无效规则和过期保存会被拒绝。打开不可信网页链接前会询问确认。使用 Tab 选择“打开”“复制”“配置可信域名”或“取消”，按 Enter 选择，按 Escape 取消。",
     "url.trust.conflict": "可信域名已更改。请重新加载文档后再保存。",
     "url.trust.invalidDocument": "可信域名必须是 JSONC 数组，最多包含 1024 个域名规则，大小不超过 64 KiB。",
     "url.trust.invalidPattern": "可信域名规则无效：{0}",
@@ -1304,6 +1305,12 @@
     "terminal.accessibility.empty": "终端没有输出。",
     "terminal.accessibility.clipboard": "<keybinding:workbench.action.terminal.copySelection> 复制选中的终端文本。<keybinding:workbench.action.terminal.paste> 将剪贴板文本粘贴到当前正在运行的终端。没有选区时，Ctrl+C 会发送给进程。",
     "terminal.clipboard.copy": "终端：复制选区",
+    "terminal.context.invalid": "无效的终端实例上下文",
+    "terminal.context.focus": "聚焦终端",
+    "terminal.context.clear": "清除终端",
+    "terminal.context.relaunch": "重新启动终端",
+    "terminal.context.kill": "终止终端",
+    "terminal.accessibility.tabsMenu": "在终端实例列表中，方向键移动焦点，Enter 激活终端。Shift+F10 打开所聚焦终端的菜单。即使活动终端发生变化，菜单中的聚焦、清除、重新启动和终止操作仍作用于该终端。Escape 关闭菜单并恢复焦点。",
     "terminal.clipboard.copyAndClear": "终端：复制并清除选区",
     "terminal.clipboard.paste": "终端：粘贴到活动终端",
     "terminal.clipboard.pasteSelection": "终端：将选择剪贴板粘贴到活动终端",

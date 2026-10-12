@@ -1,3 +1,4 @@
+import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { parse, type ParseError } from '../../../../base/common/json.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
@@ -62,10 +63,12 @@ export class TrustedDomainService extends Disposable implements ITrustedDomainSe
 	}
 
 	private parseRules(content: string): readonly string[] {
+		const invalidDocument = () => new TypeError(localize('url.trust.invalidDocument', 'Trusted domains must be a JSONC array of at most 1024 domain patterns, within 64 KiB.'));
+		if (VSBuffer.fromString(content).byteLength > 65_536) throw invalidDocument();
 		const errors: ParseError[] = [];
 		const value: unknown = parse(content, errors, { allowTrailingComma: true });
-		if (content.length > 65_536 || errors.length || !Array.isArray(value) || value.length > 1_024) {
-			throw new TypeError(localize('url.trust.invalidDocument', 'Trusted domains must be a JSONC array of at most 1024 domain patterns, within 64 KiB.'));
+		if (errors.length || !Array.isArray(value) || value.length > 1_024) {
+			throw invalidDocument();
 		}
 		const rules = value.map((rule: unknown) => {
 			try {

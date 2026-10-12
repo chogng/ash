@@ -48,6 +48,8 @@ export function createDisconnectedModelApi(unavailable: UnavailableOperation): I
 
 export function createDisconnectedThreadApi(unavailable: UnavailableOperation): IThreadApi {
 	return {
+		checkpoints: () => unavailable('thread.checkpoints'),
+		restoreMessage: () => unavailable('thread.restoreMessage'),
 		readTrace: () => unavailable('thread.readTrace'),
 		readTraceDiagnostics: () => unavailable('thread.readTraceDiagnostics'),
 		readTracePayload: () => unavailable('thread.readTracePayload'),
@@ -185,6 +187,10 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 
 export function createAppServerThreadApi(connection: AppServerProtocolClient): IThreadApi {
 	return {
+		checkpoints: params => appServerRequest(connection, 'session/thread/checkpoints', params),
+		restoreMessage: params => appServerRequest(connection, 'session/request', sessionRequest(params, {
+			type: 'restoreMessage', threadId: params.threadId, itemId: params.itemId, boundary: params.boundary, title: params.title,
+		})).then(sessionThreadResult),
 		readTrace: params => appServerRequest(connection, 'session/trace/read', params),
 		readTraceDiagnostics: params => appServerRequest(connection, 'session/trace/diagnostics/read', params),
 		readTracePayload: params => appServerRequest(connection, 'session/trace/payload/read', params),

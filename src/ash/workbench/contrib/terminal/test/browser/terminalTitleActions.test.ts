@@ -291,3 +291,61 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	panel.dispose();
 	assert.equal(toolbar.isConnected, false);
 });
+
+
+test('Terminal context commands resolve captured and serialized identities through the current window', async () => {
+	const { registerTerminalActions } = await import('../../browser/terminalActions.js');
+	const { InstanceContext } = await import('../../browser/terminalContextMenu.js');
+	const { ITerminalService } = await import('../../browser/terminal.js');
+	const { Disposable } = await import('../../../../../base/common/lifecycle.js');
+	registerTerminalActions();
+	const effects: unknown[] = [];
+	const create = (instanceId: number) => ({
+		instanceId, id: `terminal-instance-${instanceId}`, state: 'exited', xterm: undefined,
+		clearBuffer: () => effects.push(['clear', instanceId]),
+	} as ITerminalInstance);
+	const first = create(1);
+	const second = create(2);
+	const instances = [first, second];
+	let active: ITerminalInstance | undefined = second;
+	using services = new InstantiationService();
+	services.registerInstance(ITerminalService, {
+		...Disposable.None, instances, get activeInstance() { return active; },
+		onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
+		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
+		setActiveInstance: instance => { active = instance; }, moveTerminal() { },
+		closeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); },
+		relaunchTerminal: async (instance, dimensions) => { effects.push(['relaunch', instance.instanceId, dimensions]); },
+	});
+	using commands = new CommandService(services);
+	const context = new InstanceContext(first);
+	assert.deepEqual(JSON.parse(JSON.stringify(context)), { $mid: 15, instanceId: 1 });
+	assert.deepEqual(Object.keys(context), ['instanceId']);
+	await commands.executeCommand(TerminalCommandId.Clear, context);
+	await commands.executeCommand(TerminalCommandId.Clear, context.toJSON());
+	await commands.executeCommand(TerminalCommandId.Clear, second.id);
+	assert.equal(active, second);
+	await commands.executeCommand(TerminalCommandId.Relaunch, context);
+	assert.deepEqual(effects, [['clear', 1], ['clear', 1], ['clear', 2], ['relaunch', 1, { cols: 80, rows: 24 }]]);
+	for (const invalid of [{ $mid: 15, instanceId: '1' }, { $mid: 15, instanceId: -1 }, { $mid: 1, instanceId: 1 }, { instanceId: 1 }]) {
+		await assert.rejects(commands.executeCommand(TerminalCommandId.Kill, invalid), /Invalid terminal instance context/);
+	}
+	await commands.executeCommand(TerminalCommandId.Kill, context);
+	assert.deepEqual(effects.at(-1), ['close', 1]);
+	await assert.rejects(commands.executeCommand(TerminalCommandId.Clear, context), /This terminal has been closed/);
+	assert.equal(instances.length, 1);
+});
+
+test('Terminal context action runner forwards the focused target and complete selection', async () => {
+	const { InstanceContext, TerminalContextActionRunner } = await import('../../browser/terminalContextMenu.js');
+	const contexts = [1, 2].map(instanceId => new InstanceContext({ instanceId } as ITerminalInstance));
+	let args: readonly unknown[] = [];
+	using runner = new TerminalContextActionRunner();
+	await runner.run({ id: 'selected', label: 'Selected', tooltip: '', enabled: true, run: (...values) => { args = values; } }, contexts);
+	assert.deepEqual(args, [contexts[0], contexts]);
+	const error = new Error('action failed');
+	let reported: unknown;
+	using listener = runner.onDidRun(event => { reported = event.error; });
+	await runner.run({ id: 'failed', label: 'Failed', tooltip: '', enabled: true, run: async () => { throw error; } }, contexts);
+	assert.equal(reported, error);
+});

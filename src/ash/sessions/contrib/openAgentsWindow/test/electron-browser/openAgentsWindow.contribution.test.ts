@@ -61,6 +61,7 @@ class Fixture extends Disposable {
 		super();
 		this.resource.bindings = bindings;
 		const host: INativeHostApi = {
+			getTitleBarStyle: async () => 'custom',
 			isAdmin: async () => false,
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 			onDidChangeColorScheme: () => Disposable.None,
