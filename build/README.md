@@ -84,14 +84,48 @@ source edits were excluded. These warm-cache local results do not cover the CI
 runner, cold installation, cache restoration, full job time or connected-backend
 acceptance.
 
-- [ ] TODO: Benchmark Bun 1.4.3 against TS7 7.0.2 for Renderer checks on the
-      `ubuntu-24.04` and `windows-latest` x64 CI runners to measure the cross-platform
-      benefit of the Renderer switch. Use identical prepared inputs, alternate repeated full checks, and
-      compare successful checks plus injected-error diagnostics. Record peak memory
-      and complete job time, including cold installation and warm cache restoration.
-      The macOS measurement is in `.build/benchmarks/bun-renderer/results.json`;
-      Linux ARM64 containers or emulated x64 runs on this Mac do not establish the
-      performance of the x64 CI runners.
+The manual `Bun CI acceptance` workflow runs isolated cold dependency installs
+on `ubuntu-24.04` and `windows-latest`, then restores those exact pnpm stores on
+fresh runners for offline warm installs. Each job prepares generated inputs,
+checks input hashes, alternates five full Renderer checks after warmup and
+compares injected TS2322/TS2345 diagnostics. Raw logs and manifests are uploaded
+as `bun-ci-*`; the summary includes completed job time and cache step timings.
+Run the existing `Frontend` workflow separately for product build and test
+acceptance. Cold installation does not establish a cold filesystem cache for
+the checker measurements.
+
+- [x] CI runner comparison completed on 2026-10-12 at `81e60027d` in
+      [Bun CI acceptance](https://github.com/chogng/ash/actions/runs/38196463913).
+      All four jobs and the report passed with Bun 1.4.3 and TS7 7.0.2. Each
+      runner reported four logical CPUs. Successful Renderer checks and injected
+      TS2322/TS2345 diagnostics matched, probe checks emitted no files, and input
+      hashes stayed stable both within each job and between each platform's cold
+      and warm jobs. The five alternating full checks after warmup gave:
+
+| Runner         | pnpm store | Bun ms / MiB | TS7 ms / MiB  | Install s | Cache restore s | Complete job s |
+| -------------- | ---------- | ------------ | ------------- | --------- | --------------- | -------------- |
+| ubuntu-24.04   | cold       | 1943 / 311.3 | 3241 / 1179.8 | 10.0      | —               | 208            |
+| ubuntu-24.04   | restored   | 1909 / 312.3 | 3186 / 1169.5 | 0.5       | 2               | 194            |
+| windows-latest | cold       | 1004 / 317.4 | 2101 / 1145.6 | 59.6      | —               | 288            |
+| windows-latest | restored   | 2177 / 313.4 | 3918 / 1128.7 | 2.6       | 6               | 356            |
+
+Checker times and peak memory are medians. Linux uses GNU time maximum RSS;
+Windows uses peak working set. Installation covers the whole pnpm workspace,
+including Bun, TS7 and package build scripts. Warm jobs restore only the pnpm
+store and use `pnpm install --offline`; other toolchain and backend caches are
+outside that cache. Complete job time includes setup, preparation, both checkers,
+cache operations and evidence upload. It does not compare separate Bun and TS7
+product jobs: the slower Windows warm job illustrates variation between fresh
+runners despite the faster package installation. The checker processes use warm
+filesystem caches in both installation phases.
+
+Raw manifests, commands, logs and memory samples are in the four `bun-ci-*`
+artifacts; `bun-ci-summary` retains completed jobs and step timings. The separate
+[Frontend run](https://github.com/chogng/ash/actions/runs/38196550734) at the same
+commit did not pass: Linux build-tool tests reported missing generated language
+pack resources in two budget fixtures and a host watch rebuild timeout; macOS
+backend preparation could not find the `rusty_v8` static library. Product build
+and connected-backend acceptance remain incomplete.
 
 ```text
 <package>/

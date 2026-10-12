@@ -1,0 +1,68 @@
+name: Bun CI acceptance
+
+on:
+  workflow_dispatch:
+  # Allow validation before this new workflow exists on the default branch.
+  push:
+    branches: [codex/bun-ci-acceptance]
+    paths:
+      - .github/workflows/bun-acceptance.yml
+      - .github/workflows/bun-benchmark.yml
+      - build/bun_acceptance.py
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: bun-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cold:
+    name: cold (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-latest]
+    uses: ./.github/workflows/bun-benchmark.yml
+    with:
+      runner: ${{ matrix.runner }}
+      phase: cold
+
+  warm:
+    name: warm (${{ matrix.runner }})
+    needs: cold
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-latest]
+    uses: ./.github/workflows/bun-benchmark.yml
+    with:
+      runner: ${{ matrix.runner }}
+      phase: warm
+
+  report:
+    needs: [cold, warm]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bun-ci-*
+          merge-multiple: true
+          path: .build/benchmarks/bun-ci
+      - name: Record completed job and cache step timings
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -B build/bun_acceptance.py summarize --output .build/benchmarks/bun-ci
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bun-ci-summary
+          path: |
+            .build/benchmarks/bun-ci/summary.json
+            .build/benchmarks/bun-ci/summary.md
+          if-no-files-found: error

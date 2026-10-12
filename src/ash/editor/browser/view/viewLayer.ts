@@ -10,6 +10,7 @@ import { type EditorLineRange } from '../../common/viewModel.js';
 export interface ViewLayerLineRenderer<TLine> {
 	createLine(visualLineIndex: number): TLine;
 	getDomNode(line: TLine): HTMLElement;
+	isDirty(line: TLine): boolean;
 	renderLine(line: TLine, visualLine: EditorVisualLine): void;
 	layoutLine(line: TLine, lineHeight: number): void;
 }
@@ -18,6 +19,7 @@ export interface ViewLayerOptions<TLine> {
 	readonly host: HTMLElement;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readProjectionRevision: () => number;
+	readonly readContentRevision: () => number;
 	readonly lineRenderer: ViewLayerLineRenderer<TLine>;
 }
 
@@ -32,18 +34,21 @@ export class ViewLayer<TLine> extends Disposable {
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly readProjectionRevision: () => number;
+	private readonly readContentRevision: () => number;
 	private readonly lineRenderer: ViewLayerLineRenderer<TLine>;
 	private lines = new Map<number, TLine>();
 	private renderedRange: EditorLineRange = { startLineIndex: 0, endLineIndexExclusive: 0 };
 	private renderedModelVersion = -1;
 	private renderedLineHeight = -1;
 	private renderedProjectionRevision = -1;
+	private renderedContentRevision = -1;
 	private renderedVerticalOffsets: readonly number[] | undefined;
 
 	constructor(options: ViewLayerOptions<TLine>) {
 		super();
 		this.readVisualProjection = options.readVisualProjection;
 		this.readProjectionRevision = options.readProjectionRevision;
+		this.readContentRevision = options.readContentRevision;
 		this.lineRenderer = options.lineRenderer;
 		const domNode = h(options.host.ownerDocument, 'div');
 		this._register(toDisposable(() => domNode.remove()));
@@ -64,14 +69,28 @@ export class ViewLayer<TLine> extends Disposable {
 		this.root.setTop(viewportData.bigNumbersDelta);
 		const visualProjection = this.readVisualProjection();
 		const projectionRevision = this.readProjectionRevision();
+		const contentRevision = this.readContentRevision();
 		const renderRange = { startLineIndex: viewportData.startLineNumber - 1, endLineIndexExclusive: viewportData.endLineNumber };
+		const structureChanged = this.renderedModelVersion !== visualProjection.modelVersion || this.renderedProjectionRevision !== projectionRevision;
+		const contentChanged = this.renderedContentRevision !== contentRevision;
 		if (
-			this.renderedModelVersion === visualProjection.modelVersion &&
+			!structureChanged &&
 			this.renderedLineHeight === viewportData.lineHeight &&
-			this.renderedProjectionRevision === projectionRevision &&
 			numberArraysEqual(this.renderedVerticalOffsets, viewportData.relativeVerticalOffset) &&
 			lineRangesEqual(this.renderedRange, renderRange)
-		) return;
+		) {
+			if (!contentChanged) return;
+			// Token batches can invalidate a row without changing its viewport or
+			// position. Keep the row window and geometry intact in that case.
+			for (const [lineIndex, line] of this.lines) {
+				if (!this.lineRenderer.isDirty(line)) continue;
+				const visualLine = visualProjection.lineAt(lineIndex);
+				if (!visualLine) throw new Error('Viewport render range exceeds the visual line projection');
+				this.lineRenderer.renderLine(line, visualLine);
+			}
+			this.renderedContentRevision = contentRevision;
+			return;
+		}
 
 		const ordered: HTMLElement[] = [];
 		const next = new Map<number, TLine>();
@@ -80,7 +99,7 @@ export class ViewLayer<TLine> extends Disposable {
 			if (!visualLine) throw new Error('Viewport render range exceeds the visual line projection');
 			const existing = this.lines.get(visualLineIndex);
 			const line = existing ?? this.lineRenderer.createLine(visualLineIndex);
-			const needsLineRender = !existing || this.renderedModelVersion !== visualProjection.modelVersion || this.renderedProjectionRevision !== projectionRevision;
+			const needsLineRender = !existing || structureChanged || (contentChanged && this.lineRenderer.isDirty(line));
 			if (needsLineRender) this.lineRenderer.renderLine(line, visualLine);
 			if (!existing || this.renderedLineHeight !== viewportData.lineHeight) this.lineRenderer.layoutLine(line, viewportData.lineHeight);
 			const domNode = this.lineRenderer.getDomNode(line);
@@ -94,6 +113,7 @@ export class ViewLayer<TLine> extends Disposable {
 		this.renderedModelVersion = visualProjection.modelVersion;
 		this.renderedLineHeight = viewportData.lineHeight;
 		this.renderedProjectionRevision = projectionRevision;
+		this.renderedContentRevision = contentRevision;
 		this.renderedVerticalOffsets = viewportData.relativeVerticalOffset;
 	}
 }

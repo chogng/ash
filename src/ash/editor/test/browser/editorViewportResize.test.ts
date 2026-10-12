@@ -101,7 +101,7 @@ test('editors finish text rendering before measuring widgets and writing widget 
 			phases: ['text first', 'text second', 'measure first', 'measure second', 'write first', 'write second'],
 			measuredText: [['first updated', 'second updated'], ['first updated', 'second updated']],
 		});
-		assert.deepEqual(lineWidthSnapshots, [['first updated', 'second'], ['first updated', 'second updated']]);
+		assert.deepEqual(lineWidthSnapshots, [['first updated', 'second updated'], ['first updated', 'second updated']]);
 	} finally {
 		first.dispose();
 		second.dispose();
@@ -194,8 +194,57 @@ test('model token ranges retain unaffected rows and ignore duplicate composite n
 		tokenEvents.fire({ semanticTokensApplied: false, ranges: [{ fromLineNumber: 1, toLineNumber: 1 }] });
 		sourceEvents.fire();
 		view.render(true, false);
-		assert.ok(tokenReads > 0, 'Visible token changes still update rendered text');
+		assert.equal(tokenReads, 1, 'Only the affected visible line queries tokens again');
 		assert.equal(widthReads, 1, 'Only the affected line loses its measured width');
+		assert.deepEqual([...view.domNode.domNode.querySelectorAll('.view-lines > .view-line')], rows);
+		tokenReads = 0;
+		const ranges = [{ fromLineNumber: 1, toLineNumber: 1 }, { fromLineNumber: 3, toLineNumber: 3 }];
+		tokenEvents.fire({ semanticTokensApplied: false, ranges });
+		tokenEvents.fire({ semanticTokensApplied: false, ranges });
+		view.render(true, false);
+		assert.equal(tokenReads, 2, 'Overlapping batches prepare each affected row once');
+
+		tokenReads = 0;
+		view.scrollTo({ left: 0, top: 40 });
+		view.render(true, false);
+		const enteringRows = [...view.domNode.domNode.querySelectorAll<HTMLElement>('.view-lines > .view-line')].filter(row => !rows.includes(row));
+		assert.ok(enteringRows.length > 0);
+		assert.equal(tokenReads, enteringRows.length, 'New viewport rows synchronously prepare their tokens');
+	} finally {
+		view.dispose();
+		dom.window.close();
+	}
+});
+
+test('a model token range updates every visible wrapped fragment without querying other lines', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel(['first', 'wrapped text '.repeat(12), 'last'].join('\n'));
+	using tokenEvents = new Emitter<IModelTokensChangedEvent>();
+	Object.defineProperty(model, 'onDidChangeTokens', { value: tokenEvents.event });
+	const source = model.tokenization.renderedTokens;
+	const queriedLines: number[] = [];
+	let foreground = '#123456';
+	source.getLineTokens = lineIndex => {
+		queriedLines.push(lineIndex);
+		return [{ startColumn: 0, endColumn: model.getLineContent(lineIndex + 1).length, syntaxPresentation: { foreground } }];
+	};
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, semanticTokenSource: source, minimap: { enabled: false } });
+	try {
+		view.layout({ width: 180, height: 300 });
+		view.setLineWrapping(EditorLineWrapping.On);
+		view.render(true, false);
+		const rows = [...view.domNode.domNode.querySelectorAll<HTMLElement>('.view-lines > .view-line')];
+		const wrappedRows = rows.filter(row => row.dataset.logicalLineIndex === '1');
+		assert.ok(wrappedRows.length > 1);
+		queriedLines.length = 0;
+		foreground = '#654321';
+		tokenEvents.fire({ semanticTokensApplied: false, ranges: [{ fromLineNumber: 2, toLineNumber: 2 }] });
+		view.render(true, false);
+		assert.deepEqual(queriedLines, wrappedRows.map(() => 1));
+		for (const row of wrappedRows) {
+			assert.equal(requiredElement<HTMLElement>(row, '.stanza-editor-token').style.getPropertyValue('--ash-editor-token-foreground'), foreground);
+		}
 		assert.deepEqual([...view.domNode.domNode.querySelectorAll('.view-lines > .view-line')], rows);
 	} finally {
 		view.dispose();

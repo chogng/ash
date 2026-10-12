@@ -1,0 +1,83 @@
+name: Bun benchmark job
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        required: true
+        type: string
+      phase:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
+        with:
+          install: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        id: python
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version-file: scripts/pyproject.toml
+      - name: Install Linux frontend build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev time
+      - name: Sync locked Python tools
+        run: python -B scripts/install_python_tools.py
+      - name: Select an isolated dependency store
+        id: store
+        run: |
+          ci_store="$RUNNER_TEMP/bun-ci-store"
+          pnpm config set store-dir "$ci_store"
+          echo "BUN_CI_STORE=$ci_store" >> "$GITHUB_ENV"
+          echo "path=$ci_store" >> "$GITHUB_OUTPUT"
+      - name: Restore the exact cold installation cache
+        if: inputs.phase == 'warm'
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: ${{ steps.store.outputs.path }}
+          key: bun-ci-${{ inputs.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+      - name: Measure dependency installation
+        env:
+          PYTHON: ${{ steps.python.outputs.python-path }}
+          PHASE: ${{ inputs.phase }}
+          OUTPUT: .build/benchmarks/bun-ci/${{ inputs.runner }}/${{ inputs.phase }}
+        run: python -B build/bun_acceptance.py install --phase "$PHASE" --output "$OUTPUT"
+      - name: Prepare identical generated inputs
+        run: pnpm run prepare:generated
+      - name: Compare checkers and injected-error diagnostics
+        env:
+          OUTPUT: .build/benchmarks/bun-ci/${{ inputs.runner }}/${{ inputs.phase }}
+        run: python -B build/bun_acceptance.py benchmark --output "$OUTPUT"
+      - name: Save cold dependencies for the fresh warm runner
+        if: inputs.phase == 'cold'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: ${{ steps.store.outputs.path }}
+          key: bun-ci-${{ inputs.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload raw acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bun-ci-${{ inputs.runner }}-${{ inputs.phase }}
+          path: .build/benchmarks/bun-ci/
+          if-no-files-found: error

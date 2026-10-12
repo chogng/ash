@@ -39,6 +39,10 @@ export class ViewLine {
 		return this._renderedViewLine.domNode.domNode;
 	}
 
+	public get isDirty(): boolean {
+		return this._isMaybeInvalid;
+	}
+
 	public setDomNode(domNode: HTMLElement): void {
 		const textElement = domNode.firstElementChild;
 		if (!isHTMLElement(textElement) || textElement.tagName !== 'SPAN') {

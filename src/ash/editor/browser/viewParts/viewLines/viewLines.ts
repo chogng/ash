@@ -85,10 +85,12 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this._visibleLines = this._register(new ViewLayer<ViewLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
-			readProjectionRevision: () => options.readProjectionRevision() + this.contentRevision,
+			readProjectionRevision: options.readProjectionRevision,
+			readContentRevision: () => this.contentRevision,
 			lineRenderer: {
 				createLine: visualLineIndex => new ViewLine(this.domNode.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
 				getDomNode: line => line.getDomNode(),
+				isDirty: line => line.isDirty,
 				renderLine: (line, visualLine) => {
 					const lineDomNode = line.getDomNode();
 					lineDomNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
@@ -134,14 +136,18 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this.lastViewportData = viewportData;
 		this._checkMonospaceFontAssumptions();
 		this._visibleLines.render(viewportData);
+	}
+
+	public override prepareRender(context: RestrictedRenderingContext): void {
 		this.updateLineWidths();
 		// Reveal uses the measured extent of the new rows before the host binds
 		// its RenderingContext, including text wider than the model estimate.
-		this.applyHorizontalReveal(viewportData);
+		this.applyHorizontalReveal(context.viewportData);
 	}
 
 	public render(context: RestrictedRenderingContext): void {
 		this.renderText(context.viewportData);
+		this.prepareRender(context);
 	}
 
 	public override onConfigurationChanged(_event?: ViewConfigurationChangedEvent): boolean {
