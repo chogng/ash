@@ -62,19 +62,26 @@ impl StdioExtensionHostProcess {
         launch: &ExtensionLaunchCommand,
         limits: &ExtensionHostLimits,
     ) -> Result<Self, ExtensionHostError> {
+        let executable = launch
+            .executable()
+            .ok_or(ExtensionHostError::IsolationUnavailable)?;
         #[cfg(windows)]
         if matches!(
             limits.isolation,
             crate::ProcessIsolationPolicy::RequireJavaScriptEnforcement(_)
         ) {
             let command = ash_sandboxing::SandboxCommand::new(
-                launch.executable(),
+                executable,
                 launch.arguments().iter().cloned(),
                 launch.working_directory(),
             );
-            let sources = match launch.runtime {
-                super::LaunchRuntime::JavaScript => windows_sandbox::LockedProcessSources::Package,
-                super::LaunchRuntime::Executable | super::LaunchRuntime::Vscode => {
+            let sources = match &launch.runtime {
+                super::LaunchRuntime::JavaScript(_) => {
+                    windows_sandbox::LockedProcessSources::Package
+                }
+                super::LaunchRuntime::Executable(_)
+                | super::LaunchRuntime::Vscode
+                | super::LaunchRuntime::Node(_) => {
                     return Err(ExtensionHostError::IsolationUnavailable);
                 }
             };
@@ -90,11 +97,8 @@ impl StdioExtensionHostProcess {
         if let Some(binding) = &binding {
             arguments.extend(binding.arguments()?);
         }
-        let command = ash_sandboxing::SandboxCommand::new(
-            launch.executable(),
-            arguments,
-            launch.working_directory(),
-        );
+        let command =
+            ash_sandboxing::SandboxCommand::new(executable, arguments, launch.working_directory());
         let environment = launch
             .environment()
             .iter()

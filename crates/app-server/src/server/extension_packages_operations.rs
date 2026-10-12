@@ -157,7 +157,7 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         if matches!(params.action, Action::Grant)
             && (source.kind() != ash_core_plugins::CapabilityKind::EditorExtension
-                || !ash_external_ext::ProductJavaScriptLauncher::supports_platform()
+                || !ash_external_ext::ProductNodeLauncher::supports_platform()
                 || !crate::extension_packages_editor_extensions::javascript_entrypoint(&source)
                     .is_ok_and(|entry| entry.is_some()))
         {
@@ -245,7 +245,7 @@ impl AppServer {
             }
             let state = policy.snapshot(source.package(), source.capability());
             let entrypoint = if source.kind() == ash_core_plugins::CapabilityKind::EditorExtension
-                && ash_external_ext::ProductJavaScriptLauncher::supports_platform()
+                && ash_external_ext::ProductNodeLauncher::supports_platform()
             {
                 crate::extension_packages_editor_extensions::javascript_entrypoint(&source)
                     .ok()

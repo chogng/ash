@@ -8,7 +8,7 @@ use super::ManifestLocalId;
 
 /// Editor Extension launch target declared by one immutable Plugin package.
 ///
-/// JavaScript entries run in the product-owned V8 host; Host RPC programs implement the
+/// JavaScript entries run in the product-bound Node-compatible host; Host RPC programs implement the
 /// process protocol themselves. The product supervisor enforces authority and process isolation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

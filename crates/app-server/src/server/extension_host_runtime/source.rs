@@ -239,25 +239,20 @@ pub(super) fn plugin_deployments(
             let entry = package
                 .resolve_file(&contribution.entrypoint)
                 .map_err(|_| ExtensionHostRuntimeError::Host(ExtensionHostError::SpawnFailed))?;
-            let (executable, arguments) = match contribution.runtime {
-                ash_plugin::EditorExtensionRuntime::HostRpc => (entry, Vec::new()),
+            let command = match contribution.runtime {
+                ash_plugin::EditorExtensionRuntime::HostRpc => ExtensionLaunchCommand::new(
+                    entry,
+                    Vec::<String>::new(),
+                    package.package_root(),
+                    BTreeMap::new(),
+                ),
                 ash_plugin::EditorExtensionRuntime::JavaScript => {
-                    let current = std::env::current_exe().map_err(|_| {
-                        ExtensionHostRuntimeError::Host(ExtensionHostError::SpawnFailed)
-                    })?;
-                    let directory = current
-                        .parent()
-                        .ok_or(ExtensionHostRuntimeError::Internal)?;
-                    let executable = directory.join(format!(
-                        "ash-external-js-ext{}",
-                        std::env::consts::EXE_SUFFIX
-                    ));
                     let root = package
                         .package_root()
                         .to_str()
                         .ok_or(ExtensionHostRuntimeError::Internal)?
                         .to_string();
-                    (executable, {
+                    let arguments = {
                         let mut arguments = vec![
                             "--extension-id".into(),
                             id.clone(),
@@ -270,21 +265,11 @@ pub(super) fn plugin_deployments(
                             arguments.extend(["--api".into(), "vscode".into()]);
                         }
                         arguments
-                    })
-                }
-            };
-            let command = match contribution.runtime {
-                ash_plugin::EditorExtensionRuntime::HostRpc => ExtensionLaunchCommand::new(
-                    executable,
-                    arguments,
-                    package.package_root(),
-                    BTreeMap::new(),
-                ),
-                ash_plugin::EditorExtensionRuntime::JavaScript => {
+                    };
                     let launch = match contribution.api {
                         EditorExtensionApi::Vscode => ExtensionLaunchCommand::vscode,
                     };
-                    launch(executable, arguments, package.package_root())
+                    launch(arguments, package.package_root())
                 }
             }
             .map_err(ExtensionHostRuntimeError::Host)?;

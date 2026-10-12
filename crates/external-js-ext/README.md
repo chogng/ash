@@ -4,7 +4,7 @@ The package and executable are named `ash-external-js-ext`, under `crates/extern
 
 The target architecture runs TS/JS packages through Electron on Desktop and independent Rust/V8 hosts in the shared backend; optional Rust capability providers remain independent Rust executables. The backend target has no standalone Node dependency. Runtime duties and the uniform VS Code/Node compatibility contract are defined in [the extension architecture](../../docs/editor-extensions.md#运行时职责与兼容契约). This crate currently implements real Node and limited V8 paths; their presence does not establish that the target migration is complete. A Rust process embedding V8 is still a JS host, not a Rust capability extension.
 
-`ash-external-js-ext` executes captured standard CommonJS packages in an independent Rust/V8 process. The private `host.mjs` owns callback registration and lifecycle; `vscode.js` translates supported public APIs to the shared protocol. Neither is a second author SDK. App Server remains free of V8. Code Mode and this host share engine initialization through `ash-v8-runtime`, while execution state and permissions remain separate.
+`ash-external-js-ext` retains the confined Rust/V8 implementation and its process tests. Default development and release packages omit this executable; `build/app_server.py --external-js-ext-bin` explicitly includes a prebuilt host with component integrity and signing. Supported standard extensions use the product Node-compatible runtime. The private `host.mjs` owns callback registration and lifecycle; `vscode.js` translates supported public APIs to the shared protocol. Neither is a second author SDK. App Server remains free of V8. Code Mode and the optional host share engine initialization through `ash-v8-runtime`, while execution state and permissions remain separate.
 
 Standard `api: vscode` extensions run in the product's real Node runtime. The existing
 App Server authority gate checks exact-package execution consent before its supervisor
@@ -41,9 +41,9 @@ fd writes and Debug children inheriting stdout cannot corrupt control frames. Th
 after the exact child binding connects; startup is bounded, parent closure retires the host, and
 termination shuts down the socket before joining readers. V8 and executable hosts retain stdio.
 
-The product packages the V8 executable next to App Server. Plugin contributions explicitly select
+Plugin contributions explicitly select
 `runtime: javascript`; an existing `hostRpc` contribution runs its own protocol program.
-Installed extensions supply the admitted extension ID, absolute package root and relative JS entrypoint.
+Installed extensions supply the admitted extension ID, absolute package root and relative JS entrypoint. Their launch commands leave executable selection to `ProductNodeLauncher`, which freezes the actual Node or Electron executable, bootstrap and environment without borrowing the optional V8 host's path. Packages continue to ship `node.mjs`, `vscode.mjs`, `host.mjs` and `scm.js`.
 The saved-connection SSH resolver runs as the independent `ash-remote-ssh-extension` Rust program,
 using the public Rust SDK and the same Host RPC. Product authority permits no workspace file reads;
 installed packages cannot obtain that authority or register the reserved `ssh` prefix.

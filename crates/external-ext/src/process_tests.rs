@@ -183,16 +183,15 @@ fn control_request_capacity_is_reserved_when_normal_requests_are_full() {
 }
 
 #[test]
-fn node_runtime_requires_its_policy_exact_product_host_and_runtime_binding() {
+fn node_runtime_requires_its_policy_and_binding_and_rejects_package_executables() {
     use crate::ExtensionHostLauncher;
     let executable = std::env::current_exe().unwrap();
     let root = executable.parent().unwrap().to_path_buf();
-    let product = root.join("ash-external-js-ext");
-    let launcher = crate::ProductJavaScriptLauncher::new(product.clone())
-        .with_node_runtime(executable.clone(), executable, BTreeMap::new())
-        .unwrap();
-    let node = super::ExtensionLaunchCommand::vscode(product, std::iter::empty::<String>(), &root)
-        .unwrap();
+    let launcher =
+        crate::ProductNodeLauncher::new(executable.clone(), executable.clone(), BTreeMap::new())
+            .unwrap();
+    let node = super::ExtensionLaunchCommand::vscode(std::iter::empty::<String>(), &root).unwrap();
+    assert_eq!(node.executable(), None);
     let confined = crate::ExtensionHostLimits {
         isolation: crate::ProcessIsolationPolicy::RequireJavaScriptEnforcement(
             crate::JavaScriptMemoryLimits::default(),
@@ -207,13 +206,13 @@ fn node_runtime_requires_its_policy_exact_product_host_and_runtime_binding() {
         isolation: crate::ProcessIsolationPolicy::AuthorizedNode,
         ..Default::default()
     };
-    let unbound = crate::ProductJavaScriptLauncher::new(node.executable().to_path_buf());
+    let unbound = crate::ProductNodeLauncher::default();
     assert!(matches!(
         unbound.spawn(&node, &limits),
         Err(crate::ExtensionHostError::IsolationUnavailable)
     ));
     let independent = super::ExtensionLaunchCommand::new(
-        node.executable(),
+        executable,
         std::iter::empty::<String>(),
         &root,
         BTreeMap::new(),
@@ -223,7 +222,7 @@ fn node_runtime_requires_its_policy_exact_product_host_and_runtime_binding() {
         launcher.spawn(&independent, &limits),
         Err(crate::ExtensionHostError::IsolationUnavailable)
     ));
-    let other = super::ExtensionLaunchCommand::vscode(
+    let other = super::ExtensionLaunchCommand::javascript(
         root.join("package-program"),
         std::iter::empty::<String>(),
         &root,
@@ -297,12 +296,13 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
   return Buffer.from('Node wire').toString();
 }));
 "#).unwrap();
-    let product = root.join("ash-external-js-ext");
-    let launcher = crate::ProductJavaScriptLauncher::new(product.clone())
-        .with_node_runtime(node, root.join("node.mjs"), BTreeMap::new())
-        .unwrap();
+    // Windows Node needs SystemRoot to initialize its cryptographic provider.
+    let environment = std::env::var_os("SYSTEMROOT")
+        .map(|value| BTreeMap::from([("SYSTEMROOT".into(), value)]))
+        .unwrap_or_default();
+    let launcher =
+        crate::ProductNodeLauncher::new(node, root.join("node.mjs"), environment).unwrap();
     let command = crate::ExtensionLaunchCommand::vscode(
-        product,
         vec![
             "--extension-id".into(),
             "test.node".into(),

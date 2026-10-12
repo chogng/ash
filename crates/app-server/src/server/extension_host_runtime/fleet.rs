@@ -165,7 +165,11 @@ impl RuntimeInner {
                 // is the launch authority, without granting this policy to package programs.
                 limits.isolation = ash_external_ext::ProcessIsolationPolicy::AuthorizedProduct;
                 launcher = Arc::new(ash_external_ext::ProductExecutableLauncher::new(
-                    prepared.command.executable().to_path_buf(),
+                    prepared
+                        .command
+                        .executable()
+                        .ok_or(ExtensionHostError::SpawnFailed)?
+                        .to_path_buf(),
                 )?);
             }
             if prepared.command.is_vscode() {

@@ -49,7 +49,7 @@ package 原始 bytes/digest 保持不变。通用 `asset` 不会被自动解释�
 
 当前声明式装载链已接入 App Server 与 Workbench。Legacy Plugin 与 Extensions executable source 都会
 先规范化为 Host deployment，Host runtime 不解析任何 package manifest。App Server broker 以及
-Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现。产品 launcher 分别选择受限 V8 与真实 Node。
+Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现。标准包由产品绑定的 Node 兼容宿主执行，Desktop 使用 Electron 的 Node 模式。受限 Rust/V8 实现保留测试与显式预编译打包入口，默认包省略该扩展宿主；Code Mode 的 Rust/V8 宿主继续随包提供。
 V8 的第三方系统隔离在 macOS 与 64 位 Windows 实现；标准 Node 包需单独的精确包执行授权。独立可执行扩展仍要求整个进程的系统硬限制，目前产品 launcher 拒绝启动它们。
 后续章节说明这些流程、所有权、信任与失败边界、完成度及演进。
 
@@ -443,7 +443,7 @@ App 可预装并按认证请求激活 GitHub 扩展；TUI 默认不加载、不�
 | 受限 V8 执行与系统隔离                              | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放        |
 | 完整 TS API                                         | 尚未完成；现有可信 Worker 仍接入通用命令，不属于第三方扩展权限边界                                              |
 | Open VSX 搜索、下载、安装、更新和卸载               | 已接入 Rust Manager 与 Extensions 界面；支持 universal 正式版本、已有静态贡献及分别授权的基础 CommonJS API 子集 |
-| Rust 能力扩展与作者接口                             | GitHub 认证已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成 |
+| Rust 能力扩展与作者接口                             | GitHub 认证已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成            |
 
 后续实现必须通过真实扩展入口验证：正常授权操作成功；伪造扩展身份、越界文件或仓库、未授权命令、
 受限 V8 的直接 Node 访问及所有扩展的产品 IPC/后端越权访问失败；授权 Node 包的真实文件、网络和子进程调用成功；撤销授权后在途和后续调用停止；关闭窗口释放注册与任务；文档编辑

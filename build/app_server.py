@@ -94,7 +94,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
     parser.add_argument(
         "--external-js-ext-bin",
         type=Path,
-        help="Prebuilt Rust/V8 JavaScript extension host. If omitted, Cargo builds it.",
+        help="Optional prebuilt Rust/V8 JavaScript extension host. Default packages omit it.",
     )
     parser.add_argument(
         "--rg-bin",
@@ -197,7 +197,6 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-app-server": args.server_bin,
         "ash-app-server-daemon": args.app_server_daemon_bin,
         "ash-code-mode-host": args.code_mode_host_bin,
-        "ash-external-js-ext": args.external_js_ext_bin,
         "ash-github-authentication": args.github_authentication_bin,
         "ash-remote-ssh-extension": args.remote_ssh_extension_bin,
         "ash-remote": args.remote_bin,
@@ -205,6 +204,8 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-remote-server": args.remote_server_bin,
         "ash-exec-server": args.exec_server_bin,
     }
+    if args.external_js_ext_bin is not None:
+        inputs["ash-external-js-ext"] = args.external_js_ext_bin
     if spec.is_windows:
         inputs["ash-windows-sandbox"] = args.windows_sandbox_bin
         inputs["ash-windows-sandbox-service"] = args.windows_sandbox_service_bin
@@ -264,7 +265,7 @@ def build_package(args: argparse.Namespace) -> int:
         binaries["ash-exec-server"],
         binaries["ash-app-server-daemon"],
         binaries["ash-code-mode-host"],
-        binaries["ash-external-js-ext"],
+        binaries.get("ash-external-js-ext"),
         ripgrep,
         tgrep,
         node,

@@ -298,6 +298,11 @@ class ReleaseSymbolsTests(unittest.TestCase):
         extracted = self.work / "extracted"
         extracted.mkdir()
         manifest = extract_archive(archive, extracted, digest(archive))
+        for package in manifest["packages"]:
+            self.assertNotIn(
+                "bin/" + self.spec.js_extension_host_name,
+                [binding["path"] for binding in package["modules"]],
+            )
         self.assertEqual(manifest["modules"][0]["id"], module["id"])
         self.assertEqual(
             manifest["packages"][0]["archive"]["sha256"], digest(product_archive)
@@ -320,6 +325,24 @@ class ReleaseSymbolsTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "hashes"):
             validate_store(extracted)
+
+    def test_optional_v8_host_has_exact_companion_symbol_binding(self):
+        module = self.collect()
+        runtime = create_runtime_package(
+            self.work,
+            self.target,
+            first_party_binary=self.binary,
+            symbols_dir=self.store.root,
+            include_js_host=True,
+        )
+        self.store.bind("ash-app-server", runtime)
+        binding = next(
+            binding
+            for binding in self.store.manifest()["packages"][0]["modules"]
+            if binding["path"] == "bin/" + self.spec.js_extension_host_name
+        )
+        self.assertEqual(binding["module"], module["key"])
+        self.assertEqual(binding["sha256"], digest(runtime / binding["path"]))
 
     def test_archive_rejects_traversal_and_symlinks(self):
         for name, kind in (("../escape", tarfile.REGTYPE), ("link", tarfile.SYMTYPE)):

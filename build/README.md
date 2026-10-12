@@ -170,7 +170,12 @@ The release entry point is `build/app_server.py`. It prepares `.build/protocol/`
 `ash-app-server` or profile-scoped `ash-app-server-daemon` for the selected target.
 When `ASH_UPDATE_PUBLIC_KEY` or `--update-public-key` is supplied, the builder binds that trusted key into the App Server component of the immutable package metadata. The release backend uses it to verify independently published stable updates while running; development packages without a key do not check automatically.
 It collects all missing first-party executables into one locked Cargo build, including
-the Code Mode Host, Rust/V8 JavaScript extension host, Remote programs, and Windows sandbox when required. Prebuilt inputs
+the Code Mode Host, Remote programs, and Windows sandbox when required. The Rust/V8
+JavaScript extension host is optional: only `--external-js-ext-bin` explicitly adds
+it to release packages; default development and release packages omit it. Existing
+packages containing that component remain valid, including integrity and signing
+checks. Standard extensions retain their packaged JS bootstrap and use the bound
+Node/Electron runtime. Prebuilt inputs
 are validated before the build and are not rebuilt. Executable paths come from Cargo's
 JSON artifact messages; a successful build without a requested artifact is rejected.
 Windows builds explicitly select the package's MSVC target, including development

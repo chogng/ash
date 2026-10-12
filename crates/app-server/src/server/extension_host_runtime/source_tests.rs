@@ -206,10 +206,8 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
     assert_eq!(snapshot.deployments.len(), 1);
     let deployment = &snapshot.deployments[0];
     assert_eq!(deployment.id, "ash/inspect-example:inspect");
-    assert!(deployment.command.executable().ends_with(format!(
-        "ash-external-js-ext{}",
-        std::env::consts::EXE_SUFFIX
-    )));
+    assert!(deployment.command.is_vscode());
+    assert_eq!(deployment.command.executable(), None);
     let arguments: Vec<_> = deployment
         .command
         .arguments()

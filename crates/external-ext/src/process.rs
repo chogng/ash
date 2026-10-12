@@ -18,13 +18,12 @@ mod stdio;
 
 use stdio::StdioExtensionHostProcess;
 
-/// Exact executable, arguments, working directory, and allowlisted environment for one runtime.
+/// Arguments, working directory, and execution format for one admitted extension.
 ///
-/// The executable and working directory must already have been resolved from the immutable package
-/// selected by installation authority. This process-local value is never serialized to the child.
+/// Executable packages name their exact installed program; standard JS packages leave runtime
+/// selection to the product launcher. This process-local value is never serialized to the child.
 #[derive(Clone, Eq, PartialEq)]
 pub struct ExtensionLaunchCommand {
-    executable: PathBuf,
     arguments: Vec<OsString>,
     working_directory: PathBuf,
     environment: BTreeMap<OsString, OsString>,
@@ -36,17 +35,17 @@ impl std::fmt::Debug for ExtensionLaunchCommand {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ExtensionLaunchCommand")
-            .field("executable", &self.executable)
             .field("runtime", &self.runtime)
             .finish_non_exhaustive()
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum LaunchRuntime {
-    Executable,
-    JavaScript,
+    Executable(PathBuf),
+    JavaScript(PathBuf),
     Vscode,
+    Node(PathBuf),
 }
 
 impl ExtensionLaunchCommand {
@@ -56,15 +55,15 @@ impl ExtensionLaunchCommand {
         working_directory: impl Into<PathBuf>,
         environment: BTreeMap<OsString, OsString>,
     ) -> Result<Self, ExtensionHostError> {
+        let executable = executable.into();
         let command = Self {
-            executable: executable.into(),
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory: working_directory.into(),
             environment,
             extension_environment: None,
-            runtime: LaunchRuntime::Executable,
+            runtime: LaunchRuntime::Executable(executable.clone()),
         };
-        if !command.executable.is_absolute() || !command.working_directory.is_absolute() {
+        if !executable.is_absolute() || !command.working_directory.is_absolute() {
             return Err(ExtensionHostError::InvalidProtocol(
                 "extension executable and working directory must be absolute".into(),
             ));
@@ -78,20 +77,35 @@ impl ExtensionLaunchCommand {
         arguments: impl IntoIterator<Item = impl Into<OsString>>,
         working_directory: impl Into<PathBuf>,
     ) -> Result<Self, ExtensionHostError> {
-        let mut command = Self::new(executable, arguments, working_directory, BTreeMap::new())?;
-        command.runtime = LaunchRuntime::JavaScript;
+        let executable = executable.into();
+        let mut command = Self::new(
+            executable.clone(),
+            arguments,
+            working_directory,
+            BTreeMap::new(),
+        )?;
+        command.runtime = LaunchRuntime::JavaScript(executable);
         Ok(command)
     }
 
-    /// Selects the product Node host after the existing package authority gate.
+    /// Requests the product Node host without allowing package data to choose its executable.
     pub fn vscode(
-        executable: impl Into<PathBuf>,
         arguments: impl IntoIterator<Item = impl Into<OsString>>,
         working_directory: impl Into<PathBuf>,
     ) -> Result<Self, ExtensionHostError> {
-        let mut command = Self::javascript(executable, arguments, working_directory)?;
-        command.runtime = LaunchRuntime::Vscode;
-        Ok(command)
+        let working_directory = working_directory.into();
+        if !working_directory.is_absolute() {
+            return Err(ExtensionHostError::InvalidProtocol(
+                "extension working directory must be absolute".into(),
+            ));
+        }
+        Ok(Self {
+            arguments: arguments.into_iter().map(Into::into).collect(),
+            working_directory,
+            environment: BTreeMap::new(),
+            extension_environment: None,
+            runtime: LaunchRuntime::Vscode,
+        })
     }
 
     /// These values reach extension code during handshake, never the OS loader or host process.
@@ -112,16 +126,22 @@ impl ExtensionLaunchCommand {
     pub fn is_javascript(&self) -> bool {
         matches!(
             self.runtime,
-            LaunchRuntime::JavaScript | LaunchRuntime::Vscode
+            LaunchRuntime::JavaScript(_) | LaunchRuntime::Vscode | LaunchRuntime::Node(_)
         )
     }
 
     pub fn is_vscode(&self) -> bool {
-        self.runtime == LaunchRuntime::Vscode
+        matches!(self.runtime, LaunchRuntime::Vscode | LaunchRuntime::Node(_))
     }
 
-    pub fn executable(&self) -> &Path {
-        &self.executable
+    /// Returns the exact program, if this command names one rather than requesting the Node host.
+    pub fn executable(&self) -> Option<&Path> {
+        match &self.runtime {
+            LaunchRuntime::Executable(path)
+            | LaunchRuntime::JavaScript(path)
+            | LaunchRuntime::Node(path) => Some(path),
+            LaunchRuntime::Vscode => None,
+        }
     }
 
     pub fn arguments(&self) -> &[OsString] {
@@ -301,10 +321,14 @@ struct PendingEntry {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TrustedDevelopmentLauncher;
 
-/// Launches only product-bound runtimes: the confined V8 executable for standard JS packages,
-/// or the frozen Node executable/bootstrap for authorized standard extensions.
+/// Launches the explicitly selected confined V8 executable.
 pub struct ProductJavaScriptLauncher {
     executable: PathBuf,
+}
+
+/// Binds authorized standard extensions to the installation's Node or Electron runtime.
+#[derive(Default)]
+pub struct ProductNodeLauncher {
     node: Option<NodeHost>,
 }
 
@@ -315,7 +339,7 @@ struct NodeHost {
 }
 
 impl ProductJavaScriptLauncher {
-    /// Platforms with an implemented supervised product Node runtime.
+    /// Platforms with an implemented supervised product JS runtime.
     pub const fn supports_platform() -> bool {
         cfg!(any(
             target_os = "macos",
@@ -325,15 +349,17 @@ impl ProductJavaScriptLauncher {
     }
 
     pub fn new(executable: PathBuf) -> Self {
-        Self {
-            executable,
-            node: None,
-        }
+        Self { executable }
+    }
+}
+
+impl ProductNodeLauncher {
+    pub const fn supports_platform() -> bool {
+        ProductJavaScriptLauncher::supports_platform()
     }
 
     /// Freezes the installation's runtime and bootstrap, never an extension-selected executable.
-    pub fn with_node_runtime(
-        mut self,
+    pub fn new(
         executable: PathBuf,
         bootstrap: PathBuf,
         environment: BTreeMap<OsString, OsString>,
@@ -345,12 +371,41 @@ impl ProductJavaScriptLauncher {
         {
             return Err(ExtensionHostError::SpawnFailed);
         }
-        self.node = Some(NodeHost {
-            executable,
-            bootstrap,
-            environment,
-        });
-        Ok(self)
+        Ok(Self {
+            node: Some(NodeHost {
+                executable,
+                bootstrap,
+                environment,
+            }),
+        })
+    }
+}
+
+impl ExtensionHostLauncher for ProductNodeLauncher {
+    fn spawn(
+        &self,
+        command: &ExtensionLaunchCommand,
+        limits: &ExtensionHostLimits,
+    ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
+        limits.validate()?;
+        if !Self::supports_platform()
+            || !matches!(command.runtime, LaunchRuntime::Vscode)
+            || limits.isolation != ProcessIsolationPolicy::AuthorizedNode
+        {
+            return Err(ExtensionHostError::IsolationUnavailable);
+        }
+        let node = self
+            .node
+            .as_ref()
+            .ok_or(ExtensionHostError::IsolationUnavailable)?;
+        let mut command = command.clone();
+        command.runtime = LaunchRuntime::Node(node.executable.clone());
+        command
+            .arguments
+            .insert(0, node.bootstrap.as_os_str().to_owned());
+        command.environment = node.environment.clone();
+        command.validate_limits(limits)?;
+        StdioExtensionHostProcess::spawn(&command, limits).map(|process| Arc::new(process) as _)
     }
 }
 
@@ -361,33 +416,12 @@ impl ExtensionHostLauncher for ProductJavaScriptLauncher {
         limits: &ExtensionHostLimits,
     ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
         limits.validate()?;
-        if command.is_vscode() {
-            let node = self
-                .node
-                .as_ref()
-                .ok_or(ExtensionHostError::IsolationUnavailable)?;
-            if command.executable() != self.executable
-                || limits.isolation != ProcessIsolationPolicy::AuthorizedNode
-            {
-                return Err(ExtensionHostError::IsolationUnavailable);
-            }
-            let mut command = command.clone();
-            command.executable = node.executable.clone();
-            command
-                .arguments
-                .insert(0, node.bootstrap.as_os_str().to_owned());
-            command.environment = node.environment.clone();
-            command.validate_limits(limits)?;
-            // Spawn Node itself in the supervisor's process group. No second process owner.
-            return StdioExtensionHostProcess::spawn(&command, limits)
-                .map(|process| Arc::new(process) as _);
-        }
         let ProcessIsolationPolicy::RequireJavaScriptEnforcement(memory) = limits.isolation else {
             return Err(ExtensionHostError::IsolationUnavailable);
         };
         if !Self::supports_platform()
-            || !command.is_javascript()
-            || command.executable() != self.executable
+            || !matches!(command.runtime, LaunchRuntime::JavaScript(_))
+            || command.executable() != Some(self.executable.as_path())
         {
             return Err(ExtensionHostError::IsolationUnavailable);
         }
@@ -425,8 +459,8 @@ impl ExtensionHostLauncher for ProductExecutableLauncher {
     ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
         limits.validate()?;
         command.validate_limits(limits)?;
-        if command.runtime != LaunchRuntime::Executable
-            || command.executable() != self.executable
+        if !matches!(command.runtime, LaunchRuntime::Executable(_))
+            || command.executable() != Some(self.executable.as_path())
             || limits.isolation != ProcessIsolationPolicy::AuthorizedProduct
         {
             return Err(ExtensionHostError::IsolationUnavailable);
