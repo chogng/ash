@@ -428,6 +428,28 @@ fn slash_command_definition_preserves_discovery_and_argument_shape() {
 }
 
 #[test]
+fn frontend_session_requirements_are_exported_from_the_rust_compatibility_owner() {
+    let requirements = crate::protocol::initialize::REQUIRED_SESSION_CAPABILITIES
+        .iter()
+        .map(|requirement| match requirement {
+            crate::protocol::initialize::CapabilityRequirement::Enabled(name) => *name,
+            crate::protocol::initialize::CapabilityRequirement::Contract { .. } => {
+                panic!("unexpected session contract requirement")
+            }
+        })
+        .collect::<Vec<_>>();
+    let files = typescript_files()
+        .into_iter()
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let protocol = &files[Path::new("protocol.ts")];
+    assert!(protocol.contains(&format!(
+        "export const APP_SERVER_REQUIRED_SESSION_CAPABILITIES = {} as const;",
+        serde_json::to_string(&requirements).unwrap()
+    )));
+    assert!(files[Path::new("index.ts")].contains("APP_SERVER_REQUIRED_SESSION_CAPABILITIES"));
+}
+
+#[test]
 fn rpc_envelopes_preserve_json_rpc_2_shape() {
     let request = JsonRpcRequest::new(
         JsonRpcId::Number(7),

@@ -13,6 +13,8 @@ import type { CustomModelProvider, IAgentModelsService } from '../common/agentMo
 
 export function createDisconnectedAgentModelsService(unavailable: UnavailableOperation): IAgentModelsService {
 	return {
+		readDefaults: () => unavailable('model.readDefaults'),
+		configureDefaults: () => unavailable('model.configureDefaults'),
 		readApprovalReviewModel: () => unavailable('model.readApprovalReviewModel'),
 		setApprovalReviewModel: () => unavailable('model.setApprovalReviewModel'),
 		setModelPreferences: () => unavailable('model.setModelPreferences'),
@@ -33,6 +35,17 @@ export function createDisconnectedAgentModelsService(unavailable: UnavailableOpe
 
 export function createAppServerAgentModelsService(connection: AppServerProtocolClient): IAgentModelsService {
 	return {
+		readDefaults: async () => {
+			const config = await appServerRequest(connection, 'config/read', {});
+			return { revision: config.revision, model: config.model ? { ...config.model } : null, reasoningEffort: config.modelReasoningEffort ?? null };
+		},
+		configureDefaults: async (update, expectedRevision) => {
+			await appServerRequest(connection, 'config/update', {
+				commandId: createUuid(), expectedRevision,
+				...(update.model !== undefined ? { model: update.model } : {}),
+				...(update.reasoningEffort !== undefined ? { modelReasoningEffort: update.reasoningEffort } : {}),
+			});
+		},
 		readApprovalReviewModel: async () => {
 			const selection = (await appServerRequest(connection, 'config/read', {})).approvalReviewModel;
 			return selection.type === 'automatic'

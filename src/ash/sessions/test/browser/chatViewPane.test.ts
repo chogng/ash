@@ -967,7 +967,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'default' });
-	assert.equal(fake.createThreadRequests.length, 1);
+	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(fake.turnStartRequests.length, 1);
 	assert.equal(fake.turnStartRequests[0]?.mode, 'agent');
 	assert.equal(contextResolutions, 1);
@@ -1880,9 +1880,10 @@ function registerChatBackend(services: InstantiationService, api: IRendererHost,
 	if (omitted !== ITurnChangesApi) { services.registerInstance(ITurnChangesApi, api.turnChanges); }
 	if (omitted !== IAppServerSkillApi) { services.registerInstance(IAppServerSkillApi, api.skills); }
 	if (omitted !== IServerEventApi) { services.registerInstance(IServerEventApi, api.events); }
+	if (omitted !== IAgentExecutionSettingsService) { services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } }); }
 }
 
-for (const dependency of [IAgentModelsService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi]) {
+for (const dependency of [IAgentModelsService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IAgentExecutionSettingsService]) {
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -2303,10 +2304,9 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
 	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, '');
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
-	using restoredCodePreferences = services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences);
 	using restoredCoworkPreferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 	const catalog = await modelsFor(chat).listModels();
-	assert.deepEqual([restoredCodePreferences.getDefaultNewChatModel(catalog), restoredCoworkPreferences.getDefaultNewChatModel(catalog)], [codeModel.model, coworkModel.model]);
+	assert.deepEqual([modelsFor(chat).getDefaultNewChatModel(catalog), restoredCoworkPreferences.getDefaultNewChatModel(catalog)], [codeModel.model, coworkModel.model]);
 	assert.deepEqual(sessions.untitledSessions.find(session => session.untitledSessionId === draft.untitledSessionId)?.model, codeModel.model);
 	await cowork.send('Use the Cowork model');
 	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, coworkModel.model);
@@ -2338,7 +2338,7 @@ test('New chats use the configured model before the remembered picker choice', a
 	using storage = createTestStorage();
 	using chat = createChatService(fake.api, configuration, storage);
 	using sessions = new SessionsManagementService(fake.api);
-	modelsFor(chat).rememberSelectedModel(first.model);
+	await modelsFor(chat).rememberSelectedModel(first.model);
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-opus-5-5');
 	const configuredDraft = sessions.createUntitledSession();
 	using configured = createWidgetModel(chat, { kind: 'untitled', session: configuredDraft }, sessions);
@@ -2357,6 +2357,7 @@ test('New chats use the configured model before the remembered picker choice', a
 	await remembered.send('Use the remembered model');
 	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, first.model);
 	using restoredChatService = createChatService(fake.api, configuration, storage);
+	await modelsFor(restoredChatService).readModelDefaults();
 	assert.deepEqual(modelsFor(restoredChatService).getDefaultNewChatModel(await modelsFor(restoredChatService).listModels()), first.model);
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'missing/model');
 	assert.deepEqual(modelsFor(chat).getDefaultNewChatModel(await modelsFor(chat).listModels()), first.model);
@@ -2540,8 +2541,9 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const nextModel = { provider: 'provider', model: 'next' };
 		const manualModel = { provider: 'provider', model: 'manual' };
 		const persisted = [{ ...session('session-1', 'thread-1'), model: initialModel }];
-		const fake = fakeApi({ sessions: persisted });
+		const fake = fakeApi({ sessions: persisted, models: [initialModel, nextModel, manualModel].map(model => ({ model, displayName: model.model })) });
 		using chat = createChatService(fake.api);
+		await modelsFor(chat).setModelVisible(manualModel, true);
 		using sessions = new SessionsManagementService(fake.api);
 		await sessions.openThread('session-1', 'thread-1');
 		using services = new InstantiationService();
@@ -2576,7 +2578,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
-test("ChatWidgetModel selects models per chat without changing the global model", async () => {
+test("ChatWidgetModel keeps per-chat choices while saving the default for new chats", async () => {
 	const firstModel: ModelRef = { provider: "openai", model: "gpt-first" };
 	const secondModel: ModelRef = { provider: "openai", model: "gpt-second" };
 	const activeSession = {
@@ -2587,8 +2589,10 @@ test("ChatWidgetModel selects models per chat without changing the global model"
 		],
 	};
 	let currentThread = thread();
-	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
+	const fake = fakeApi({ sessions: [activeSession], models: [firstModel, secondModel].map(model => ({ model, displayName: model.model })), thread: () => currentThread });
 	using chat = createChatService(fake.api);
+	await modelsFor(chat).setModelVisible(firstModel, true);
+	await modelsFor(chat).setModelVisible(secondModel, true);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
@@ -2604,7 +2608,7 @@ test("ChatWidgetModel selects models per chat without changing the global model"
 
 	assert.deepEqual(fake.turnStartRequests.map(request => request.model), [firstModel, secondModel]);
 	assert.deepEqual(model.selectedModel, firstModel);
-	assert.equal(fake.modelRequests.length, 0);
+	assert.deepEqual((await fake.api.model.readDefaults()).model, secondModel);
 });
 
 test('ChatWidgetModel sends the selected model thinking effort with its Turn', async () => {
@@ -2660,12 +2664,13 @@ test('New Chat keeps its thinking effort when it creates a Thread', async () => 
 	assert.equal(model.inputState.selectedReasoningEffort, 'high');
 });
 
-test('ChatWidgetModel returns to the session model when Auto is selected', async () => {
+test('ChatWidgetModel Auto retains the configured profile model and leaves Turn resolution to the backend', async () => {
 	const sessionModel: ModelRef = { provider: 'openai', model: 'gpt-default' };
 	const manualModel: ModelRef = { provider: 'openai', model: 'gpt-manual' };
 	const activeSession = { ...session('session-1', 'thread-1'), model: sessionModel };
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], models: [sessionModel, manualModel].map(model => ({ model, displayName: model.model })) });
 	using chat = createChatService(fake.api);
+	await modelsFor(chat).setModelVisible(manualModel, true);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
@@ -2678,6 +2683,7 @@ test('ChatWidgetModel returns to the session model when Auto is selected', async
 	await model.send('Use the session model');
 
 	assert.equal(fake.turnStartRequests[0]?.model, undefined);
+	assert.deepEqual((await fake.api.model.readDefaults()).model, manualModel);
 });
 
 test('ChatWidgetModel sends image-only input using the selected approval mode', async () => {
@@ -2936,6 +2942,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const listeners = new Set<(notification: ServerNotification) => void>();
 	const connectionListeners = new Set<(state: "ready") => void>();
 	let connectionGeneration = 1;
+	let modelDefaults = { revision: 1, model: null as ModelRef | null, reasoningEffort: null as import('../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
 	const archiveRequests: SessionMutationParams[] = [];
 	const stopRequests: SessionMutationParams[] = [];
 	const createSessionRequests: SessionCreateParams[] = [];
@@ -2992,7 +2999,10 @@ function fakeApi(options: FakeOptions = {}): {
 			create: async (params: SessionCreateParams) => {
 				createSessionRequests.push(params);
 				if (options.createSessionError) throw options.createSessionError;
-				return { session: sessionDto(options.createSession ?? session("created")) };
+				const created = options.createSession ?? options.createThread?.session ?? session("created", "created-thread");
+				// Legacy fixtures kept root creation in createThread; the real create API is atomic.
+				const chats = created.chats.length ? created.chats : (options.createThread?.session ?? session(created.sessionId, 'created-thread')).chats;
+				return { session: sessionDto({ ...created, chats }) };
 			},
 			createThread: async (params: SessionOperationInput<"createThread">) => {
 				createThreadRequests.push(params);
@@ -3028,6 +3038,11 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		model: {
+			readDefaults: async () => modelDefaults,
+			configureDefaults: async (update: import('../../../platform/agentHost/common/agentModels.js').AgentModelDefaultsUpdate, expectedRevision: number) => {
+				assert.equal(expectedRevision, modelDefaults.revision);
+				modelDefaults = { revision: modelDefaults.revision + 1, model: update.model === undefined ? modelDefaults.model : update.model, reasoningEffort: update.reasoningEffort === undefined ? modelDefaults.reasoningEffort : update.reasoningEffort };
+			},
 			setModelPreferences: async () => { },
 			listModels: async () => {
 				modelListRequests.push(undefined);
@@ -3753,4 +3768,116 @@ test('ChatWidgetModel connects agentHost tool transcript updates to a retained c
 	await waitFor(() => model.items[0]?.toolInvocation?.stopped === true);
 	assert.equal(model.items[0].toolInvocation?.result, undefined);
 	assert.equal(model.items[0].transient, false);
+});
+
+
+test('Chat model saves cannot overwrite or send the previous input into the newly selected Thread', async () => {
+	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First' };
+	const activeSession = session('session-1');
+	let currentThread = thread();
+	const fake = fakeApi({ sessions: [activeSession], models: [entry], thread: () => currentThread });
+	const saved = new DeferredPromise<void>();
+	fake.api.model.configureDefaults = async () => saved.p;
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const selecting = model.selectModel(entry.model);
+	const sending = model.send('Keep this message in its original Thread');
+	const canceledSend = assert.rejects(sending, error => isCancellationError(error));
+	assert.equal(model.selectedModel, undefined);
+	currentThread = { ...currentThread, threadId: 'thread-2' };
+	await model.selectThread({ session: { ...activeSession, chats: [{ ...activeSession.chats[0]!, threadId: 'thread-2' }] }, threadId: 'thread-2' });
+	await saved.complete(); await selecting; await canceledSend;
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.equal(model.threadId, 'thread-2');
+	assert.equal(model.selectedModel, undefined);
+});
+
+test('Chat selection failure retains Auto and sending awaits successful effort persistence', async () => {
+	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: [{ effort: 'high' as const }] };
+	const fake = fakeApi({ models: [entry], createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await model.initialize();
+	const write = fake.api.model.configureDefaults;
+	fake.api.model.configureDefaults = async () => { throw new Error('save rejected'); };
+	await assert.rejects(model.selectModel(entry.model), /save rejected/);
+	assert.equal(model.isAutomaticModel, true);
+	fake.api.model.configureDefaults = write;
+	await model.selectModel(entry.model);
+	const saved = new DeferredPromise<void>();
+	fake.api.model.configureDefaults = async (...args) => { await saved.p; await write(...args); };
+	const selecting = model.selectReasoningEffort('high');
+	const sending = model.send('Use saved effort');
+	await nextTask(); assert.equal(fake.turnStartRequests.length, 0);
+	await saved.complete(); await Promise.all([selecting, sending]);
+	assert.equal(fake.turnStartRequests.at(-1)?.reasoningEffort, 'high');
+});
+
+test('Queued chat Turns inherit the backend permission default and reject a late connection read', async () => {
+	const fake = fakeApi();
+	using services = new InstantiationService();
+	registerChatBackend(services, fake.api, IAgentExecutionSettingsService);
+	const pending = new DeferredPromise<Awaited<ReturnType<IAgentExecutionSettingsService['read']>>>();
+	let delayed = false;
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, configure: async () => { }, read: async () => delayed ? pending.p : { revision: 2, settings: { approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } } });
+	using chat = services.createInstance(ChatService);
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Queue', mode: 'agent' as const };
+	await chat.queueTurn(options);
+	assert.equal(fake.queuedRequests[0]?.approvalMode, 'auto');
+	await chat.queueTurn({ ...options, approvalMode: 'manual' });
+	assert.equal(fake.queuedRequests[1]?.approvalMode, 'manual');
+	delayed = true;
+	const queuing = chat.queueTurn(options);
+	fake.emitReady();
+	await pending.complete({ revision: 2, settings: { approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } });
+	await assert.rejects(queuing, error => isCancellationError(error));
+	assert.equal(fake.queuedRequests.length, 2);
+});
+
+
+test('New chat Turns let the backend inherit permission when the default read fails', async () => {
+	const fake = fakeApi({ createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions,
+		{ onDidChange: Event.None, read: async () => { throw new Error('temporarily unavailable'); }, configure: async () => { } });
+	await model.initialize();
+	await model.send('Inherit server permissions');
+	assert.equal(fake.turnStartRequests.at(-1)?.approvalMode, undefined);
+});
+
+
+test('A queued permission read cannot enqueue after a same-generation crash', async () => {
+	const fake = fakeApi();
+	using connection = new Emitter<AppServerConnectionState>();
+	using services = new InstantiationService();
+	registerChatBackend(services, { ...fake.api, appServer: { ...fake.api.appServer, onConnectionState: listener => connection.event(listener) } }, IAgentExecutionSettingsService);
+	const pending = new DeferredPromise<Awaited<ReturnType<IAgentExecutionSettingsService['read']>>>();
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, configure: async () => { }, read: () => pending.p });
+	using chat = services.createInstance(ChatService);
+	const queuing = chat.queueTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Queue', mode: 'agent' });
+	const rejected = assert.rejects(queuing, error => isCancellationError(error));
+	connection.fire('crashed');
+	await pending.complete({ revision: 2, settings: { approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } });
+	await rejected;
+	assert.equal(fake.queuedRequests.length, 0);
+});
+
+
+test('An unavailable model leaves backend defaults and Auto intact with the generated Chinese catalog', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const fake = fakeApi();
+		using chat = createChatService(fake.api);
+		using sessions = new SessionsManagementService(fake.api);
+		using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+		await model.initialize();
+		const before = await fake.api.model.readDefaults();
+		await assert.rejects(model.selectModel({ provider: 'missing', model: 'retired' }), { message: '所选模型不可用' });
+		assert.deepEqual(await fake.api.model.readDefaults(), before);
+		assert.equal(model.isAutomaticModel, true);
+	} finally { resetNlsResolver(); }
 });

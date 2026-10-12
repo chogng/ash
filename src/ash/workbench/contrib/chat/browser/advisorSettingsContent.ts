@@ -49,6 +49,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 	private working = false;
 	private visible = false;
 	private loadVersion = 0;
+	private reloadRequested = false;
 
 	constructor(container: HTMLElement,
 		@IChatService private readonly chat: IChatService,
@@ -119,7 +120,9 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 		}));
 		this._register(this.languageModels.onDidChangeModels(() => {
 			this.advisor.hide();
-			if (this.visible && !this.working) { void this.loadSettings(); }
+			if (!this.visible) return;
+			if (this.working) this.reloadRequested = true;
+			else void this.loadSettings();
 		}));
 		this.updateControls();
 	}
@@ -137,7 +140,14 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 	public setVisible(visible: boolean): void {
 		if (this.visible === visible) { return; }
 		this.visible = visible;
-		if (visible && !this.working) { void this.loadSettings(); }
+		if (!visible) {
+			this.loadVersion++;
+			this.working = false;
+			this.loaded = false;
+			this.reloadRequested = false;
+			this.advisor.hide();
+			this.updateControls();
+		} else { void this.loadSettings(); }
 	}
 
 	private async loadSettings(): Promise<void> {
@@ -147,7 +157,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 		this.status.textContent = localize('advisor.settings.loading', 'Loading Advisor settings…');
 		try {
 			const [models, advisor] = await Promise.all([this.languageModels.listAdvisorModels(), this.chat.readAdvisorDefault()]);
-			if (this.isDisposed || version !== this.loadVersion) { return; }
+			if (this.isDisposed || !this.visible || version !== this.loadVersion) { return; }
 			this.savedAdvisor = advisor;
 			this.models = models;
 			this.updateModelLabel();
@@ -155,36 +165,47 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 			this.loaded = true;
 			this.status.textContent = '';
 		} catch (error) {
-			if (!this.isDisposed && version === this.loadVersion) {
+			if (!this.isDisposed && this.visible && version === this.loadVersion) {
 				this.status.textContent = localize('advisor.settings.loadFailed', 'Could not load Advisor settings: {0}', String(error));
 			}
 		} finally {
-			if (!this.isDisposed && version === this.loadVersion) {
+			if (!this.isDisposed && this.visible && version === this.loadVersion) {
 				this.working = false;
 				this.updateControls();
 				this.changed.fire();
+				this.reloadIfRequested();
 			}
 		}
 	}
 
 	private async saveAdvisor(next: AdvisorConfig | null): Promise<void> {
+		if (!this.visible || !this.loaded || this.working) return;
+		const version = ++this.loadVersion;
 		this.working = true;
 		this.updateControls();
 		try {
 			await this.chat.saveAdvisorDefault(next);
-			if (this.isDisposed) { return; }
-			this.savedAdvisor = next;
+			if (this.isDisposed || !this.visible || version !== this.loadVersion) return;
+			const saved = await this.chat.readAdvisorDefault();
+			if (this.isDisposed || !this.visible || version !== this.loadVersion) { return; }
+			this.savedAdvisor = saved;
 			this.updateModelLabel();
-			this.enabled.checked = next?.enabled ?? false;
+			this.enabled.checked = saved?.enabled ?? false;
 			this.status.textContent = localize('advisor.settings.saved', 'Advisor settings saved.');
 		} catch (error) {
-			if (this.isDisposed) { return; }
+			if (this.isDisposed || !this.visible || version !== this.loadVersion) { return; }
 			this.updateModelLabel();
 			this.enabled.checked = this.savedAdvisor?.enabled ?? false;
 			this.status.textContent = localize('advisor.settings.saveFailed', 'Could not save Advisor settings: {0}', String(error));
 		} finally {
-			if (!this.isDisposed) { this.working = false; this.updateControls(); }
+			if (!this.isDisposed && this.visible && version === this.loadVersion) { this.working = false; this.updateControls(); this.changed.fire(); this.reloadIfRequested(); }
 		}
+	}
+
+	private reloadIfRequested(): void {
+		if (!this.reloadRequested) return;
+		this.reloadRequested = false;
+		void this.loadSettings();
 	}
 
 	private updateControls(): void {

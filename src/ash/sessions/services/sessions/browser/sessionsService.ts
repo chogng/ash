@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
+import { canceled } from '../../../../base/common/errors.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { observableValue, transaction, type IReader, type ITransaction } from "../../../../base/common/observable.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -77,6 +78,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	async initialize(): Promise<void> {
 		await this.sessionService.initialize();
+		if (this.isDisposed) return;
 		if (!this.initialized) {
 			const state = this.current;
 			for (const draft of this.storedState?.drafts ?? []) {
@@ -114,6 +116,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
 		const revision = ++this.navigationRevision;
 		await this.sessionService.openThread(sessionId, threadId);
+		if (this.isDisposed) throw canceled();
 		if (revision === this.navigationRevision) { this.activate({ kind: 'session', sessionId, threadId }); }
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
@@ -128,8 +131,11 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const key = visibilityKey(referenceForSelection(selection));
 		const index = state.visibleReferences.findIndex(reference => visibilityKey(reference) === key);
 		if (index < 0) return;
+		this.navigationRevision++;
 		const active = state.activeSelection.get();
 		const wasActive = active !== undefined && visibilityKey(referenceForSelection(active)) === key;
+		// Closing a sibling supersedes pending navigation even when the foreground identity stays the same.
+		if (!wasActive && active) this.updateManagementSelection(referenceForSelection(active));
 		state.visibleReferences.splice(index, 1);
 		const replacement = state.visibleReferences.slice(index).find(reference => this.resolve(reference))
 			?? state.visibleReferences.slice(0, index).reverse().find(reference => this.resolve(reference));
@@ -266,9 +272,13 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 
 	private activate(reference: SessionsViewReference, state = this.current, mode: 'open' | 'focus' | 'add' = 'open'): void {
-		if (reference.kind === "session") this.sessionService.selectThread(reference.sessionId, reference.threadId);
-		else this.sessionService.selectUntitledSession(reference.untitledSessionId);
+		this.updateManagementSelection(reference);
 		this.select(this.resolve(reference)!, state, mode);
+	}
+
+	private updateManagementSelection(reference: SessionsViewReference): void {
+		if (reference.kind === 'session') this.sessionService.selectThread(reference.sessionId, reference.threadId);
+		else this.sessionService.selectUntitledSession(reference.untitledSessionId);
 	}
 
 	private resolve(reference: SessionsViewReference | undefined): SessionsViewSelection | undefined {

@@ -29,6 +29,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	private access = 'read';
 	private visible = false;
 	private busy = false;
+	private refreshRequested = false;
 	private dirty = false;
 	private directoryDirty = false;
 	private stale = false;
@@ -46,7 +47,8 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	) {
 		super();
 		const changed = (): void => {
-			if (!this.visible || this.busy) return;
+			if (!this.visible) return;
+			if (this.busy) { this.refreshRequested = true; return; }
 			if (this.dirty || this.directoryDirty) {
 				this.stale = true;
 				this.message = localize({ bundle: 'ash.settings', key: 'execution.changed' }, 'Backend settings changed. Refresh before saving; refresh discards drafts.');
@@ -56,7 +58,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		this._register(execution.onDidChange(changed));
 		this._register(permissions.onDidChangePermissions(changed));
 		const connectionChanged = (): void => {
-			this.generation++; this.snapshot = undefined; this.directories = undefined; this.dirty = false; this.directoryDirty = false; this.busy = false; this.message = ''; this.savedText = ''; this.path = '';
+			this.generation++; this.snapshot = undefined; this.directories = undefined; this.dirty = false; this.directoryDirty = false; this.stale = false; this.busy = false; this.refreshRequested = false; this.message = ''; this.savedText = ''; this.path = '';
 			if (this.visible) void this.refresh();
 		};
 		this._register(remote.onDidChangeConnection(connectionChanged));
@@ -115,17 +117,22 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		const generation = ++this.generation;
 		this.busy = true; this.message = ''; this.changed.fire();
 		try {
-			const [snapshot, catalog] = await Promise.all([this.execution.read(), this.capabilities.read()]);
-			const directories = catalog.directoryGrantsReadable ? await this.permissions.list() : undefined;
-			if (!this.current(generation)) return;
-			const draft = this.draft; const dirty = this.dirty; const directoryDirty = this.directoryDirty;
-			this.snapshot = snapshot; this.draft = snapshot.settings; this.directories = directories;
-			this.savedText = localize({ bundle: 'ash.settings', key: 'execution.saved' }, 'Saved defaults: approval {0}; command files {1}; command network {2}.', localize(approvalModeDefinition(snapshot.settings.approvalMode).label.key, approvalModeDefinition(snapshot.settings.approvalMode).label.text), snapshot.settings.commandFileAccess === 'readOnly' ? localize({ bundle: 'ash.settings', key: 'execution.readOnly' }, 'Read only') : localize({ bundle: 'ash.settings', key: 'execution.directoryWrite' }, 'Write in authorized directories'), snapshot.settings.commandNetworkAccess === 'denied' ? localize({ bundle: 'ash.settings', key: 'execution.denied' }, 'Blocked') : localize({ bundle: 'ash.settings', key: 'execution.allowed' }, 'Allowed'));
-			this.dirty = false; this.directoryDirty = false; this.stale = false;
-			if (!preserveDrafts || !directoryDirty) {
-				if (directories?.entries.some(entry => entry.path === this.path)) this.selectDirectory(this.path);
+			// A notification may follow an already captured config snapshot; publish only after rereading it.
+			while (this.current(generation)) {
+				this.refreshRequested = false;
+				const [snapshot, catalog] = await Promise.all([this.execution.read(), this.capabilities.read()]);
+				const directories = catalog.directoryGrantsReadable ? await this.permissions.list() : undefined;
+				if (!this.current(generation)) return;
+				if (this.refreshRequested) continue;
+				const draft = this.draft; const dirty = this.dirty; const directoryDirty = this.directoryDirty;
+				this.snapshot = snapshot; this.draft = snapshot.settings; this.directories = directories;
+				this.savedText = localize({ bundle: 'ash.settings', key: 'execution.saved' }, 'Saved defaults: approval {0}; command files {1}; command network {2}.', localize(approvalModeDefinition(snapshot.settings.approvalMode).label.key, approvalModeDefinition(snapshot.settings.approvalMode).label.text), snapshot.settings.commandFileAccess === 'readOnly' ? localize({ bundle: 'ash.settings', key: 'execution.readOnly' }, 'Read only') : localize({ bundle: 'ash.settings', key: 'execution.directoryWrite' }, 'Write in authorized directories'), snapshot.settings.commandNetworkAccess === 'denied' ? localize({ bundle: 'ash.settings', key: 'execution.denied' }, 'Blocked') : localize({ bundle: 'ash.settings', key: 'execution.allowed' }, 'Allowed'));
+				this.dirty = false; this.directoryDirty = false; this.stale = false;
+				if (!preserveDrafts) { this.path = ''; this.access = 'read'; }
+				else if (!directoryDirty && directories?.entries.some(entry => entry.path === this.path)) this.selectDirectory(this.path);
+				if (preserveDrafts) { if (dirty) { this.draft = draft; this.dirty = true; } this.directoryDirty = directoryDirty; }
+				break;
 			}
-			if (preserveDrafts) { if (dirty) { this.draft = draft; this.dirty = true; } this.directoryDirty = directoryDirty; }
 		} catch (error) {
 			if (!this.current(generation)) return;
 			this.snapshot = undefined; this.directories = undefined;

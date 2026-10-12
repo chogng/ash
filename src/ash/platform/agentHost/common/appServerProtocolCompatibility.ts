@@ -1,10 +1,10 @@
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from '../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, APP_SERVER_REQUIRED_SESSION_CAPABILITIES, type InitializeResult, type ServerCapabilities } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { localize } from '../../../nls.js';
 
 type AppServerCapabilityName = Exclude<keyof ServerCapabilities, 'contracts'>;
 
-export const requiredSessionCapabilities: readonly AppServerCapabilityName[] = ['sessions', 'threads', 'turns'];
+export const requiredSessionCapabilities: readonly AppServerCapabilityName[] = APP_SERVER_REQUIRED_SESSION_CAPABILITIES;
 
 export type AppServerProtocolIncompatibility =
 	| { readonly kind: 'majorVersion'; readonly expected: number; readonly received: number; }

@@ -71,3 +71,31 @@ test('archiving removes group membership and restoring permits reassignment', as
 		assert.deepEqual(groups.groups[0].sessionIds, ['session-1']);
 	} finally { dom.window.close(); }
 });
+
+test('restored group membership removes already archived Sessions before later edits', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'restored-archived', flushInterval: 0 });
+		using original = new SessionGroupsService(storage, { sessions: [], onDidChange: Event.None } as unknown as ISessionsManagementService);
+		const group = await original.create('Review');
+		await original.move('archived', group.sectionId);
+		await original.move('active', group.sectionId);
+		const management = { sessions: [{ sessionId: 'archived', status: 'archived' }, { sessionId: 'active', status: 'active' }], onDidChange: Event.None } as unknown as ISessionsManagementService;
+		using restored = new SessionGroupsService(storage, management);
+		await restored.rename(group.sectionId, 'After restart');
+		assert.deepEqual(restored.groups, [{ sectionId: group.sectionId, name: 'After restart', sessionIds: ['active'] }]);
+	} finally { dom.window.close(); }
+});
+
+test('moving an existing member to the same group retains the saved order', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'same-group', flushInterval: 0 });
+		using groups = new SessionGroupsService(storage, { sessions: [], onDidChange: Event.None } as unknown as ISessionsManagementService);
+		const group = await groups.create('Review');
+		await groups.move('first', group.sectionId);
+		await groups.move('second', group.sectionId);
+		await groups.move('first', group.sectionId);
+		assert.deepEqual(groups.groups[0].sessionIds, ['first', 'second']);
+	} finally { dom.window.close(); }
+});

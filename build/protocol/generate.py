@@ -129,7 +129,7 @@ def generate_protocol(
             directories
             and cache.get("graph") == graph
             and cache.get("inputs") == inputs
-            and artifacts
+            and REQUIRED_ARTIFACTS.issubset(artifacts)
             and cache.get("artifacts") == artifacts
         ):
             sources = portable_sources(root, directories)

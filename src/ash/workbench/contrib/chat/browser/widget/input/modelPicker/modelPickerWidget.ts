@@ -102,7 +102,8 @@ export class ModelPickerWidget extends Disposable {
 
 	public setEnabled(enabled: boolean): void {
 		this.enabled = enabled;
-		for (const button of [this.nameButton!, this.configurationButton!]) {
+		for (const button of [this.nameButton, this.configurationButton]) {
+			if (!button) continue;
 			button.setAttribute('aria-disabled', String(!enabled));
 			button.tabIndex = enabled && !button.hidden ? 0 : -1;
 		}
@@ -114,7 +115,7 @@ export class ModelPickerWidget extends Disposable {
 		const model = this.delegate.getModels().find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
 		const label = this.delegate.isAutomaticModel()
 			? localize('chat.modelPicker.auto', 'Auto')
-			: model?.displayName ?? localize('chat.modelPicker.selectModel', 'Select model');
+			: model?.displayName ?? (selected ? `${selected.provider}/${selected.model}` : localize('chat.modelPicker.selectModel', 'Select model'));
 		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
 		this.nameButton!.setAttribute('aria-label', label);
 		this.nameHover.clear();
@@ -189,6 +190,7 @@ export class ModelPickerWidget extends Disposable {
 				}],
 			}));
 		}
+		let selecting = false;
 		let active: { entry: ModelCatalogEntry; row: HTMLElement; } | undefined;
 		let detailsMenu: ModelPickerDetailsMenu;
 		let hasNavigated = false;
@@ -242,6 +244,8 @@ export class ModelPickerWidget extends Disposable {
 				showDetails();
 			},
 			onSelect: async entry => {
+				if (selecting) return;
+				selecting = true;
 				try {
 					await this.delegate.selectModel(entry.model);
 					if (!session.isDisposed) this.actionWidgetService.hide(false);
@@ -249,7 +253,7 @@ export class ModelPickerWidget extends Disposable {
 					if (session.isDisposed) return;
 					error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
 					error.hidden = false;
-				}
+				} finally { selecting = false; }
 			},
 			onHide: () => {
 				anchor.setAttribute('aria-expanded', 'false');
@@ -308,6 +312,8 @@ export class ModelPickerWidget extends Disposable {
 		};
 		session.add(this.delegate.onDidChangePresentation(renderMode));
 		session.add(modeSwitch.onDidChange(async automatic => {
+			if (selecting) { renderMode(); return; }
+			selecting = true;
 			const hadFocus = ownerDocument.activeElement === modeSwitch.input;
 			modeSwitch.busy = true;
 			error.hidden = true;
@@ -315,13 +321,16 @@ export class ModelPickerWidget extends Disposable {
 				if (automatic) {
 					await this.delegate.selectAutomaticModel();
 				} else {
-					await this.delegate.selectModel(this.delegate.getSelectedModel() ?? models[0].model);
+					const candidate = this.delegate.getSelectedModel() ?? models[0]?.model;
+					if (!candidate) throw new Error('No models available');
+					await this.delegate.selectModel(candidate);
 				}
 			} catch {
 				if (session.isDisposed) return;
 				error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
 				error.hidden = false;
 			} finally {
+				selecting = false;
 				if (!session.isDisposed) {
 					modeSwitch.busy = false;
 					renderMode();

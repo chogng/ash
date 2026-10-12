@@ -707,3 +707,134 @@ function modelCatalogApi(
 		},
 	} as unknown as AppServerProtocolClient);
 }
+
+
+test('Model and effort saves serialize against fresh backend revisions while Auto retains executable defaults', async () => {
+	using resources = new DisposableStore();
+	const first = new DeferredPromise<void>();
+	let defaults = { revision: 1, model: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | null, reasoningEffort: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
+	const writes: unknown[] = [];
+	const api = {
+		...modelCatalogApi(async () => ({ models: [] })),
+		readDefaults: async () => defaults,
+		configureDefaults: async (update: import('../../../../../platform/agentHost/common/agentModels.js').AgentModelDefaultsUpdate, revision: number) => {
+			writes.push({ update, revision });
+			if (writes.length === 1) await first.p;
+			assert.equal(revision, defaults.revision);
+			defaults = { revision: revision + 1, model: update.model === undefined ? defaults.model : update.model, reasoningEffort: update.reasoningEffort === undefined ? defaults.reasoningEffort : update.reasoningEffort };
+		},
+	};
+	const models = resources.add(new LanguageModelsService(api,
+		{ connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
+		{ onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: (value: import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | undefined | null) => assert.ok(value === null || value === undefined, 'Backend model references must not duplicate UI profile state') } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None } as IAccountService));
+	const model = { provider: 'example', model: 'reasoning' };
+	const select = models.rememberSelectedModel(model);
+	const effort = models.saveReasoningEffort(model, 'high');
+	const auto = models.rememberSelectedModel(undefined);
+	await Promise.resolve(); await Promise.resolve();
+	assert.equal(writes.length, 1);
+	await first.complete();
+	await Promise.all([select, effort, auto]);
+	assert.deepEqual(writes, [
+		{ revision: 1, update: { model, reasoningEffort: null } },
+		{ revision: 2, update: { model, reasoningEffort: 'high' } },
+	]);
+	assert.deepEqual(await models.readModelDefaults(), { revision: 3, model, reasoningEffort: 'high' });
+});
+
+test('A failed default save leaves the backend snapshot intact and permits a later save', async () => {
+	using resources = new DisposableStore();
+	let fail = true;
+	let configured = false;
+	const defaults = { revision: 3, model: null, reasoningEffort: null };
+	const models = resources.add(new LanguageModelsService({
+		...modelCatalogApi(async () => ({ models: [] })),
+		readDefaults: async () => defaults,
+		configureDefaults: async () => { if (fail) throw new Error('write rejected'); configured = true; },
+	}, { connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
+		{ onDidChangeModels: Event.None, rememberSelectedModel: () => { } } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None } as IAccountService));
+	await models.readModelDefaults();
+	await assert.rejects(models.rememberSelectedModel({ provider: 'example', model: 'test' }), /write rejected/);
+	assert.deepEqual(await models.readModelDefaults(), defaults);
+	assert.equal(configured, false);
+	fail = false; await models.rememberSelectedModel({ provider: 'example', model: 'test' }); assert.equal(configured, true);
+});
+
+
+test('A late model-default snapshot from a disconnected connection cannot become the new profile selection', async () => {
+	using resources = new DisposableStore();
+	const connection = resources.add(new Emitter<AppServerConnectionState>());
+	const old = new DeferredPromise<{ revision: number; model: null; reasoningEffort: null; }>();
+	let generation = 1;
+	const models = resources.add(new LanguageModelsService({ ...modelCatalogApi(async () => ({ models: [] })), readDefaults: () => old.p },
+		{ get connectionGeneration() { return generation; }, onConnectionState: connection.event } as unknown as IAppServerApi,
+		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
+		{ onDidChangeModels: Event.None } as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None } as IAccountService));
+	const reading = models.readModelDefaults();
+	connection.fire('stopped');
+	await old.complete({ revision: 99, model: null, reasoningEffort: null });
+	await assert.rejects(reading, error => isCancellationError(error));
+});
+
+
+for (const pendingOperation of ['read', 'write'] as const) {
+	test(`A ${pendingOperation} from a closed connection cannot apply a model choice even without a replacement generation`, async () => {
+		using resources = new DisposableStore();
+		const connection = resources.add(new Emitter<AppServerConnectionState>());
+		const pending = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		let writes = 0;
+		let remembered = 0;
+		const models = resources.add(new LanguageModelsService({
+			...modelCatalogApi(async () => ({ models: [] })),
+			readDefaults: async () => { if (pendingOperation === 'read') { await started.complete(); await pending.p; } return { revision: 1, model: null, reasoningEffort: null }; },
+			configureDefaults: async () => { writes++; if (pendingOperation === 'write') { await started.complete(); await pending.p; } },
+		}, { connectionGeneration: 1, onConnectionState: connection.event } as unknown as IAppServerApi,
+			{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
+			{ onDidChangeModels: Event.None, rememberSelectedModel: () => remembered++ } as unknown as ILanguageModelsConfigurationService,
+			{ onDidChangeAccounts: Event.None } as IAccountService));
+		const saving = models.rememberSelectedModel({ provider: 'example', model: 'test' });
+		const rejected = assert.rejects(saving, error => isCancellationError(error));
+		await started.p;
+		connection.fire('crashed');
+		await pending.complete();
+		await rejected;
+		assert.equal(writes, pendingOperation === 'read' ? 0 : 1);
+		assert.equal(remembered, 0);
+	});
+}
+
+
+test('A config notification racing a confirmed model save cannot turn its readback into a failed choice', async () => {
+	using resources = new DisposableStore();
+	const readback = new DeferredPromise<Awaited<ReturnType<IAgentModelsService['readDefaults']>>>();
+	const reading = new DeferredPromise<void>();
+	let notify: (event: ServerNotification) => void = () => { throw new Error('Expected a notification subscription'); };
+	let defaults: Awaited<ReturnType<IAgentModelsService['readDefaults']>> = { revision: 1, model: null, reasoningEffort: null };
+	let reads = 0;
+	let writes = 0;
+	let remembered = 0;
+	const model = { provider: 'example', model: 'test' };
+	const models = resources.add(new LanguageModelsService({
+		...modelCatalogApi(async () => ({ models: [] })),
+		readDefaults: async () => { if (++reads === 2) { await reading.complete(); return readback.p; } return defaults; },
+		configureDefaults: async () => { writes++; defaults = { ...defaults, revision: 2, model }; },
+	}, { connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+		{ subscribe: listener => { notify = listener; return { dispose() { } }; } } as IServerEventApi,
+		{ onDidChangeModels: Event.None, rememberSelectedModel: () => remembered++ } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None } as IAccountService));
+	const saving = models.rememberSelectedModel(model);
+	await reading.p;
+	notify({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	await readback.complete(defaults);
+	await saving;
+	assert.equal(reads, 3);
+	assert.equal(writes, 1);
+	assert.equal(remembered, 1);
+	assert.deepEqual(await models.readModelDefaults(), defaults);
+});

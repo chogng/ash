@@ -34,6 +34,10 @@ export class ModelPickerConfiguration extends Disposable {
 		super();
 		this.contextView = this._register(new ContextView(contextViewService.container));
 		const button = this.trigger;
+		this._register(delegate.onDidChangePresentation(() => {
+			// The menu captures a model and its options; never leave those actions attached to another selection.
+			if (this.contextView.visible) this.contextView.hide();
+		}));
 		this._register(addDisposableListener(button, 'focus', () => this.updateHelpHint()));
 		this._register(AccessibleViewRegistry.register({
 			type: AccessibleViewType.Help,
@@ -91,7 +95,8 @@ export class ModelPickerConfiguration extends Disposable {
 			this.contextView.hide();
 			return;
 		}
-		const entry = this.selectedEntry!;
+		const entry = this.selectedEntry;
+		if (!entry || this.delegate.isAutomaticModel() || this.trigger.getAttribute('aria-disabled') === 'true') return;
 		const options = entry.supportedReasoningEfforts?.length ? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()) : [];
 		const headings = new Set<IAction>();
 		const actions: IAction[] = [];

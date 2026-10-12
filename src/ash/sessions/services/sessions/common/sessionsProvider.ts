@@ -11,10 +11,13 @@ export interface ISessionsProvider extends IDisposable {
 	list(): Promise<readonly ISession[]>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined>;
+	/** Acquires one detail lease per Session; concurrent callers share the in-flight acquisition. */
 	subscribe(session: ISession): Promise<ISession>;
+	/** Cancels pending acquisition and releases it before the next lease can be acquired. */
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	currentWorkspace(): SessionWorkspaceSelection;
-	create(title: string, workspace: SessionWorkspaceSelection, model?: ModelRef, agent?: ChatAgent): Promise<IActiveSessionThread>;
+	/** Creation identity is stable across retries; model defaults are applied by the first Turn's owner. */
+	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string): Promise<IActiveSessionThread>;
 	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;
 	stop(session: ISession): Promise<ISession>;

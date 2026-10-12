@@ -1,3 +1,4 @@
+import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { ChatContextUsage } from '../common/chatService.js';
 import type { AgentInput } from '../../../../platform/agentHost/common/agentService.js';
 import { localize } from '../../../../nls.js';
@@ -41,6 +42,8 @@ export class ChatService extends Disposable implements IChatService {
 	readonly onDidUpdateTurnChanges = this._onDidUpdateTurnChanges.event;
 	readonly onDidChangeQueue = this._onDidChangeQueue.event;
 
+	private connectionEpoch = 0;
+
 	constructor(
 		@IAgentModelsService private readonly modelApi: IAgentModelsService,
 		@IAgentThreadService private readonly threadApi: IAgentThreadService,
@@ -48,6 +51,7 @@ export class ChatService extends Disposable implements IChatService {
 		@ITurnChangesApi private readonly turnChangesApi: ITurnChangesApi,
 		@IAppServerApi private readonly appServerApi: IAppServerApi,
 		@IServerEventApi eventApi: IServerEventApi,
+		@IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService,
 	) {
 		super();
 		this._register(threadApi.onDidUpdateThread(event => this._onDidUpdateThread.fire(event)));
@@ -65,6 +69,7 @@ export class ChatService extends Disposable implements IChatService {
 		});
 		this._register(toDisposable(() => events.dispose()));
 		const connection = appServerApi.onConnectionState((state) => {
+			this.connectionEpoch++;
 			if (state !== "ready") {
 				// Backend subscriptions belong to the connection that created them.
 				this.threadSubscriptions.clear();
@@ -170,7 +175,11 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async queueTurn(options: StartTurnOptions): Promise<void> {
-		await this.turnApi.enqueue({ commandId: commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode ?? "manual" });
+		const epoch = this.connectionEpoch;
+		const generation = this.appServerApi.connectionGeneration;
+		const approvalMode = options.approvalMode ?? (await this.execution.read()).settings.approvalMode;
+		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
+		await this.turnApi.enqueue({ commandId: commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode });
 	}
 
 	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {

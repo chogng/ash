@@ -164,6 +164,10 @@ test('App Server server-request decoding validates method, request ID, and param
 
 	assert.deepEqual(decodeAppServerServerRequest(request), request);
 	assert.throws(
+		() => decodeAppServerServerRequest({ ...request, id: null }),
+		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.id',
+	);
+	assert.throws(
 		() => decodeAppServerServerRequest({ ...request, id: Number.MAX_SAFE_INTEGER + 1 }),
 		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.id',
 	);

@@ -22,7 +22,7 @@ export function getModelConfigValueLabel(tokens: number): string {
 /** Both configuration surfaces write undefined when the configured default is chosen. */
 export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; }[] {
 	const defaultEffort = entry.defaultReasoningEffort;
-	const efforts = defaultEffort === undefined
+	const efforts = defaultEffort === undefined || !entry.supportedReasoningEfforts?.some(option => option.effort === defaultEffort)
 		? [{ effort: undefined, description: undefined }, ...(entry.supportedReasoningEfforts ?? [])]
 		: entry.supportedReasoningEfforts ?? [];
 	return efforts.map(({ effort, description }) => ({
@@ -30,7 +30,7 @@ export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffor
 		value: effort === defaultEffort ? undefined : effort,
 		label: modelPickerEffortLabel(effort),
 		description: modelPickerEffortDescription(description),
-		checked: effort === (selectedEffort ?? defaultEffort),
+		checked: effort === (selectedEffort ?? (efforts.some(option => option.effort === defaultEffort) ? defaultEffort : undefined)),
 	}));
 }
 

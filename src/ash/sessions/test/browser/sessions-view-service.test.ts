@@ -488,3 +488,23 @@ function selectionId(selection: SessionsViewSelection | undefined): string {
 		? `session:${selection.active.session.sessionId}:${selection.active.threadId}`
 		: `untitled:${selection.session.untitledSessionId}`;
 }
+
+test('closing a visible sibling supersedes a pending open of that conversation', async () => {
+	const pending = new DeferredPromise<void>();
+	using sessions = new class extends FakeSessionService {
+		override async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+			await pending.p;
+			await super.openThread(sessionId, threadId);
+		}
+	}([session('first', 'first-thread'), session('second', 'second-thread')]);
+	using storage = createTestStorage();
+	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
+	storage.store('sessions.viewState', JSON.stringify({ version: 2, drafts: [], visible, active: 0 }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	using view = createView(sessions, storage);
+	await view.initialize();
+	const opening = view.openThread('second', 'second-thread');
+	view.closeVisibleSelection(view.visibleSelections[1]!);
+	await pending.complete();
+	await opening;
+	assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) }, { visible: ['session:first:first-thread'], active: 'session:first:first-thread' });
+});

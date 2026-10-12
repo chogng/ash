@@ -87,6 +87,12 @@ class ProtocolPreparationTests(unittest.TestCase):
             "typescript/index.ts": "export type Contract = string;",
             "typescript/protocol.ts": "export const APP_SERVER_PROTOCOL_MAJOR = 1;",
         }
+        from build.protocol.artifacts import REQUIRED_ARTIFACTS
+
+        # These fixtures model export completeness; production decoder behavior is
+        # verified from the real Rust export by the frontend and protocol suites.
+        for name in REQUIRED_ARTIFACTS:
+            contents.setdefault(name, "export {};\n")
         for name, value in contents.items():
             path = output / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,6 +137,46 @@ class ProtocolPreparationTests(unittest.TestCase):
         (self.contract / "Cargo.toml").write_text("[package]\nversion='2'\n")
         self.prepare()
         self.assertEqual(self.discovery.call_count, 2)
+
+    def test_matching_cache_cannot_reuse_a_contract_missing_its_decoder(self):
+        from build.protocol.artifacts import artifact_digests
+
+        self.prepare()
+        output = self.root / ".build/protocol"
+        (output / "typescript/AppServerProtocolDecoder.ts").unlink()
+        cache_path = self.root / ".build/protocol-inputs.json"
+        cache = json.loads(cache_path.read_text())
+        # Even a cache whose digest inventory matches must satisfy completeness.
+        cache["artifacts"] = artifact_digests(output)
+        cache_path.write_text(json.dumps(cache))
+        self.exporter.reset_mock()
+        self.prepare()
+        self.exporter.assert_called_once()
+        self.assertTrue((output / "typescript/AppServerProtocolDecoder.ts").is_file())
+
+    def test_partial_maps_or_decoder_never_replace_the_previous_contract(self):
+        from build.protocol.artifacts import artifact_digests
+
+        self.prepare()
+        output = self.root / ".build/protocol"
+        original = artifact_digests(output)
+        (self.contract / "src/lib.rs").write_text("changed")
+        for name in [
+            "AppServerRequestMap.ts",
+            "AppServerServerRequestMap.ts",
+            "AppServerProtocolDecoder.ts",
+            "AppServerProtocolSchema0.ts",
+        ]:
+            with self.subTest(missing=name):
+
+                def partial(command, **options):
+                    self.export(command, **options)
+                    (Path(command[-1]) / "typescript" / name).unlink()
+
+                self.exporter.side_effect = partial
+                with self.assertRaisesRegex(RuntimeError, "complete contract"):
+                    self.prepare()
+                self.assertEqual(artifact_digests(output), original)
 
     def test_failed_or_partial_exports_preserve_the_previous_complete_contract_and_retry(
         self,

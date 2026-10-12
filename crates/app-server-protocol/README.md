@@ -335,3 +335,18 @@ Directory permissions remain editable only through a trusted host connection.
 连接模式要求 `arguments: []` 并拒绝 program/cwd/env；两种模式共用 connection-owned
 sessionId、send/read/close 与有限 DAP 缓冲。生成 decoder 通过本地 schema 引用共享
 重复的校验子树，保留所有规则、公共入口和 method 分派对象，不扩大 renderer chunk 上限。
+
+## 连接边界与生成完整性
+
+前端初始化使用导出自 Rust `REQUIRED_SESSION_CAPABILITIES` 的
+`APP_SERVER_REQUIRED_SESSION_CAPABILITIES`，不维护第二份必需能力列表。
+关闭连接时 protocol client 先撤销 capability/命令快照、请求与 host handler
+的归属，再释放 transport 和通知状态观察者；恢复观察者因此可以安全取得新连接。
+client request ID 在一个 client 实例内单调递增；旧代次 response 被丢弃，当前代次
+未知或重复 response 是协议错误。迟到的 host 结果在解码前检查归属，取消排队请求
+不会启动 handler，取消、超时与正常结果至多产生一次回复。主动断开不重放请求。
+
+RPC `null` ID 仅供无法配对的错误响应使用；server request 必须携带可配对的 ID。
+协议产物必须同时包含请求、通知、host request 映射，运行时 decoder 及其 schema
+模块、Web decoder 与入口类型。缓存、打包恢复和新导出遵守相同的完整性门禁；
+缺失 decoder 或映射的导出失败并保留上一份完整产物。

@@ -28,10 +28,13 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 			if (event.affectsConfiguration(this.preferences.defaultModelSetting)) { this.changed.fire(); }
 		}));
 	}
-	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined {
+	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[], savedModel?: ModelRef | null): ModelRef | undefined {
 		const configured = this.configuration.getValue<string>(this.preferences.defaultModelSetting).trim();
 		const remembered = this.storage.get(this.preferences.selectedModelStorageKey, StorageScope.PROFILE);
-		for (const requested of [configured, remembered]) {
+		// Backend snapshots replace legacy manual remembrance; Auto is an intent to inherit that configured runtime.
+		const backendDefault = savedModel ? `${savedModel.provider}/${savedModel.model}` : savedModel === null ? 'auto' : remembered;
+		const defaultChoice = remembered?.toLowerCase() === 'auto' ? remembered : backendDefault;
+		for (const requested of [configured, defaultChoice]) {
 			if (!requested) { continue; }
 			if (requested.toLowerCase() === 'auto') { return undefined; }
 			const match = models.find(entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === requested.toLowerCase());
@@ -39,10 +42,11 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 			const unqualified = models.filter(entry => entry.model.model.toLowerCase() === requested.toLowerCase());
 			if (unqualified.length === 1) { return unqualified[0].model; }
 		}
-		return undefined;
+		return savedModel ?? undefined;
 	}
 
-	public rememberSelectedModel(model: ModelRef | undefined): void {
+	public rememberSelectedModel(model: ModelRef | undefined | null): void {
+		if (model === null) { this.storage.remove(this.preferences.selectedModelStorageKey, StorageScope.PROFILE); return; }
 		const value = model ? `${model.provider}/${model.model}` : 'auto';
 		this.storage.store(this.preferences.selectedModelStorageKey, value, StorageScope.PROFILE, StorageTarget.USER);
 	}

@@ -85,7 +85,7 @@ async function selectModel(page: Page, composer: ReturnType<Page['locator']>, na
 // The real observer has a five-minute remote cadence. Keep this long scenario
 // opt-in: its installed Codex source is version-checked and never uses real credentials.
 for (const scenario of [
-	{ title: 'Persisted root and child models survive profile reopen without taking the default or another window selection', subscription: false },
+	{ title: 'Persisted root and child models survive profile reopen while manual selection updates the profile default', subscription: false },
 	{ title: 'Rust subscription notifications update open Code and Cowork model pickers within the same account', subscription: true },
 ]) {
 	test(scenario.title, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
@@ -222,7 +222,7 @@ for (const scenario of [
 			await page.keyboard.press('Escape');
 			await expect(sourceChat.locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session?.model).toEqual(rootModel);
-			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).model).toEqual(defaultModel);
+			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).model).toEqual(childModel);
 			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'No persisted model' }).click();
@@ -242,7 +242,7 @@ for (const scenario of [
 			await expect(sourceChat.locator('.ash-chat-input-model-action')).toHaveText(childModel.model);
 			expect(invokedModels).toEqual([rootModel.model, childModel.model, childModel.model, childModel.model, childModel.model]);
 			expect(await page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic; }).sessionModelTraffic!.starts)).toEqual([{ threadId: rootThreadId, model: childModel }]);
-			if (scenario.subscription) await verifySubscriptionUpdates(application, webAppServer, client, source, sourceChat, page, active(), defaultModel, testInfo);
+			if (scenario.subscription) await verifySubscriptionUpdates(application, webAppServer, client, source, sourceChat, page, active(), childModel, testInfo);
 			await attachJson(testInfo, 'durable-models', { rootThreadId, childThreadId: fork.value.threadId, defaultModel, invokedModels, session: (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session });
 			const screenshot = testInfo.outputPath('session-model-choice.png');
 			await page.screenshot({ path: screenshot });
@@ -262,7 +262,7 @@ for (const scenario of [
 
 
 /** Only writes the launcher-owned HOME; the real Codex source validates cache identity. */
-async function verifySubscriptionUpdates(application: PlaywrightApplication, web: WebLaunchResult | undefined, client: AppServerProtocolClient, source: Page, sourceChat: ReturnType<Page['locator']>, cowork: Page, coworkChat: ReturnType<Page['locator']>, defaultModel: ModelRef, testInfo: TestInfo): Promise<void> {
+async function verifySubscriptionUpdates(application: PlaywrightApplication, web: WebLaunchResult | undefined, client: AppServerProtocolClient, source: Page, sourceChat: ReturnType<Page['locator']>, cowork: Page, coworkChat: ReturnType<Page['locator']>, profileModel: ModelRef, testInfo: TestInfo): Promise<void> {
 	const cli = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
 	expect(execFileSync(cli, ['--version'], { encoding: 'utf8' }).trim()).toBe('codex-cli 0.160.1');
 	const home = web ? web.profileDirectory : 'evaluate' in application ? await application.evaluate(() => process.env.HOME) : undefined;
@@ -327,7 +327,7 @@ async function verifySubscriptionUpdates(application: PlaywrightApplication, web
 	const account = await client.request(APP_SERVER_METHODS['account/read'], {});
 	const accountCount = accountUpdates;
 	const config = await client.request(APP_SERVER_METHODS['config/read'], {});
-	expect(config.model).toEqual(defaultModel);
+	expect(config.model).toEqual(profileModel);
 	// Code and Cowork retain separate composer modes. Keep an explicit Auto
 	// choice in Agents Code while both manually selected pickers remain open.
 	const activity = cowork.locator('.ash-sessions-activity-content');
@@ -383,7 +383,7 @@ async function verifySubscriptionUpdates(application: PlaywrightApplication, web
 	expect(accountUpdates).toBe(accountCount);
 	expect(await client.request(APP_SERVER_METHODS['account/read'], {})).toEqual(account);
 	const after = await client.request(APP_SERVER_METHODS['config/read'], {});
-	expect({ model: after.model, gui: after.gui }).toEqual({ model: config.model, gui: config.gui });
+	expect({ model: after.model, gui: after.gui }).toEqual({ model: { provider: 'openai', model: 'gpt-6.1-sol' }, gui: config.gui });
 	const authoritative = await client.request(APP_SERVER_METHODS['model/list'], {});
 	if (!model) throw new Error('Expected the updated subscription model');
 	// Provider discovery adds its source flag; global list exposes the shared
@@ -421,7 +421,7 @@ async function verifySubscriptionUpdates(application: PlaywrightApplication, web
 	}
 	expect(accountUpdates).toBe(accountCount);
 	const final = await client.request(APP_SERVER_METHODS['config/read'], {});
-	expect({ model: final.model, gui: final.gui }).toEqual({ model: config.model, gui: config.gui });
+	expect({ model: final.model, gui: final.gui }).toEqual({ model: after.model, gui: config.gui });
 	expect((await client.request(APP_SERVER_METHODS['model/list'], {})).models.find(entry => entry.model.provider === 'openai' && entry.model.model === 'gpt-6.1-sol')).toEqual(metadata);
 	await attachJson(testInfo, 'subscription-model-notifications', { updates, account, accountUpdates: accountCount, cacheIdentity: identity, cliVersion: '0.160.1', beforeMetadataReads, beforeFailureReads, finalReads: await Promise.all([reads(source), reads(cowork)]) });
 }
@@ -431,4 +431,135 @@ async function attachJson(testInfo: TestInfo, name: string, value: unknown): Pro
 	const path = testInfo.outputPath(`${name}.json`);
 	await writeFile(path, JSON.stringify(value, null, 2) + '\n');
 	await testInfo.attach(name, { path, contentType: 'application/json' });
+}
+
+
+interface DefaultsFixtureRequest { readonly model: string; readonly reasoning?: { readonly effort?: string; }; readonly input: readonly unknown[]; readonly tools?: readonly { readonly name?: string; }[]; }
+const defaultsTest = test.extend<{ defaultsEndpoint: { readonly url: string; readonly requests: DefaultsFixtureRequest[]; }; }>({
+	defaultsEndpoint: async ({ }, use) => {
+		const requests: DefaultsFixtureRequest[] = [];
+		const server = createServer(async (request, response) => {
+			if (request.method === 'GET') {
+				response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: 'gpt-6.1-sol' }, { id: 'gpt-6-astra' }] })); return;
+			}
+			try {
+				const chunks: Buffer[] = [];
+				for await (const chunk of request) chunks.push(Buffer.from(chunk));
+				const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as DefaultsFixtureRequest;
+				if (typeof body.model !== 'string' || !Array.isArray(body.input)) throw new Error('Expected a Responses model request');
+				requests.push(body);
+				const consult = body.model === 'gpt-6.1-sol' && JSON.stringify(body.input).includes('defaults-fixture-consult') && !JSON.stringify(body.input).includes('defaults-advice-call');
+				if (consult && !body.tools?.some(tool => tool.name === 'advisor')) throw new Error('The real Turn did not expose its configured Advisor');
+				const output = consult
+					? [{ type: 'function_call', id: 'defaults-advice-item', call_id: 'defaults-advice-call', name: 'advisor', arguments: JSON.stringify({ question: 'Confirm the persisted Advisor preference.' }) }]
+					: [{ type: 'message', id: `defaults-answer-${requests.length}`, role: 'assistant', phase: 'final_answer', content: [{ type: 'output_text', text: body.model === 'gpt-6-astra' ? 'Persisted Advisor consulted.' : 'Saved defaults accepted.' }] }];
+				response.writeHead(200, { 'content-type': 'text/event-stream' }).end(`event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', response: { id: `defaults-response-${requests.length}`, status: 'completed', output, usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } } })}\n\n`);
+			} catch (error) { response.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: String(error), type: 'invalid_request_error' } })); }
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Expected the isolated model endpoint');
+		try { await use({ url: `http://127.0.0.1:${address.port}/v1`, requests }); }
+		finally { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+	},
+	backendConfiguration: async ({ defaultsEndpoint }, use) => {
+		// The product's OpenAI metadata/effort validation remains authoritative. Only HTTP responses are scripted.
+		await use(`schemaVersion = 10\n[connections.openai]\nconnection = "openai"\nprovider = "openai"\nbaseUrl = ${JSON.stringify(defaultsEndpoint.url)}\n`);
+	},
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	defaultsTest(`Saved model, effort, Advisor and permission defaults reach a real Turn after reopen in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, restartWorkbench, testWorkspace, defaultsEndpoint }, testInfo) => {
+		test.setTimeout(240_000);
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文'); await language.press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		const copy = locale === 'zh-CN'
+			? { code: '代码', picker: '选择聊天模型', auto: '自动', high: '高', execution: '执行与权限', approval: '默认审批模式', files: '命令文件访问', readOnly: '只读', save: '保存执行默认值', refresh: '刷新', stale: '后端设置已变化', agents: '智能体', advisor: '顾问模型', enabledAdvisor: '启用顾问' }
+			: { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', high: 'High', execution: 'Execution and permissions', approval: 'Default approval mode', files: 'Command file access', readOnly: 'Read only', save: 'Save execution defaults', refresh: 'Refresh', stale: 'Backend settings changed', agents: 'Agents', advisor: 'Advisor model', enabledAdvisor: 'Enable Advisor' };
+		const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryPermissionsHost: true });
+		const { client } = connection;
+		try {
+			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: 'openai', apiKey: 'isolated-defaults-fixture-key' });
+			if (webAppServer) {
+				const grants = await client.request(APP_SERVER_METHODS['config/dirPermissions/list'], {});
+				await client.request(APP_SERVER_METHODS['config/dirPermissions/set'], { commandId: `defaults-directory-${locale}`, expectedRevision: grants.revision, path: testWorkspace.directory, permissions: ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'] });
+			}
+			const catalog = await client.request(APP_SERVER_METHODS['model/list'], {});
+			const primary = catalog.models.find(entry => entry.model.provider === 'openai' && entry.model.model === 'gpt-6.1-sol');
+			const advisor = catalog.models.find(entry => entry.model.provider === 'openai' && entry.model.model === 'gpt-6-astra');
+			if (!primary || !advisor) throw new Error('Expected the real product model metadata');
+			expect(primary.supported_reasoning_efforts.some(option => option.effort === 'high')).toBe(true);
+			let page = await workbench.openAgentsWindow(target.kind);
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+			const composer = (): ReturnType<Page['locator']> => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+			await composer().locator('.ash-chat-input-model-action').press('ArrowDown');
+			const picker = page.getByRole('dialog', { name: copy.picker, exact: true });
+			const auto = picker.getByRole('switch', { name: copy.auto, exact: true });
+			if (await auto.isChecked()) { await auto.press('Space'); await expect(auto).not.toBeChecked(); }
+			await picker.getByRole('combobox').fill(primary.model.model);
+			await picker.getByRole('combobox').press('Enter');
+			await expect(composer().locator('.ash-chat-input-model-action')).toHaveText(primary.display_name);
+			await composer().locator('.ash-chat-input-configuration-action').press('ArrowDown');
+			await page.locator('[data-action-id="ash.chat.input.effort.high"] button').click();
+			await expect(composer().locator('.ash-chat-input-configuration-action')).toHaveText(copy.high);
+			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).model).toEqual(primary.model);
+			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).modelReasoningEffort).toBe('high');
+			await page.keyboard.press('ControlOrMeta+,');
+			let settings = page.locator('.ash-sessions-settings-dialog');
+			await settings.getByRole('button', { name: copy.execution, exact: true }).click();
+			let approval = settings.getByRole('combobox', { name: copy.approval, exact: true });
+			await approval.click(); await page.getByRole('option', { name: copy.auto, exact: true }).click();
+			// Another real connection changes a revision while the UI has a draft; the editor must block a stale save.
+			const before = await client.request(APP_SERVER_METHODS['config/read'], {});
+			await client.request(APP_SERVER_METHODS['config/update'], { commandId: `defaults-conflict-${locale}`, expectedRevision: before.revision, execution: { ...before.execution, commandNetworkAccess: 'allowed' } });
+			await expect(settings).toContainText(copy.stale);
+			await expect(settings.getByRole('button', { name: copy.save, exact: true })).toBeDisabled();
+			await settings.getByRole('button', { name: copy.refresh, exact: true }).click();
+			approval = settings.getByRole('combobox', { name: copy.approval, exact: true });
+			await approval.click(); await page.getByRole('option', { name: copy.auto, exact: true }).click();
+			await settings.getByRole('combobox', { name: copy.files, exact: true }).click(); await page.getByRole('option', { name: copy.readOnly, exact: true }).click();
+			await settings.getByRole('button', { name: copy.save, exact: true }).click();
+			await expect(settings.getByRole('button', { name: copy.save, exact: true })).toBeDisabled();
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['config/read'], {})).execution).toEqual({ approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'allowed' });
+			await settings.getByRole('button', { name: copy.agents, exact: true }).click();
+			const advisorButton = settings.getByRole('button', { name: copy.advisor, exact: true });
+			await expect(advisorButton).toBeEnabled(); await advisorButton.click();
+			await page.getByRole('menuitemradio', { name: advisor.display_name, exact: true }).click();
+			await expect(settings.getByRole('switch', { name: copy.enabledAdvisor, exact: true })).toBeChecked();
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['config/read'], {})).advisor?.model).toEqual(advisor.model);
+			await page.keyboard.press('Escape');
+			page = await workbench.reopenAgentsWindow(application, page);
+			await expect(composer().locator('.ash-chat-input-model-action')).toHaveText(primary.display_name);
+			await expect(composer().locator('.ash-chat-input-configuration-action')).toHaveText(copy.high);
+			await composer().locator('[data-action-id="ash.chat.input.mode"] button').click();
+			await page.getByRole('menuitemradio', { name: /^(Plan|计划)$/u, exact: true }).click();
+			const input = composer().locator('.stanza-editor-input');
+			await input.focus(); await page.keyboard.insertText(`defaults-fixture-consult-${locale}: Check the saved defaults.`);
+			await composer().locator('[data-action-id="ash.chat.input.send"] button').click();
+			await expect(composer()).toHaveAttribute('data-thread-id', /.+/);
+			const threadId = (await composer().getAttribute('data-thread-id'))!;
+			const sessionId = (await composer().getAttribute('data-session-id'))!;
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)?.status).toBe('completed');
+			const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+			const turn = thread.thread.turns.at(-1)!;
+			expect({ model: turn.model, effort: turn.reasoningEffort, approval: turn.approvalMode, mode: turn.mode, advisor: turn.advisor?.model }).toEqual({ model: primary.model, effort: 'high', approval: 'auto', mode: 'plan', advisor: advisor.model });
+			const primaryRequests = defaultsEndpoint.requests.filter(request => request.model === primary.model.model);
+			expect(primaryRequests.length).toBeGreaterThanOrEqual(2);
+			expect(primaryRequests.every(request => request.reasoning?.effort === 'high')).toBe(true);
+			expect(defaultsEndpoint.requests.some(request => request.model === advisor.model.model)).toBe(true);
+			await page.keyboard.press('ControlOrMeta+,'); settings = page.locator('.ash-sessions-settings-dialog');
+			await settings.getByRole('button', { name: copy.agents, exact: true }).click();
+			const enabled = settings.getByRole('switch', { name: copy.enabledAdvisor, exact: true });
+			await expect(enabled).toBeChecked(); await enabled.press('Space');
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['config/read'], {})).advisor?.enabled).toBe(false);
+			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).advisor?.model).toEqual(advisor.model);
+			await page.keyboard.press('Escape');
+			await attachJson(testInfo, `defaults-${locale}`, { source: 'Real frontend/App Server/Core/SQLite; scripted isolated HTTP model responses', locale, config: await client.request(APP_SERVER_METHODS['config/read'], {}), thread: thread.thread, requests: defaultsEndpoint.requests });
+			await page.screenshot({ path: testInfo.outputPath(`model-defaults-${locale}.png`) });
+		} finally { await connection.close(); }
+	});
 }

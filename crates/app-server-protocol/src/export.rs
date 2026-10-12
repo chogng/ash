@@ -70,10 +70,22 @@ struct ProtocolSchema {
 fn generated_protocol() -> String {
     assert_typescript_bindings_are_closed();
     let schema_hash = schema_hash();
+    let required_capabilities = crate::protocol::initialize::REQUIRED_SESSION_CAPABILITIES
+        .iter()
+        .map(|requirement| match requirement {
+            crate::protocol::initialize::CapabilityRequirement::Enabled(name) => *name,
+            crate::protocol::initialize::CapabilityRequirement::Contract { .. } => {
+                panic!("session capability requirements must be boolean capabilities")
+            }
+        })
+        .collect::<Vec<_>>();
+    let required_capabilities = serde_json::to_string(&required_capabilities)
+        .expect("session capability names must serialize");
     format!(
         "{GENERATED_TYPESCRIPT_HEADER}\
          export const APP_SERVER_PROTOCOL_MAJOR = {} as const;\n\
          export const APP_SERVER_SCHEMA_HASH = {schema_hash:?} as const;\n\
+         export const APP_SERVER_REQUIRED_SESSION_CAPABILITIES = {required_capabilities} as const;\n\
          export type JsonRpcVersion = \"2.0\";\n\
          export type JsonRpcId = number | string | null;\n\
          export type JsonRpcRequest<P> = {{ jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P }};\n\
@@ -389,7 +401,7 @@ fn generated_types_index() -> String {
 fn generated_index() -> String {
     format!(
         "{GENERATED_TYPESCRIPT_HEADER}\
-         export {{ APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH }} from './protocol.js';\n\
+         export {{ APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, APP_SERVER_REQUIRED_SESSION_CAPABILITIES }} from './protocol.js';\n\
          export type {{ JsonRpcError, JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, JsonRpcSuccess, JsonRpcVersion }} from './protocol.js';\n\
          export type {{ AppServerListenInfo }} from './AppServerListenInfo.js';\n\
          export type {{ RemoteTunnelHostInfo }} from './RemoteTunnelHostInfo.js';\n\

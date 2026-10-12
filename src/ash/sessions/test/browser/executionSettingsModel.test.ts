@@ -1,7 +1,8 @@
 import type { ILocalizationService } from '../../../workbench/services/localization/common/localizationService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { Event } from '../../../base/common/event.js';
+import { DeferredPromise } from '../../../base/common/async.js';
+import { Emitter, Event } from '../../../base/common/event.js';
 import type { IDirPermissionsService, DirPermission } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
 import type { IAgentExecutionSettingsService, ExecutionSettings } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
@@ -47,4 +48,53 @@ test('execution settings preserve an unsaved default while saving an aliased dir
 	assert.equal(settings.approvalMode, 'auto');
 	const revoke = field(model, 'revoke-directory'); if (revoke.kind === 'action') { assert.ok(revoke.enabled); await revoke.run(); }
 	assert.ok(forgotten);
+});
+
+
+function executionFixture(execution: IAgentExecutionSettingsService) {
+	return new ExecutionSettingsModel(execution,
+		{ onDidChangePermissions: Event.None } as IDirPermissionsService,
+		{ read: async () => ({ directoryGrantsReadable: false }) } as IAgentCapabilitiesService,
+		{ connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
+		{} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
+}
+const manualDefaults: ExecutionSettings = { approvalMode: 'manual', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' };
+
+test('Execution defaults reject a failed save, retain its draft and require an explicit refresh', async () => {
+	using model = executionFixture({ onDidChange: Event.None, read: async () => ({ revision: 7, settings: manualDefaults }), configure: async () => { throw new Error('revision conflict'); } });
+	const initialized = ready(model); model.setVisible(true); await initialized;
+	const approval = field(model, 'approval'); if (approval.kind === 'select') approval.setValue('auto');
+	const save = field(model, 'save'); if (save.kind === 'action') await save.run();
+	assert.ok(field(model, 'save').kind === 'action');
+	const failedSave = field(model, 'save'); assert.ok(failedSave.kind === 'action' && !failedSave.enabled);
+	const draft = field(model, 'approval'); assert.ok(draft.kind === 'select' && draft.value === 'auto');
+	const message = field(model, 'status'); assert.ok(message.kind === 'status' && message.text.includes('revision conflict'));
+	const refresh = field(model, 'refresh'); if (refresh.kind === 'action') await refresh.run();
+	const refreshed = field(model, 'approval'); assert.ok(refreshed.kind === 'select' && refreshed.value === 'manual');
+});
+
+test('Execution settings ignore a late read from the previously hidden page', async () => {
+	const old = new DeferredPromise<{ revision: number; settings: ExecutionSettings; }>();
+	let reads = 0;
+	using model = executionFixture({ onDidChange: Event.None, read: () => ++reads === 1 ? old.p : Promise.resolve({ revision: 2, settings: { ...manualDefaults, approvalMode: 'auto' } }), configure: async () => { } });
+	model.setVisible(true); model.setVisible(false);
+	const initialized = ready(model); model.setVisible(true); await initialized;
+	await old.complete({ revision: 1, settings: manualDefaults });
+	await Promise.resolve(); await Promise.resolve();
+	const current = field(model, 'approval'); assert.ok(current.kind === 'select' && current.value === 'auto');
+});
+
+
+test('A backend change received during execution-default loading is reread before edits use its revision', async () => {
+	using updates = new Emitter<void>();
+	const old = new DeferredPromise<{ revision: number; settings: ExecutionSettings; }>();
+	let reads = 0;
+	using model = executionFixture({ onDidChange: updates.event, read: () => ++reads === 1 ? old.p : Promise.resolve({ revision: 2, settings: { ...manualDefaults, approvalMode: 'auto' } }), configure: async () => { } });
+	model.setVisible(true);
+	updates.fire();
+	await old.complete({ revision: 1, settings: manualDefaults });
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(reads, 2);
+	const current = field(model, 'approval');
+	assert.ok(current.kind === 'select' && current.value === 'auto' && current.enabled);
 });

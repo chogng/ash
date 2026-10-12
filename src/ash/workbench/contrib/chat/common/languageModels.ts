@@ -1,4 +1,5 @@
-import type { AgentModelCatalog, AgentModelProviders } from '../../../../platform/agentHost/common/agentModels.js';
+import type { AgentModelCatalog, AgentModelProviders, AgentModelDefaults, ModelReasoningEffort } from '../../../../platform/agentHost/common/agentModels.js';
+import { TaskQueue } from '../../../../base/common/async.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -20,7 +21,9 @@ export interface ILanguageModelsService {
 	readonly onDidChangeModels: Event<void>;
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
 	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined;
-	rememberSelectedModel(model: ModelRef | undefined): void;
+	readModelDefaults(): Promise<AgentModelDefaults>;
+	rememberSelectedModel(model: ModelRef | undefined): Promise<void>;
+	saveReasoningEffort(model: ModelRef, effort: ModelReasoningEffort | undefined): Promise<void>;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
 	listCustomModelProviders(): Promise<readonly CustomModelProvider[]>;
 	saveCustomModelProvider(provider: CustomModelProvider): Promise<void>;
@@ -45,6 +48,11 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeModels = this.changed.event;
+	private readonly selectionUpdates = new TaskQueue();
+	private modelDefaults: AgentModelDefaults | undefined;
+	private defaultsGeneration = 0;
+	// A close/crash invalidates work even when no replacement transport generation has started.
+	private connectionEpoch = 0;
 	private modelCatalog: readonly ModelCatalogEntry[] = [];
 	private modelCatalogLoad: Promise<void> | undefined;
 	private hasLoadedModelCatalog = false;
@@ -61,9 +69,14 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		@ILanguageModelsConfigurationService private readonly preferences: ILanguageModelsConfigurationService,
 		@IAccountService private readonly accounts: IAccountService) {
 		super();
+		this._register(toDisposable(() => this.selectionUpdates.clearPending()));
 		this._register(preferences.onDidChangeModels(() => this.changed.fire()));
 		const subscription = events.subscribe(event => {
-			if (event.method === 'provider/models/updated') {
+			if (event.method === 'config/changed') {
+				this.defaultsGeneration++;
+				this.modelDefaults = undefined;
+				this.changed.fire();
+			} else if (event.method === 'provider/models/updated') {
 				const scope = 'catalogScope' in event.params ? event.params.catalogScope : undefined;
 				if (scope && this.externalScopes.get(scope.connection) !== scope.identity) {
 					this.externalScopes.set(scope.connection, scope.identity);
@@ -87,6 +100,9 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			this.invalidateModelCatalog();
 		}));
 		const connection = appServer.onConnectionState(state => {
+			this.connectionEpoch++;
+			this.defaultsGeneration++;
+			this.modelDefaults = undefined;
 			this.externalScopes.clear();
 			this.accountScope = undefined;
 			this.accountState = undefined;
@@ -97,8 +113,57 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		this._register(toDisposable(() => connection.dispose()));
 		this._register(toDisposable(() => this.retireModelCatalog()));
 	}
-	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined { return this.preferences.getDefaultNewChatModel(models); }
-	public rememberSelectedModel(model: ModelRef | undefined): void { this.preferences.rememberSelectedModel(model); }
+	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined {
+		return this.preferences.getDefaultNewChatModel(models, this.modelDefaults?.model);
+	}
+	public async readModelDefaults(): Promise<AgentModelDefaults> {
+		const epoch = this.connectionEpoch;
+		const connectionGeneration = this.appServer.connectionGeneration;
+		for (; ;) {
+			const generation = this.defaultsGeneration;
+			const defaults = await this.modelApi.readDefaults();
+			if (this.isDisposed || epoch !== this.connectionEpoch || connectionGeneration !== this.appServer.connectionGeneration) throw canceled();
+			// Config notifications can trail a successful write. Reread that profile instead of reporting a failed choice.
+			if (generation !== this.defaultsGeneration) continue;
+			if (this.modelDefaults && defaults.revision < this.modelDefaults.revision) throw canceled();
+			this.modelDefaults = defaults;
+			return defaults;
+		}
+	}
+	public rememberSelectedModel(model: ModelRef | undefined): Promise<void> {
+		const epoch = this.connectionEpoch;
+		const generation = this.appServer.connectionGeneration;
+		return this.selectionUpdates.schedule(async () => {
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+			if (model === undefined) {
+				// Auto inherits the backend model and effort. Clearing model would make that runtime unavailable.
+				// Persist only this existing composer intent until the backend has a separate selection contract.
+				this.preferences.rememberSelectedModel(undefined);
+				return;
+			}
+			const defaults = await this.modelApi.readDefaults();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+			const same = defaults.model && modelRefIdentity(model) === modelRefIdentity(defaults.model);
+			await this.modelApi.configureDefaults({ model, ...(!same ? { reasoningEffort: null } : {}) }, defaults.revision);
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+			await this.readModelDefaults();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+			this.preferences.rememberSelectedModel(null);
+		});
+	}
+	public saveReasoningEffort(model: ModelRef, effort: ModelReasoningEffort | undefined): Promise<void> {
+		const epoch = this.connectionEpoch;
+		const generation = this.appServer.connectionGeneration;
+		return this.selectionUpdates.schedule(async () => {
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+			const defaults = await this.modelApi.readDefaults();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+			await this.modelApi.configureDefaults({ model, reasoningEffort: effort ?? null }, defaults.revision);
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+			await this.readModelDefaults();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+		});
+	}
 	public isModelVisible(model: ModelRef): boolean { return this.preferences.isModelVisible(model); }
 	public setModelVisible(model: ModelRef, visible: boolean): Promise<void> { return this.preferences.setModelVisible(model, visible); }
 	public async discoverProviderModels(connection: string): Promise<readonly ModelCatalogEntry[]> {
@@ -109,7 +174,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		return models;
 	}
 	public async listModels(): Promise<readonly ModelCatalogEntry[]> {
-		const catalog = await this.listModelCatalog();
+		const [catalog] = await Promise.all([this.listModelCatalog(), this.modelDefaults ? undefined : this.readModelDefaults().catch(() => undefined)]);
 		return catalog.filter(entry => this.isModelVisible(entry.model));
 	}
 

@@ -29,6 +29,7 @@ export interface ISessionsManagementService {
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void;
 	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void;
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
+	/** Concurrent first sends share one creation; retrying a successful creation keeps its durable identity. */
 	materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread>;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;

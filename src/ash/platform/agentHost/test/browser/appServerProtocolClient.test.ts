@@ -1,0 +1,342 @@
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS } from '../../../../../../.build/protocol/typescript/index.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
+import { appServerRequest } from '../../browser/appServerRequest.js';
+import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../common/appServerTransport.js';
+import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
+
+class ProtocolTransport implements AppServerTransport {
+	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
+	public readonly frames: Record<string, unknown>[] = [];
+	public shouldCloseSynchronously = false;
+	public onInitialize: (() => void) | undefined;
+	public onDisconnect: (() => void) | undefined;
+	constructor(private readonly initialize: () => unknown = createTestInitializeResult) { }
+
+	public on(event: string, listener: (payload: unknown) => void): void {
+		let listeners = this.listeners.get(event);
+		if (!listeners) { this.listeners.set(event, listeners = new Set()); }
+		listeners.add(listener);
+	}
+
+	public off(event: string, listener: (payload: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
+
+	public send(event: string, payload?: unknown): void {
+		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
+			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: 'workspace', workspaceRoot: '/workspace' });
+		} else if (event === WEB_APP_SERVER_DISCONNECT_EVENT) {
+			this.onDisconnect?.();
+			if (this.shouldCloseSynchronously) { this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true }); }
+		} else if (event === WEB_APP_SERVER_FRAME_EVENT) {
+			const frame = JSON.parse((payload as { frame: string; }).frame) as Record<string, unknown>;
+			this.frames.push(frame);
+			if (frame.method === 'initialize') { this.frame({ id: frame.id, result: this.initialize() }); this.onInitialize?.(); }
+		}
+	}
+
+	public frame(value: Record<string, unknown>): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', ...value }) }); }
+
+	public emit(event: string, payload: unknown): void { for (const listener of this.listeners.get(event) ?? []) { listener(payload); } }
+
+	public hostRequest(id: string): void {
+		this.frame({ id, method: 'browser/create', params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' } });
+	}
+}
+
+const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
+
+test('closing a connection withdraws its negotiated capabilities before observers run', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	assert.equal(client.capabilities?.sessions, true);
+	let observed: unknown = 'not called';
+	using observer = client.onStateChange(state => { if (state === 'stopped') { observed = client.capabilities; } });
+	client.disconnect();
+	assert.equal(observed, undefined);
+	assert.equal(client.capabilities, undefined);
+	assert.deepEqual(client.slashCommands, []);
+});
+
+test('a retired host result is discarded before decoding and cannot crash its replacement', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	let finish!: (value: { targetId: string; }) => void;
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => new Promise(resolve => { finish = resolve; }));
+	await client.connect();
+	transport.hostRequest('retired');
+	await flushHandlers();
+	client.disconnect();
+	await client.connect();
+	finish({ targetId: 42 } as unknown as { targetId: string; });
+	await flushHandlers();
+	assert.equal(client.state, 'ready');
+	assert.equal(transport.frames.some(frame => frame.id === 'retired'), false);
+});
+
+test('cancelling a queued host request prevents the handler from starting and replies once', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	let calls = 0;
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { calls++; return { targetId: 'target' }; });
+	await client.connect();
+	transport.hostRequest('cancel-before-start');
+	transport.frame({ method: '$/cancelRequest', params: { id: 'cancel-before-start' } });
+	await flushHandlers();
+	assert.equal(calls, 0);
+	assert.deepEqual(transport.frames.filter(frame => frame.id === 'cancel-before-start'), [{ jsonrpc: '2.0', id: 'cancel-before-start', error: { code: -32800, message: 'Host request cancelled', data: null } }]);
+});
+
+test('recovery observers acquire a replacement only after the old carrier is released', async () => {
+	const transport = new ProtocolTransport();
+	transport.shouldCloseSynchronously = true;
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	let replacement: Promise<unknown> | undefined;
+	using observer = client.onStateChange(state => { if (state === 'crashed') { replacement = client.connect(); } });
+	transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'remote closed' });
+	assert.ok(replacement);
+	await replacement;
+	assert.equal(client.state, 'ready');
+	assert.equal(client.generation, 2);
+});
+
+test('unserializable requests reject asynchronously and release their pending capacity', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	for (let attempt = 0; attempt < 128; attempt++) {
+		await assert.rejects(() => appServerRequest(client, 'session/list', { invalid: 1n } as {}), /BigInt/);
+	}
+	const pending = client.request(APP_SERVER_METHODS['session/list'], {});
+	transport.frame({ id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+	assert.deepEqual(await pending, { sessions: [] });
+	assert.equal(client.state, 'ready');
+});
+
+test('same request IDs on separate clients complete only their own pending method', async () => {
+	const leftTransport = new ProtocolTransport();
+	const rightTransport = new ProtocolTransport();
+	const left = new AppServerProtocolClient(leftTransport);
+	const right = new AppServerProtocolClient(rightTransport);
+	using cleanup = toDisposable(() => { left.dispose(); right.dispose(); });
+	await Promise.all([left.connect(), right.connect()]);
+	const leftPending = appServerRequest(left, 'session/list', {});
+	const rightPending = appServerRequest(right, 'automation/list', {});
+	const id = leftTransport.frames.at(-1)!.id;
+	assert.equal(id, rightTransport.frames.at(-1)!.id);
+	const leftRejected = assert.rejects(leftPending);
+	leftTransport.frame({ id, result: { automations: [] } });
+	await leftRejected;
+	assert.equal(left.state, 'crashed');
+	assert.equal(right.state, 'ready');
+	rightTransport.frame({ id, result: { automations: [] } });
+	assert.deepEqual(await rightPending, { automations: [] });
+});
+
+test('pending responses may complete out of order using each request method decoder', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const sessions = appServerRequest(client, 'session/list', {});
+	const sessionsId = transport.frames.at(-1)!.id;
+	const automations = appServerRequest(client, 'automation/list', {});
+	transport.frame({ id: transport.frames.at(-1)!.id, result: { automations: [] } });
+	transport.frame({ id: sessionsId, result: { sessions: [] } });
+	assert.deepEqual(await sessions, { sessions: [] });
+	assert.deepEqual(await automations, { automations: [] });
+});
+
+for (const duplicate of [false, true]) {
+	test(`${duplicate ? 'duplicate' : 'unknown'} current response IDs fail only the current connection`, async () => {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		await client.connect();
+		let id: unknown = 999;
+		if (duplicate) {
+			const pending = appServerRequest(client, 'session/list', {});
+			id = transport.frames.at(-1)!.id;
+			transport.frame({ id, result: { sessions: [] } });
+			await pending;
+		}
+		transport.frame({ id, result: { sessions: [] } });
+		assert.equal(client.state, 'crashed');
+	});
+}
+
+test('late responses from a retired generation do not complete a new pending request', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const old = appServerRequest(client, 'session/list', {});
+	const oldId = transport.frames.at(-1)!.id;
+	const oldRejected = assert.rejects(old, /replaced/);
+	client.disconnect();
+	await oldRejected;
+	await client.connect();
+	const current = appServerRequest(client, 'automation/list', {});
+	const currentId = transport.frames.at(-1)!.id;
+	transport.frame({ id: oldId, result: { invalidOldResult: true } });
+	assert.equal(client.state, 'ready');
+	transport.frame({ id: currentId, result: { automations: [] } });
+	assert.deepEqual(await current, { automations: [] });
+});
+
+test('a cancelled host ID can be reused without accepting the retired handler result', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const completions: ((value: { targetId: string; }) => void)[] = [];
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => new Promise(resolve => { completions.push(resolve); }));
+	await client.connect();
+	transport.hostRequest('reused');
+	await flushHandlers();
+	transport.frame({ method: '$/cancelRequest', params: { id: 'reused' } });
+	transport.hostRequest('reused');
+	await flushHandlers();
+	completions[0]({ targetId: 42 } as unknown as { targetId: string; });
+	completions[1]({ targetId: 'new-target' });
+	await flushHandlers();
+	assert.deepEqual(transport.frames.filter(frame => frame.id === 'reused'), [
+		{ jsonrpc: '2.0', id: 'reused', error: { code: -32800, message: 'Host request cancelled', data: null } },
+		{ jsonrpc: '2.0', id: 'reused', result: { targetId: 'new-target' } },
+	]);
+	assert.equal(client.state, 'ready');
+});
+
+test('an abort listener reconnecting the client cannot send its cancellation to the replacement', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	let replacement: Promise<unknown> | undefined;
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
+		context.signal.addEventListener('abort', () => { client.disconnect(); replacement = client.connect(); }, { once: true });
+		return new Promise(() => { });
+	});
+	await client.connect();
+	transport.hostRequest('old-cancel');
+	await flushHandlers();
+	transport.frame({ method: '$/cancelRequest', params: { id: 'old-cancel' } });
+	assert.ok(replacement);
+	await replacement;
+	assert.equal(client.state, 'ready');
+	assert.equal(transport.frames.some(frame => frame.id === 'old-cancel'), false);
+});
+
+test('timed out host work is aborted and produces exactly one terminal reply', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 10 });
+	using cleanup = toDisposable(() => client.dispose());
+	let finish!: (value: { targetId: string; }) => void;
+	let cancelled!: () => void;
+	const cancellation = new Promise<void>(resolve => { cancelled = resolve; });
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
+		context.signal.addEventListener('abort', cancelled, { once: true });
+		return new Promise(resolve => { finish = resolve; });
+	});
+	await client.connect();
+	transport.hostRequest('timed-out');
+	await cancellation;
+	finish({ targetId: 42 } as unknown as { targetId: string; });
+	await flushHandlers();
+	assert.deepEqual(transport.frames.filter(frame => frame.id === 'timed-out'), [{ jsonrpc: '2.0', id: 'timed-out', error: { code: -32000, message: 'Host request timed out', data: null } }]);
+	assert.equal(client.state, 'ready');
+});
+
+for (const compatible of [false, true]) {
+	test(`host calls buffered behind initialization ${compatible ? 'run after compatibility' : 'are dropped on incompatibility'}`, async () => {
+		const transport = new ProtocolTransport(() => {
+			const initialized = createTestInitializeResult();
+			if (!compatible) { initialized.capabilities.turns = false; }
+			return initialized;
+		});
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let stateDuringHandler: string | undefined;
+		using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { stateDuringHandler = client.state; return { targetId: 'target' }; });
+		transport.onInitialize = () => transport.hostRequest('during-initialize');
+		if (compatible) { await client.connect(); } else { await assert.rejects(client.connect(), /turns/); }
+		await flushHandlers();
+		assert.equal(stateDuringHandler, compatible ? 'ready' : undefined);
+		assert.equal(client.state, compatible ? 'ready' : 'crashed');
+		assert.equal(transport.frames.filter(frame => frame.id === 'during-initialize').length, compatible ? 1 : 0);
+	});
+}
+
+test('initialization buffering is bounded and rejects the handshake without starting host work', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	let calls = 0;
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { calls++; return { targetId: 'target' }; });
+	transport.onInitialize = () => { for (let index = 0; index < 129; index++) { transport.hostRequest(`queued-${index}`); } };
+	await assert.rejects(client.connect());
+	await flushHandlers();
+	assert.equal(calls, 0);
+	assert.equal(client.state, 'crashed');
+});
+
+
+test('terminal transport closure retains its diagnostic while withdrawing the handshake', async () => {
+	const message = 'authorization revoked: open another authenticated link';
+	const transport = new ProtocolTransport(() => {
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message });
+		return createTestInitializeResult();
+	});
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await assert.rejects(client.connect(), (error: unknown) => error instanceof Error && error.message === message);
+	assert.equal(client.state, 'stopped');
+	assert.equal(client.capabilities, undefined);
+});
+
+
+test('an abort listener cannot acquire a new pending request while shutdown retires its connection', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	let reentrant: Promise<string> | undefined;
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
+		context.signal.addEventListener('abort', () => {
+			reentrant = appServerRequest(client, 'session/list', {}).then(() => 'fulfilled', () => 'rejected');
+		}, { once: true });
+		return new Promise(() => { });
+	});
+	await client.connect();
+	transport.hostRequest('closing');
+	await flushHandlers();
+	client.disconnect();
+	assert.ok(reentrant);
+	assert.equal(transport.frames.some(frame => frame.method === 'session/list'), false);
+	assert.equal(await reentrant, 'rejected');
+	assert.equal(client.state, 'stopped');
+});
+
+
+test('frames emitted by a releasing carrier cannot start host work during shutdown', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	let calls = 0;
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => {
+		calls++;
+		return { targetId: 'target' };
+	});
+	await client.connect();
+	transport.onDisconnect = () => transport.hostRequest('during-release');
+	client.disconnect();
+	await flushHandlers();
+	assert.equal(calls, 0);
+	assert.equal(transport.frames.some(frame => frame.id === 'during-release'), false);
+	assert.equal(client.state, 'stopped');
+});

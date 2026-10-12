@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Event } from '../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Event, Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -76,4 +77,62 @@ test('Advisor focuses its saved model, Disable when disabled and the menu when t
 	} finally {
 		dom.window.close();
 	}
+});
+
+
+function advisorFixture(chat: Pick<IChatService, 'readAdvisorDefault' | 'saveAdvisorDefault'>, changes = Event.None) {
+	const dom = new JSDOM('<body></body>');
+	const resources = new DisposableStore();
+	const content = resources.add(new AdvisorSettingsContent(dom.window.document.body, chat as IChatService,
+		{ onDidChangeModels: changes, listAdvisorModels: async () => [], isModelVisible: () => true } as unknown as ILanguageModelsService,
+		resources.add(new BrowserContextViewService(dom.window.document.body)), resources.add(new ContextKeyService()),
+		{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, resources.add(new InMemoryConfigurationService()), {} as ILocalizationService));
+	dom.window.document.body.append(content.domNode);
+	return { content, dom, dispose() { resources.dispose(); dom.window.close(); }, [Symbol.dispose]() { this.dispose(); } };
+}
+function advisorLoaded(content: AdvisorSettingsContent): Promise<void> {
+	return new Promise(resolve => { const listener = content.onDidChange(() => { listener.dispose(); resolve(); }); });
+}
+
+test('Advisor hide and reopen discard a late load and keep the newer backend preference', async () => {
+	const old = new DeferredPromise<AdvisorConfig | null>();
+	let reads = 0;
+	const saved: AdvisorConfig = { model: { provider: 'openai', model: 'new-model' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
+	using fixture = advisorFixture({ readAdvisorDefault: () => ++reads === 1 ? old.p : Promise.resolve(saved), saveAdvisorDefault: async () => { } });
+	fixture.content.setVisible(true); fixture.content.setVisible(false);
+	const ready = advisorLoaded(fixture.content); fixture.content.setVisible(true); await ready;
+	await old.complete(null); await Promise.resolve(); await Promise.resolve();
+	assert.equal(fixture.content.domNode.querySelector('[aria-label="Advisor model"]')?.textContent, 'openai/new-model');
+	assert.equal(fixture.content.domNode.querySelector<HTMLInputElement>('input')?.checked, true);
+});
+
+test('Advisor failed writes restore the saved switch and successful writes read the backend back', async () => {
+	let saved: AdvisorConfig | null = { model: { provider: 'openai', model: 'saved-model' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
+	let fail = true; let reads = 0;
+	using fixture = advisorFixture({ readAdvisorDefault: async () => { reads++; return saved; }, saveAdvisorDefault: async value => { if (fail) throw new Error('write rejected'); saved = value; } });
+	const ready = advisorLoaded(fixture.content); fixture.content.setVisible(true); await ready;
+	const input = fixture.content.domNode.querySelector<HTMLInputElement>('input')!;
+	input.click();
+	await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+	assert.equal(input.checked, true);
+	assert.match(fixture.content.domNode.textContent ?? '', /write rejected/);
+	fail = false;
+	const savedEvent = advisorLoaded(fixture.content); input.click(); await savedEvent;
+	assert.equal(input.checked, false);
+	assert.equal(saved?.enabled, false);
+	assert.equal(reads, 2);
+});
+
+
+test('Advisor rechecks a backend update received while its first read is still pending', async () => {
+	using changes = new Emitter<void>();
+	const old = new DeferredPromise<AdvisorConfig | null>();
+	let reads = 0;
+	const saved: AdvisorConfig = { model: { provider: 'openai', model: 'new-default' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
+	using fixture = advisorFixture({ readAdvisorDefault: () => ++reads === 1 ? old.p : Promise.resolve(saved), saveAdvisorDefault: async () => { } }, changes.event);
+	const refreshed = new Promise<void>(resolve => {
+		const listener = fixture.content.onDidChange(() => { if (fixture.content.domNode.querySelector('[aria-label="Advisor model"]')?.textContent === 'openai/new-default') { listener.dispose(); resolve(); } });
+	});
+	fixture.content.setVisible(true); changes.fire(); await old.complete(null); await refreshed;
+	assert.equal(reads, 2);
 });

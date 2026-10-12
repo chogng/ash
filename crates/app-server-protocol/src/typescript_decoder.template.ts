@@ -58,6 +58,7 @@ export function decodeAppServerEnvelope(value: unknown): DecodedAppServerEnvelop
 		if (Object.hasOwn(envelope, 'id')) {
 			exactKeys(envelope, ['jsonrpc', 'id', 'method', 'params'], '$');
 			assertJsonRpcId(envelope.id, '$.id');
+			if (envelope.id === null) throw failure('$.id', 'a request requires a correlation ID');
 			return { kind: 'serverRequest', id: envelope.id, method: envelope.method, params: envelope.params };
 		}
 		exactKeys(envelope, ['jsonrpc', 'method', 'params'], '$');

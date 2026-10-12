@@ -82,8 +82,9 @@ function compareModelRefs(left: ModelRef, right: ModelRef): number {
 
 export interface ILanguageModelsConfigurationService {
 	readonly onDidChangeModels: Event<void>;
-	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined;
-	rememberSelectedModel(model: ModelRef | undefined): void;
+	getDefaultNewChatModel(models: readonly ModelCatalogEntry[], savedModel?: ModelRef | null): ModelRef | undefined;
+	/** Undefined remembers Auto; null removes obsolete composer remembrance. */
+	rememberSelectedModel(model: ModelRef | undefined | null): void;
 	isModelVisible(model: ModelRef): boolean;
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
 }

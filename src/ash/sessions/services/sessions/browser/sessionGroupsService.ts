@@ -38,15 +38,17 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 	constructor(@IStorageService private readonly storage: IStorageService, @ISessionsManagementService private readonly sessions: ISessionsManagementService) {
 		super();
 		this.reload();
-		this._register(sessions.onDidChange(() => {
-			const archived = new Set(sessions.sessions.filter(session => session.status === 'archived').map(session => session.sessionId));
-			if (this.groups.some(group => group.sessionIds.some(id => archived.has(id)))) {
-				void this.change(groups => groups.map(group => ({ ...group, sessionIds: group.sessionIds.filter(id => !archived.has(id)) }))).catch(onUnexpectedError);
-			}
-		}));
+		this.removeArchivedMembership();
+		this._register(sessions.onDidChange(() => this.removeArchivedMembership()));
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key === STORAGE_KEY) this.reload();
 		}));
+	}
+	private removeArchivedMembership(): void {
+		const archived = new Set(this.sessions.sessions.filter(session => session.status === 'archived').map(session => session.sessionId));
+		if (this.groups.some(group => group.sessionIds.some(id => archived.has(id)))) {
+			void this.change(groups => groups.map(group => ({ ...group, sessionIds: group.sessionIds.filter(id => !archived.has(id)) }))).catch(onUnexpectedError);
+		}
 	}
 	get groups(): readonly SessionGroup[] { return this.state.get(); }
 	private reload(): void {
@@ -100,7 +102,11 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 		if (!sessionId) throw new Error('Session ID is required');
 		await this.change(groups => {
 			if (sectionId !== null && this.sessions.sessions.some(session => session.sessionId === sessionId && session.status === 'archived')) throw new Error('Restore the archived task before assigning a group');
-			if (sectionId !== null && findGroup(groups, sectionId).sessionIds.length >= 1000) throw new Error('Maximum group membership reached');
+			if (sectionId !== null) {
+				const target = findGroup(groups, sectionId);
+				if (target.sessionIds.includes(sessionId)) return groups;
+				if (target.sessionIds.length >= 1000) throw new Error('Maximum group membership reached');
+			}
 			return groups.map(group => ({ ...group, sessionIds: [...group.sessionIds.filter(id => id !== sessionId), ...(group.sectionId === sectionId ? [sessionId] : [])] }));
 		}, signal);
 	}

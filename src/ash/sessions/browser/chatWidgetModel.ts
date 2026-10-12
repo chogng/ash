@@ -5,7 +5,7 @@ import { IPromptsService } from '../../workbench/contrib/chat/common/promptSynta
 import { toSkillSelectors } from '../../workbench/contrib/chat/common/skillSelectors.js';
 import { ILanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { Emitter, type Event } from "../../base/common/event.js";
-import { isCancellationError } from "../../base/common/errors.js";
+import { canceled, isCancellationError } from "../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import type { AgentResponse, ChatAgent, ChatMode, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../nls.js";
@@ -17,6 +17,7 @@ import { chatTranscriptListItems, type IChatListItem } from "../../workbench/con
 import { getChatInputChanges, type ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
+import type { AgentModelDefaults } from '../../platform/agentHost/common/agentModels.js';
 import { observableValue } from '../../base/common/observable.js';
 
 export type ChatWidgetState =
@@ -56,6 +57,9 @@ export class ChatWidgetModel extends Disposable {
 	private subscriptionPromise: Promise<void> | undefined;
 	private _models: readonly ModelCatalogEntry[] = [];
 	private modelsError: string | undefined;
+	private modelsGeneration = 0;
+	private defaults: AgentModelDefaults | undefined;
+	private pendingModelSelection: Promise<void> | undefined;
 	private readonly selectedModes = new Map<string, ChatMode>();
 	private queuedMessages = 0;
 	private queueGeneration = 0;
@@ -210,7 +214,8 @@ export class ChatWidgetModel extends Disposable {
 		// A local "Default" choice must override the last durable Turn's explicit effort.
 		const effort = selection
 			? selection.model === identity ? selection.effort : undefined
-			: lastTurn?.model && modelRefIdentity(lastTurn.model) === identity ? lastTurn.reasoningEffort ?? undefined : undefined;
+			: lastTurn?.model && modelRefIdentity(lastTurn.model) === identity ? lastTurn.reasoningEffort ?? undefined
+				: this.defaults?.model && modelRefIdentity(this.defaults.model) === identity ? this.defaults.reasoningEffort ?? undefined : undefined;
 		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === identity);
 		return effort && entry?.supportedReasoningEfforts?.some(option => option.effort === effort) ? effort : undefined;
 	}
@@ -288,29 +293,37 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	async selectModel(model: ModelRef): Promise<void> {
-		if (this.selection.kind === "untitled") {
-			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
-			this.refreshUntitledSelection();
-			this.languageModels.rememberSelectedModel(model);
-			return;
+		if (!this._models.some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
+			throw new Error(localize('chat.modelPicker.unavailable', 'The selected model is not available'));
 		}
-		this.selectedModels.set(this.selection.active.threadId, model);
-		this.automaticModels.delete(this.selection.active.threadId);
-		this.languageModels.rememberSelectedModel(model);
-		this._onDidChange.fire();
+		const identity = this.composerIdentity;
+		await this.saveModelSelection(() => this.languageModels.rememberSelectedModel(model), () => {
+			if (this.isDisposed || identity !== this.composerIdentity) return;
+			if (this.selection.kind === 'untitled') {
+				this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
+				this.refreshUntitledSelection();
+			} else {
+				this.selectedModels.set(this.selection.active.threadId, model);
+				this.automaticModels.delete(this.selection.active.threadId);
+			}
+			this._onDidChange.fire();
+		});
 	}
 
 	async selectAutomaticModel(): Promise<void> {
-		if (this.selection.kind === 'untitled') {
-			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, undefined);
-			this.refreshUntitledSelection();
-			this.languageModels.rememberSelectedModel(undefined);
-			return;
-		}
-		this.selectedModels.delete(this.selection.active.threadId);
-		this.automaticModels.add(this.selection.active.threadId);
-		this.languageModels.rememberSelectedModel(undefined);
-		this._onDidChange.fire();
+		const identity = this.composerIdentity;
+		await this.saveModelSelection(() => this.languageModels.rememberSelectedModel(undefined), () => {
+			if (this.isDisposed || identity !== this.composerIdentity) return;
+			if (this.selection.kind === 'untitled') {
+				this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, undefined);
+				this.refreshUntitledSelection();
+			} else {
+				this.selectedModels.delete(this.selection.active.threadId);
+				this.automaticModels.add(this.selection.active.threadId);
+			}
+			this.selectedReasoningEfforts.delete(identity);
+			this._onDidChange.fire();
+		});
 	}
 
 	async selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void> {
@@ -320,9 +333,19 @@ export class ChatWidgetModel extends Disposable {
 		if (!entry || (effort !== undefined && !entry.supportedReasoningEfforts?.some(option => option.effort === effort))) {
 			throw new Error('The selected model does not support this thinking effort');
 		}
-		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
-		this.selectedReasoningEfforts.set(key, { model: modelRefIdentity(model), effort });
-		this._onDidChange.fire();
+		const identity = this.composerIdentity;
+		await this.saveModelSelection(() => this.languageModels.saveReasoningEffort(model, effort), () => {
+			if (this.isDisposed || identity !== this.composerIdentity || !sameModel(model, this.selectedModel) || this.isAutomaticModel) return;
+			this.selectedReasoningEfforts.set(identity, { model: modelRefIdentity(model), effort });
+			this._onDidChange.fire();
+		});
+	}
+
+	private async saveModelSelection(save: () => Promise<void>, apply: () => void): Promise<void> {
+		const pending = save().then(apply);
+		this.pendingModelSelection = pending;
+		try { await pending; }
+		finally { if (this.pendingModelSelection === pending) this.pendingModelSelection = undefined; }
 	}
 
 	async listAgents(): Promise<readonly ChatAgent[]> {
@@ -342,13 +365,21 @@ export class ChatWidgetModel extends Disposable {
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
 		const input = text.trim();
 		if (!input && !contexts?.length) return;
+		let identity = this.composerIdentity;
 		try {
+			await this.pendingModelSelection;
+			if (this.isDisposed || identity !== this.composerIdentity) throw canceled();
 			await this.initialize();
+			if (this.isDisposed || identity !== this.composerIdentity) throw canceled();
 			this.setState("submitting");
 			const active = await this.ensureActiveSession();
+			if (this.isDisposed || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
+			// Materializing this composer changes its identity from draft to durable Thread.
+			identity = active.threadId;
 			if (this._thread?.threadId !== active.threadId) {
 				await this.subscribe(active);
 			}
+			if (this.isDisposed || identity !== this.composerIdentity) throw canceled();
 			const thread = this._thread;
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error("Chat Thread is not available");
@@ -360,7 +391,8 @@ export class ChatWidgetModel extends Disposable {
 				expectedSequence: thread.sequence,
 				text: input,
 				mode,
-				approvalMode: this.inputState.approvalMode,
+				// An unknown/default choice stays with the backend authority; only conversation choices override it.
+				approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode,
 				model: this.isAutomaticModel ? undefined : this.selectedModel,
 				reasoningEffort: this.selectedReasoningEffort,
 				contexts,
@@ -376,9 +408,11 @@ export class ChatWidgetModel extends Disposable {
 			} else {
 				await this.chatService.startTurn(submission);
 			}
+			if (this.isDisposed || identity !== this.composerIdentity) return;
 			await this.refreshThread();
-			this.setState("ready");
+			if (!this.isDisposed && identity === this.composerIdentity) this.setState("ready");
 		} catch (error) {
+			if (this.isDisposed || identity !== this.composerIdentity) throw error;
 			if (isCancellationError(error)) {
 				this.setState('ready');
 				throw error;
@@ -542,13 +576,14 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async loadCatalogs(): Promise<void> {
-		const [models, slashCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.loadSkillSelectors(), this.loadDefaultApprovalMode()]);
+		const generation = ++this.modelsGeneration;
+		const [models, slashCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.loadSkillSelectors(), this.loadDefaultApprovalMode(), this.loadModelDefaults()]);
 		if (this.isDisposed) return;
-		if (models.status === "fulfilled") {
+		if (generation === this.modelsGeneration && models.status === "fulfilled") {
 			this._models = models.value;
 			this.modelsError = undefined;
 			this.applyDefaultNewChatModel();
-		} else {
+		} else if (generation === this.modelsGeneration && models.status === "rejected") {
 			this.modelsError = String(models.reason);
 		}
 		if (slashCommands.status === "fulfilled") this._slashCommands = slashCommands.value;
@@ -556,15 +591,26 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async loadModels(): Promise<void> {
+		const generation = ++this.modelsGeneration;
 		try {
-			this._models = await this.modelEntries();
+			const [models] = await Promise.all([this.modelEntries(), this.loadModelDefaults()]);
+			if (this.isDisposed || generation !== this.modelsGeneration) return;
+			this._models = models;
 			this.modelsError = undefined;
 			this.applyDefaultNewChatModel();
 			this._onDidChange.fire();
 		} catch (error) {
+			if (this.isDisposed || generation !== this.modelsGeneration) return;
 			this.modelsError = String(error);
 			this._onDidChange.fire();
 		}
+	}
+
+	private async loadModelDefaults(): Promise<void> {
+		try {
+			const defaults = await this.languageModels.readModelDefaults();
+			if (!this.isDisposed) this.defaults = defaults;
+		} catch { /* Keep the last backend snapshot until the connection recovers. */ }
 	}
 
 	private async modelEntries(): Promise<readonly ModelCatalogEntry[]> {

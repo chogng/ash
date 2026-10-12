@@ -1,5 +1,7 @@
 {
   "ash": {
+    "sessions.create.noActiveChat": "新会话中没有活动聊天。",
+    "chat.modelPicker.unavailable": "所选模型不可用",
     "sessions.history.placeholder": "选择会话或草稿",
     "sessions.history.draft": "草稿",
     "sessions.history.thread": "分支 {0}",

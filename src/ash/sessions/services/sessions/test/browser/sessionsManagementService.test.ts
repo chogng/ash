@@ -122,24 +122,22 @@ for (const absent of [undefined, null]) {
 	});
 }
 
-for (const selected of [undefined, { provider: 'provider', model: 'manual' }]) {
-	test(`only creating a known new Session applies its chosen or default model (${selected?.model ?? 'default'})`, async () => {
-		const fake = sessionHost([]);
-		const defaultModel = { provider: 'provider', model: 'default' };
-		let modelReads = 0;
-		fake.host.model.readModel = async () => { modelReads++; return defaultModel; };
-		fake.host.session.create = async () => {
-			const value = session('created', 'created-thread');
-			fake.sessions.push(value);
-			return { session: value, agentTree: { roots: [] } };
-		};
-		fake.host.session.createThread = async () => ({ session: fake.sessions[0]!, threadId: 'created-thread' });
-		using provider = createProvider(fake);
-		const active = await provider.create('New', { type: 'current' }, selected);
-		const persisted = await provider.readCatalog('created', active.session);
-		assert.deepEqual({ created: active.session.model, persisted: persisted?.model, modelReads }, { created: selected ?? defaultModel, persisted: undefined, modelReads: selected ? 0 : 1 });
-	});
-}
+test('creation uses the atomic root Thread and never invents a catalog model from profile defaults', async () => {
+	const fake = sessionHost([]);
+	let modelReads = 0;
+	let extraThreads = 0;
+	fake.host.model.readModel = async () => { modelReads++; throw new Error('Defaults unavailable'); };
+	fake.host.session.create = async () => {
+		const value = session('created', 'created-root');
+		fake.sessions.push(value);
+		return { session: value, agentTree: { roots: [] } };
+	};
+	fake.host.session.createThread = async () => { extraThreads++; throw new Error('Unexpected peer Thread'); };
+	using provider = createProvider(fake);
+	const active = await provider.create('New', { type: 'current' });
+	const persisted = await provider.readCatalog('created', active.session);
+	assert.deepEqual({ thread: active.threadId, created: active.session.model, persisted: persisted?.model, modelReads, extraThreads }, { thread: 'created-root', created: undefined, persisted: undefined, modelReads: 0, extraThreads: 0 });
+});
 
 for (const selected of [true, false]) {
 	test(`model-only catalog changes update the Session without reloading details (selected: ${selected})`, async () => {
@@ -859,3 +857,238 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	}
 	throw new Error("Condition was not met");
 }
+
+test('concurrent catalog discovery acquires a single connection subscription', async () => {
+	const fake = sessionHost([]);
+	let release!: (value: { sessions: SessionDto[]; }) => void;
+	let acquisitions = 0;
+	fake.host.session.subscribeCatalog = () => { acquisitions++; return new Promise(resolve => { release = resolve; }); };
+	using provider = createProvider(fake);
+	const first = provider.list();
+	const second = provider.list();
+	assert.equal(first, second);
+	release({ sessions: [] });
+	assert.deepEqual(await first, []);
+	await second;
+	assert.equal(acquisitions, 1);
+});
+
+test('pending detail acquisition is cancelled and released before its replacement starts', async () => {
+	const fake = sessionHost([session('first', 'root')]);
+	const snapshot = await fake.host.session.subscribe({ sessionId: 'first' });
+	let release!: (value: typeof snapshot) => void;
+	const operations: string[] = [];
+	let acquisitions = 0;
+	fake.host.session.subscribe = async () => {
+		operations.push(`subscribe-${++acquisitions}`);
+		return acquisitions === 1 ? new Promise(resolve => { release = resolve; }) : snapshot;
+	};
+	fake.host.session.unsubscribe = async () => { operations.push('unsubscribe'); };
+	using provider = createProvider(fake);
+	const listed = (await provider.list())[0]!;
+	const old = provider.subscribe(listed);
+	assert.equal(provider.subscribe(listed), old);
+	const rejected = assert.rejects(old, isCancellationError);
+	const releasing = provider.unsubscribe('first');
+	const replacement = provider.subscribe(listed);
+	assert.deepEqual(operations, ['subscribe-1']);
+	release(snapshot);
+	await rejected;
+	await releasing;
+	await replacement;
+	assert.deepEqual(operations, ['subscribe-1', 'unsubscribe', 'subscribe-2']);
+	await provider.unsubscribe('first');
+	assert.deepEqual(operations, ['subscribe-1', 'unsubscribe', 'subscribe-2', 'unsubscribe']);
+});
+
+test('a repeated release cancels its queued replacement and leaves no detail lease', async () => {
+	const fake = sessionHost([session('first', 'root')]);
+	const snapshot = await fake.host.session.subscribe({ sessionId: 'first' });
+	let completeFirst!: (value: typeof snapshot) => void;
+	let acquisitions = 0;
+	let lease = false;
+	const operations: string[] = [];
+	fake.host.session.subscribe = async () => {
+		operations.push(`subscribe-${++acquisitions}`);
+		lease = true;
+		return acquisitions === 1 ? new Promise(resolve => { completeFirst = resolve; }) : snapshot;
+	};
+	fake.host.session.unsubscribe = async () => { operations.push('unsubscribe'); lease = false; };
+	using provider = createProvider(fake);
+	const listed = (await provider.list())[0]!;
+	const outcome = (pending: Promise<unknown>): Promise<string> => pending.then(() => 'fulfilled', error => {
+		assert.ok(isCancellationError(error));
+		return 'cancelled';
+	});
+	const first = outcome(provider.subscribe(listed));
+	const releasing = provider.unsubscribe('first');
+	const replacement = outcome(provider.subscribe(listed));
+	const releasingAgain = provider.unsubscribe('first');
+	assert.equal(releasingAgain, releasing);
+
+	completeFirst(snapshot);
+	await Promise.all([releasing, releasingAgain]);
+	assert.deepEqual({ first: await first, replacement: await replacement, operations: [...operations], lease }, {
+		first: 'cancelled', replacement: 'cancelled', operations: ['subscribe-1', 'unsubscribe'], lease: false,
+	});
+	await provider.unsubscribe('first');
+	assert.deepEqual(operations, ['subscribe-1', 'unsubscribe']);
+
+	// A later deliberate open still acquires its own lease after both cancellations settle.
+	await provider.subscribe(listed);
+	assert.equal(lease, true);
+	await provider.unsubscribe('first');
+	assert.deepEqual({ operations, lease }, { operations: ['subscribe-1', 'unsubscribe', 'subscribe-2', 'unsubscribe'], lease: false });
+});
+
+test('a failed post-create subscription retries the same command and uses its existing root', async () => {
+	const fake = sessionHost([]);
+	const commands: string[] = [];
+	fake.host.session.create = async params => {
+		commands.push(params.commandId);
+		const created = fake.sessions[0] ?? session('durable', 'atomic-root');
+		if (fake.sessions.length === 0) fake.sessions.push(created);
+		return { session: created, agentTree: { roots: [] } };
+	};
+	const subscribe = fake.host.session.subscribe;
+	let first = true;
+	fake.host.session.subscribe = async params => {
+		if (first) { first = false; throw new Error('Detail unavailable'); }
+		return subscribe(params);
+	};
+	using management = createManagement(fake);
+	const draft = management.createUntitledSession('Retry detail');
+	await assert.rejects(management.materializeUntitledSession(draft.untitledSessionId), /Detail unavailable/);
+	const active = await management.materializeUntitledSession(draft.untitledSessionId);
+	assert.deepEqual({ commands, count: fake.sessions.length, thread: active.threadId, state: management.state }, {
+		commands: [`desktop-session-${draft.untitledSessionId}`, `desktop-session-${draft.untitledSessionId}`], count: 1, thread: 'atomic-root', state: 'ready',
+	});
+});
+
+test('a Session creation response from a replaced connection cannot acquire details on the new connection', async () => {
+	const fake = sessionHost([]);
+	let release!: (value: Awaited<ReturnType<IAgentSessionService['create']>>) => void;
+	fake.host.session.create = () => new Promise(resolve => { release = resolve; });
+	using provider = createProvider(fake);
+	await provider.list();
+	const creating = provider.create('Closing connection', { type: 'current' });
+	const rejected = assert.rejects(creating, isCancellationError);
+	fake.setConnectionState('crashed');
+	fake.setConnectionState('ready');
+	release({ session: session('late', 'late-root'), agentTree: { roots: [] } });
+	await rejected;
+	assert.equal(fake.subscribeCount, 0);
+});
+
+test('a reconnect while reading an interrupt target prevents sending its old sequence', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1')], agentNode());
+	let release!: (value: Awaited<ReturnType<IAgentSessionService['read']>>) => void;
+	fake.host.session.read = () => new Promise(resolve => { release = resolve; });
+	using provider = createProvider(fake);
+	const listed = (await provider.list())[0]!;
+	const interrupting = provider.interrupt(listed, 'thread-1');
+	const rejected = assert.rejects(interrupting, isCancellationError);
+	fake.setConnectionState('crashed');
+	fake.setConnectionState('ready');
+	release({ session: fake.sessions[0]!, agentTree: { roots: [agentNode()] } });
+	await rejected;
+	assert.deepEqual(fake.interruptRequests, []);
+});
+
+test('disposing during atomic Session creation releases its implicit subscription on the same connection', async () => {
+	const fake = sessionHost([]);
+	let release!: (value: Awaited<ReturnType<IAgentSessionService['create']>>) => void;
+	fake.host.session.create = () => new Promise(resolve => { release = resolve; });
+	const releases: string[] = [];
+	fake.host.session.unsubscribe = async params => { releases.push(params.sessionId); };
+	const provider = createProvider(fake);
+	await provider.list();
+	const creating = provider.create('Closing', { type: 'current' });
+	const rejected = assert.rejects(creating, isCancellationError);
+	provider.dispose();
+	release({ session: session('created', 'root'), agentTree: { roots: [] } });
+	await rejected;
+	assert.deepEqual({ releases, details: fake.subscribeCount }, { releases: ['created'], details: 0 });
+});
+
+
+test('a catalog response resolved before disconnect cannot publish after disconnect without a new generation', async () => {
+	const fake = sessionHost([session('first', 'root')]);
+	using provider = createProvider(fake);
+	await provider.list();
+	const generation = fake.appServer.connectionGeneration;
+	let release!: (value: { sessions: SessionDto[]; }) => void;
+	fake.host.session.list = () => new Promise(resolve => { release = resolve; });
+	const loading = provider.list();
+	const rejected = assert.rejects(loading, isCancellationError);
+	release({ sessions: [session('late', 'late-root')] });
+	fake.setConnectionState('crashed');
+	await rejected;
+	assert.equal(fake.appServer.connectionGeneration, generation);
+});
+
+test('a resolved interrupt target is discarded when close precedes the consumer continuation', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1')], agentNode());
+	using provider = createProvider(fake);
+	const listed = (await provider.list())[0]!;
+	let release!: (value: Awaited<ReturnType<IAgentSessionService['read']>>) => void;
+	fake.host.session.read = () => new Promise(resolve => { release = resolve; });
+	const interrupting = provider.interrupt(listed, 'thread-1');
+	const rejected = assert.rejects(interrupting, isCancellationError);
+	release({ session: fake.sessions[0]!, agentTree: { roots: [agentNode()] } });
+	fake.setConnectionState('crashed');
+	await rejected;
+	assert.deepEqual(fake.interruptRequests, []);
+});
+
+
+test('closing while an archive releases its lease prevents publishing the old connection snapshot', async () => {
+	const fake = sessionHost([session('first', 'root')]);
+	using provider = createProvider(fake);
+	const listed = (await provider.list())[0]!;
+	const detailed = await provider.subscribe(listed);
+	let release!: () => void;
+	fake.host.session.unsubscribe = () => new Promise(resolve => { release = resolve; });
+	const archiving = provider.archive(detailed);
+	const rejected = assert.rejects(archiving, isCancellationError);
+	await waitFor(() => release !== undefined);
+	fake.setConnectionState('crashed');
+	release();
+	await rejected;
+});
+
+
+test('closing while an archived subscription releases its lease prevents publishing its snapshot', async () => {
+	const fake = sessionHost([session('first', 'root')]);
+	using provider = createProvider(fake);
+	const listed = (await provider.list())[0]!;
+	fake.sessions[0] = { ...fake.sessions[0]!, status: 'archived' };
+	let release!: () => void;
+	fake.host.session.unsubscribe = () => new Promise(resolve => { release = resolve; });
+	const opening = provider.subscribe(listed);
+	const rejected = assert.rejects(opening, isCancellationError);
+	await waitFor(() => release !== undefined);
+	const generation = fake.appServer.connectionGeneration;
+	fake.setConnectionState('crashed');
+	release();
+	await rejected;
+	assert.equal(fake.appServer.connectionGeneration, generation);
+});
+
+test('creation failure uses the real Chinese catalog and releases its implicit subscription', async () => {
+	const { productLanguagePackCatalogs } = await import('../../../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../../../nls.js');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	assert.equal(chinese.bundles.ash['sessions.create.noActiveChat'], '新会话中没有活动聊天。');
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		const fake = sessionHost([]);
+		fake.host.session.create = async () => ({ session: { ...session('broken', 'unused'), threads: [] }, agentTree: { roots: [] } });
+		const released: string[] = [];
+		fake.host.session.unsubscribe = async params => { released.push(params.sessionId); };
+		using provider = createProvider(fake);
+		await provider.list();
+		await assert.rejects(provider.create('Missing root', { type: 'current' }), { message: '新会话中没有活动聊天。' });
+		assert.deepEqual(released, ['broken']);
+	} finally { resetNlsResolver(); }
+});

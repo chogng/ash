@@ -4,6 +4,7 @@ import type {
 	ThreadSubscription,
 	TurnStatus,
 } from '../../../../../platform/agentHost/common/agentService.js';
+import { localize } from '../../../../../nls.js';
 import { Emitter } from "../../../../../base/common/event.js";
 import { canceled } from "../../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
@@ -24,6 +25,13 @@ export interface AppServerSessionsProviderHost {
 export class AppServerSessionsProvider extends Disposable implements ISessionsProvider {
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
+	private connectionEpoch = 0;
+	private connectionReady = false;
+	private readonly initialConnectionState: Promise<void>;
+	private catalogSubscription: Promise<readonly ISession[]> | undefined;
+	private readonly subscriptions = new Map<SessionId, { readonly revision: number; readonly promise: Promise<ISession>; }>();
+	private readonly releases = new Map<SessionId, Promise<void>>();
+	private readonly subscriptionRevisions = new Map<SessionId, number>();
 	private readonly _onDidChangeCatalog = this._register(new Emitter<void>());
 	readonly onDidChangeCatalog = this._onDidChangeCatalog.event;
 	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean; }>());
@@ -38,10 +46,22 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		@IServerEventApi events: IServerEventApi,
 	) {
 		super();
+		let observedState = false;
+		this.initialConnectionState = appServer.getConnectionState().then(state => {
+			if (!observedState && !this.isDisposed) this.connectionReady = state === 'ready';
+		});
 		const connection = appServer.onConnectionState(state => {
+			observedState = true;
+			this.connectionReady = state === 'ready';
+			// Transport generation changes on connect, but a resolved response can outlive close.
+			if (state !== 'ready') this.connectionEpoch++;
 			// The server starts each connection with an empty subscription set.
 			this.catalogSubscribed = false;
 			this.subscribed.clear();
+			this.catalogSubscription = undefined;
+			this.subscriptions.clear();
+			this.releases.clear();
+			this.subscriptionRevisions.clear();
 			if (state === 'ready') this._onDidChangeCatalog.fire();
 		});
 		this._register(toDisposable(() => connection.dispose()));
@@ -59,78 +79,157 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		}));
 	}
 
-	async list(): Promise<readonly ISession[]> {
+	list(): Promise<readonly ISession[]> {
 		this.assertNotDisposed();
-		const generation = this.appServer.connectionGeneration;
+		if (!this.catalogSubscribed && this.catalogSubscription) return this.catalogSubscription;
 		const subscribing = !this.catalogSubscribed;
-		const result = await (subscribing ? this.sessionApi.subscribeCatalog() : this.sessionApi.list()).then(async result => {
-			if (generation !== this.appServer.connectionGeneration) { throw canceled(); }
-			if (this.isDisposed) {
-				if (subscribing) { await this.sessionApi.unsubscribeCatalog(); }
-				throw canceled();
-			}
-			this.catalogSubscribed = true;
-			return result;
-		});
-		this.assertCurrentConnection(generation);
+		const result = this.readList(subscribing);
+		if (subscribing) {
+			this.catalogSubscription = result;
+			const finish = (): void => { if (this.catalogSubscription === result) this.catalogSubscription = undefined; };
+			void result.then(finish, finish);
+		}
+		return result;
+	}
+
+	private async readList(subscribing: boolean): Promise<readonly ISession[]> {
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const result = await (subscribing ? this.sessionApi.subscribeCatalog() : this.sessionApi.list());
+		await this.initialConnectionState;
+		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch && subscribing) {
+			await this.sessionApi.unsubscribeCatalog();
+		}
+		this.assertCurrentConnection(generation, epoch);
 		this.catalogSubscribed = true;
 		return result.sessions.map(session => toSession(session));
 	}
 
 	async listAgents(): Promise<readonly ChatAgent[]> {
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
 		const result = await this.sessionApi.listAgents();
+		this.assertCurrentConnection(generation, epoch);
 		return result.agents.flatMap(agent => agent.source.type === 'directory'
 			? [{ name: agent.name, description: agent.description, sourceId: agent.source.id }]
 			: []);
 	}
 
 	async readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined> {
+		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
 		const result = await this.sessionApi.readCatalog({ sessionId });
-		this.assertCurrentConnection(generation);
+		this.assertCurrentConnection(generation, epoch);
 		return result.session ? toSession(result.session, [], previous) : undefined;
 	}
 
-	async subscribe(session: ISession): Promise<ISession> {
+	subscribe(session: ISession): Promise<ISession> {
 		this.assertNotDisposed();
-		if (session.status !== "active") return session;
+		if (session.status !== "active") return Promise.resolve(session);
+		const revision = this.subscriptionRevisions.get(session.sessionId) ?? 0;
+		const pending = this.subscriptions.get(session.sessionId);
+		if (pending?.revision === revision) return pending.promise;
+		const promise = this.subscribeSession(session, revision);
+		this.subscriptions.set(session.sessionId, { revision, promise });
+		const finish = (): void => { if (this.subscriptions.get(session.sessionId)?.promise === promise) this.subscriptions.delete(session.sessionId); };
+		void promise.then(finish, finish);
+		return promise;
+	}
+
+	private async subscribeSession(session: ISession, revision: number): Promise<ISession> {
 		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		// Release the previous lease before acquiring the next one on the same connection.
+		const releasing = this.releases.get(session.sessionId);
+		if (releasing) await releasing;
+		if (!this.connectionReady) await this.initialConnectionState;
+		this.assertCurrentConnection(generation, epoch);
+		if ((this.subscriptionRevisions.get(session.sessionId) ?? 0) !== revision) throw canceled();
 		const result = await this.sessionApi.subscribe({ sessionId: session.sessionId });
-		if (this.isDisposed && generation === this.appServer.connectionGeneration) {
+		if ((this.isDisposed || (this.subscriptionRevisions.get(session.sessionId) ?? 0) !== revision)
+			&& generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: session.sessionId });
 		}
-		this.assertCurrentConnection(generation);
+		this.assertCurrentConnection(generation, epoch);
+		if ((this.subscriptionRevisions.get(session.sessionId) ?? 0) !== revision) throw canceled();
 		this.subscribed.add(session.sessionId);
 		const next = toSession(result.session, result.threadSnapshots, session, result.agentTree.roots);
 		if (next.sessionId !== session.sessionId) {
-			await this.unsubscribe(session.sessionId);
+			this.subscribed.delete(session.sessionId);
+			await this.sessionApi.unsubscribe({ sessionId: session.sessionId });
 			throw new Error(`Session subscription returned '${next.sessionId}' for '${session.sessionId}'`);
 		}
-		if (next.status !== "active") await this.unsubscribe(session.sessionId);
+		if (next.status !== "active") {
+			this.subscribed.delete(session.sessionId);
+			await this.sessionApi.unsubscribe({ sessionId: session.sessionId });
+			this.assertCurrentConnection(generation, epoch);
+			if ((this.subscriptionRevisions.get(session.sessionId) ?? 0) !== revision) throw canceled();
+		}
 		return next;
 	}
 
-	async unsubscribe(sessionId: SessionId): Promise<void> {
-		if (!this.subscribed.delete(sessionId)) return;
-		await this.sessionApi.unsubscribe({ sessionId });
+	unsubscribe(sessionId: SessionId): Promise<void> {
+		const existing = this.releases.get(sessionId);
+		const pending = this.subscriptions.get(sessionId)?.promise;
+		const owned = this.subscribed.delete(sessionId);
+		if (!owned && !pending) return existing ?? Promise.resolve();
+		// A replacement may be queued behind the existing release; this call cancels it too.
+		this.subscriptionRevisions.set(sessionId, (this.subscriptionRevisions.get(sessionId) ?? 0) + 1);
+		if (existing) return existing;
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const release = (async () => {
+			// An in-flight acquire observes the revision and releases itself before settling.
+			await pending?.catch(() => { });
+			if (owned && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) await this.sessionApi.unsubscribe({ sessionId });
+		})();
+		this.releases.set(sessionId, release);
+		const finish = (): void => { if (this.releases.get(sessionId) === release) this.releases.delete(sessionId); };
+		void release.then(finish, finish);
+		return release;
 	}
 
 	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
 
-	async create(title: string, workspace: SessionWorkspaceSelection, model?: ModelRef, agent?: ChatAgent): Promise<IActiveSessionThread> {
+	async create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid()): Promise<IActiveSessionThread> {
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
 		const executionTarget = workspace.type === 'multiple'
 			? await this.host.selectWorkspace(workspace.folders)
 			: workspace.type === 'current' ? null : workspace;
 		if (executionTarget === undefined) throw canceled();
-		const created = await this.sessionApi.create({ commandId: commandId("session"), title, executionTarget, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
-		const thread = await this.sessionApi.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, title: "Main" });
-		const selected = model ?? await this.modelApi.readModel();
-		const session = await this.subscribe(toSession(thread.session));
-		if (!session.chats.some(candidate => candidate.threadId === thread.threadId && candidate.status === "active")) {
-			throw new Error(`Created Thread is missing from subscribed Session snapshot: ${thread.threadId}`);
+		if (!this.connectionReady) await this.initialConnectionState;
+		this.assertCurrentConnection(generation, epoch);
+		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+		// Creation also subscribes this connection to the new Session on the server.
+		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
+			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });
 		}
-		// Defaults apply to this known creation flow, never to persisted catalog facts.
-		return { session: { ...session, model: session.model ?? selected ?? null }, threadId: thread.threadId };
+		this.assertCurrentConnection(generation, epoch);
+		this.subscribed.add(created.session.sessionId);
+		// session/create already starts the root Thread atomically. A second createThread
+		// would add an unrelated peer chat and leave the root empty on every first send.
+		const root = created.session.threads.find(thread => thread.status === 'active' && !thread.parentThreadId && !thread.forkedFromId);
+		if (!root) {
+			await this.unsubscribe(created.session.sessionId);
+			throw new Error(localize('sessions.create.noActiveChat', 'The new session has no active chat.'));
+		}
+		let session: ISession;
+		try {
+			session = await this.subscribe(toSession(created.session));
+		} catch (error) {
+			if (generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) await this.unsubscribe(created.session.sessionId);
+			throw error;
+		}
+		this.assertCurrentConnection(generation, epoch);
+		if (!session.chats.some(candidate => candidate.threadId === root.threadId && candidate.status === "active")) {
+			throw new Error(`Created Thread is missing from subscribed Session snapshot: ${root.threadId}`);
+		}
+		// First-Turn defaults belong to ChatService; the catalog only reports durable facts.
+		return { session, threadId: root.threadId };
 	}
 
 	async setModel(model: ModelRef): Promise<void> {
@@ -138,19 +237,33 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async archive(session: ISession): Promise<ISession> {
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
 		const result = await this.sessionApi.archive({ commandId: commandId("archive-session"), sessionId: session.sessionId });
+		this.assertCurrentConnection(generation, epoch);
 		await this.unsubscribe(session.sessionId);
+		this.assertCurrentConnection(generation, epoch);
 		return toSession(result.session, [], session);
 	}
 
 	async stop(session: ISession): Promise<ISession> {
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
 		const result = await this.sessionApi.stop({ commandId: commandId("stop-session"), sessionId: session.sessionId });
+		this.assertCurrentConnection(generation, epoch);
 		await this.unsubscribe(session.sessionId);
+		this.assertCurrentConnection(generation, epoch);
 		return toSession(result.session, [], session);
 	}
 
 	async interrupt(session: ISession, threadId: ThreadId): Promise<void> {
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
 		const current = await this.sessionApi.read({ sessionId: session.sessionId });
+		this.assertCurrentConnection(generation, epoch);
 		const node = findAgentNode(current.agentTree.roots.map(toAgentTreeNode), threadId);
 		if (!node?.currentTurnId || !canInterrupt(node)) throw new Error(`Running Agent Thread is not available: ${threadId}`);
 		await this.turnApi.interrupt({
@@ -162,8 +275,8 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		});
 	}
 
-	private assertCurrentConnection(generation: number): void {
-		if (this.isDisposed || generation !== this.appServer.connectionGeneration) throw canceled();
+	private assertCurrentConnection(generation: number, epoch: number): void {
+		if (this.isDisposed || !this.connectionReady || generation !== this.appServer.connectionGeneration || epoch !== this.connectionEpoch) throw canceled();
 	}
 }
 
@@ -199,7 +312,7 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 				executionStatus: detail ? executionStatus(detail.turns.at(-1)?.status) : prior?.executionStatus ?? "idle",
 			};
 		}),
-		agentTree: agentTree?.map(toAgentTreeNode) ?? previous?.agentTree,
+		agentTree: session.status === "active" ? agentTree?.map(toAgentTreeNode) ?? previous?.agentTree : undefined,
 	};
 }
 

@@ -108,7 +108,21 @@ export type ApprovalReviewModelSelection =
 		readonly reasoningEffort?: ModelReasoningEffort;
 	};
 
+/** Backend execution defaults. Null means no configured model, not an executable automatic selection. */
+export interface AgentModelDefaults {
+	readonly revision: number;
+	readonly model: ModelRef | null;
+	readonly reasoningEffort: ModelReasoningEffort | null;
+}
+
+export interface AgentModelDefaultsUpdate {
+	readonly model?: ModelRef | null;
+	readonly reasoningEffort?: ModelReasoningEffort | null;
+}
+
 export interface IAgentModelsService {
+	readDefaults(): Promise<AgentModelDefaults>;
+	configureDefaults(update: AgentModelDefaultsUpdate, expectedRevision: number): Promise<void>;
 	readApprovalReviewModel(): Promise<ApprovalReviewModelSelection>;
 	setApprovalReviewModel(selection: ApprovalReviewModelSelection): Promise<void>;
 	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;

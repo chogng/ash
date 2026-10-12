@@ -16,6 +16,23 @@ REQUIRED_ARTIFACTS = {
     "json/schema.json",
     "typescript/index.ts",
     "typescript/protocol.ts",
+    "typescript/types/index.ts",
+    "typescript/AppServerRequestMap.ts",
+    "typescript/AppServerNotificationMap.ts",
+    "typescript/AppServerServerRequestMap.ts",
+    "typescript/AppServerProtocolDecoder.ts",
+    "typescript/AppServerProtocolSchema0.ts",
+    "typescript/AppServerListenInfo.ts",
+    "typescript/WebProtocolDecoder.ts",
+    "typescript/WebListenInfo.ts",
+    "typescript/WebSessionInfo.ts",
+    "typescript/RemoteTunnelHostInfo.ts",
+    "typescript/WebWorkspaceDirectory.ts",
+    "typescript/WebWorkspaceListRequest.ts",
+    "typescript/WebWorkspaceListResult.ts",
+    "typescript/WebWorkspaceOpenRequest.ts",
+    "typescript/ProductSlashCommands.ts",
+    "typescript/ApprovalModes.ts",
 }
 
 

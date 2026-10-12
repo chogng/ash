@@ -53,6 +53,8 @@ export class AppServerProtocolClient {
 	private readonly pending = new Map<number, PendingRequest>();
 	private readonly handlers = new Map<AppServerServerRequestMethod, (params: never, context: AppServerRequestContext) => unknown | Promise<unknown>>();
 	private readonly inbound = new Map<JsonRpcId, AbortController>();
+	private readonly bufferedCalls: Record<string, unknown>[] = [];
+	private bufferedCallBytes = 0;
 	private nextRequestId = 1;
 	private _generation = 0;
 	private _state: AppServerConnectionState = "stopped";
@@ -60,11 +62,12 @@ export class AppServerProtocolClient {
 	private _capabilities: ServerCapabilities | undefined;
 	private _operatingSystem: OperatingSystem | undefined;
 	private _userHome: string | undefined;
-	private metadata: AppServerConnectionMetadata | undefined;
 	private connectResolve: ((metadata: AppServerConnectionMetadata) => void) | undefined;
 	private connectReject: ((error: Error) => void) | undefined;
 	private connectTimeout: ReturnType<typeof setTimeout> | undefined;
 	private disposed = false;
+	private isClosing = false;
+	private firstRequestId = 1;
 
 	constructor(transport: AppServerTransport, options: AppServerProtocolClientOptions = {}) {
 		this.transport = transport;
@@ -104,14 +107,14 @@ export class AppServerProtocolClient {
 	}
 
 	public disconnect(): void {
-		this.shutdown(new Error('App Server connection replaced'), 'stopped');
-		this.transport.send(WEB_APP_SERVER_DISCONNECT_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION });
+		this.shutdown(new Error('App Server connection replaced'), 'stopped', { releaseTransport: true });
 	}
 
 	async connect(): Promise<AppServerConnectionMetadata> {
-		if (this.disposed) throw new Error("Cannot connect a disposed App Server client");
+		if (this.disposed || this.isClosing) throw new Error("Cannot connect a disposed or closing App Server client");
 		if (this._state !== "stopped" && this._state !== 'crashed') throw new Error(`Cannot connect App Server client from ${this._state}`);
 		const generation = ++this._generation;
+		this.firstRequestId = this.nextRequestId;
 		const connected = new Promise<AppServerConnectionMetadata>((resolve, reject) => {
 			this.connectResolve = resolve;
 			this.connectReject = reject;
@@ -143,9 +146,15 @@ export class AppServerProtocolClient {
 			this._userHome = initialization.userHome;
 			this.setState("ready");
 			if (!this.isCurrentConnection(generation, 'ready')) { throw canceled(); }
+			const calls = this.bufferedCalls.splice(0);
+			this.bufferedCallBytes = 0;
+			for (const call of calls) {
+				if (!this.isCurrentConnection(generation, 'ready')) { throw canceled(); }
+				this.handleInboundCall(call);
+			}
 			return metadata;
 		} catch (error) {
-			if (this.isCurrentConnection(generation, 'initializing')) { this.fail(toError(error)); }
+			if (this.isCurrentConnection(generation, 'initializing') || this.isCurrentConnection(generation, 'ready')) { this.fail(toError(error)); }
 			throw error;
 		}
 	}
@@ -155,7 +164,8 @@ export class AppServerProtocolClient {
 	}
 
 	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs: number; }): Promise<MethodResult<M>> {
-		if (this._state !== "ready") return Promise.reject(new Error(`App Server is not ready: ${this._state}`));
+		// Abort listeners can reenter before the final state event is published.
+		if (this.disposed || this.isClosing || this._state !== "ready") return Promise.reject(new Error(`App Server is not ready: ${this.isClosing ? 'closing' : this._state}`));
 		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, "timeoutMs") : this.options.requestTimeoutMs);
 	}
 
@@ -181,12 +191,11 @@ export class AppServerProtocolClient {
 		if (this.disposed) return;
 		this.disposed = true;
 		try {
-			this.transport.send(WEB_APP_SERVER_DISCONNECT_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION });
+			this.shutdown(new Error("App Server client disposed"), "stopped", { releaseTransport: true });
 		} finally {
 			this.transport.off(WEB_APP_SERVER_CONNECTED_EVENT, this.handleConnected);
 			this.transport.off(WEB_APP_SERVER_FRAME_EVENT, this.handleFrame);
 			this.transport.off(WEB_APP_SERVER_CLOSED_EVENT, this.handleClosed);
-			this.shutdown(new Error("App Server client disposed"), "stopped");
 			this.stateListeners.clear();
 			this.notificationListeners.clear();
 			this.handlers.clear();
@@ -212,8 +221,8 @@ export class AppServerProtocolClient {
 			};
 			this.pending.set(id, pending);
 		});
-		const frame = JSON.stringify({ jsonrpc: "2.0", id, method: definition.method, params });
 		try {
+			const frame = JSON.stringify({ jsonrpc: "2.0", id, method: definition.method, params });
 			this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
 		} catch (error) {
 			this.rejectPending(id, toError(error));
@@ -225,7 +234,6 @@ export class AppServerProtocolClient {
 		if (this._state !== "starting") return;
 		try {
 			const metadata = validateConnectedPayload(payload);
-			this.metadata = metadata;
 			this.clearConnectTimeout();
 			const resolve = this.connectResolve;
 			this.connectResolve = undefined;
@@ -237,15 +245,23 @@ export class AppServerProtocolClient {
 	};
 
 	private readonly handleFrame = (payload: unknown): void => {
-		if (this.disposed || this._state === 'stopped' || this._state === 'crashed') {
+		if (this.disposed || this.isClosing || this._state === 'stopped' || this._state === 'crashed') {
 			return;
 		}
 		try {
-			const frame = validateFramePayload(payload);
+			const { frame, byteLength } = validateFramePayload(payload);
 			const message: unknown = JSON.parse(frame);
 			const envelope = decodeAppServerEnvelope(message);
 			if (envelope.kind === "notification" || envelope.kind === "serverRequest") {
-				this.handleInboundCall(message as Record<string, unknown>);
+				if (this._state !== 'ready') {
+					// A carrier can deliver the initialize response and subsequent calls in one
+					// batch. Gate host effects until compatibility has actually been checked.
+					if (this.bufferedCalls.length >= 128 || this.bufferedCallBytes + byteLength > MAX_FRAME_BYTES) { throw new Error('App Server initialization call limit reached'); }
+					this.bufferedCalls.push(message as Record<string, unknown>);
+					this.bufferedCallBytes += byteLength;
+				} else {
+					this.handleInboundCall(message as Record<string, unknown>);
+				}
 			} else {
 				this.handleResponse(message as Record<string, unknown>);
 			}
@@ -255,11 +271,13 @@ export class AppServerProtocolClient {
 	};
 
 	private readonly handleClosed = (payload: unknown): void => {
-		if (this.disposed) { return; }
-		if (isRecord(payload) && payload.intentional === true) { this.shutdown(new Error('App Server connection stopped'), 'stopped'); return; }
+		if (this.disposed || this.isClosing || this._state === 'stopped') { return; }
+		const intentional = isRecord(payload) && payload.intentional === true;
+		const fallback = intentional ? 'App Server connection stopped' : 'App Server bridge closed';
 		const message = isRecord(payload) && typeof payload.message === "string" && payload.message.trim()
 			? payload.message
-			: "App Server bridge closed";
+			: fallback;
+		if (intentional) { this.shutdown(new Error(message), 'stopped'); return; }
 		this.fail(new Error(message));
 	};
 
@@ -267,7 +285,12 @@ export class AppServerProtocolClient {
 		if (!Number.isSafeInteger(message.id) || (message.id as number) <= 0) throw new Error("App Server emitted an invalid response ID");
 		const id = message.id as number;
 		const pending = this.pending.get(id);
-		if (!pending) return;
+		if (!pending) {
+			// Request IDs never repeat. A response from a retired connection cannot complete
+			// this generation; an unknown or duplicate current response is a protocol failure.
+			if (id < this.firstRequestId) { return; }
+			throw new Error('App Server emitted an unmatched response ID');
+		}
 		const response = decodeAppServerResponse(pending.method, message);
 		this.pending.delete(id);
 		clearTimeout(pending.timeout);
@@ -293,23 +316,34 @@ export class AppServerProtocolClient {
 				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'Method not found', data: null } }) });
 				return;
 			}
+			const generation = this._generation;
 			const controller = new AbortController();
 			this.inbound.set(request.id, controller);
-			const reply = (response: object): void => {
-				if (this.inbound.get(request.id) !== controller) { return; }
+			const ownsRequest = (): boolean => this._generation === generation && this.inbound.get(request.id) === controller;
+			// Check ownership before decoding or serializing a host result. Both can throw,
+			// and retired work must have no effect on a replacement connection.
+			const reply = (response: () => object, options?: { readonly abort: boolean; }): void => {
+				if (!ownsRequest()) { return; }
+				const frame = JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response() });
 				this.inbound.delete(request.id);
 				clearTimeout(timeout);
-				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response }) });
+				if (options?.abort) { controller.abort(); }
+				if (this.isCurrentConnection(generation, 'ready')) {
+					try {
+						this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
+					} catch (error) {
+						this.fail(toError(error));
+					}
+				}
 			};
-			const timeout = setTimeout(() => {
-				controller.abort();
-				reply({ error: { code: -32000, message: 'Host request timed out', data: null } });
-			}, this.options.requestTimeoutMs);
+			const timeout = setTimeout(() => reply(() => ({ error: { code: -32000, message: 'Host request timed out', data: null } }), { abort: true }), this.options.requestTimeoutMs);
 			controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
-			void Promise.resolve().then(() => handler(request.params as never, { signal: controller.signal })).then(
-				value => reply({ result: decodeAppServerServerRequestResult(request.method, value) }),
-				error => reply({ error: { code: isCancellationError(error) ? -32800 : -32000, message: toError(error).message, data: null } }),
-			).catch(error => this.fail(toError(error)));
+			void Promise.resolve().then(() => ownsRequest() ? handler(request.params as never, { signal: controller.signal }) : undefined).then(
+				value => reply(() => ({ result: decodeAppServerServerRequestResult(request.method, value) })),
+				error => reply(() => ({ error: { code: isCancellationError(error) ? -32800 : -32000, message: toError(error).message, data: null } })),
+			).catch(error => {
+				if (this._generation === generation && !controller.signal.aborted) { this.fail(toError(error)); }
+			});
 			return;
 		}
 		const wireNotification = decodeAppServerNotification(message);
@@ -318,9 +352,12 @@ export class AppServerProtocolClient {
 			const controller = this.inbound.get(id);
 			if (controller) {
 				// Retire first: cancellation listeners and late promises must not send a second reply.
+				const generation = this._generation;
 				this.inbound.delete(id);
 				controller.abort();
-				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32800, message: 'Host request cancelled', data: null } }) });
+				if (this.isCurrentConnection(generation, 'ready')) {
+					this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32800, message: 'Host request cancelled', data: null } }) });
+				}
 			}
 			return;
 		}
@@ -344,22 +381,49 @@ export class AppServerProtocolClient {
 	}
 
 	private fail(error: Error): void {
-		this.shutdown(error, this._state === "stopped" ? "stopped" : "crashed");
-		this.transport.send(WEB_APP_SERVER_DISCONNECT_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION });
+		if (this.disposed || this.isClosing) { return; }
+		this.shutdown(error, this._state === "stopped" ? "stopped" : "crashed", { releaseTransport: true });
 	}
 
-	private shutdown(error: Error, state: AppServerConnectionState): void {
-		this._operatingSystem = undefined;
-		this._userHome = undefined;
-		this.clearConnectTimeout();
-		const reject = this.connectReject;
-		this.connectResolve = undefined;
-		this.connectReject = undefined;
-		reject?.(error);
-		for (const [id] of this.pending) this.rejectPending(id, error);
-		for (const controller of this.inbound.values()) { controller.abort(); }
-		this.inbound.clear();
-		this.setState(state);
+	private shutdown(error: Error, state: AppServerConnectionState, options?: { readonly releaseTransport: boolean; }): void {
+		if (this.isClosing) { return; }
+		this.isClosing = true;
+		try {
+			this.bufferedCalls.length = 0;
+			this.bufferedCallBytes = 0;
+			this._slashCommands = [];
+			this._capabilities = undefined;
+			this._operatingSystem = undefined;
+			this._userHome = undefined;
+			this.clearConnectTimeout();
+			const reject = this.connectReject;
+			this.connectResolve = undefined;
+			this.connectReject = undefined;
+			const pending = [...this.pending.values()];
+			const inbound = [...this.inbound.values()];
+			// Retire every request before notifying cancellation listeners, which can
+			// synchronously dispose this client or complete another host operation.
+			this.pending.clear();
+			this.inbound.clear();
+			reject?.(error);
+			for (const request of pending) {
+				clearTimeout(request.timeout);
+				request.reject(error);
+			}
+			for (const controller of inbound) { controller.abort(); }
+			if (options?.releaseTransport) {
+				try {
+					this.transport.send(WEB_APP_SERVER_DISCONNECT_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION });
+				} catch {
+					// Cleanup must settle all waiters even if the carrier already stopped.
+				}
+			}
+		} finally {
+			this.isClosing = false;
+			// Recovery observers may immediately connect again. Publish only after
+			// the old transport has closed so cleanup cannot tear down their new lease.
+			this.setState(this.disposed ? 'stopped' : state);
+		}
 	}
 
 	private clearConnectTimeout(): void {
@@ -389,10 +453,11 @@ function validateConnectedPayload(payload: unknown): AppServerConnectionMetadata
 	return { workspaceId: payload.workspaceId, workspaceRoot: payload.workspaceRoot };
 }
 
-function validateFramePayload(payload: unknown): string {
+function validateFramePayload(payload: unknown): { frame: string; byteLength: number; } {
 	if (!isRecord(payload) || typeof payload.frame !== "string") throw new Error("App Server bridge frame is invalid");
-	if (VSBuffer.fromString(payload.frame).byteLength > MAX_FRAME_BYTES) throw new Error(`App Server frame exceeds ${MAX_FRAME_BYTES} bytes`);
-	return payload.frame;
+	const byteLength = VSBuffer.fromString(payload.frame).byteLength;
+	if (byteLength > MAX_FRAME_BYTES) throw new Error(`App Server frame exceeds ${MAX_FRAME_BYTES} bytes`);
+	return { frame: payload.frame, byteLength };
 }
 
 function validateInitializeResult(value: InitializeResult): Pick<InitializeResult, "capabilities" | "slashCommands"> & { operatingSystem: OperatingSystem | undefined; userHome: string | undefined; } {
