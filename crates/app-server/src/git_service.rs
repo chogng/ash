@@ -631,6 +631,30 @@ impl GitService {
         })
     }
 
+    pub(crate) fn change_file_at_paths(
+        &self,
+        original_path: &Path,
+        modified_path: &Path,
+        comparison: GitChangeFileComparison,
+    ) -> Result<GitChangeFile, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
+        run(&runtime, async {
+            let repository = self.open_repository().await?;
+            let dir_prefix = self.repository_prefix(&repository)?;
+            self.client
+                .change_file_at_paths(
+                    &repository,
+                    &dir_prefix.join(original_path),
+                    &dir_prefix.join(modified_path),
+                    comparison,
+                    MAX_CHANGE_FILE_BYTES,
+                )
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
     pub(crate) fn conflict_file(
         &self,
         path: &Path,

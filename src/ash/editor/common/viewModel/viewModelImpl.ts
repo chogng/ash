@@ -695,8 +695,7 @@ export class ViewModel extends Disposable implements IViewModel {
 	private publishVisibleLines(stabilized: boolean): void {
 		const viewport = this.viewLayout.getLinesViewportData();
 		const viewRange = new Range(viewport.startLineNumber, 1, viewport.endLineNumber, this.getLineMaxColumn(viewport.endLineNumber));
-		const modelRange = this.coordinatesConverter.convertViewRangeToModelRange(viewRange);
-		this.attachedView.setVisibleLines([{ startLineNumber: modelRange.startLineNumber, endLineNumber: modelRange.endLineNumber }], stabilized);
+		this.attachedView.setVisibleLines(this.toModelVisibleRanges(viewRange), stabilized);
 	}
 
 	private toCursorState(selection: Selection): CursorState {

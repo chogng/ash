@@ -181,13 +181,31 @@ impl GitClient {
         comparison: GitChangeFileComparison,
         maximum_bytes: usize,
     ) -> GitResult<GitChangeFile> {
+        self.change_file_at_paths(
+            repository,
+            comparison_original_path(change, comparison),
+            change.path(),
+            comparison,
+            maximum_bytes,
+        )
+        .await
+    }
+
+    /// Reads current comparison contents at paths resolved by the caller's status owner.
+    pub async fn change_file_at_paths(
+        &self,
+        repository: &GitRepository,
+        original_path: &Path,
+        modified_path: &Path,
+        comparison: GitChangeFileComparison,
+        maximum_bytes: usize,
+    ) -> GitResult<GitChangeFile> {
         if maximum_bytes == 0 {
             return Err(GitError::InvalidConfiguration {
                 field: "maximum_bytes",
                 requirement: "must be non-zero",
             });
         }
-        let original_path = comparison_original_path(change, comparison);
         let original = self
             .read_file_at_revision(
                 repository,
@@ -203,14 +221,14 @@ impl GitClient {
             GitChangeFileComparison::Staged => {
                 self.read_file_at_revision(
                     repository,
-                    change.path(),
+                    modified_path,
                     GitFileRevision::Index,
                     maximum_bytes,
                 )
                 .await?
             }
             GitChangeFileComparison::Unstaged => {
-                read_worktree_file(repository, change.path(), maximum_bytes)?
+                read_worktree_file(repository, modified_path, maximum_bytes)?
             }
         };
         Ok(GitChangeFile { original, modified })

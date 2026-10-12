@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { WorkerDiffComputationService } from '../../../browser/services/workerDiffComputationService.js';
+import { WorkerBasedDiffProviderFactoryService } from '../../../browser/widget/diffEditor/diffProviderFactoryService.js';
 import { DiffModel } from '../../../common/diff/diffModel.js';
 import { type DiffComputationRequest } from '../../../common/diff/diffComputationService.js';
 import { type IDocumentDiff, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
@@ -13,6 +16,56 @@ import { DiffTestPort } from './diffTestPort.js';
 const options: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 suite('Frontend diff Worker', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('shared Worker failure rejects pending work and allows the next comparison to recover', async () => {
+		using failures = new Emitter<unknown>();
+		const ports: DiffTestPort[] = [];
+		using factory = new WorkerBasedDiffProviderFactoryService(() => {
+			const port = Object.assign(new DiffTestPort(), { onFailure: failures.event });
+			ports.push(port);
+			return port;
+		});
+		using provider = factory.createDiffProvider();
+		using original = new TextModel('old');
+		using modified = new TextModel('new');
+		const pending = provider.computeDiff(original, modified, options, CancellationToken.None);
+		const rejected = assert.rejects(pending, /Worker crashed/);
+		failures.fire(new Error('Worker crashed'));
+		await rejected;
+		assert.equal(ports[0]!.isDisposed, true);
+		assert.equal((await provider.computeDiff(original, modified, options, CancellationToken.None)).changes.length, 1);
+		assert.equal(ports.length, 2);
+	});
+	test('factory reuses its Worker across disposed providers while cancelling only their own requests', async () => {
+		const ports: DiffTestPort[] = [];
+		using factory = new WorkerBasedDiffProviderFactoryService(() => {
+			const port = new DiffTestPort();
+			ports.push(port);
+			return port;
+		});
+		using first = factory.createDiffProvider();
+		using second = factory.createDiffProvider();
+		using original = new TextModel('old');
+		using modified = new TextModel('new');
+		const pending = first.computeDiff(original, modified, options, CancellationToken.None);
+		const rejected = assert.rejects(pending, { name: 'CancellationError' });
+		const surviving = second.computeDiff(original, modified, options, CancellationToken.None);
+		first.dispose();
+		await rejected;
+		assert.equal((await surviving).changes.length, 1);
+		second.dispose();
+		assert.equal(ports.length, 1);
+		assert.equal(ports[0]!.isDisposed, false);
+		using replacement = factory.createDiffProvider();
+		assert.equal((await replacement.computeDiff(original, modified, options, CancellationToken.None)).changes.length, 1);
+		assert.equal(ports.length, 1);
+		const closing = replacement.computeDiff(original, modified, options, CancellationToken.None);
+		const closed = assert.rejects(closing, /disposed/);
+		factory.dispose();
+		await closed;
+		assert.equal(ports[0]!.isDisposed, true);
+		assert.throws(() => factory.createDiffProvider(), ReferenceError);
+	});
 	test('uses the same frontend provider for concurrent comparisons', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
 		const [first, second] = await Promise.all([

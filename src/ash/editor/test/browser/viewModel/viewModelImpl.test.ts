@@ -216,7 +216,10 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	}]);
 	assert.equal(viewModel.getLineContent(1), 'one!');
 	viewModel.visibleLinesStabilized();
-	assert.deepEqual(visible.at(-1), { startLineNumber: 1, endLineNumber: 3 });
+	assert.deepEqual(visible.slice(-2).map(({ startLineNumber, endLineNumber }) => ({ startLineNumber, endLineNumber })), [
+		{ startLineNumber: 1, endLineNumber: 1 },
+		{ startLineNumber: 3, endLineNumber: 3 },
+	]);
 });
 
 test('ViewModel preserves cursor markers across structural edits and resets them only on model replacement', () => {

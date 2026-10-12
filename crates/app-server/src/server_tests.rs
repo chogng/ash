@@ -7963,8 +7963,65 @@ fn git_change_file_rpc_preserves_head_index_and_worktree_sides() {
         "from working tree\n"
     );
 
+    std::fs::write(root.join("tracked.txt"), "new working tree\n").unwrap();
+    let refreshed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"git/changeFile",
+            "params":{"path":"tracked.txt","comparison":"unstaged"}
+        }),
+    );
+    assert_eq!(refreshed["result"]["original"]["text"], "from index\n");
+    assert_eq!(
+        refreshed["result"]["modified"]["text"],
+        "new working tree\n"
+    );
+
     drop(server);
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn git_change_file_rpc_preserves_renames_and_rejects_sources_outside_the_grant() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join("nested")).unwrap();
+    run_git(&root, &["init"]);
+    run_git(&root, &["config", "user.name", "Ash Test"]);
+    run_git(&root, &["config", "user.email", "ash@example.test"]);
+    std::fs::write(root.join("old.txt"), "original content\n").unwrap();
+    run_git(&root, &["add", "."]);
+    run_git(&root, &["commit", "-m", "initial"]);
+    run_git(&root, &["mv", "old.txt", "nested/renamed.txt"]);
+    for (grant_root, path, allowed) in [
+        (root.clone(), "nested/renamed.txt", true),
+        (root.join("nested"), "renamed.txt", false),
+    ] {
+        let server = server()
+            .with_git_root(dir_authorization(
+                &grant_root,
+                DirPermission::InspectRepository,
+            ))
+            .unwrap();
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        let result = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":2, "method":"git/changeFile",
+                "params":{"path":path,"comparison":"staged"}
+            }),
+        );
+        if allowed {
+            assert!(result.get("error").is_none(), "{result}");
+            assert_eq!(result["result"]["original"]["text"], "original content\n");
+            assert_eq!(result["result"]["modified"]["text"], "original content\n");
+        } else {
+            assert!(result.get("error").is_some(), "{result}");
+        }
+    }
 }
 
 #[test]

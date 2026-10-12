@@ -694,6 +694,9 @@ test('session Changes retains collapse and scroll through hiding, refresh and de
 	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(100);
 	await page.evaluate(() => window.ashDiffIntegration.switchSessionChanges());
 	await expect(firstHeader).toHaveAttribute('aria-expanded', 'true');
+	// An immediate zero can hide first-change navigation that is still awaiting the Worker.
+	await expect(editor.locator('.stanza-diff-overview-marker').first()).toBeAttached();
+	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
 });
 

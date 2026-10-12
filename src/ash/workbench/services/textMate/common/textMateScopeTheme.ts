@@ -79,7 +79,12 @@ export function createTextMateScopeThemeResolver(theme: TextMateScopeTheme): Tex
 		createMatchers(rule.selector, scopeMatchScore, matchers);
 		return { rule, matchers };
 	});
+	// Repeated token scopes share immutable styles for this theme revision only.
+	const styles = new Map<string, TextMateResolvedTokenStyle>();
 	return scopes => {
+		const key = JSON.stringify(scopes);
+		const cached = styles.get(key);
+		if (cached) return cached;
 		const base = defaultTextMateScopeResolver(scopes);
 		const result: { tokenType: string; modifiers: readonly string[]; foreground?: string; background?: string; fontStyle?: readonly TextMateTokenFontStyle[]; } = {
 			tokenType: base?.tokenType ?? 'source', modifiers: base?.modifiers ?? EMPTY_MODIFIERS,
@@ -98,7 +103,10 @@ export function createTextMateScopeThemeResolver(theme: TextMateScopeTheme): Tex
 				}
 			}
 		}
-		return Object.freeze(result);
+		const style = Object.freeze(result);
+		if (styles.size >= MAX_SCOPE_STYLE_COUNT) styles.delete(styles.keys().next().value!);
+		styles.set(key, style);
+		return style;
 	};
 }
 
@@ -124,6 +132,7 @@ export function matchesTextMateScopeSelector(selector: string, scopes: readonly 
 }
 
 const MAX_RULE_COUNT = 1_024;
+const MAX_SCOPE_STYLE_COUNT = 1_024;
 const MAX_SELECTOR_LENGTH = 512;
 const MAX_TOKEN_TYPE_LENGTH = 128;
 const MAX_MODIFIER_COUNT = 32;

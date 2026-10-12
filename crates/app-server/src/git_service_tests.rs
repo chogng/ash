@@ -361,6 +361,55 @@ fn branch_listing_discovers_once_and_refreshes_worktree_occupancy() {
     assert_eq!(std::fs::read_to_string(&log).unwrap().lines().count(), 3);
 }
 
+#[test]
+fn git_change_file_at_paths_reads_fresh_contents_without_status_queries() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    git(&root, &["init", "--initial-branch=main"]);
+    git(&root, &["config", "user.name", "Ash Test"]);
+    git(&root, &["config", "user.email", "ash@example.invalid"]);
+    std::fs::write(root.join("old.txt"), "from head\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-m", "initial"]);
+    git(&root, &["mv", "old.txt", "renamed.txt"]);
+    std::fs::write(root.join("renamed.txt"), "from index\n").unwrap();
+    git(&root, &["add", "."]);
+    std::fs::write(root.join("renamed.txt"), "from working tree\n").unwrap();
+    let authorization = Grant::for_environment(
+        Dir::open_local(&root).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::InspectRepository]),
+    )
+    .authorize(Permission::InspectRepository)
+    .unwrap();
+    let mut service = GitService::new(authorization, root.clone()).unwrap();
+    let (client, commands) = recording_git(&root);
+    service.client = client;
+    let staged = service
+        .change_file_at_paths(
+            Path::new("old.txt"),
+            Path::new("renamed.txt"),
+            ash_git::GitChangeFileComparison::Staged,
+        )
+        .unwrap();
+    assert_eq!(staged.original(), Some(b"from head\n".as_slice()));
+    assert_eq!(staged.modified(), Some(b"from index\n".as_slice()));
+    let unstaged = service
+        .change_file_at_paths(
+            Path::new("renamed.txt"),
+            Path::new("renamed.txt"),
+            ash_git::GitChangeFileComparison::Unstaged,
+        )
+        .unwrap();
+    assert_eq!(unstaged.original(), Some(b"from index\n".as_slice()));
+    assert_eq!(unstaged.modified(), Some(b"from working tree\n".as_slice()));
+    let log = std::fs::read_to_string(commands).unwrap();
+    assert!(
+        !log.split_whitespace().any(|argument| argument == "status"),
+        "{log}"
+    );
+}
+
 fn recording_git(root: &Path) -> (GitClient, std::path::PathBuf) {
     // Keep the probe outside the working tree so all-change staging cannot include test artifacts.
     let executable = root.join(".git/record-git");

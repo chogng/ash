@@ -21,6 +21,24 @@ test("Scope themes retain exact foreground, background, and font style presentat
 	assert.deepEqual(resolver(["source.demo", "comment.line.demo"]), { tokenType: "comment", modifiers: [], foreground: "#6A9955", background: "#10101080", fontStyle: ["italic", "underline"] });
 });
 
+test('scope style reuse preserves stack order and is invalidated by theme replacement', () => {
+	using themes = new TextMateScopeThemeModel({
+		revision: 1, rules: [
+			{ selector: 'source.ts string', foreground: '#123456' },
+		]
+	});
+	const scopes = ['source.ts', 'string.quoted.ts'];
+	const first = themes.resolve(scopes);
+	assert.equal(themes.resolve([...scopes]), first);
+	assert.equal(first?.foreground, '#123456');
+	assert.equal(themes.resolve([...scopes].reverse())?.foreground, undefined);
+	scopes[1] = 'comment.line.ts';
+	assert.equal(themes.resolve(scopes)?.foreground, undefined);
+	themes.replace({ revision: 2, rules: [{ selector: 'source.ts string', foreground: '#abcdef' }] });
+	assert.equal(themes.resolve(['source.ts', 'string.quoted.ts'])?.foreground, '#abcdef');
+	assert.equal(first?.foreground, '#123456');
+});
+
 test("Scope selector matching supports comma unions, segment wildcards, and exclusions", () => {
 	assert.equal(matchesTextMateScopeSelector("comment, string.*", ["source.demo", "string.quoted.demo"]), true);
 	assert.equal(matchesTextMateScopeSelector("source.demo string -string.regexp", ["source.demo", "string.quoted.demo"]), true);

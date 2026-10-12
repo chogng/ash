@@ -1,7 +1,7 @@
 import { throwIfCancelled, type CancellationToken } from '../../../base/common/cancellation.js';
 import { Event } from '../../../base/common/event.js';
 import { CancellationError } from '../../../base/common/errors.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { WebWorkerClient, type WebWorkerClientPort } from '../../../base/common/worker/webWorker.js';
 import { BrowserWorkerClientPort } from '../../../platform/webWorker/browser/browserWorkerClientPort.js';
 import { type DiffComputationRequest } from '../../common/diff/diffComputationService.js';
@@ -11,7 +11,8 @@ import { type ITextModel } from '../../common/model.js';
 
 /** Owns one lazy frontend Worker and independent, cancellable document comparisons. */
 export class WorkerDiffComputationService extends Disposable implements IDocumentDiffProvider {
-	private client: WebWorkerClient | undefined;
+	private readonly client = this._register(new MutableDisposable<WebWorkerClient>());
+	private readonly failureListener = this._register(new MutableDisposable<IDisposable>());
 	private requestId = 0;
 	public readonly onDidChange = Event.None;
 
@@ -37,8 +38,8 @@ export class WorkerDiffComputationService extends Disposable implements IDocumen
 				throwIfCancelled(cancellationToken);
 				return nullDocumentDiff;
 			}
-			this.client ??= this._register(new WebWorkerClient(this.createPort(), diffWorkerChannel));
-			const result = await this.client.request(++this.requestId, { request }, controller.signal);
+			const client = this.client.value ?? this.createClient();
+			const result = await client.request(++this.requestId, { request }, controller.signal);
 			this.assertNotDisposed();
 			throwIfCancelled(cancellationToken);
 			const diff = readDiffResult(result, request);
@@ -51,6 +52,17 @@ export class WorkerDiffComputationService extends Disposable implements IDocumen
 		} finally {
 			cancellation.dispose();
 		}
+	}
+
+	private createClient(): WebWorkerClient {
+		const client = new WebWorkerClient(this.createPort(), diffWorkerChannel);
+		this.client.value = client;
+		// A failed shared transport must not poison every later comparison in the window.
+		this.failureListener.value = client.onDidFail(() => {
+			this.failureListener.clear();
+			this.client.clear();
+		});
+		return client;
 	}
 }
 

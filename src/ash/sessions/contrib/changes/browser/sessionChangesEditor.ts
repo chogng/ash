@@ -201,7 +201,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			}
 			this.messageDomNode.hidden = true;
 			pane.layout(this.dimension);
-			this.restoreViewState(this.viewState);
+			// A new conversation starts at the header; cancel deferred first-change
+			// navigation just as restoring an existing conversation's state does.
+			this.restoreViewState(this.viewState ?? { scrollTop: 0, collapsedItemIds: [], itemViewStates: [] });
 			pane.setVisible(true);
 		} catch (error) {
 			if (!this.isDisposed && revision === this.revision) {

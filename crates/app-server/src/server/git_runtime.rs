@@ -1172,16 +1172,57 @@ impl GitRepositoryRuntime {
     ) -> Result<GitChangeFileResult, GitRuntimeError> {
         let _operation = lock_current_operation(&self.operation)
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
-        let file = self
-            .service
-            .change_file(
-                path,
-                match comparison {
-                    GitChangeFileComparisonDto::Staged => GitChangeFileComparison::Staged,
-                    GitChangeFileComparisonDto::Unstaged => GitChangeFileComparison::Unstaged,
-                },
-            )
-            .map_err(GitRuntimeError::Service)?;
+        let original_path = {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+            let wire_path = wire_path(path)?;
+            let change = state.status.as_ref().and_then(|status| {
+                status
+                    .changes
+                    .iter()
+                    .find(|change| change.path == wire_path)
+            });
+            change
+                .map(|change| {
+                    let status = match comparison {
+                        GitChangeFileComparisonDto::Staged => change.index_status,
+                        GitChangeFileComparisonDto::Unstaged => change.worktree_status,
+                    };
+                    match status {
+                        GitChangeStatusDto::Unmodified => Ok(None),
+                        GitChangeStatusDto::Renamed | GitChangeStatusDto::Copied => change
+                            .original_path
+                            .as_ref()
+                            .map(|path| Some(PathBuf::from(path)))
+                            .ok_or(GitRuntimeError::Boundary),
+                        GitChangeStatusDto::Modified
+                        | GitChangeStatusDto::Added
+                        | GitChangeStatusDto::Deleted
+                        | GitChangeStatusDto::TypeChanged
+                        | GitChangeStatusDto::Unmerged
+                        | GitChangeStatusDto::Untracked
+                        | GitChangeStatusDto::Ignored => Ok(Some(path.to_path_buf())),
+                    }
+                })
+                .transpose()?
+                .flatten()
+        };
+        let comparison = match comparison {
+            GitChangeFileComparisonDto::Staged => GitChangeFileComparison::Staged,
+            GitChangeFileComparisonDto::Unstaged => GitChangeFileComparison::Unstaged,
+        };
+        // The published resource already identifies its comparison paths. Read fresh
+        // contents without rescanning the repository on every preview selection.
+        let file = match original_path {
+            Some(original_path) => {
+                self.service
+                    .change_file_at_paths(&original_path, path, comparison)
+            }
+            None => self.service.change_file(path, comparison),
+        }
+        .map_err(GitRuntimeError::Service)?;
         Ok(GitChangeFileResult {
             original: commit_file_content(file.original()),
             modified: commit_file_content(file.modified()),
