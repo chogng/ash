@@ -235,6 +235,28 @@ fn node_runtime_requires_its_policy_and_binding_and_rejects_package_executables(
 }
 
 #[test]
+fn a_node_runtime_replaced_after_binding_cannot_start_an_extension() {
+    use crate::ExtensionHostLauncher;
+    let root = tempfile::tempdir().unwrap();
+    let executable = root.path().join("electron");
+    let bootstrap = root.path().join("node.mjs");
+    std::fs::write(&executable, b"first installation").unwrap();
+    std::fs::write(&bootstrap, b"bootstrap").unwrap();
+    let launcher =
+        crate::ProductNodeLauncher::new(executable.clone(), bootstrap, BTreeMap::new()).unwrap();
+    std::fs::write(executable, b"replacement installation").unwrap();
+    let command = crate::ExtensionLaunchCommand::vscode(Vec::<String>::new(), root.path()).unwrap();
+    let limits = crate::ExtensionHostLimits {
+        isolation: crate::ProcessIsolationPolicy::AuthorizedNode,
+        ..Default::default()
+    };
+    assert!(matches!(
+        launcher.spawn(&command, &limits),
+        Err(crate::ExtensionHostError::IsolationUnavailable)
+    ));
+}
+
+#[test]
 fn product_node_process_speaks_the_shared_protocol_and_uses_real_node() {
     use crate::ExtensionHostLauncher;
     use serde_json::json;

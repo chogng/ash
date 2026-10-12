@@ -115,7 +115,13 @@ impl Drop for EditorPeer {
 }
 
 fn install_node_fixture(root: &Path) -> (ProductNodeLauncher, EditorExtensionDeployment) {
-    let output = std::process::Command::new("node")
+    let electron = std::env::var_os("ASH_TEST_ELECTRON_PATH");
+    let mut runtime =
+        std::process::Command::new(electron.as_deref().unwrap_or(std::ffi::OsStr::new("node")));
+    if electron.is_some() {
+        runtime.env("ELECTRON_RUN_AS_NODE", "1");
+    }
+    let output = runtime
         .args(["--print", "process.execPath"])
         .output()
         .expect("Node is required for standard extension lifecycle tests");
@@ -157,9 +163,12 @@ exports.activate = context => {
 "#,
     )
     .unwrap();
-    let environment = std::env::var_os("SYSTEMROOT")
+    let mut environment = std::env::var_os("SYSTEMROOT")
         .map(|value| BTreeMap::from([("SYSTEMROOT".into(), value)]))
         .unwrap_or_default();
+    if electron.is_some() {
+        environment.insert("ELECTRON_RUN_AS_NODE".into(), "1".into());
+    }
     let launcher = ProductNodeLauncher::new(node, root.join("node.mjs"), environment).unwrap();
     let command = ExtensionLaunchCommand::vscode(
         vec![

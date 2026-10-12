@@ -124,6 +124,10 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         help="Ed25519 public key trusted by the independently updated App Server.",
     )
     parser.add_argument(
+        "--electron-version",
+        help="Exact Electron version required by a Desktop host-provided runtime package.",
+    )
+    parser.add_argument(
         "--bwrap-bin",
         type=Path,
         help=(
@@ -231,6 +235,13 @@ def build_package(args: argparse.Namespace) -> int:
         raise RuntimeError(
             "--node-bin cannot be used with --javascript-runtime host-provided-node"
         )
+    if (
+        args.electron_version is not None
+        and args.javascript_runtime != "host-provided-node"
+    ):
+        raise ValueError(
+            "--electron-version requires --javascript-runtime host-provided-node"
+        )
     tgrep = resolve_tgrep(
         spec, args.tgrep_lock, args.tgrep_cache_root, args.tgrep_bin, cargo=args.cargo
     )
@@ -279,6 +290,7 @@ def build_package(args: argparse.Namespace) -> int:
         protocol_metadata=protocol_metadata,
         update_public_key=args.update_public_key,
         build_profile=args.cargo_profile,
+        electron_version=args.electron_version,
         symbols_dir=args.symbols_dir,
         windows_sandbox_service_binary=binaries.get("ash-windows-sandbox-service"),
         windows_sandbox_binary=binaries["ash-windows-sandbox"]

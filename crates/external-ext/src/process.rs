@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,6 +14,8 @@ use crate::ExtensionHostOutputEvent;
 use crate::ExtensionHostRequest;
 use crate::ExtensionHostResponse;
 use crate::ProcessIsolationPolicy;
+use sha2::Digest;
+use sha2::Sha256;
 
 mod node;
 mod stdio;
@@ -336,6 +340,7 @@ struct NodeHost {
     executable: PathBuf,
     bootstrap: PathBuf,
     environment: BTreeMap<OsString, OsString>,
+    executable_digest: String,
 }
 
 impl ProductJavaScriptLauncher {
@@ -373,6 +378,7 @@ impl ProductNodeLauncher {
         }
         Ok(Self {
             node: Some(NodeHost {
+                executable_digest: executable_digest(&executable)?,
                 executable,
                 bootstrap,
                 environment,
@@ -398,6 +404,9 @@ impl ExtensionHostLauncher for ProductNodeLauncher {
             .node
             .as_ref()
             .ok_or(ExtensionHostError::IsolationUnavailable)?;
+        if executable_digest(&node.executable)? != node.executable_digest {
+            return Err(ExtensionHostError::IsolationUnavailable);
+        }
         let mut command = command.clone();
         command.runtime = LaunchRuntime::Node(node.executable.clone());
         command
@@ -407,6 +416,22 @@ impl ExtensionHostLauncher for ProductNodeLauncher {
         command.validate_limits(limits)?;
         StdioExtensionHostProcess::spawn(&command, limits).map(|process| Arc::new(process) as _)
     }
+}
+
+fn executable_digest(path: &Path) -> Result<String, ExtensionHostError> {
+    let mut file = File::open(path).map_err(|_| ExtensionHostError::SpawnFailed)?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|_| ExtensionHostError::SpawnFailed)?;
+        if read == 0 {
+            break;
+        }
+        digest.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 impl ExtensionHostLauncher for ProductJavaScriptLauncher {

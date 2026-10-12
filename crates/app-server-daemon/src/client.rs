@@ -312,7 +312,7 @@ fn start_new_unlocked(
     daemon: &BackendExecutable,
 ) -> Result<LifecycleOutput, String> {
     remove_stale_process_record(&endpoint.pid)?;
-    let mut spawned = spawn_backend(endpoint, options, &daemon.path)?;
+    let mut spawned = spawn_backend(endpoint, options, daemon)?;
     let result = (|| {
         let deadline = Instant::now() + START_TIMEOUT;
         let mut last_error = None;

@@ -104,6 +104,61 @@ fn publishing_identical_contents_reuses_the_selected_package() {
 }
 
 #[test]
+fn installation_bindings_advance_selection_without_changing_signed_package_bytes() {
+    let temporary = TempDir::new().unwrap();
+    let store = PackageStore::open(temporary.path().join("store")).unwrap();
+    let source = package(temporary.path(), "first", "same");
+    let original = fs::read(source.join("ash-package.json")).unwrap();
+    let first_binding = json!({"executable": "/app/first", "digest": "first"});
+    let second_binding = json!({"executable": "/app/second", "digest": "second"});
+    let first = store
+        .publish_with_installation(source, first_binding.clone())
+        .unwrap();
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(
+            temporary
+                .path()
+                .join("store/manifests/00000000000000000001.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(manifest["formatVersion"], 1);
+    let second = store
+        .publish_with_installation(package(temporary.path(), "second", "same"), second_binding)
+        .unwrap();
+    assert_eq!(first.package_root, second.package_root);
+    assert_eq!(second.sequence, first.sequence + 1);
+    assert_eq!(
+        fs::read(second.package_root.join("ash-package.json")).unwrap(),
+        original
+    );
+    let rollback = store
+        .publish_with_installation(
+            package(temporary.path(), "rollback", "same"),
+            first_binding.clone(),
+        )
+        .unwrap();
+    assert_eq!(rollback.sequence, second.sequence + 1);
+    assert_eq!(
+        store.current().unwrap().unwrap().installation,
+        Some(first_binding)
+    );
+    assert!(
+        store
+            .publish_with_installation(
+                package(temporary.path(), "invalid", "other"),
+                json!({"oversized":"x".repeat(16 * 1024)})
+            )
+            .is_err()
+    );
+    assert_eq!(
+        store.current().unwrap().unwrap().sequence,
+        rollback.sequence
+    );
+}
+
+#[test]
 fn republishing_a_rollback_package_keeps_its_shared_directory() {
     let temporary = TempDir::new().unwrap();
     let store = PackageStore::open(temporary.path().join("store")).unwrap();

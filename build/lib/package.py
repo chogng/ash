@@ -81,6 +81,7 @@ def build_package_directory(
     protocol_metadata: Optional[Dict[str, object]] = None,
     update_public_key: Optional[str] = None,
     build_profile: str = "release",
+    electron_version: Optional[str] = None,
     windows_sandbox_binary: Optional[Path] = None,
     windows_sandbox_service_binary: Optional[Path] = None,
     remote_host_binary: Optional[Path] = None,
@@ -205,6 +206,7 @@ def build_package_directory(
                 "sourceRoot": str(repository_root),
                 "version": version,
                 "buildProfile": build_profile,
+                "electronVersion": electron_version,
                 "protocol": protocol_metadata
                 if protocol_metadata is not None
                 else load_protocol_metadata(repository_root),
@@ -449,6 +451,13 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     }
     if catalog:
         identity["remoteRuntimeCatalog"] = catalog
+    electron_version = options.get("electronVersion")
+    if electron_version is not None:
+        if node or not valid_electron_version(electron_version):
+            raise RuntimeError(
+                "Electron contract requires a valid version and host-provided Node"
+            )
+        identity["javascriptRuntime"]["electronVersion"] = electron_version
     files = package_files(staging)
     metadata = {
         **identity,
@@ -585,7 +594,15 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         if not isinstance(components.get("node"), dict):
             raise RuntimeError("Packaged Node runtime metadata is missing")
         executables.append(package / "ash-resources" / "node" / "bin" / spec.node_name)
-    elif javascript_runtime == {"kind": "hostProvidedNode"}:
+    elif (
+        isinstance(javascript_runtime, dict)
+        and javascript_runtime.get("kind") == "hostProvidedNode"
+    ):
+        if set(javascript_runtime) not in ({"kind"}, {"kind", "electronVersion"}) or (
+            "electronVersion" in javascript_runtime
+            and not valid_electron_version(javascript_runtime["electronVersion"])
+        ):
+            raise RuntimeError("Invalid Electron runtime contract")
         if "node" in components:
             raise RuntimeError("Host-provided runtime package contains Node metadata")
         if (package / "ash-resources" / "node").exists():
@@ -676,6 +693,18 @@ def package_binary_layout(components: Mapping[str, object]) -> Dict[str, str]:
             if name in components
         },
     }
+
+
+def valid_electron_version(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) <= 128
+        and re.fullmatch(
+            r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?",
+            value,
+        )
+        is not None
+    )
 
 
 def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]:

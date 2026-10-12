@@ -808,7 +808,7 @@ test('SCM graph menus create at an old commit, switch references, delete branche
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
 	}
-	await setHistoryBadges(workbench, 'All references');
+	await workbench.git.setHistoryBadges('All references');
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const history = page.locator('[data-view-id="ash.gitGraph"]');
 	await history.locator('.ash-pane-view-header').click();

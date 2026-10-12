@@ -13,6 +13,9 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  desktop-runtime:
+    uses: ./.github/workflows/desktop-runtime-acceptance.yml
+
   check:
     name: ${{ matrix.surface }} (${{ matrix.runner }})
     strategy:

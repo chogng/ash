@@ -166,5 +166,5 @@ pub fn backend_executable_path() -> Result<PathBuf, String> {
 mod tests;
 
 fn validate_backend_digest(executable: &Path, expected: &str) -> Result<(), String> {
-    crate::process::executable_identity(executable)?.verify_package_digest(expected)
+    crate::process::binary_identity(executable)?.verify_package_digest(expected)
 }

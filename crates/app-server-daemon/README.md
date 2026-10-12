@@ -3,6 +3,9 @@
 - 管理独立的 `ash-app-server --managed` 进程，记录其 PID、启动身份、可执行文件摘要和随包 `buildId`。
 - 串行化生命周期操作，所选服务探测成功后才返回 ready。Agent 连接验证 initialize 和必需能力；Execution 连接验证执行协议，不打开 Agent 历史。普通 start/connect 复用同一 profile 已运行且协议与必需能力兼容的进程；`ensure-selected` 在可执行文件内容变化时更换运行代次，`restart` 总是更换运行代次。
 - 提供同用户控制端点与 stdio 连接程序；`ManagedEndpoint` 由后台服务进程持有。
+- Desktop 发布包声明 `hostProvidedNode` 和确切 `electronVersion`。安装器探测 Electron 的 Node 模式，将 canonical executable、SHA-256 和 Electron/Node 版本写入包选择 manifest 的可选 `installation` 字段；签名包原始 bytes 与 buildId 保持不变。manifest 继续使用版本 1，旧客户端仍可显式选择自包含包回滚。
+- TUI 等普通客户端复用 profile 的选定绑定，重启不使用调用方的 Electron 环境。每次启动重新校验文件与运行版本；缺失或不兼容时，Rust 后台继续启动，JS 扩展和语言服务器不可用。绑定或可用性变化使 `ensure-selected` 创建新进程代际，旧扩展与语言服务器随旧后端释放。
+- Desktop 后端随完整 Desktop 应用更新，不进入独立 App Server 更新通道；普通 CLI/Web/Remote 后端继续安装和更新带 Node 的自包含包。
 - `ManagedEndpoint` 非阻塞轮询连接握手与控制响应，同时最多保留 32 个待完成握手，每个握手期限为 5 秒；未完成握手不会阻止其他连接或停止命令，也不增加握手线程。
 - 停止宽限期继续响应控制请求并拒绝新业务连接。生命周期 API 返回 `LifecycleError::ServerShuttingDown`；stdio 连接程序将其作为初始化请求的 JSON-RPC 错误返回，保留请求 ID，错误码为 `-32600`、`data.kind` 为 `ServerShuttingDown`，由客户端决定是否重试。
 - `ManagedEndpoint` 在运行期间每秒检查日志，超过 1 MiB 时在原文件上清空；后台继承的 stdout/stderr 文件句柄继续可写，无需重启。该限额是按轮询周期维护的预算，周期内的写入可以暂时超过限额。

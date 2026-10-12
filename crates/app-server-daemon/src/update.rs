@@ -156,6 +156,7 @@ fn install_stable_with_mode(
     caller_backend: &Path,
     mode: UpdateMode,
 ) -> Result<UpdateOutput, String> {
+    require_self_contained_update(profile_root, caller_backend)?;
     let source = caller_backend
         .parent()
         .and_then(Path::parent)
@@ -314,6 +315,27 @@ fn install_stable_with_mode(
     })();
     let _ = fs::remove_dir_all(staging);
     result
+}
+
+fn require_self_contained_update(profile_root: &Path, caller_backend: &Path) -> Result<(), String> {
+    let caller = caller_backend
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("App Server executable is outside a package")?;
+    if package_metadata(caller)?.javascript_runtime.kind != "packagedNode" {
+        return Err("Desktop-backed App Server updates with the Desktop application".into());
+    }
+    let store = PackageStore::open(profile_root.join("app-server-packages"))
+        .map_err(|error| error.to_string())?;
+    if let Some(selected) = store.current().map_err(|error| error.to_string())?
+        && package_metadata(&selected.package_root)?
+            .javascript_runtime
+            .kind
+            != "packagedNode"
+    {
+        return Err("Selected Desktop backend updates with the Desktop application".into());
+    }
+    Ok(())
 }
 
 fn selected_output(store: &PackageStore, status: &'static str) -> Result<UpdateOutput, String> {

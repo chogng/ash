@@ -110,7 +110,9 @@ fn dropping_an_unready_child_terminates_and_reaps_it() {
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
     let options = ConnectionOptions::new(root.path(), None, GrantSource::HostConfiguration, None);
     let endpoint = EndpointPaths::prepare(root.path()).unwrap();
-    let child = spawn_backend(&endpoint, &options, &executable).unwrap();
+    let backend =
+        super::resolve_backend_executable(&executable, super::PackageDigest::NotProvided).unwrap();
+    let child = spawn_backend(&endpoint, &options, &backend).unwrap();
     let pid = child.child.as_ref().unwrap().id();
     assert!(process_start_identity(pid).unwrap().is_some());
     drop(child);
@@ -149,7 +151,9 @@ fn managed_backend_receives_the_selected_product_services_path() {
         Some(product_services.clone()),
     );
     let endpoint = EndpointPaths::prepare(root.path()).unwrap();
-    let child = spawn_backend(&endpoint, &options, &executable).unwrap();
+    let backend =
+        super::resolve_backend_executable(&executable, super::PackageDigest::NotProvided).unwrap();
+    let child = spawn_backend(&endpoint, &options, &backend).unwrap();
     let deadline = Instant::now() + Duration::from_secs(2);
     while !output.exists() && Instant::now() < deadline {
         thread::sleep(Duration::from_millis(10));
