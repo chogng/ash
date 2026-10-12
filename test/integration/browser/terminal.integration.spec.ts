@@ -1347,3 +1347,20 @@ test('terminal Clear and Relaunch commands operate on the active editor instance
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.relaunch'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 2, editorTabs: 1, originalScreen: true, target: 2 });
 });
+
+
+test('terminal instance list restores its resized width after page reload', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration))).toBe(true);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
+	const sash = page.locator('.ash-terminal-tabs-layout > .ash-sash');
+	await expect(sash).toBeVisible();
+	await sash.press('ArrowLeft');
+	await sash.press('ArrowLeft');
+	const column = page.locator('.ash-terminal-tabs-layout > .ash-split-view-pane').nth(1);
+	const resized = await column.evaluate(element => element.getBoundingClientRect().width);
+	await page.reload();
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration))).toBe(true);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
+	await expect.poll(() => column.evaluate(element => element.getBoundingClientRect().width)).toBe(resized);
+});

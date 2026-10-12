@@ -1,5 +1,5 @@
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
-import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { mock } from 'node:test';
@@ -127,6 +127,13 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	using recreated = services.createInstance(TerminalTabbedView, parent);
 	recreated.layout(1_000, 200);
 	assert.equal(recreated.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')[1]?.style.width, '500px');
+	for (const invalidWidth of [-1, 501, Number.NaN]) {
+		services.get(IStorageService).store('tabs-list-width-horizontal', invalidWidth, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		using invalid = services.createInstance(TerminalTabbedView, parent);
+		invalid.layout(1_000, 200);
+		assert.equal(invalid.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')[1]?.style.width, '120px');
+	}
+
 	dom.window.close();
 });
 
