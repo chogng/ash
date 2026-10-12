@@ -1092,6 +1092,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "stop-circle",
+      "file": "stop-circle.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "straw",
       "file": "straw.svg",
       "rendering": "symbolic"
