@@ -1,6 +1,14 @@
 import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/common/changesViewService.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/browser/changesViewService.js';
+import { ISessionChangesService } from '../../../src/ash/sessions/contrib/changes/common/sessionChangesService.js';
+import { SessionChangesService } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesService.js';
+import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
+import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
+import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
+import { SessionChangesEditorInput } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditorInput.js';
+import { IDecorationsService } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
+import { DecorationsService } from '../../../src/ash/workbench/services/decorations/browser/decorationsService.js';
 import { Event, Emitter } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -36,7 +44,16 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessa
 const resources = new DisposableStore();
 const services = resources.add(registerTestComponentServices(new InstantiationService()));
 services.registerInstance(ILogService, new NullLoggerService());
+services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 services.registerSingleton(IChangesViewService, () => resources.add(services.createInstance(ChangesViewService)));
+services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
+services.registerInstance(ISessionsManagementService, {
+	get sessions() {
+		const selection = services.get(ISessionsService).activeSelection;
+		return selection?.kind === 'session' ? [selection.active.session] : [];
+	},
+} as unknown as ISessionsManagementService);
+services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
 const changed = resources.add(new Emitter<void>());
 services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
@@ -102,7 +119,15 @@ services.registerInstance(IChatService, {
 	readTurnChangeFile: async () => ({ path: details.files[0]!.path, binary: false, truncated: false, before: 'Before', after: 'After' }),
 } as unknown as IChatService);
 let opened = 0;
-services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { opened++; } } as unknown as IEditorService);
+const reviews: { resource: string; changesetId?: string; }[] = [];
+services.registerInstance(IEditorService, {
+	...emptyEditorServiceState, openEditor: async (input: IResourceEditorInput) => {
+		opened++;
+		if (input instanceof SessionChangesEditorInput) {
+			reviews.push({ resource: input.resource.toString(), changesetId: input.changesetSelection?.kind === 'id' ? input.changesetSelection.id : undefined });
+		}
+	}
+} as unknown as IEditorService);
 services.registerInstance(INotificationService, { info: (message: string) => { notifications.push(message); }, error: (error: unknown) => { throw new Error(String(error)); } } as unknown as INotificationService);
 services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.' } as unknown as IAccessibleViewService);
@@ -124,6 +149,7 @@ declare global {
 			activeTurn(value: boolean): void;
 			setLocale(): void;
 			opened(): number;
+			reviews(): readonly { resource: string; changesetId?: string; }[];
 			content(): string;
 			gitCalls(): readonly string[];
 			created(): readonly unknown[];
@@ -150,6 +176,7 @@ window.ashChangesIntegration = {
 	fail: value => { fail = value; changed.fire(); },
 	setLocale: () => { setNlsMessages('zh-CN', chinese); changed.fire(); },
 	opened: () => opened,
+	reviews: () => reviews,
 	content: () => view.getAccessibleContent(),
 	gitCalls: () => gitCalls,
 	created: () => created,

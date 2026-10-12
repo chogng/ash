@@ -1,5 +1,26 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN'] as const) test(`Changes opens the selected Turn in its canonical editor (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto(`/changes.html?locale=${locale}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.evaluate(() => window.ashChangesIntegration.multipleTurns());
+	const turn = page.getByRole('combobox', { name: locale === 'en' ? 'Changes from Turn' : '选择回合更改' });
+	await turn.selectOption('second');
+	const review = page.getByRole('button', { name: locale === 'en' ? 'Review all changes' : '查看全部更改', exact: true });
+	await review.focus();
+	await page.keyboard.press('Space');
+	await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.reviews())).toEqual([{ resource: 'ash-session-changes:/session?thread=thread', changesetId: 'second' }]);
+	await turn.selectOption('');
+	await review.click();
+	await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.reviews())).toEqual([
+		{ resource: 'ash-session-changes:/session?thread=thread', changesetId: 'second' },
+		{ resource: 'ash-session-changes:/session?thread=thread', changesetId: undefined },
+	]);
+	expect(errors).toEqual([]);
+});
+
 test('Changes filters Turns, restores tree state and binds review markers to revision and conversation', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

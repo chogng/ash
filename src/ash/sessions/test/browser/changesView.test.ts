@@ -1,5 +1,11 @@
 import { IChangesViewService } from '../../contrib/changes/common/changesViewService.js';
 import { ChangesViewService } from '../../contrib/changes/browser/changesViewService.js';
+import { ISessionChangesService } from '../../contrib/changes/common/sessionChangesService.js';
+import { SessionChangesService } from '../../contrib/changes/browser/sessionChangesService.js';
+import { SessionChangesEditorInput } from '../../contrib/changes/browser/sessionChangesEditorInput.js';
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
+import { IDecorationsService } from '../../../workbench/services/decorations/common/decorations.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -35,7 +41,6 @@ import { ChatService } from '../../../workbench/services/chat/browser/chatServic
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import { IEditorService, type EditorOpenOptions } from '../../../workbench/services/editor/common/editorService.js';
 import { isDiffEditorInput } from '../../../workbench/common/editor/diffEditorInput.js';
-import { isMultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import { ChangesViewPane } from '../../contrib/changes/browser/changesView.js';
 import { setNlsMessages, resetNlsResolver } from '../../../nls.js';
@@ -146,12 +151,19 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		assert.equal(new URLSearchParams(diff.modified.resource.query).get('side'), 'after');
 		assert.deepEqual([diff.original.initialText, diff.modified.initialText, diff.original.readOnly, diff.modified.readOnly], ['before', 'after', true, true]);
 		assert.deepEqual(requests.at(-1), { sessionId: 'current', threadId: 'current-thread', changeSetId: 'change-current', path: 'main.ts' });
+		const turnPicker = view.element.querySelector<HTMLSelectElement>('select')!;
+		turnPicker.value = 'change-current';
+		turnPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		view.element.querySelector<HTMLButtonElement>('.ash-sessions-changes button')!.click();
 		await settle();
 		assert.equal(opened.length, 3);
 		const review = opened[2]!;
-		assert.ok(isMultiDiffEditorInput(review));
-		assert.deepEqual(review.items.map(item => [item.original.initialText, item.modified.initialText, item.original.readOnly, item.modified.readOnly]), [['before', 'after', true, true]]);
+		assert.ok(review instanceof SessionChangesEditorInput);
+		assert.equal(review.resource.toString(), 'ash-session-changes:/current?thread=current-thread');
+		assert.deepEqual(review.changesetSelection, { kind: 'id', id: 'change-current' });
+		assert.equal(openOptions[2]?.forceReload, true);
+		turnPicker.value = '';
+		turnPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		truncated = true;
 		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 		await settle();
@@ -209,10 +221,19 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 });
 
 function selected(id: string): SessionsViewSelection {
-	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [] } } };
+	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] } } };
 }
 
 function registerChecksServices(services: InstantiationService): void {
+	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
+	services.registerInstance(ISessionsManagementService, {
+		get sessions() {
+			const selection = services.get(ISessionsService).activeSelection;
+			return selection?.kind === 'session' ? [selection.active.session] : [];
+		},
+	} as unknown as ISessionsManagementService);
+	services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
+	services.registerInstance(IDecorationsService, { registerDecorationsProvider: () => toDisposable(() => { }) } as unknown as IDecorationsService);
 	services.registerInstance(ICommandService, { executeCommand: async () => [] } as unknown as ICommandService);
 	services.registerInstance(ISessionGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as ISessionGitHubService);
 	services.registerInstance(IGitHubApi, {} as IGitHubApi);

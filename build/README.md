@@ -43,6 +43,13 @@ and the scenario runner's esbuild retain bundling. Node, Mocha and Playwright
 retain test execution; pnpm retains dependency management. Build tools keep
 the TS6 JavaScript Compiler API provided by the `typescript` compatibility alias.
 
+Bun also runs the product-icon generator, localization generator, CSS checker
+and TypeScript/JavaScript formatter through their existing pnpm scripts. The
+formatting CI job installs dependencies with `--ignore-scripts`, then runs
+`pnpm rebuild bun` to initialize the pinned executable without running other
+dependency build scripts. Desktop build, packaging, launch and test runners
+continue to use Node.
+
 Linux ARM64 Renderer checks were compared in the existing Debian 12 devcontainer
 on an Apple M5, with 10 Docker VM CPUs and about 8 GB VM memory. The source and
 prepared protocol/localization data were snapshotted onto container storage.

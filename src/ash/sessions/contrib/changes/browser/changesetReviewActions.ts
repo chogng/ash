@@ -20,10 +20,11 @@ export class ChangesetReviewAction extends Action2 {
 		const argument = args[0];
 		const resource = argument instanceof URI ? argument : isRecord(argument) ? argument.resource : undefined;
 		if (!(resource instanceof URI)) { return; }
-		const pane = accessor.get(IEditorPart).activePane;
+		const editors = accessor.get(IEditorPart);
+		const pane = editors.activePane;
 		if (!(pane instanceof SessionChangesEditor)) { return; }
 		const change = await pane.getFileChange(resource);
-		if (!change) { return; }
+		if (!change || editors.activePane !== pane) { return; }
 		const state = accessor.get(IChangesViewService);
 		const reviewed = !state.reviewedFilesObs.get().has(change.uri.toString());
 		state.setChangesetFilesReviewState([change.uri], reviewed);

@@ -133,7 +133,7 @@
     "sessions.changes.markReviewed": "Mark reviewed",
     "sessions.changes.markUnread": "Mark unreviewed",
     "sessions.changes.allTurns": "All Turns",
-    "sessions.changes.reviewHelp": "Choose All Turns or a specific Turn to filter files. Switch between List and Tree; use Left and Right arrows to collapse or expand folders. Select files and choose Mark reviewed or Mark unreviewed. Read markers belong to the exact Turn revision and do not change commit eligibility. Each conversation and view mode retains its selection, focus, expansion and scroll position while this window is open.",
+    "sessions.changes.reviewHelp": "Choose All Turns or a specific Turn to filter files. Review all changes opens the Changes editor for that selection. Switch between List and Tree; use Left and Right arrows to collapse or expand folders. Select files and choose Mark reviewed or Mark unreviewed. Read markers belong to the exact Turn revision and do not change commit eligibility. Each conversation and view mode retains its selection, focus, expansion and scroll position while this window is open.",
     "sessions.changes.viewAsList": "Changes: View as List",
     "sessions.changes.viewAsTree": "Changes: View as Tree",
     "sessions.changes.prAgentUnavailable": "This repository cannot prepare a pull request request for the agent.",

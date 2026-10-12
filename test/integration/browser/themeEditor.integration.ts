@@ -3,6 +3,14 @@ import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
 import '../../../src/ash/workbench/contrib/themes/browser/themes.contribution.js';
 import '../../../src/ash/workbench/contrib/themeEditor/browser/themeEditor.contribution.js';
+import '../../../src/ash/workbench/contrib/accessibility/browser/accessibleViewActions.js';
+import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
+import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
+import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
+import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { createTestEditorServices, createTestFileService, createTestTextFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
@@ -41,37 +49,37 @@ import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/
 
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
- const catalog = productLanguagePackCatalogs.find(item => item.locale === locale)!;
- setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+	const catalog = productLanguagePackCatalogs.find(item => item.locale === locale)!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 }
 const resources = new DisposableStore();
-const extensions = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), { subscribe: () => toDisposable(() => {}) }));
+const extensions = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), { subscribe: () => toDisposable(() => { }) }));
 await extensions.start();
 const resource = URI.file('/themes/aurora.json');
 const initial = '// keep this comment\n{\n  "name": "Aurora",\n  "type": "dark",\n  "colors": { "editor.background": "#101525", "sideBar.background": "#151a25" },\n}\n';
 
 /** Deterministic file boundary; the real theme and text-model services own parsing and writes. */
 class ThemeFiles implements IFileSystemProvider {
- private readonly delegate = new MemoryFileService([[resource, initial]]);
- private readonly paths = new Set([resource.toString()]);
- public readonly capabilities = this.delegate.capabilities;
- public readonly onDidChangeCapabilities = Event.None;
- public readonly onDidChangeFiles = Event.None;
- public watch() { return toDisposable(() => {}); }
- public stat(uri: URI) { return this.delegate.stat(uri); }
- public readFile(uri: URI) { return this.delegate.readFile(uri); }
- public async readDirectory(uri: URI) {
-  return [...this.paths].map(path => URI.parse(path)).filter(path => path.path.startsWith(uri.path + '/')).map(path => ({ resource: path, name: path.path.split('/').at(-1)!, kind: FileKind.File }));
- }
- public async writeFile(uri: URI, bytes: Uint8Array, options: IFileWriteOptions) {
-  if (options.expectedRevision !== undefined && this.delegate.text(uri) !== options.expectedRevision) throw new FileRevisionConflictError(uri);
-  const result = await this.delegate.writeFile(uri, bytes, options); this.paths.add(uri.toString()); return result;
- }
- public async createFile(uri: URI, existing: FileExistingTargetBehavior) { const result = await this.delegate.createFile(uri, existing); this.paths.add(uri.toString()); return result; }
- public createDirectory() { return this.delegate.createDirectory(); }
- public copy() { return this.delegate.copy(); }
- public async rename(from: URI, to: URI, existing: FileExistingTargetBehavior) { await this.delegate.rename(from, to, existing); this.paths.delete(from.toString()); this.paths.add(to.toString()); }
- public async delete(uri: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode) { await this.delegate.delete(uri, missing, mode); this.paths.delete(uri.toString()); }
+	private readonly delegate = new MemoryFileService([[resource, initial]]);
+	private readonly paths = new Set([resource.toString()]);
+	public readonly capabilities = this.delegate.capabilities;
+	public readonly onDidChangeCapabilities = Event.None;
+	public readonly onDidChangeFiles = Event.None;
+	public watch() { return toDisposable(() => { }); }
+	public stat(uri: URI) { return this.delegate.stat(uri); }
+	public readFile(uri: URI) { return this.delegate.readFile(uri); }
+	public async readDirectory(uri: URI) {
+		return [...this.paths].map(path => URI.parse(path)).filter(path => path.path.startsWith(uri.path + '/')).map(path => ({ resource: path, name: path.path.split('/').at(-1)!, kind: FileKind.File }));
+	}
+	public async writeFile(uri: URI, bytes: Uint8Array, options: IFileWriteOptions) {
+		if (options.expectedRevision !== undefined && this.delegate.text(uri) !== options.expectedRevision) throw new FileRevisionConflictError(uri);
+		const result = await this.delegate.writeFile(uri, bytes, options); this.paths.add(uri.toString()); return result;
+	}
+	public async createFile(uri: URI, existing: FileExistingTargetBehavior) { const result = await this.delegate.createFile(uri, existing); this.paths.add(uri.toString()); return result; }
+	public createDirectory() { return this.delegate.createDirectory(); }
+	public copy() { return this.delegate.copy(); }
+	public async rename(from: URI, to: URI, existing: FileExistingTargetBehavior) { await this.delegate.rename(from, to, existing); this.paths.delete(from.toString()); this.paths.add(to.toString()); }
+	public async delete(uri: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode) { await this.delegate.delete(uri, missing, mode); this.paths.delete(uri.toString()); }
 }
 
 const provider = new ThemeFiles();
@@ -83,6 +91,14 @@ services.registerInstance(IFileService, files);
 services.registerInstance(IDialogService, resources.add(new DialogService()));
 const textFiles = resources.add(createTestTextFileService(files, configuration));
 services.registerInstance(ITextFileService, textFiles);
+services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+services.registerSingleton(IKeybindingService, () => resources.add(services.createInstance(WorkbenchKeybindingService, {
+	ownerDocument: document,
+	commandService: services.get(ICommandService),
+	contextKeyService: services.get(IContextKeyService),
+	keyboardLayoutService: resources.add(new BrowserKeyboardLayoutService({ navigator })),
+})));
+services.registerSingleton(IAccessibleViewService, () => services.createInstance(AccessibleViewService));
 registerCodeEditorServices(services);
 const store = new BrowserTextResourceStore(textFiles);
 const models = resources.add(services.createInstance(BrowserTextModelService, store, {}));
@@ -90,7 +106,6 @@ services.registerInstance(IFileTextModelService, models);
 services.registerInstance(ITextModelResourceService, models);
 const root = document.querySelector<HTMLElement>('#main')!;
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root })));
-services.registerInstance(IAccessibleViewService, resources.add(services.createInstance(AccessibleViewService)));
 services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
 const themes = resources.add(services.createInstance(WorkbenchThemeService, root));
 services.registerInstance(IThemeService, themes);
@@ -100,47 +115,47 @@ const users = resources.add(await loadUserThemes(services, URI.file('/themes')))
 services.registerInstance(IUserThemeService, users);
 await themes.setColorTheme('aurora');
 services.registerInstance(IFileDialogService, {
- pickFileToSave: async () => undefined, showSaveConfirm: async () => ConfirmResult.DONT_SAVE,
- showSaveDialog: async () => undefined, showOpenDialog: async () => undefined,
+	pickFileToSave: async () => undefined, showSaveConfirm: async () => ConfirmResult.DONT_SAVE,
+	showSaveDialog: async () => undefined, showOpenDialog: async () => undefined,
 });
 const editorOptions = { fileService: files, textFileService: textFiles, configurationService: configuration, fileDialogService: services.get(IFileDialogService) };
 const main = resources.add(services.createInstance(EditorPart, document.querySelector<HTMLElement>('#editors')!, editorOptions));
 const windows = resources.add(services.createInstance(BrowserAuxiliaryWindowService, window, root));
 const parts = resources.add(services.createInstance(EditorParts, main, windows, (container: HTMLElement) => {
- const element = container.ownerDocument.createElement('header'); container.append(element);
- const titlebar = {
-  container: element, element, height: 28, minimumWidth: 0, maximumWidth: Infinity, minimumHeight: 28, maximumHeight: 28,
-  onDidChange: Event.None, onMenubarVisibilityChange: Event.None,
-  layout() {}, updateOptions() {}, updateProperties() {}, registerVariables() {}, dispose() { element.remove(); }, [Symbol.dispose]() { this.dispose(); },
- };
- return { titlebar, part: services.createInstance(EditorPart, container, editorOptions) };
+	const element = container.ownerDocument.createElement('header'); container.append(element);
+	const titlebar = {
+		container: element, element, height: 28, minimumWidth: 0, maximumWidth: Infinity, minimumHeight: 28, maximumHeight: 28,
+		onDidChange: Event.None, onMenubarVisibilityChange: Event.None,
+		layout() { }, updateOptions() { }, updateProperties() { }, registerVariables() { }, dispose() { element.remove(); }, [Symbol.dispose]() { this.dispose(); },
+	};
+	return { titlebar, part: services.createInstance(EditorPart, container, editorOptions) };
 }, services.get(IAccessibilityService), services.get(IStorageService)));
 services.registerInstance(IEditorPartsService, parts);
 root.style.cssText = 'height:100vh; background:var(--ash-editor-background);color:var(--ash-foreground)';
 document.body.style.margin = '0';
 document.querySelector('#open')!.addEventListener('click', () => { void services.invokeFunction(accessor => CommandsRegistry.getCommand('workbench.action.openThemeEditor')!(accessor)); });
 declare global {
- interface Window {
-  themeEditorTest: {
-   source(): string;
-   persisted(file?: string): Promise<string>;
-   setSource(text: string): void;
-   undo(): void;
-   close(): Promise<boolean>;
-   selectTheme(id: string): Promise<void>;
-   externalWrite(text: string): Promise<void>;
-  };
- }
+	interface Window {
+		themeEditorTest: {
+			source(): string;
+			persisted(file?: string): Promise<string>;
+			setSource(text: string): void;
+			undo(): void;
+			close(): Promise<boolean>;
+			selectTheme(id: string): Promise<void>;
+			externalWrite(text: string): Promise<void>;
+		};
+	}
 }
 const pane = (): ThemeEditor => { const editor = parts.activePane; if (!(editor instanceof ThemeEditor)) throw new Error('No Theme Editor'); return editor; };
 window.themeEditorTest = {
- source: () => pane().getControl()!.getValue(),
- persisted: async (file = 'aurora.json') => (await files.readFile(URI.file('/themes/' + file))).content,
- setSource: text => { const model = pane().getControl()!.getModel()!; model.pushStackElement(); pane().getControl()!.executeEdits('test.json', [{ range: model.getFullModelRange(), text }]); model.pushStackElement(); },
- undo: () => { pane().getControl()!.getModel()!.undo(); },
- close: () => parts.closeAuxiliaryEditorPart(parts.activePart),
- selectTheme: id => themes.setColorTheme(id).then(() => {}),
- externalWrite: text => files.writeFile({ resource, content: text }).then(() => {}),
+	source: () => pane().getControl()!.getValue(),
+	persisted: async (file = 'aurora.json') => (await files.readFile(URI.file('/themes/' + file))).content,
+	setSource: text => { const model = pane().getControl()!.getModel()!; model.pushStackElement(); pane().getControl()!.executeEdits('test.json', [{ range: model.getFullModelRange(), text }]); model.pushStackElement(); },
+	undo: () => { pane().getControl()!.getModel()!.undo(); },
+	close: () => parts.closeAuxiliaryEditorPart(parts.activePart),
+	selectTheme: id => themes.setColorTheme(id).then(() => { }),
+	externalWrite: text => files.writeFile({ resource, content: text }).then(() => { }),
 };
 document.body.dataset.ready = 'true';
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

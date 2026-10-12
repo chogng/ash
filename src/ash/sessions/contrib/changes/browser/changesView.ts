@@ -16,7 +16,7 @@ import { IChatService, type TurnChangeSetSummary, type TurnCommitSelection } fro
 import { createDiffEditorInput } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { createMultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
+import { createTurnCommitPreviewInput } from '../../../browser/turnMultiDiffSource.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { observableValue } from '../../../../base/common/observable.js';
@@ -37,6 +37,7 @@ import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { findChangesEditorFileChange, getChangesEditorFileResource } from './changesEditorLabels.js';
 import { createSessionFileChange } from '../../../services/sessions/common/session.js';
+import { ISessionChangesService } from '../common/sessionChangesService.js';
 
 /** Reviews immutable Turn changes for the selected Code conversation. */
 export class ChangesViewPane extends ViewPane {
@@ -77,6 +78,7 @@ export class ChangesViewPane extends ViewPane {
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IChangesViewService private readonly viewState: IChangesViewService,
+		@ISessionChangesService private readonly changesService: ISessionChangesService,
 	) {
 		super(container, options);
 		this.contentElement.classList.add('ash-sessions-changes');
@@ -371,10 +373,9 @@ export class ChangesViewPane extends ViewPane {
 	private async openReview(): Promise<void> {
 		const selection = this.sessions.activeSelection;
 		if (!this.isVisible() || selection?.kind !== 'session') { return; }
-		const ownerEpoch = this.ownerEpoch;
-		const input = await createTurnMultiDiffEditorInput(this.chat, selection.active, 'throughCurrentTurn', this.changesetId ? [this.changesetId] : undefined);
-		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
-		await this.editors.openEditor(input, { pinned: true });
+		await this.changesService.openChangesEditor(new SessionChangesEditorInput(selection).sessionResource, {
+			changesetSelection: { kind: 'id', id: this.changesetId },
+		});
 	}
 
 	private async previewSelection(): Promise<void> {

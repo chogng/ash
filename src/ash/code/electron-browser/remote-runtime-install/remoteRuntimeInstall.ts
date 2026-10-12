@@ -1,6 +1,6 @@
 import type { RemoteRuntimeInstallProgressState } from "../../../platform/remote/common/remoteRuntimeInstallProgress.js";
 import { addDisposableListener } from "../../../base/browser/dom.js";
-import { DisposableStore } from "../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { createRemoteRuntimeInstallProgressApi } from "../../../platform/remote/electron-browser/remoteRuntimeInstallProgressApi.js";
 import { bindColorTheme } from "../../../platform/theme/browser/themeStyles.js";
 import { darkColorTheme } from "../../../platform/theme/common/colorTheme.js";
@@ -27,7 +27,9 @@ const progress = requiredElement("remote-install-progress", HTMLProgressElement)
 const detail = requiredElement("remote-install-detail", HTMLParagraphElement);
 const cancel = requiredElement("remote-install-cancel", HTMLButtonElement);
 
-resources.add(api.onDidChange(render));
+// ContextBridge cleanup handles expose dispose(), while the renderer store also requires Symbol.dispose.
+const progressSubscription = api.onDidChange(render);
+resources.add(toDisposable(() => progressSubscription.dispose()));
 const updateColorScheme = (): void => themeChanges.fire(themeService.getColorTheme());
 resources.add(addDisposableListener(preferredColorScheme, "change", updateColorScheme));
 resources.add(addDisposableListener(window, "beforeunload", () => resources.dispose(), { once: true }));

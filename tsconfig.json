@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": ".build/desktop/all",
     "rootDir": ".",
-    "types": ["node", "electron", "@webgpu/types"]
+    "types": ["node", "electron", "@webgpu/types", "vite/client"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/typings/base-common.d.ts", "src/typings/crypto.d.ts"]

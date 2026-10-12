@@ -22,17 +22,19 @@ import { ISessionChangesService } from '../../common/sessionChangesService.js';
 import { SessionChangesService } from '../../browser/sessionChangesService.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
-import { IDecorationsService } from '../../../../../workbench/services/decorations/common/decorations.js';
+import { IDecorationsService, type IDecorationsProvider } from '../../../../../workbench/services/decorations/common/decorations.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
 
 test('a hidden Changes editor ignores a late ledger result and loads fresh content when shown', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using services = new InstantiationService();
 	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
+	let decorations: IDecorationsProvider | undefined;
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { } } as unknown as IEditorService);
-	services.registerInstance(IDecorationsService, { registerDecorationsProvider: () => toDisposable(() => { }) } as unknown as IDecorationsService);
+	services.registerInstance(IDecorationsService, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorations = provider; return toDisposable(() => { }); } } as unknown as IDecorationsService);
 	services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 	services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
 	using configuration = new InMemoryConfigurationService();
@@ -41,6 +43,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	using ready = new Emitter<void>();
 	const pending = new DeferredPromise<readonly TurnChangeSetSummary[]>();
 	let requests = 0;
+	let failed = false;
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
@@ -48,12 +51,16 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	services.registerInstance(IChatService, {
 		onDidUpdateTurnChanges: changes.event,
 		onDidBecomeReady: ready.event,
-		listTurnChanges: () => ++requests === 1 ? pending.p : Promise.resolve([]),
+		listTurnChanges: () => ++requests === 1 ? pending.p : failed ? Promise.reject(new Error('Unavailable')) : Promise.resolve([]),
 	} as unknown as IChatService);
 	using pane = registerTestComponentServices(services).createInstance(SessionChangesEditor, {});
 	pane.create(dom.window.document.body);
-	await pane.setInput({ resource: URI.parse('ash-session-changes:/a?thread=a-thread') }, new AbortController().signal);
+	const resource = URI.parse('ash-session-changes:/a?thread=a-thread');
+	const changesService = services.get(ISessionChangesService);
+	changesService.setChangesCount(resource, 5);
+	await pane.setInput({ resource }, new AbortController().signal);
 	pane.setVisible(true);
+	assert.equal(await decorations!.provideDecorations(resource, CancellationToken.None), undefined);
 	pane.setVisible(false);
 	await pending.complete([{
 		changeSetId: 'change-a', sessionId: 'a', threadId: 'a-thread', turnId: 'turn-a', repositoryId: 'repository-a',
@@ -67,6 +74,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	await Promise.resolve();
 	assert.equal(requests, 2);
 	assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');
+	assert.equal((await decorations!.provideDecorations(resource, CancellationToken.None))?.letter, '0');
 	services.registerInstance(IEditorPart, { activePane: pane } as unknown as IEditorPart);
 	const accessibility = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChangesEditor.'));
 	assert.equal(accessibility.length, 2);
@@ -80,11 +88,16 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 		provider.dispose();
 		assert.equal(dom.window.document.activeElement, dom.window.document.querySelector('.ash-sessions-changes-editor'));
 	}
+	failed = true;
+	ready.fire();
+	await Promise.resolve();
+	assert.match(pane.getAccessibleContent(), /Unavailable/u);
+	assert.equal(await decorations!.provideDecorations(resource, CancellationToken.None), undefined);
 	pane.clearInput();
 	const cancelled = new AbortController();
 	cancelled.abort();
 	await assert.rejects(pane.setInput({ resource: URI.parse('ash-session-changes:/a?thread=a-thread') }, cancelled.signal), { name: 'CancellationError' });
 	changes.fire({ sessionId: 'a', threadId: 'a-thread' });
-	assert.equal(requests, 2);
+	assert.equal(requests, 3);
 	dom.window.close();
 });

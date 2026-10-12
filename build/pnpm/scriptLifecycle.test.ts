@@ -94,9 +94,11 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	const smokeSteps = workflow.slice(workflow.indexOf('      - name: Prepare production browser UI smoke tests')).split('      - name: ');
 	for (const [surface, failure, expected] of [
 		['browser', '', ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer', 'automation', 'bundle-web', 'browser-ui-tests', 'bundle-web-full', 'backend-web', 'browser-connected-tests']],
-		['electron', '', ['backend', 'electron-dependencies', 'protocol', 'localization', 'common', 'extensions', 'icons', 'desktop-build', 'automation', 'electron-ui-tests', 'electron-connected-tests']],
+		// CI invokes connected Electron smoke tests separately for the general suite and mock Agent Task coverage.
+		['electron', '', ['backend', 'electron-dependencies', 'protocol', 'localization', 'common', 'extensions', 'icons', 'desktop-build', 'automation', 'electron-ui-tests', 'electron-connected-tests', 'electron-connected-tests']],
 		['browser', 'renderer', ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer']],
 		['electron', 'backend', ['backend']],
+		['electron', 'electron-connected-tests', ['backend', 'electron-dependencies', 'protocol', 'localization', 'common', 'extensions', 'icons', 'desktop-build', 'automation', 'electron-ui-tests', 'electron-connected-tests']],
 	] as const) {
 		await writeFile(join(directory, 'operations.jsonl'), '');
 		const commands = smokeSteps.filter(step => step.includes(`if: matrix.surface == '${surface}'`)).flatMap(step => {

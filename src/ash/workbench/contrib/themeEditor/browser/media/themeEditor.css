@@ -125,15 +125,40 @@
 	min-width: 0;
 }
 
-.ash-theme-color-picker {
+.ash-theme-color-fields > .ash-theme-color-picker {
+	position: relative;
 	width: 28px;
 	height: 28px;
+	min-width: 0;
 	padding: 0;
 	flex-shrink: 0;
 	border: var(--ash-strokeThickness) solid var(--ash-input-border);
 	border-radius: var(--ash-cornerRadius-small);
 	background: var(--ash-input-background);
 	cursor: pointer;
+}
+
+.ash-theme-color-swatch {
+	position: absolute;
+	width: 20px;
+	height: 20px;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-xSmall);
+	pointer-events: none;
+}
+
+.ash-color-picker.ash-theme-editor-color-popup {
+	max-height: calc(100vh - 8px);
+	overflow: auto;
+	background: var(--ash-dialog-background);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: var(--ash-shadow-lg);
+}
+
+.ash-theme-editor-color-popup[data-color-scheme="hcDark"],
+.ash-theme-editor-color-popup[data-color-scheme="hcLight"] {
+	border-color: var(--ash-contrastBorder);
 }
 
 .ash-theme-color-alpha {

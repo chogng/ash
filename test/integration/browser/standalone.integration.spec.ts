@@ -4017,7 +4017,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 			clipboardData.setData('text/plain', 'A\nB');
 			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 		});
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe('Ax\nBy');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('Ax\nBy');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 

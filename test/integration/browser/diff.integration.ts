@@ -95,6 +95,9 @@ async function createGitMultiDiffEditorInput(...args: Parameters<typeof gitMulti
 function wireReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown { return this[key] instanceof URI ? this[key].toString() : value; }
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { SessionChangesEditorInput } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditorInput.js';
+import { EditorInputSerializers } from '../../../src/ash/workbench/services/editor/common/editorInputSerializer.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { ISessionChangesService } from '../../../src/ash/sessions/contrib/changes/common/sessionChangesService.js';
 import { SessionChangesService } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesService.js';
 import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
@@ -236,6 +239,13 @@ let titleTheme: TestThemeService | undefined;
 let sessionTheme: TestThemeService | undefined;
 let sessionRevision = 1;
 let sessionCaptureState: 'sealed' | 'open' = 'sealed';
+let sessionAvailability: 'available' | 'empty' | 'failed' = 'available';
+let sessionMultipleCaptures = false;
+let sessionInput: SessionChangesEditorInput | undefined;
+let sessionCommandsActive = true;
+let pendingSessionRead: DeferredPromise<void> | undefined;
+let sessionReadStarted = false;
+let pendingViewedAction: Promise<unknown> | undefined;
 const sessionOpenedFiles: string[] = [];
 const sessionPreparedFiles: unknown[] = [];
 let focusedHistoryView: string | undefined;
@@ -257,7 +267,7 @@ function createSessionChangesPane(): SessionChangesEditor {
 		sessionServices.registerInstance(ISessionsManagementService, { sessions } as unknown as ISessionsManagementService);
 		sessionServices.registerInstance(ISessionsService, { onDidChange: Event.None, activeSelection: { kind: 'session', active: { session: sessions[0], threadId: 'review-thread' } } } as unknown as ISessionsService);
 		sessionServices.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async input => { sessionOpenedFiles.push(input.resource.toString()); } } as IEditorService);
-		sessionServices.registerInstance(IEditorPart, { get activePane() { return sessionPane.value; } } as IEditorPart);
+		sessionServices.registerInstance(IEditorPart, { get activePane() { return sessionCommandsActive ? sessionPane.value : undefined; } } as IEditorPart);
 		sessionServices.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
 		sessionServices.registerSingleton(ISessionChangesService, () => sessionServices!.createInstance(SessionChangesService));
 		sessionServices.registerSingleton(IChangesViewService, () => sessionServices!.createInstance(ChangesViewService));
@@ -272,8 +282,20 @@ function createSessionChangesPane(): SessionChangesEditor {
 		sessionServices.registerInstance(IChatService, {
 			onDidUpdateTurnChanges: sessionChanges.event,
 			onDidBecomeReady: Event.None,
-			listTurnChanges: async (sessionId: string, threadId: string) => [{ ...summary, sessionId, threadId, revision: sessionRevision, captureState: sessionCaptureState }],
-			readTurnChange: async (sessionId: string, threadId: string) => ({ summary: { ...summary, sessionId, threadId, revision: sessionRevision, captureState: sessionCaptureState }, files: Array.from({ length: 8 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })) }),
+			listTurnChanges: async (sessionId: string, threadId: string) => {
+				if (sessionAvailability === 'failed') { throw new Error('Unavailable'); }
+				if (sessionAvailability === 'empty') { return []; }
+				const current = { ...summary, sessionId, threadId, revision: sessionRevision, captureState: sessionCaptureState };
+				return sessionMultipleCaptures ? [current, { ...current, changeSetId: 'review-later', turnId: 'later-turn', statistics: { files: 2, additions: 2, deletions: 2 } }] : [current];
+			},
+			readTurnChange: async (sessionId: string, threadId: string, changeSetId: string) => {
+				if (pendingSessionRead) { sessionReadStarted = true; await pendingSessionRead.p; }
+				const indexes = changeSetId === 'review-later' ? [0, 8] : Array.from({ length: 8 }, (_, index) => index);
+				return {
+					summary: { ...summary, sessionId, threadId, changeSetId, revision: sessionRevision, captureState: sessionCaptureState, statistics: { files: indexes.length, additions: indexes.length, deletions: indexes.length } },
+					files: indexes.map(index => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })),
+				};
+			},
 			readTurnChangeFile: async (_sessionId: string, _threadId: string, _changeSetId: string, path: string) => ({ path, binary: false, truncated: false, before: `before\n${'shared\n'.repeat(30)}`, after: `after\n${'shared\n'.repeat(30)}` }),
 			prepareTurnCommit: async (_sessionId: string, _threadId: string, selections: unknown, message: string) => {
 				sessionPreparedFiles.push({ selections, message });
@@ -567,7 +589,34 @@ const harness = {
 	async openSessionChanges(): Promise<void> {
 		const pane = createSessionChangesPane();
 		pane.setVisible(true);
-		await pane.setInput({ resource: URI.parse('ash-session-changes:/review?thread=review-thread') }, new AbortController().signal);
+		sessionInput = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'));
+		await pane.setInput(sessionInput, new AbortController().signal);
+	},
+	async selectSessionCapture(id: string | undefined, kind: 'id' | 'transient' | 'disabled' | 'noReview' = 'id'): Promise<void> {
+		const resource = URI.parse('ash-session:/review?thread=review-thread');
+		const changeset = kind === 'id' ? undefined : await sessionServices!.get(ISessionChangesService).resolveChangeset(resource, id!);
+		sessionInput = new SessionChangesEditorInput(resource, changeset
+			? { kind: 'transient', changeset: { ...changeset, isEnabled: kind === 'disabled' ? constObservable(false) : changeset.isEnabled, capabilities: { review: kind !== 'noReview' } } }
+			: { kind: 'id', id });
+		await sessionPane.value!.setInput(sessionInput, new AbortController().signal);
+	},
+	multipleSessionCaptures(): void { sessionMultipleCaptures = true; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
+	async reviewSessionOriginalFile(index: number): Promise<void> {
+		await sessionServices!.get(ICommandService).executeCommand(CHANGESET_REVIEW_ACTION_ID, URI.parse(`ash-turn-diff:/review-change/file-${index}.ts?session=review&thread=review-thread&revision=${sessionRevision}&side=before`));
+	},
+	beginDelayedSessionReview(): void {
+		pendingSessionRead = new DeferredPromise<void>();
+		sessionReadStarted = false;
+		pendingViewedAction = this.reviewSessionFile(0);
+	},
+	sessionReviewReadStarted(): boolean { return sessionReadStarted; },
+	async finishInactiveSessionReview(): Promise<void> {
+		sessionCommandsActive = false;
+		await pendingSessionRead!.complete();
+		await pendingViewedAction;
+		pendingSessionRead = undefined;
+		pendingViewedAction = undefined;
+		sessionCommandsActive = true;
 	},
 	setSessionChangesVisible(visible: boolean): void { sessionPane.value!.setVisible(visible); },
 	refreshSessionChanges(): void { sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
@@ -584,6 +633,10 @@ const harness = {
 	sessionTheme(name: 'dark' | 'light' | 'contrast'): void { sessionTheme!.setColorTheme(name === 'light' ? lightColorTheme : name === 'contrast' ? highContrastDarkColorTheme : darkColorTheme); },
 	advanceSessionRevision(): void { sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
 	unsealSessionCapture(): void { sessionCaptureState = 'open'; sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
+	setSessionAvailability(availability: 'available' | 'empty' | 'failed'): void {
+		sessionAvailability = availability;
+		sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' });
+	},
 	sessionOpenedFiles(): readonly string[] { return sessionOpenedFiles; },
 	sessionPreparedFiles(): readonly unknown[] { return sessionPreparedFiles; },
 	rejectInvalidSessionReveal(): boolean {
@@ -600,9 +653,11 @@ const harness = {
 	},
 	async reopenSessionChanges(): Promise<void> {
 		const state = this.readSessionViewState();
+		const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(sessionInput!)));
 		sessionPane.clear();
 		const pane = createSessionChangesPane();
-		await pane.setInput({ resource: URI.parse('ash-session-changes:/review?thread=review-thread') }, new AbortController().signal);
+		sessionInput = EditorInputSerializers.deserialize(serialized) as SessionChangesEditorInput;
+		await pane.setInput(sessionInput, new AbortController().signal);
 		if (isEditorPaneWithViewState(pane)) pane.restoreViewState(state);
 		pane.setVisible(true);
 	},

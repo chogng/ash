@@ -1,5 +1,6 @@
 import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/common/changesViewService.js';
 import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/browser/changesViewService.js';
+import type { ISessionChangesService } from '../../../src/ash/sessions/contrib/changes/common/sessionChangesService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
@@ -134,7 +135,8 @@ const pane = resources.add(view === 'empty'
 								{ activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture' } } }, onDidChange: Event.None } as unknown as ISessionsService,
 								{ onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None, listTurnChanges: async () => [changes.summary], readTurnChange: async () => changes } as unknown as IChatService,
 								editors, configuration, contextKeys, notifications, {} as IQuickInputService,
-								{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState)
+								{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
+								{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService)
 							: view === 'console'
 								? new DebugConsoleViewPane(root, { id: 'fixture.console', title: 'Console' }, {
 									...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', output: 'Fixture output', canEvaluate: true },

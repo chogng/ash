@@ -14,8 +14,8 @@ test('policy stops expose their reason in the live transcript without a retry ac
 test('policy stop guidance uses the selected Chinese catalog', async ({ page }) => {
 	await page.goto('/advisor.html?locale=zh-CN');
 	await page.getByRole('button', { name: 'Show policy stop' }).click();
-	const transcript = page.getByRole('log', { name: 'Chat transcript' });
-	await expect(transcript.getByText('自动审查已停止本轮执行', { exact: true })).toBeVisible();
+	const transcript = page.getByRole('log', { name: '聊天记录' });
+	await expect(transcript).toContainText('自动审查已停止本轮执行');
 	await expect(transcript.getByText('多次操作被拒绝。请先查看原因，再要求采用更安全的方式。', { exact: true })).toBeVisible();
 	await expect(transcript.getByRole('button')).toHaveCount(0);
 });

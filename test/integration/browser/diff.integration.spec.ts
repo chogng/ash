@@ -732,6 +732,91 @@ test('session Changes retains collapse and scroll through hiding, refresh and de
 	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
 });
 
+for (const locale of ['en', 'zh-CN'] as const) test(`session Changes restores a selected capture and reviews the current side of a cumulative comparison (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page, locale);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.multipleSessionCaptures());
+	const message = page.locator('#session-changes .ash-sessions-editor-message');
+	await expect(message).toBeHidden();
+	const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
+	await expect(first.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'true');
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionOriginalFile(0));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-later/file-0.ts?session=review&thread=review-thread&revision=1']);
+	await expect(first.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'false');
+	await expect(first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-later'));
+	await expect(message).toBeHidden();
+	await expect(page.locator('#session-changes .stanza-multi-diff-editor-file-count')).toHaveCount(0);
+	const label = page.locator('#session-changes-label .ash-icon-label');
+	await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').content)).toBe('"2"');
+	await first.getByRole('button', { name: /file-0.ts/ }).click();
+	await expect(first.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'false');
+	await page.evaluate(() => window.ashDiffIntegration.reopenSessionChanges());
+	await expect(message).toBeHidden();
+	await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').content)).toBe('"2"');
+	await expect(first.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'false');
+	await first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
+	await expect(first.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'true');
+	expect(errors).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`session Changes accepts a transient capture with an empty catalogue and honors its capabilities (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page, locale);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.evaluate(() => window.ashDiffIntegration.setSessionAvailability('empty'));
+	const message = page.locator('#session-changes .ash-sessions-editor-message');
+	await expect(message).toBeVisible();
+	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change', 'transient'));
+	await expect(message).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionOriginalFile(0));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-0.ts?session=review&thread=review-thread&revision=1']);
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionOriginalFile(0));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
+	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change', 'noReview'));
+	await expect(message).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionOriginalFile(0));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
+	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change', 'disabled'));
+	await expect(message).toHaveText(localized(locale, 'No changes in this conversation.', '当前对话没有更改。'));
+	expect(errors).toEqual([]);
+});
+
+test('session Changes drops a pending Viewed action after the active editor changes', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.beginDelayedSessionReview());
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewReadStarted())).toBe(true);
+	await page.evaluate(() => window.ashDiffIntegration.finishInactiveSessionReview());
+	expect(await page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
+	await expect(page.locator('#session-changes').getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'true');
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`session Changes clears its old count when the capture is empty or unavailable (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page, locale);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	const label = page.locator('#session-changes-label .ash-icon-label');
+	const count = () => label.evaluate(element => getComputedStyle(element, '::after').content);
+	await expect.poll(count).toBe('"8"');
+	await page.evaluate(() => window.ashDiffIntegration.setSessionAvailability('empty'));
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toHaveText(localized(locale, 'No changes in this conversation.', '当前对话没有更改。'));
+	await expect.poll(count).toBe('"0"');
+	await page.evaluate(() => window.ashDiffIntegration.setSessionAvailability('failed'));
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toContainText('Unavailable');
+	await expect(label).not.toHaveClass(/ash-decoration-badge/u);
+	await page.evaluate(() => window.ashDiffIntegration.setSessionAvailability('available'));
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	await expect.poll(count).toBe('"8"');
+	expect(errors).toEqual([]);
+});
+
 for (const locale of ['en', 'zh-CN'] as const) test(`session Changes reveals a lazy file, reviews its revision and decorates the input (${locale})`, async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
