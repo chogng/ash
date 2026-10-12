@@ -17,7 +17,7 @@ use url::Url;
 use crate::ExtensionsClientError;
 use crate::registry::archive::MAX_ARCHIVE_BYTES;
 
-/// Bridges deployment-specific TLS roots to TUF through the shared verified HTTP client.
+/// Routes online TUF metadata and target reads through the shared verified HTTP client.
 #[derive(Clone)]
 pub(super) struct HttpsTransport {
     http: Arc<UreqHttpClient>,
@@ -57,7 +57,9 @@ impl Transport for HttpsTransport {
         let http = self.http.clone();
         let request_url = url.clone();
         let response = tokio::task::spawn_blocking(move || {
-            let request = HttpRequest::new(HttpMethod::Get, request_url.as_str(), vec![], vec![])?;
+            // The configured TUF endpoints must not redirect outside this HTTPS boundary.
+            let request = HttpRequest::new(HttpMethod::Get, request_url.as_str(), vec![], vec![])?
+                .without_redirects();
             http.execute(&request)
         })
         .await

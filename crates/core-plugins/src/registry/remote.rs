@@ -11,8 +11,8 @@ use ash_http_client::TlsPolicy;
 use semver::Version;
 use serde::Deserialize;
 use tempfile::TempDir;
-use tough::DefaultTransport;
 use tough::ExpirationEnforcement;
+use tough::FilesystemTransport;
 use tough::IntoVec;
 use tough::Limits;
 use tough::Repository;
@@ -288,12 +288,16 @@ impl RemoteSource {
         .datastore(datastore.path())
         .limits(Limits::default())
         .expiration_enforcement(ExpirationEnforcement::Safe);
-        let loader = if let Some(bundle) = &self.config.tls_root_certificates {
-            loader.transport(transport::HttpsTransport::new(
-                HttpClientConfig::default().with_tls_policy(TlsPolicy::CustomOnly(bundle.clone())),
-            )?)
+        // Development distributions stay local; all online metadata and target reads use the
+        // same proxy, certificate, timeout and redirect policies as other Ash HTTP consumers.
+        let loader = if self.config.metadata_base_url.scheme() == "file" {
+            loader.transport(FilesystemTransport)
         } else {
-            loader.transport(DefaultTransport::default())
+            let mut config = HttpClientConfig::default();
+            if let Some(bundle) = &self.config.tls_root_certificates {
+                config = config.with_tls_policy(TlsPolicy::CustomOnly(bundle.clone()));
+            }
+            loader.transport(transport::HttpsTransport::new(config)?)
         };
         let online = loader.load().await;
         match online {
