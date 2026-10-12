@@ -331,7 +331,7 @@
       },
       {
         "command": "git.graph.compareRef",
-        "title": "%command.git.graph.compareRef%"
+        "title": "%command.git.graph.compareRef%",
         "enablement": "!scmBusy"
       },
       {
