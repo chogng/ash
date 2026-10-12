@@ -17,6 +17,7 @@ import type { ISCMConflictProvider, ISCMInput, ISCMProvider, ISCMResource, ISCMR
 import { GitSwitchBranchCommandId } from './commandIds.js';
 import type { CommandClient, DialogClient, EditorClient, ViewsClient, WorkingCopyClient } from './editors.js';
 import { gitErrorMessage } from './gitError.js';
+import { CancellationError } from './support.js';
 import type { GitChangeFileComparison, GitChangeStatus, GitCommitOptions, GitHead, GitPullMode, GitRepository, GitRepositoryChange, GitStatus, IGitService } from './types.js';
 import { GitHistoryProvider } from './gitHistoryProvider.js';
 
@@ -55,6 +56,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	private resourceGroups: readonly ISCMResourceGroup[] = [];
 	private readonly retiredStreams = new Set<string>();
 	private requestRevision = 0;
+	private refreshing: Promise<void> | undefined;
 	private busy = false;
 	private syncing = false;
 	private operation: Promise<unknown> = Promise.resolve();
@@ -181,8 +183,26 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		}
 	}
 
-	public async refresh(): Promise<void> {
+	/** Commands can arrive after discovery but before the first status snapshot. */
+	public async whenReady(): Promise<void> {
+		while (!this.status) {
+			if (this.isDisposed) throw new CancellationError();
+			await (this.refreshing ?? this.refresh());
+			if (this.isDisposed) throw new CancellationError();
+			if (!this.status && !this.refreshing) throw new Error(this.operationError ?? this.message);
+		}
+	}
+
+	public refresh(): Promise<void> {
 		const requestRevision = ++this.requestRevision;
+		const request = this.readStatus(requestRevision).finally(() => {
+			if (this.refreshing === request) this.refreshing = undefined;
+		});
+		this.refreshing = request;
+		return request;
+	}
+
+	private async readStatus(requestRevision: number): Promise<void> {
 		try {
 			const status = await this.gitService.status(this.id);
 			if (!this.isDisposed && requestRevision === this.requestRevision) this.acceptStatus(status);

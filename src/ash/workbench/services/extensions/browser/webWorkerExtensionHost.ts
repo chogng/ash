@@ -23,6 +23,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	}
 	private clientHandler: ExtensionClientHandler | undefined;
 	private readonly workers = this._register(new DisposableMap<string, BrowserExtensionWorker>());
+	private readonly workerPackages = new Map<string, string>();
 	private readonly changes = this._register(new Emitter<number>());
 	private generation = 0;
 	private snapshot: ExtensionHostFleetSnapshot = { generation: 1, extensions: [] };
@@ -128,26 +129,30 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 
 	private async activate(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot> {
 		const generation = ++this.generation;
-		if (mode === 'refresh') {
-			await Promise.all([...this.workers].map(([, worker]) => worker.close()));
-			this.workers.clearAndDisposeAll();
-			this.assertNotDisposed();
-		}
 		const catalog = await this.extensions.list('refresh');
 		this.assertNotDisposed();
-		const ids = new Set(catalog.extensions.map(extension => extension.id));
+		const packages = new Map(catalog.extensions.map(extension => [extension.id, browserPackageIdentity(extension)]));
+		const retained = this.snapshot.extensions.filter(runtime => runtime.lifecycle === 'ready' && this.workers.has(runtime.id) && this.workerPackages.get(runtime.id) === packages.get(runtime.id));
+		const retainedIds = new Set(retained.map(runtime => runtime.id));
+		const retired: BrowserExtensionWorker[] = [];
 		for (const [id] of this.workers) {
-			if (!ids.has(id)) { this.workers.deleteAndDispose(id); }
+			if (!retainedIds.has(id)) {
+				retired.push(this.workers.deleteAndLeak(id)!);
+				this.workerPackages.delete(id);
+			}
 		}
-		const retained = this.snapshot.extensions.filter(extension => ids.has(extension.id));
+		// Revoke changed owners before cleanup or replacement can reuse their SCM identities.
+		// An ordinary refresh (including remote first-use activation) keeps unchanged Workers.
 		if (retained.length !== this.snapshot.extensions.length) {
 			this.snapshot = { ...this.snapshot, extensions: retained };
 			this.changes.fire(++this.snapshotGeneration);
 		}
+		await Promise.all(retired.map(worker => worker.close()));
+		this.assertNotDisposed();
 		const runtimes: ExtensionHostRuntime[] = [];
 		for (const extension of catalog.extensions) {
 			const previous = this.snapshot.extensions.find(runtime => runtime.id === extension.id);
-			if (mode === 'restartFailed' && previous?.lifecycle === 'ready') { runtimes.push(previous); continue; }
+			if (previous?.lifecycle === 'ready') { runtimes.push(previous); continue; }
 			const localization = this.instantiation.createInstance(MainThreadLocalization);
 			const manifest = JSON.parse(await localization.localizeManifest(extension.id, extension.manifestJson, catalog.generation));
 			if (typeof manifest.browser !== 'string') { continue; }
@@ -158,9 +163,11 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				const source = await this.extensions.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
 				worker = this.instantiation.createInstance(BrowserExtensionWorker, extension.id, source, async (message: unknown, signal: AbortSignal) => {
+					if (this.workers.get(extension.id) !== worker) { throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation')); }
 					const operation = message as ExtensionClientOperation;
 					if (!this.clientHandler) throw new Error('No extension client handler is registered');
 					const result = await this.clientHandler(operation, signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
+					if (this.workers.get(extension.id) !== worker) { throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation')); }
 					if (operation.operation === 'setStatusBarEntries' && result.result === 'done' && !signal.aborted) {
 						// Reconnect snapshots retain only the current acknowledged value, never activation's old arguments.
 						this.snapshot = {
@@ -188,6 +195,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				const runtime = normalizeExtensionHostSnapshot({ generation, extensions: [{ ...runtimeIdentity(extension, generation), lifecycle: 'ready', failure: null, registrations }] }).extensions[0];
 				assertRemoteResolverOwnership(runtime, false);
 				worker.onDidFail(error => this.retire(extension.id, generation, error));
+				this.workerPackages.set(extension.id, packages.get(extension.id)!);
 				runtimes.push(runtime);
 			} catch (error) {
 				this.workers.deleteAndDispose(extension.id);
@@ -195,7 +203,10 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				runtimes.push({ ...runtimeIdentity(extension, generation), lifecycle: 'failed', failure: { code: 'activationFailed', message: String(error), incarnation: generation }, registrations: [] });
 			}
 		}
-		this.snapshot = Object.freeze({ generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes) });
+		// Background SCM/status-bar publication can advance a retained runtime while another
+		// package activates. Carry its latest acknowledged registrations into the complete fleet.
+		this.snapshot = Object.freeze({ generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes.map(runtime =>
+			this.snapshot.extensions.find(current => current.id === runtime.id && current.activationGeneration === runtime.activationGeneration) ?? runtime)) });
 		this.snapshotGeneration++;
 		await this.refreshRemote(mode);
 		if (!this.pendingMode) { this.changes.fire(++this.snapshotGeneration); }
@@ -206,6 +217,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		const runtime = this.snapshot.extensions.find(extension => extension.id === id);
 		if (!runtime || runtime.activationGeneration !== activationGeneration) { return; }
 		this.workers.deleteAndDispose(id);
+		this.workerPackages.delete(id);
 		this.snapshot = {
 			generation: this.snapshot.generation + 1,
 			extensions: this.snapshot.extensions.map(extension => extension.id === id
@@ -342,6 +354,10 @@ function assertRemoteResolverOwnership(runtime: ExtensionHostRuntime, builtInSsh
 	if (!builtInSsh && runtime.registrations.some(registration => (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'remoteConnectionResolver') && registration.authorityPrefix === 'ssh')) {
 		throw new TypeError('Remote ssh prefix belongs to the built-in SSH extension');
 	}
+}
+
+function browserPackageIdentity(extension: ExtensionDescriptor): string {
+	return JSON.stringify([extension.id, extension.version, extension.packageSha256, extension.manifestSha256, extension.sourceKind, extension.extensionLocation, extension.targetPlatform, getNLSLanguage()]);
 }
 
 function runtimeIdentity(extension: ExtensionDescriptor, generation: number): Omit<ExtensionHostRuntime, 'lifecycle' | 'failure' | 'registrations'> {

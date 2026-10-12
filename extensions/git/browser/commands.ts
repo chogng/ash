@@ -25,7 +25,7 @@ interface GitCommandContext {
 	opener: { open(uri: URI, options: unknown): Promise<void>; };
 	notifications: { info(message: string): void; warning(message: string): void; error(message: string): void; };
 }
-export function registerGitCommands(context: ExtensionContext, git: GitService, providers: ReadonlyMap<string, GitSCMProvider>, monitor: GitBackendMonitor, showOutput: () => void): void {
+export function registerGitCommands(context: ExtensionContext, git: GitService, providers: ReadonlyMap<string, GitSCMProvider>, monitor: GitBackendMonitor, showOutput: () => void, whenReady: () => Promise<void>): void {
 	const ctx: GitCommandContext = {
 		git, providers, monitor, input: { input }, dialogs: dialogClient, commands: commandClient, editor: editorClient,
 		clipboard: { writeText: text => editors.request({ method: 'clipboard', text }) },
@@ -34,7 +34,7 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 	};
 	const register = (id: string, callback: (...args: readonly unknown[]) => unknown): void => {
 		context.subscriptions.push(commands.registerCommand(id, async (...args: readonly unknown[]) => {
-			try { return await callback(...args); } catch (error) {
+			try { await whenReady(); await provider(args[0])?.whenReady(); return await callback(...args); } catch (error) {
 				// Opening another workspace retires this callback; its cancellation is not a Git failure.
 				if (error instanceof CancellationError || error instanceof Error && (error.name === 'AbortError' || error.name === 'Canceled')) throw error;
 				ctx.notifications.error(localize('git.commandFailed', 'Git operation failed: {0}', gitErrorMessage(error)));

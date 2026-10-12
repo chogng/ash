@@ -9,6 +9,36 @@ function collectErrors(page: Page): string[] {
 	return errors;
 }
 
+test('Git activates before backend readiness, discovers automatically and waits for discovery on an immediate command', async ({ page }) => {
+	const errors = collectErrors(page);
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitStartupIntegration.hold());
+		const runtimes = await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		expect(runtimes.map(runtime => runtime.lifecycle)).toEqual(['ready']);
+		await expect.poll(() => page.evaluate(() => window.gitStartupIntegration.stateReads())).toBeGreaterThan(0);
+		expect(await page.evaluate(() => window.gitStartupIntegration.discoveryReads())).toBe(0);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().repositories)).toEqual([]);
+		const command = page.evaluate(() => window.gitExtensionIntegration.invoke('git.stageAll'));
+		await page.evaluate(() => window.gitStartupIntegration.releaseState());
+		await expect.poll(() => page.evaluate(() => window.gitStartupIntegration.discoveryReads())).toBe(1);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.some(call => call.method === 'git/stage'))).toBe(false);
+		await page.evaluate(() => window.gitStartupIntegration.releaseDiscovery());
+		await expect.poll(() => page.evaluate(() => window.gitStartupIntegration.statusReads())).toBeGreaterThan(0);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.some(call => call.method === 'git/stage'))).toBe(false);
+		await page.evaluate(() => window.gitStartupIntegration.releaseStatus());
+		await command;
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/stage').length)).toBe(1);
+		expect(await page.evaluate(() => window.gitStartupIntegration.discoveryReads())).toBe(1);
+		expect(await page.evaluate(() => window.gitStartupIntegration.refresh())).toEqual({ generationPreserved: true, providerPreserved: true });
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+		expect(errors).toEqual([]);
+	} finally {
+		await page.evaluate(() => { window.gitStartupIntegration.releaseState(); window.gitStartupIntegration.releaseDiscovery(); window.gitStartupIntegration.releaseStatus(); window.gitExtensionIntegration.dispose(); });
+	}
+});
+
 test('Worker queues a large client request batch without retiring its incarnation', async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
@@ -182,7 +212,7 @@ for (const language of ['en', 'zh-CN']) test(`disabled Git leaves another SCM Wo
 	try {
 		await page.evaluate(() => window.gitExtensionIsolation.addGeneric());
 		await page.evaluate(language => window.gitExtensionIntegration.activate(language), language);
-		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories.map(value => value.id))).toEqual(['root', 'snapshots']);
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories.map(value => value.id).sort())).toEqual(['root', 'snapshots']);
 		const before = await page.evaluate(() => window.gitExtensionIsolation.runtimes());
 		expect(before.every(runtime => runtime.lifecycle === 'ready')).toBe(true);
 		await page.evaluate(() => window.gitExtensionIsolation.openEditor());

@@ -136,6 +136,10 @@ let clean = false;
 let upstream: { name: string; ahead: number; behind: number; } | null = null;
 let pullGate: DeferredPromise<void> | undefined;
 let pullFailure = false;
+let startupStateGate: DeferredPromise<void> | undefined;
+let startupDiscoveryGate: DeferredPromise<void> | undefined;
+let startupStatusGate: DeferredPromise<void> | undefined;
+let startupStateReads = 0;
 const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false }] });
 const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 	request: async (method, params): Promise<JsonValue> => {
@@ -150,8 +154,10 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 				configurationEvents.fire({ method: 'config/changed', params: { revision: configurationRevision, generation: configurationRevision } });
 				return { revision: configurationRevision, disposition: 'applied' };
 			}
-			case 'git/repositories': return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
-			case 'git/status': return status();
+			case 'git/repositories':
+				await startupDiscoveryGate?.p;
+				return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
+			case 'git/status': await startupStatusGate?.p; return status();
 			case 'git/catalog': return { tags: [], stashes: [], remotes: ['origin'], upstreamRemote: upstream ? 'origin' : null, operation: null };
 			case 'git/pull':
 				await pullGate?.p;
@@ -203,7 +209,11 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 	switch (operation.operation) {
 		case 'readInitialization': return { result: 'initialization', initialization: createExtensionHostInitialization(workspace, configuration) };
 		case 'backendRequest': return { result: 'value', value: await backend.handle(source, operation.capability, operation.method, operation.params, 0, signal) };
-		case 'backendState': return { result: 'value', value: await backend.handle(source, operation.capability, undefined, {}, operation.after, signal) };
+		case 'backendState':
+			startupStateReads++;
+			await startupStateGate?.p;
+			signal.throwIfAborted();
+			return { result: 'value', value: await backend.handle(source, operation.capability, undefined, {}, operation.after, signal) };
 		case 'editorOperation': {
 			requests.push(operation.payload);
 			const request = operation.payload as { method: string; };
@@ -263,6 +273,25 @@ window.gitExtensionIntegration = {
 	history: async () => scm.getRepository('root')!.provider.historyProvider!.provideHistoryItems({ limit: 1 }),
 	dispose: () => lifetime.dispose(),
 };
+
+const startupIntegration = {
+	hold: () => { startupStateGate = new DeferredPromise<void>(); startupDiscoveryGate = new DeferredPromise<void>(); startupStatusGate = new DeferredPromise<void>(); },
+	releaseState: () => { const gate = startupStateGate; startupStateGate = undefined; void gate?.complete(); },
+	releaseDiscovery: () => { const gate = startupDiscoveryGate; startupDiscoveryGate = undefined; void gate?.complete(); },
+	releaseStatus: () => { const gate = startupStatusGate; startupStatusGate = undefined; void gate?.complete(); },
+	stateReads: () => startupStateReads,
+	discoveryReads: () => calls.filter(call => call.method === 'git/repositories').length,
+	statusReads: () => calls.filter(call => call.method === 'git/status').length,
+	refresh: async () => {
+		const before = (await host.list()).extensions.find(runtime => runtime.id === 'ash.git')!;
+		const repository = scm.getRepository('root');
+		await host.reconcile('refresh');
+		const after = (await host.list()).extensions.find(runtime => runtime.id === 'ash.git')!;
+		return { generationPreserved: before.activationGeneration === after.activationGeneration, providerPreserved: repository === scm.getRepository('root') };
+	},
+};
+declare global { interface Window { gitStartupIntegration: typeof startupIntegration; } }
+window.gitStartupIntegration = startupIntegration;
 
 const statusbar = lifetime.add(new StatusbarService());
 const statusItems = new Map<string, StatusbarEntryItem>();

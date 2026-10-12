@@ -84,10 +84,13 @@ function browser(remote: RemoteHost): WebWorkerExtensionHost {
 
 const request = { extensionId: 'lazy', activationGeneration: 7, event: { type: 'command' as const, command: 'lazy.run' } };
 
-test('browser refresh acknowledges SDK cleanup before retiring the Worker and its resources', async () => {
+test('browser refresh preserves unchanged Workers and pending calls, and cleans up changed packages before replacement', async () => {
 	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
 	const order: string[] = [];
 	const urls: string[] = [];
+	let digest = `sha256:${'a'.repeat(64)}`;
+	const invoked = new DeferredPromise<void>();
+	let finishInvocation: (() => void) | undefined;
 	class WorkerFixture extends EventTarget {
 		postMessage(message: BrowserExtensionHostRequest): void {
 			queueMicrotask(() => {
@@ -101,6 +104,9 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 					order.push('deactivate');
 					this.dispatchEvent(new MessageEvent('message', { data: { type: 'releaseWebviewResource', url: urls.at(-1) } }));
 					this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: null } }));
+				} else if (message.type === 'invoke') {
+					finishInvocation = () => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: 'completed' } }));
+					void invoked.complete();
 				} else assert.fail(`Unexpected Worker request: ${message.type}`);
 			});
 		}
@@ -120,7 +126,7 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 			list: async () => ({
 				generation: 1, diagnostics: [], extensions: [{
 					id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn',
-					manifestJson: JSON.stringify({ browser: './browser.js' }), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+					manifestJson: JSON.stringify({ browser: './browser.js' }), manifestSha256: digest, packageSha256: digest,
 				}]
 			}),
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
@@ -132,11 +138,26 @@ test('browser refresh acknowledges SDK cleanup before retiring the Worker and it
 		using handler = toDisposable(() => registration.dispose());
 		const activation = api.reconcile('refresh');
 		assert.equal(api.reconcile('refresh'), activation, 'Concurrent reads share the existing activation');
-		assert.equal((await activation).extensions[0]?.lifecycle, 'ready');
+		const original = (await activation).extensions[0]!;
+		assert.equal(original.lifecycle, 'ready');
 		assert.equal(await (await fetch(urls[0]!)).text(), 'style');
-		assert.equal((await api.reconcile('refresh')).extensions[0]?.lifecycle, 'ready');
+		const invocation = { extensionId: original.id, activationGeneration: original.activationGeneration, incarnation: original.incarnation!, registrationId: 'callback', operation: 'execute', payload: {}, deadlineUnixMillis: Date.now() + 10_000 };
+		const pending = api.invoke(invocation, new AbortController().signal);
+		await invoked.p;
+		assert.deepEqual((await api.reconcile('refresh')).extensions[0], original);
+		await remote.activation.complete(snapshot(2, 'ready'));
+		assert.deepEqual((await api.activateByEvent(request)).extensions.find(runtime => runtime.id === original.id), original);
+		assert.deepEqual(order, ['activate']);
+		assert.equal(await (await fetch(urls[0]!)).text(), 'style');
+		finishInvocation!();
+		assert.equal(await pending, 'completed');
+		digest = `sha256:${'b'.repeat(64)}`;
+		const replacement = (await api.reconcile('restartFailed')).extensions.find(runtime => runtime.id === original.id)!;
+		assert.equal(replacement.lifecycle, 'ready');
+		assert.notEqual(replacement.activationGeneration, original.activationGeneration);
 		assert.deepEqual(order, ['activate', 'deactivate', 'terminate', 'activate']);
 		await assert.rejects(fetch(urls[0]!));
+		await assert.rejects(api.invoke(invocation, new AbortController().signal), /retired activation/);
 		api.dispose();
 		await assert.rejects(fetch(urls[1]!));
 		assert.deepEqual(order, ['activate', 'deactivate', 'terminate', 'activate', 'terminate']);
@@ -156,6 +177,10 @@ test('disablement during activation retires the Worker before publishing its con
 	let reply: (() => void) | undefined;
 	class WorkerFixture extends EventTarget {
 		postMessage(message: BrowserExtensionHostRequest): void {
+			if (message.type === 'deactivate') {
+				queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: null } })));
+				return;
+			}
 			assert.equal(message.type, 'activate');
 			reply = () => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: [] } }));
 			void started.complete();

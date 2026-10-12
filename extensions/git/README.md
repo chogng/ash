@@ -14,6 +14,15 @@ shared Rust primitives directly; TUI uses the existing typed `git/*` App Server 
 None of these consumers requires the frontend Worker or a separate Git capability process.
 Shared configuration remains the only persistent autofetch owner.
 
+Git retains `activationEvents: ["*"]` for early frontend availability. Activation registers
+commands and an initially empty SCM contribution without awaiting the first backend state read
+or repository discovery. `GitService` discovers automatically on workspace/connection updates;
+an immediate command waits for that initial state, joins pending discovery and waits for its
+provider's first status snapshot. Repository state and file decorations arrive through subsequent SCM updates.
+An unchanged package retains its Worker and SCM providers across host refreshes. See
+[the host lifecycle mechanisms](../../docs/editor-extensions.md#浏览器-worker-与后端宿主的生命周期)
+for the distinction from backend JS activation and independent Rust providers.
+
 `build/builtin` bundles the browser module and its dependencies into the immutable renderer
 catalog, with the manifest and NLS. Backend resources retain package metadata; no Git Rust
 executable, Cargo inputs or browser sources are installed in the shared runtime package.

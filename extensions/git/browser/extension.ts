@@ -22,7 +22,6 @@ export async function activate(context: ExtensionContext): Promise<void> {
 	context.subscriptions.push(channel);
 	const report = (error: unknown): void => channel.appendLine(String(error));
 	const monitor = lifetime.add(new GitBackendMonitor(report));
-	await monitor.start();
 	const facts = await editors.request<{ canClone: boolean; }>({ method: 'hostFacts' });
 	const git = lifetime.add(new GitService({ api: createGitApi(), appServerApi: monitor.connection, eventApi: monitor.notifications, workspaceContext: monitor.workspace, canCloneRepository: facts.canClone }, {
 		inspect: key => ({ userLocalValue: workspace.getConfiguration().inspect(key)?.globalValue }),
@@ -67,7 +66,12 @@ export async function activate(context: ExtensionContext): Promise<void> {
 	};
 	lifetime.add(git.onDidChangeRepositories(sync));
 	lifetime.add(git.onDidChangeActiveRepository(repository => scm.selectRepository(repository?.id)));
-	registerGitCommands(context, git, providers, monitor, () => channel.show());
-	if (monitor.workspace.getWorkspace().folders.length) { await git.listRepositories(); }
+	// GitService discovers repositories from workspace/connection events in the background.
+	// An immediate command joins that discovery instead of running before its provider exists.
+	const initialized = monitor.start();
+	registerGitCommands(context, git, providers, monitor, () => channel.show(), async () => {
+		await initialized;
+		if (!git.repositories.length && monitor.workspace.getWorkspace().folders.length) { await git.listRepositories(); }
+	});
 	sync();
 }

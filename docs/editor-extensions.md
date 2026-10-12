@@ -92,6 +92,30 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 “打开富文本编辑器”（`markdown.showRichEditor`）保留源码标签；“重新打开为富文本”替换当前视图。
 源码、预览与富文本标签可以同时打开。此入口没有扩大第三方扩展的生产执行许可。
 
+### 浏览器 Worker 与后端宿主的生命周期
+
+执行位置与 Provider 类型决定生命周期机制，不能因实现语言是 TS 或 Rust 就把它们合并：
+
+| 路径 | 启动与激活 owner | 当前机制 |
+| --- | --- | --- |
+| 内置或显式可信的 TS/JS `browser` 包 | 窗口的 `WebWorkerExtensionHost` | reconcile 读取启用目录并启动 browser 入口；当前尚未按 manifest `activationEvents` 延迟创建 Worker |
+| 后端标准 JS 包（Node 或 Rust/V8 JS 宿主） | App Server 的 JS 扩展发现、授权与宿主监管 | 启用并授权后可保持 `dormant`，按已支持的命令、语言、启动完成等事件激活；Rust/V8 仍执行 JS |
+| 独立 Rust capability Provider | 共享运行时、来源授权与对应 supervisor | 按 Provider 声明、scope 和能力需求启动/握手，不套用浏览器包的 VS Code activation events |
+| 共享 Git 后端 | App Server 的目录级 `GitRuntime` / `GitService` | 由共享后端管理仓库、监听和状态；不依赖 `ash.git` Worker 的启用或激活事件 |
+
+浏览器 reconcile 是增量刷新：包版本、package/manifest digest、来源、执行位置/平台和窗口语言
+不变时保留健康 Worker、激活代次、进行中的调用及 SCM provider。移除、禁用或身份变更先撤销旧
+registration，再进行有界的 SDK 清理与替换；失败实例可重试。后端首次使用事件仍经过对应的
+后端激活接口，这次发现/刷新不能顺带重启无关浏览器 Worker。旧实例的迟到结果不能更新替代实例。
+
+Git 保留 `*` 表达尽早提供前端集成的意图。其 `activate()` 只等待必要的客户端能力信息，注册命令
+和空 SCM contribution 后返回；首个后端状态读取和仓库发现继续在后台执行。`GitService` 收到工作区
+与连接状态后自动发现仓库，立即执行的 Git 命令等待初始状态、复用进行中的发现，并等待相关
+provider 的首次状态读取，避免仓库或状态尚未就绪时静默无操作。SCM、分支和文件装饰随状态
+逐步更新。共享 Rust Git 的运行机制不因此改变。
+这次优化减少浏览器激活的等待与无关重启，不表示浏览器宿主已经支持延迟激活，也不以消除 `*`
+诊断作为性能结果；冷启动与大型仓库的改善仍需以实际运行测量确认。
+
 ## 0. 确定的产品方向
 
 ### Extensions 包管理与开放来源

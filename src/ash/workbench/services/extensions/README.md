@@ -95,6 +95,15 @@ the sandbox document when its pane first becomes visible; this keeps the first n
 a hidden editor host. Independent custom tabs retain their editor ID in working sets.
 Browser packages use Ash's bounded registration contract, not the complete VS Code extension API.
 
+Browser reconciliation scans the enabled package catalog but retains healthy Workers with the
+same package/manifest digests, version, provenance, execution location/platform and window
+language. Removal or changed identity revokes the old registrations before bounded SDK cleanup
+and replacement; failed Workers can be retried. Refreshing for a remote activation does not
+restart an unchanged browser package or cancel its pending calls. A retained runtime carries
+its latest acknowledged SCM/status-bar registrations through other packages' activation.
+Packaged browser entries currently activate during reconciliation; this path does not implement
+backend JS manifest event scheduling. See [host lifecycle mechanisms](../../../../../docs/editor-extensions.md#浏览器-worker-与后端宿主的生命周期).
+
 Theme documents accept the four supported `uiTheme` values, hexadecimal colors, package-relative
 JSON `include` files, `tokenColors` arrays or package-relative TextMate theme files, and semantic token styles. Token
 settings use `foreground`, `background`, and supported `fontStyle` values. Unknown
