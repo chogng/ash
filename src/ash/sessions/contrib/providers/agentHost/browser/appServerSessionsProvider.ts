@@ -1,10 +1,16 @@
-import type { AgentTreeNodeProjection as AgentTreeNodeDto, Session as SessionDto, SessionThreadProjection as ThreadDto, TurnStatus as TurnStatusDto } from "../../../../../../../.build/protocol/typescript/index.js";
+import type {
+	AgentExecutionNode,
+	AgentSession,
+	ThreadSubscription,
+	TurnStatus,
+} from '../../../../../platform/agentHost/common/agentService.js';
 import { Emitter } from "../../../../../base/common/event.js";
 import { canceled } from "../../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
 import { IAppServerApi, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { IModelApi, ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
+import { IAgentSessionService, IAgentTurnService } from "../../../../../platform/agentHost/common/agentService.js";
+import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from "../../../../services/sessions/common/session.js";
 import type { ISessionsProvider } from "../../../../services/sessions/common/sessionsProvider.js";
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
@@ -14,7 +20,7 @@ export interface AppServerSessionsProviderHost {
 	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 }
 
-/** App Server adapter. Generated DTOs do not cross this provider boundary. */
+/** Adapts shared Agent execution records into Sessions product models. */
 export class AppServerSessionsProvider extends Disposable implements ISessionsProvider {
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
@@ -26,9 +32,9 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	constructor(
 		private readonly host: AppServerSessionsProviderHost,
 		@IAppServerApi private readonly appServer: IAppServerApi,
-		@ISessionApi private readonly sessionApi: ISessionApi,
-		@IModelApi private readonly modelApi: IModelApi,
-		@ITurnApi private readonly turnApi: ITurnApi,
+		@IAgentSessionService private readonly sessionApi: IAgentSessionService,
+		@IAgentModelsService private readonly modelApi: IAgentModelsService,
+		@IAgentTurnService private readonly turnApi: IAgentTurnService,
 		@IServerEventApi events: IServerEventApi,
 	) {
 		super();
@@ -95,7 +101,7 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		}
 		this.assertCurrentConnection(generation);
 		this.subscribed.add(session.sessionId);
-		const next = toSession(result.session, result.threadProjections, session, result.agentTree.roots);
+		const next = toSession(result.session, result.threadSnapshots, session, result.agentTree.roots);
 		if (next.sessionId !== session.sessionId) {
 			await this.unsubscribe(session.sessionId);
 			throw new Error(`Session subscription returned '${next.sessionId}' for '${session.sessionId}'`);
@@ -161,8 +167,8 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 }
 
-function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], previous?: ISession, agentTree?: readonly AgentTreeNodeDto[]): ISession {
-	const byId = new Map(threads.map(entry => [entry.thread.threadId, entry.thread]));
+function toSession(session: AgentSession, threads: readonly ThreadSubscription[] = [], previous?: ISession, agentTree?: readonly AgentExecutionNode[]): ISession {
+	const byId = new Map(threads.map(entry => [entry.thread.threadId, entry]));
 	return {
 		sessionId: session.sessionId,
 		title: session.title,
@@ -175,10 +181,15 @@ function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], prev
 		management: { ...session.manager },
 		nextApprovalMode: previous?.nextApprovalMode ?? "manual",
 		chats: session.threads.map(thread => {
-			const detail = byId.get(thread.threadId);
+			const snapshot = byId.get(thread.threadId);
+			const detail = snapshot?.thread;
 			const prior = previous?.chats.find(candidate => candidate.threadId === thread.threadId);
 			return {
 				threadId: thread.threadId,
+				workspace: snapshot ? (snapshot.directory ? {
+					authorityId: snapshot.directory.type === 'local' ? 'local' : snapshot.directory.host,
+					root: snapshot.directory.root,
+				} : null) : prior?.workspace,
 				origin: thread.parentThreadId || thread.forkedFromId
 					? { type: "fork" as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
 					: { type: "root" as const },
@@ -192,7 +203,7 @@ function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], prev
 	};
 }
 
-function toAgentTreeNode(node: AgentTreeNodeDto): AgentTreeNode {
+function toAgentTreeNode(node: AgentExecutionNode): AgentTreeNode {
 	return {
 		threadId: node.threadId,
 		threadSequence: node.threadSequence,
@@ -213,7 +224,7 @@ function toAgentTreeNode(node: AgentTreeNodeDto): AgentTreeNode {
 	};
 }
 
-function executionStatus(status: TurnStatusDto | undefined): AgentThreadExecutionStatus {
+function executionStatus(status: TurnStatus | undefined): AgentThreadExecutionStatus {
 	switch (status) {
 		case "created": return "queued";
 		case "running":

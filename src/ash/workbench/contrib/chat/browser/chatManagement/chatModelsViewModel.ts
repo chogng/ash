@@ -2,7 +2,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import type { CustomModelProvider } from '../../../../../platform/sessions/common/sessionApi.js';
+import type { CustomModelProvider } from '../../../../../platform/agentHost/common/agentModels.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 
 export interface ProviderModelItem {

@@ -4,7 +4,7 @@ import * as terminalColors from "../../common/terminalColorRegistry.js";
 
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon, ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
-import type { Terminal, IDecoration, ITheme } from "@xterm/xterm";
+import type { Terminal, IDecoration, ITheme, ITerminalOptions } from "@xterm/xterm";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
@@ -12,7 +12,7 @@ import { IQuickInputService, type IQuickPickItem } from "../../../../../platform
 import { computeLinks } from "../../../../../editor/common/languages/linkComputer.js";
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
 import { localize } from "../../../../../nls.js";
-import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../terminal.js";
+import { ITerminalConfigurationService, type ITerminalCommandStatusEvent, type ITerminalDimensions, type ITerminalInstance } from "../terminal.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
 import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';
@@ -58,6 +58,7 @@ export class XtermTerminal extends Disposable {
 		@IOpenerService private readonly openerService: IOpenerService,
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
+		@ITerminalConfigurationService private readonly configuration: ITerminalConfigurationService,
 	) {
 		super();
 		this.element = h(container.ownerDocument, "div");
@@ -74,6 +75,11 @@ export class XtermTerminal extends Disposable {
 		}));
 		this.element.dataset.state = instance.state;
 		this._register(observeResize(this.element, () => this.fit()));
+		this._register(configuration.onConfigChanged(() => {
+			if (!this.terminal) return;
+			this.terminal.options = this.screenOptions();
+			this.fit();
+		}));
 	}
 
 	public get raw(): Terminal {
@@ -100,11 +106,7 @@ export class XtermTerminal extends Disposable {
 			disableStdin: this.instance.isReadOnly === true,
 			allowProposedApi: true,
 			allowTransparency: false,
-			cursorBlink: true,
-			cursorStyle: "block",
-			fontFamily: "var(--ash-font-family-monospace, Consolas, 'Courier New', monospace)",
-			fontSize: 13,
-			scrollback: 5_000,
+			...this.screenOptions(),
 			theme: terminalTheme(this.themeService.getColorTheme()),
 			linkHandler: { activate: (_event, url) => { void this.openLink(url).catch(onUnexpectedError); } },
 		});
@@ -126,6 +128,17 @@ export class XtermTerminal extends Disposable {
 		this.fit();
 		if (this.visible && this.focusSource !== undefined && this.element.ownerDocument.activeElement === this.focusSource) terminal.focus();
 		this.focusSource = undefined;
+	}
+
+	private screenOptions(): ITerminalOptions {
+		const config = this.configuration.config;
+		return {
+			fontFamily: config.fontFamily, fontSize: config.fontSize,
+			letterSpacing: config.letterSpacing, lineHeight: config.lineHeight,
+			cursorBlink: config.cursorBlinking, cursorStyle: config.cursorStyle === 'line' ? 'bar' : config.cursorStyle,
+			cursorInactiveStyle: config.cursorStyleInactive === 'line' ? 'bar' : config.cursorStyleInactive,
+			cursorWidth: config.cursorWidth, scrollback: config.scrollback, minimumContrastRatio: config.minimumContrastRatio,
+		};
 	}
 
 	public write(data: string | Uint8Array, callback?: () => void): void {

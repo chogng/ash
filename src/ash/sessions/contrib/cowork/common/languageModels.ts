@@ -1,8 +1,8 @@
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { CustomModelProvider, ModelProviderTestResult } from '../../../../platform/sessions/common/sessionApi.js';
-import type { ModelPreferencesUpdate } from '../../../../platform/sessions/common/sessionApi.js';
-import type { ApprovalReviewModelSelection } from '../../../../platform/sessions/common/sessionApi.js';
+import type { CustomModelProvider, ModelProviderTestResult } from '../../../../platform/agentHost/common/agentModels.js';
+import type { ModelPreferencesUpdate } from '../../../../platform/agentHost/common/agentModels.js';
+import type { ApprovalReviewModelSelection } from '../../../../platform/agentHost/common/agentModels.js';
 import type { ModelRef, ModelProviderCredentialStatus } from '../../../../workbench/services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';

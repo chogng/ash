@@ -1,41 +1,11 @@
-import type { ModelRef } from './chatService.js';
-
-export type ModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
-
-export interface ModelReasoningEffortOption {
-	readonly effort: ModelReasoningEffort;
-	readonly description?: string | null;
-}
-
-export interface ModelAccelerationOption {
-	readonly id: string;
-	readonly name: string;
-	readonly description: string;
-}
-
-/** Confirmed announcement for the selected connection; an absent date still means retiring. */
-export interface ModelRetirement {
-	/** Exact date-only YYYY-MM-DD value, displayed without time-zone conversion. */
-	readonly shutdownDate?: string | null;
-}
-
-export interface ModelCatalogEntry {
-	/** Unknown modalities preserve existing attachment behavior. */
-	readonly inputModalities?: readonly ('text' | 'image' | 'audio')[] | null;
-	readonly longContext: boolean | null;
-	readonly model: ModelRef;
-	readonly displayName: string;
-	readonly description?: string | null;
-	readonly discovered?: boolean;
-	readonly retirement?: ModelRetirement;
-	readonly contextWindow?: number | null;
-	readonly defaultContextWindow?: number | null;
-	readonly maximumContextWindow?: number | null;
-	readonly accelerationOptions?: readonly ModelAccelerationOption[];
-	readonly selectedAcceleration?: string | null;
-	readonly supportedReasoningEfforts?: readonly ModelReasoningEffortOption[];
-	readonly defaultReasoningEffort?: ModelReasoningEffort;
-}
+import type { ModelRef } from '../../../../platform/agentHost/common/agentModels.js';
+export type {
+	ModelReasoningEffort,
+	ModelReasoningEffortOption,
+	ModelAccelerationOption,
+	ModelRetirement,
+	ModelCatalogEntry,
+} from '../../../../platform/agentHost/common/agentModels.js';
 
 export function modelRefIdentity(model: ModelRef): string {
 	return `${model.provider}\0${model.model}`;

@@ -424,6 +424,7 @@ impl AppServer {
                     .thread_updates_after(&thread.thread_id, 0)
                     .map_err(core_error)?;
                 Ok(SessionThreadProjection {
+                    directory: self.thread_directory(&thread.thread_id)?,
                     transcript: self.updates.thread_transcript_snapshot(&thread, true),
                     thread,
                     updates,

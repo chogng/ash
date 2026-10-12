@@ -25,8 +25,7 @@ export class SessionsWorkspaceContextService extends WorkspaceContextService {
 		if (selected) { return selected; }
 		// A dirty editor can outlive the visible Session. Never retarget its writes on page switching.
 		const folders = [...this.retainedFolders.values(), ...this.management.sessions.flatMap(session => {
-			const folder = sessionFolder(session);
-			return folder ? [folder] : [];
+			return [sessionFolder(session), ...session.chats.map(chat => sessionFolder(session, chat.threadId))].filter((folder): folder is IWorkspaceFolder => !!folder);
 		})].sort((a, b) => b.uri.path.length - a.uri.path.length);
 		const session = folders.find(folder => extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.uri));
 		if (session) { return session; }
@@ -36,7 +35,7 @@ export class SessionsWorkspaceContextService extends WorkspaceContextService {
 	private updateSelection(): void {
 		const selected = this.sessions.activeSelection;
 		if (selected?.kind === 'session') {
-			const folder = sessionFolder(selected.active.session);
+			const folder = sessionFolder(selected.active.session, selected.active.threadId);
 			if (folder) { this.retainedFolders.set(folder.uri.toString(), folder); }
 			this.updateWorkspace({ id: selected.active.session.sessionId, folders: folder ? [folder] : [] });
 			return;
@@ -52,8 +51,8 @@ export class SessionsWorkspaceContextService extends WorkspaceContextService {
 	}
 }
 
-function sessionFolder(session: ISession): IWorkspaceFolder | undefined {
-	const workspace = session.workspace;
+function sessionFolder(session: ISession, threadId?: string): IWorkspaceFolder | undefined {
+	const workspace = (threadId ? session.chats.find(chat => chat.threadId === threadId)?.workspace : undefined) ?? session.workspace;
 	if (!workspace) { return undefined; }
 	const uri = workspace.authorityId === 'local' ? URI.file(workspace.root) : createSshRemoteWorkspaceUri(workspace.authorityId, workspace.root);
 	// Bind the root into the folder identity: moving a Session must not redirect an already open file.

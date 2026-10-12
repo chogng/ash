@@ -63,14 +63,15 @@ impl MessageCheckpointSource for GitTurnChangesRuntime {
             .write_lifecycles
             .try_checkpoint(thread_id)
             .map_err(CoreError::Journal)?;
-        let workspace = if binding.kind() != ManagedDirKind::Git {
-            WorkspaceCheckpoint::Unavailable {
-                reason: "This directory has no immutable Git file snapshots.".into(),
-            }
-        } else if lease.is_none() {
+        let workspace = if lease.is_none() {
             WorkspaceCheckpoint::Unavailable {
                 reason: "A write-capable Tool was still running when this message was recorded."
                     .into(),
+            }
+        } else if binding.kind() == ManagedDirKind::Directory {
+            match self.dirs.worktrees.capture_directory_checkpoint(binding.dir()) {
+                Ok(digest) => WorkspaceCheckpoint::Directory { source_dir_id: self.dirs.id.to_string(), digest },
+                Err(error) => WorkspaceCheckpoint::Unavailable { reason: format!("Directory snapshot capture failed: {error}") },
             }
         } else {
             let targets = binding

@@ -1,4 +1,7 @@
-import { IExecutionSettingsService } from '../../../platform/execution/common/executionSettingsService.js';
+import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
+import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
+import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
+import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { toSkillSelectors } from '../../../workbench/contrib/chat/common/skillSelectors.js';
@@ -19,7 +22,8 @@ import { initializeTestLocalization } from '../../../workbench/services/localiza
 import { resetNlsResolver } from '../../../nls.js';
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../workbench/services/accounts/browser/appServerAccountService.js';
-import { IModelApi, ISessionApi, IThreadApi, ITurnApi } from '../../../platform/sessions/common/sessionApi.js';
+import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
@@ -35,7 +39,7 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../.build/protocol/typescript/index.js";
-import type { SessionMutationParams, SessionOperationInput } from "../../../platform/sessions/common/sessionApi.js";
+import type { SessionMutationParams, SessionOperationInput } from "../../../platform/agentHost/common/agentService.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
 import { Emitter, Event } from "../../../base/common/event.js";
@@ -104,7 +108,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	services.registerInstance(IDictationService, undefined);
@@ -128,9 +132,9 @@ class SessionsManagementService extends BaseSessionsManagementService {
 		const services = inputResources.add(new InstantiationService());
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerApi, api.appServer);
-		services.registerInstance(ISessionApi, api.session);
-		services.registerInstance(IModelApi, api.model);
-		services.registerInstance(ITurnApi, api.turn);
+		services.registerInstance(IAgentSessionService, api.session);
+		services.registerInstance(IAgentModelsService, api.model);
+		services.registerInstance(IAgentTurnService, api.turn);
 		services.registerInstance(IServerEventApi, api.events);
 		super(services.createInstance(AppServerSessionsProvider, { workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined }));
 	}
@@ -342,7 +346,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IContextKeyService, contextKeys);
@@ -838,7 +842,7 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(IContextViewService, contextViewService);
 	using chat = createChatService(fake.api);
 	editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
-	editorServices.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	editorServices.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	const widgetModel = createWidgetModel(chat, { kind: 'untitled', session: draft.session }, sessions);
 	using widget = new ChatWidget(
 		dom.window.document.body,
@@ -1898,11 +1902,11 @@ const skillServices = new WeakMap<IChatService, IAppServerSkillApi>();
 function modelsFor(chat: IChatService): ILanguageModelsService {
 	return modelServices.get(chat)!;
 }
-function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService, execution?: IExecutionSettingsService): ChatWidgetModel {
+function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService, execution?: IAgentExecutionSettingsService): ChatWidgetModel {
 	const services = inputResources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
-	services.registerInstance(IExecutionSettingsService, execution ?? { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, execution ?? { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	return services.createInstance(ChatWidgetModel, chat, selection, sessions);
 }
@@ -1923,16 +1927,16 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 }
 
 function registerChatBackend(services: InstantiationService, api: IRendererHost, omitted?: unknown): void {
-	if (omitted !== IModelApi) { services.registerInstance(IModelApi, api.model); }
+	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, api.model); }
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, api.appServer); }
-	if (omitted !== IThreadApi) { services.registerInstance(IThreadApi, api.thread); }
-	if (omitted !== ITurnApi) { services.registerInstance(ITurnApi, api.turn); }
+	if (omitted !== IAgentThreadService) { services.registerInstance(IAgentThreadService, api.thread); }
+	if (omitted !== IAgentTurnService) { services.registerInstance(IAgentTurnService, api.turn); }
 	if (omitted !== ITurnChangesApi) { services.registerInstance(ITurnChangesApi, api.turnChanges); }
 	if (omitted !== IAppServerSkillApi) { services.registerInstance(IAppServerSkillApi, api.skills); }
 	if (omitted !== IServerEventApi) { services.registerInstance(IServerEventApi, api.events); }
 }
 
-for (const dependency of [IModelApi, IThreadApi, ITurnApi, ITurnChangesApi, IAppServerApi, IServerEventApi]) {
+for (const dependency of [IAgentModelsService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi]) {
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -2233,7 +2237,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerSkillApi, api.skills);
 		services.registerInstance(ILanguageModelsService, modelsFor(chat));
-		services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+		services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 		using configuration = new WorkbenchConfigurationService();
 		using storage = createTestStorage();
 		services.registerInstance(IConfigurationService, configuration);
@@ -2335,7 +2339,7 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 	services.registerInstance(ICoworkModelPreferences, preferences);
@@ -2447,7 +2451,7 @@ test('A manual model choice stays with its chat while later new chats use the ne
 });
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
-	const discovered: Awaited<ReturnType<IRendererHost['model']['listProviderModels']>>[number] = createTestModel({
+	const discovered = createTestModel({
 		model: { provider: 'custom-gateway', model: 'private-model' }, display_name: 'Private model', discovered: true,
 		description: 'Private model overview',
 		context_window: null, default_context_window: null, maximum_context_window: null, long_context: null, selected_acceleration: null, acceleration_options: [],
@@ -2464,8 +2468,8 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	using chat = createChatService({
 		...fake.api, model: {
 			...fake.api.model,
-			listModels: async () => ++loads === 1 ? initial.p : { models: [discovered] },
-			listProviderModels: async () => [discovered],
+			listModels: async () => ++loads === 1 ? initial.p : agentModelCatalog([discovered]),
+			listProviderModels: async () => (await agentModelCatalog([discovered])).models,
 		}
 	});
 	const models = modelsFor(chat);
@@ -2566,7 +2570,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerSkillApi, fake.api.skills);
 		services.registerInstance(ILanguageModelsService, modelsFor(chat));
-		services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+		services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 		services.registerInstance(IConfigurationService, configuration);
 		using storage = createTestStorage();
 		services.registerInstance(IStorageService, storage);
@@ -2598,7 +2602,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerSkillApi, fake.api.skills);
 		services.registerInstance(ILanguageModelsService, modelsFor(chat));
-		services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+		services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 		using configuration = new WorkbenchConfigurationService();
 		using storage = createTestStorage();
 		services.registerInstance(IConfigurationService, configuration);
@@ -3035,7 +3039,7 @@ function fakeApi(options: FakeOptions = {}): {
 			subscribe: async ({ sessionId }: { sessionId: string; }) => ({
 				session: sessionDto(currentSession(sessionId)),
 				updates: [],
-				threadProjections: [],
+				threadSnapshots: [],
 				agentTree: { roots: [] },
 			}),
 			unsubscribe: async () => undefined,
@@ -3081,19 +3085,17 @@ function fakeApi(options: FakeOptions = {}): {
 			setModelPreferences: async () => { },
 			listModels: async () => {
 				modelListRequests.push(undefined);
-				return {
-					models: (options.models ?? []).map(entry => createTestModel({
-						model: entry.model, display_name: entry.displayName,
-						context_window: entry.contextWindow ?? null,
-						default_reasoning_effort: entry.defaultReasoningEffort ?? null,
-						supported_reasoning_efforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })),
-					}))
-				};
+				return agentModelCatalog((options.models ?? []).map(entry => createTestModel({
+					model: entry.model, display_name: entry.displayName,
+					context_window: entry.contextWindow ?? null,
+					default_reasoning_effort: entry.defaultReasoningEffort ?? null,
+					supported_reasoning_efforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })),
+				})));
 			},
 			listProviders: async () => ({ providers: providers.map(provider => ({ ...provider })) }),
 			listProviderModels: async (connection: string) => {
 				providerModelRequests.push(connection);
-				return (options.providerModels?.[connection] ?? []).map(entry => createTestModel({ model: entry.model, display_name: entry.displayName }));
+				return (await agentModelCatalog((options.providerModels?.[connection] ?? []).map(entry => createTestModel({ model: entry.model, display_name: entry.displayName })))).models;
 			},
 			setProviderApiKey: async ({ connection, apiKey }: { connection: string; apiKey: string; }) => {
 				providerKeyRequests.push({ connection, apiKey });
@@ -3101,7 +3103,6 @@ function fakeApi(options: FakeOptions = {}): {
 				return { connection, apiKeyConfigured: true };
 			},
 			readAdvisorDefault: async () => advisorDefault,
-			readConfiguredProviderIds: async () => options.configuredProviders ?? [],
 			setAdvisorDefault: async ({ advisor }: { readonly advisor: AdvisorConfig | null; }) => {
 				advisorDefault = advisor;
 				savedAdvisorDefaults.push(advisor);
@@ -3445,7 +3446,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService([]));
@@ -3491,7 +3492,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService(messages));
@@ -3688,8 +3689,8 @@ test('ChatWidgetModel inherits profile approval and preserves a conversation ove
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using changed = new Emitter<void>();
-	let mode: import('../../../platform/sessions/common/approvalModes.js').ApprovalMode = 'auto';
-	const execution: IExecutionSettingsService = { onDidChange: changed.event, read: async () => ({ revision: 1, settings: { approvalMode: mode, commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } }), configure: async () => { } };
+	let mode: import('../../../platform/agentHost/common/approvalModes.js').ApprovalMode = 'auto';
+	const execution: IAgentExecutionSettingsService = { onDidChange: changed.event, read: async () => ({ revision: 1, settings: { approvalMode: mode, commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } }), configure: async () => { } };
 	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions, execution);
 	await model.initialize();
 	assert.equal(model.inputState.approvalMode, 'auto');
@@ -3763,3 +3764,8 @@ test('Chat footer permission changes use the current model and confirm full acce
 	assert.equal(model.inputState.approvalMode, 'bypassPermissions');
 	assert.equal(confirmations, 2);
 });
+function agentModelCatalog(models: ModelListResult['models']) {
+	return createAppServerAgentModelsService({
+		async request(): Promise<ModelListResult> { return { models }; },
+	} as unknown as AppServerProtocolClient).listModels();
+}

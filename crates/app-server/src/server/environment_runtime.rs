@@ -2865,23 +2865,51 @@ impl AppServer {
         root: &std::path::Path,
         permission: Permission,
     ) -> Result<ash_file_access::Authorization, RpcError> {
-        if self
+        let threads = self
             .threads
             .list_session_threads(session_id)
-            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
-            .is_empty()
-        {
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        if threads.is_empty() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let runtime = self
             .env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime
+        let authorization = runtime
             .dir_grants
             .authorize(session_id, root, permission)
-            .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?
-            .ok_or_else(|| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))
+            .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?;
+        if let Some(authorization) = authorization {
+            return Ok(authorization);
+        }
+        let root = dunce::canonicalize(root)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        // A managed directory is accessible only through a Thread in this Session tree.
+        // Do not turn knowing a managed path into a grant for another Session's files.
+        for thread in threads {
+            if let Some(scope) = runtime.dir_grants.thread_scope(&thread.thread_id, permission)
+                .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?
+            {
+                if scope.primary().dir().canonical_path() == root {
+                    return Ok(scope.primary().clone());
+                }
+            }
+        }
+        Err(RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))
+    }
+
+    pub(super) fn thread_directory(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, RpcError> {
+        let runtime = self.env_runtime.read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let scope = runtime.dir_grants.thread_scope(thread_id, Permission::ReadFiles)
+            .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?;
+        Ok(scope.map(|scope| ash_protocol::SessionExecutionTarget::Local {
+            root: scope.primary().dir().canonical_path().to_path_buf(),
+        }))
     }
 
     fn terminate_revoked_terminal_sessions(&self) {

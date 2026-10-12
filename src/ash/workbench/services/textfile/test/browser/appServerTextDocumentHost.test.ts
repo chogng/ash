@@ -323,11 +323,13 @@ test('restarting restores an atomic create, move and delete review with exact or
 	host.files.contents.set(deleted.toString(), 'deleted');
 	const a = await snapshot(host.transport, moved);
 	const b = await snapshot(host.transport, deleted);
-	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'turn', changes: [
-		{ kind: 'move', snapshot: a, target: target.fsPath, text: 'moved' },
-		{ kind: 'delete', snapshot: b },
-		{ kind: 'create', path: created.fsPath, text: 'created' },
-	] });
+	await host.transport.call('textDocument/apply', {
+		threadId: 'review-thread', turnId: 'turn', changes: [
+			{ kind: 'move', snapshot: a, target: target.fsPath, text: 'moved' },
+			{ kind: 'delete', snapshot: b },
+			{ kind: 'create', path: created.fsPath, text: 'created' },
+		]
+	});
 	const { backend } = host;
 	const contents = new Map(host.files.contents);
 	host.dispose();
@@ -368,6 +370,67 @@ test('malformed saved reviews are reported and preserved without touching files'
 	assert.equal(reopened.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), invalid);
 	await createReview(reopened, 'after-invalid.txt');
 	assert.equal(reopened.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), invalid);
+});
+
+test('shutdown recaptures reviews when the user edits while a storage commit is waiting', async () => {
+	const host = await fixture();
+	const resource = URI.file('c:/workspace/shutdown-review.txt');
+	host.files.contents.set(resource.toString(), 'first\nseparator\nlast');
+	using reference = await host.models.acquire({ resource }, new AbortController().signal);
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] });
+	const started = new DeferredPromise<void>();
+	const gate = new DeferredPromise<void>();
+	const flush = host.storage.flush.bind(host.storage);
+	let pause = true;
+	host.storage.flush = async reason => {
+		if (reason === undefined && pause) { pause = false; void started.complete(); await gate.p; }
+		await flush(reason);
+	};
+	const shutdown = host.lifecycle.shutdown('reload');
+	await started.p;
+	reference.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: 'user ' }]);
+	await reference.save(new AbortController().signal);
+	void gate.complete();
+	await shutdown;
+	const { backend } = host;
+	const contents = new Map(host.files.contents);
+	host.dispose();
+	using reopened = await fixture({ backend, contents });
+	await flushReviews(reopened);
+	await reviewSession(reopened).reject();
+	assert.equal(reopened.files.contents.get(resource.toString()), 'first\nuser separator\nlast');
+});
+
+test('failed review persistence prevents shutdown and can be retried without losing the review', async () => {
+	using host = await fixture();
+	await createReview(host, 'shutdown-retry.txt');
+	const flush = host.storage.flush.bind(host.storage);
+	host.storage.flush = async () => { throw new Error('Injected review storage failure'); };
+	await assert.rejects(host.lifecycle.shutdown('reload'), /shutdown participants failed/);
+	assert.equal(host.lifecycle.willShutdown, false);
+	assert.equal(host.editing.entries.length, 1);
+	host.storage.flush = flush;
+	await host.lifecycle.shutdown('reload');
+	assert.ok(host.storage.get('chatEditing.sessions', StorageScope.WORKSPACE));
+});
+
+test('restored reviews stay manual even when the saved reply completed and automatic acceptance is enabled', async () => {
+	const host = await fixture();
+	await host.configuration.updateValue('chat.editing.autoAcceptDelay', 5);
+	await createReview(host, 'restored-manual.txt');
+	host.transport.finishTurn('review-thread', 'review-turn');
+	await flushReviews(host);
+	assert.equal(JSON.parse(host.storage.get('chatEditing.sessions', StorageScope.WORKSPACE)!).entries[0].sources[0].outcome, 'completed');
+	await host.lifecycle.shutdown('reload');
+	const { backend } = host;
+	const contents = new Map(host.files.contents);
+	host.dispose();
+	using reopened = await fixture({ backend, contents });
+	await flushReviews(reopened);
+	await reopened.configuration.updateValue('chat.editing.autoAcceptDelay', 5);
+	assert.equal(reopened.editing.entries.length, 1);
+	assert.equal(reopened.editing.getAutoAcceptCountdown(reopened.editing.entries[0]!), undefined);
 });
 
 test('chat review sessions decide only their own files and release their final entries', async () => {

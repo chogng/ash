@@ -1,3 +1,4 @@
+import { OperatingSystem } from '../../../../base/common/platform.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { APP_SERVER_METHODS } from "../../../../../../.build/protocol/typescript/index.js";
@@ -119,6 +120,11 @@ test("SSH terminal service supplies profiles, connection events and decoded outp
 	const supervisor = new TestSupervisor();
 	using adapter = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
 	const service: ITerminalProcessService = adapter;
+	assert.equal(service.operatingSystem, OperatingSystem.Linux);
+	supervisor.operatingSystem = undefined;
+	assert.equal(service.operatingSystem, undefined);
+	supervisor.operatingSystem = OperatingSystem.Windows;
+	assert.equal(service.operatingSystem, OperatingSystem.Windows);
 	const states: string[] = [];
 	using subscription = service.onConnectionState(state => states.push(state));
 	assert.deepEqual(await service.listProfiles(), [{ profileId: "shell", title: "Shell", isDefault: true }]);
@@ -171,6 +177,7 @@ interface RecordedRequest {
 }
 
 class TestSupervisor {
+	operatingSystem: OperatingSystem | undefined = OperatingSystem.Linux;
 	state: AppServerConnectionState = "ready";
 	generation = 1;
 	attachFailures = 0;
@@ -191,7 +198,8 @@ class TestSupervisor {
 	}
 
 	async request(definition: { method: string; }, params: unknown): Promise<any> {
-		this.requests.push({ method: definition.method, params });
+		// Requests cross JSON-RPC in production, which omits absent optional fields.
+		this.requests.push({ method: definition.method, params: JSON.parse(JSON.stringify(params)) });
 		switch (definition.method) {
 			case APP_SERVER_METHODS["terminal/profile/list"].method:
 				return { profiles: [{ profileId: "shell", title: "Shell", isDefault: true }] };

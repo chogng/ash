@@ -54,6 +54,10 @@ pub enum WorkspaceCheckpoint {
         source_dir_id: String,
         repositories: Vec<RepositoryCheckpoint>,
     },
+    Directory {
+        source_dir_id: String,
+        digest: ContentDigest,
+    },
     Unavailable {
         reason: String,
     },

@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`unavailable checkpoints are explained without sending a restore request (${locale})`, async ({ page }) => {
+		await page.goto(`/chatEditing.html?locale=${locale}&unavailable`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await page.getByRole('button', { name: 'Restore checkpoint', exact: true }).click();
+		await expect(page.getByRole('status', { name: 'Review error' })).toContainText(locale === 'en' ? 'No restorable checkpoints are available.' : '没有可恢复的检查点。');
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().requests)).toEqual([]);
+	});
 	test(`checkpoint cancellation keeps the current chat and restoration opens the backend result (${locale})`, async ({ page }) => {
 		await page.goto(`/chatEditing.html?locale=${locale}`);
 		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
@@ -86,6 +93,6 @@ test('a checkpoint result does not steal focus from a chat selected during resto
 	await page.keyboard.press('Enter');
 	await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.checkpointState().requests.length)).toBe(1);
 	await page.evaluate(() => { window.ashChatEditingIntegration.switchChat(); window.ashChatEditingIntegration.finishRestore(); });
-	await expect(page.locator('.ash-aria-status')).toContainText(['Checkpoint restored in a new chat.', '']);
+	await expect(page.locator('.ash-aria-status').filter({ hasText: 'Checkpoint restored in a new chat.' })).toHaveCount(1);
 	expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().opened)).toEqual([]);
 });

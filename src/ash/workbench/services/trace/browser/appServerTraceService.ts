@@ -1,10 +1,10 @@
-import { IThreadApi } from '../../../../platform/sessions/common/sessionApi.js';
+import { IAgentThreadService } from '../../../../platform/agentHost/common/agentService.js';
 import type { ITraceService } from '../common/traceService.js';
 import type { AgentTracePage, AgentTraceDiagnosticPage, AgentTraceGraph } from '../common/agentTrace.js';
 
 /** Borrows the canonical transport. Parsers load only when evidence is requested. */
 export class AppServerTraceService implements ITraceService {
-	constructor(@IThreadApi private readonly threads: IThreadApi) { }
+	constructor(@IAgentThreadService private readonly threads: IAgentThreadService) { }
 
 	public async readTrace(sessionId: string, after: Readonly<Record<string, number>>): Promise<AgentTracePage> {
 		const [{ parseAgentTracePage }, page] = await Promise.all([import('../common/agentTrace.js'), this.threads.readTrace({ sessionId, after: { ...after }, limit: 500 })]);

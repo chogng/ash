@@ -1,3 +1,13 @@
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
+import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
+import { TerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileService.js';
+import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { ITerminalProcessService } from '../../../src/ash/platform/terminal/common/terminal.js';
+import { OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
@@ -107,6 +117,7 @@ widgetServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () =>
 const themeService = store.add(new TestThemeService(darkColorTheme));
 if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
+widgetServices.registerInstance(ITerminalConfigurationService, store.add(widgetServices.createInstance(TerminalConfigurationService)));
 instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 const widget = instance.xterm!;
 widget.setVisible(true);
@@ -114,6 +125,8 @@ if (new URLSearchParams(location.search).has('browser')) widget.element.style.he
 let completion: Promise<void> | undefined;
 
 window.ashTerminalIntegration = {
+	configure: async (key, value) => { await widgetServices.get(IConfigurationService).updateValue(key, value); },
+	options: () => ({ fontSize: widget.raw.options.fontSize, fontFamily: widget.raw.options.fontFamily, cursorStyle: widget.raw.options.cursorStyle, cursorBlink: widget.raw.options.cursorBlink, scrollback: widget.raw.options.scrollback, lineHeight: widget.raw.options.lineHeight, letterSpacing: widget.raw.options.letterSpacing, minimumContrastRatio: widget.raw.options.minimumContrastRatio }),
 	theme: mode => {
 		themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[mode]);
 		return { background: widget.raw.options.theme?.background, foreground: widget.raw.options.theme?.foreground, red: widget.raw.options.theme?.red };
@@ -138,6 +151,8 @@ window.ashTerminalIntegration = {
 declare global {
 	interface Window {
 		ashTerminalIntegration: {
+			configure(key: string, value: unknown): Promise<void>;
+			options(): { fontSize?: number; fontFamily?: string; cursorStyle?: string; cursorBlink?: boolean; scrollback?: number; lineHeight?: number; letterSpacing?: number; minimumContrastRatio?: number; };
 			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight'): { background: string | undefined; foreground: string | undefined; red: string | undefined; };
 			snapshot(limit: number): Promise<string | undefined>;
 			readonly writes: readonly string[];
@@ -229,6 +244,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		let selected = true;
 		let profiles = 0;
 		let creates = 0;
+		const createdProfiles: string[] = [];
+		const availableProfiles = new URLSearchParams(location.search).has('profiles') ? [instance.profile, { profileId: 'bash', title: 'Bash', isDefault: false }] : [instance.profile];
 		let release: (() => void) | undefined;
 		let pending: Promise<void> = Promise.resolve();
 		const instances: ITerminalInstance[] = new URLSearchParams(location.search).has('existing') ? [instance] : [];
@@ -247,10 +264,14 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			onDidDisposeInstance: disposed.event,
 			onDidChangeInstances: instancesChanged.event,
 			onDidChangeActiveInstance: activeChanged.event,
-			getProfiles: async () => { profiles++; await pending; return [instance.profile]; },
-			createTerminal: async () => {
+			getProfiles: async () => { profiles++; await pending; return availableProfiles; },
+			createTerminal: async options => {
 				creates++;
+				const profileId = options.profile?.type === 'profile' ? options.profile.profileId : undefined;
+				const selected = availableProfiles.find(profile => profile.profileId === profileId) ?? instance.profile;
+				createdProfiles.push(selected.profileId);
 				const createdInstance = instances.length === 0 ? instance : createFixtureInstance(`test-terminal-${creates}`);
+				Object.assign(createdInstance, { profile: selected, title: selected.title });
 				instances.push(createdInstance);
 				activeInstance = createdInstance;
 				const clear = createdInstance.clearBuffer.bind(createdInstance);
@@ -279,6 +300,11 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		registerTestDictationOnboarding(services);
 		services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
+		services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: workspaceChanged.event, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null });
+		if (new URLSearchParams(location.search).has('profiles')) services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService()));
+		services.registerInstance(ITerminalProcessService, { operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None } as ITerminalProcessService);
+		const profileService = lifetime.add(services.createInstance(TerminalProfileService));
+		services.registerInstance(ITerminalProfileService, profileService);
 		const pane = lifetime.add(new TerminalViewPane(root, { id: 'terminal', title: 'Terminal' }, terminals, Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
 			onDidChangePartVisibility: visibility.event,
 			isPartVisible: () => visible,
@@ -298,10 +324,13 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getWorkspace: () => workspace,
 			getWorkbenchState: () => 2,
 			getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
-		}, services));
+		}, services, profileService));
 		root.append(pane.partTitleProjection.actions!);
 		if (new URLSearchParams(location.search).has('browser')) pane.layout(root.clientHeight - pane.partTitleProjection.actions!.offsetHeight, 0, root.clientWidth);
 		return {
+			configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
+			createdProfiles: () => [...createdProfiles],
+			defaultProfile: () => profileService.getDefaultProfile()?.profileId,
 			operations: () => ({ cleared, closed, relaunched }),
 			menuActions: () => menu.getMenuActions(MenuId.TerminalInstanceContext).flatMap(([, actions]) => actions.map(action => action.label)),
 			ids: () => instances.map(instance => instance.instanceId),
@@ -347,6 +376,9 @@ declare global {
 			dispose(): void;
 		}[];
 		ashTerminalPaneIntegration: {
+			configure(key: string, value: unknown): Promise<void>;
+			createdProfiles(): readonly string[];
+			defaultProfile(): string | undefined;
 			dispose(): void;
 			command(id: string, argument?: unknown): Promise<unknown>;
 			operations(): { cleared: readonly number[]; closed: readonly number[]; relaunched: readonly number[]; };
@@ -413,7 +445,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 			installWorkbenchServiceContributions({ container, register: value => resources.add(value), blockRestorationUntil: () => { } });
 		};
 		const services = [0, 1].map(() => {
-			const container = resources.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			const container = resources.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace], [IConfigurationService, resources.add(new InMemoryConfigurationService())])));
 			install(container);
 			return container.get(ITerminalService);
 		});
@@ -541,6 +573,8 @@ if (new URLSearchParams(location.search).has('stream')) {
 	let closes = 0;
 	const bytes = new TextEncoder().encode('中文🙂\r\n');
 	const overflow = new URLSearchParams(location.search).has('overflow');
+	// This scenario observes the display-history cap independently of xterm's configurable scrollback.
+	if (overflow) await widgetServices.get(IConfigurationService).updateValue('terminal.integrated.scrollback', 5000);
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		getEnvironment: async () => ({}), listProfiles: async () => [profile],

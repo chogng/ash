@@ -1,3 +1,5 @@
+import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
+import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { IMenuService, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
@@ -344,6 +346,7 @@ const terminalInstance: ITerminalInstance = {
 const terminalHost = document.createElement('div');
 document.body.append(terminalHost);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
+if (hasContextSources) services.registerInstance(ITerminalConfigurationService, resources.add(services.createInstance(TerminalConfigurationService)));
 const terminalScreen = hasContextSources ? resources.add(services.createInstance(XtermTerminal, terminalHost, terminalInstance)) : undefined;
 terminalScreen?.write(`\x1b[32m${terminalSource}\x1b[0m\r\n`);
 const terminalInstances = hasContextSources ? [terminalInstance] : [];

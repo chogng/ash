@@ -1,3 +1,5 @@
+import { createAppServerAgentModelsService } from '../../../../../platform/agentHost/browser/appServerAgentModels.js';
+import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -6,7 +8,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { AccountDto, AccountReadResult, ModelListResult, ProviderListResult, ProviderModelsListResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IModelApi } from '../../../../../platform/sessions/common/sessionApi.js';
+import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
 import type { IAccountApi } from '../../../../../platform/accounts/common/accountApi.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../../services/accounts/browser/appServerAccountService.js';
@@ -19,7 +21,7 @@ test('retirement-only catalog changes notify consumers and keep date-only eviden
 	try {
 		const entry = modelEntry();
 		const models = resources.add(new LanguageModelsService(
-			{ listModels: async () => ({ models: [entry] }), listProviders: async () => ({ providers: [] }) } as unknown as IModelApi,
+			modelCatalogApi(async () => ({ models: [entry] })),
 			{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
 			{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
 			{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
@@ -88,7 +90,7 @@ test('model input capabilities notify consumers and do not change previous catal
 	using resources = new DisposableStore();
 	const entry = modelEntry();
 	const models = resources.add(new LanguageModelsService(
-		{ listModels: async () => ({ models: [entry] }), listProviders: async () => ({ providers: [] }) } as unknown as IModelApi,
+		modelCatalogApi(async () => ({ models: [entry] })),
 		{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
 		{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
 		{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
@@ -138,12 +140,14 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 			read: async () => { source.accountReads++; return source.readAccount ? source.readAccount() : source.account; },
 		} as IAccountApi, { subscribe: events.event })));
 	}
-	services.registerInstance(IModelApi, {
-		listModels: async () => { source.catalogReads++; return source.readCatalog ? source.readCatalog() : { models: source.catalog, catalog_scopes: source.catalogScopes }; },
-		listProviders: async () => { source.providerReads++; return { providers: source.providers }; },
-		listProviderModels: async (connection: string) => { source.discoveries.push(connection); return source.readDiscovery ? source.readDiscovery(connection) : []; },
+	services.registerInstance(IAgentModelsService, {
+		...modelCatalogApi(
+			async () => { source.catalogReads++; return source.readCatalog ? source.readCatalog() : { models: source.catalog, catalog_scopes: source.catalogScopes }; },
+			async () => { source.providerReads++; return { providers: source.providers }; },
+			async (connection: string) => { source.discoveries.push(connection); return source.readDiscovery ? source.readDiscovery(connection) : []; },
+		),
 		setModel: async () => { source.configWrites++; },
-	} as unknown as IModelApi);
+	});
 	services.registerInstance(ILanguageModelsConfigurationService, {
 		onDidChangeModels: Event.None,
 		isModelVisible: () => true,
@@ -686,3 +690,20 @@ test('a late external snapshot cannot restore credentials retired by a scope not
 	await settleCatalogEvents();
 	assert.deepEqual((await models.listModels()).map(entry => entry.model.model), ['current-external']);
 });
+
+function modelCatalogApi(
+	readCatalog: () => Promise<ModelListResult>,
+	readProviders: () => Promise<ProviderListResult> = async () => ({ providers: [] }),
+	readDiscovery: (connection: string) => Promise<ModelListResult['models']> = async () => [],
+): IAgentModelsService {
+	return createAppServerAgentModelsService({
+		async request(definition: { method: string; }, params: { connection?: string; }): Promise<unknown> {
+			switch (definition.method) {
+				case 'model/list': return readCatalog();
+				case 'provider/list': return readProviders();
+				case 'provider/models/list': return { type: 'models', models: await readDiscovery(params.connection!) };
+				default: throw new Error(`Unexpected model request: ${definition.method}`);
+			}
+		},
+	} as unknown as AppServerProtocolClient);
+}

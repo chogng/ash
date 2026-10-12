@@ -5,7 +5,8 @@ import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Se
 import { IAppServerApi, type AppServerConnectionState, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { ISessionApi, ITurnApi, IModelApi } from "../../../../../platform/sessions/common/sessionApi.js";
+import { IAgentSessionService, IAgentTurnService } from "../../../../../platform/agentHost/common/agentService.js";
+import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
@@ -19,7 +20,7 @@ test('the App Server provider requires the window connection service when create
 	assert.throws(() => services.createInstance(AppServerSessionsProvider, fake.host), /AppServerApi/);
 });
 
-for (const dependency of [IAppServerApi, ISessionApi, IModelApi, ITurnApi, IServerEventApi]) {
+for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IServerEventApi]) {
 	test(`the Session provider rejects missing ${dependency.description} at creation`, () => {
 		assert.throws(() => createProvider(sessionHost([]), dependency), { message: `Unknown service: ${dependency.description}` });
 	});
@@ -44,7 +45,7 @@ for (const reconnect of [false, true]) {
 
 	test(`disposing during Session subscription only releases its own connection (reconnect: ${reconnect})`, async () => {
 		const fake = sessionHost([session('session-1', 'thread-1')]);
-		let resolveSession!: (value: Awaited<ReturnType<ISessionApi['subscribe']>>) => void;
+		let resolveSession!: (value: Awaited<ReturnType<IAgentSessionService['subscribe']>>) => void;
 		const snapshot = await fake.host.session.subscribe({ sessionId: 'session-1' });
 		fake.host.session.subscribe = () => new Promise(resolve => { resolveSession = resolve; });
 		const released: string[] = [];
@@ -89,7 +90,7 @@ test('list and subscription retain each root model independently of child and gl
 		const result = await subscribe(params);
 		return {
 			...result,
-			threadProjections: result.threadProjections.map(detail => ({
+			threadSnapshots: result.threadSnapshots.map(detail => ({
 				...detail,
 				thread: {
 					...detail.thread,
@@ -399,9 +400,9 @@ test('a failed catalog restoration retries on the next ready connection', async 
 function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown): AppServerSessionsProvider {
 	using services = new InstantiationService();
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, fake.appServer); }
-	if (omitted !== ISessionApi) { services.registerInstance(ISessionApi, fake.host.session); }
-	if (omitted !== IModelApi) { services.registerInstance(IModelApi, fake.host.model); }
-	if (omitted !== ITurnApi) { services.registerInstance(ITurnApi, fake.host.turn); }
+	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, fake.host.session); }
+	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, fake.host.model); }
+	if (omitted !== IAgentTurnService) { services.registerInstance(IAgentTurnService, fake.host.turn); }
 	if (omitted !== IServerEventApi) { services.registerInstance(IServerEventApi, fake.host.events); }
 	return services.createInstance(AppServerSessionsProvider, { workspace: fake.host.workspace, selectWorkspace: fake.host.selectWorkspace });
 }
@@ -751,13 +752,13 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	const listeners = new Set<(event: ServerNotification) => void>();
 	const sessions = [...initial];
 	const agentTree = { roots: tree ? [tree] : [] };
-	const archiveRequests: Parameters<ISessionApi["archive"]>[0][] = [];
-	const interruptRequests: Parameters<ITurnApi["interrupt"]>[0][] = [];
+	const archiveRequests: Parameters<IAgentSessionService["archive"]>[0][] = [];
+	const interruptRequests: Parameters<IAgentTurnService["interrupt"]>[0][] = [];
 	let subscribeCount = 0;
 	let catalogSubscriptionCount = 0;
 	let listCount = 0;
 	let readCatalogCount = 0;
-	const api: ISessionApi = {
+	const api: IAgentSessionService = {
 		async create() { throw new Error("Not used"); },
 		async listAgents() { return { agents: [] }; },
 		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },
@@ -770,13 +771,12 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 			const value = sessions.find(candidate => candidate.sessionId === sessionId)!;
 			return {
 				session: value,
-				threadProjections: value.threads.map(thread => threadProjection(sessionId, thread.threadId)),
+				threadSnapshots: value.threads.map(thread => threadProjection(sessionId, thread.threadId)),
 				agentTree,
 			};
 		},
 		async unsubscribe() { },
 		async createThread() { throw new Error("Not used"); },
-		async forkThread() { throw new Error("Not used"); },
 		async archive(params) {
 			archiveRequests.push(params);
 			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
@@ -785,7 +785,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		},
 		async stop() { throw new Error("Not used"); },
 	};
-	const turn: ITurnApi = {
+	const turn: IAgentTurnService = {
 		enqueue: async () => { throw new Error("Queue is unavailable in this fixture"); },
 		listQueued: async () => ({ messages: [] }),
 		async consultAdvisor() { throw new Error("Not used"); },

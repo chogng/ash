@@ -317,6 +317,16 @@ impl GitTurnChangesRuntime {
             }
         }
         let origin = &request.origin;
+        if let ThreadOrigin::Message {
+            workspace: ash_protocol::WorkspaceCheckpoint::Directory { source_dir_id, digest }, ..
+        } = origin {
+            if source_dir_id != self.dirs.id.as_str() {
+                return Err(CoreError::Journal("message checkpoint belongs to a different source directory".into()));
+            }
+            return Ok((ManagedDirSource::DirectoryCheckpoint {
+                source_directory: self.dirs.root.clone(), digest: digest.clone(),
+            }, ManagedDirTarget::SourceHead));
+        }
         if let ThreadOrigin::Message { workspace, .. } = origin {
             let ash_protocol::WorkspaceCheckpoint::Git {
                 source_dir_id,
@@ -710,6 +720,7 @@ impl GitTurnChangesRuntime {
         self.dirs
             .bind_services(thread_id, binding)
             .map_err(CoreError::Journal)?;
+        self.start_file_watcher(thread_id, binding).map_err(CoreError::Journal)?;
         if binding.kind() == ManagedDirKind::Git {
             self.refresh_capture_object_locations(thread_id, binding)
                 .map_err(CoreError::Journal)?;

@@ -6,7 +6,7 @@ import { parseExtensionManifest } from '../../../../services/extensions/common/e
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { showConfigureHooksQuickPick } from '../../../chat/browser/promptSyntax/hookActions.js';
-import { IExecutionSettingsService } from '../../../../../platform/execution/common/executionSettingsService.js';
+import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
@@ -952,7 +952,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const panel = disposables.add(services.createInstance(ModelSettingsContent, root));
@@ -1015,7 +1015,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ILanguageModelsService, models);
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
@@ -1225,7 +1225,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IServerEventApi, { subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })) });
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
@@ -1891,7 +1891,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	document.body.replaceChildren();
 	const root = h(document, 'div');
 	document.body.append(root);
-	const saved: import('../../../../../platform/sessions/common/sessionApi.js').CustomModelProvider[] = [];
+	const saved: import('../../../../../platform/agentHost/common/agentModels.js').CustomModelProvider[] = [];
 	const keys: string[] = [];
 	let removed = 0;
 	let failed = false;
@@ -1920,7 +1920,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });

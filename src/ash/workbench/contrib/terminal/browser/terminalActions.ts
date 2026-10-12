@@ -5,6 +5,9 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TerminalCommandId, TERMINAL_VIEW_ID } from '../common/terminal.js';
+import { ITerminalProfileService } from '../common/terminal.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
 import { ITerminalService } from './terminal.js';
 import type { TerminalViewPane } from './terminalView.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
@@ -34,12 +37,34 @@ export function registerTerminalActions(): void {
 	});
 
 	CommandsRegistry.register(TerminalCommandId.New, accessor => terminalView(accessor).createTerminal());
-	CommandsRegistry.register(TerminalCommandId.NewWithProfile, async (accessor, profileId) => {
-		const profiles = await accessor.get(ITerminalService).getProfiles();
-		if (typeof profileId !== 'string' || !profiles.some(profile => profile.profileId === profileId)) {
-			throw new TypeError(`Unknown terminal profile: ${String(profileId)}`);
+	registerAction2(class NewWithProfileAction extends Action2 {
+		constructor() {
+			super({ id: TerminalCommandId.NewWithProfile, title: localize2('terminal.profile.newCommand', 'Terminal: Create New Terminal With Profile'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
 		}
-		return terminalView(accessor).createTerminal(profileId);
+		override async run(accessor: ServicesAccessor, profileId?: unknown): Promise<void> {
+			const profiles = accessor.get(ITerminalProfileService);
+			const view = terminalView(accessor);
+			if (profileId === undefined) {
+				using picker = accessor.get(IInstantiationService).createInstance(TerminalProfileQuickpick);
+				profileId = await picker.showAndGetResult('createInstance');
+				if (profileId === undefined) return;
+			} else {
+				await profiles.refreshAvailableProfiles();
+			}
+			if (typeof profileId !== 'string' || !profiles.availableProfiles.some(profile => profile.profileId === profileId)) {
+				throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
+			}
+			await view.createTerminal(profileId);
+		}
+	});
+	registerAction2(class SelectDefaultProfileAction extends Action2 {
+		constructor() {
+			super({ id: TerminalCommandId.SelectDefaultProfile, title: localize2('terminal.profile.defaultCommand', 'Terminal: Select Default Profile'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
+		}
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			using picker = accessor.get(IInstantiationService).createInstance(TerminalProfileQuickpick);
+			await picker.showAndGetResult('setDefault');
+		}
 	});
 	CommandsRegistry.register(TerminalCommandId.Relaunch, async (accessor, context) => {
 		if (context === undefined) return terminalView(accessor).relaunchActive();

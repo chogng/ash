@@ -1,4 +1,4 @@
-import { createDisconnectedExecutionSettingsApi } from '../../execution/browser/executionSettingsApi.js';
+import { createDisconnectedExecutionSettingsService } from './appServerExecutionSettingsService.js';
 import { createDisconnectedInstructionService } from '../../instructions/browser/appServerInstructionService.js';
 import { createDisconnectedFileSearchApi } from '../../search/browser/fileSearchApi.js';
 import { createDisconnectedNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
@@ -15,7 +15,8 @@ import { createDisconnectedSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
 import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConfigurationApi } from "../../search/browser/searchApi.js";
-import { createDisconnectedModelApi, createDisconnectedSessionApi, createDisconnectedThreadApi, createDisconnectedTurnApi } from "../../sessions/browser/sessionApi.js";
+import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from "./appServerAgentService.js";
+import { createDisconnectedAgentModelsService } from "./appServerAgentModels.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
 import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
@@ -43,11 +44,11 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		hasAppServer: false,
 		appServer,
 		accounts: createDisconnectedAccountApi(unavailableOperation),
-		session: createDisconnectedSessionApi(unavailableOperation),
+		session: createDisconnectedAgentSessionService(unavailableOperation),
 		teams: createDisconnectedTeamApi(unavailableOperation),
-		model: createDisconnectedModelApi(unavailableOperation),
-		thread: createDisconnectedThreadApi(unavailableOperation),
-		turn: createDisconnectedTurnApi(unavailableOperation),
+		model: createDisconnectedAgentModelsService(unavailableOperation),
+		thread: createDisconnectedAgentThreadService(unavailableOperation),
+		turn: createDisconnectedAgentTurnService(unavailableOperation),
 		turnChanges: createDisconnectedTurnChangesApi(unavailableOperation),
 		skills: createDisconnectedSkillOperations(unavailableOperation),
 		instructions: createDisconnectedInstructionService(unavailableOperation),
@@ -89,7 +90,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		github: createDisconnectedGitHubService(),
 		agentCapabilities: createDisconnectedAgentCapabilitiesApi(unavailableOperation),
 		traceSettings: createDisconnectedTraceSettingsApi(unavailableOperation),
-		executionSettings: createDisconnectedExecutionSettingsApi(unavailableOperation),
+		executionSettings: createDisconnectedExecutionSettingsService(unavailableOperation),
 		hooks: createDisconnectedHooksApi(unavailableOperation),
 	};
 }

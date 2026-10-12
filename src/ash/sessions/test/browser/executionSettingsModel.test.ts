@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../base/common/event.js';
 import type { IDirPermissionsService, DirPermission } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
-import type { IExecutionSettingsService, ExecutionSettings } from '../../../platform/execution/common/executionSettingsService.js';
+import type { IAgentExecutionSettingsService, ExecutionSettings } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import type { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
@@ -21,7 +21,7 @@ function ready(model: ExecutionSettingsModel): Promise<void> {
 
 test('execution settings preserve an unsaved default while saving an aliased directory and retain discovery capabilities', async () => {
 	let settings: ExecutionSettings = { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' };
-	const execution: IExecutionSettingsService = { onDidChange: Event.None, read: async () => ({ revision: 1, settings }), configure: async draft => { settings = draft; } };
+	const execution: IAgentExecutionSettingsService = { onDidChange: Event.None, read: async () => ({ revision: 1, settings }), configure: async draft => { settings = draft; } };
 	let permissions: readonly DirPermission[] = ['readFiles', 'loadInstructions', 'discoverSkills'];
 	let forgotten = false;
 	const directories: IDirPermissionsService = {

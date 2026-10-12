@@ -1,6 +1,6 @@
 import type { TitleBarStyleConfiguration, IColorScheme } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
-import type { SessionMode } from '../../sessions/common/sessionApi.js';
+import type { SessionMode } from '../../agentHost/common/agentService.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import type { FileFilter, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';

@@ -6,8 +6,8 @@ import { observableFromEvent, type IObservable, type IReader } from '../../../..
 import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { IBulkEditService, ResourceFileEdit, ResourceTextEdit, type IBulkEditResult, ResourceEdit } from '../../../../../editor/browser/services/bulkEditService.js';
-import type { LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
+import { IBulkEditService, ResourceFileEdit, ResourceTextEdit, type IBulkEditResult, ResourceEdit, WorkspaceEditConflictError } from '../../../../../editor/browser/services/bulkEditService.js';
+import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../../editor/common/languages.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../../nls.js';
 import { IChatEditingService, type IChatEditReviewSession, type IModifiedFileEntry, type IModifiedFileEntryChangeHunk } from '../../common/editing/chatEditingService.js';
@@ -21,8 +21,6 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { ChatEditingSessionStorage, type StoredFileReview, type StoredReviewEntry } from './chatEditingSessionStorage.js';
-import { WorkspaceEditConflictError } from '../../../../../editor/browser/services/bulkEditService.js';
-import type { LanguageWorkspaceEditEntry } from '../../../../../editor/common/languages.js';
 
 interface ReviewTurn {
 	readonly source: ChatEditSource;
@@ -277,13 +275,19 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	public finishTurn(source: ChatEditSource, outcome: ChatEditOutcome): Promise<void> {
 		return this.operations.schedule(async () => {
 			const key = JSON.stringify([source.threadId, source.turnId]);
+			let updated = false;
 			for (const [entry, review] of this.entryReviews) {
 				if (review.turns.get(key)?.outcome === 'pending') {
 					review.turns.set(key, { source, outcome });
 					this.startCountdown(entry, review);
+					updated = true;
 				}
 			}
 			this.scheduleTick();
+			if (updated) {
+				this.changed.fire();
+				await this.saveReviews();
+			}
 		});
 	}
 

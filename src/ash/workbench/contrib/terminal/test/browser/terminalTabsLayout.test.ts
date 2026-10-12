@@ -13,7 +13,8 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import type { ITerminalInstance } from '../../browser/terminal.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { test, suite, suiteTeardown } from "mocha";
+import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../base/test/common/utils.js";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -119,70 +120,74 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 });
 
 
-test('Terminal screen resize coalesces columns, applies rows immediately and flushes explicitly', async () => {
-	mock.timers.enable({ apis: ['setTimeout'] });
-	try {
+suite('Terminal screen resize lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('Terminal screen resize coalesces columns, applies rows immediately and flushes explicitly', async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			const calls: unknown[] = [];
+			const screen = { isDisposed: false, raw: { buffer: { normal: { length: 400 } } } } as unknown as XtermTerminal;
+			using resize = new TerminalResizeDebouncer(() => true, () => screen,
+				(cols, rows) => calls.push(['both', cols, rows]), cols => calls.push(['x', cols]), rows => calls.push(['y', rows]));
+			await resize.resize(90, 30, false);
+			await resize.resize(100, 40, false);
+			assert.deepEqual(calls, [['y', 30], ['y', 40]]);
+			mock.timers.tick(99);
+			assert.deepEqual(calls, [['y', 30], ['y', 40]]);
+			mock.timers.tick(1);
+			assert.deepEqual(calls, [['y', 30], ['y', 40], ['x', 100]]);
+			await resize.resize(110, 45, false);
+			resize.flush();
+			assert.deepEqual(calls.slice(-2), [['y', 45], ['x', 110]]);
+			await resize.resize(120, 50, true);
+			mock.timers.tick(200);
+			assert.deepEqual(calls.at(-1), ['both', 120, 50]);
+		} finally { mock.timers.reset(); }
+	});
+
+	test('Terminal screen resize keeps the latest hidden dimensions and releases idle work', async () => {
+		let idle: (() => void) | undefined;
+		let canceled = 0;
+		const targetWindow = {
+			requestIdleCallback: (work: () => void) => { idle = work; return 1; },
+			cancelIdleCallback: () => { idle = undefined; canceled++; },
+		};
+		const screen = {
+			isDisposed: false, raw: { buffer: { normal: { length: 400 } } },
+			element: { ownerDocument: { defaultView: targetWindow } },
+		} as unknown as XtermTerminal;
 		const calls: unknown[] = [];
-		const screen = { isDisposed: false, raw: { buffer: { normal: { length: 400 } } } } as unknown as XtermTerminal;
-		using resize = new TerminalResizeDebouncer(() => true, () => screen,
-			(cols, rows) => calls.push(['both', cols, rows]), cols => calls.push(['x', cols]), rows => calls.push(['y', rows]));
+		using resize = new TerminalResizeDebouncer(() => false, () => screen,
+			(cols, rows) => calls.push([cols, rows]), () => assert.fail('Unexpected horizontal-only resize'), () => assert.fail('Unexpected vertical-only resize'));
 		await resize.resize(90, 30, false);
 		await resize.resize(100, 40, false);
-		assert.deepEqual(calls, [['y', 30], ['y', 40]]);
-		mock.timers.tick(99);
-		assert.deepEqual(calls, [['y', 30], ['y', 40]]);
-		mock.timers.tick(1);
-		assert.deepEqual(calls, [['y', 30], ['y', 40], ['x', 100]]);
-		await resize.resize(110, 45, false);
-		resize.flush();
-		assert.deepEqual(calls.slice(-2), [['y', 45], ['x', 110]]);
-		await resize.resize(120, 50, true);
-		mock.timers.tick(200);
-		assert.deepEqual(calls.at(-1), ['both', 120, 50]);
-	} finally { mock.timers.reset(); }
-});
-
-test('Terminal screen resize keeps the latest hidden dimensions and releases idle work', async () => {
-	let idle: (() => void) | undefined;
-	let canceled = 0;
-	const targetWindow = {
-		requestIdleCallback: (work: () => void) => { idle = work; return 1; },
-		cancelIdleCallback: () => { idle = undefined; canceled++; },
-	};
-	const screen = {
-		isDisposed: false, raw: { buffer: { normal: { length: 400 } } },
-		element: { ownerDocument: { defaultView: targetWindow } },
-	} as unknown as XtermTerminal;
-	const calls: unknown[] = [];
-	using resize = new TerminalResizeDebouncer(() => false, () => screen,
-		(cols, rows) => calls.push([cols, rows]), () => assert.fail('Unexpected horizontal-only resize'), () => assert.fail('Unexpected vertical-only resize'));
-	await resize.resize(90, 30, false);
-	await resize.resize(100, 40, false);
-	assert.deepEqual(calls, []);
-	assert.ok(idle);
-	idle();
-	assert.deepEqual(calls, [[100, 40]]);
-	await resize.resize(110, 50, false);
-	resize.dispose();
-	assert.equal(idle, undefined);
-	assert.equal(canceled, 2);
-	resize.flush();
-	assert.deepEqual(calls, [[100, 40]]);
-});
-
-test('Terminal screen resize cancels pending work after disposal and tolerates disposal in a callback', async () => {
-	mock.timers.enable({ apis: ['setTimeout'] });
-	try {
-		const calls: unknown[] = [];
-		const screen = { isDisposed: false, raw: { buffer: { normal: { length: 400 } } } } as unknown as XtermTerminal;
-		const resize = new TerminalResizeDebouncer(() => true, () => screen,
-			() => assert.fail('Unexpected immediate resize'), cols => calls.push(cols), () => { });
-		await resize.resize(90, 30, false);
-		resize.dispose();
-		mock.timers.tick(200);
 		assert.deepEqual(calls, []);
-		using reentrant = new TerminalResizeDebouncer(() => true, () => screen, () => { }, () => assert.fail('Disposed owner resized'), () => reentrant.dispose());
-		await reentrant.resize(100, 40, false);
-		mock.timers.tick(200);
-	} finally { mock.timers.reset(); }
+		assert.ok(idle);
+		idle();
+		assert.deepEqual(calls, [[100, 40]]);
+		await resize.resize(110, 50, false);
+		resize.dispose();
+		assert.equal(idle, undefined);
+		assert.equal(canceled, 2);
+		resize.flush();
+		assert.deepEqual(calls, [[100, 40]]);
+	});
+
+	test('Terminal screen resize cancels pending work after disposal and tolerates disposal in a callback', async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			const calls: unknown[] = [];
+			const screen = { isDisposed: false, raw: { buffer: { normal: { length: 400 } } } } as unknown as XtermTerminal;
+			const resize = new TerminalResizeDebouncer(() => true, () => screen,
+				() => assert.fail('Unexpected immediate resize'), cols => calls.push(cols), () => { });
+			await resize.resize(90, 30, false);
+			resize.dispose();
+			mock.timers.tick(200);
+			assert.deepEqual(calls, []);
+			using reentrant = new TerminalResizeDebouncer(() => true, () => screen, () => { }, () => assert.fail('Disposed owner resized'), () => reentrant.dispose());
+			await reentrant.resize(100, 40, false);
+			mock.timers.tick(200);
+		} finally { mock.timers.reset(); }
+	});
+
 });

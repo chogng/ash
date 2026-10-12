@@ -394,6 +394,10 @@ pub struct SessionListResult {
 /// A child Thread snapshot and its committed gap carried by the Session subscription.
 pub struct SessionThreadProjection {
     pub thread: Thread,
+    /// Effective directory of this Thread, independent of the Session's creation directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub directory: Option<ash_protocol::SessionExecutionTarget>,
     pub transcript: ThreadTranscriptSnapshot,
     pub updates: Vec<ThreadUpdateEnvelope>,
 }
@@ -426,6 +430,9 @@ pub struct SessionRewriteResult {
 #[serde(rename_all = "camelCase")]
 pub struct SessionThreadReadResult {
     pub thread: Thread,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub directory: Option<ash_protocol::SessionExecutionTarget>,
     pub transcript: ThreadTranscriptSnapshot,
     /// Present whenever the request selected bounded history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -437,6 +444,9 @@ pub struct SessionThreadReadResult {
 #[serde(rename_all = "camelCase")]
 pub struct SessionThreadSubscribeResult {
     pub thread: Thread,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub directory: Option<ash_protocol::SessionExecutionTarget>,
     pub transcript: ThreadTranscriptSnapshot,
     pub updates: Vec<ThreadUpdateEnvelope>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

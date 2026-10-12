@@ -6,7 +6,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
-import type { CustomModelProvider } from '../../../../../platform/sessions/common/sessionApi.js';
+import type { CustomModelProvider } from '../../../../../platform/agentHost/common/agentModels.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import { ChatModelsViewModel } from '../../browser/chatManagement/chatModelsViewModel.js';

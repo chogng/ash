@@ -15,6 +15,8 @@ import type {
 export class AppServerTerminalProcessService implements ITerminalProcessService {
 	constructor(private readonly connection: AppServerProtocolClient, private readonly appServerApi: IAppServerApi) { }
 
+	get operatingSystem() { return this.connection.operatingSystem; }
+
 	async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
 		const result = await appServerRequest(this.connection, "terminal/profile/list", {});
 		return result.profiles;

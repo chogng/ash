@@ -1,6 +1,6 @@
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type { ApprovalMode } from '../../sessions/common/approvalModes.js';
+import type { ApprovalMode } from './approvalModes.js';
 
 export interface ExecutionSettings {
 	readonly approvalMode: ApprovalMode;
@@ -14,10 +14,11 @@ export interface ExecutionSettingsSnapshot {
 }
 
 /** Backend profile defaults; directory grants and per-Turn approval remain separate authorities. */
-export interface IExecutionSettingsService {
+export interface IAgentExecutionSettingsService {
 	readonly onDidChange: Event<void>;
 	read(): Promise<ExecutionSettingsSnapshot>;
 	configure(settings: ExecutionSettings, expectedRevision: number): Promise<void>;
 }
 
-export const IExecutionSettingsService = createServiceIdentifier<IExecutionSettingsService>('executionSettingsService');
+export const IAgentExecutionSettingsService =
+	createServiceIdentifier<IAgentExecutionSettingsService>('executionSettingsService');

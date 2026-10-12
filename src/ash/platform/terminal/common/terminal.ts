@@ -1,5 +1,6 @@
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { Event } from '../../../base/common/event.js';
+import type { OperatingSystem } from '../../../base/common/platform.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type TerminalProcessConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
@@ -100,6 +101,8 @@ export interface ITerminalProcessCloseOptions {
 
 /** Platform contract for creating and communicating with terminal processes. */
 export interface ITerminalProcessService {
+	/** Initialized execution host OS; unavailable before connection readiness. */
+	readonly operatingSystem?: OperatingSystem;
 	listProfiles(): Promise<readonly ITerminalProcessProfile[]>;
 	/** Reads requested variables from the selected execution host; missing values are omitted. */
 	getEnvironment(names: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>>;

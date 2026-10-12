@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import { IThreadApi } from '../../../../../platform/sessions/common/sessionApi.js';
+import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
 import { AppServerTraceService } from '../../browser/appServerTraceService.js';
 
 suite('App Server Trace service', () => {
@@ -14,8 +14,8 @@ suite('App Server Trace service', () => {
 			readTraceDiagnostics: async (params: unknown) => { calls.push(params); return { diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'recording', droppedRecords: 0, pendingRecords: 0, events: [] }, cursor: 0, hasMore: false }; },
 			readTracePayload: async (params: unknown) => { calls.push(params); return { payload: { semantic: true } }; },
 			readTraceGraph: async (params: unknown) => { calls.push(params); return { graph: { nodes: {}, edges: [], warnings: [] } }; },
-		} as unknown as IThreadApi;
-		using services = new InstantiationService(new ServiceCollection([IThreadApi, threads]));
+		} as unknown as IAgentThreadService;
+		using services = new InstantiationService(new ServiceCollection([IAgentThreadService, threads]));
 		const trace = services.createInstance(AppServerTraceService);
 		assert.deepEqual(calls, []);
 		assert.equal((await trace.readTrace('session', {})).trace.sessionId, 'session');

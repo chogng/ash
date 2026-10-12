@@ -12,10 +12,10 @@ import { ISessionsService } from "../../../sessions/services/sessions/browser/se
 import type { ISession } from "../../../sessions/services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../../sessions/services/sessions/common/sessionsManagement.js";
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
-import type { ApprovalReviewModelSelection } from '../../../platform/sessions/common/sessionApi.js';
+import type { ApprovalReviewModelSelection } from '../../../platform/agentHost/common/agentModels.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, localize, setNlsResolver, resetNlsResolver } from '../../../nls.js';
-import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/sessions/common/approvalModes.js';
+import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/agentHost/common/approvalModes.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 

@@ -1,5 +1,5 @@
 import type { ChatContextUsage } from '../../workbench/services/chat/common/chatService.js';
-import { IExecutionSettingsService } from '../../platform/execution/common/executionSettingsService.js';
+import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { CancellationToken } from '../../base/common/cancellation.js';
 import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { toSkillSelectors } from '../../workbench/contrib/chat/common/skillSelectors.js';
@@ -75,7 +75,7 @@ export class ChatWidgetModel extends Disposable {
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IExecutionSettingsService private readonly execution: IExecutionSettingsService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService) {
 		super();
 		this.chatService = chatService;
 		this.sessionService = sessionService;

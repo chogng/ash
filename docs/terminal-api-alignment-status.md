@@ -1,5 +1,16 @@
 # Terminal API 对齐状态
 
+## 配置与 Profile 本批准入（2026-10-11）
+
+更改终端设置 → settings.json / IConfigurationService → common/terminalConfiguration.ts 与 browser/terminalConfigurationService.ts → 配置服务拥有有效值，实例屏幕订阅派生配置 → 字体、光标和回滚参数实时生效且输出保留 → 配置边界单测与真实浏览器场景。
+
+交互式新建 / 默认 Profile / 命令面板 → TerminalViewPane 与 terminalActions → terminalProfileService.ts、terminalProfileQuickpick.ts → Profile service 拥有可用列表的前端快照与设置派生的默认选择，Rust 继续拥有可信 profile 与进程 → 使用执行端 OS 的默认设置，取消不创建，配置变化刷新工具栏 → 非本机 OS、过期列表、释放与快捷选择测试。现有 TerminalService.getProfiles 是无状态后端读取端口，Tasks / Debug 保留调用；不建立第二份可编辑 profile 定义。默认交互 profile 是显式创建参数，已有实例重启保留原 profile。
+
+准入路径：common/{terminal.ts,terminalConfiguration.ts}、browser/{terminal.ts,terminalConfigurationService.ts,terminalProfileService.ts,terminalProfileQuickpick.ts,terminal.contribution.ts,terminalActions.ts,terminalView.ts,xterm/xtermTerminal.ts}。其中 terminalConfiguration.ts 和三个 browser 服务/选择器为上游同路径缺失，其余为双方同路径；既有文件只改设置契约、DI、配置订阅和 profile 入口。platform/terminal/common/terminal.ts 补执行端 OS 只读契约；已批准保留的 browser/{appServerTerminalProcessService,reconnectableTerminalProcessService,disconnectedTerminalProcessService}.ts 仅映射现有初始化 OS，不改 Rust/生成协议。允许测试 terminal/test/browser/{terminalConfigurationService.test.ts,terminalTitleActions.test.ts}、platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts、test/integration/browser/{terminal.integration.ts,terminal.integration.spec.ts,chatInput.integration.ts}、中文 workbench.json，以及本文和 Terminal README。
+
+settings.json 继续由现有配置系统保存与合并；外观和 defaultProfile.{linux,osx,windows} 使用对应 WINDOW scope，不写 legacy configuration.json；先消费已验证有效值，无额外值仓库或迁移。profile 的 path/args/env、自定义和扩展 profile、自动化 shell、完整 resolver API 尚未闭合，不创建空模块。
+
+
 ## Browser 列表、菜单与尺寸调度（2026-10-11）
 
 用户切换／拖动终端列表、打开实例菜单或调整面板 → `TerminalViewPane` → `TerminalTabbedView`／`TerminalTabList`、当前窗口命令、`XtermTerminal` → 实例身份与原 `TerminalService`／进程管理器 → 指定实例操作与最终屏幕／PTY 尺寸。实例集合、活动项和进程状态仍只有原服务／实例 owner；本批独立实现三个缺失 browser 文件，未新建 backend、分组或配置状态。
@@ -21,9 +32,11 @@
 
 屏幕调度器使用一份待处理的列／行请求与原 RunOnceScheduler、可取消 idle 任务。显式 immediate 或短缓冲区同步更新；长缓冲区的可见屏幕先更新行数，横向重排在 100 ms 窗口中合并；隐藏请求在 idle 执行。focus 显式 flush，实例屏幕释放取消定时／idle 请求，回调内释放同样不能再调度。屏幕只调用既有 `instance.resize`，后端确认与尺寸请求取消仍归 `TerminalProcessManager`。
 
-验证：正常 `pnpm test:unit` 的 Terminal 实例、Tabs／resize、标题／context 与 Tasks 共 157 项通过（48+4+4+101），runner 自测 9 项通过。Chromium Terminal 全量 52 项通过，新增 5 项覆盖固定菜单目标、中文／键盘焦点恢复、异步 Relaunch、长 scrollback 重排及 focus／dispose。Renderer 与终端定向浏览器类型检查通过。18 个本批 TS 文件格式检查通过；Tasks 文件在范围外的既有 search fixture 对象格式上仍未通过整文件检查，格式化差异不涉及本批新增身份字段，未清洗该无关区域。
+验证：正常 `pnpm test:unit` 的 Terminal 实例、Tabs／resize、标题／context 与 Tasks 共 158 项通过（48+4+5+101），runner 自测 9 项通过。Chromium Terminal 全量 52 项通过，新增 5 项覆盖固定菜单目标、中文／键盘焦点恢复、异步 Relaunch、长 scrollback 重排及 focus／dispose。Renderer 与终端定向浏览器类型检查通过。18 个本批 TS 文件格式检查通过；Tasks 文件在范围外的既有 search fixture 对象格式上仍未通过整文件检查，格式化差异不涉及本批新增身份字段，未清洗该无关区域。
 
 初次真实鼠标测试发现旧独立 Pane fixture 没有提供生产宿主负责的 flex 分配与 Pane.layout；新 `browser` 场景补上宿主几何，并绑定真实主题，不放宽 click 或尺寸断言。单屏幕 fixture 同样按宿主高度分配给屏幕，避免自动高度使行数变化断言无效。首轮中文菜单使用陈旧生成语言包，正常本地化准备恢复后用新产物验证。正常命令曾被范围外 `ash.extensions/languageFilter` 未知翻译阻塞，后续准备成功；正常浏览器全套类型检查最后被 `chatEditing.integration.ts:78` 的隐式 any 阻塞，终端以继承原 noEmit 配置的定向检查后运行原 runner，未修改该错误。未修改 Rust、协议或产品 CSS；运行环境为 macOS Chromium，未验证其他 OS 或真实 SSH。
+
+释放复核：菜单为每次展示创建独立 DisposableStore，取消立即释放，已开始的异步动作等结果通知送达宿主后释放 runner 和监听；列表释放清空拖动实例引用并关闭自己打开的菜单。新增 resize／context 测试套件启用 `ensureNoDisposablesAreLeakedInTestSuite`，菜单测试使用自己拥有的独立 Window 与 ModifierKeyEmitter，避免把窗口基础设施误当作菜单资源。取消、异步完成、原始错误返回与 timer／idle 释放均已通过；资源包装完成后新增 5 项浏览器场景再次通过。
 
 ### Browser 目录剩余文件
 

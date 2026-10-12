@@ -1,3 +1,5 @@
+import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agentService.js';
+export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agentService.js';
 import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 
 // Shared Chat identities live below Sessions so both window modes use one contract.
@@ -45,15 +47,9 @@ export interface AgentTreeNode {
 }
 
 /** Coarse durable activity; this does not identify an exact Turn state or waiting reason. */
-export interface SessionManagementInfo {
-	readonly status: 'idle' | 'needsInput' | 'working' | 'readyForReview' | 'completed' | 'failed' | 'stopped';
-	readonly statusChangedAtUnixMs: number;
-	readonly activity?: { readonly type: 'operation' | 'question' | 'failure'; readonly text: string; } | null;
-	readonly summary?: string | null;
-}
-
 export interface IChat {
 	readonly threadId: ThreadId;
+	readonly workspace?: ISession['workspace'];
 	readonly origin: ThreadOrigin;
 	readonly status: ChatStatus;
 	readonly title?: string;

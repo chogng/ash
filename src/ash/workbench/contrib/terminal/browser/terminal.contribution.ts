@@ -12,7 +12,11 @@ import { TerminalViewPane } from "./terminalView.js";
 import { ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
-import { ITerminalService } from './terminal.js';
+import { ITerminalConfigurationService, ITerminalService } from './terminal.js';
+import { ITerminalProfileService } from '../common/terminal.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { TerminalConfigurationService } from './terminalConfigurationService.js';
+import { TerminalProfileService } from './terminalProfileService.js';
 import { TerminalService } from './terminalService.js';
 import { TerminalMainContribution } from './terminalMainContribution.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -25,6 +29,18 @@ registerWorkbenchServiceContribution({
 	service: ITerminalService,
 	dependencies: [ITerminalProcessService, IWorkspaceContextService],
 	install: context => context.register(context.container.createInstance(TerminalService)),
+});
+
+registerWorkbenchServiceContribution({
+	service: ITerminalConfigurationService,
+	dependencies: [IConfigurationService],
+	install: context => context.register(context.container.createInstance(TerminalConfigurationService)),
+});
+
+registerWorkbenchServiceContribution({
+	service: ITerminalProfileService,
+	dependencies: [ITerminalService, ITerminalProcessService, IConfigurationService, IWorkspaceContextService],
+	install: context => context.register(context.container.createInstance(TerminalProfileService)),
 });
 
 export { TERMINAL_VIEW_ID } from "../common/terminal.js";

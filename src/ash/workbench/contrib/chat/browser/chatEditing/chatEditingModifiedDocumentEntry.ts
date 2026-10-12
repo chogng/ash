@@ -135,36 +135,36 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	}
 
 	private adoptUserEdits(edits: { start: number; end: number; text: string; }[]): void {
-			const groups: { start: number; end: number; edits: typeof edits; }[] = [];
-			for (const edit of edits.sort((a, b) => a.start - b.start)) {
-				let start = edit.start;
-				let end = edit.end;
-				for (const hunk of this.changes) {
-					const overlaps = hunk.modifiedStart === hunk.modifiedEnd
-						? start <= hunk.modifiedStart && end >= hunk.modifiedEnd
-						: start === end
-							? hunk.modifiedStart <= start && start < hunk.modifiedEnd
-							: hunk.modifiedStart < end && hunk.modifiedEnd > start;
-					if (overlaps) {
-						start = Math.min(start, hunk.modifiedStart);
-						end = Math.max(end, hunk.modifiedEnd);
-					}
+		const groups: { start: number; end: number; edits: typeof edits; }[] = [];
+		for (const edit of edits.sort((a, b) => a.start - b.start)) {
+			let start = edit.start;
+			let end = edit.end;
+			for (const hunk of this.changes) {
+				const overlaps = hunk.modifiedStart === hunk.modifiedEnd
+					? start <= hunk.modifiedStart && end >= hunk.modifiedEnd
+					: start === end
+						? hunk.modifiedStart <= start && start < hunk.modifiedEnd
+						: hunk.modifiedStart < end && hunk.modifiedEnd > start;
+				if (overlaps) {
+					start = Math.min(start, hunk.modifiedStart);
+					end = Math.max(end, hunk.modifiedEnd);
 				}
-				const previous = groups.at(-1);
-				if (previous && previous.end >= start) {
-					previous.end = Math.max(previous.end, end);
-					previous.edits.push(edit);
-				} else { groups.push({ start, end, edits: [edit] }); }
 			}
-			for (const group of groups.reverse()) {
-				let text = this.previousText.slice(group.start, group.end);
-				for (const edit of group.edits.reverse()) {
-					text = text.slice(0, edit.start - group.start) + edit.text + text.slice(edit.end - group.start);
-				}
-				const start = this.originalOffset(group.start, false);
-				const end = this.originalOffset(group.end, true);
-				this.originalText = this.originalText.slice(0, start) + text + this.originalText.slice(end);
+			const previous = groups.at(-1);
+			if (previous && previous.end >= start) {
+				previous.end = Math.max(previous.end, end);
+				previous.edits.push(edit);
+			} else { groups.push({ start, end, edits: [edit] }); }
+		}
+		for (const group of groups.reverse()) {
+			let text = this.previousText.slice(group.start, group.end);
+			for (const edit of group.edits.reverse()) {
+				text = text.slice(0, edit.start - group.start) + edit.text + text.slice(edit.end - group.start);
 			}
+			const start = this.originalOffset(group.start, false);
+			const end = this.originalOffset(group.end, true);
+			this.originalText = this.originalText.slice(0, start) + text + this.originalText.slice(end);
+		}
 	}
 
 	private originalOffset(offset: number, end: boolean): number {

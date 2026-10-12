@@ -5,8 +5,8 @@ import { localize } from '../../../../nls.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IDirPermissionsService, dirPermissionNames, type DirPermission, type DirPermissionsSnapshot } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IExecutionSettingsService, type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/execution/common/executionSettingsService.js';
-import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/sessions/common/approvalModes.js';
+import { IAgentExecutionSettingsService, type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { IAppServerRemoteAgentService } from '../../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 
@@ -37,7 +37,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	private message = '';
 
 	constructor(
-		@IExecutionSettingsService private readonly execution: IExecutionSettingsService,
+		@IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService,
 		@IDirPermissionsService private readonly permissions: IDirPermissionsService,
 		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
 		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,

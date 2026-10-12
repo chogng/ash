@@ -17,8 +17,13 @@ registerAction2(class RestoreCheckpointAction extends Action2 {
 		const navigation = accessor.get(IChatSessionNavigationService);
 		const source = navigation.getActiveConversation();
 		if (!source) { return; }
+		const viewingSource = (): boolean => {
+			const current = navigation.getActiveConversation();
+			return current?.sessionId === source.sessionId && current.threadId === source.threadId;
+		};
 		const chat = accessor.get(IChatService);
 		const checkpoints = await chat.readCheckpoints(source.sessionId, source.threadId);
+		if (!viewingSource()) { return; }
 		const available = checkpoints.filter(checkpoint => checkpoint.files !== 'unavailable');
 		if (available.length === 0) {
 			accessor.get(INotificationService).info(localize('chat.restoreCheckpoint.empty', 'No restorable checkpoints are available. {0}', checkpoints.map(checkpoint => checkpoint.unavailableReason).filter(Boolean).join('\n')));
@@ -47,8 +52,7 @@ registerAction2(class RestoreCheckpointAction extends Action2 {
 			...source, itemId: selected.checkpoint.itemId, boundary: selected.boundary,
 			title: localize('chat.restoreCheckpoint.title', 'Restored checkpoint: {0}', selected.checkpoint.itemId),
 		});
-		const current = navigation.getActiveConversation();
-		if (current?.sessionId === source.sessionId && current.threadId === source.threadId) {
+		if (viewingSource()) {
 			await navigation.openConversation(restored.sessionId, restored.threadId);
 		}
 		status(localize('chat.restoreCheckpoint.done', 'Checkpoint restored in a new chat.'));

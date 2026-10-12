@@ -114,6 +114,10 @@ pub enum ManagedDirSource {
         tree_id: String,
         repository_trees: BTreeMap<PathBuf, String>,
     },
+    DirectoryCheckpoint {
+        source_directory: PathBuf,
+        digest: ContentDigest,
+    },
 }
 
 impl ManagedDirSource {
@@ -121,6 +125,9 @@ impl ManagedDirSource {
         match self {
             Self::CurrentDirectory { source_directory }
             | Self::ImmutableTree {
+                source_directory, ..
+            }
+            | Self::DirectoryCheckpoint {
                 source_directory, ..
             } => source_directory,
         }
@@ -660,6 +667,9 @@ impl WorktreeManager {
             bail!("managed directory source identity cannot be empty");
         }
         request.owner.validate(&request.source_dir_id)?;
+        if matches!(request.source, ManagedDirSource::DirectoryCheckpoint { .. }) {
+            return self.provision_directory(request, request.source.source_directory()).await;
+        }
         let source_directory = dunce::canonicalize(request.source.source_directory())
             .with_context(|| {
                 format!(
@@ -688,6 +698,7 @@ impl WorktreeManager {
             ManagedDirSource::ImmutableTree { tree_id, .. } => {
                 ash_git::GitTreeId::new(tree_id.clone())?
             }
+            ManagedDirSource::DirectoryCheckpoint { .. } => bail!("directory checkpoint cannot initialize a Git worktree"),
         };
         let (target_branch, target_head, target_unborn) = match &request.target {
             ManagedDirTarget::SourceHead => {
@@ -971,6 +982,7 @@ impl WorktreeManager {
                             )
                         })?,
                 )?,
+                ManagedDirSource::DirectoryCheckpoint { .. } => bail!("directory checkpoint cannot initialize nested Git worktrees"),
             };
             let target = request.repository_targets.get(&relative_path);
             let inherited = binding::try_read(source_repository.git_dir())?;
@@ -1177,7 +1189,12 @@ impl WorktreeManager {
             .tempdir_in(parent)?;
         let dir = staging.path().join("dir");
         std::fs::create_dir(&dir)?;
-        let baseline_tree = copy_directory(source_directory, &dir)?;
+        let baseline_tree = if let ManagedDirSource::DirectoryCheckpoint { digest, .. } = &request.source {
+            self.copy_directory_checkpoint(digest, &dir)?;
+            digest.as_str().strip_prefix("sha256:").expect("ContentDigest validates its prefix").to_string()
+        } else {
+            copy_directory(source_directory, &dir)?
+        };
         binding::write(
             staging.path(),
             &binding::BindingRecord::new(
@@ -1629,7 +1646,7 @@ fn discover_nested_repository_roots(
     roots
 }
 
-fn copy_directory(source: &Path, destination: &Path) -> Result<String> {
+pub(crate) fn copy_directory(source: &Path, destination: &Path) -> Result<String> {
     let mut digest = Sha256::new();
     copy_directory_entries(source, source, destination, &mut digest)?;
     Ok(format!("{:x}", digest.finalize()))
@@ -1677,22 +1694,36 @@ fn copy_directory_entries(
             .context("managed directory path is not UTF-8")?;
         let destination_path = destination.join(relative);
         let metadata = std::fs::symlink_metadata(&source_path)?;
+        digest.update((relative_text.len() as u64).to_le_bytes());
         digest.update(relative_text.as_bytes());
         digest.update([0]);
+        if !metadata.file_type().is_symlink() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                digest.update(metadata.permissions().mode().to_le_bytes());
+            }
+            #[cfg(not(unix))]
+            digest.update([u8::from(metadata.permissions().readonly())]);
+        }
         if metadata.is_dir() && !metadata.file_type().is_symlink() {
             digest.update(b"directory");
             std::fs::create_dir_all(&destination_path)?;
             copy_directory_entries(root, &source_path, destination, digest)?;
+            std::fs::set_permissions(&destination_path, metadata.permissions())?;
         } else if metadata.file_type().is_symlink() {
             digest.update(b"symlink");
             let target = std::fs::read_link(&source_path)?;
+            digest.update((target.as_os_str().len() as u64).to_le_bytes());
             digest.update(target.to_string_lossy().as_bytes());
             copy_symlink(&source_path, &target, &destination_path)?;
         } else if metadata.is_file() {
             digest.update(b"file");
+            digest.update(metadata.len().to_le_bytes());
             let mut source_file = std::fs::File::open(&source_path)?;
             let mut destination_file = std::fs::File::create(&destination_path)?;
             let mut buffer = [0u8; 64 * 1024];
+            let mut copied = 0u64;
             loop {
                 let read = match source_file.read(&mut buffer) {
                     Ok(read) => read,
@@ -1703,9 +1734,14 @@ fn copy_directory_entries(
                     break;
                 }
                 digest.update(&buffer[..read]);
+                copied += read as u64;
                 destination_file.write_all(&buffer[..read])?;
             }
             std::fs::set_permissions(&destination_path, metadata.permissions())?;
+            destination_file.sync_all()?;
+            if copied != metadata.len() || source_file.metadata()?.modified()? != metadata.modified()? {
+                bail!("file changed while capturing directory checkpoint: {}", source_path.display());
+            }
         } else {
             bail!(
                 "unsupported managed directory entry: {}",

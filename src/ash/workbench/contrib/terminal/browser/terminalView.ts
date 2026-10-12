@@ -4,7 +4,7 @@ import {
 	TerminalActiveInstanceInTitleContext,
 	TerminalActiveInstanceStateContext,
 } from '../common/terminalContextKey.js';
-import { TerminalCommandId } from '../common/terminal.js';
+import { ITerminalProfileService, TerminalCommandId } from '../common/terminal.js';
 import { terminalProfileIcon } from "./terminalIcon.js";
 import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
@@ -52,12 +52,15 @@ export class TerminalViewPane extends ViewPane {
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@ITerminalProfileService private readonly profileService: ITerminalProfileService,
 	) {
 		super(container, options);
 		this.terminalService = terminalService;
 		this.element.classList.add("ash-terminal-view");
 		this.setHeaderVisible(false);
 		this.titleActions = this._register(instantiation.createInstance(TerminalTitleActions, this.headerActionsElement));
+		this.titleActions.setProfiles(profileService.availableProfiles);
+		this._register(profileService.onDidChangeAvailableProfiles(profiles => this.titleActions.setProfiles(profiles)));
 
 		this.contentElement.classList.add("ash-terminal-content");
 		this.statusElement = h(container.ownerDocument, "div");
@@ -144,9 +147,9 @@ export class TerminalViewPane extends ViewPane {
 		}
 		this.initializing = true;
 		try {
-			const profiles = await this.terminalService.getProfiles();
+			await this.profileService.refreshAvailableProfiles();
 			if (this.isDisposed) return;
-			this.titleActions.setProfiles(profiles);
+			this.titleActions.setProfiles(this.profileService.availableProfiles);
 		} catch {
 			if (this.isDisposed) return;
 			this.titleActions.setProfiles([]);
@@ -170,6 +173,11 @@ export class TerminalViewPane extends ViewPane {
 		this.titleActions.setCreating(true);
 		this.setStatus(undefined);
 		try {
+			if (profileId === undefined) {
+				if (!this.profileService.availableProfiles.length) await this.profileService.refreshAvailableProfiles();
+				if (this.isDisposed) return;
+				profileId = this.profileService.getDefaultProfile()?.profileId;
+			}
 			await this.terminalService.createTerminal({
 				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
 				profile: profileId ? { type: "profile", profileId } : { type: "default" },

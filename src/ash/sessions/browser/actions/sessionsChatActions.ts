@@ -9,7 +9,7 @@ import { ICommandService } from '../../../platform/commands/common/commands.js';
 import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
-import { approvalModeDefinitions } from '../../../platform/sessions/common/approvalModes.js';
+import { approvalModeDefinitions } from '../../../platform/agentHost/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';

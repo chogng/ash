@@ -1,5 +1,6 @@
 import { ActionRunner, type IAction } from '../../../../base/common/actions.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import type { IMenu } from '../../../../platform/actions/common/actions.js';
 import type { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -42,25 +43,26 @@ export function openContextMenu(
 	const instances = contextInstances === undefined ? [] : Array.isArray(contextInstances) ? contextInstances : [contextInstances as ITerminalInstance];
 	const contexts = instances.map(instance => new InstanceContext(instance));
 	const actions = [...getFlatContextMenuActions(menu.getActions({ shouldForwardArgs: true }), undefined, targetWindow), ...extraActions];
-	const runner = new TerminalContextActionRunner();
+	const lifetime = new DisposableStore();
+	const runner = lifetime.add(new TerminalContextActionRunner());
 	let executing = false;
 	let hidden = false;
-	runner.onWillRun(() => { executing = true; });
-	runner.onDidRun(() => {
+	lifetime.add(runner.onWillRun(() => { executing = true; }));
+	lifetime.add(runner.onDidRun(() => {
 		executing = false;
 		// Let the host finish its notification and execution cleanup listeners first.
-		if (hidden) queueMicrotask(() => runner.dispose());
-	});
+		if (hidden) queueMicrotask(() => lifetime.dispose());
+	}));
 	try {
 		contextMenuService.showContextMenu({
 			getAnchor: () => ({ x: event.clientX, y: event.clientY, targetWindow }),
 			getActions: () => actions,
 			getActionsContext: () => contexts,
 			actionRunner: runner,
-			onHide: () => { hidden = true; if (!executing) runner.dispose(); },
+			onHide: () => { hidden = true; if (!executing) lifetime.dispose(); },
 		});
 	} catch (error) {
-		runner.dispose();
+		lifetime.dispose();
 		throw error;
 	}
 }

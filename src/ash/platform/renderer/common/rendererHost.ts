@@ -21,7 +21,8 @@ import type { IDiffApi } from "../../diff/common/diffApi.js";
 import type { ISyntaxApi } from "../../syntax/common/syntaxApi.js";
 import type { IContentSearchConfigurationService } from '../../search/common/search.js';
 import type { IContentSearchApi } from "../../search/common/searchApi.js";
-import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
+import type { IAgentSessionService, IAgentThreadService, IAgentTurnService } from "../../agentHost/common/agentService.js";
+import type { IAgentModelsService } from "../../agentHost/common/agentModels.js";
 import type { IAppServerSkillApi } from "../../agentHost/common/appServerApi.js";
 import type { ILanguageServerService } from "../../language/common/languageServerService.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminal.js";
@@ -41,7 +42,7 @@ import type { IExtensionManagementApi } from "../../extensionManagement/common/e
 import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
 import type { IHooksService } from '../../hooks/common/hooksService.js';
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
-import type { IExecutionSettingsService } from '../../execution/common/executionSettingsService.js';
+import type { IAgentExecutionSettingsService } from '../../agentHost/common/agentExecutionSettingsService.js';
 import type { ITraceSettingsService } from '../../trace/common/traceSettingsService.js';
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
@@ -93,11 +94,11 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly remote?: IRemoteAgentApi;
 	/** Optional because web hosts cannot restart into a host-owned SSH connection. */
 	readonly remoteConnections?: IRemoteConnectionApi;
-	readonly session: ISessionApi;
+	readonly session: IAgentSessionService;
 	readonly teams: ITeamApi;
-	readonly model: IModelApi;
-	readonly thread: IThreadApi;
-	readonly turn: ITurnApi;
+	readonly model: IAgentModelsService;
+	readonly thread: IAgentThreadService;
+	readonly turn: IAgentTurnService;
 	readonly turnChanges: ITurnChangesApi;
 	readonly skills: IAppServerSkillApi;
 	readonly instructions: IInstructionService;
@@ -126,7 +127,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly dirPermissions: IDirPermissionsApi;
 	readonly agentCapabilities: IAgentCapabilitiesService;
 	readonly traceSettings: ITraceSettingsService;
-	readonly executionSettings: IExecutionSettingsService;
+	readonly executionSettings: IAgentExecutionSettingsService;
 	readonly networkDiagnostics: INetworkDiagnosticsService;
 	readonly issueReporter: IIssueReporterService;
 	readonly github: IGitHubService;

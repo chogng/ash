@@ -92,6 +92,24 @@ fn archiving_more_than_the_keep_count_preserves_non_git_edits_until_explicit_che
         );
     }
     let (_, binding, _) = &copies[0];
+    assert!(server.session_dir_authorization(
+        &SessionId::new(copies[0].0.clone()).unwrap(), binding.dir(), ash_file_access::Permission::ReadFiles
+    ).is_ok());
+    assert!(server.session_dir_authorization(
+        &SessionId::new(copies[1].0.clone()).unwrap(), binding.dir(), ash_file_access::Permission::ReadFiles
+    ).is_err());
+    let directory_id = ash_file_access::Dir::open_local(binding.dir()).unwrap().id().to_string();
+    std::fs::write(binding.dir().join("watcher-check"), "changed").unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let observed = server.drain_notifications(&mut connection).iter().any(|notification| {
+            let notification: serde_json::Value = serde_json::from_str(notification).unwrap();
+            notification["method"] == "fs/changed" && notification["params"]["dirId"] == directory_id
+        });
+        if observed { break; }
+        assert!(std::time::Instant::now() < deadline, "managed files did not invalidate the client");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
     let ManagedDirOwner::Thread { thread_id } = binding.owner();
     server
         .delete_worktree_session(thread_id, &CommandId::new("delete-first").unwrap())

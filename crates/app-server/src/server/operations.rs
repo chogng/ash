@@ -1215,6 +1215,7 @@ impl AppServer {
             .updates
             .thread_transcript_snapshot(&thread, include_transient);
         result(&SessionThreadReadResult {
+            directory: self.thread_directory(&params.thread_id)?,
             thread,
             transcript,
             history,
@@ -1311,6 +1312,7 @@ impl AppServer {
             .map_or(sequence, |update| update.durable_sequence.max(sequence));
         let transcript_revision = transcript.revision;
         let response = result(&SessionThreadSubscribeResult {
+            directory: self.thread_directory(&params.thread_id)?,
             thread,
             transcript,
             updates,

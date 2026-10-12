@@ -18,13 +18,12 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 		const name = relative(sourceRoot, file).replaceAll('\\', '/');
 		if (name.includes('/test/') || name.includes('/generated/')) continue;
 		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-		const allowed = /^platform\/agentHost\//u.test(name)
+		const agentDomainContract = /^platform\/agentHost\/common\/(?:agentService|agentModels|agentExecutionSettingsService)\.ts$/u.test(name);
+		const allowed = /^platform\/agentHost\//u.test(name) && !agentDomainContract
 			|| /^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name)
 			|| /^platform\/[^/]+\/(?:browser|electron-browser|electron-main|node)\//u.test(name)
 			|| /^(?:workbench|sessions)\/services\/[^/]+\/(?:browser|electron-browser)\//u.test(name)
-			|| /^sessions\/contrib\/providers\/agentHost\/browser\//u.test(name)
-			// This shared implementation adapts IModelApi into frontend model choices.
-			|| name === 'workbench/contrib/chat/common/languageModels.ts';
+			|| /^sessions\/contrib\/providers\/agentHost\/browser\//u.test(name);
 		// Generated product definitions are metadata, not wire data or transport APIs.
 		const metadataOnly = source.statements.filter(ts.isImportDeclaration).every(statement => {
 			if (!ts.isStringLiteral(statement.moduleSpecifier) || protocolPath(file, statement.moduleSpecifier.text) === undefined) return true;

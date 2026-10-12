@@ -4,6 +4,7 @@
 //! baselines, and cleans them only after the change ledger proves every ChangeSet settled.
 
 mod binding;
+mod directory_checkpoint;
 mod manager;
 mod metadata;
 mod settings;

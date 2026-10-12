@@ -1,5 +1,6 @@
 use super::git_turn_changes_commit::spawn_commit_job;
 use super::git_turn_changes_message::spawn_message_job;
+use super::fs_watcher::FileSystemWatcher;
 use super::thread_dirs::ThreadDirs;
 use super::update_broker::UpdateBroker;
 use ash_app_server_protocol::protocol::turn_changes::ChangeSetId as ChangeSetIdDto;
@@ -54,6 +55,7 @@ pub(super) struct GitTurnChangesRuntime {
     pub(super) tool_write_capabilities: RwLock<BTreeMap<(TurnId, ToolCallId), bool>>,
     pub(super) write_lifecycles: WriteLifecycleTracker,
     pub(super) watchers: RwLock<BTreeMap<ThreadId, GitTurnChangeWatcher>>,
+    file_watchers: RwLock<BTreeMap<ThreadId, FileSystemWatcher>>,
 }
 
 impl GitTurnChangesRuntime {
@@ -86,6 +88,7 @@ impl GitTurnChangesRuntime {
             tool_write_capabilities: RwLock::new(BTreeMap::new()),
             write_lifecycles: WriteLifecycleTracker::default(),
             watchers: RwLock::new(BTreeMap::new()),
+            file_watchers: RwLock::new(BTreeMap::new()),
         });
         let hook_observer: Arc<dyn core_api::HookExecutionObserver> = runtime.clone();
         dirs.hooks.set_execution_observer(hook_observer);
@@ -100,6 +103,7 @@ impl GitTurnChangesRuntime {
                 .threads
                 .install_message_checkpoint_source(thread_id.clone(), runtime.clone())
                 .map_err(|error| error.to_string())?;
+            runtime.start_file_watcher(thread_id, binding)?;
             if binding.kind() == worktree::ManagedDirKind::Git {
                 runtime.refresh_capture_object_locations(thread_id, binding)?;
                 runtime.start_watcher(thread_id.clone(), [binding.dir().to_path_buf()])?;
@@ -147,10 +151,21 @@ impl GitTurnChangesRuntime {
     }
 
     pub(super) fn stop_watcher(&self, thread_id: &ThreadId) {
+        self.file_watchers.write().unwrap_or_else(std::sync::PoisonError::into_inner).remove(thread_id);
         self.watchers
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(thread_id);
+    }
+
+    pub(super) fn start_file_watcher(&self, thread_id: &ThreadId, binding: &ManagedDirBinding) -> Result<(), String> {
+        let mut watchers = self.file_watchers.write().map_err(|_| "Thread file watcher lock poisoned")?;
+        if watchers.contains_key(thread_id) { return Ok(()); }
+        let dir = ash_file_access::Dir::open_local(binding.dir()).map_err(|error| error.to_string())?;
+        let id = dir.id().to_string();
+        let watcher = FileSystemWatcher::start_for_dir(dir, Arc::clone(&self.updates), id).map_err(|error| error.to_string())?;
+        watchers.insert(thread_id.clone(), watcher);
+        Ok(())
     }
 
     fn resume_pending_jobs(self: &Arc<Self>) -> Result<(), String> {

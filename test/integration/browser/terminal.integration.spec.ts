@@ -928,3 +928,59 @@ test('terminal browser resize flushes before focus and cancels pending work on d
 	expect(await page.evaluate(() => window.ashTerminalIntegration.resizes)).toEqual(writes);
 	expect(errors).toEqual([]);
 });
+
+test('terminal configuration applies live options and keeps the existing screen output', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?browser');
+	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
+	await page.evaluate(async () => {
+		await window.ashTerminalIntegration.configure('terminal.integrated.fontSize', 16);
+		window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready();
+		window.ashTerminalIntegration.write('configuration retained\r\n');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.snapshot(10000))).toContain('configuration retained');
+	expect(await page.evaluate(() => window.ashTerminalIntegration.options().fontSize)).toBe(16);
+	await page.evaluate(async () => {
+		for (const [key, value] of Object.entries({ fontSize: 20, fontFamily: 'monospace', cursorStyle: 'line', cursorBlinking: true, scrollback: 2000, lineHeight: 1.2, letterSpacing: 2, minimumContrastRatio: 7 })) {
+			await window.ashTerminalIntegration.configure(`terminal.integrated.${key}`, value);
+		}
+	});
+	expect(await page.evaluate(() => window.ashTerminalIntegration.options())).toEqual({ fontSize: 20, fontFamily: 'monospace', cursorStyle: 'bar', cursorBlink: true, scrollback: 2000, lineHeight: 1.2, letterSpacing: 2, minimumContrastRatio: 7 });
+	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(10000))).toContain('configuration retained');
+	expect(await page.evaluate(async () => {
+		try { await window.ashTerminalIntegration.configure('terminal.integrated.fontSize', -1); return false; } catch { return true; }
+	})).toBe(true);
+	expect(await page.evaluate(() => window.ashTerminalIntegration.options().fontSize)).toBe(20);
+	expect(errors).toEqual([]);
+});
+
+test('terminal profile commands select, cancel and apply the saved default to the next creation', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?pane&profiles&locale=zh-CN');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell']);
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
+	const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
+	await expect(picker).toBeFocused();
+	await picker.press('Escape');
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell']);
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
+	await expect(picker).toBeFocused();
+	await picker.fill('Bash'); await picker.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'bash']);
+	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
+	const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
+	await expect(defaults).toBeFocused();
+	await defaults.fill('Bash'); await defaults.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('bash');
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'bash', 'bash']);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.configure('terminal.integrated.defaultProfile.linux', 'Unavailable'));
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('shell');
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'bash', 'bash', 'shell']);
+	expect(errors).toEqual([]);
+});

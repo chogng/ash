@@ -88,7 +88,9 @@ services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, w
 const lifecycle = resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: window, onError: (error: unknown) => console.error(error) }));
 services.registerInstance(ILifecycleService, lifecycle);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
-services.registerInstance(INotificationService, resources.add(new NotificationService()));
+const notifications = resources.add(new NotificationService());
+services.registerInstance(INotificationService, notifications);
+resources.add(notifications.onDidAdd(item => { document.querySelector('#error')!.textContent = item.message; }));
 services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
 services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 const contexts = resources.add(new ContextKeyService());

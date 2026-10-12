@@ -77,7 +77,11 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 			show(tab, new targetWindow.MouseEvent('contextmenu', { clientX: bounds.left, clientY: bounds.bottom }));
 		}));
 		this._register(contextMenu.onDidHideContextMenu(() => { this.ownsMenu = false; }));
-		this._register(toDisposable(() => { if (this.ownsMenu) contextMenu.hideContextMenu(); }));
+		this._register(toDisposable(() => {
+			this.draggedTerminal = undefined;
+			if (this.ownsMenu) contextMenu.hideContextMenu();
+			this.ownsMenu = false;
+		}));
 		this._register(terminals.onDidChangeInstances(() => this.refresh()));
 		this._register(terminals.onDidChangeActiveInstance(() => this.refresh()));
 		this.refresh();

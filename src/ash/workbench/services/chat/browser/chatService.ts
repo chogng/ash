@@ -1,12 +1,15 @@
 import type { ChatContextUsage } from '../common/chatService.js';
+import type { AgentInput } from '../../../../platform/agentHost/common/agentService.js';
+import { toThreadUpdate, toThreadTranscriptUpdate } from '../../../../platform/agentHost/browser/appServerAgentService.js';
 import { localize } from '../../../../nls.js';
-import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRefDto, Thread as ThreadDto, ThreadItem as ThreadItemDto, ThreadTranscriptEntry as ThreadTranscriptEntryDto, ThreadTranscriptSnapshot as ThreadTranscriptSnapshotDto, ThreadTranscriptUpdateEnvelope as ThreadTranscriptUpdateEnvelopeDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto, TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from "../../../../../../.build/protocol/typescript/index.js";
+import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from "../../../../base/common/event.js";
 import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import { IAppServerApi, IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
+import { IAgentThreadService, IAgentTurnService } from "../../../../platform/agentHost/common/agentService.js";
+import { IAgentModelsService } from "../../../../platform/agentHost/common/agentModels.js";
 import { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
 import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
@@ -40,9 +43,9 @@ export class ChatService extends Disposable implements IChatService {
 	readonly onDidChangeQueue = this._onDidChangeQueue.event;
 
 	constructor(
-		@IModelApi private readonly modelApi: IModelApi,
-		@IThreadApi private readonly threadApi: IThreadApi,
-		@ITurnApi private readonly turnApi: ITurnApi,
+		@IAgentModelsService private readonly modelApi: IAgentModelsService,
+		@IAgentThreadService private readonly threadApi: IAgentThreadService,
+		@IAgentTurnService private readonly turnApi: IAgentTurnService,
 		@ITurnChangesApi private readonly turnChangesApi: ITurnChangesApi,
 		@IAppServerApi private readonly appServerApi: IAppServerApi,
 		@IServerEventApi eventApi: IServerEventApi,
@@ -88,17 +91,11 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]> {
-		const result = await this.threadApi.checkpoints({ sessionId, threadId });
-		return result.checkpoints.map(checkpoint => ({
-			itemId: checkpoint.itemId, turnId: checkpoint.turnId, sourceThreadId: checkpoint.sourceThreadId,
-			files: checkpoint.workspace.type,
-			...(checkpoint.workspace.type === 'unavailable' ? { unavailableReason: checkpoint.workspace.reason } : {}),
-		}));
+		return this.threadApi.checkpoints({ sessionId, threadId });
 	}
 
 	async restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }> {
-		const result = await this.threadApi.restoreMessage({ ...options, commandId: createUuid() });
-		return { sessionId: result.session.sessionId, threadId: result.threadId };
+		return this.threadApi.restoreMessage({ ...options, commandId: createUuid() });
 	}
 
 	async readContextUsage(sessionId: SessionId, threadId: ThreadId): Promise<ChatContextUsage> {
@@ -114,8 +111,7 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {
-		const result = await this.threadApi.read({ sessionId, threadId });
-		return { thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript) };
+		return this.threadApi.read({ sessionId, threadId });
 	}
 
 	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription> {
@@ -127,9 +123,7 @@ export class ChatService extends Disposable implements IChatService {
 			this.threadSubscriptions.set(key, subscription);
 		}
 		subscription.owners.add(owner);
-		const pending = this.threadApi.subscribe({ sessionId, threadId, afterSequence }).then(result => ({
-			thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript), updates: result.updates.map(toThreadUpdate),
-		}));
+		const pending = this.threadApi.subscribe({ sessionId, threadId, afterSequence });
 		subscription.pending.add(pending);
 		try {
 			const result = await pending;
@@ -222,7 +216,7 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async resolveInteraction(options: ResolveInteractionOptions): Promise<void> {
-		await this.turnApi.resolveInteraction({ commandId: commandId("interaction"), ...options, response: toAgentResponse(options.response) });
+		await this.turnApi.resolveInteraction({ commandId: commandId("interaction"), ...options, response: options.response });
 	}
 
 	async listTurnChanges(sessionId: SessionId, threadId: ThreadId): Promise<readonly TurnChangeSetSummary[]> {
@@ -275,7 +269,7 @@ export class ChatService extends Disposable implements IChatService {
 
 }
 
-function toContextInput(context: ResolvedChatContext): InputItem {
+function toContextInput(context: ResolvedChatContext): AgentInput {
 	if (context.kind === 'image') { return { type: 'image', url: context.content }; }
 	if (context.kind === 'instruction') { return { type: 'instruction', path: context.content }; }
 	if (context.kind === 'toolSelection') {
@@ -288,131 +282,12 @@ function toContextInput(context: ResolvedChatContext): InputItem {
 	return { type: 'context', name: context.name, content: context.content };
 }
 
-function toThread(thread: ThreadDto): Thread {
-	return {
-		agentId: thread.agentId,
-		origin: thread.origin.type === "message" ? {
-			type: "message", parentThreadId: thread.origin.parentThreadId, parentSequence: thread.origin.parentSequence,
-			itemId: thread.origin.itemId, boundary: thread.origin.boundary,
-		} : { ...thread.origin },
-		sessionId: thread.sessionId,
-		threadId: thread.threadId,
-		title: thread.title,
-		status: thread.status,
-		sequence: thread.sequence,
-		goal: thread.goal ? { ...thread.goal } : thread.goal,
-		advisor: thread.advisor,
-		usage: {
-			modelInvocations: thread.usage.modelInvocations,
-			inputTokens: { ...thread.usage.inputTokens },
-			outputTokens: { ...thread.usage.outputTokens },
-			cachedInputTokens: { ...thread.usage.cachedInputTokens },
-			cacheWriteInputTokens: { ...thread.usage.cacheWriteInputTokens },
-			reasoningTokens: { ...thread.usage.reasoningTokens },
-		},
-		turns: thread.turns.map((turn) => ({
-			turnId: turn.turnId,
-			status: turn.status,
-			mode: turn.mode,
-			approvalMode: turn.approvalMode,
-			model: turn.model ? { ...turn.model } : turn.model,
-			reasoningEffort: turn.reasoningEffort,
-			plan: turn.plan ? {
-				explanation: turn.plan.explanation,
-				steps: turn.plan.steps.map((step) => ({ ...step })),
-			} : turn.plan,
-			usage: {
-				modelInvocations: turn.usage.modelInvocations,
-				inputTokens: { ...turn.usage.inputTokens },
-				outputTokens: { ...turn.usage.outputTokens },
-				cachedInputTokens: { ...turn.usage.cachedInputTokens },
-				cacheWriteInputTokens: { ...turn.usage.cacheWriteInputTokens },
-				reasoningTokens: { ...turn.usage.reasoningTokens },
-			},
-			items: turn.items.map(toThreadItem),
-			error: turn.error ? { ...turn.error } : turn.error,
-		})),
-	};
-}
-
-function turnInput(options: StartTurnOptions): InputItem[] {
+function turnInput(options: StartTurnOptions): AgentInput[] {
 	return [
-		...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
+		...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill })),
 		...(options.contexts ?? []).map(toContextInput),
 		...(options.text.trim() ? [{ type: "text" as const, text: options.text }] : []),
 	];
-}
-
-function toThreadUpdate(update: ThreadUpdateEnvelopeDto): ThreadUpdateEnvelope {
-	return {
-		sessionId: update.sessionId,
-		threadId: update.threadId,
-		durableSequence: update.durableSequence,
-		streamCursor: update.streamCursor ? { ...update.streamCursor } : update.streamCursor,
-		update: toThreadUpdateValue(update.update),
-	};
-}
-
-function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto["update"]): ThreadUpdate {
-	switch (update.type) {
-		case "committed": {
-			const event = update.event;
-			if (event.type === 'interactionRequested') return { type: 'committed', event: { type: event.type, interaction: { ...event.interaction } } };
-			if (event.type === 'turnModeChanged') return { type: 'committed', event: { type: event.type, turnId: event.turnId, fromMode: event.fromMode, mode: event.mode } };
-			return { type: 'committed', event: { type: event.type } };
-		}
-		case "itemStarted": return { type: "itemStarted", item: toThreadItem(update.item) };
-		case "itemDelta": return { type: "itemDelta", itemId: update.itemId, delta: { ...update.delta } };
-		case "toolOutputDelta": return { type: "toolOutputDelta", turnId: update.turnId, toolCallId: update.toolCallId, stream: update.stream, text: update.text };
-	}
-}
-
-function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto): ThreadTranscriptSnapshot {
-	return {
-		sessionId: snapshot.sessionId,
-		threadId: snapshot.threadId,
-		durableSequence: snapshot.durableSequence,
-		revision: snapshot.revision,
-		entries: snapshot.entries.map(toThreadTranscriptEntry),
-	};
-}
-
-function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): ThreadTranscriptUpdateEnvelope {
-	return {
-		sessionId: update.sessionId,
-		threadId: update.threadId,
-		durableSequence: update.durableSequence,
-		revision: update.revision,
-		changes: update.changes.map((change) => {
-			switch (change.type) {
-				case "upsert": return { type: "upsert", entry: toThreadTranscriptEntry(change.entry) };
-				case "remove": return { type: "remove", entryIds: [...change.entryIds] };
-				case "clearTransient": return { type: "clearTransient" };
-			}
-		}),
-	};
-}
-
-function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscriptEntry {
-	switch (entry.type) {
-		case 'hookRun': return { type: 'hookRun', entryId: entry.entryId, turnId: entry.turnId, run: { ...entry.run, status: { ...entry.run.status } } };
-		case "item": return { type: "item", entryId: entry.entryId, turnId: entry.turnId, item: toThreadItem(entry.item), transient: entry.transient };
-		case "turnPlan": return { type: "turnPlan", entryId: entry.entryId, turnId: entry.turnId, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };
-		case "turnError": return { type: "turnError", entryId: entry.entryId, turnId: entry.turnId, error: { ...entry.error } };
-		case "toolOutput": return { type: "toolOutput", entryId: entry.entryId, turnId: entry.turnId, toolCallId: entry.toolCallId, stream: entry.stream, text: entry.text };
-	}
-}
-
-function toThreadItem(item: ThreadItemDto): ThreadItem {
-	return { ...item };
-}
-
-function toAgentResponse(response: ResolveInteractionOptions["response"]): AgentResponseDto {
-	switch (response.type) {
-		case "approval": return { type: "approval", response: { ...response.response } };
-		case "userInput": return { type: "userInput", response: { answers: { ...response.response.answers } } };
-		case "dynamicTool": return { type: "dynamicTool", response: { ...response.response, content: response.response.content.map((output) => ({ ...output })) } };
-	}
 }
 
 function toTurnChangeSummary(summary: TurnChangeSetSummaryDto): TurnChangeSetSummary {

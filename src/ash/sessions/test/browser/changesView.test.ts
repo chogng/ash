@@ -19,7 +19,8 @@ import type { TurnChangesReadResult } from '../../../../../.build/protocol/types
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
-import { IModelApi, IThreadApi, ITurnApi } from '../../../platform/sessions/common/sessionApi.js';
+import { IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
@@ -60,9 +61,9 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		const host = createDisconnectedRendererApi();
 		let truncated = false;
 		let pendingRead: DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }> | undefined;
-		services.registerInstance(IModelApi, host.model);
-		services.registerInstance(IThreadApi, host.thread);
-		services.registerInstance(ITurnApi, host.turn);
+		services.registerInstance(IAgentModelsService, host.model);
+		services.registerInstance(IAgentThreadService, host.thread);
+		services.registerInstance(IAgentTurnService, host.turn);
 		services.registerInstance(IAppServerSkillApi, host.skills);
 		services.registerInstance(IAppServerApi, host.appServer);
 		services.registerInstance(IServerEventApi, host.events);

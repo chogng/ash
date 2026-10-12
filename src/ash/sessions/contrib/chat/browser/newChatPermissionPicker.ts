@@ -11,7 +11,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { approvalModeDefinitions } from '../../../../platform/sessions/common/approvalModes.js';
+import { approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
 import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';

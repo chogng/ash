@@ -54,6 +54,8 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		}));
 	}
 
+	get operatingSystem() { return this.supervisor.operatingSystem; }
+
 	async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/profile/list"], {});
 		return result.profiles;

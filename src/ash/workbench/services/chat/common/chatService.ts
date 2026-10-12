@@ -1,16 +1,60 @@
+import type { SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription } from '../../../../platform/agentHost/common/agentService.js';
+export type {
+	ChatImageAttachment,
+	ChatAudioAttachment,
+	ChatReasoningState,
+	ChatToolSource,
+	ChatToolCallBinding,
+	ChatContentPart,
+	ThreadItem,
+	TurnStatus,
+	TurnError,
+	PlanStepStatus,
+	PlanStep,
+	PlanUpdate,
+	Turn,
+	ModelUsageTotal,
+	ModelUsageSummary,
+	ThreadGoalStatus,
+	ThreadGoal,
+	ThreadOrigin,
+	Thread,
+	ThreadGoalUpdate,
+	UserInputOption,
+	UserInputQuestion,
+	RequestUserInput,
+	ActionApprovalCapability,
+	ActionApprovalRequest,
+	DynamicToolCall,
+	AgentRequest,
+	AgentResponse,
+	TurnInteraction,
+	ThreadCommittedEvent,
+	ThreadUpdate,
+	ThreadUpdateEnvelope,
+	ThreadTranscriptEntry,
+	ChatHookRun,
+	ThreadTranscriptSnapshot,
+	ThreadTranscriptChange,
+	ThreadTranscriptUpdateEnvelope,
+	ThreadRead,
+	ThreadSubscription,
+} from '../../../../platform/agentHost/common/agentService.js';
+import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
+export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
 import type { Event } from "../../../../base/common/event.js";
 import { PRODUCT_SLASH_COMMANDS } from "../../../../../../.build/protocol/typescript/index.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { SkillReference } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { ModelReasoningEffort } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
-import type { SessionMode } from '../../../../platform/sessions/common/sessionApi.js';
-import type { ApprovalMode } from '../../../../platform/sessions/common/approvalModes.js';
+
+import type { ApprovalMode } from '../../../../platform/agentHost/common/approvalModes.js';
 
 export type { ModelCatalogEntry } from "./modelCatalog.js";
 
-export type SessionId = string;
-export type ThreadId = string;
+import type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint } from '../../../../platform/agentHost/common/agentService.js';
+export type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint } from '../../../../platform/agentHost/common/agentService.js';
 
 /** Identifies the reply that produced a document edit, independently of the visible Chat. */
 export interface ChatEditSource {
@@ -20,26 +64,12 @@ export interface ChatEditSource {
 
 export type ChatEditOutcome = 'completed' | 'failed' | 'interrupted';
 
-/** A backend-owned message boundary and its file restoration availability. */
-export interface ChatCheckpoint {
-	readonly itemId: string;
-	readonly turnId: string;
-	readonly sourceThreadId: ThreadId;
-	readonly files: 'git' | 'noFiles' | 'unavailable';
-	readonly unavailableReason?: string;
-}
-
 export interface RestoreChatCheckpointOptions {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly itemId: string;
 	readonly boundary: 'before' | 'after';
 	readonly title: string;
-}
-
-export interface ModelRef {
-	readonly provider: string;
-	readonly model: string;
 }
 
 /** An authorized directory Agent that can start a new Chat Session. */
@@ -49,79 +79,7 @@ export interface ChatAgent {
 	readonly sourceId: string;
 }
 
-export type { ApprovalMode } from '../../../../platform/sessions/common/approvalModes.js';
-
-export interface ModelProviderCredentialStatus {
-	readonly connection: string;
-	readonly access: 'apiKey' | 'subscription' | 'local' | 'enterprise' | 'unknown';
-	readonly active: boolean;
-	readonly configured: boolean;
-	readonly ready: boolean;
-	readonly provider: string;
-	readonly displayName: string;
-	readonly apiKeyPolicy: 'unsupported' | 'optional' | 'required';
-	readonly apiKeyConfigured: boolean;
-}
-
-export interface ChatImageAttachment {
-	readonly contentDigest: string;
-	readonly mediaType: "png" | "jpeg" | "gif" | "webP";
-	readonly encodedBytes: number;
-	readonly width: number;
-	readonly height: number;
-}
-
-export interface ChatAudioAttachment {
-	readonly contentDigest: string;
-	readonly mediaType: "wav" | "mp3" | "m4a" | "webM" | "ogg";
-	readonly encodedBytes: number;
-	readonly durationMs: number;
-}
-
-export interface ChatReasoningState {
-	readonly scope: string;
-	readonly item: unknown;
-}
-
-export type ChatToolSource =
-	| { readonly type: "product"; readonly component: string; }
-	| { readonly type: "plugin"; readonly pluginId: string; readonly version: string; readonly packageDigest: string; readonly contributionId: string; }
-	| { readonly type: "mcp"; readonly serverId: string; readonly remoteName: string; readonly catalogGeneration: number; readonly connectionGeneration: number; }
-	| { readonly type: "dynamic"; readonly name: string; }
-	| { readonly type: "extension" | "system"; readonly id: string; };
-
-export interface ChatToolCallBinding {
-	readonly registryIncarnation?: string | null;
-	readonly registryGeneration: number;
-	readonly definitionDigest: string;
-	readonly sourceChain: readonly ChatToolSource[];
-	readonly activity?:
-	| { readonly type: "read" | "search" | "list" | "edit"; readonly target: string; }
-	| { readonly type: "run"; }
-	| { readonly type: "fileRead"; readonly path: string; readonly offset: number; readonly limit: number; }
-	| { readonly type: "fileSearch" | "fileList"; readonly pattern: string; readonly path: string; }
-	| { readonly type: "fileEdit"; readonly path: string; }
-	| { readonly type: "command"; readonly program: string; readonly arguments: readonly string[]; readonly workingDirectory: string; }
-	| null;
-	readonly caller: { readonly type: "direct"; } | { readonly type: "codeMode"; readonly parentToolCallId: string; readonly cellId: string; readonly runtimeCallId: string; };
-}
-
-export type ChatContentPart =
-	| { readonly type: "text"; readonly text: string; }
-	| { readonly type: "imageAttachment"; readonly attachment: ChatImageAttachment; readonly detail: "auto" | "low" | "high" | "original"; }
-	| { readonly type: "imageUrl"; readonly url: string; readonly detail: "auto" | "low" | "high" | "original"; }
-	| { readonly type: "audioAttachment"; readonly attachment: ChatAudioAttachment; }
-	| { readonly type: "audioUrl"; readonly url: string; };
-
-export interface AdvisorConfig {
-	readonly model: ModelRef;
-	readonly enabled: boolean;
-	readonly reasoningEffort?: ModelReasoningEffort | null;
-	readonly maxCalls: number;
-	readonly maxOutputTokens: number;
-}
-
-export type AdvisorSelection = { readonly type: "default"; } | { readonly type: "off"; } | { readonly type: "model"; readonly config: AdvisorConfig; };
+export type { ApprovalMode } from '../../../../platform/agentHost/common/approvalModes.js';
 
 export interface SlashCommandDefinition {
 	readonly name: string;
@@ -140,53 +98,6 @@ export interface SkillSelectorDefinition {
 	readonly skill: SkillReference;
 }
 
-type MessagePhase = 'commentary' | 'partial_answer' | 'final_answer' | { readonly other: string; };
-
-export type ThreadItem =
-	| { readonly type: "userMessage"; readonly itemId: string; readonly turnId: string; readonly text: string; }
-	| { readonly type: "userContext"; readonly itemId: string; readonly turnId: string; readonly name: string; readonly content: string; }
-	| { readonly type: "userImage"; readonly itemId: string; readonly turnId: string; readonly url: string; }
-	| { readonly type: "userImageAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatImageAttachment; }
-	| { readonly type: "userAudioAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatAudioAttachment; }
-	| { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string; readonly phase?: MessagePhase | null; }
-	| { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string; readonly state: readonly ChatReasoningState[]; }
-	| { readonly type: "plan"; readonly itemId: string; readonly turnId: string; readonly text: string; }
-	| { readonly type: "toolCall"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly name: string; readonly argumentsJson: string; readonly binding?: ChatToolCallBinding | null; }
-	| { readonly type: "toolResult"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly text: string; readonly content?: readonly ChatContentPart[] | null; readonly isError: boolean; };
-
-export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
-
-export interface TurnError {
-	readonly code: "policyCircuitBreaker" | "modelConfiguration" | "providerCredentials" | "rateLimited" | "connectionFailed" | "providerUnavailable" | "providerHttp" | "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "worktreeCaptureFailed";
-	readonly message: string;
-	readonly retryable: boolean;
-}
-
-export type PlanStepStatus = "pending" | "inProgress" | "completed";
-
-export interface PlanStep {
-	readonly step: string;
-	readonly status: PlanStepStatus;
-}
-
-export interface PlanUpdate {
-	readonly explanation?: string | null;
-	readonly steps: readonly PlanStep[];
-}
-
-export interface Turn {
-	readonly turnId: string;
-	readonly status: TurnStatus;
-	readonly mode: ChatMode;
-	readonly approvalMode: ApprovalMode;
-	readonly model?: ModelRef | null;
-	readonly reasoningEffort?: ModelReasoningEffort | null;
-	readonly plan?: PlanUpdate | null;
-	readonly usage: ModelUsageSummary;
-	readonly items: readonly ThreadItem[];
-	readonly error?: TurnError | null;
-}
-
 /** Current context estimate and execution capacity, independently of accumulated billing usage. */
 export interface ChatContextUsage {
 	readonly estimatedTokens: number;
@@ -200,175 +111,6 @@ export interface ChatContextUsage {
 	}[];
 }
 
-export interface ModelUsageTotal {
-	readonly reported: number;
-	readonly complete: boolean;
-}
-
-export interface ModelUsageSummary {
-	readonly modelInvocations: number;
-	readonly inputTokens: ModelUsageTotal;
-	readonly outputTokens: ModelUsageTotal;
-	readonly cachedInputTokens: ModelUsageTotal;
-	readonly cacheWriteInputTokens: ModelUsageTotal;
-	readonly reasoningTokens: ModelUsageTotal;
-}
-
-export type ThreadGoalStatus = "active" | "paused" | "blocked" | "usageLimited" | "budgetLimited" | "complete";
-
-export interface ThreadGoal {
-	readonly threadId: ThreadId;
-	readonly goalId: string;
-	readonly objective: string;
-	readonly status: ThreadGoalStatus;
-	readonly tokenBudget?: number | null;
-	readonly tokensUsed: number;
-}
-
-export type ThreadOrigin =
-	| { readonly type: "root"; }
-	| { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
-	| { readonly type: "message"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly itemId: string; readonly boundary: "before" | "after"; }
-	| { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly beforeTurnId: string; }
-	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string; }
-	| { readonly type: "replacement"; readonly sourceThreadId: ThreadId; readonly sourceSequence: number; };
-
-export interface Thread {
-	readonly advisor: AdvisorSelection;
-	readonly agentId: string;
-	readonly origin: ThreadOrigin;
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly title: string;
-	readonly status: "active" | "archived";
-	readonly sequence: number;
-	readonly usage: ModelUsageSummary;
-	readonly goal?: ThreadGoal | null;
-	readonly turns: readonly Turn[];
-}
-
-export interface ThreadGoalUpdate {
-	readonly threadId: ThreadId;
-	readonly goal?: ThreadGoal;
-}
-
-export interface UserInputOption { readonly label: string; readonly description: string; }
-export interface UserInputQuestion { readonly id: string; readonly header: string; readonly question: string; readonly options?: readonly UserInputOption[]; readonly allowFreeForm: boolean; }
-export interface RequestUserInput { readonly questions: readonly UserInputQuestion[]; }
-export interface ActionApprovalCapability {
-	readonly kind: 'fileRead' | 'fileWrite' | 'processSpawn' | 'network' | 'credentialUse' | 'externalMutation' | 'systemConfiguration' | 'userInterface';
-	readonly scope: string;
-}
-export interface ActionApprovalRequest {
-	readonly reason: string;
-	readonly capabilities: readonly ActionApprovalCapability[];
-}
-export interface DynamicToolCall { readonly callId: string; readonly name: string; readonly definitionDigest: string; readonly arguments: unknown; }
-
-export type AgentRequest =
-	| { readonly type: "approval"; readonly request: ActionApprovalRequest; }
-	| { readonly type: "userInput"; readonly request: RequestUserInput; }
-	| { readonly type: "dynamicTool"; readonly call: DynamicToolCall; };
-
-export type AgentResponse =
-	| { readonly type: "approval"; readonly response: { readonly decision: "approveOnce" | "decline"; }; }
-	| { readonly type: "userInput"; readonly response: { readonly answers: Readonly<Record<string, { readonly value: string; }>>; }; }
-	| { readonly type: "dynamicTool"; readonly response: { readonly callId: string; readonly content: readonly ({ readonly type: "text"; readonly text: string; } | { readonly type: "image"; readonly dataUrl: string; })[]; readonly success: boolean; }; };
-
-export interface TurnInteraction {
-	readonly requestId: string;
-	readonly itemId?: string | null;
-	readonly request: AgentRequest;
-	readonly deadline?: { readonly expiresAtUnixMs: number; } | null;
-}
-
-export type ThreadCommittedEvent =
-	| { readonly type: "interactionRequested"; readonly interaction: TurnInteraction; }
-	| { readonly type: 'turnModeChanged'; readonly turnId: string; readonly fromMode: ChatMode; readonly mode: ChatMode; }
-	| {
-		readonly type:
-		"threadCreated"
-		| "advisorConfigured"
-		| "modelProvidersMigrated"
-		| "threadArchived"
-		| "threadRestored"
-		| "goalCreated"
-		| "goalUpdated"
-		| "goalCleared"
-		| "userGoalChanged"
-		| "turnExecutionBound"
-		| "agentContextSeedCommitted"
-		| "historyPrefixBound"
-		| "historyImported"
-		| "forkHistoryImported"
-		| "forkTurnImported"
-		| "forkHistoryImportCompleted"
-		| "contextCheckpointCommitted"
-		| "contextOverflowRecoveryCommitted"
-		| "turnAccepted"
-		| "turnStarted"
-		| "turnSteered"
-		| "turnSteerDelivered"
-		| "turnExecutionAttempted"
-		| "modelUsageRecorded"
-		| "modelInvocationRecorded"
-		| "modelResponseEvaluated"
-		| "itemCompleted"
-		| "planUpdated"
-		| 'hookRunUpdated'
-		| "interactionResolved"
-		| "toolExecutionStarted"
-		| "toolExecutionEscalated"
-		| "interactionCancelled"
-		| "turnCompleted"
-		| "turnFailed"
-		| "turnCancelling"
-		| "turnInterrupted"
-		| "delegationRequested"
-		| "delegationStarted"
-		| "delegationCancellationRequested"
-		| "agentCancellationReceived"
-		| "delegationResultProduced"
-		| "delegationResultReceived"
-		| "agentMessageSent"
-		| "agentMessageReceived"
-		| "agentJoinRequested"
-		| "agentJoinSatisfied";
-	};
-
-export type ThreadUpdate =
-	| { readonly type: "committed"; readonly event: ThreadCommittedEvent; }
-	| { readonly type: "itemStarted"; readonly item: ThreadItem; }
-	| { readonly type: "itemDelta"; readonly itemId: string; readonly delta: { readonly type: "agentMessage" | "reasoning" | "plan"; readonly text: string; } | { readonly type: 'agentMessagePhase'; readonly phase: MessagePhase | null; }; }
-	| { readonly type: "toolOutputDelta"; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string; };
-
-export interface ThreadUpdateEnvelope {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly durableSequence: number;
-	readonly streamCursor?: { readonly streamInstanceId: string; readonly sequence: number; } | null;
-	readonly update: ThreadUpdate;
-}
-
-export type ThreadTranscriptEntry =
-	| { readonly type: 'hookRun'; readonly entryId: string; readonly turnId: string; readonly run: ChatHookRun; }
-	| { readonly type: "item"; readonly entryId: string; readonly turnId: string; readonly item: ThreadItem; readonly transient: boolean; }
-	| { readonly type: "turnPlan"; readonly entryId: string; readonly turnId: string; readonly plan: PlanUpdate; }
-	| { readonly type: "turnError"; readonly entryId: string; readonly turnId: string; readonly error: TurnError; }
-	| { readonly type: "toolOutput"; readonly entryId: string; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string; };
-
-export interface ChatHookRun {
-	readonly runId: string;
-	readonly hookId: string;
-	readonly event: string;
-	readonly status: { readonly type: 'running' | 'continued'; } | { readonly type: 'denied' | 'cancelled'; readonly reason: string; } | { readonly type: 'failed'; readonly message: string; };
-	readonly startedAtUnixMs: number;
-	readonly durationMs: number;
-	readonly turnId: string | null;
-	readonly toolCallId: string | null;
-	readonly toolName: string | null;
-}
-
 /** User-facing Hook feedback; process evidence remains in Execution trace. */
 export interface IChatHookPart {
 	readonly kind: 'hook';
@@ -376,38 +118,6 @@ export interface IChatHookPart {
 	readonly stopReason?: string;
 	readonly systemMessage?: string;
 	readonly toolDisplayName?: string;
-}
-
-export interface ThreadTranscriptSnapshot {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly durableSequence: number;
-	readonly revision: number;
-	readonly entries: readonly ThreadTranscriptEntry[];
-}
-
-export type ThreadTranscriptChange =
-	| { readonly type: "upsert"; readonly entry: ThreadTranscriptEntry; }
-	| { readonly type: "remove"; readonly entryIds: readonly string[]; }
-	| { readonly type: "clearTransient"; };
-
-export interface ThreadTranscriptUpdateEnvelope {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly durableSequence: number;
-	readonly revision: number;
-	readonly changes: readonly ThreadTranscriptChange[];
-}
-
-export interface ThreadRead {
-	readonly thread: Thread;
-	readonly transcript: ThreadTranscriptSnapshot;
-}
-
-export interface ThreadSubscription {
-	readonly thread: Thread;
-	readonly transcript: ThreadTranscriptSnapshot;
-	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
 export interface StartTurnOptions {

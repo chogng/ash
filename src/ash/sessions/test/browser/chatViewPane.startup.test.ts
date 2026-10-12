@@ -1,4 +1,4 @@
-import { IExecutionSettingsService } from '../../../platform/execution/common/executionSettingsService.js';
+import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -67,7 +67,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
 	services.registerInstance(ILanguageModelsService, chat);
-	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: () => new Promise(() => { }), read: () => new Promise(() => { }), setEnabled: () => new Promise(() => { }) });
 	services.registerInstance(IContextViewService, contextViewService);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);

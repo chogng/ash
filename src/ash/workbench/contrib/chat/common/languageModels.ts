@@ -1,11 +1,11 @@
-import type { ModelListResult, ProviderListResult } from '../../../../../../.build/protocol/typescript/index.js';
+import type { AgentModelCatalog, AgentModelProviders } from '../../../../platform/agentHost/common/agentModels.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import { IModelApi, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/sessions/common/sessionApi.js';
-import type { ModelPreferencesUpdate } from '../../../../platform/sessions/common/sessionApi.js';
-import type { ApprovalReviewModelSelection } from '../../../../platform/sessions/common/sessionApi.js';
+import { IAgentModelsService, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/agentHost/common/agentModels.js';
+import type { ModelPreferencesUpdate } from '../../../../platform/agentHost/common/agentModels.js';
+import type { ApprovalReviewModelSelection } from '../../../../platform/agentHost/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
 import { ILanguageModelsConfigurationService } from './languageModelsConfiguration.js';
@@ -56,7 +56,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	private modelAccountConnections: ReadonlySet<string> | undefined;
 	private providerState = '[]';
 	private readonly externalScopes = new Map<string, string | null>();
-	constructor(@IModelApi private readonly modelApi: IModelApi,
+	constructor(@IAgentModelsService private readonly modelApi: IAgentModelsService,
 		@IAppServerApi private readonly appServer: IAppServerApi, @IServerEventApi events: IServerEventApi,
 		@ILanguageModelsConfigurationService private readonly preferences: ILanguageModelsConfigurationService,
 		@IAccountService private readonly accounts: IAccountService) {
@@ -106,7 +106,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		const models = await this.modelApi.listProviderModels(connection);
 		if (this.modelCatalogLoad) { await this.modelCatalogLoad; }
 		await this.refreshModels();
-		return models.map(modelCatalogEntry);
+		return models;
 	}
 	public async listModels(): Promise<readonly ModelCatalogEntry[]> {
 		const catalog = await this.listModelCatalog();
@@ -224,15 +224,15 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		}
 	}
 
-	private acceptModelCatalog(snapshot: ModelListResult, providers: ProviderListResult): void {
+	private acceptModelCatalog(snapshot: AgentModelCatalog, providers: AgentModelProviders): void {
 		const identities = new Set<string>();
 		const catalog = snapshot.models.map(entry => {
 			const identity = modelRefIdentity(entry.model);
 			if (identities.has(identity)) { throw new Error(`Model catalog contains duplicate entry '${entry.model.provider}/${entry.model.model}'`); }
 			identities.add(identity);
-			return modelCatalogEntry(entry);
+			return entry;
 		});
-		const scopes = snapshot.catalog_scopes ?? [];
+		const scopes = snapshot.scopes ?? [];
 		const scopeChanged = scopes.some(scope => this.externalScopes.get(scope.connection) !== scope.identity);
 		this.externalScopes.clear();
 		for (const scope of scopes) { this.externalScopes.set(scope.connection, scope.identity); }
@@ -252,7 +252,7 @@ function accountCatalogScope(account: AccountState, modelConnections: ReadonlySe
 	return JSON.stringify(account.accounts.filter(entry => !modelConnections || modelConnections.has(entry.provider)).map(entry => JSON.stringify([entry.provider, entry.accountId, entry.organization, entry.plan, entry.status])).sort());
 }
 
-function modelProviderStatuses(result: ProviderListResult): ModelProviderCredentialStatus[] {
+function modelProviderStatuses(result: AgentModelProviders): ModelProviderCredentialStatus[] {
 	return result.providers.map(provider => ({
 		provider: provider.provider,
 		connection: provider.connection,
@@ -264,25 +264,6 @@ function modelProviderStatuses(result: ProviderListResult): ModelProviderCredent
 		apiKeyPolicy: provider.apiKeyPolicy,
 		apiKeyConfigured: provider.apiKeyConfigured,
 	}));
-}
-
-function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
-	return Object.freeze({
-		model: Object.freeze({ ...entry.model }),
-		displayName: entry.display_name,
-		inputModalities: entry.settings.input_modalities ? Object.freeze([...entry.settings.input_modalities]) : null,
-		retirement: entry.retirement ? Object.freeze({ shutdownDate: entry.retirement.shutdown_date }) : undefined,
-		description: entry.description,
-		defaultContextWindow: entry.default_context_window,
-		maximumContextWindow: entry.maximum_context_window,
-		accelerationOptions: Object.freeze(entry.acceleration_options.map(option => Object.freeze({ ...option }))),
-		selectedAcceleration: entry.selected_acceleration,
-		longContext: entry.long_context,
-		...(entry.discovered === true ? { discovered: true } : {}),
-		contextWindow: entry.context_window,
-		supportedReasoningEfforts: Object.freeze(entry.supported_reasoning_efforts.map(option => Object.freeze({ ...option }))),
-		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {}),
-	});
 }
 
 function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly ModelCatalogEntry[]): boolean {

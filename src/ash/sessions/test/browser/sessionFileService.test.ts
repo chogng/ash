@@ -58,6 +58,16 @@ test('Session files preserve their original directory through selection, directo
 			},
 		};
 		using files = services.createInstance(SessionFileService, fileHost);
+		const restoredRoot = 'C:/managed/restored';
+		provider.items[0] = {
+			...provider.items[0]!,
+			chats: [...provider.items[0]!.chats, { threadId: 'restored-thread', status: 'active', origin: { type: 'fork', parentThreadId: 'first-thread', parentSequence: 1 }, workspace: { authorityId: 'local', root: restoredRoot } }],
+		};
+		await sessions.openThread('first', 'restored-thread');
+		assert.equal(workspace.getWorkspace().folders[0]!.uri.toString(), URI.file(restoredRoot).toString());
+		await files.readFile(URI.file(`${restoredRoot}/main.ts`));
+		assert.deepEqual(calls.pop(), { sessionDirectory: { sessionId: 'first', path: restoredRoot }, path: 'main.ts' });
+		await sessions.openThread('first', 'first-thread');
 		const originalFolder = workspace.getWorkspace().folders[0]!;
 		const first = URI.file('C:/sessions/first/main.ts');
 		await files.resolvePathIdentity(first);

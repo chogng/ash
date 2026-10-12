@@ -1,6 +1,6 @@
 import { AppServerMessageHistoryService } from '../../messageHistory/browser/appServerMessageHistoryService.js';
 import { createExtensionBackendApi } from './extensionBackendApi.js';
-import { createAppServerExecutionSettingsApi } from '../../execution/browser/executionSettingsApi.js';
+import { createAppServerExecutionSettingsService } from './appServerExecutionSettingsService.js';
 import { AppServerSymphonyService } from '../../symphony/browser/appServerSymphonyService.js';
 import { createAppServerInstructionService } from '../../instructions/browser/appServerInstructionService.js';
 import { createAppServerFileSearchApi } from '../../search/browser/fileSearchApi.js';
@@ -25,7 +25,8 @@ import { createAppServerDiffApi } from "../../diff/browser/diffApi.js";
 import { createAppServerSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import { createAppServerContentSearchApi, createAppServerContentSearchConfigurationApi } from "../../search/browser/searchApi.js";
-import { createAppServerModelApi, createAppServerSessionApi, createAppServerThreadApi, createAppServerTurnApi } from "../../sessions/browser/sessionApi.js";
+import { createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from "./appServerAgentService.js";
+import { createAppServerAgentModelsService } from "./appServerAgentModels.js";
 import { AppServerTerminalProcessService } from "../../terminal/browser/appServerTerminalProcessService.js";
 import { createAppServerTypstApi } from "../../typst/browser/typstApi.js";
 import { createAppServerDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
@@ -106,11 +107,11 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
 		approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 		accounts: createAppServerAccountApi(connection, connectorHostServices),
-		session: createAppServerSessionApi(connection),
+		session: createAppServerAgentSessionService(connection),
 		teams: createAppServerTeamApi(connection),
-		model: createAppServerModelApi(connection),
-		thread: createAppServerThreadApi(connection),
-		turn: createAppServerTurnApi(connection),
+		model: createAppServerAgentModelsService(connection),
+		thread: createAppServerAgentThreadService(connection),
+		turn: createAppServerAgentTurnService(connection),
 		turnChanges: createAppServerTurnChangesApi(connection),
 		skills: createAppServerSkillOperations(connection),
 		instructions: createAppServerInstructionService(connection),
@@ -145,7 +146,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		github: new AppServerGitHubService(connection),
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
 		traceSettings: createAppServerTraceSettingsApi(connection),
-		executionSettings: createAppServerExecutionSettingsApi(connection),
+		executionSettings: createAppServerExecutionSettingsService(connection),
 		hooks: createAppServerHooksApi(connection),
 	};
 }

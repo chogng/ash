@@ -1,10 +1,14 @@
+import { ITerminalProfileService } from '../../common/terminal.js';
+import { TerminalProfileService } from '../../browser/terminalProfileService.js';
+import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { TerminalCommandId } from '../../common/terminal.js';
 import { setupTerminalMenus } from '../../browser/terminalMenus.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { test, suite, suiteTeardown } from "mocha";
+import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../base/test/common/utils.js";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
@@ -51,6 +55,8 @@ suiteTeardown(() => {
 });
 
 setupTerminalMenus();
+const { registerTerminalActions } = await import("../../browser/terminalActions.js");
+registerTerminalActions();
 
 let shownProfileActions: readonly IAction[] = [];
 let shownProfileAnchor: unknown;
@@ -247,6 +253,8 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 		...toDisposable(() => { }),
 	});
 	services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None } as ITerminalProcessService);
+	services.registerInstance(ITerminalProfileService, resources.add(services.createInstance(TerminalProfileService)));
 	services.registerInstance(IWorkbenchLayoutService, resources.add(services.createInstance(WorkbenchLayout, browserEnvironment.window.document.body, { initialDimension: new Dimension(800, 600) })));
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as import('../../../../services/preferences/common/preferences.js').IPreferencesService);
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
@@ -294,64 +302,105 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 });
 
 
-test('Terminal context commands resolve captured and serialized identities through the current window', async () => {
-	const { registerTerminalActions } = await import('../../browser/terminalActions.js');
-	const { InstanceContext } = await import('../../browser/terminalContextMenu.js');
-	const { ITerminalService } = await import('../../browser/terminal.js');
-	const { Disposable } = await import('../../../../../base/common/lifecycle.js');
-	registerTerminalActions();
-	const effects: unknown[] = [];
-	const create = (instanceId: number) => ({
-		...Disposable.None, instanceId, id: `terminal-instance-${instanceId}`, state: 'exited', xterm: undefined,
-		dirId: 'workspace', processId: 100 + instanceId, initialCwd: '/workspace', title: 'Shell',
-		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, exitCode: 0,
-		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
-		xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
-		start() { }, attachToElement() { }, detachFromElement() { }, async sendText() { }, async processBinary() { }, resize() { },
-		async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
-	} satisfies ITerminalInstance);
-	const first = create(1);
-	const second = create(2);
-	const instances: ITerminalInstance[] = [first, second];
-	let active: ITerminalInstance | undefined = second;
-	using services = new InstantiationService();
-	services.registerInstance(ITerminalService, {
-		...Disposable.None, instances, get activeInstance() { return active; },
-		onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
-		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
-		setActiveInstance: instance => { active = instance; }, moveTerminal() { },
-		closeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); },
-		relaunchTerminal: async (instance, dimensions) => { effects.push(['relaunch', instance.instanceId, dimensions]); },
+suite('Terminal context command lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('Terminal context commands resolve captured and serialized identities through the current window', async () => {
+		const { InstanceContext } = await import('../../browser/terminalContextMenu.js');
+		const { ITerminalService } = await import('../../browser/terminal.js');
+		const { Disposable } = await import('../../../../../base/common/lifecycle.js');
+		const effects: unknown[] = [];
+		const create = (instanceId: number) => ({
+			...Disposable.None, instanceId, id: `terminal-instance-${instanceId}`, state: 'exited', xterm: undefined,
+			dirId: 'workspace', processId: 100 + instanceId, initialCwd: '/workspace', title: 'Shell',
+			profile: { profileId: 'shell', title: 'Shell', isDefault: true }, exitCode: 0,
+			onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
+			xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
+			start() { }, attachToElement() { }, detachFromElement() { }, async sendText() { }, async processBinary() { }, resize() { },
+			async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
+		} satisfies ITerminalInstance);
+		const first = create(1);
+		const second = create(2);
+		const instances: ITerminalInstance[] = [first, second];
+		let active: ITerminalInstance | undefined = second;
+		using services = new InstantiationService();
+		services.registerInstance(ITerminalService, {
+			...Disposable.None, instances, get activeInstance() { return active; },
+			onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
+			getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
+			setActiveInstance: instance => { active = instance; }, moveTerminal() { },
+			closeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); },
+			relaunchTerminal: async (instance, dimensions) => { effects.push(['relaunch', instance.instanceId, dimensions]); },
+		});
+		using commands = new CommandService(services);
+		const context = new InstanceContext(first);
+		assert.deepEqual(JSON.parse(JSON.stringify(context)), { $mid: 15, instanceId: 1 });
+		assert.deepEqual(Object.keys(context), ['instanceId']);
+		await commands.executeCommand(TerminalCommandId.Clear, context);
+		await commands.executeCommand(TerminalCommandId.Clear, context.toJSON());
+		await commands.executeCommand(TerminalCommandId.Clear, second.id);
+		assert.equal(active, second);
+		await commands.executeCommand(TerminalCommandId.Relaunch, context);
+		assert.deepEqual(effects, [['clear', 1], ['clear', 1], ['clear', 2], ['relaunch', 1, { cols: 80, rows: 24 }]]);
+		for (const invalid of [{ $mid: 15, instanceId: '1' }, { $mid: 15, instanceId: -1 }, { $mid: 1, instanceId: 1 }, { instanceId: 1 }]) {
+			await assert.rejects(commands.executeCommand(TerminalCommandId.Kill, invalid), /Invalid terminal instance context/);
+		}
+		await commands.executeCommand(TerminalCommandId.Kill, context);
+		assert.deepEqual(effects.at(-1), ['close', 1]);
+		await assert.rejects(commands.executeCommand(TerminalCommandId.Clear, context), /This terminal has been closed/);
+		assert.equal(instances.length, 1);
 	});
-	using commands = new CommandService(services);
-	const context = new InstanceContext(first);
-	assert.deepEqual(JSON.parse(JSON.stringify(context)), { $mid: 15, instanceId: 1 });
-	assert.deepEqual(Object.keys(context), ['instanceId']);
-	await commands.executeCommand(TerminalCommandId.Clear, context);
-	await commands.executeCommand(TerminalCommandId.Clear, context.toJSON());
-	await commands.executeCommand(TerminalCommandId.Clear, second.id);
-	assert.equal(active, second);
-	await commands.executeCommand(TerminalCommandId.Relaunch, context);
-	assert.deepEqual(effects, [['clear', 1], ['clear', 1], ['clear', 2], ['relaunch', 1, { cols: 80, rows: 24 }]]);
-	for (const invalid of [{ $mid: 15, instanceId: '1' }, { $mid: 15, instanceId: -1 }, { $mid: 1, instanceId: 1 }, { instanceId: 1 }]) {
-		await assert.rejects(commands.executeCommand(TerminalCommandId.Kill, invalid), /Invalid terminal instance context/);
-	}
-	await commands.executeCommand(TerminalCommandId.Kill, context);
-	assert.deepEqual(effects.at(-1), ['close', 1]);
-	await assert.rejects(commands.executeCommand(TerminalCommandId.Clear, context), /This terminal has been closed/);
-	assert.equal(instances.length, 1);
-});
 
-test('Terminal context action runner forwards the focused target and complete selection', async () => {
-	const { InstanceContext, TerminalContextActionRunner } = await import('../../browser/terminalContextMenu.js');
-	const contexts = [1, 2].map(instanceId => new InstanceContext({ instanceId } as ITerminalInstance));
-	let args: readonly unknown[] = [];
-	using runner = new TerminalContextActionRunner();
-	await runner.run({ id: 'selected', label: 'Selected', tooltip: '', enabled: true, run: (...values) => { args = values; } }, contexts);
-	assert.deepEqual(args, [contexts[0], contexts]);
-	const error = new Error('action failed');
-	let reported: unknown;
-	using listener = runner.onDidRun(event => { reported = event.error; });
-	await runner.run({ id: 'failed', label: 'Failed', tooltip: '', enabled: true, run: async () => { throw error; } }, contexts);
-	assert.equal(reported, error);
+	test('Terminal context action runner forwards the focused target and complete selection', async () => {
+		const { InstanceContext, TerminalContextActionRunner } = await import('../../browser/terminalContextMenu.js');
+		const contexts = [1, 2].map(instanceId => new InstanceContext({ instanceId } as ITerminalInstance));
+		let args: readonly unknown[] = [];
+		using runner = new TerminalContextActionRunner();
+		await runner.run({ id: 'selected', label: 'Selected', tooltip: '', enabled: true, run: (...values) => { args = values; } }, contexts);
+		assert.deepEqual(args, [contexts[0], contexts]);
+		const error = new Error('action failed');
+		let reported: unknown;
+		using listener = runner.onDidRun(event => { reported = event.error; });
+		await runner.run({ id: 'failed', label: 'Failed', tooltip: '', enabled: true, run: async () => { throw error; } }, contexts);
+		assert.equal(reported, error);
+	});
+
+	test('Terminal menu releases cancellation resources and keeps the runner through asynchronous completion', async () => {
+		const { openContextMenu, TerminalContextActionRunner } = await import('../../browser/terminalContextMenu.js');
+		const { Disposable } = await import('../../../../../base/common/lifecycle.js');
+		const { DeferredPromise } = await import('../../../../../base/common/async.js');
+		const { ModifierKeyEmitter } = await import('../../../../../base/browser/dom.js');
+		const menuDom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using modifiers = ModifierKeyEmitter.getInstance(menuDom.window as unknown as Window);
+			const ready = new DeferredPromise<void>();
+			const action: IAction = { id: 'async', label: 'Async', tooltip: '', enabled: true, run: () => ready.p };
+			const menu = { ...Disposable.None, onDidChange: Event.None, getActions: () => [['terminal', [action]] as const] };
+			let delegate: import('../../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
+			const service: IContextMenuService = {
+				contextMenuStyle: 'custom',
+				onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { },
+				showContextMenu: value => { delegate = value as typeof delegate; },
+			};
+			const show = () => openContextMenu(menuDom.window as unknown as Window,
+				new menuDom.window.MouseEvent('contextmenu'), { instanceId: 1 } as ITerminalInstance, menu, service);
+			show();
+			const canceled = delegate!.actionRunner;
+			assert.ok(canceled instanceof TerminalContextActionRunner);
+			delegate!.onHide!(true);
+			assert.equal(canceled.isDisposed, true);
+			show();
+			const runner = delegate!.actionRunner;
+			assert.ok(runner instanceof TerminalContextActionRunner);
+			let completed = 0;
+			using listener = runner.onDidRun(() => { completed++; });
+			const operation = runner.run(action, delegate!.getActionsContext!());
+			delegate!.onHide!(false);
+			assert.equal(runner.isDisposed, false);
+			await ready.complete();
+			await operation;
+			assert.equal(completed, 1);
+			assert.equal(runner.isDisposed, true);
+		} finally { menuDom.window.close(); }
+	});
+
 });

@@ -4,6 +4,14 @@ import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution } from '../../../../platform/terminal/common/terminal.js';
 import type { XtermTerminal } from './xterm/xtermTerminal.js';
+import type { ITerminalConfiguration } from '../common/terminal.js';
+
+export interface ITerminalConfigurationService extends IDisposable {
+	readonly config: Readonly<ITerminalConfiguration>;
+	readonly onConfigChanged: Event<void>;
+}
+
+export const ITerminalConfigurationService = createServiceIdentifier<ITerminalConfigurationService>('terminalConfigurationService');
 
 /** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {

@@ -19,7 +19,7 @@ import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widg
 import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
 import { NewChatContextAttachments } from './newChatContextAttachments.js';
 import { NewChatPermissionPicker } from './newChatPermissionPicker.js';
-import { approvalModeDefinition } from '../../../../platform/sessions/common/approvalModes.js';
+import { approvalModeDefinition } from '../../../../platform/agentHost/common/approvalModes.js';
 import { NewChatInputPasteTarget } from './newChatInputPasteTarget.js';
 import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';

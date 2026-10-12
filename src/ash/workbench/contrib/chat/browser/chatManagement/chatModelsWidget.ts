@@ -10,7 +10,7 @@ import { localize } from '../../../../../nls.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import type { CustomModelProvider, ModelProviderApiFormat } from '../../../../../platform/sessions/common/sessionApi.js';
+import type { CustomModelProvider, ModelProviderApiFormat } from '../../../../../platform/agentHost/common/agentModels.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import { ChatModelsViewModel, type ProviderModelItem } from './chatModelsViewModel.js';
 

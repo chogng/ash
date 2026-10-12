@@ -1,5 +1,5 @@
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { approvalModeDefinition } from '../../../../../platform/sessions/common/approvalModes.js';
+import { approvalModeDefinition } from '../../../../../platform/agentHost/common/approvalModes.js';
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
