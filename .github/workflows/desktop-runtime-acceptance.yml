@@ -48,6 +48,8 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: ". -> .build/cargo"
+          # Keep the verified input archives used to restore pruned native outputs.
+          cache-directories: third_party/.cache/v8
           shared-key: desktop-runtime-${{ matrix.runner }}
           save-if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
           cache-on-failure: true
@@ -61,6 +63,11 @@ jobs:
       - name: Fetch locked Rust graph for offline build-script metadata
         # V8's include discovery reads Cargo metadata offline, including other targets.
         run: cargo fetch --locked
+      - name: Revalidate V8 outputs after restoring the build cache
+        # Cargo can consider V8 fresh while profile/gn_out was pruned from the cache.
+        run: |
+          cargo clean --package v8 --profile dev-small
+          cargo clean --package v8 --profile ci-test
       - name: Build self-contained backend for Web and headless hosts
         run: pnpm run prepare:backend:web
       - name: Select the independently usable runtime package
