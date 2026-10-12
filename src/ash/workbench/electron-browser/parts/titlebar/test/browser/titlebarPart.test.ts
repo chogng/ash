@@ -91,7 +91,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		const options = {
 			windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() { }, registerVariables() { } },
 			menuService: menus,
-			contextMenuService: { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } },
+			contextMenuService: { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } },
 			localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
 		};
 		services.registerInstance(IContextMenuService, options.contextMenuService);

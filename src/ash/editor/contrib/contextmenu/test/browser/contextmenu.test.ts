@@ -38,6 +38,7 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 	using model = new TextModel('alpha\nbeta');
 	const requests: Array<IContextMenuDelegate | IContextMenuMenuDelegate> = [];
 	const contextMenuService: IContextMenuServiceContract = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu: request => { requests.push(request); },
@@ -77,6 +78,7 @@ test('ContextMenuController opens minimap settings from the scrollbar and closes
 	let hideCount = 0;
 	let onHide: ((didCancel: boolean) => void) | undefined;
 	const contextMenuService: IContextMenuServiceContract = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(request) {

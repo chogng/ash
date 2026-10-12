@@ -88,6 +88,7 @@ const { BrowserMenubarControl } = await import(
 );
 
 const contextMenuService: IContextMenuService = {
+	contextMenuStyle: 'custom' as const,
 	onDidShowContextMenu: Event.None,
 	onDidHideContextMenu: Event.None,
 	showContextMenu() { },
@@ -482,6 +483,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	let menuLabels: readonly string[] = [];
 	let openSubmenusImmediatelyOnHover: boolean | undefined;
 	const menuContextService: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(options) {

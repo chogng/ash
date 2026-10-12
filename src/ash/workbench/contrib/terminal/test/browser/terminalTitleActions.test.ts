@@ -56,6 +56,7 @@ let shownProfileActions: readonly IAction[] = [];
 let shownProfileAnchor: unknown;
 
 const contextMenuService: IContextMenuService = {
+	contextMenuStyle: 'custom' as const,
 	onDidShowContextMenu: Event.None,
 	onDidHideContextMenu: Event.None,
 	showContextMenu(options) {

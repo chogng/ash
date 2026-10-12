@@ -93,6 +93,8 @@ test('startup error removes the decorative splash before focusing its retry acti
 		assert.equal(dom.window.document.getElementById('ash-parts-splash'), null);
 		assert.equal(dom.window.document.querySelector('.ash-initial-shell-colors'), null);
 		assert.equal(dom.window.document.activeElement?.textContent, 'Retry');
+		assert.equal(dom.window.document.querySelector('section')!.style.backgroundColor, 'rgb(30, 30, 30)');
+		assert.equal(dom.window.document.querySelector('section')!.style.colorScheme, 'dark');
 	} finally {
 		console.error = originalError;
 		if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);

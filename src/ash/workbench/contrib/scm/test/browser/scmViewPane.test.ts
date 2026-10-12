@@ -1314,6 +1314,7 @@ async function createResourceGroupMenuFixture(renderContextMenu = false, groupLa
 			services.registerInstance(IContextViewService, contextView);
 		}
 		services.registerInstance(IContextMenuService, {
+			contextMenuStyle: 'custom' as const,
 			onDidShowContextMenu: contextMenu?.onDidShowContextMenu ?? Event.None,
 			onDidHideContextMenu: contextMenu?.onDidHideContextMenu ?? Event.None,
 			showContextMenu: delegate => {
@@ -2072,6 +2073,7 @@ function testFileIconThemeService(): IResourceIconRenderer {
 }
 
 const testContextMenuProvider: IContextMenuService = {
+	contextMenuStyle: 'custom' as const,
 	onDidShowContextMenu: Event.None,
 	onDidHideContextMenu: Event.None,
 	showContextMenu() { },

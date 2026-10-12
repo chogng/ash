@@ -91,6 +91,7 @@ await configuration.updateValue(HoverConfiguration.delay, 0);
 const contextViews = resources.add(new BrowserContextViewService(document.body));
 // Menu presentation and editor display are boundaries outside this component scenario.
 const menus: IContextMenuService = {
+	contextMenuStyle: 'custom',
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 };

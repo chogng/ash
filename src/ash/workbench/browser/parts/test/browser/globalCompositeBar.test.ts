@@ -54,6 +54,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	let placement: Pick<IContextMenuDelegate, 'anchorAlignment' | 'anchorAxisAlignment'> = {};
 	let sideBarLocation: SideBarLocation = 'left';
 	const contextMenu: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(options) {

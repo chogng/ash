@@ -67,6 +67,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, Creator,
 	let accountAnchor: HTMLElement | undefined;
 	const selectedActions: string[] = [];
 	const contextMenu: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu() { },
@@ -159,6 +160,7 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 	ownerDocument.body.replaceChildren();
 	let shownActions: readonly IAction[] = [];
 	const contextMenu: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(delegate) { shownActions = delegate.getActions?.() ?? []; },
@@ -204,6 +206,7 @@ test('Sessions Activity Bar requires its window Hover service during creation', 
 	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu() { },
@@ -221,7 +224,7 @@ test('navigation order survives a new window and includes new menu contributions
 	using configuration = new WorkbenchConfigurationService();
 	using contextViews = new BrowserContextViewService(document.body);
 	let shownActions: readonly IAction[] = [];
-	const contextMenu: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { shownActions = delegate.getActions!(); }, hideContextMenu() { } };
+	const contextMenu: IContextMenuService = { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { shownActions = delegate.getActions!(); }, hideContextMenu() { } };
 	using hovers = new HoverService(configuration, contextViews, contextMenu);
 	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
@@ -257,7 +260,7 @@ test('navigation and ordering labels use the Chinese language catalog', async ()
 		using configuration = new WorkbenchConfigurationService();
 		using contextViews = new BrowserContextViewService(ownerDocument.body);
 		let actions: readonly IAction[] = [];
-		const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { actions = delegate.getActions!(); }, hideContextMenu() { } };
+		const menus: IContextMenuService = { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { actions = delegate.getActions!(); }, hideContextMenu() { } };
 		using hovers = new HoverService(configuration, contextViews, menus);
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);

@@ -17,11 +17,12 @@ export class SettingsChangeRelauncher extends Disposable {
 
 	private startupTitleBarStyle: TitleBarStyleConfiguration | undefined;
 	private readonly ready: Promise<void>;
-	private readonly startupMenuStyle: 'custom' | 'system' | undefined;
+	private readonly startupMenuStyle: 'custom' | 'system';
 	private titleBarStyle: TitleBarStyleConfiguration;
 	private menuStyle: 'custom' | 'system';
 	private confirming = false;
-	private checkAfterReady = true;
+	private checkTitleBarAfterReady = true;
+	private checkMenuAfterReady = true;
 
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -39,7 +40,7 @@ export class SettingsChangeRelauncher extends Disposable {
 			if (this._store.isDisposed) return;
 			this.startupTitleBarStyle = titleBarStyle;
 			// Settings can change before this contribution is created or while Main answers.
-			if (this.checkAfterReady) this.checkForRestart();
+			if (this.requiresRestart(this.checkTitleBarAfterReady, this.checkMenuAfterReady)) this.checkForRestart();
 		}).catch(onUnexpectedError);
 	}
 
@@ -54,11 +55,15 @@ export class SettingsChangeRelauncher extends Disposable {
 		const titleBarStyle = this.configuration.getValue<TitleBarStyleConfiguration>(TitleBarSetting.TitleBarStyle);
 		const menuStyle = this.readMenuStyle(titleBarStyle);
 		// macOS switches context menu implementations immediately; other desktop hosts snapshot it at startup.
-		const changed = titleBarStyle !== this.titleBarStyle || (!isMacintosh && menuStyle !== this.menuStyle);
+		const titleBarChanged = titleBarStyle !== this.titleBarStyle;
+		const menuChanged = !isMacintosh && menuStyle !== this.menuStyle;
 		this.titleBarStyle = titleBarStyle;
 		this.menuStyle = menuStyle;
-		if (changed) {
-			if (this.startupTitleBarStyle === undefined) this.checkAfterReady = event.source !== ConfigurationTarget.DEFAULT;
+		if (titleBarChanged || menuChanged) {
+			if (this.startupTitleBarStyle === undefined) {
+				if (titleBarChanged) this.checkTitleBarAfterReady = event.source !== ConfigurationTarget.DEFAULT;
+				if (menuChanged) this.checkMenuAfterReady = event.source !== ConfigurationTarget.DEFAULT;
+			}
 			if (event.source !== ConfigurationTarget.DEFAULT) this.checkForRestart();
 		}
 	}
@@ -69,10 +74,10 @@ export class SettingsChangeRelauncher extends Disposable {
 		}
 	}
 
-	private requiresRestart(): boolean {
+	private requiresRestart(checkTitleBar = true, checkMenu = true): boolean {
 		if (this.startupTitleBarStyle === undefined) return false;
 		const titleBarStyle = this.configuration.getValue<TitleBarStyleConfiguration>(TitleBarSetting.TitleBarStyle);
-		return titleBarStyle !== this.startupTitleBarStyle || (!isMacintosh && this.startupMenuStyle !== undefined && this.readMenuStyle(titleBarStyle) !== this.startupMenuStyle);
+		return (checkTitleBar && titleBarStyle !== this.startupTitleBarStyle) || (checkMenu && !isMacintosh && this.readMenuStyle(titleBarStyle) !== this.startupMenuStyle);
 	}
 
 	private async confirmRestart(): Promise<void> {

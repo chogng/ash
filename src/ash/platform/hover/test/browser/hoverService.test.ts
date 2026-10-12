@@ -240,6 +240,7 @@ test('HoverService resolves delayed content and position once at display time', 
 });
 
 class TestContextMenuService extends Disposable implements IContextMenuService {
+	readonly contextMenuStyle = 'custom';
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;

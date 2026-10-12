@@ -149,6 +149,7 @@ const commands = resources.add(new CommandService(services));
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
 // Context menus and global layout are outside this content-focus scenario.
 services.registerInstance(IContextMenuService, {
+	contextMenuStyle: 'custom',
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 });

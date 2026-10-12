@@ -385,7 +385,9 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				let key: string;
 				if (snapshot.kind === 'text') {
 					const resource = URI.parse(snapshot.resource);
-					const reference = await this.models.acquire({ resource }, new AbortController().signal);
+					let reference: Awaited<ReturnType<ITextModelResourceService['acquire']>>;
+					try { reference = await this.models.acquire({ resource }, new AbortController().signal); }
+					catch (error) { if (error instanceof FileNotFoundError) { continue; } throw error; }
 					if (this.isDisposed) { reference.dispose(); return; }
 					key = extUriBiasedIgnorePathCase.getComparisonKey(resource);
 					const document = new ChatEditingModifiedDocumentEntry(resource, reference, () => this.remove(key), () => this.changed.fire(), { resource, original: snapshot.original, current: snapshot.current });
@@ -403,12 +405,12 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 					cancelled: true, deadline: undefined, revision: 0,
 				});
 			}
-			this.synchronizeSessions();
 		} catch (error) {
 			// Preserve unreadable saved data rather than overwriting it with a partial restore.
 			this.restorationFailed = true;
 			this.reportStorageError(error);
 		} finally {
+			if (!this.isDisposed) { this.synchronizeSessions(); }
 			this.initialized = true;
 			this.changed.fire();
 		}

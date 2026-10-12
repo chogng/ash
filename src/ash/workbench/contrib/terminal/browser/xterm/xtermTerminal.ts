@@ -315,7 +315,7 @@ export class XtermTerminal extends Disposable {
 		if (this.element.clientWidth <= 0 || this.element.clientHeight <= 0) return;
 		try {
 			const dimensions = this.fitAddon.proposeDimensions();
-			if (dimensions) void this.resizeDebouncer.resize(Math.min(512, dimensions.cols), Math.min(512, dimensions.rows), false);
+			if (dimensions) void this.resizeDebouncer.resize(Math.min(512, dimensions.cols), Math.min(512, dimensions.rows), false).catch(onUnexpectedError);
 		} catch {
 			return;
 		}

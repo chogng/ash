@@ -68,6 +68,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, new MenuService(commands, context));
 	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { },
 	});
 	using layout = services.createInstance(TerminalTabbedView, parent);

@@ -1,7 +1,8 @@
 import { addDisposableListener, h } from '../../base/browser/dom.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { localize } from '../../nls.js';
-import { removePartsSplash } from '../contrib/splash/browser/splash.js';
+import { readBrowserPartsSplash, removePartsSplash } from '../contrib/splash/browser/splash.js';
+import { isDarkColorScheme } from '../../platform/theme/common/theme.js';
 
 /**
  * Shows startup failures before Workbench services can report them.
@@ -12,6 +13,14 @@ export function showStartupError(error: unknown, writeClipboard: (text: string) 
 	console.error('Unable to start Ash', error);
 	const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 	const message = h(document, 'section');
+	// Workbench may have disposed its theme binding before handing startup to this view.
+	const colors = readBrowserPartsSplash(window);
+	Object.assign(message.style, {
+		minHeight: '100vh',
+		backgroundColor: colors.colorInfo.background,
+		color: colors.colorInfo.foreground,
+		colorScheme: isDarkColorScheme(colors.baseTheme) ? 'dark' : 'light',
+	});
 	const title = h(document, 'h1');
 	title.setAttribute('role', 'alert');
 	title.textContent = localize('workbench.startupError.title', 'Unable to start Ash');

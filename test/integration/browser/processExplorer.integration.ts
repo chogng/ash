@@ -52,7 +52,7 @@ services.registerInstance(IThemeService, theme);
 registerTestComponentServices(services);
 services.registerInstance(IKeybindingService, StandaloneServices.get(IKeybindingService));
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
-const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { } };
+const menus: IContextMenuService = { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { } };
 services.registerInstance(IContextMenuService, menus);
 const views = resources.add(new BrowserContextViewService(document.body));
 services.registerInstance(IHoverService, resources.add(new HoverService(configuration, views, menus)));

@@ -54,7 +54,7 @@ class ImageFixture extends Disposable {
 		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
-		this.services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
+		this.services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });
 		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!({ instantiationService: this.services }, 'Image preview') as ImagePreview);
 		this.preview.create(this.browser.window.document.body);

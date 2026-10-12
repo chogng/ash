@@ -1,6 +1,24 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`checkpoint cancellation keeps the current chat and restoration opens the backend result (${locale})`, async ({ page }) => {
+		await page.goto(`/chatEditing.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		const restore = page.getByRole('button', { name: 'Restore checkpoint', exact: true });
+		await restore.click();
+		const picker = page.getByRole('combobox');
+		await expect(picker).toHaveAttribute('aria-label', locale === 'en' ? 'Choose a checkpoint to restore into a new chat' : '选择要恢复到新对话的检查点');
+		await page.keyboard.press('Escape');
+		await expect(restore).toBeFocused();
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.checkpointState())).toEqual({ requests: [], opened: [] });
+		await restore.click();
+		await picker.fill(locale === 'en' ? 'Before' : '之前');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.checkpointState().opened)).toEqual(['restored']);
+		const request = await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().requests[0]);
+		expect(request).toMatchObject({ sessionId: 'session', threadId: 'source', itemId: 'message', boundary: 'before' });
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.snapshot().texts)).toEqual(['first change', 'second change']);
+	});
 	test(`pending reviews survive a window reload and decisions remain scoped (${locale})`, async ({ page }) => {
 		await page.goto(`/chatEditing.html?locale=${locale}`);
 		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
@@ -59,3 +77,15 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.snapshot())).toEqual({ entries: [['/workspace/second.txt']], texts: ['original', 'second change'] });
 	});
 }
+
+test('a checkpoint result does not steal focus from a chat selected during restoration', async ({ page }) => {
+	await page.goto('/chatEditing.html?restoreSlow');
+	await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+	await page.getByRole('button', { name: 'Restore checkpoint', exact: true }).click();
+	await page.getByRole('combobox').fill('After');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.checkpointState().requests.length)).toBe(1);
+	await page.evaluate(() => { window.ashChatEditingIntegration.switchChat(); window.ashChatEditingIntegration.finishRestore(); });
+	await expect(page.locator('.ash-aria-status')).toContainText(['Checkpoint restored in a new chat.', '']);
+	expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().opened)).toEqual([]);
+});

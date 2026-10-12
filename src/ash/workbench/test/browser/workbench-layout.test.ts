@@ -1501,7 +1501,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	panelServices.registerInstance(PanelLocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
 	panelServices.registerInstance(IMenuService, menuService);
 	assert.throws(() => panelServices.createInstance(PanelPart, dom.window.document.body), /contextMenuService/);
-	panelServices.registerInstance(IContextMenuService, { ...contextMenuProvider, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None, hideContextMenu() { } });
+	panelServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', ...contextMenuProvider, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None, hideContextMenu() { } });
 	const panel = disposables.add(registerContainerServices(panelServices).createInstance(PanelPart, dom.window.document.body));
 	assert.deepEqual([panel.minimumWidth, panel.minimumHeight], [300, 77]);
 	dom.window.document.body.append(panel.domNode);
@@ -2179,7 +2179,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
 	const commands = resources.add(new CommandService(services));
 	services.registerInstance(IMenuService, new MenuService(commands, context));
-	services.registerInstance(IContextMenuService, { showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None });
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None });
 	const panel = resources.add(registerContainerServices(services).createInstance(PanelPart, browserEnvironment.window.document.body));
 	panel.setVisible(false);
 	services.registerInstance(IWorkbenchLayoutService, {

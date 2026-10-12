@@ -201,6 +201,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	};
 	const contextMenuEvents = new Emitter<void>();
 	const contextMenuService: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: contextMenuEvents.event,
 		onDidHideContextMenu: contextMenuEvents.event,
 		showContextMenu() { },

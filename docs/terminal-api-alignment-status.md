@@ -1,5 +1,46 @@
 # Terminal API 对齐状态
 
+## Browser 列表、菜单与尺寸调度（2026-10-11）
+
+用户切换／拖动终端列表、打开实例菜单或调整面板 → `TerminalViewPane` → `TerminalTabbedView`／`TerminalTabList`、当前窗口命令、`XtermTerminal` → 实例身份与原 `TerminalService`／进程管理器 → 指定实例操作与最终屏幕／PTY 尺寸。实例集合、活动项和进程状态仍只有原服务／实例 owner；本批独立实现三个缺失 browser 文件，未新建 backend、分组或配置状态。
+
+| 准确路径（相对 `src/ash`） | 存在关系与本批动作 | 生产入口／可观察结果 |
+| --- | --- | --- |
+| `workbench/contrib/terminal/browser/terminalTabsList.ts` | 上游同路径缺失；迁入现有 TabList 的终端行渲染、监听、激活、关闭、拖动与窄模式 | Tabbed View 经 DI 创建；保留原实例身份与键盘导航，列表菜单支持鼠标和 Shift+F10 |
+| `workbench/contrib/terminal/browser/terminalContextMenu.ts` | 上游同路径缺失；实例上下文只保存数值身份，命令转发与菜单执行生命周期独立实现 | 实例列表菜单；活动项变化后仍操作捕获目标，异步动作结束后释放 runner |
+| `workbench/contrib/terminal/browser/terminalResizeDebouncer.ts` | 上游同路径缺失；一份待调度尺寸负责屏幕重排，使用原 scheduler／idle 基础能力 | xterm fit；大 normal 缓冲区即刻调整行数，合并列重排，focus 前 flush，dispose 取消 |
+| `workbench/contrib/terminal/browser/terminalTabbedView.ts` | 双方已有；退出列表交互／行监听 owner，只保留 SplitView 几何、可见性与宽度吸附 | View → 唯一列表；旧列表实现和重复事件订阅退出 |
+| `workbench/contrib/terminal/browser/terminalActions.ts`、`terminalMenus.ts` | 双方已有；新增目标实例菜单及既有 Focus/Clear/Kill/Relaunch 的目标上下文解析 | 原标题命令不带上下文的行为保留；带上下文的命令直接定位原实例，失效或非法身份拒绝 |
+| `workbench/contrib/terminal/browser/{terminal.ts,terminalInstance.ts}`、`common/terminal.ts` | 双方已有；只增加被菜单使用的标准 instanceId 与序列化上下文 | instanceId 从原实例编号派生，不是 OS PID，也不另存身份状态 |
+| `base/common/marshallingIds.ts`、`platform/actions/common/actions.ts` | 双方已有；只补 `TerminalContext` 标识及 `TerminalInstanceContext` MenuId | 现有命令序列化与 MenuService；下层不导入贡献 |
+| `workbench/contrib/terminal/browser/xterm/xtermTerminal.ts` | 双方已有；fit 提议尺寸交给新调度器，最终 resize 仍由原实例／管理器执行 | 解析后的屏幕与 scrollback 保留，未改变输入确认、读取或后端租约 |
+
+配套准入范围为终端 Tabs／标题动作单测、Tasks 的 FakeTerminalInstance（仅增加数值身份）、`test/integration/browser/terminal.integration{,.spec}.ts`、Chat 输入的实例 fixture（仅身份字段）、既有终端无障碍帮助、中文 `workbench.json`、本台账与 Terminal README。保护共享工作树的其他修改。没有批量复制上游代码、DOM、CSS 或创建没有本地消费者的文件。
+
+列表继续使用 Ash 已有 TabList 的 roving focus、滚动与拖动基础部件；不为名称一致换掉其 DOM。`TerminalTabList` 当前不具备完整上游 WorkbenchList 的多选、行编辑、分组标记、hover 与所有列表 hooks，因此只记录已迁移的真实职责。菜单上下文可序列化为 `$mid: 15` 与 `instanceId`；用户／插件命令边界验证身份，执行时只查当前窗口的实例服务。MenuService 的作用域反映所指终端的状态，不修改窗口活动项。运行／重连中的实例不提供 Relaunch；关闭的目标上下文不能转而操作其他终端。
+
+屏幕调度器使用一份待处理的列／行请求与原 RunOnceScheduler、可取消 idle 任务。显式 immediate 或短缓冲区同步更新；长缓冲区的可见屏幕先更新行数，横向重排在 100 ms 窗口中合并；隐藏请求在 idle 执行。focus 显式 flush，实例屏幕释放取消定时／idle 请求，回调内释放同样不能再调度。屏幕只调用既有 `instance.resize`，后端确认与尺寸请求取消仍归 `TerminalProcessManager`。
+
+验证：正常 `pnpm test:unit` 的 Terminal 实例、Tabs／resize、标题／context 与 Tasks 共 157 项通过（48+4+4+101），runner 自测 9 项通过。Chromium Terminal 全量 52 项通过，新增 5 项覆盖固定菜单目标、中文／键盘焦点恢复、异步 Relaunch、长 scrollback 重排及 focus／dispose。Renderer 与终端定向浏览器类型检查通过。18 个本批 TS 文件格式检查通过；Tasks 文件在范围外的既有 search fixture 对象格式上仍未通过整文件检查，格式化差异不涉及本批新增身份字段，未清洗该无关区域。
+
+初次真实鼠标测试发现旧独立 Pane fixture 没有提供生产宿主负责的 flex 分配与 Pane.layout；新 `browser` 场景补上宿主几何，并绑定真实主题，不放宽 click 或尺寸断言。单屏幕 fixture 同样按宿主高度分配给屏幕，避免自动高度使行数变化断言无效。首轮中文菜单使用陈旧生成语言包，正常本地化准备恢复后用新产物验证。正常命令曾被范围外 `ash.extensions/languageFilter` 未知翻译阻塞，后续准备成功；正常浏览器全套类型检查最后被 `chatEditing.integration.ts:78` 的隐式 any 阻塞，终端以继承原 noEmit 配置的定向检查后运行原 runner，未修改该错误。未修改 Rust、协议或产品 CSS；运行环境为 macOS Chromium，未验证其他 OS 或真实 SSH。
+
+### Browser 目录剩余文件
+
+本批后生产 `.ts`／`.css` 同路径文件 18 个，上游缺失 47 个，仅 Ash 0 个。下面是完整路径调查；文件存在不表示公开 API 完整，调查项也不是无调用方文件的创建队列。
+
+| 职责链 | 仍缺的准确路径（相对 terminal/browser） |
+| --- | --- |
+| 实例创建／分组分屏 | `terminalInstanceService.ts`、`terminalGroupService.ts`、`terminalGroup.ts` |
+| 配置／profile／命令基础 | `terminalConfigurationService.ts`、`terminalProfileService.ts`、`terminalProfileResolverService.ts`、`terminalProfileQuickpick.ts`、`terminalCommands.ts`、`terminalEscapeSequences.ts`、`terminalEvents.ts` |
+| 编辑区承载／身份 | `terminalEditingService.ts`、`terminalEditorService.ts`、`terminalEditor.ts`、`terminalEditorInput.ts`、`terminalEditorSerializer.ts`、`terminalUri.ts` |
+| 状态、提示与图标 | `terminalStatusList.ts`、`terminalTooltip.ts`、`terminalIcons.ts`、`terminalIconPicker.ts`、`terminalTabsChatEntry.ts`、`widgets/terminalHoverWidget.ts`、`widgets/widgetManager.ts`、`widgets/widgets.ts`、`media/widgets.css`、`media/xterm.css` |
+| xterm 扩展职责 | `xterm-private.d.ts`、`xterm/decorationAddon.ts`、`xterm/decorationStyles.ts`、`xterm/lineDataEventAddon.ts`、`xterm/markNavigationAddon.ts`、`xterm/terminalFontRendering.css`、`xterm/terminalFontRendering.ts`、`xterm/xtermAddonImporter.ts` |
+| 后端／运行环境／Agent | `baseTerminalBackend.ts`、`remoteTerminalBackend.ts`、`remotePty.ts`、`terminalProcessExtHostProxy.ts`、`detachedTerminal.ts`、`environmentVariableInfo.ts`、`terminal.web.contribution.ts`、`agentHostTerminalService.ts`、`agentHostPty.ts`、`agentHostOutputChannel.ts`、`ahpTerminalCommandSource.ts`、`chatTerminalCommandMirror.ts` |
+| 上游浏览器路径测试辅助 | `terminalTestHelpers.ts`（尚无本地生产消费者，不能按缺失数预建） |
+
+后续沿现有入口分别闭合：创建／profile 选择先补配置和可信 profile 契约；分屏先确定实例创建与分组 owner，再接列表和屏幕几何；编辑区终端接现有 Editor 服务；状态／提示和 xterm 贡献从真实实例状态、解析与命令事件接入。现有分页轮询适配器与三处已批准 Ash 专属适配器不等于完整上游 backend／child-process 事件契约；Agent／remote 文件也不因路径缺失而提前创建。
+
 ## Clipboard 本批准入（2026-10-11）
 
 用户复制／粘贴终端文本 → 当前窗口命令和 `TerminalClipboardContribution` → 实例唯一 xterm 选区／`sendText` → 既有进程管理器与平台输入确认。屏幕仍拥有选区；剪贴板服务仍拥有宿主访问；贡献只拥有异步操作的实例身份与失效代次，不新建进程或输出副本。

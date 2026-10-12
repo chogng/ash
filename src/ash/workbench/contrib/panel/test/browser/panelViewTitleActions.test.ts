@@ -21,6 +21,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
 	browser.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let shownActions: readonly IAction[] = [];
 	const contextMenus: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu: options => { shownActions = options.getActions?.() ?? []; },

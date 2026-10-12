@@ -50,6 +50,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 	let onHide: (() => void) | undefined;
 	let closedMenus = 0;
 	const contextMenus: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(delegate) {

@@ -97,6 +97,7 @@ const writes: IFileWriteRequest[] = [];
 const unexpected = async (): Promise<never> => { throw new Error('Unexpected service call'); };
 let contextMenu: IContextMenuDelegate | undefined;
 services.registerInstance(IContextMenuService, {
+	contextMenuStyle: 'custom' as const,
 	onDidShowContextMenu: AshEvent.None,
 	onDidHideContextMenu: AshEvent.None,
 	showContextMenu: delegate => {

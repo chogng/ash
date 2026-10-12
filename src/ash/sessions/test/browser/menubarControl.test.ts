@@ -36,6 +36,7 @@ test('Sessions and Workbench menus keep product commands separate while sharing 
 	let shownActions: readonly IAction[] = [];
 	let onHide: (() => void) | undefined;
 	const contextMenus: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(delegate) {

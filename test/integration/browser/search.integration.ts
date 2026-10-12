@@ -102,6 +102,7 @@ let treeViewAction: IAction | undefined;
 let resultMenus: BrowserContextMenuService;
 // Existing toolbar scenarios retain their action; result menus exercise the production menu host.
 const menus: IContextMenuService = {
+	contextMenuStyle: 'custom',
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	showContextMenu: delegate => {
 		const action = delegate.getActions?.().find(action => action.id === 'search.treeView');

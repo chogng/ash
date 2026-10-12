@@ -25,6 +25,7 @@ test('Sessions account menu opens its own settings and account actions', async (
 		logout: async provider => { loggedOut.push(provider); },
 	};
 	const contextMenus: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(delegate) {
@@ -70,6 +71,7 @@ test('Sessions settings remain available when accounts cannot be loaded', async 
 		logout: async () => { },
 	};
 	const contextMenus: IContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(delegate) { actions = delegate.getActions?.() ?? []; },

@@ -13,7 +13,10 @@
 | `browser/terminalProcessManager.ts`                        | Shell 输入队列、UTF-8 分块、二进制顺序、尺寸合并、输入/尺寸确认、增量读取、双游标、分页排空、解析等待与取消 |
 | `browser/terminalView.ts`                                  | 可见性、初始化、标题 toolbar、屏幕 attach/detach 及焦点；屏幕由实例保留                                     |
 | `browser/xterm/xtermTerminal.ts`                           | 每实例一份屏幕：ANSI/VT 解析、alternate scroll、主题、选择、输入编码、fit、链接与命令标记                   |
-| `browser/terminalTabbedView.ts`                            | Tab 列表、选择、关闭、拖动与右侧分栏；服务仍是实例集合 owner                                                |
+| `browser/terminalTabbedView.ts`                            | 右侧分栏几何与宽度吸附；实例列表的渲染和交互归 TerminalTabList                                                |
+| `browser/terminalTabsList.ts`                              | 终端行渲染、状态监听、激活／关闭／拖动、键盘与实例菜单；复用 Ash TabList                                  |
+| `browser/terminalContextMenu.ts`                           | 只携带实例身份的动作上下文、菜单转发与异步执行释放                                                         |
+| `browser/terminalResizeDebouncer.ts`                       | 屏幕横向重排／隐藏 idle 调度；最终尺寸仍交给原实例与进程管理器                                               |
 | `browser/terminalActions.ts`、`terminalMenus.ts`           | 标准命令 ID 的静态注册与菜单；执行时从当前窗口 accessor 取得 View，不保存窗口回调                           |
 | `browser/terminalIcon.ts`                                  | Ash 可信 profile 标识的产品图标映射                                                                         |
 | `browser/media/terminal.css`、`terminalVoice.css`          | Ash 终端屏幕、Tab、标题与听写样式                                                                           |
@@ -65,3 +68,5 @@ Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共�
 终端无障碍贡献读取已解析的屏幕和滚动历史，提供随输出更新的只读视图与帮助，关闭后回到终端输入。`accessibility.verbosity.terminal` 控制输入标签中的帮助提示。贡献与屏幕同生命周期，内容提供者由无障碍对话框释放；查找贡献继续拥有终端焦点上下文。
 
 文本剪贴板由 `terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts` 随实例屏幕就绪挂载。复制只读原选区，粘贴调用既有宿主剪贴板服务与 `sendText(text, false, true)`；异步读取期间关闭、断线、退出或切换实例都会作废旧结果。输入不增加 Enter，遵守 child paste mode，并返回进程确认或失败。浏览器原生粘贴仍进入 xterm 原始输入；HTML／资源粘贴、自动复制与多行确认尚未接入。
+
+Browser 列表职责已从 Tabbed View 迁回 `terminalTabsList.ts`，View 仍拥有原屏幕附着与可见性。Shift+F10／鼠标实例菜单使用捕获的数值 instanceId；活动项变更不改变目标，消失的目标在当前窗口命令边界拒绝。原字符串 UI id 保留现有消费者，数值身份从实例编号派生；PID 随 Shell 替换而变化，不能代替实例身份。大 normal 缓冲区的屏幕横向重排经过 `TerminalResizeDebouncer`，focus flush，dispose 取消；PTY 尺寸确认仍由原管理器负责。完整标准列表 hooks、分组分屏、编辑区、配置／profile、状态／hover、其他 xterm Addon 与 backend 仍未完成，完整 browser 路径清单见台账。

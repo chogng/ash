@@ -1125,6 +1125,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		},
 	};
 	const contextMenuProvider: ContextMenuService = {
+		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu: options => {
@@ -2042,7 +2043,7 @@ function createSettingWidget(resources: import('../../../../../base/common/lifec
 	services.registerInstance(ClipboardServiceId, options.clipboardService);
 	services.registerInstance(ConfigurationServiceId, options.configurationService);
 	services.registerInstance(IContextViewService, options.contextViewProvider);
-	services.registerInstance(IContextMenuService, { ...options.contextMenuProvider, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { } });
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, ...options.contextMenuProvider, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { } });
 	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings }, services);
 }
 
@@ -2055,7 +2056,7 @@ test('Settings widgets require their scoped clipboard registration and clean up 
 	const configuration = resources.add(new WorkbenchConfigurationService());
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
-	services.registerInstance(IContextMenuService, { showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
 	assert.throws(() => instantiateSettingWidget(root, new DefaultSettings().get('editor.lineNumbers'), { onStatus() { } }, services), /clipboardService/);
 	assert.equal(root.querySelector('.ash-configuration-setting'), null);
 });

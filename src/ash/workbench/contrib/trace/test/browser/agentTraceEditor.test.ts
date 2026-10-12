@@ -32,7 +32,7 @@ suite('Execution Trace editor', () => {
 		try {
 			using services = new InstantiationService();
 			const actions: IAction[] = [];
-			services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+			services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 			using configuration = new InMemoryConfigurationService();
 			using context = new ContextKeyService();
 			services.registerInstance(IConfigurationService, configuration);
@@ -71,7 +71,7 @@ suite('Execution Trace editor', () => {
 		try {
 			using services = new InstantiationService();
 			const actions: IAction[] = [];
-			services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+			services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 			using configuration = new InMemoryConfigurationService();
 			using context = new ContextKeyService();
 			using changes = new Emitter<{ sessionId: string; agentTreeChanged: boolean; }>();
@@ -140,7 +140,7 @@ suite('Execution Trace editor', () => {
 		try {
 			using services = new InstantiationService();
 			const actions: IAction[] = [];
-			services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+			services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 			using configuration = new InMemoryConfigurationService();
 			using context = new ContextKeyService();
 			const requested = new DeferredPromise<void>();
@@ -180,7 +180,7 @@ suite('Execution Trace editor', () => {
 		try {
 			using services = new InstantiationService();
 			const actions: IAction[] = [];
-			services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+			services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 			using configuration = new InMemoryConfigurationService();
 			using context = new ContextKeyService();
 			using updates = new Emitter<ThreadUpdateEnvelope>();
@@ -237,7 +237,7 @@ suite('Execution Trace editor', () => {
 		try {
 			using services = new InstantiationService();
 			const actions: IAction[] = [];
-			services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+			services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 			using configuration = new InMemoryConfigurationService();
 			using context = new ContextKeyService();
 			using updates = new Emitter<ThreadUpdateEnvelope>();
@@ -283,7 +283,7 @@ suite('Execution Trace editor', () => {
 			try {
 				using services = new InstantiationService();
 				const actions: IAction[] = [];
-				services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+				services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 				using configuration = new InMemoryConfigurationService();
 				using context = new ContextKeyService();
 				const reading = new DeferredPromise<void>();
@@ -373,7 +373,7 @@ suite('Execution Trace editor', () => {
 			try {
 				using services = new InstantiationService();
 				const actions: IAction[] = [];
-				services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+				services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 				using configuration = new InMemoryConfigurationService();
 				using context = new ContextKeyService();
 				services.registerInstance(IConfigurationService, configuration);
@@ -431,7 +431,7 @@ suite('Execution Trace editor', () => {
 			try {
 				using services = new InstantiationService();
 				const actions: IAction[] = [];
-				services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+				services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 				using configuration = new InMemoryConfigurationService();
 				using context = new ContextKeyService();
 				const payload = new DeferredPromise<unknown>();
@@ -533,7 +533,7 @@ suite('Execution Trace editor', () => {
 		try {
 			using services = new InstantiationService();
 			const actions: IAction[] = [];
-			services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+			services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 			services.registerInstance(IConfigurationService, new InMemoryConfigurationService());
 			services.registerInstance(IContextKeyService, new ContextKeyService());
 			services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
@@ -563,7 +563,7 @@ suite('Execution Trace editor', () => {
 		try {
 			using services = new InstantiationService();
 			const actions: IAction[] = [];
-			services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
+			services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { }, showContextMenu: delegate => { actions.splice(0, actions.length, ...(delegate.getActions?.() ?? [])); } });
 			services.registerInstance(IConfigurationService, new InMemoryConfigurationService());
 			services.registerInstance(IContextKeyService, new ContextKeyService());
 			services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);

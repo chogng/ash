@@ -741,7 +741,7 @@ function createServices(store: DisposableStore, browser: JSDOM, search: ViewSear
 	const configuration = configured ?? store.add(new WorkbenchConfigurationService());
 	const services = store.add(new InstantiationService());
 	services.registerInstance(ICommandService, store.add(new CommandService(services)));
-	const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } };
+	const menus: IContextMenuService = { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } };
 	const contextView = store.add(new BrowserContextViewService(browser.window.document.body));
 	services.registerInstance(ContentSearchServiceId, {
 		search: (folder, query, options) => search.search(query, {

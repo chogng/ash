@@ -420,7 +420,7 @@ const delegate: ChatInputDelegate = {
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
-const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, [], {
+const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, [], {
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,

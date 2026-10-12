@@ -117,7 +117,7 @@ test('a cache from a different viewport renders colors until the current layout 
 	await expect.poll(async () => (await readSplash(page))?.layoutInfo?.width).toBe(await page.evaluate(() => innerWidth));
 });
 
-test('Sessions captures its own layout and removes its splash after reload', async ({ application, workbench, target }) => {
+test('Sessions captures its own layout and removes its splash after reload', async ({ application, workbench, target }, testInfo) => {
 	const workbenchPage = workbench.page;
 	await expect.poll(async () => (await readSplash(workbenchPage))?.layoutInfo?.partBounds.length ?? 0).toBeGreaterThan(0);
 	const previous = (await readSplash(workbenchPage))!;
@@ -144,4 +144,5 @@ test('Sessions captures its own layout and removes its splash after reload', asy
 	const marks = await sessionPage.evaluate(() => ({ shown: performance.getEntriesByName('ash.splash.shown')[0]?.startTime, removed: performance.getEntriesByName('ash.splash.removed')[0]?.startTime }));
 	expect(marks.shown).toBeDefined();
 	expect(marks.removed).toBeGreaterThanOrEqual(marks.shown!);
+	await sessionPage.screenshot({ path: testInfo.outputPath('sessions-layout.png') });
 });

@@ -157,7 +157,7 @@ test("Debug view initializes Chinese labels and retains its draft and collapsed 
 	}
 });
 
-const contextMenus: IContextMenuService = { onDidShowContextMenu: CommonEvent.None, onDidHideContextMenu: CommonEvent.None, showContextMenu() { }, hideContextMenu() { } };
+const contextMenus: IContextMenuService = { contextMenuStyle: 'custom' as const, onDidShowContextMenu: CommonEvent.None, onDidHideContextMenu: CommonEvent.None, showContextMenu() { }, hideContextMenu() { } };
 
 test("Debug variable editing uses its parent reference, refreshes watches, cancels, and restores focus", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");

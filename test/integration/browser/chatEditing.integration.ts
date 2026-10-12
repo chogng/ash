@@ -42,11 +42,20 @@ import { BrowserStorageService } from '../../../src/ash/workbench/services/stora
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { BrowserLifecycleService } from '../../../src/ash/workbench/services/lifecycle/browser/lifecycleService.js';
 import { MemoryTextFiles } from './memoryTextFiles.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { IChatService, type RestoreChatCheckpointOptions } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../../src/ash/workbench/browser/media/style.css';
 
 declare global {
 	interface Window {
-		ashChatEditingIntegration: { snapshot(): { entries: string[][]; texts: string[]; }; prepareReload(): Promise<void>; };
+		ashChatEditingIntegration: {
+			snapshot(): { entries: string[][]; texts: string[]; };
+			prepareReload(): Promise<void>;
+			checkpointState(): { requests: RestoreChatCheckpointOptions[]; opened: string[]; };
+			switchChat(): void;
+			finishRestore(): void;
+		};
 	}
 }
 
@@ -55,6 +64,7 @@ const locale = parameters.get('locale') ?? 'en';
 const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 setNlsMessages(locale, catalog.bundles);
 await import('../../../src/ash/workbench/contrib/chat/browser/chatEditing/chatEditingEditorActions.js');
+await import('../../../src/ash/workbench/contrib/chat/browser/chatEditing/chatEditingActions.js');
 
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
@@ -75,7 +85,7 @@ services.registerInstance(IDialogService, resources.add(new DialogService()));
 services.registerInstance(IBulkEditService, resources.add(services.createInstance(BulkEditService)));
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'chat-editing', flushInterval: 0 })));
 services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
-const lifecycle = resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: window, onError: error => console.error(error) }));
+const lifecycle = resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: window, onError: (error: unknown) => console.error(error) }));
 services.registerInstance(ILifecycleService, lifecycle);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
 services.registerInstance(INotificationService, resources.add(new NotificationService()));
@@ -86,6 +96,26 @@ services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickIn
 const commands = resources.add(new CommandService(services));
 const editing = resources.add(services.createInstance(ChatEditingService));
 services.registerInstance(IChatEditingService, editing);
+let activeChat = { sessionId: 'session', threadId: 'source' };
+const restoreRequests: RestoreChatCheckpointOptions[] = [];
+const opened: string[] = [];
+const restoring = parameters.has('restoreSlow') ? new DeferredPromise<void>() : undefined;
+services.registerInstance(IChatSessionNavigationService, {
+	getActiveConversation: () => activeChat,
+	getConversations: () => [], appendToActiveDraft() { }, captureActiveDraft: async () => undefined,
+	openConversation: async (sessionId, threadId) => { activeChat = { sessionId, threadId }; opened.push(threadId); },
+});
+// Durable message history is the external boundary of this UI fixture.
+services.registerInstance(IChatService, {
+	readCheckpoints: async () => parameters.has('unavailable')
+		? [{ itemId: 'message', turnId: 'turn', sourceThreadId: 'source', files: 'unavailable', unavailableReason: 'No Git snapshot' }]
+		: [{ itemId: 'message', turnId: 'turn', sourceThreadId: 'source', files: 'git' }],
+	restoreCheckpoint: async (options: RestoreChatCheckpointOptions) => {
+		restoreRequests.push(options);
+		if (restoring) { await restoring.p; }
+		return { sessionId: 'session', threadId: 'restored' };
+	},
+} as unknown as IChatService);
 resources.add(bindColorTheme(resources.add(new TestThemeService(locale === 'en' ? lightColorTheme : highContrastDarkColorTheme)), document.body));
 setARIAContainer(document.body);
 
@@ -101,7 +131,7 @@ if (!parameters.has('reopen')) {
 }
 await editing.finishTurn({ threadId: 'readiness', turnId: 'readiness' }, 'completed');
 
-for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#review', 'chatEditing.reviewChanges']] as const) {
+for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#review', 'chatEditing.reviewChanges'], ['#checkpoint', 'workbench.action.chat.restoreCheckpoint']] as const) {
 	resources.add(addDisposableListener(document.querySelector(selector)!, 'click', () => {
 		void commands.executeCommand(command).catch(error => {
 			document.querySelector('#error')!.textContent = String(error.message);
@@ -109,6 +139,9 @@ for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#revi
 	}));
 }
 window.ashChatEditingIntegration = {
+	checkpointState: () => ({ requests: restoreRequests, opened }),
+	switchChat: () => { activeChat = { sessionId: 'other-session', threadId: 'other-thread' }; },
+	finishRestore: () => { void restoring?.complete(); },
 	prepareReload: () => lifecycle.shutdown('reload'),
 	snapshot: () => ({
 		entries: editing.entries.map(entry => entry.resources.map(resource => resource.path)),

@@ -2,7 +2,27 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { ConfigUpdateParams, ModelPreferencesUpdateParams } from '../../../../../../.build/protocol/typescript/index.js';
-import { createAppServerModelApi } from '../../browser/sessionApi.js';
+import { createAppServerModelApi, createAppServerThreadApi } from '../../browser/sessionApi.js';
+
+test('message checkpoints and restoration use the existing typed session protocol', async () => {
+	const requests: { method: string; params: unknown; }[] = [];
+	const connection = {
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			return definition.method === 'session/thread/checkpoints'
+				? { checkpoints: [] }
+				: { type: 'thread', value: { session: { sessionId: 'session' }, threadId: 'restored' } };
+		},
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerThreadApi(connection);
+	assert.deepEqual(await api.checkpoints({ sessionId: 'session', threadId: 'source' }), { checkpoints: [] });
+	const result = await api.restoreMessage({ sessionId: 'session', threadId: 'source', itemId: 'message', boundary: 'before', title: 'Restored', commandId: 'restore-command' });
+	assert.equal(result.threadId, 'restored');
+	assert.deepEqual(requests, [
+		{ method: 'session/thread/checkpoints', params: { sessionId: 'session', threadId: 'source' } },
+		{ method: 'session/request', params: { sessionId: 'session', commandId: 'restore-command', request: { type: 'restoreMessage', threadId: 'source', itemId: 'message', boundary: 'before', title: 'Restored' } } },
+	]);
+});
 
 test('Model preferences send a targeted update with the current revision', async () => {
 	const writes: ModelPreferencesUpdateParams[] = [];
