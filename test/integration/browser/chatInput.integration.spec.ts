@@ -10,8 +10,8 @@ for (const locale of ['en', 'zh-CN']) {
 			const footer = page.locator('.ash-chat-secondary-toolbar');
 			const permissions = footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Manual' : '权限：手动' });
 			const context = footer.getByRole('button', { name: locale === 'en' ? /^Context usage:/ : /^上下文用量：/ });
-			const feedback = footer.getByRole('button', { name: locale === 'en' ? 'Report an issue' : '报告问题' });
 			const status = footer.getByRole('button', { name: 'Extension status' });
+			await expect(footer.getByRole('button', { name: locale === 'en' ? 'Report an issue' : '报告问题' })).toHaveCount(0);
 			await expect(permissions).toBeVisible();
 			await expect(context).toBeVisible();
 			await expect(context).toHaveText('');
@@ -45,18 +45,13 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(status).toBeFocused();
 			await page.keyboard.press('Enter');
 			await expect(page.getByLabel('Opened sources')).toContainText('test.chat.status');
-			await page.keyboard.press('Tab');
-			await expect(feedback).toBeFocused();
-			await page.keyboard.press('Space');
-			await expect(page.getByLabel('Opened sources')).toContainText('workbench.action.openIssueReporter');
 			await expect(input).toHaveValue('Keep my draft');
 			for (const width of [240, 450]) {
 				await page.locator('main').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
 				await expect(context).toBeVisible();
-				await expect(feedback).toBeVisible();
 				await expect(status).toBeVisible();
 				const bounds = await footer.boundingBox();
-				for (const button of [context, feedback, status]) {
+				for (const button of [context, status]) {
 					const buttonBounds = await button.boundingBox();
 					expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width + 1);
 				}

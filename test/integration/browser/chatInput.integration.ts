@@ -61,7 +61,13 @@ import { IDictationService } from '../../../src/ash/platform/dictation/common/di
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
-import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
+import { formatNlsMessage, localize, setNlsResolver } from '../../../src/ash/nls.js';
+import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
+import { HoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
+import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
+import '../../../src/ash/base/browser/ui/dialog/dialog.css';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -399,6 +405,15 @@ errorOutput.setAttribute('aria-label', 'Context error');
 document.body.append(errorOutput);
 resources.add(notifications.onDidAdd(item => { errorOutput.textContent = item.message; }));
 
+const previewDialogs = new URLSearchParams(location.search).has('footerPreview') ? resources.add(new DialogService()) : undefined;
+if (previewDialogs) {
+	resources.add(new DialogHandlerContribution(previewDialogs.model, new BrowserDialogHandler(document.body)));
+	const hover = resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), {
+		showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+	}));
+	resources.add(setHoverDelegate(hover));
+}
+
 const delegate: ChatInputDelegate = {
 	send: async (_text, _mode, _skills, contexts) => {
 		historySubmissions.push({ text: _text, skills: _skills });
@@ -417,7 +432,7 @@ const delegate: ChatInputDelegate = {
 		renderModels();
 	},
 	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
-	showContextUsage: async detail => { recordDestination({ contextDetail: detail }); }, openModelSettings: async () => { recordDestination({ settings: 'models' }); },
+	showContextUsage: async detail => { recordDestination({ contextDetail: detail }); await previewDialogs?.info(localize('chat.input.contextUsage', 'Context usage'), detail); }, openModelSettings: async () => { recordDestination({ settings: 'models' }); },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';

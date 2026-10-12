@@ -223,7 +223,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					if (type === AccessibleViewType.View && this.attachmentModel.size === 0) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
 						const names = this.attachmentModel.attachments.map(attachment => attachment.name).join('\n');
-						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('hooks.feedbackHelp', 'Hook blocks and failures appear in the conversation. Use Tab to reach a Hook summary and Enter or Space to expand its reason. Execution Trace shows status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only.') + '\n' + (this.secondaryToolbarContainer ? localize('chat.input.secondaryHelp', 'Below the input, Permissions changes the approval mode for this chat. Full access requires confirmation. The static context ring shows the estimated share of model capacity in use. Hover or focus it to read the percentage and token counts, or activate it to read the breakdown. A dashed ring indicates unknown capacity and shows token counts without a percentage. Loading, working and error status appears alongside extension status indicators. Report an issue opens the issue reporter. Use Tab to reach each toolbar, arrow keys to move between actions, and Enter or Space to activate an action.') : '') + '\n' + names;
+						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('hooks.feedbackHelp', 'Hook blocks and failures appear in the conversation. Use Tab to reach a Hook summary and Enter or Space to expand its reason. Execution Trace shows status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only.') + '\n' + (this.secondaryToolbarContainer ? localize('chat.input.secondaryHelp', 'Below the input, Permissions changes the approval mode for this chat. Full access requires confirmation. The static context ring shows the estimated share of model capacity in use. Hover or focus it to read the percentage and token counts, or activate it to read the breakdown. A dashed ring indicates unknown capacity and shows token counts without a percentage. Loading, working and error status appears alongside extension status indicators. Use Tab to reach each toolbar, arrow keys to move between actions, and Enter or Space to activate an action.') : '') + '\n' + names;
 					}, () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -754,23 +754,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			toolbarOptions: { primaryGroup: () => true },
 		}));
 		statusToolbar.element.classList.add('ash-chat-input-status-toolbar');
-		const feedback: IAction = {
-			id: 'workbench.action.openIssueReporter',
-			label: localize('chat.input.reportIssue', 'Report an issue'),
-			tooltip: localize('chat.input.reportIssue', 'Report an issue'),
-			icon: Lxicon.chat4,
-			enabled: true,
-			run: () => this.runSecondaryAction(() => this.delegate.executeCommand({
-				commandId: 'workbench.action.openIssueReporter', argumentsText: '',
-			})),
-		};
-		const feedbackToolbar = this._register(new WorkbenchToolBar(container, contextMenus, {
-			ariaLabel: feedback.label,
-			presentation: 'inherit-foreground',
-			actionViewItemProvider: action => new ChatFooterActionViewItem(action, this.footerChanged.event, true),
-		}));
-		feedbackToolbar.element.classList.add('ash-chat-input-feedback-toolbar');
-		feedbackToolbar.setActions([feedback]);
 		this.renderFooter();
 		return container;
 	}
@@ -1111,13 +1094,12 @@ class ChatContextUsageActionViewItem extends ActionViewItem {
 
 /** Retains focused footer buttons while the owning input model changes their labels. */
 class ChatFooterActionViewItem extends ButtonActionViewItem {
-	constructor(action: IAction, private readonly onDidChange: Event<void>, private readonly iconOnly = false) {
+	constructor(action: IAction, private readonly onDidChange: Event<void>) {
 		super(action);
 	}
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		container.classList.toggle('icon', this.iconOnly);
 		const update = (): void => {
 			this.button.label = this.action.label;
 			this.button.enabled = this.action.enabled;

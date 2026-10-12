@@ -69,8 +69,7 @@
 	flex: 0 0 auto;
 }
 
-.ash-chat-input-context-toolbar,
-.ash-chat-input-feedback-toolbar {
+.ash-chat-input-context-toolbar {
 	flex: 0 0 auto;
 }
 
