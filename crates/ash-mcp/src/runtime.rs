@@ -32,6 +32,7 @@ pub struct McpRuntimeOptions {
     client_timeouts: RmcpTimeouts,
     client_host: Arc<dyn McpClientHost>,
     form_elicitation: bool,
+    mcp_apps: bool,
     startup_policy: McpStartupPolicy,
     catalog_limits: McpCatalogLimits,
     loading: ToolLoading,
@@ -48,6 +49,7 @@ impl std::fmt::Debug for McpRuntimeOptions {
             .field("client_timeouts", &self.client_timeouts)
             .field("client_host", &"<dyn McpClientHost>")
             .field("form_elicitation", &self.form_elicitation)
+            .field("mcp_apps", &self.mcp_apps)
             .field("startup_policy", &self.startup_policy)
             .field("catalog_limits", &self.catalog_limits)
             .field("loading", &self.loading)
@@ -68,6 +70,7 @@ impl McpRuntimeOptions {
             client_timeouts: RmcpTimeouts::default(),
             client_host: Arc::new(NoopMcpClientHost),
             form_elicitation: false,
+            mcp_apps: false,
             startup_policy: McpStartupPolicy::RequireAll,
             catalog_limits: McpCatalogLimits::default(),
             loading: ToolLoading::Eager,
@@ -89,6 +92,12 @@ impl McpRuntimeOptions {
     /// Enables form elicitation after the product host installs durable interaction routing.
     pub fn with_form_elicitation(mut self) -> Self {
         self.form_elicitation = true;
+        self
+    }
+
+    /// Enables UI negotiation for a host with an installed isolated MCP App renderer.
+    pub fn with_mcp_apps(mut self) -> Self {
+        self.mcp_apps = true;
         self
     }
 
@@ -190,6 +199,9 @@ impl McpRuntime {
                 RmcpClientOptions::new(&options.client_name, &options.client_version)
                     .with_timeouts(options.client_timeouts)
                     .with_host(host);
+            if options.mcp_apps {
+                client_options = client_options.with_mcp_apps();
+            }
             if options.form_elicitation {
                 client_options = client_options.with_form_elicitation();
             }
@@ -346,7 +358,124 @@ impl McpRuntime {
             .call_tool(request, cancellation)
             .await
             .map_err(|error| McpCallError::OutcomeUncertain(error.to_string()))?;
-        project_tool_result(result, self.limits.maximum_tool_output_bytes)
+        let app = descriptor.app_resource_uri.as_ref().map(|uri| {
+            ash_protocol::ToolOutputArtifact::new(
+                ash_protocol::ToolOutputArtifactSource::McpApp { uri: uri.clone() },
+                "text/html;profile=mcp-app".into(),
+                ash_protocol::ToolOutputArtifactData::Json {
+                    json: result.meta.as_ref().map_or_else(
+                        || "{}".into(),
+                        |meta| serde_json::to_string(meta).expect("MCP metadata is JSON"),
+                    ),
+                },
+            )
+        });
+        let reserved = app.as_ref().map_or(0, |app| {
+            let ash_protocol::ToolOutputArtifactData::Json { json } = &app.data else {
+                unreachable!("App metadata was normalized above")
+            };
+            json.len()
+                + app.mime_type.len()
+                + descriptor.app_resource_uri.as_ref().map_or(0, String::len)
+        });
+        if reserved > self.limits.maximum_tool_output_bytes {
+            return Err(McpCallError::InvalidResult(
+                "MCP App metadata byte limit exceeded".into(),
+            ));
+        }
+        let output = project_tool_result(result, self.limits.maximum_tool_output_bytes - reserved)?;
+        match app {
+            Some(app) => {
+                let status = output.status();
+                let mut content = output.content().to_vec();
+                content.push(ash_tools::ToolContent::Artifact(app));
+                Ok(match status {
+                    ash_tools::ToolOutputStatus::Success => ToolOutput::success(content),
+                    ash_tools::ToolOutputStatus::Error => ToolOutput::error(content),
+                })
+            }
+            None => Ok(output),
+        }
+    }
+
+    /// Reads only through a still-valid tool origin; a URI never chooses a different server.
+    pub async fn read_resource(
+        &self,
+        binding: &McpToolBinding,
+        uri: String,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, McpCallError> {
+        cancellation
+            .check()
+            .map_err(|signal| McpCallError::NotStarted(signal.reason().to_string()))?;
+        let descriptor = self
+            .catalog
+            .resolve(binding.exposed_name())
+            .ok_or_else(|| McpCallError::NotStarted(McpRuntimeError::StaleBinding.to_string()))?;
+        if descriptor.binding() != binding {
+            return Err(McpCallError::NotStarted(
+                McpRuntimeError::StaleBinding.to_string(),
+            ));
+        }
+        let connection = self
+            .connections
+            .get(binding.remote().server())
+            .ok_or_else(|| McpCallError::NotStarted(McpRuntimeError::StaleBinding.to_string()))?;
+        if connection.catalog_stale.load(Ordering::Acquire) {
+            return Err(McpCallError::NotStarted(
+                McpRuntimeError::StaleCatalog.to_string(),
+            ));
+        }
+        if connection
+            .session
+            .server_info()
+            .capabilities
+            .resources
+            .is_none()
+        {
+            return Err(McpCallError::NotStarted(
+                "server does not support resource reading".into(),
+            ));
+        }
+        if uri.is_empty() || uri.len() > 4096 || uri.chars().any(char::is_control) {
+            return Err(McpCallError::NotStarted("invalid resource URI".into()));
+        }
+        let result = connection
+            .session
+            .read_resource(uri.clone(), cancellation)
+            .await
+            .map_err(|error| McpCallError::InvalidResult(error.to_string()))?;
+        cancellation
+            .check()
+            .map_err(|signal| McpCallError::NotStarted(signal.reason().to_string()))?;
+        if result.contents.len() != 1 {
+            return Err(McpCallError::InvalidResult(
+                "resource read must return one exact resource".into(),
+            ));
+        }
+        let output = project_tool_result(
+            ash_rmcp_client::CallToolResult::success(
+                result
+                    .contents
+                    .into_iter()
+                    .map(ash_rmcp_client::ContentBlock::resource)
+                    .collect(),
+            ),
+            self.limits.maximum_tool_output_bytes.min(262_144),
+        )?;
+        let [ash_tools::ToolContent::Artifact(artifact)] = output.content() else {
+            return Err(McpCallError::InvalidResult(
+                "resource read returned unsupported data".into(),
+            ));
+        };
+        if artifact.source != (ash_protocol::ToolOutputArtifactSource::EmbeddedResource { uri })
+            || artifact.truncated
+        {
+            return Err(McpCallError::InvalidResult(
+                "resource identity mismatch or byte limit exceeded".into(),
+            ));
+        }
+        Ok(artifact.clone())
     }
 
     pub async fn shutdown(self) -> Vec<McpShutdownDiagnostic> {

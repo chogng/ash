@@ -263,6 +263,7 @@ fn convert_content(content: &[ContentPart]) -> Value {
         content
             .iter()
             .map(|part| match part {
+                ContentPart::Artifact { artifact } => json!({"type": "text", "text": artifact.model_text()}),
                 ContentPart::Text(text) => json!({"type": "text", "text": text}),
                 ContentPart::ImageAttachment { .. } | ContentPart::AudioAttachment { .. } => {
                     unreachable!(
@@ -452,7 +453,8 @@ fn content_text(content: &[ContentPart]) -> String {
     content
         .iter()
         .filter_map(|part| match part {
-            ContentPart::Text(text) => Some(text.as_str()),
+            ContentPart::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
+            ContentPart::Artifact { artifact } => Some(std::borrow::Cow::Owned(artifact.model_text())),
             ContentPart::ImageAttachment { .. }
             | ContentPart::AudioAttachment { .. }
             | ContentPart::AudioUrl { .. } => None,

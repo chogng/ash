@@ -79,6 +79,7 @@ fn text_content(content: &[ContentPart]) -> Option<String> {
     let mut text = String::new();
     for part in content {
         match part {
+            ContentPart::Artifact { artifact } => text.push_str(&artifact.model_text()),
             ContentPart::Text(part) => text.push_str(part),
             ContentPart::ImageAttachment { .. }
             | ContentPart::AudioAttachment { .. }

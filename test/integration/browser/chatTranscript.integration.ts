@@ -1,3 +1,6 @@
+import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webview.js';
+import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
 import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
 import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -48,13 +51,13 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+	setNlsMessages(locale, catalog.bundles);
 }
 const resources = new DisposableStore();
 const services = resources.add(createTestEditorServices(undefined, undefined, document));
@@ -83,7 +86,7 @@ const prompts = resources.add(new PromptsService({
 	},
 }));
 services.registerInstance(IPromptsService, prompts);
-const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures']));
+const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures', 'chatResponseResourceWorkbenchContribution']));
 promptContributions.advance(WorkbenchPhase.BlockStartup);
 const fileContainer = document.createElement('section');
 fileContainer.style.cssText = 'width:600px;height:140px';
@@ -121,6 +124,15 @@ services.registerInstance(IEditorService, {
 	visibleEditorPanes: [],
 	get visibleEditors() { return [{ resource: activeResource }]; },
 	openEditor: async input => {
+		if (input.resource.scheme === 'chat-response-resource') {
+			const bytes = await services.get(IFileService).readFileBytes(input.resource);
+			const model = services.get(IModelService).getModel(input.resource) ?? services.get(IModelService).createModel(new TextDecoder('utf-8', { fatal: true }).decode(bytes.bytes), services.get(ILanguageService).createByFilepathOrFirstLine(input.resource), input.resource);
+			if (!(model instanceof TextModel)) throw new TypeError('Expected a resource model');
+			file.setModel(model);
+			file.updateOptions({ readOnly: input.readOnly });
+			activeResource = input.resource;
+			return;
+		}
 		const model = await services.get(IUntitledTextEditorService).resolve({ untitledResource: input.resource });
 		activeResource = input.resource;
 		file.setModel(model.textEditorModel!);
@@ -137,7 +149,59 @@ let imageReads = 0;
 const list = resources.add(services.createInstance(ChatListWidget, root, { imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } }));
 list.setVisible(true);
 const toolNotifications = resources.add(new Emitter<ServerNotification>());
-const toolService = createAppServerAgentThreadService({ onNotification: listener => toolNotifications.event(listener) } as AppServerProtocolClient);
+const appHtml = `<h1>Report</h1><output id="context"></output><output id="result"></output><output id="error"></output><button id="increment">Increment</button><button id="call">Call tool</button><output id="count">0</output>
+<script>
+let count = 0;
+const rpc = message => parent.postMessage({jsonrpc:'2.0',...message}, '*');
+window.addEventListener('message', event => {
+  if (event.source !== parent) return;
+  const message = event.data;
+  if (message.id === 1 && message.result) {
+    document.querySelector('#context').textContent = JSON.stringify(message.result.hostContext);
+    rpc({method:'ui/notifications/initialized',params:{}});
+    rpc({method:'ui/notifications/size-changed',params:{height:240}});
+  } else if (message.method === 'ui/notifications/tool-result') {
+    document.querySelector('#result').textContent = JSON.stringify(message.params);
+  } else if (message.method === 'ui/notifications/host-context-changed') {
+    document.querySelector('#context').textContent = JSON.stringify(message.params);
+  } else if (message.error) document.querySelector('#error').textContent = JSON.stringify(message.error);
+  else if (message.method === 'ui/resource-teardown') rpc({id:message.id,result:{}});
+});
+document.querySelector('#increment').onclick = () => { document.querySelector('#count').textContent = ++count; };
+document.querySelector('#call').onclick = () => rpc({id:2,method:'tools/call',params:{name:'unexpected',arguments:{}}});
+rpc({id:1,method:'ui/initialize',params:{protocolVersion:'2026-01-26',appInfo:{name:'report',version:'1'},appCapabilities:{availableDisplayModes:['inline']}}});
+</script>`;
+let appRequests = false;
+const appMessages: unknown[] = [];
+const webviews = services.get(IWebviewService);
+const observedViews = new Set<unknown>();
+resources.add(webviews.onDidChangeActiveWebview(view => {
+	if (view && !observedViews.has(view)) { observedViews.add(view); resources.add(view.onMessage(event => appMessages.push(event.message))); }
+}));
+let linkMode: 'read' | 'delay' | 'error' = 'read';
+let linkRequests: { method: string; params: unknown; }[] = [];
+let completeLink: (() => void) | undefined;
+const linkBytes = new TextEncoder().encode('# Linked\r\n中文\r\n');
+const toolService = createAppServerAgentThreadService({
+	generation: 1,
+	onNotification: (listener: (notification: ServerNotification) => void) => toolNotifications.event(listener),
+	async request(definition: { method: string; }, params: unknown) {
+		linkRequests.push({ method: definition.method, params });
+		switch (definition.method) {
+			case 'tool/resource/open': {
+				if (linkMode === 'delay') await new Promise<void>(resolve => { completeLink = resolve; });
+				if (linkMode === 'error') throw new Error('Resource origin retired');
+				const bytes = appRequests ? new TextEncoder().encode(appHtml) : linkBytes;
+				const digest = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes));
+				return { resourceId: 'linked', mimeType: appRequests ? 'text/html;profile=mcp-app' : 'text/markdown', size: bytes.length, sha256: `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')}` };
+			}
+			case 'resource/read': { const bytes = appRequests ? new TextEncoder().encode(appHtml) : linkBytes; return { resourceId: 'linked', offset: 0, decodedLength: bytes.length, dataBase64: btoa(String.fromCharCode(...bytes)), eof: true }; }
+			case 'resource/release': return null;
+			case 'tool/resource/cancel': return null;
+			default: throw new Error(`Unexpected ${definition.method}`);
+		}
+	},
+} as unknown as AppServerProtocolClient);
 function receiveToolUpdate(params: TranscriptDto): ThreadTranscriptUpdateEnvelope {
 	let latest: ThreadTranscriptUpdateEnvelope | undefined;
 	using subscription = toolService.onDidUpdateThreadTranscript(update => { latest = update; });
@@ -187,6 +251,13 @@ declare global {
 			openAccessibleView(help: boolean): boolean;
 			updateTool(finish: boolean): void;
 			showMedia(delay: boolean): void;
+			showArtifacts(revise: boolean): void;
+			showLink(mode: 'read' | 'delay' | 'error'): void;
+			showApp(): void;
+			appState(): { messages: readonly unknown[]; views: number; };
+			linkRequests(): readonly { method: string; params: unknown; }[];
+			finishLink(): void;
+			readResource(uri: string): Promise<number[]>;
 			refreshMedia(): void;
 			finishMedia(): void;
 			mediaState(): { requests: readonly unknown[]; aborted: boolean; };
@@ -250,6 +321,62 @@ window.ashChatTranscriptIntegration = {
 		});
 		toolEntries.push(...update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []));
 		list.render(chatTranscriptListItems(toolEntries));
+	},
+	linkRequests: () => linkRequests,
+	finishLink: () => completeLink?.(),
+	appState: () => ({ messages: appMessages, views: [...webviews.webviews].length }),
+	showApp: () => {
+		appRequests = true;
+		linkMode = 'read';
+		linkRequests = [];
+		const update = receiveToolUpdate({
+			sessionId: 'app-session', threadId: 'app-thread', revision: 2, durableSequence: 1, changes: [
+				{ type: 'upsert', entry: { type: 'item', entryId: 'app-call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'app-call', turnId: 'turn', toolCallId: 'report', name: 'report', argumentsJson: '{"value":7}' } } },
+				{
+					type: 'upsert', entry: {
+						type: 'item', entryId: 'app-result', turnId: 'turn', transient: false, item: {
+							type: 'toolResult', itemId: 'app-result', turnId: 'turn', toolCallId: 'report', text: 'Report ready', isError: false, content: [
+								{ type: 'text', text: 'Report ready' },
+								{ type: 'artifact', artifact: { source: { type: 'structuredResult' }, mimeType: 'application/json', data: { type: 'json', json: '{"value":7}' }, contentDigest: 'sha256:result', truncated: false } },
+								{ type: 'artifact', artifact: { source: { type: 'mcpApp', uri: 'ui://report' }, mimeType: 'text/html;profile=mcp-app', data: { type: 'json', json: '{"viewOnly":"metadata"}' }, contentDigest: 'sha256:app', truncated: false } },
+							]
+						}
+					}
+				},
+			]
+		});
+		list.render(chatTranscriptListItems(update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []), undefined, [], { sessionId: update.sessionId, threadId: update.threadId }));
+	},
+	showLink: mode => {
+		appRequests = false;
+		linkMode = mode;
+		linkRequests = [];
+		const update = receiveToolUpdate({
+			sessionId: 'link-session', threadId: 'link-thread', revision: 2, durableSequence: 1, changes: [
+				{ type: 'upsert', entry: { type: 'item', entryId: 'linked-result', turnId: 'link-turn', transient: false, item: { type: 'toolResult', itemId: 'linked-result', turnId: 'link-turn', toolCallId: 'documents', text: '', isError: false, content: [{ type: 'artifact', artifact: { source: { type: 'resourceLink', uri: 'file:///server/report.md' }, mimeType: 'text/markdown', data: { type: 'json', json: '{"name":"report.md","description":"Read from the original server"}' }, contentDigest: 'sha256:link', truncated: false } }] } } },
+			]
+		});
+		list.render(chatTranscriptListItems(update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []), undefined, [], { sessionId: update.sessionId, threadId: update.threadId }));
+	},
+	readResource: async uri => [...(await services.get(IFileService).readFileBytes(URI.parse(uri))).bytes],
+	showArtifacts: revise => {
+		const update = receiveToolUpdate({
+			sessionId: 'resource-session', threadId: 'resource-thread', revision: revise ? 3 : 2, durableSequence: 2, changes: [
+				{ type: 'upsert', entry: { type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'resources', name: 'resources', argumentsJson: '{}' } } },
+				{
+					type: 'upsert', entry: {
+						type: 'item', entryId: 'result', turnId: 'turn', transient: false, item: {
+							type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'resources', text: 'Legacy fallback', isError: false, content: [
+								{ type: 'artifact', artifact: { source: { type: 'embeddedResource', uri: 'file:///untrusted/report.md' }, mimeType: 'text/markdown', data: { type: 'text', text: revise ? 'Changed truncated resource' : '<script>window.compromised = true</script>\r\n中文' }, contentDigest: revise ? 'sha256:revised' : 'sha256:text', truncated: revise } },
+								{ type: 'artifact', artifact: { source: { type: 'structuredResult' }, mimeType: 'application/json', data: { type: 'json', json: '{"amount":1.0,"text":"<img src=x onerror=alert(1)>"}' }, contentDigest: 'sha256:json', truncated: false } },
+								{ type: 'artifact', artifact: { source: { type: 'embeddedResource', uri: 'mcp://data/blob.bin' }, mimeType: 'application/octet-stream', data: { type: 'binary', bytes: [0, 127, 255] }, contentDigest: 'sha256:bytes', truncated: false } },
+							]
+						}
+					}
+				},
+			]
+		});
+		list.render(chatTranscriptListItems(update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []), undefined, [], { sessionId: update.sessionId, threadId: update.threadId }));
 	},
 	showMedia: delay => {
 		delayMedia = delay;

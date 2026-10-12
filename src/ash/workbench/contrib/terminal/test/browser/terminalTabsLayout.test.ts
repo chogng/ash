@@ -1,3 +1,7 @@
+import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
+import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -71,6 +75,8 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	using context = new ContextKeyService();
 	using commands = new CommandService(services);
 	services.registerInstance(ITerminalService, terminals);
+	services.registerSingleton(IWorkspaceContextService, () => new WorkspaceContextService({ id: 'terminal-tabs-test', folders: [] }));
+	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, new MenuService(commands, context));

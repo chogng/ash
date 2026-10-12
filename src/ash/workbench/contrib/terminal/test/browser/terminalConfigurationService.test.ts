@@ -5,7 +5,7 @@ import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
-import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../../api/browser/mainThreadTerminalService.js';
 import assert from 'node:assert/strict';
@@ -69,7 +69,8 @@ function createServices(owner: DisposableStore, useInstances = false) {
 		close: async (options: ITerminalProcessCloseOptions) => { closed.push(options); },
 	} as unknown as ITerminalProcessService;
 	services.registerInstance(IConfigurationService, configuration);
-	services.registerInstance(IExtensionService, { ...Disposable.None, terminalProfiles: [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
+	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
+	services.registerInstance(IExtensionService, { ...Disposable.None, getExtensionPointContributions: () => [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	services.registerInstance(IConfigurationResolverService, { resolveWithEnvironment: async (env, folder, value) => value.replaceAll('${workspaceFolder}', folder?.uri.path ?? '').replace(/\$\{env:([^}]+)\}/g, (_match: string, key: string) => env[key] ?? '') } as IConfigurationResolverService);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	const stored = new Map<string, string>();

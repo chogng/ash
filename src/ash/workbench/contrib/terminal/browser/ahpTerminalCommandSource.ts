@@ -6,6 +6,8 @@ import type { ITerminalCommandStatusEvent, ITerminalShellIntegration } from '../
 
 /** Publishes Rust-owned command metadata only after the associated output is committed to the screen. */
 export class AhpTerminalCommandSource extends Disposable {
+	private readonly metadataChanged = this._register(new Emitter<void>());
+	readonly onDidChangeMetadata = this.metadataChanged.event;
  private readonly commandStatusEmitter = this._register(new Emitter<ITerminalCommandStatusEvent>());
  readonly onDidChangeCommandStatus = this.commandStatusEmitter.event;
  private readonly pendingCommandEvents: ITerminalProcessCommandStatusEvent[] = [];
@@ -29,9 +31,11 @@ export class AhpTerminalCommandSource extends Disposable {
   super.disposeCore();
  }
 	commitThrough(sequence: number, token: CancellationToken): void {
+		let changed = false;
 		if (!token.isCancellationRequested && this.pendingCwd && this.pendingCwd.afterOutputSequence <= sequence) {
 			this.currentCwd = this.pendingCwd.value;
 			this.pendingCwd = undefined;
+			changed = true;
 		}
 		if (!token.isCancellationRequested && this.pendingShellIntegration && this.pendingShellIntegration.afterOutputSequence <= sequence) {
 			const integration = this.pendingShellIntegration;
@@ -43,7 +47,9 @@ export class AhpTerminalCommandSource extends Disposable {
 				commands: integration.commands.map(commandStatusEvent),
 			};
 			this.pendingShellIntegration = undefined;
+			changed = true;
 		}
+		if (changed) this.metadataChanged.fire();
 		while (!token.isCancellationRequested && this.pendingCommandEvents.length > 0 && this.pendingCommandEvents[0]!.afterOutputSequence <= sequence) {
 			const event = this.pendingCommandEvents.shift()!;
 			this.commandStatusEmitter.fire(commandStatusEvent(event));

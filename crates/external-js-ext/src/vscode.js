@@ -26,9 +26,14 @@ export function createApi(configuration, initialization) {
 	let subscriptions;
 	const environmentMutators = new Map();
 	let environmentPersistent = true;
+	let environmentAdmitted = false;
+	function requireEnvironmentCapability() {
+		if (!environmentAdmitted) throw new Error('Terminal environment collections require the admitted terminal provider capability');
+	}
 	const environmentVariableCollection = Object.freeze({
 		get persistent() { return environmentPersistent; },
 		set persistent(value) {
+			requireEnvironmentCapability();
 			if (typeof value !== 'boolean') throw new TypeError('Environment collection persistence must be a boolean');
 			environmentPersistent = value;
 		},
@@ -36,12 +41,13 @@ export function createApi(configuration, initialization) {
 		append(variable, value) { setEnvironmentMutator(variable, value, 2); },
 		prepend(variable, value) { setEnvironmentMutator(variable, value, 3); },
 		get(variable) { return environmentMutators.get(variable); },
-		delete(variable) { environmentMutators.delete(variable); },
-		clear() { environmentMutators.clear(); },
+		delete(variable) { requireEnvironmentCapability(); environmentMutators.delete(variable); },
+		clear() { requireEnvironmentCapability(); environmentMutators.clear(); },
 		forEach(callback, thisArg) { environmentMutators.forEach((mutator, variable) => callback.call(thisArg, variable, mutator, environmentVariableCollection)); },
 		[Symbol.iterator]() { return environmentMutators[Symbol.iterator](); },
 	});
 	function setEnvironmentMutator(variable, value, type) {
+		requireEnvironmentCapability();
 		if (typeof variable !== 'string' || !variable || variable.length > 32768 || /[=\0]/.test(variable) || typeof value !== 'string' || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid terminal environment mutator');
 		if (!environmentMutators.has(variable) && environmentMutators.size >= 1024) throw new RangeError('Terminal environment collection quota exceeded');
 		environmentMutators.set(variable, Object.freeze({ value, type }));
@@ -1514,7 +1520,6 @@ export function createApi(configuration, initialization) {
 				const declaration = configuration.manifest?.contributes?.terminalProfiles?.find(profile => profile.id === id);
 				if (!declaration || typeof provider?.provideTerminalProfile !== 'function') throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
 				const handle = ashTerminals.registerTerminalProfileProvider(`vscode.terminalProfile.${++providerSequence}`, id, declaration.title, {
-					getEnvironmentVariableCollection: () => ({ persistent: environmentPersistent, map: [...environmentMutators] }),
 					createTerminalProfile: context => invoke(async () => {
 						const profile = await provider.provideTerminalProfile(context.cancellationToken);
 						if (profile === undefined || profile === null) return undefined;
@@ -1637,6 +1642,8 @@ export function createApi(configuration, initialization) {
 		api,
 		activate(context, callback, receiver, capabilities) {
 			subscriptions = context.subscriptions;
+			environmentAdmitted = capabilities.includes('terminalProfileProvider');
+			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('vscode.terminalEnvironment', () => ({ persistent: environmentPersistent, map: [...environmentMutators] })));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
 			// The supervisor supplies the admitted ceiling. Optional API observers must
 			// not turn an unrelated command into a rejected registration handshake.
@@ -1644,6 +1651,8 @@ export function createApi(configuration, initialization) {
 			if (capabilities.includes('debugAdapter')) ensureDebugEvents();
 			if (capabilities.includes('statusBar')) subscriptions.push(ashWindow.registerStatusBar(statusRegistrationId, statusSnapshot));
 			subscriptions.push(new Disposable(() => {
+				environmentAdmitted = false;
+				environmentMutators.clear();
 				scmBridge.dispose();
 				statusDisposed = true;
 				statusActive = false;

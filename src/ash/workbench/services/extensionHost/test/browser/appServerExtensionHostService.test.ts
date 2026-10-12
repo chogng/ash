@@ -1,4 +1,8 @@
-import { ITerminalProfileService, ITerminalProfileResolverService } from '../../../terminal/common/terminal.js';
+import '../../../../contrib/terminal/common/terminalExtensionPoints.contribution.js';
+import { TerminalContributionService } from '../../../../contrib/terminal/common/terminalExtensionPoints.js';
+import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
+import { EnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariableService.js';
+import { ITerminalContributionService, ITerminalProfileService, ITerminalProfileResolverService } from '../../../terminal/common/terminal.js';
 import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
@@ -949,6 +953,8 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None } as ITerminalProcessService);
 	services.registerInstance(ITerminalService, { ...Disposable.None, getProfiles: async () => [] } as unknown as ITerminalService);
+	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
+	services.registerSingleton(ITerminalContributionService, () => services.createInstance(TerminalContributionService));
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
 	services.registerInstance(ITerminalProfileResolverService, {} as ITerminalProfileResolverService);
 	services.registerInstance(IExtensionHostApi, api);

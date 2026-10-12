@@ -1,5 +1,5 @@
-import type { IExtensionTerminalProfile } from '../../../../platform/terminal/common/terminal.js';
-import { ThemeIcon } from '../../../../base/common/themables.js';
+import type { IExtensionPointUser } from '../common/extensionsRegistry.js';
+import type { ExtensionManifest } from '../common/extensionManifest.js';
 import { localizeManifest } from '../../../../platform/extensionManagement/common/extensionNls.js';
 import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacks.js';
 import { MenusRegistry, type ISubmenuItem } from '../../../../platform/actions/common/actions.js';
@@ -111,8 +111,14 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	readonly themes: ExtensionThemeSource;
 	readonly fileTemplates: ExtensionFileTemplateSource;
 	readonly debugAdapters: ExtensionDebugAdapterSource;
-	private _terminalProfiles: readonly IExtensionTerminalProfile[] = [];
-	get terminalProfiles(): readonly IExtensionTerminalProfile[] { return this._terminalProfiles; }
+	private manifests: readonly { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest; }[] = [];
+
+ getExtensionPointContributions<T>(name: string): readonly IExtensionPointUser<T>[] {
+  return this.manifests.flatMap(entry => {
+   const value = (entry.manifest.contributes as unknown as Readonly<Record<string, unknown>>)[name];
+   return value === undefined ? [] : [{ description: entry.description, value: value as T }];
+  });
+ }
 
 	readonly onDidChange: Event<ExtensionCatalog> = this.changeEmitter.event;
 	readonly onDidFail: Event<ExtensionServiceFailure> = this.failureEmitter.event;
@@ -131,7 +137,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this._register(toDisposable(() => {
 			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).updateConfigurations({ add: [], remove: this.activeConfigurations });
 			this.activeConfigurations = [];
-			this._terminalProfiles = [];
+			this.manifests = [];
 		}));
 		this._register(toDisposable(() => this.languageConfigurationRegistrations.dispose()));
 		this.themeRegistry = this._register(new ExtensionThemeRegistry());
@@ -276,7 +282,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const productIconThemes: IWorkbenchProductIconTheme[] = [];
 		let snippetActivation: ExtensionSnippetActivation | undefined;
 		const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
-		const terminalProfiles: IExtensionTerminalProfile[] = [];
+		const manifests: { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest; }[] = [];
 		const problemMatchers: unknown[] = [];
 		const configurations: IConfigurationNode[] = [];
 		const submenus: { menu: string; item: ISubmenuItem; }[] = [];
@@ -300,7 +306,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				const manifestJson = await this.localizeManifest(extension, catalog.generation, resources);
 				if (this.isDisposed) return;
 				const manifest = parseExtensionManifest(manifestJson, extension);
-				terminalProfiles.push(...manifest.contributes.terminalProfiles.map(profile => Object.freeze({ extensionIdentifier: extension.id, id: profile.id, title: profile.title, options: Object.freeze({ icon: profile.icon ? ThemeIcon.fromId(profile.icon) : undefined, color: profile.color }) })));
+				manifests.push({ description: activeExtension, manifest });
 				welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
 				configurations.push(...manifest.contributes.configuration);
 				for (const submenu of manifest.contributes.submenus) {
@@ -473,7 +479,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					this.activeFileIconThemes = Object.freeze([...fileIconThemes]);
 					this.activeProductIconThemes = Object.freeze([...productIconThemes]);
 					this.activeDebugAdapterFactories = Object.freeze([...debugAdapterFactories]);
-					this._terminalProfiles = Object.freeze(terminalProfiles);
+					this.manifests = Object.freeze(manifests);
 					this.catalog = catalog;
 					this.activeCatalogSignature = signature;
 					this.activeSnippetOwnerRevision = snippetOwnerRevision;

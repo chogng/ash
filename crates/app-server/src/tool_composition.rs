@@ -638,6 +638,16 @@ struct ReloadableToolService {
 }
 
 impl ToolService for ReloadableToolService {
+    fn read_resource(
+        &self,
+        call: &ToolCall,
+        uri: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
+        self.bound_tools(call)
+            .read_resource(call, uri, cancellation)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.ports.generation().tools.definitions()
     }
@@ -1339,6 +1349,23 @@ fn loading_for_exposure(exposure: ToolExposure) -> ToolLoading {
 }
 
 impl ToolService for CompositeToolService {
+    fn read_resource(
+        &self,
+        call: &ToolCall,
+        uri: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
+        let (_, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => {
+                service.read_resource(call, uri, cancellation)
+            }
+            ToolContributionRuntime::Executor(_) => Err(CoreError::Execution(
+                "this tool executor cannot read resources".into(),
+            )),
+        }
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         let mut definitions = self.definitions.clone();
         if let Some(search) = &self.search {

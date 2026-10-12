@@ -16,6 +16,7 @@ pub enum ToolOutputStatus {
 /// One bounded piece of model-visible tool output.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ToolContent {
+    Artifact(ash_protocol::ToolOutputArtifact),
     Text(String),
     Audio { url: String },
     Image { url: String, detail: ImageDetail },
@@ -93,11 +94,19 @@ fn truncate_tool_content(
     content: &[ToolContent],
     policy: ToolOutputTruncationPolicy,
 ) -> Vec<ToolContent> {
+    if content
+        .iter()
+        .any(|part| matches!(part, ToolContent::Artifact(_)))
+    {
+        return truncate_artifact_content(content, policy);
+    }
     let text_segments = content
         .iter()
         .filter_map(|content| match content {
             ToolContent::Text(text) => Some(text.as_str()),
-            ToolContent::Image { .. } | ToolContent::Audio { .. } => None,
+            ToolContent::Artifact(_) | ToolContent::Image { .. } | ToolContent::Audio { .. } => {
+                None
+            }
         })
         .collect::<Vec<_>>();
 
@@ -122,7 +131,9 @@ fn truncate_tool_content(
     ))];
     truncated.extend(content.iter().filter_map(|content| match content {
         ToolContent::Text(_) => None,
-        ToolContent::Image { .. } | ToolContent::Audio { .. } => Some(content.clone()),
+        ToolContent::Artifact(_) | ToolContent::Image { .. } | ToolContent::Audio { .. } => {
+            Some(content.clone())
+        }
     }));
     truncated
 }
@@ -130,3 +141,55 @@ fn truncate_tool_content(
 #[cfg(test)]
 #[path = "output_tests.rs"]
 mod tests;
+
+// A resource keeps its identity even when its model-visible text is clipped. Binary payloads stay
+// intact and are charged against the producer's media budget, not inserted into model text.
+fn truncate_artifact_content(
+    content: &[ToolContent],
+    policy: ToolOutputTruncationPolicy,
+) -> Vec<ToolContent> {
+    let mut remaining = policy.byte_budget();
+    content
+        .iter()
+        .map(|part| match part {
+            ToolContent::Text(text) => {
+                let output = if text.len() <= remaining {
+                    text.clone()
+                } else {
+                    formatted_truncate_text(text, ToolOutputTruncationPolicy::Bytes(remaining))
+                };
+                remaining = remaining.saturating_sub(output.len());
+                ToolContent::Text(output)
+            }
+            ToolContent::Artifact(artifact) => match &artifact.data {
+                ash_protocol::ToolOutputArtifactData::Binary { .. } => part.clone(),
+                ash_protocol::ToolOutputArtifactData::Text { .. }
+                | ash_protocol::ToolOutputArtifactData::Json { .. } => {
+                    let text = match &artifact.data {
+                        ash_protocol::ToolOutputArtifactData::Text { text } => text.clone(),
+                        ash_protocol::ToolOutputArtifactData::Json { json } => json.clone(),
+                        ash_protocol::ToolOutputArtifactData::Binary { .. } => {
+                            unreachable!("binary output is preserved above")
+                        }
+                    };
+                    let output = if text.len() <= remaining {
+                        artifact.clone()
+                    } else {
+                        artifact.truncated_text(formatted_truncate_text(
+                            &text,
+                            ToolOutputTruncationPolicy::Bytes(remaining),
+                        ))
+                    };
+                    let used = match &output.data {
+                        ash_protocol::ToolOutputArtifactData::Text { text } => text.len(),
+                        ash_protocol::ToolOutputArtifactData::Json { json } => json.len(),
+                        ash_protocol::ToolOutputArtifactData::Binary { bytes } => bytes.len(),
+                    };
+                    remaining = remaining.saturating_sub(used);
+                    ToolContent::Artifact(output)
+                }
+            },
+            ToolContent::Audio { .. } | ToolContent::Image { .. } => part.clone(),
+        })
+        .collect()
+}

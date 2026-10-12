@@ -231,6 +231,21 @@ impl TurnExecutor {
         })
     }
 
+    /// Opens a resource without executing the tool again or altering its committed result.
+    pub fn read_tool_resource(
+        &self,
+        call: &ash_protocol::ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+        uri: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        self.tools.validate_call_binding(call, Some(binding))?;
+        self.tools.read_resource(call, uri, cancellation)
+    }
+
     /// Freezes the exact durable binding for a host-created Tool Call.
     pub fn bind_tool_call(
         &self,

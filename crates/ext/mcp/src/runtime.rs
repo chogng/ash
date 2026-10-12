@@ -34,6 +34,12 @@ enum RuntimeCommand {
         hook_scope: Option<HookEventScope>,
         response: mpsc::Sender<Result<ToolOutput, McpCallError>>,
     },
+    ReadResource {
+        binding: McpToolBinding,
+        uri: String,
+        cancellation: CancellationToken,
+        response: mpsc::Sender<Result<ash_protocol::ToolOutputArtifact, McpCallError>>,
+    },
     Shutdown,
 }
 
@@ -139,6 +145,28 @@ impl McpRuntimeOwner {
             McpCallError::NotStarted(format!("MCP tool is not available: {name}"))
         })?;
         Ok(McpPreparedCall { binding, arguments })
+    }
+
+    pub(crate) fn read_resource(
+        &self,
+        binding: McpToolBinding,
+        uri: String,
+        cancellation: CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, McpCallError> {
+        let (response, receiver) = mpsc::channel();
+        self.commands
+            .as_ref()
+            .ok_or_else(|| McpCallError::NotStarted("MCP runtime is shutting down".into()))?
+            .try_send(RuntimeCommand::ReadResource {
+                binding,
+                uri,
+                cancellation,
+                response,
+            })
+            .map_err(|error| McpCallError::NotStarted(error.to_string()))?;
+        receiver.recv().map_err(|_| {
+            McpCallError::InvalidResult("MCP runtime stopped before resource delivery".into())
+        })?
     }
 
     pub(crate) fn call(
@@ -296,6 +324,10 @@ fn run_worker(
                                 };
                                 let _ = response.send(result);
                             });
+                        }
+                        Some(RuntimeCommand::ReadResource { binding, uri, cancellation, response }) => {
+                            let mcp = Arc::clone(&mcp);
+                            calls.spawn(async move { let _ = response.send(mcp.read_resource(&binding, uri, &cancellation).await); });
                         }
                         Some(RuntimeCommand::Shutdown) | None => break,
                     }

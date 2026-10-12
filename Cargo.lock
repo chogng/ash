@@ -1961,6 +1961,7 @@ dependencies = [
  "ash-rmcp-client",
  "ash-tools",
  "ash-utils-audio",
+ "base64 0.22.1",
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.19",
@@ -2452,6 +2453,7 @@ dependencies = [
  "ash-http-client",
  "reqwest 0.13.4",
  "rmcp",
+ "serde_json",
  "thiserror 2.0.19",
  "tokio",
 ]

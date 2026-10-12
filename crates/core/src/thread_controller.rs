@@ -3200,10 +3200,11 @@ fn tool_content_preview(content: &[ContentPart]) -> String {
     content
         .iter()
         .map(|part| match part {
-            ContentPart::Text(text) => text.as_str(),
-            ContentPart::ImageAttachment { .. } => "[image]",
-            ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => "[audio]",
-            ContentPart::ImageUrl { .. } => "[image]",
+            ContentPart::Artifact { artifact } => std::borrow::Cow::Owned(artifact.model_text()),
+            ContentPart::Text(text) => std::borrow::Cow::Borrowed(text.as_str()),
+            ContentPart::ImageAttachment { .. } => std::borrow::Cow::Borrowed("[image]"),
+            ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => std::borrow::Cow::Borrowed("[audio]"),
+            ContentPart::ImageUrl { .. } => std::borrow::Cow::Borrowed("[image]"),
         })
         .collect::<Vec<_>>()
         .join("\n")

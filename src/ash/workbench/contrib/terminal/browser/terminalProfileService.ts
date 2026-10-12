@@ -10,7 +10,7 @@ import { ITerminalProcessService, type ITerminalProfile, type ITerminalProfileOb
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
-import { ITerminalProfileService, type IRegisterContributedProfileArgs, type ITerminalProfileProvider } from '../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileService, type IRegisterContributedProfileArgs, type ITerminalProfileProvider } from '../../../services/terminal/common/terminal.js';
 import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
 
 type ProfileDefinition = ITerminalProfileObject | (IExtensionTerminalProfile & Pick<ITerminalProfileObject, 'icon' | 'color'>) | null;
@@ -33,12 +33,13 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IExtensionService private readonly extensions: IExtensionService,
+		@ITerminalContributionService private readonly contributions: ITerminalContributionService,
 	) {
 		super();
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(TERMINAL_CONFIG_SECTION)) this.changed.fire(this.availableProfiles);
 		}));
-		this._register(extensions.onDidChange(() => this.changed.fire(this.availableProfiles)));
+		this._register(contributions.onDidChangeTerminalProfiles(() => this.changed.fire(this.availableProfiles)));
 		this._register(processes.onConnectionState(state => {
 			this.invalidate();
 			if (state === 'ready' && this.activated && workspace.getWorkspace().folders.length) this.refreshInBackground();
@@ -58,7 +59,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 	}
 
 	get contributedProfiles(): readonly IExtensionTerminalProfile[] {
-		const profiles = new Map(this.extensions.terminalProfiles.map(profile => [profileKey(profile.extensionIdentifier, profile.id), profile]));
+		const profiles = new Map(this.contributions.terminalProfiles.map(profile => [profileKey(profile.extensionIdentifier, profile.id), profile]));
 		for (const [key, profile] of this.internalProfiles) profiles.set(key, { ...profiles.get(key), ...profile });
 		return [...profiles.values()];
 	}

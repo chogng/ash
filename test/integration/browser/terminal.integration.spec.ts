@@ -1305,7 +1305,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().some(write => write.data === 'x'))).toBe(true);
 		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToTerminalPanel'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 1, editorTabs: 0, originalScreen: true, target: 1 });
-		await expect(page.locator('.ash-terminal-widget-overlay .xterm-rows')).toContainText('preserved editor output');
+		await expect(page.locator('.ash-terminal-widgets .xterm-rows')).toContainText('preserved editor output');
 		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
 		await page.evaluate(() => window.ashTerminalEditorIntegration.close());
 		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().instances)).toBe(0);
@@ -1425,5 +1425,21 @@ for (const [theme, locale] of [['dark', 'en'], ['hcDark', 'en'], ['hcLight', 'zh
 		await page.evaluate(() => window.ashTerminalIntegration.dispose());
 		await expect(page.locator('.ash-terminal-widget-overlay')).toHaveCount(0);
 		expect(errors).toEqual([]);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal environment information follows the collection owner in ${locale}`, async ({ page }) => {
+		await page.goto(`/terminal.html?pane&profiles&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+		const tabs = page.locator('.ash-terminal-tabs [role="tab"]');
+		await expect(tabs).toHaveCount(2);
+		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(true));
+		const label = locale === 'zh-CN' ? '以下扩展为新终端配置环境变量：acme.environment' : 'Extensions configure the environment for new terminals: acme.environment';
+		await expect(tabs.first()).toHaveAttribute('title', new RegExp(label));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(false));
+		await expect(tabs.first()).not.toHaveAttribute('title', /acme\.environment/);
 	});
 }

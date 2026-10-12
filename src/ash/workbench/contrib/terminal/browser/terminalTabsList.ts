@@ -15,6 +15,8 @@ import { TerminalActiveInstanceStateContext, TerminalHasActiveInstanceContext } 
 import { ITerminalService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 import { openContextMenu } from './terminalContextMenu.js';
 import { terminalProfileIcon } from './terminalIcon.js';
+import { IEnvironmentVariableService } from '../common/environmentVariable.js';
+import { EnvironmentVariableInfoChangesActive } from './environmentVariableInfo.js';
 
 export const enum TerminalTabsListSizes {
 	NarrowViewWidth = 46,
@@ -41,6 +43,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService private readonly contextMenu: IContextMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IEnvironmentVariableService private readonly environmentVariables: IEnvironmentVariableService,
 	) {
 		super(parent, {
 			ariaLabel: localize('terminal.tabs.instances', 'Terminal instances'),
@@ -88,6 +91,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 			this.ownsMenu = false;
 		}));
 		this._register(terminals.onDidChangeInstances(() => this.refresh()));
+		this._register(environmentVariables.onDidChangeCollections(() => this.refresh()));
 		this._register(terminals.onDidChangeActiveInstance(() => this.refresh()));
 		this.refresh();
 	}
@@ -104,8 +108,9 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 				this.instanceListeners.set(instance, lifetime);
 			}
 		}
+		const environmentInfo = new EnvironmentVariableInfoChangesActive(this.environmentVariables.collections);
 		this.setTabs(this.terminals.instances.filter(instance => instance.target !== TerminalLocation.Editor).map(instance => ({
-			id: instance.id, value: instance, label: instance.title, tooltip: instance.title + getShellProcessTooltip(instance, true),
+			id: instance.id, value: instance, label: instance.title, tooltip: instance.title + getShellProcessTooltip(instance, true, environmentInfo),
 			icon: terminalProfileIcon(instance.profile), state: instance.state, tabId: `${instance.id}-tab`,
 			renderLabel: (container: HTMLElement) => {
 				const label = new IconLabel(container, { label: instance.title, icon: terminalProfileIcon(instance.profile) });

@@ -52,7 +52,7 @@ struct FakeSession {
 
 impl McpSession for FakeSession {
     fn server_info(&self) -> ServerInfo {
-        ServerInfo::default()
+        serde_json::from_value(serde_json::json!({"protocolVersion":"2025-11-25","capabilities":{"resources":{}},"serverInfo":{"name":"test","version":"0"}})).unwrap()
     }
 
     fn list_tools(&self, cursor: McpPageCursor) -> McpSessionFuture<'_, ListToolsResult> {
@@ -62,12 +62,15 @@ impl McpSession for FakeSession {
             }
             let mut schema = JsonObject::new();
             schema.insert("type".into(), serde_json::Value::String("object".into()));
+            let mut tool = Tool::new("docs.search", "Search documentation", Arc::new(schema));
+            if self.server.as_str() == "user:mcp:apps" {
+                tool.meta = Some(
+                    serde_json::from_value(serde_json::json!({"ui":{"resourceUri":"ui://chart"}}))
+                        .unwrap(),
+                );
+            }
             Ok(ListToolsResult {
-                tools: vec![Tool::new(
-                    "docs.search",
-                    "Search documentation",
-                    Arc::new(schema),
-                )],
+                tools: vec![tool],
                 ..Default::default()
             })
         })
@@ -86,6 +89,35 @@ impl McpSession for FakeSession {
             Ok(CallToolResult::success(vec![ContentBlock::text(
                 self.server.to_string(),
             )]))
+        })
+    }
+
+    fn read_resource(
+        &self,
+        uri: String,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> McpSessionFuture<'_, ash_rmcp_client::ReadResourceResult> {
+        let cancellation = cancellation.clone();
+        Box::pin(async move {
+            cancellation
+                .check()
+                .map_err(|signal| McpSessionError::Cancelled(signal.reason().to_string()))?;
+            self.calls
+                .lock()
+                .unwrap()
+                .push((self.server.clone(), format!("read:{uri}")));
+            Ok(ash_rmcp_client::ReadResourceResult::new(vec![
+                ash_rmcp_client::ResourceContents::TextResourceContents {
+                    uri: if uri == "docs://wrong" {
+                        "docs://other".into()
+                    } else {
+                        uri
+                    },
+                    mime_type: Some("text/plain".into()),
+                    text: self.server.to_string(),
+                    meta: None,
+                },
+            ]))
         })
     }
 
@@ -281,4 +313,94 @@ fn definition(id: &str) -> McpServerDefinition {
         McpServerTransport::Stdio(ash_rmcp_client::StdioServerCommand::new("unused")),
     )
     .expect("valid definition")
+}
+
+#[tokio::test]
+async fn linked_resources_keep_the_frozen_server_and_reject_uri_substitution_stale_bindings_and_cancel()
+ {
+    let factory = Arc::new(FakeFactory::default());
+    let runtime = McpRuntime::start_with_factory(
+        vec![definition("user:mcp:one"), definition("user:mcp:two")],
+        factory.clone(),
+        McpRuntimeOptions::new("test", "0"),
+    )
+    .await
+    .unwrap();
+    let binding = runtime.catalog().tools()[0].binding().clone();
+    let cancellation = CancellationSource::new();
+    let data = runtime
+        .read_resource(&binding, "docs://review".into(), &cancellation.token())
+        .await
+        .unwrap();
+    assert!(
+        matches!(data.data, ash_protocol::ToolOutputArtifactData::Text { text } if text == binding.remote().server().as_str())
+    );
+    assert_eq!(
+        factory.calls.lock().unwrap().as_slice(),
+        &[(
+            binding.remote().server().clone(),
+            "read:docs://review".into()
+        )]
+    );
+    assert!(
+        runtime
+            .read_resource(&binding, "docs://wrong".into(), &cancellation.token())
+            .await
+            .is_err()
+    );
+    let replaced = McpRuntime::start_with_factory(
+        vec![definition("user:mcp:one"), definition("user:mcp:two")],
+        factory.clone(),
+        McpRuntimeOptions::new("test", "0").with_catalog_generation(2),
+    )
+    .await
+    .unwrap();
+    let invalid = replaced.catalog().tools()[0].binding().clone();
+    assert!(
+        runtime
+            .read_resource(&invalid, "docs://review".into(), &cancellation.token())
+            .await
+            .is_err()
+    );
+    replaced.shutdown().await;
+    cancellation.cancel();
+    assert!(
+        runtime
+            .read_resource(&binding, "docs://review".into(), &cancellation.token())
+            .await
+            .is_err()
+    );
+    runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn declared_apps_retain_ui_metadata_without_replacing_the_text_tool_result() {
+    let runtime = McpRuntime::start_with_factory(
+        vec![definition("user:mcp:apps")],
+        Arc::new(FakeFactory::default()),
+        McpRuntimeOptions::new("test", "0").with_mcp_apps(),
+    )
+    .await
+    .unwrap();
+    let binding = runtime.catalog().tools()[0].binding();
+    let output = runtime
+        .call_tool(
+            binding,
+            serde_json::json!({}),
+            &CancellationSource::new().token(),
+        )
+        .await
+        .unwrap();
+    let [ToolContent::Text(text), ToolContent::Artifact(app)] = output.content() else {
+        panic!("expected text result and a declared App");
+    };
+    assert_eq!(text, "user:mcp:apps");
+    assert_eq!(
+        app.source,
+        ash_protocol::ToolOutputArtifactSource::McpApp {
+            uri: "ui://chart".into()
+        }
+    );
+    assert_eq!(app.model_text(), "");
+    runtime.shutdown().await;
 }

@@ -556,6 +556,9 @@ fn registration_dto(
             RegistrationKind::TerminalProfileProvider { profile_id, title } => {
                 ExtensionHostRegistrationKindDto::TerminalProfileProvider { profile_id, title }
             }
+            RegistrationKind::TerminalEnvironment {} => {
+                ExtensionHostRegistrationKindDto::TerminalEnvironment {}
+            }
             RegistrationKind::TaskProvider { task_type } => {
                 ExtensionHostRegistrationKindDto::TaskProvider { task_type }
             }

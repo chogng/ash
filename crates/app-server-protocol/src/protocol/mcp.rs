@@ -130,3 +130,25 @@ pub struct McpServerStatusResult {
     pub catalog_generation: u64,
     pub servers: Vec<McpServerStatusDto>,
 }
+
+/// Opens the linked resource at one durable Tool Result coordinate, never a client-selected URI.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolResourceOpenParams {
+    pub session_id: ash_protocol::SessionId,
+    pub thread_id: ash_protocol::ThreadId,
+    pub item_id: ash_protocol::ItemId,
+    pub content_index: usize,
+    #[schemars(length(min = 1, max = 256))]
+    pub operation_id: String,
+}
+
+/// Cancels a resource read owned by this connection and execution route.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolResourceCancelParams {
+    pub session_id: ash_protocol::SessionId,
+    pub thread_id: ash_protocol::ThreadId,
+    #[schemars(length(min = 1, max = 256))]
+    pub operation_id: String,
+}

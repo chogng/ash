@@ -75,3 +75,55 @@ fn truncation_is_a_noop_when_output_has_no_text() {
         output
     );
 }
+
+#[test]
+fn artifact_truncation_keeps_source_binary_and_a_shared_utf8_budget() {
+    use ash_protocol::ContentDigest;
+    use ash_protocol::ToolOutputArtifact;
+    use ash_protocol::ToolOutputArtifactData;
+    use ash_protocol::ToolOutputArtifactSource;
+    let structured = ToolOutputArtifact::new(
+        ToolOutputArtifactSource::StructuredResult,
+        "application/json".into(),
+        ToolOutputArtifactData::Json {
+            json: format!("{{\"text\":\"{}\"}}", "中文".repeat(300)),
+        },
+    );
+    let binary = ToolOutputArtifact::new(
+        ToolOutputArtifactSource::EmbeddedResource {
+            uri: "docs://data.bin".into(),
+        },
+        "application/octet-stream".into(),
+        ToolOutputArtifactData::Binary {
+            bytes: vec![0, 127, 255],
+        },
+    );
+    let output = ToolOutput::success(vec![
+        ToolContent::Text("before".into()),
+        ToolContent::Artifact(structured.clone()),
+        ToolContent::Artifact(binary.clone()),
+        ToolContent::Text("after".into()),
+    ])
+    .truncate_text(crate::ToolOutputTruncationPolicy::Bytes(256));
+    let [
+        ToolContent::Text(before),
+        ToolContent::Artifact(clipped),
+        ToolContent::Artifact(bytes),
+        ToolContent::Text(after),
+    ] = output.content()
+    else {
+        panic!("lost ordered resource parts");
+    };
+    assert!(clipped.truncated);
+    assert_eq!(clipped.source, structured.source);
+    let ToolOutputArtifactData::Text { text } = &clipped.data else {
+        panic!("truncated JSON cannot claim valid JSON");
+    };
+    assert_eq!(
+        clipped.content_digest,
+        ContentDigest::sha256(text.as_bytes())
+    );
+    assert_eq!(bytes, &binary);
+    assert!(before.len() + text.len() + after.len() <= 256);
+    assert_eq!(text.matches("Warning: truncated output").count(), 1);
+}

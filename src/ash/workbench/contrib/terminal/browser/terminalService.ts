@@ -62,8 +62,6 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (this.isDisposed) { await instance.close(); throw new CancellationError(); }
 		this.ownedInstances.set(instance.id, instance);
 		this._instances.push(instance);
-		try { instance.prepareCustomProcess(); }
-		catch (error) { instance.dispose(); throw error; }
 		this.refreshInstanceTitles();
 		if (options.deferStart && this.connectionState !== 'ready') instance.loseConnection();
 		this._onDidCreateInstance.fire(instance);

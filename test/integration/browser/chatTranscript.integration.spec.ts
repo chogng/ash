@@ -313,3 +313,143 @@ test('streamed workspace images reuse one authorized read and preserve a scrolle
 	expect(await page.evaluate(async url => { try { await fetch(url!); return false; } catch { return true; } }, url)).toBe(true);
 	expect(errors).toEqual([]);
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`MCP resources retain exact bytes, readonly editors and safe keyboard disclosure in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showArtifacts(false));
+		const tool = page.locator('.ash-chat-tool-invocation');
+		await tool.locator(':scope > summary').click();
+		const rows = tool.locator('.ash-chat-resources details');
+		await expect(rows).toHaveCount(3);
+		const textRow = rows.nth(0);
+		const jsonRow = rows.nth(1);
+		await textRow.locator('summary').focus();
+		await page.keyboard.press('Enter');
+		await expect(textRow).toHaveAttribute('open', '');
+		await expect(textRow.locator('pre')).toContainText('<script>window.compromised = true</script>');
+		await expect(tool.locator('script,img')).toHaveCount(0);
+		const open = locale === 'en' ? 'Open resource' : '打开资源';
+		const copy = locale === 'en' ? 'Copy content' : '复制内容';
+		await textRow.getByRole('button', { name: copy }).click();
+		const raw = '<script>window.compromised = true</script>\r\n中文';
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(raw);
+		await textRow.getByRole('button', { name: open }).click();
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().resource)).toMatch(/^chat-response-resource:/u);
+		const resource = await page.evaluate(() => window.ashChatTranscriptIntegration.state().resource);
+		expect(await page.evaluate(uri => window.ashChatTranscriptIntegration.readResource(uri), resource)).toEqual([...new TextEncoder().encode(raw)]);
+		const editor = page.locator('section[aria-label="File editor"] .stanza-editor');
+		await editor.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('ControlOrMeta+A');
+		await page.keyboard.insertText('should not edit');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().file)).toBe(raw);
+		await jsonRow.locator('summary').click();
+		const original = await jsonRow.elementHandle();
+		await jsonRow.getByRole('button', { name: copy }).focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('{"amount":1.0,"text":"<img src=x onerror=alert(1)>"}');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showArtifacts(true));
+		expect(await jsonRow.evaluate((element, previous) => element === previous, original)).toBe(true);
+		await expect(jsonRow.getByRole('button', { name: copy })).toBeFocused();
+		await expect(rows.nth(0).locator('summary')).toHaveText(locale === 'en' ? 'Resource: file:///untrusted/report.md' : '资源：file:///untrusted/report.md');
+		await rows.nth(0).locator('summary').click();
+		await expect(rows.nth(0)).toContainText(locale === 'en' ? 'Truncated content' : '内容已截断');
+		await page.keyboard.press('Tab');
+		await jsonRow.getByRole('button', { name: copy }).focus();
+		for (const palette of ['dark', 'light', 'hc'] as const) {
+			await page.evaluate(value => window.ashChatTranscriptIntegration.setTheme(value), palette);
+			await expect(jsonRow).toHaveCSS('border-left-width', '1px');
+			await expect(jsonRow.getByRole('button', { name: copy })).toHaveCSS('outline-style', 'solid');
+		}
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+		await expect(rows).toHaveCount(0);
+		expect(await page.evaluate(async uri => { try { await window.ashChatTranscriptIntegration.readResource(uri); return false; } catch { return true; } }, resource)).toBe(true);
+		await original?.dispose();
+		expect(errors).toEqual([]);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`linked resource opens through agentHost and releases the verified handle in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showLink('read'));
+		const row = page.locator('.ash-chat-resources details');
+		await row.locator('summary').focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests())).toEqual([]);
+		const open = row.getByRole('button', { name: locale === 'en' ? 'Open resource' : '打开资源' });
+		await page.keyboard.press('Tab');
+		await expect(open).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().file)).toBe('# Linked\r\n中文\r\n');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().resource)).toMatch(/^chat-response-resource:/u);
+		const requests = await page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests());
+		expect(requests.map(request => request.method)).toEqual(['tool/resource/open', 'resource/read', 'resource/release']);
+		expect(requests[0].params).toEqual({ sessionId: 'link-session', threadId: 'link-thread', itemId: 'linked-result', contentIndex: 0, operationId: expect.any(String) });
+		await open.click();
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests().length)).toBe(3);
+	});
+}
+
+test('removing a linked resource cancels its original operation and releases a late handle without opening an editor', async ({ page }) => {
+	await page.goto('/chatTranscript.html');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.showLink('delay'));
+	await page.locator('.ash-chat-resources summary').click();
+	await page.getByRole('button', { name: 'Open resource', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests().length)).toBe(1);
+	await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests().map(request => request.method))).toEqual(['tool/resource/open', 'tool/resource/cancel']);
+	await page.evaluate(() => window.ashChatTranscriptIntegration.finishLink());
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests().map(request => request.method))).toEqual(['tool/resource/open', 'tool/resource/cancel', 'resource/release']);
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().resource)).not.toMatch(/^chat-response-resource:/u);
+	await expect(page.locator('.ash-chat-resources')).toHaveCount(0);
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`declared MCP App negotiates in the existing isolated Webview and retains local interaction in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		const external: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		page.on('request', request => { if (request.url().startsWith('https://example.invalid')) external.push(request.url()); });
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showApp());
+		await page.locator('.ash-chat-tool-invocation > summary').click();
+		const part = page.locator('.ash-chat-mcp-app');
+		const open = part.getByRole('button', { name: locale === 'en' ? 'Open interactive view' : '打开交互式视图' });
+		await open.focus();
+		await page.keyboard.press('Enter');
+		const frame = page.frameLocator('iframe[title="' + (locale === 'en' ? 'Interactive MCP App' : '交互式 MCP App') + '"]').frameLocator('iframe');
+		await expect(frame.locator('#result')).toContainText('Report ready');
+		await expect(frame.locator('#result')).toContainText('"structuredContent":{"value":7}');
+		await expect(frame.locator('#result')).toContainText('"_meta":{"viewOnly":"metadata"}');
+		await expect(frame.locator('#context')).toContainText('"locale":"' + locale + '"');
+		await expect(page.locator('.ash-chat-mcp-app-viewport')).toHaveCSS('height', '240px');
+		await frame.getByRole('button', { name: 'Increment', exact: true }).click();
+		await expect(frame.locator('#count')).toHaveText('1');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showApp());
+		await expect(frame.locator('#count')).toHaveText('1');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests())).toEqual([]);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setTheme('light'));
+		await expect(frame.locator('#context')).toContainText('"theme":"light"');
+		await frame.getByRole('button', { name: 'Call tool', exact: true }).click();
+		await expect(frame.locator('#error')).toContainText('-32601');
+		const sandbox = await frame.locator('body').evaluate(async () => {
+			let isolated = false;
+			try { void top!.document.body; } catch { isolated = true; }
+			let denied = false;
+			try { await fetch('https://example.invalid/pwn'); } catch { denied = true; }
+			return { isolated, denied };
+		});
+		expect(sandbox).toEqual({ isolated: true, denied: true });
+		expect(external).toEqual([]);
+		await part.getByRole('button', { name: locale === 'en' ? 'Close interactive view' : '关闭交互式视图' }).click();
+		await expect(open).toBeFocused();
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.appState().views)).toBe(0);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.appState().messages)).toContainEqual({ jsonrpc: '2.0', id: 'ash-teardown', result: {} });
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+		await expect(part).toHaveCount(0);
+		expect(errors).toEqual([]);
+	});
+}

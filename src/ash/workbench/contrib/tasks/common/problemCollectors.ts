@@ -36,9 +36,9 @@ export class WatchingProblemCollector extends Disposable {
 	public readonly onDidChangeProblems = this.problemsEmitter.event;
 	public readonly onDidError = this.errorEmitter.event;
 
-	constructor(matchers: readonly ProblemMatcher[], private readonly root: URI, private readonly markers: IMarkerService, taskId: string, private readonly isOpen: (resource: URI) => boolean, private readonly searchFile?: (file: string, matcher: ProblemMatcher, signal: AbortSignal) => Promise<URI | undefined>) {
+	constructor(matchers: readonly ProblemMatcher[], private readonly root: URI, private readonly markers: IMarkerService, runId: string, private readonly isOpen: (resource: URI) => boolean, private readonly searchFile?: (file: string, matcher: ProblemMatcher, signal: AbortSignal) => Promise<URI | undefined>) {
 		super();
-		this.states = matchers.map(matcher => ({ matcher, owner: `tasks:${taskId}:${matcher.owner}`, markers: [], active: matcher.watching?.activeOnStart ?? false, completed: false, patternIndex: 0, fields: {}, version: 0, pending: 0 }));
+		this.states = matchers.map(matcher => ({ matcher, owner: `tasks:${runId}:${matcher.owner}`, markers: [], active: matcher.watching?.activeOnStart ?? false, completed: false, patternIndex: 0, fields: {}, version: 0, pending: 0 }));
 		for (const state of this.states) {
 			markers.remove(state.owner);
 		}

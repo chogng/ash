@@ -6,6 +6,7 @@ use crate::AudioAttachmentRef;
 use crate::ImageAttachmentRef;
 use crate::ToolCallId;
 use crate::ToolName;
+use crate::ToolOutputArtifact;
 use schemars::JsonSchema;
 use schemars::Schema;
 use schemars::SchemaGenerator;
@@ -101,6 +102,9 @@ pub enum MessageRole {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ContentPart {
+    Artifact {
+        artifact: ToolOutputArtifact,
+    },
     Text(String),
     AudioAttachment {
         attachment: AudioAttachmentRef,
@@ -125,6 +129,9 @@ pub enum ContentPart {
     rename_all_fields = "camelCase"
 )]
 enum ContentPartWire {
+    Artifact {
+        artifact: ToolOutputArtifact,
+    },
     AudioAttachment {
         attachment: AudioAttachmentRef,
     },
@@ -151,6 +158,9 @@ enum ContentPartWire {
     rename_all_fields = "camelCase"
 )]
 enum ContentPartRef<'a> {
+    Artifact {
+        artifact: &'a ToolOutputArtifact,
+    },
     AudioAttachment {
         attachment: &'a AudioAttachmentRef,
     },
@@ -176,6 +186,9 @@ impl Serialize for ContentPart {
         S: Serializer,
     {
         match self {
+            Self::Artifact { artifact } => {
+                ContentPartRef::Artifact { artifact }.serialize(serializer)
+            }
             Self::Text(text) => ContentPartRef::Text { text }.serialize(serializer),
             Self::AudioAttachment { attachment } => {
                 ContentPartRef::AudioAttachment { attachment }.serialize(serializer)
@@ -207,6 +220,7 @@ impl<'de> Deserialize<'de> for ContentPart {
 impl From<ContentPartWire> for ContentPart {
     fn from(part: ContentPartWire) -> Self {
         match part {
+            ContentPartWire::Artifact { artifact } => Self::Artifact { artifact },
             ContentPartWire::Text { text } => Self::Text(text),
             ContentPartWire::AudioAttachment { attachment } => Self::AudioAttachment { attachment },
             ContentPartWire::AudioUrl { url } => Self::AudioUrl { url },
@@ -240,11 +254,12 @@ impl TS for ContentPart {
 
     fn inline(cfg: &ts_rs::Config) -> String {
         format!(
-            "{{ \"type\": \"text\", text: string, }} | {{ \"type\": \"imageAttachment\", attachment: {}, detail: {}, }} | {{ \"type\": \"imageUrl\", url: string, detail: {}, }} | {{ \"type\": \"audioAttachment\", attachment: {}, }} | {{ \"type\": \"audioUrl\", url: string, }}",
+            "{{ \"type\": \"text\", text: string, }} | {{ \"type\": \"imageAttachment\", attachment: {}, detail: {}, }} | {{ \"type\": \"imageUrl\", url: string, detail: {}, }} | {{ \"type\": \"audioAttachment\", attachment: {}, }} | {{ \"type\": \"audioUrl\", url: string, }} | {{ \"type\": \"artifact\", artifact: {}, }}",
             ImageAttachmentRef::name(cfg),
             ImageDetail::name(cfg),
             ImageDetail::name(cfg),
             AudioAttachmentRef::name(cfg),
+            ToolOutputArtifact::name(cfg),
         )
     }
 
@@ -263,6 +278,7 @@ impl TS for ContentPart {
         visitor.visit::<ImageAttachmentRef>();
         visitor.visit::<AudioAttachmentRef>();
         visitor.visit::<ImageDetail>();
+        visitor.visit::<ToolOutputArtifact>();
     }
 }
 

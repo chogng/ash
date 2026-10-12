@@ -84,7 +84,8 @@ pub(crate) fn apply_settings(
                         .content
                         .iter()
                         .filter_map(|part| match part {
-                            ContentPart::Text(text) => Some(text.as_str()),
+                            ContentPart::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
+                            ContentPart::Artifact { artifact } => Some(std::borrow::Cow::Owned(artifact.model_text())),
                             ContentPart::ImageUrl { .. }
                             | ContentPart::ImageAttachment { .. }
                             | ContentPart::AudioUrl { .. }
@@ -96,6 +97,12 @@ pub(crate) fn apply_settings(
                         let truncated = formatted_truncate_text(&text, limit);
                         let mut first = true;
                         result.content.retain_mut(|part| match part {
+                            ContentPart::Artifact { .. } if first => {
+                                *part = ContentPart::Text(truncated.clone());
+                                first = false;
+                                true
+                            }
+                            ContentPart::Artifact { .. } => false,
                             ContentPart::Text(text) if first => {
                                 *text = truncated.clone();
                                 first = false;
@@ -116,7 +123,7 @@ pub(crate) fn apply_settings(
         if let Some(modalities) = &settings.input_modalities {
             for part in content {
                 let modality = match part {
-                    ContentPart::Text(_) => ModelInputModality::Text,
+                    ContentPart::Artifact { .. } | ContentPart::Text(_) => ModelInputModality::Text,
                     ContentPart::ImageUrl { .. } | ContentPart::ImageAttachment { .. } => {
                         ModelInputModality::Image
                     }

@@ -1494,3 +1494,76 @@ impl OperationClient for ErrorResponseClient {
         ))
     }
 }
+
+#[test]
+fn resource_tool_results_replay_inert_model_text_without_binary_data() {
+    use ash_protocol::ToolOutputArtifact;
+    use ash_protocol::ToolOutputArtifactData;
+    use ash_protocol::ToolOutputArtifactSource;
+    let json_text = "{\"amount\":1.0,\"text\":\"<script/>\"}";
+    let binary = ToolOutputArtifact::new(
+        ToolOutputArtifactSource::EmbeddedResource {
+            uri: "file:///remote/data.bin".into(),
+        },
+        "application/octet-stream".into(),
+        ToolOutputArtifactData::Binary {
+            bytes: vec![0, 127, 255],
+        },
+    );
+    let expected = format!("{}\n{}", json_text, binary.model_text());
+    let mut request = conformance_request();
+    let Some(InputItem::ToolResult(result)) = request.input.last_mut() else {
+        panic!("expected a Tool Result");
+    };
+    result.content = vec![
+        ContentPart::Artifact {
+            artifact: ToolOutputArtifact::new(
+                ToolOutputArtifactSource::StructuredResult,
+                "application/json".into(),
+                ToolOutputArtifactData::Json {
+                    json: json_text.into(),
+                },
+            ),
+        },
+        ContentPart::Artifact { artifact: binary },
+    ];
+    for (endpoint, response) in [
+        (
+            ApiEndpoint::OpenAiResponses,
+            json!({"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"done"}]}]}),
+        ),
+        (
+            ApiEndpoint::OpenAiChatCompletions,
+            json!({"choices":[{"message":{"content":"done"},"finish_reason":"stop"}]}),
+        ),
+        (
+            ApiEndpoint::AnthropicMessages,
+            json!({"content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}),
+        ),
+    ] {
+        let transport = CapturingTransport::new(response);
+        endpoint
+            .complete_with_client(&target(), "model", &request, &transport)
+            .unwrap();
+        let body = transport
+            .request
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .2
+            .clone();
+        let text = match endpoint {
+            ApiEndpoint::OpenAiResponses => &body["input"][2]["output"],
+            ApiEndpoint::OpenAiChatCompletions => &body["messages"][3]["content"],
+            ApiEndpoint::AnthropicMessages => &body["messages"][2]["content"][0]["content"],
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            text.as_str(),
+            Some(expected.as_str()),
+            "{endpoint:?}: {body}"
+        );
+        assert!(!text.as_str().unwrap().contains("[0,127,255]"));
+    }
+}

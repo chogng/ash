@@ -13,7 +13,7 @@ export interface IChatAttachmentsContentPartOptions {
 	readonly source?: IChatListItem['attachmentSource'];
 }
 
-type MediaPart = Exclude<ChatContentPart, { readonly type: 'text'; }>;
+type MediaPart = Exclude<ChatContentPart, { readonly type: 'text' | 'artifact'; }>;
 
 /** One media row owns its request, playback and decoded URL for exactly this transcript entry. */
 class MediaRow extends Disposable {
@@ -83,10 +83,10 @@ export class ChatAttachmentsContentPart extends Disposable {
 	}
 
 	public updateVariables(variables: readonly ChatContentPart[], source = this.options.source): void {
-		const indices = new Set(variables.flatMap((part, index) => part.type === 'text' ? [] : [index]));
+		const indices = new Set(variables.flatMap((part, index) => part.type === 'text' || part.type === 'artifact' ? [] : [index]));
 		for (const [index] of this.rows) if (!indices.has(index)) this.rows.deleteAndDispose(index);
 		for (const [index, part] of variables.entries()) {
-			if (part.type === 'text') continue;
+			if (part.type === 'text' || part.type === 'artifact') continue;
 			let row = this.rows.get(index);
 			if (!row || !sameMedia(row.part, part) || !sameSource(row.source, source)) {
 				row = this.rows.set(index, new MediaRow(this.options.ownerDocument, part, source, index));

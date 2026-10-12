@@ -69,3 +69,39 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
+
+.ash-chat-resources details {
+	margin-block: var(--ash-spacing-size80);
+	border-inline-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	padding-inline-start: var(--ash-spacing-size120);
+}
+
+.ash-chat-resources summary,
+.ash-chat-resources p {
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-resources pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: calc(var(--ash-spacing-size40) * 64);
+	overflow: auto;
+}
+
+.ash-chat-resources button {
+	color: var(--ash-button-foreground);
+	background: var(--ash-button-secondaryBackground);
+	margin-inline-end: var(--ash-spacing-size80);
+}
+
+.ash-chat-resources summary:focus-visible,
+.ash-chat-resources button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size40);
+}
+
+.ash-chat-mcp-app { min-width: 0; }
+.ash-chat-mcp-app-viewport { height: 320px; min-width: 0; }
+.ash-chat-mcp-app button { color: var(--ash-button-foreground); background: var(--ash-button-secondaryBackground); margin-block: var(--ash-spacing-size80); }
+.ash-chat-mcp-app button:focus-visible { outline: var(--ash-strokeThickness) solid var(--ash-focusBorder); outline-offset: var(--ash-spacing-size40); }

@@ -1,4 +1,4 @@
-import { AbstractDisposable, DisposableStore, noneDisposable, toDisposable, type IDisposable } from './lifecycle.js';
+import { AbstractDisposable, Disposable, DisposableStore, noneDisposable, toDisposable, type IDisposable } from './lifecycle.js';
 import { onUnexpectedError } from './errors.js';
 
 export interface Event<T> {
@@ -27,6 +27,19 @@ export namespace Event {
 				throw error;
 			}
 		};
+	}
+}
+
+/** Merges live sources; each returned lease withdraws exactly its own subscription. */
+export class EventMultiplexer<T> extends Disposable {
+	private readonly inputs = this._register(new DisposableStore());
+	private readonly emitter = this._register(new Emitter<T>());
+	readonly event = this.emitter.event;
+
+	add(event: Event<T>): IDisposable {
+		this.assertNotDisposed();
+		const subscription = this.inputs.add(event(value => this.emitter.fire(value)));
+		return toDisposable(() => { this.inputs.delete(subscription); });
 	}
 }
 

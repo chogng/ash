@@ -1,3 +1,4 @@
+import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWidget.js';
 import { ChatAttachmentsContentPart } from './chatContentParts/chatAttachmentsContentPart.js';
 import './media/chatListWidget.css';
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
@@ -319,10 +320,16 @@ export class ChatListWidget extends DomWidget {
 			content.textContent = item.text;
 			body.append(content);
 		}
-		if (item.content?.some(part => part.type !== 'text')) {
+		if (item.content?.some(part => part.type !== 'text' && part.type !== 'artifact')) {
 			const media = disposables.add(this.instantiationService.createInstance(ChatAttachmentsContentPart, { ownerDocument: article.ownerDocument, variables: item.content, source: item.attachmentSource }));
 			disposables.add(media.onDidChangeHeight(() => { if (this.visible) this.layout(); this._onDidChangeContent.fire(); }));
 			body.append(media.domNode);
+		}
+		if (item.content?.some(part => part.type === 'artifact')) {
+			const resources = disposables.add(this.instantiationService.createInstance(ChatResourceGroupWidget, article.ownerDocument));
+			disposables.add(resources.onDidChangeHeight(() => { if (this.visible) this.layout(); this._onDidChangeContent.fire(); }));
+			resources.render(item.content, JSON.stringify([item.attachmentSource?.sessionId, item.attachmentSource?.threadId, item.id]), item.attachmentSource);
+			body.append(resources.domNode);
 		}
 		if (item.detail) {
 			const detail = h(this.element.ownerDocument, "p");
@@ -394,6 +401,14 @@ function sameContent(left: IChatListItem['content'], right: IChatListItem['conte
 	return left.every((part, index) => {
 		const next = right[index];
 		if (part.type !== next.type) return false;
+		if (part.type === 'artifact') {
+			return next.type === 'artifact'
+				&& part.artifact.contentDigest === next.artifact.contentDigest
+				&& part.artifact.mimeType === next.artifact.mimeType
+				&& part.artifact.data.type === next.artifact.data.type
+				&& part.artifact.truncated === next.artifact.truncated
+				&& JSON.stringify(part.artifact.source) === JSON.stringify(next.artifact.source);
+		}
 		if (part.type === 'text') return next.type === 'text' && part.text === next.text;
 		if ('url' in part) return 'url' in next && part.url === next.url;
 		return 'attachment' in next && part.attachment.contentDigest === next.attachment.contentDigest;

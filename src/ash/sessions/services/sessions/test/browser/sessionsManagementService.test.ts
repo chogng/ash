@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
-import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../../../.build/protocol/typescript/index.js";
+import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto } from "../../../../../../../.build/protocol/typescript/index.js";
 import { IAppServerApi, type AppServerConnectionState, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { IAgentSessionService, IAgentTurnService } from "../../../../../platform/agentHost/common/agentService.js";
+import { IAgentSessionService, IAgentTurnService, type ThreadSubscription } from "../../../../../platform/agentHost/common/agentService.js";
 import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
@@ -826,14 +826,12 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	};
 }
 
-function threadProjection(sessionId: string, threadId: string): SessionThreadProjection {
+function threadProjection(sessionId: string, threadId: string): ThreadSubscription {
 	return {
 		thread: {
 			advisor: { type: "default" },
 			agentId: "agent-1",
 			origin: { type: "root" },
-			hookRuns: [],
-			referenceCost: { knownAmounts: [], complete: true },
 			sessionId,
 			threadId,
 			title: `Thread ${threadId}`,

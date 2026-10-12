@@ -89,6 +89,7 @@ impl McpToolBinding {
 /// Validated host definition and frozen route for one discovered MCP tool.
 #[derive(Clone, Debug, PartialEq)]
 pub struct McpToolDescriptor {
+    pub(crate) app_resource_uri: Option<String>,
     binding: McpToolBinding,
     definition: ToolDefinition,
 }
@@ -237,6 +238,22 @@ fn project_tool(
     catalog_generation: u64,
     loading: ToolLoading,
 ) -> Result<McpToolDescriptor, McpRuntimeError> {
+    let app_resource_uri = tool
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("ui"))
+        .and_then(|ui| ui.get("resourceUri"));
+    let app_resource_uri = match app_resource_uri {
+        None => None,
+        Some(serde_json::Value::String(uri))
+            if uri.starts_with("ui://")
+                && uri.len() <= 4096
+                && !uri.chars().any(char::is_control) =>
+        {
+            Some(uri.clone())
+        }
+        Some(_) => return Err(catalog_error(server, "invalid MCP App resource URI")),
+    };
     let remote_name = tool.name.into_owned();
     let exposed_name = exposed_name(server, &remote_name)?;
     let description = tool
@@ -269,6 +286,7 @@ fn project_tool(
         catalog_generation,
     };
     Ok(McpToolDescriptor {
+        app_resource_uri,
         binding,
         definition,
     })

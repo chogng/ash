@@ -73,6 +73,7 @@ pub(super) fn validate_registrations(
     let mut debugger_types = BTreeSet::new();
     let mut task_types = BTreeSet::new();
     let mut terminal_profiles = BTreeSet::new();
+    let mut has_terminal_environment = false;
     let mut test_profile_providers = BTreeSet::new();
     for registration in registrations {
         validate_identifier(&registration.registration_id)?;
@@ -269,6 +270,13 @@ pub(super) fn validate_registrations(
                 validate_display_text(title, "terminal profile title")?;
                 ExtensionCapability::TerminalProfileProvider
             }
+            RegistrationKind::TerminalEnvironment {} => {
+                if has_terminal_environment {
+                    return Err(protocol_error("terminal environment collection must be unique"));
+                }
+                has_terminal_environment = true;
+                ExtensionCapability::TerminalProfileProvider
+            }
             RegistrationKind::TaskProvider { task_type } => {
                 validate_selector(task_type, "task type")?;
                 require_unique(&mut task_types, task_type, "task types")?;
@@ -397,8 +405,8 @@ fn validate_display_text(value: &str, label: &'static str) -> Result<(), Protoco
 }
 
 fn require_unique<'a>(
-    values: &mut BTreeSet<&'a String>,
-    value: &'a String,
+    values: &mut BTreeSet<&'a str>,
+    value: &'a str,
     label: &'static str,
 ) -> Result<(), ProtocolError> {
     if !values.insert(value) {

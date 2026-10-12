@@ -35,6 +35,126 @@ const MCP_OAUTH_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const MCP_OAUTH_DISCONNECT_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 impl AppServer {
+    pub(super) fn tool_resource_cancel(
+        &self,
+        connection: &super::ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::mcp::ToolResourceCancelParams =
+            decode(params)?;
+        self.read_session_thread(&params.session_id, &params.thread_id)?;
+        if params.operation_id.is_empty() || params.operation_id.len() > 256 {
+            return Err(invalid_params());
+        }
+        self.request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id);
+        self.request_scheduler.cancel_waiting_requests();
+        result(&())
+    }
+
+    pub(super) fn tool_resource_open(
+        &self,
+        connection: &super::ConnectionState,
+        params: &Value,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Value, RpcError> {
+        use ash_protocol::ContentPart;
+        use ash_protocol::ThreadItem;
+        use ash_protocol::ToolOutputArtifactData;
+        use ash_protocol::ToolOutputArtifactSource;
+        let params: ash_app_server_protocol::protocol::mcp::ToolResourceOpenParams =
+            decode(params)?;
+        if params.operation_id.is_empty() || params.operation_id.len() > 256 {
+            return Err(invalid_params());
+        }
+        let thread = self.read_session_thread(&params.session_id, &params.thread_id)?;
+        let (turn, item) = thread
+            .turns
+            .iter()
+            .find_map(|turn| {
+                turn.items
+                    .iter()
+                    .find(|item| item.item_id() == &params.item_id)
+                    .map(|item| (turn, item))
+            })
+            .ok_or_else(invalid_params)?;
+        let ThreadItem::ToolResult {
+            tool_call_id,
+            content: Some(content),
+            ..
+        } = item
+        else {
+            return Err(invalid_params());
+        };
+        let Some(ContentPart::Artifact { artifact }) = content.get(params.content_index) else {
+            return Err(invalid_params());
+        };
+        let uri = match &artifact.source {
+            ToolOutputArtifactSource::ResourceLink { uri } | ToolOutputArtifactSource::McpApp { uri } => uri,
+            ToolOutputArtifactSource::EmbeddedResource { .. } | ToolOutputArtifactSource::StructuredResult => return Err(invalid_params()),
+        };
+        let (call, binding) = turn
+            .items
+            .iter()
+            .find_map(|item| match item {
+                ThreadItem::ToolCall {
+                    tool_call_id: id,
+                    name,
+                    arguments_json,
+                    binding: Some(binding),
+                    ..
+                } if id == tool_call_id => Some((
+                    ash_protocol::ToolCall {
+                        id: id.clone(),
+                        name: name.clone(),
+                        arguments: serde_json::from_str(arguments_json).ok()?,
+                    },
+                    binding,
+                )),
+                _ => None,
+            })
+            .ok_or_else(invalid_params)?;
+        let resource = self
+            .turn_executor_snapshot()
+            .read_tool_resource(&call, binding, uri, cancellation)
+            .map_err(super::core_error)?;
+        let bytes = match resource.data {
+            ToolOutputArtifactData::Text { text } => text.into_bytes(),
+            ToolOutputArtifactData::Binary { bytes } => bytes,
+            ToolOutputArtifactData::Json { json } => json.into_bytes(),
+        };
+        cancellation
+            .check()
+            .map_err(|_| RpcError::new(-32800, AppServerErrorName::RequestCancelled))?;
+        let state = connection
+            .state
+            .lock()
+            .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
+        if state.closed {
+            return Err(RpcError::new(-32800, AppServerErrorName::RequestCancelled));
+        }
+        let resource = self
+            .resources
+            .lock()
+            .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?
+            .create_with_limit(
+                connection.connection_id,
+                resource.mime_type,
+                bytes,
+                Duration::from_secs(300),
+                262_144,
+            )
+            .map_err(super::operations::resource_rpc_error)?;
+        result(
+            &ash_app_server_protocol::protocol::resources::ResourceMetadataResult {
+                resource_id: resource.resource_id,
+                mime_type: resource.mime_type,
+                size: resource.size,
+                sha256: resource.sha256,
+            },
+        )
+    }
+
     pub(super) fn mcp_oauth_start(&self, params: &Value) -> Result<Value, RpcError> {
         let params: McpOAuthStartParams = decode(params)?;
         let server_id = parse_server_id(params.server_id)?;

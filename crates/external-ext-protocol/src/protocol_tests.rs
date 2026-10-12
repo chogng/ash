@@ -1052,3 +1052,34 @@ fn terminal_profile_registration_requires_capability_and_unique_bounded_identity
     invalid["shellPath"] = json!("/untrusted/shell");
     assert!(serde_json::from_value::<RegistrationDescriptor>(invalid).is_err());
 }
+
+#[test]
+fn terminal_environment_registration_requires_the_admitted_terminal_ceiling() {
+    let mut params = activation();
+    let registration = json!({"registrationId":"environment", "kind":"terminalEnvironment"});
+    let mut request = ExtensionHostRequest {
+        context: RequestContext::new(1, 1, 1),
+        request: HostRequestKind::Activate(params.clone()),
+    };
+    assert_command_registration_rejected(&request, registration.clone());
+    params.capabilities = vec![ExtensionCapability::TerminalProfileProvider];
+    request.request = HostRequestKind::Activate(params);
+    let descriptor: RegistrationDescriptor = serde_json::from_value(registration.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&descriptor).unwrap(), registration);
+    let response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![descriptor.clone()],
+        })),
+    };
+    response.validate_for(&request, &ProtocolLimits::default()).unwrap();
+    let mut duplicate = descriptor.clone();
+    duplicate.registration_id = "second".into();
+    let duplicated = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![descriptor, duplicate],
+        })),
+    };
+    assert!(duplicated.validate_for(&request, &ProtocolLimits::default()).is_err());
+}

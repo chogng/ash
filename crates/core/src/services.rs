@@ -308,6 +308,19 @@ impl OneTimeToolGrant {
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
 
+    /// Reads a user-selected resource through a validated originating tool service.
+    /// Non-resource providers reject this optional capability; callers must validate the frozen binding first.
+    fn read_resource(
+        &self,
+        _call: &ToolCall,
+        _uri: &str,
+        _cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
+        Err(CoreError::Execution(
+            "this tool provider cannot read resources".into(),
+        ))
+    }
+
     /// Declares a call's transcript activity independently of execution authorization.
     fn activity(&self, _call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
         None

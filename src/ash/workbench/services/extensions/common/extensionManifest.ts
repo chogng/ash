@@ -1,3 +1,4 @@
+import { ExtensionsRegistry } from './extensionsRegistry.js';
 import { localize } from '../../../../nls.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
 import { ConfigurationScope, type IConfigurationNode, type IConfigurationPropertySchema } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -630,18 +631,8 @@ function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['
 }
 
 function parseTerminalProfiles(value: unknown): ExtensionManifest['contributes']['terminalProfiles'] {
-	if (value === undefined) return Object.freeze([]);
-	if (!Array.isArray(value) || value.length > 128) throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
-	const ids = new Set<string>();
-	return Object.freeze(value.map(candidate => {
-		const profile = record(candidate, 'Terminal profile');
-		if (typeof profile.id !== 'string' || !/^[\w.-]{1,256}$/.test(profile.id) || ids.has(profile.id)
-			|| typeof profile.title !== 'string' || !profile.title.trim() || profile.title.length > 256 || /[\u0000-\u001f\u007f]/.test(profile.title)
-			|| profile.icon !== undefined && (typeof profile.icon !== 'string' || !/^[\w-]{1,256}$/.test(profile.icon))
-			|| profile.color !== undefined && (typeof profile.color !== 'string' || !/^[\w.]{1,256}$/.test(profile.color))) {
-			throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
-		}
-		ids.add(profile.id);
-		return Object.freeze({ id: profile.id, title: profile.title, icon: profile.icon as string | undefined, color: profile.color as string | undefined });
-	}));
+ if (value === undefined) return Object.freeze([]);
+ const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['terminalProfiles']>('terminalProfiles');
+ if (!point) throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
+ return point.validate(value);
 }

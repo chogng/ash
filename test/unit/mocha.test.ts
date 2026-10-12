@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -8,11 +8,14 @@ import { readFile } from 'node:fs/promises';
 import { after, test } from 'node:test';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
-const outputDirectory = resolve(desktopDirectory, '.build/desktop/test');
+// Runner fixtures belong to this self-test, outside the shared compiler cleanup.
+const outputDirectory = mkdtempSync(join(desktopDirectory, '.build/desktop/runner-fixtures-'));
+cpSync(resolve(desktopDirectory, '.build/desktop/test'), outputDirectory, { recursive: true });
+const runnerEnvironment = { ...process.env, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory };
 const parent = join(outputDirectory, 'test/unit');
 mkdirSync(parent, { recursive: true });
 const directory = mkdtempSync(join(parent, 'runner-'));
-after(() => rmSync(directory, { recursive: true, force: true }));
+after(() => rmSync(outputDirectory, { recursive: true, force: true }));
 writeFileSync(join(directory, 'first.test.js'), `import { test } from 'mocha';
 test('selected behavior', () => {});
 test('deliberate failure', () => { throw new Error('runner regression sentinel'); });
@@ -31,7 +34,7 @@ await runUnitTests(${JSON.stringify([first, 'test/unit/missing-required.test.js'
 
 function run(args: readonly string[], entrypoint = 'test/unit/run.ts'): { status: number | null; output: string; } {
 	const result = spawnSync(process.execPath, [entrypoint, ...args], {
-		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true,
+		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true, env: runnerEnvironment,
 	});
 	if (result.error) { throw result.error; }
 	return { status: result.status, output: result.stdout + result.stderr };
@@ -102,7 +105,7 @@ test('retains a dependency loaded after cleanup', async () => {
  assert.equal((await import('./snapshot-dependency.js')).value, 42);
 });
 `);
-	const child = spawn(process.execPath, ['test/unit/run.ts', '--run', relative(outputDirectory, waiting).replaceAll('\\', '/')], { cwd: desktopDirectory, stdio: ['ignore', 'pipe', 'pipe'] });
+	const child = spawn(process.execPath, ['test/unit/run.ts', '--run', relative(outputDirectory, waiting).replaceAll('\\', '/')], { cwd: desktopDirectory, env: runnerEnvironment, stdio: ['ignore', 'pipe', 'pipe'] });
 	let output = '';
 	child.stdout.on('data', chunk => { output += chunk; });
 	child.stderr.on('data', chunk => { output += chunk; });
@@ -141,7 +144,7 @@ test('waiting', async function() {
 `);
 		writeFileSync(following, `import { test } from 'mocha'; import { writeFileSync } from 'node:fs'; test('must not start', () => writeFileSync(${JSON.stringify(later)}, 'ran'));`);
 		const paths = [waiting, following].map(path => relative(outputDirectory, path).replaceAll('\\', '/'));
-		const child = spawn(process.execPath, ['test/unit/run.ts', '--run', paths[0], '--run', paths[1]], { cwd: desktopDirectory, stdio: ['ignore', 'pipe', 'pipe'] });
+		const child = spawn(process.execPath, ['test/unit/run.ts', '--run', paths[0], '--run', paths[1]], { cwd: desktopDirectory, env: runnerEnvironment, stdio: ['ignore', 'pipe', 'pipe'] });
 		let output = '';
 		child.stdout.on('data', chunk => { output += chunk; });
 		child.stderr.on('data', chunk => { output += chunk; });

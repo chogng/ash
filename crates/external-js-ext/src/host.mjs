@@ -339,11 +339,10 @@ function registerPseudoterminalCallbacks(registration, provider) {
 
 	const handle = register({
 		...registration, operation: [
-			...(registration.kind === 'taskEvents' ? ['taskEvent'] : registration.kind === 'terminalProfileProvider' ? ['createTerminalProfile', 'getTerminalEnvironment'] : ['provideTasks', 'resolveTask']),
+			...(registration.kind === 'taskEvents' ? ['taskEvent'] : registration.kind === 'terminalProfileProvider' ? ['createTerminalProfile'] : ['provideTasks', 'resolveTask']),
 			'createTaskTerminal', 'openTaskTerminal', 'readTaskTerminal', 'inputTaskTerminal', 'resizeTaskTerminal', 'closeTaskTerminal',
 		],
 		async callback(context, payload, operation) {
-			if (operation === 'getTerminalEnvironment') return provider.getEnvironmentVariableCollection();
 			if (operation === 'taskEvent') return await provider.onTaskEvent(context, payload);
 			if (operation === 'provideTasks') return { tasks: await provider.provideTasks(context) ?? [] };
 			if (operation === 'resolveTask') {
@@ -391,6 +390,10 @@ function registerPseudoterminalCallbacks(registration, provider) {
 }
 
 export const terminals = Object.freeze({
+	registerEnvironmentVariableCollection(registrationId, snapshot) {
+		if (typeof snapshot !== 'function') throw new TypeError('Terminal environment collection requires a snapshot callback');
+		return register({ registrationId, kind: 'terminalEnvironment', operation: 'getTerminalEnvironment', callback: snapshot });
+	},
 	registerTerminalProfileProvider(registrationId, profileId, title, provider) {
 		if (typeof provider?.createTerminalProfile !== 'function' || typeof profileId !== 'string' || !profileId || typeof title !== 'string' || !title) throw new TypeError('Terminal profile providers require an ID, title and callback');
 		return registerPseudoterminalCallbacks({ registrationId, kind: 'terminalProfileProvider', profileId, title }, provider);

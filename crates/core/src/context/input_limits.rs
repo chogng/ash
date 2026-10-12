@@ -163,7 +163,8 @@ fn limit_content(
     let combined_text = content
         .iter()
         .filter_map(|part| match part {
-            ContentPart::Text(text) => Some(text.as_str()),
+            ContentPart::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
+            ContentPart::Artifact { artifact } => Some(std::borrow::Cow::Owned(artifact.model_text())),
             ContentPart::ImageAttachment { .. }
             | ContentPart::ImageUrl { .. }
             | ContentPart::AudioAttachment { .. }
@@ -481,7 +482,8 @@ mod tests {
         let selected_text = selected_content
             .iter()
             .filter_map(|part| match part {
-                ContentPart::Text(text) => Some(text.as_str()),
+                ContentPart::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
+            ContentPart::Artifact { artifact } => Some(std::borrow::Cow::Owned(artifact.model_text())),
                 ContentPart::ImageAttachment { .. }
                 | ContentPart::ImageUrl { .. }
                 | ContentPart::AudioAttachment { .. }

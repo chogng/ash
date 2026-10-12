@@ -126,7 +126,7 @@ pub(crate) fn require_materialized_attachments(request: &ModelRequest) -> Result
                 audio::load_data_url(url)
                     .map_err(|error| ApiError::InvalidRequest(error.to_string()))?;
             }
-            ContentPart::Text(_) | ContentPart::ImageUrl { .. } => {}
+            ContentPart::Artifact { .. } | ContentPart::Text(_) | ContentPart::ImageUrl { .. } => {}
         }
     }
     Ok(())

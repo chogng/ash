@@ -1,3 +1,4 @@
+import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { registerChatActions } from './actions/chatActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
@@ -23,6 +24,8 @@ registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Del
 registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
 
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
+registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerChatActions();
 registerChatCodeBlockActions();
 registerSkillActions();

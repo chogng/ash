@@ -41,7 +41,7 @@ function createServices(resources: DisposableStore): {
 	let catalog: ExtensionCatalog = { generation: 0, extensions: [], diagnostics: [] };
 	resources.add(catalogChanged.event(next => { catalog = next; }));
 	const extensions: IExtensionService = Object.assign(toDisposable(() => { }), {
-		terminalProfiles: [],
+		getExtensionPointContributions: () => [],
 		currentCatalog: catalog,
 		getExtension: async (id: string) => catalog.extensions.find(extension => extension.id.toLowerCase() === id.toLowerCase()),
 		themes: { currentCatalog: { revision: 0, themes: [] }, onDidChange: Event.None },

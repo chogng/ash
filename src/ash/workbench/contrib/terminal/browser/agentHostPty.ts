@@ -28,6 +28,7 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	get shellIntegration() { return this.manager.shellIntegration; }
 	get onProcessError() { return this.manager.onProcessError; }
 	get onDidChangeCommandStatus() { return this.manager.onDidChangeCommandStatus; }
+	get onDidChangeMetadata() { return this.manager.onDidChangeMetadata; }
 	get onOutputGap() { return this.manager.onOutputGap; }
 	get onPtyReconnect() { return this.manager.onPtyReconnect; }
 
@@ -46,7 +47,7 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	close(): Promise<void> {
 		if (this.closeTask) return this.closeTask;
 		this.stop();
-		this.closeTask = this.processes.close({ terminalId: this.creation.terminalId, ...(this.dirId === undefined ? {} : { dirId: this.dirId }) }).finally(() => {
+		this.closeTask = Promise.resolve().then(() => this.processes.close({ terminalId: this.creation.terminalId, ...(this.dirId === undefined ? {} : { dirId: this.dirId }) })).finally(() => {
 			this.dispose();
 		});
 		return this.closeTask;

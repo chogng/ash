@@ -29,6 +29,7 @@ pub(crate) fn normalize_image_details(
                 }
                 ContentPart::ImageUrl { .. }
                 | ContentPart::ImageAttachment { .. }
+                | ContentPart::Artifact { .. }
                 | ContentPart::Text(_)
                 | ContentPart::AudioAttachment { .. }
                 | ContentPart::AudioUrl { .. } => {}

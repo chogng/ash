@@ -40,7 +40,7 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../.build/protocol/typescript/index.js";
-import type { SessionMutationParams, SessionOperationInput } from "../../../platform/agentHost/common/agentService.js";
+import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from "../../../platform/agentHost/common/agentService.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
 import { Emitter, Event } from "../../../base/common/event.js";
@@ -3221,7 +3221,7 @@ function transcript(value: Thread): ThreadTranscriptSnapshot {
 	};
 }
 
-function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn failed"): Thread["turns"][number] {
+function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn failed"): Omit<Thread["turns"][number], 'items'> & { items: []; } {
 	return {
 		turnId: "turn-1",
 		status: "failed",
@@ -3504,7 +3504,7 @@ test("Advisor model choices include the fixed catalog before connection setup", 
 });
 
 test("Advisor transcript groups the call and renders advice as a disclosure", () => {
-	const entries: ThreadTranscriptSnapshot["entries"] = [
+	const entries: readonly ThreadTranscriptEntry[] = [
 		{ type: "item", entryId: "call", turnId: "turn", transient: false, item: { type: "toolCall", itemId: "call", turnId: "turn", toolCallId: "consult", name: "advisor", argumentsJson: '{"question":"Check cancellation"}' } },
 		{ type: "item", entryId: "result", turnId: "turn", transient: false, item: { type: "toolResult", itemId: "result", turnId: "turn", toolCallId: "consult", text: JSON.stringify({ status: "reviewed", model: { provider: "test", model: "reviewer" }, advice: "Check **cancellation**.", question: "Check cancellation", sourceSequence: 10, usage: { inputTokens: 120, outputTokens: 8 } }), isError: false } },
 	];

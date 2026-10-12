@@ -282,6 +282,15 @@ export interface ChatToolCallBinding {
 }
 
 export type ChatContentPart =
+	| {
+		readonly type: 'artifact'; readonly artifact: {
+			readonly source: { readonly type: 'embeddedResource'; readonly uri: string; } | { readonly type: 'resourceLink'; readonly uri: string; } | { readonly type: 'mcpApp'; readonly uri: string; } | { readonly type: 'structuredResult'; };
+			readonly mimeType: string;
+			readonly data: { readonly type: 'text'; readonly text: string; } | { readonly type: 'bytes'; readonly bytes: Uint8Array; } | { readonly type: 'json'; readonly json: string; };
+			readonly contentDigest: string;
+			readonly truncated: boolean;
+		};
+	}
 	| { readonly type: 'text'; readonly text: string; }
 	| {
 		readonly type: 'imageAttachment';
@@ -740,6 +749,7 @@ export interface IAgentThreadService {
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
 	readonly onDidUpdateThreadTranscript: Event<ThreadTranscriptUpdateEnvelope>;
 	readAttachment(source: AgentAttachmentSource, signal?: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string; }>;
+	readToolResource(source: AgentAttachmentSource & { readonly contentIndex: number; }, signal?: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string; }>;
 	readHistoryState(params: { readonly sessionId: string; readonly threadId: string; }): Promise<AgentThreadHistoryState>;
 	moveHistory(params: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; readonly commandId: string; }): Promise<void>;
 	readContext(params: { readonly sessionId: string; readonly threadId: string; }): Promise<{ readonly context: AgentContextUsage; }>;

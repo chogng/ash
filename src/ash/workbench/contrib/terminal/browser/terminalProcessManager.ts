@@ -43,6 +43,7 @@ export class TerminalProcessManager extends Disposable {
 	public readonly onProcessError = this.processErrorEmitter.event;
 	public readonly onProcessData = this.processDataEmitter.event;
 	public readonly onDidChangeCommandStatus = this.commandSource.onDidChangeCommandStatus;
+	public readonly onDidChangeMetadata = this.commandSource.onDidChangeMetadata;
 	public readonly onProcessExit = this.processExitEmitter.event;
 	public readonly onPtyReconnect = this.ptyReconnectEmitter.event;
 	public readonly onOutputGap = this.outputGapEmitter.event;

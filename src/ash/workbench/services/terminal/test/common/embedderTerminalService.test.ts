@@ -28,9 +28,10 @@ suite('Embedder terminal creation', () => {
 		first.services.get(IEmbedderTerminalService).createTerminal({ name: 'First window', pty: firstHost });
 		store.add(second.services.createInstance(TerminalMainContribution));
 		second.services.get(IEmbedderTerminalService).createTerminal({ name: 'Second window', pty: secondHost });
+		await waitFor(() => secondHost.opens === 1);
 		assert.deepEqual({ first: first.terminals.instances.length, second: second.terminals.instances.map(instance => instance.title), opens: firstHost.opens }, { first: 0, second: ['Second window'], opens: 0 });
 		store.add(first.services.createInstance(TerminalMainContribution));
-		await Promise.resolve();
+		await waitFor(() => firstHost.opens === 1);
 		assert.deepEqual([first.terminals.instances.map(instance => instance.title), second.terminals.instances.map(instance => instance.title)], [['First window'], ['Second window']]);
 	});
 
@@ -41,6 +42,7 @@ suite('Embedder terminal creation', () => {
 		const host = store.add(new HostPty());
 		host.onOpen = () => { host.output.fire('first line'); host.ended.fire(0); };
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Early', pty: host });
+		await waitFor(() => host.opens === 1);
 		const instance = terminals.instances[0];
 		const events: (string | number | undefined)[] = [];
 		store.add(instance.onDidWriteData(data => events.push(new TextDecoder().decode(data.data))));
@@ -66,8 +68,7 @@ suite('Embedder terminal creation', () => {
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Host output', pty: host });
 		assert.equal(terminals.instances.length, 0);
 		store.add(services.createInstance(TerminalMainContribution));
-		await Promise.resolve();
-		await Promise.resolve();
+		await waitFor(() => reveals.length === 1 && terminals.instances[0]?.state === 'exited');
 		const instance = terminals.instances[0];
 		assert.deepEqual({ title: instance.title, state: instance.state, exitCode: instance.exitCode, pid: instance.processId, cwd: instance.initialCwd, output, exited, reveals }, {
 			title: 'Host output', state: 'exited', exitCode: 0, pid: -1, cwd: '', output: ['early output'], exited: [0], reveals: [TERMINAL_VIEW_ID],
@@ -82,10 +83,12 @@ suite('Embedder terminal creation', () => {
 		store.add(services.createInstance(TerminalMainContribution));
 		const host = store.add(new HostPty());
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Original', pty: host });
+		await waitFor(() => host.opens === 1);
 		const instance = terminals.instances[0];
 		host.name.fire('Renamed');
 		const second = store.add(new HostPty());
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Second', pty: second });
+		await waitFor(() => second.opens === 1);
 		terminals.moveTerminal(instance, 1);
 		assert.deepEqual(terminals.instances.map(item => ({ title: item.title, readOnly: item.isReadOnly, state: item.state })), [
 			{ title: 'Second', readOnly: true, state: 'running' }, { title: 'Renamed', readOnly: true, state: 'running' },
@@ -94,7 +97,7 @@ suite('Embedder terminal creation', () => {
 		assert.equal(host.closes, 1);
 	});
 
-	test('window disposal closes running and unconsumed host PTYs once', () => {
+	test('window disposal closes running and unconsumed host PTYs once', async () => {
 		using store = new DisposableStore();
 		const owner = store.add(new DisposableStore());
 		const { services, terminals } = createServices(owner);
@@ -108,8 +111,21 @@ suite('Embedder terminal creation', () => {
 		runningOwner.add(running.services.createInstance(TerminalMainContribution));
 		const active = store.add(new HostPty());
 		running.services.get(IEmbedderTerminalService).createTerminal({ name: 'Running', pty: active });
+		await waitFor(() => active.opens === 1);
 		runningOwner.dispose();
 		assert.deepEqual({ opens: active.opens, closes: active.closes, instances: running.terminals.instances.length }, { opens: 1, closes: 1, instances: 0 });
+	});
+
+	test('window disposal before asynchronous publication releases an unopened host PTY', async () => {
+		using store = new DisposableStore();
+		const owner = store.add(new DisposableStore());
+		const { services, terminals } = createServices(owner);
+		owner.add(services.createInstance(TerminalMainContribution));
+		const host = store.add(new HostPty());
+		services.get(IEmbedderTerminalService).createTerminal({ name: 'Pending', pty: host });
+		owner.dispose();
+		await waitFor(() => host.closes === 1);
+		assert.deepEqual({ opens: host.opens, closes: host.closes, instances: terminals.instances.length }, { opens: 0, closes: 1, instances: 0 });
 	});
 
 	test('closing during instance publication releases the PTY before it opens', async () => {
@@ -132,6 +148,7 @@ suite('Embedder terminal creation', () => {
 		store.add(services.createInstance(TerminalMainContribution));
 		const host = store.add(new HostPty());
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Host', pty: host });
+		await waitFor(() => host.opens === 1);
 		const instance = terminals.instances[0];
 		host.ended.fire(3);
 		await terminals.relaunchTerminal(instance, { rows: 30, cols: 100 });
@@ -150,13 +167,21 @@ suite('Embedder terminal creation', () => {
 		const host = store.add(new HostPty());
 		host.onOpen = () => { throw new Error('Host open failed'); };
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Broken', pty: host });
-		await Promise.resolve();
+		await waitFor(() => terminals.instances[0]?.state === 'error');
 		const instance: ITerminalInstance = terminals.instances[0];
 		assert.equal(instance.state, 'error');
 		await instance.close();
 		assert.deepEqual({ closes: host.closes, instances: terminals.instances.length }, { closes: 1, instances: 0 });
 	});
 });
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+	for (let attempt = 0; attempt < 100; attempt++) {
+		if (predicate()) return;
+		await new Promise<void>(resolve => setImmediate(resolve));
+	}
+	throw new Error('Timed out waiting for host terminal lifecycle');
+}
 
 class HostPty extends Disposable implements IEmbedderTerminalPty {
 	public readonly output = this._register(new Emitter<string>());

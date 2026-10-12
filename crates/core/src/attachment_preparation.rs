@@ -42,7 +42,7 @@ pub(crate) fn prepare_tool_content(
                     .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
                 continue;
             }
-            ContentPart::Text(_) => continue,
+            ContentPart::Artifact { .. } | ContentPart::Text(_) => continue,
         };
         *part = replacement.map_err(|error| CoreError::InvalidInput(error.to_string()))?;
     }

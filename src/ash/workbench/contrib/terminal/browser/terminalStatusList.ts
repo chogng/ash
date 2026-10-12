@@ -1,6 +1,7 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import type { ITerminalStatus, ITerminalStatusList } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalStatusList } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalStatus } from '../../../services/terminal/common/terminal.js';
 
 /** Owns display messages, never the process lifecycle that produced them. */
 export class TerminalStatusList extends Disposable implements ITerminalStatusList {

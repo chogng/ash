@@ -30,7 +30,13 @@ Rename / Change Icon 命令和实例菜单 → 新同路径 `browser/terminalEdi
 
 Ubuntu 自动图标不依赖配置名或终端标题。参照 VS Code 的职责划分，`BrowserTerminalProfileResolverService` 使用执行端已解析的启动程序和参数选择默认图标；配置菜单调用既有 `resolveIcon`，创建后的实例保存解析结果，显示层只消费图标。识别 Ubuntu launcher 及 `wsl.exe -d/--distribution` 的实际发行版名，保留显式图标优先级；Windows 原始命令行仅为识别读取，原启动字符串不被拆写，子命令里的 `-d Ubuntu` 不当作 WSL 参数。VS Code 在执行端自动发现 WSL 发行版时赋图标；Ash 的自定义 WSL 参数推断是本次用户要求的补充，不表示已实现 WSL 自动发现或读取无参数 WSL 的默认发行版。
 
-本次图标验证：原 unit runner 的两项定向回归通过，覆盖配置改名、启动程序、两种 WSL 发行版参数、Windows 引号/反斜杠、子命令隔离、变量解析与显式覆盖；正常 Chromium 入口的三项场景通过，验证改名前后菜单和实例图标以及中文配置/原始命令行回归。完整 unit 编译曾遇到共享 PTY 事件类型不匹配，运行完整配置套件另遇到范围外 `AgentHostPty` 重复 disposable owner，不能记为全套通过；本次未改动这些 PTY 所有权实现。
+本次图标验证：原 unit runner 的两项定向回归通过，覆盖配置改名、启动程序、两种 WSL 发行版参数、Windows 引号/反斜杠、子命令隔离、变量解析与显式覆盖；正常 Chromium 入口的三项场景通过，验证改名前后菜单和实例图标以及中文配置/原始命令行回归。
+
+随后修复 PTY 类型与生命周期阻塞：保留上游 `string | IProcessDataEvent` 输出契约，实例转换字符串而保留结构化事件及其提交承诺。`AgentHostTerminalService` 的普通 Map 仅索引句柄，原实例 lifetime 是 PTY 的唯一 disposable owner；PTY 本地释放时立即注销，延迟关闭仅在索引仍指向自己时删除，不能删掉同 ID 的替代 PTY。后端窗口关闭仍请求剩余句柄 shutdown，原异步关闭结果、失败传播、重启和晚到进程释放由现有 owner 保持。自定义 PTY 在创建工厂返回前绑定到实例，窗口在异步发布前关闭时也能释放未打开的宿主句柄。导航夹具使用真实 addon，嵌入式终端测试等待可观察生命周期，扩展宿主夹具补齐真实环境变量服务的单一注册。
+
+剩余五处类型错误已按原 owner 的契约闭合：App Server 适配层将 artifact 的二进制传输数组转换为领域字节，并保留合法 JSON 的原始字符串和空值内容；Chat 按内容联合类型区分 artifact 与 attachment；Sessions 服务夹具使用领域 `ThreadSubscription`，扩展目录夹具补齐元数据。完整运行暴露的夹具问题也已修正：终端布局和标题测试注册真实 `EnvironmentVariableService`，singleton 只由容器持有；只读资源测试分别验证 FileService 的能力检查、provider 的只读拒绝和拒绝后的原始字节。新增工具资源请求参数在 Rust 生成源注册，不手改生成文件。
+
+运行器自测复制完整编译快照到自己的独立目录，并通过已有 `ASH_UNIT_TEST_OUTPUT_DIRECTORY` 将该目录交给子运行器，避免另一轮编译清理其夹具；测试资源预加载也读取同一快照，结束后由本轮清理。此前定向入口五文件 277 项和 `just verify ash-external-ext-protocol` 的 41 项测试通过。最终不带筛选的标准 `pnpm test:unit` 全部通过，退出码 0：资源、协议、语言和图标准备、类型编译、10 项运行器自测及 838 文件的 6353 项单测均通过。相关九个 TypeScript 文件格式检查通过；`just generate-protocol`、`pnpm typecheck:protocol` 和 `just verify ash-app-server-protocol` 的编译、129 项主测试、2 项兼容性测试、1 项生成一致性测试及警告检查通过。
 
 准确新增路径仅 VS Code：上述 2 文件。准确局部路径双方已有：terminalInstance.ts（用户元数据）、terminalService.ts（已有 title callback 先刷新原组名，再发布 labels）、terminalActions.ts/terminalMenus.ts/common/terminal.ts（命令/菜单）、terminal.contribution.ts（delayed 注册）、terminalEditorInput.ts（已用原 label event）、terminalAccessibilityHelp.ts（发现性）；已批准服务契约 services/terminal/browser/terminal.ts；现有 integration fixture/spec、新 test/browser/terminalEditor.test.ts（元数据/资源回归）、terminalService.test.ts（复用）；zh-CN/workbench.json、README、本台账。采用现有 Quick Input 的键盘/焦点/取消路径，不添加无消费者 inline editing API 或其他新 owner；测试双语重命名、取消、图标搜索、关闭目标期间选择与复用。
 
@@ -816,3 +822,37 @@ TerminalService.createTerminal → TerminalInstanceService.createInstance → �
 backend/PTY 的 109 项单测通过后，沿原 read→writePromise→metadata 链继续：Manager 只拥有 IO 游标、输入队列和 commit 等待；新 browser/ahpTerminalCommandSource.ts 承接现有待提交 command/cwd/ShellIntegration 元数据及唯一只读发布快照。Rust 仍唯一解析/保存命令，source 只在对应 bytes 已提交时转换协议事件，不增加 parser、nonce 或另一份历史。现有 decoration/history/Chat consumers 继续从原实例读取这一快照。
 
 准确新增仅上游路径 ahpTerminalCommandSource.ts，已有仅局部 terminalProcessManager.ts（将 metadata gate 移交）。现有 terminalService.test.ts 的 parse commit、分页/输出空档、断线/重连、迟到旧结果、reuse 回归直接证明可观察行为；不声明 upstream AHP session command/render API 完成。
+
+## 环境 producer 前置契约深化（2026-10-12）
+
+标准 marketplace VS Code SDK 的已批准 capability ceiling 已包含 terminalProfileProvider，故环境集合改为独立 terminalEnvironment registration，借用同一现有权限，不要求实际注册某个 profile；所有已激活且获准的标准扩展均可为未来 Shell 提供集合。退出原 profile callback 的 getTerminalEnvironment 端口，独立 registration 的 operation/admission/DTO/renderer decoder/transaction 同批闭合，不增加权限 ceiling 或第二条传输链。
+
+新增准入的已有准确路径：crates/external-ext-protocol/src/{lib.rs,validation.rs,protocol_tests.rs}、crates/app-server-protocol/src/protocol/extension_host.rs、crates/app-server/src/server/extension_host_operations.rs；原已准入的两端 host/runtime/SDK files；platform/agentHost/{common/extensionHostApi.ts,browser/extensionHostProtocol.ts}、api/browser/mainThreadExtensionApi.ts 与 mainThreadTerminalService.ts（独立集合 descriptor、reconcile/rollback/lifetime）；现有 Node SDK、platform extensionHostProtocol tests 与 extensionHostService tests。按 Rust skill 的 protocol 生成及 affected client/typechecks 验证。Profile callbacks 保留原 PTY 行为；注册不含环境内容，快照只由原回调查询，工作区持久化仍由 EnvironmentVariableService 拥有。
+
+环境 registration 追加类型路径：services/extensionHost/common/extensionHostService.ts 同步 host registration kind。原主线程扩展测试装配新增真实 EnvironmentVariableService 前置依赖，保留其 fake backend；无新权限或兼容转发。UI 全套的两项 editor move 失败是新 overlay class 的测试迁移误改了旧 panel 容器 locator；已精确恢复旧 locator，两种语言的移动测试均通过，生产 DOM/生命周期没有退化。
+
+协议生成的共享工作树阻塞追加准入：crates/app-server-protocol/src/protocol/registry.rs 仅登记已经由另一批添加并被 ModelMessage 引用的 ToolOutputArtifact/Source/Data 导出，解决生成器的 missing declaration 断言。不改变这些 artifact 的业务模型或消费 UI；这是本批新增 terminalEnvironment DTO 生成与正常类型检查的前置编译缺口。
+
+## 连续批：terminal extension point 的前置 registry 与唯一声明 owner（2026-10-12）
+
+已验证 manifest → services/extensions 的 typed extension-point registry 验证与已提交声明快照 → TerminalContributionService 转成窗口 terminalProfiles → 原 TerminalProfileService 的声明/运行时 profile 合并 → QuickPick。声明验证从 hard-coded Manifest parser 回到终端注册入口；ExtensionService 只保存已验证 manifest，不再另存 terminal domain profiles。运行时 provider/internal profiles 留在原 ProfileService，Shell 创建/授权不变。common 不反向导入 browser/contribution；下层只查询注册 metadata，已验证声明从通用 domain contract 给 consumer。
+
+准确新增仅上游路径：services/extensions/common/extensionsRegistry.ts、terminal/common/{terminalExtensionPoints.ts,terminalExtensionPoints.contribution.ts}。准确已有局部：services/extensions/common/{extensionManifest.ts,extensionService.ts} 与 browser/appServerExtensionService.ts（验证分派、canonical 已提交 manifest snapshots、退出旧 terminalProfiles owner）；services/terminal/common/terminal.ts（批准的贡献服务 domain ID）；terminal/browser/{terminalProfileService.ts,terminal.contribution.ts}、terminal/terminal.all.ts（消费/DI/装载）。测试同步原 terminalConfigurationService/terminalTitleActions、services/{tasks,debug}/test 既有 profile helpers、extensionHostService、extensions/test/common/extensionService 与 folding typed fixture、integration/browser/{terminal,appTools}。仅迁移声明依赖和 fixture；独立新增同路径 terminal/test/common/terminalExtensionPoints.test.ts 验证 manifest入口拒绝重复/非法声明与真实 source 发布/清理。其他工作树改动保护。
+
+## 连续批：环境信息呈现（2026-10-12）
+
+环境 collection 的已同步快照 → EnvironmentVariableInfoChangesActive → 既有终端列表 tooltip。只提示为“新终端”配置了环境的扩展，不推断正在运行实例的环境，也不保存第二份集合或自动重启 Shell。列表订阅原集合事件刷新 tooltip；空集合及 custom PTY 不显示。ITerminalStatus 从批准 browser 契约迁到 common 契约，避免 common/environmentVariable 的类型依赖反向进入 browser。
+
+准确新增仅上游路径 browser/environmentVariableInfo.ts；已有局部 common/environmentVariable.ts、批准 services/terminal/{browser,common}/terminal.ts、terminalStatusList.ts（类型 import）、terminalTooltip.ts、terminalTabsList.ts（唯一 UI consumer/event）；terminalTabsLayout.test.ts 与 terminalTitleActions fixture、既有 env common test、integration fixture/spec，中文 workbench.json。无新的 DOM/CSS/focus 行为；验证真实变量变更后的双语 tooltip 更新、清空撤回，原 PID/cwd/失败原因仍保留。
+
+## 连续批：Desktop 关闭窗口的 PTY 回收确认（2026-10-12）
+
+已有 Desktop 生命周期 onWillShutdown → TerminalNativeContribution 的 final join → 原实例 close Promise → 原 backend/PTY 回收；重复 final join 直到 TerminalService 当前成员为空，覆盖等待期间出现的新实例。RPC 拒绝会记录实际诊断并继续关闭窗口，原实例 close 已移除它的 UI/model；pending create 的迟到释放仍由已验证 backend lifetime 保证。新增 electron-browser/terminal.contribution.ts 只登记此环境 owner，Desktop main 真实装载；Web 不新增重复 owner。
+
+准确新增仅上游路径：electron-browser/{terminalNativeContribution.ts,terminal.contribution.ts} 与 test/electron-browser/terminalNativeContribution.test.ts。已有：sessions/sessions.desktop.main.ts（环境入口）、中文 workbench.json（关闭 join 与实际错误日志）、README/本台账。测试使用真实 LifecycleService 的 final-join 循环和原 TerminalService/Backend，替换只有 process IO；检查关闭确认等待、等待中创建、单个拒绝后其余释放与 contribution dispose 撤回订阅。生命周期参数、日志与存储契约已存在，无新的 CLI/Node spawn 或 process state owner。
+
+## 连续批：只读 capability 前置契约与事件汇合（2026-10-12）
+
+Rust committed ShellIntegration/cwd/status → 原 source → TerminalCapabilityStore 的只读视图 → createInstanceCapabilityEventMultiplexer → Terminal Host Output 的命令完成诊断。capability availability 由原快照计算，只缓存事件边沿；命令/目录通过 getter 读唯一 source，不能写入历史或解析 Shell。事件汇合监听既有/新增实例和 capability，撤回/关闭即时释放订阅。Output 是有界诊断消费者，不作为命令/环境 state owner。
+
+准确新增仅上游路径：platform/terminal/common/capabilities/{capabilities.ts,terminalCapabilityStore.ts}，terminal/browser/{terminalEvents.ts,agentHostOutputChannel.ts}。已有局部 base/common/event.ts（生产使用的 EventMultiplexer 底座，先读 Base reference）；terminal/browser/{ahpTerminalCommandSource.ts,terminalProcessManager.ts,agentHostPty.ts,terminalInstance.ts,terminalMainContribution.ts}（commit change signal/capability/唯一装载），批准 services/terminal/browser/terminal.ts（可选 capability 只读端口，已有 host/PTy fake 可无检测）。定向新增 terminal/test/browser/terminalEvents.test.ts 与既有源/解析/生命周期测试；Frame Output fixture只补 stdout sink domain，中文语言包新增实际 channel/诊断 label。当前 capability 支持 cwd 与 committed command detection 的只读子集，不声明完整 marker/command execution/前端 parser API。

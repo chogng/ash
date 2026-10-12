@@ -440,6 +440,8 @@ pub enum RegistrationKind {
         profile_id: String,
         title: String,
     },
+    /// Extension-owned mutations for future shells; borrows the terminal provider ceiling.
+    TerminalEnvironment {},
     TestProfileProvider {
         provider_id: String,
         label: String,

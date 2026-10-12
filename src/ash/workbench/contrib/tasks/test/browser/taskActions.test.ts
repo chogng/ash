@@ -5,14 +5,18 @@ import '../../browser/taskActions.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ITaskService, type IWorkspaceTask } from '../../../../services/tasks/common/taskService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
-import { RUN_TASK_COMMAND_ID } from '../../common/tasks.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { RUN_BUILD_TASK_COMMAND_ID, RUN_TASK_COMMAND_ID, RUN_TEST_TASK_COMMAND_ID } from '../../common/tasks.js';
 
 interface TaskItem extends IQuickPickItem { readonly task: IWorkspaceTask; }
 
@@ -41,6 +45,38 @@ class Picker extends Disposable implements IQuickPick<TaskItem> {
 
 suite('Tasks command catalog and async service lifetime', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const group of ['build', 'test'] as const) {
+		for (const currentDefault of [true, '**/*.ts']) {
+			test(`${group} matches default globs only in the active folder with fallback ${currentDefault}`, async () => {
+				using services = new InstantiationService();
+				using picker = new Picker();
+				const firstFolder = { id: 'a', uri: URI.file('/workspace/a'), name: 'A', index: 0 };
+				const activeFolder = { id: 'b', uri: URI.file('/workspace/b'), name: 'B', index: 1 };
+				using workspace = new WorkspaceContextService({ id: 'workspace', folders: [firstFolder, activeFolder] });
+				const catalog: readonly IWorkspaceTask[] = [
+					{ id: 'a:task', label: 'Task A', command: 'command-a', source: 'vscode', group, dirId: 'a', groupIsDefault: '**/*.ts' },
+					{ id: 'b:task', label: 'Task B', command: 'command-b', source: 'vscode', group, dirId: 'b', groupIsDefault: currentDefault },
+				];
+				const executed: string[] = [];
+				const completed = new DeferredPromise<void>();
+				services.registerInstance(ITaskService, {
+					tasks: catalog, refresh: async () => catalog, onDidChangeTasks: Event.None,
+					run: async (task: IWorkspaceTask) => { executed.push(task.id); void completed.complete(undefined); },
+				} as unknown as ITaskService);
+				services.registerInstance(IQuickInputService, { createQuickPick: () => { void completed.error(new Error('A unique default must run directly')); return picker; } } as unknown as IQuickInputService);
+				services.registerInstance(IViewsService, { focusView: async () => { void completed.error(new Error('The selected group has a task')); return false; } } as unknown as IViewsService);
+				services.registerInstance(INotificationService, { error: (message: string) => { void completed.error(new Error(message)); } } as unknown as INotificationService);
+				services.registerInstance(IWorkspaceContextService, workspace);
+				services.registerInstance(IEditorService, { activeEditor: { resource: URI.file('/workspace/b/src/index.ts') } } as IEditorService);
+				services.invokeFunction(CommandsRegistry.getCommand(group === 'build' ? RUN_BUILD_TASK_COMMAND_ID : RUN_TEST_TASK_COMMAND_ID)!);
+				try {
+					await completed.p;
+					assert.deepEqual(executed, ['b:task']);
+				} finally { picker.hide(); }
+			});
+		}
+	}
 
 	for (const failure of [false, true]) {
 		test(`Run Task uses the latest open picker catalog and ${failure ? 'reports failure' : 'leaves presentation to the execution owner'} after command invocation ends`, async () => {

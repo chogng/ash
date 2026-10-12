@@ -3,8 +3,8 @@ use std::pin::Pin;
 
 use ash_async_utils::CancellationToken;
 use ash_rmcp_client::{
-    CallToolRequestParams, CallToolResult, ListToolsResult, RmcpClient, RmcpClientOptions,
-    ServerInfo,
+    CallToolRequestParams, CallToolResult, ListToolsResult, ReadResourceResult, RmcpClient,
+    RmcpClientOptions, ServerInfo,
 };
 
 use crate::{McpServerDefinition, McpServerTransport, McpSessionError};
@@ -39,6 +39,19 @@ pub trait McpSession: Send + Sync {
         request: CallToolRequestParams,
         cancellation: &CancellationToken,
     ) -> McpSessionFuture<'_, CallToolResult>;
+
+    /// Reads an origin-bound resource without changing tool state or durable Core history.
+    fn read_resource(
+        &self,
+        _uri: String,
+        _cancellation: &CancellationToken,
+    ) -> McpSessionFuture<'_, ReadResourceResult> {
+        Box::pin(async {
+            Err(McpSessionError::Transport(
+                "resource reading is not supported by this session".into(),
+            ))
+        })
+    }
 
     fn shutdown(self: Box<Self>) -> McpSessionFuture<'static, ()>;
 }
@@ -110,6 +123,29 @@ impl McpSession for RmcpSession {
             match self
                 .client
                 .call_tool_with_cancellation(request, async move {
+                    cancellation.cancelled().await.reason().to_string()
+                })
+                .await
+            {
+                Ok(result) => Ok(result),
+                Err(ash_rmcp_client::RmcpClientError::Cancelled { reason, .. }) => {
+                    Err(McpSessionError::Cancelled(reason))
+                }
+                Err(error) => Err(McpSessionError::Transport(error.to_string())),
+            }
+        })
+    }
+
+    fn read_resource(
+        &self,
+        uri: String,
+        cancellation: &CancellationToken,
+    ) -> McpSessionFuture<'_, ReadResourceResult> {
+        let cancellation = cancellation.clone();
+        Box::pin(async move {
+            match self
+                .client
+                .read_resource_with_cancellation(uri, async move {
                     cancellation.cancelled().await.reason().to_string()
                 })
                 .await

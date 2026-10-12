@@ -2,6 +2,12 @@ import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IEnvironmentVariableCollection, IMergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariable.js';
+import type { ITerminalStatus } from '../../../services/terminal/common/terminal.js';
+
+export interface IEnvironmentVariableInfo {
+	readonly requiresAction: boolean;
+	getStatus(): ITerminalStatus | undefined;
+}
 
 export interface IEnvironmentVariableCollectionWithPersistence extends IEnvironmentVariableCollection {
 	readonly persistent: boolean;

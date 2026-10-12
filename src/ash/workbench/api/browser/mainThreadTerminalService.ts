@@ -21,11 +21,19 @@ export interface ExtensionTerminalProfileRegistration {
 	readonly invoke: ExtensionHostProviderInvoker;
 }
 
+export interface ExtensionTerminalEnvironmentRegistration {
+ readonly runtimeId: string;
+ readonly packageDigest: string;
+ readonly invoke: ExtensionHostProviderInvoker;
+}
+
 /** Binds incarnation-owned callbacks to the existing terminal profile and instance owners. */
 export class MainThreadTerminalService extends Disposable {
 	private readonly registrations = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly descriptors = new Map<string, ExtensionTerminalProfileRegistration>();
 	private workspaceGeneration = 0;
+	private readonly environmentRegistrations = this._register(new DisposableMap<string, DisposableStore>());
+	private readonly environmentDescriptors = new Map<string, ExtensionTerminalEnvironmentRegistration>();
 
 	constructor(
 		@ITerminalProfileService private readonly profiles: ITerminalProfileService,
@@ -39,6 +47,35 @@ export class MainThreadTerminalService extends Disposable {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
 	}
+
+ replaceEnvironmentProviders(next: readonly ExtensionTerminalEnvironmentRegistration[]): void {
+  if (this.isDisposed) throw new CancellationError();
+  const keys = new Set(next.map(descriptor => descriptor.runtimeId));
+  if (keys.size !== next.length) throw invalid();
+  for (const key of this.environmentDescriptors.keys()) {
+   if (keys.has(key)) continue;
+   this.environmentRegistrations.deleteAndDispose(key);
+   this.environmentDescriptors.delete(key);
+  }
+  for (const descriptor of next) {
+   const key = descriptor.runtimeId;
+   if (this.environmentDescriptors.get(key) === descriptor) continue;
+   const extension = this.extensions.currentCatalog.extensions.find(extension => extension.packageSha256 === descriptor.packageDigest);
+   if (!extension) throw invalid();
+   this.environmentRegistrations.deleteAndDispose(key);
+   this.environmentDescriptors.delete(key);
+   const lifetime = new DisposableStore();
+   const controller = new AbortController();
+   lifetime.add(toDisposable(() => controller.abort()));
+   lifetime.add(this.environmentVariables.registerCollectionProvider(extension.id, async () => {
+    const snapshot = record(await descriptor.invoke('getTerminalEnvironment', {}, controller.signal), ['persistent', 'map']);
+    if (typeof snapshot.persistent !== 'boolean') throw invalid();
+    return { persistent: snapshot.persistent, map: deserializeEnvironmentVariableCollection(snapshot.map) };
+   }));
+   this.environmentRegistrations.set(key, lifetime);
+   this.environmentDescriptors.set(key, descriptor);
+  }
+ }
 
 	replaceProfiles(next: readonly ExtensionTerminalProfileRegistration[]): void {
 		if (this.isDisposed) throw new CancellationError();
@@ -61,11 +98,7 @@ export class MainThreadTerminalService extends Disposable {
 			const controller = new AbortController();
 			lifetime.add(toDisposable(() => controller.abort()));
 			try {
-				lifetime.add(this.environmentVariables.registerCollectionProvider(extension.id, async () => {
-					const snapshot = record(await descriptor.invoke('getTerminalEnvironment', {}, controller.signal), ['persistent', 'map']);
-					if (typeof snapshot.persistent !== 'boolean') throw invalid();
-					return { persistent: snapshot.persistent, map: deserializeEnvironmentVariableCollection(snapshot.map) };
-				}));
+
 				lifetime.add(this.profiles.registerInternalContributedProfile({ extensionIdentifier: extension.id, id: descriptor.profileId, title: descriptor.title }));
 				lifetime.add(this.profiles.registerTerminalProfileProvider(extension.id, descriptor.profileId, {
 					createContributedTerminalProfile: async presentation => {
@@ -133,6 +166,7 @@ export class MainThreadTerminalService extends Disposable {
 
 	protected override disposeCore(): void {
 		this.descriptors.clear();
+		this.environmentDescriptors.clear();
 		super.disposeCore();
 	}
 }

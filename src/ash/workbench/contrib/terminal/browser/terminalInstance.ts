@@ -26,6 +26,7 @@ import { XtermTerminal } from './xterm/xtermTerminal.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
 import { TerminalStatusList } from './terminalStatusList.js';
+import { TerminalCapabilityStore } from '../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 
 export interface CustomTerminalProcessOptions {
 	readonly create: NonNullable<IShellLaunchConfig['customPtyImplementation']>;
@@ -35,6 +36,8 @@ export interface CustomTerminalProcessOptions {
 }
 
 export class TerminalInstance extends Disposable implements ITerminalInstance {
+	private readonly capabilityChanged = this._register(new Emitter<void>());
+	readonly capabilities: TerminalCapabilityStore;
 	readonly resource: URI;
 	private hostTarget: TerminalLocation | undefined = TerminalLocation.Panel;
 	private readonly targetChanged = this._register(new Emitter<TerminalLocation | undefined>());
@@ -118,6 +121,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	) {
 		super();
 		this.shellProcessManager = child;
+		this.capabilities = this._register(new TerminalCapabilityStore(() => this.shellIntegration, () => this.cwd, this.capabilityChanged.event, this.onDidChangeCommandStatus));
 		this._profile = profile;
 		this._title = title;
 		this.resource = getTerminalUri(generateUuid(), instanceNumber, title);
@@ -626,6 +630,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}));
 		lifetime.add(manager.onProcessData(event => this.handleProcessData(event)));
 		lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
+		lifetime.add(manager.onDidChangeMetadata(() => this.capabilityChanged.fire()));
 		lifetime.add(manager.onOutputGap(() => {
 			this.handleProcessData({ data: VSBuffer.fromString(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`).buffer, trackCommit: false });
 		}));
@@ -634,6 +639,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.setState("running");
 		}));
 		lifetime.add(manager.onProcessExit(code => this.handleProcessExit(code)));
+		this.capabilityChanged.fire();
 	}
 
 	private async poll(generation: number, initialState: "running" | "reconnecting" = "running"): Promise<void> {

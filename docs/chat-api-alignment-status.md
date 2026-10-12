@@ -6,7 +6,7 @@
 | -------- | --: | ------: | -----: | -----: | ---------: |
 | 首次审计 |  95 |     965 |     72 |     23 |        893 |
 | 本批前   | 108 |     965 |     90 |     18 |        875 |
-| 本批后   | 112 |     965 |     93 |     19 |        872 |
+| 当前审计 | 118 |     965 |     99 |     19 |        866 |
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
@@ -103,9 +103,9 @@ start 绑定调用连接、目标 Thread 和媒体代次；stop 只关闭该会�
 
 ### Prompt 语法与响应内容
 
-已接入的正文、补全、Hover 和代码块操作见上方完成项。Prompt 尚未具备完整 YAML AST、编辑诊断、值补全与引用解析；当前后端 Skill catalog 继续拥有有效性、版本和权限判断。不能用前端根级键提示冒充完整 Prompt 语言服务。
+已接入的正文、补全、Hover 和代码块操作见上方完成项。Prompt 已具备 Skill schema 对应的 YAML AST、编辑诊断、目录名/工具值补全与正文引用，验证结果见后续准入记录。后端 Skill catalog 继续拥有接受、版本和权限判断；上游 VS Code 专属 Agent/Prompt 格式仍按真实 Ash 产品调用逐项调查。
 
-响应仍需继续核对工具进度与结果、引用、图片/音频附件、终端、可交互 MCP 内容和增量渲染。现有 `ChatHookContentPart`、provider 链接装饰、Advisor 和编辑审核保持原 owner；本轮只接入真实调用链需要的 Markdown/代码块职责，不把其他缺失 content parts 计为完成。
+工具进度与结果、持久图片/音频、流式 Markdown 与 Skill 引用已接入并验证。响应仍需继续核对终端关联、其他引用、可交互 MCP 内容和语音。现有 `ChatHookContentPart`、provider 链接装饰、Advisor 和编辑审核保持原 owner；本轮只接入真实调用链需要的 Markdown/代码块职责，不把其他缺失 content parts 计为完成。
 
 ### 其他目录中的已有职责
 
@@ -174,3 +174,90 @@ PromptLanguageFeaturesProvider 通过既有 ITextModelService 注册 private sch
 流式 Markdown 图片布局追加准入：既有 ChatMarkdownContentPart 补充上游已有 onDidChangeHeight 公开事件，当前 render snapshot 的异步资源回调和本 part root 捕获的 img load 触发高度变化；原 ChatListWidget 使用原 ScrollableElement 的滚动事件维护跟随状态并在资源加载时布局，不改变滚动 owner。测试仍限当前 widget/browser transcript，覆盖追加时只读取一次工作区图片、实际图片解码、用户阅读位置、移除后的 URL 释放和安全链接回调；不把 Base 的图片生命周期搬到 Chat。
 
 资源关闭边界追加准入：持久媒体与 Skill IO 完成后，mint connection resource 前必须重新在 ConnectionState 锁内检查 closed，并持锁完成短暂的 ResourceStore.create。否则旧连接关闭清理与慢读取完成之间可能建立无人可释放的晚到 handle。仅追加 attachment_operations.rs 和双方现有 skill_operations.rs 的 mint hunk，保持 state → resources 的关闭锁顺序；不持连接锁执行文件或外部网络 IO。验证沿既有 App Server media/Skill 测试，并保留前端 generation / abort 回归。
+
+## MCP 嵌入资源与结构数据准入
+
+用户检查 MCP 工具返回的嵌入文件或结构数据 → Rust MCP 输出边界 → 原 ToolContent / ContentPart / ThreadItem.ToolResult → agentHost 深层领域转换 → ChatToolInvocationPart / ChatResourceGroupWidget → ChatResponseResourceFileSystemProvider.associate → 原 FileService / readonly editor。只展示工具实际返回的数据，原 MCP runtime、Core 事件、文件服务与模型各自保持 owner；不根据 JSON 字符串猜测 HTML App，不执行资源脚本，也不把资源 URI 当作本机路径。只读资源在当前响应 association 中持有，释放随行生命周期；原 Backend Thread 仍持有历史结果。
+
+本阶段准确范围：新增共享协议 crates/protocol/src/tool_output_artifact.rs 的实际使用 payload / source / digest 契约并在 lib.rs / model/message.rs 接入；MCP 输出、Tools output 与 protocol_adapter 保留资源/结构数据，超过原输出预算时显式标记截断而不假装完整 JSON。ash-mcp Cargo.toml / Cargo.lock 仅增加所需既有 base64 依赖。所有受闭合 ContentPart / ToolContent enum 影响的匹配，仅增加 Artifact 的 inert model-text / context-size / unchanged-media 处理，不重排原实现。准入精确列表：
+
+- `crates/core/src/thread_controller_tests.rs`
+- `crates/rmcp-client/src/lib.rs`（只重导出当前 SDK ResourceContents，实际 MCP decoder 消费）
+- `crates/tools/src/output.rs`
+- `crates/ash-api/src/requests.rs`
+- `crates/ash-api/src/endpoint/anthropic_tests.rs`
+- `crates/ash-api/src/endpoint/anthropic.rs`
+- `crates/tools/src/output_tests.rs`
+- `crates/core/src/attachment_preparation_tests.rs`
+- `crates/ash-api/src/endpoint/chat_completions.rs`
+- `crates/core/src/thread_controller.rs`
+- `crates/tools/src/protocol_adapter_tests.rs`
+- `crates/tools/src/protocol_adapter.rs`
+- `crates/ash-api/src/endpoint/responses.rs`
+- `crates/core/src/attachment_model_service.rs`
+- `crates/ash-api/src/requests/google_count_tokens.rs`
+- `crates/core/src/turn/code_mode/response.rs`
+- `crates/ash-api/tests/audio.rs`
+- `crates/ash-api/tests/provider_adapters.rs`
+- `crates/ash-api/tests/request_header_tests.rs`
+- `crates/ash-mcp/src/output.rs`
+- `crates/ash-mcp/src/output_tests.rs`
+- `crates/core/src/context/assembler_tests.rs`
+- `crates/app-server-client/src/session_tests.rs`
+- `crates/core/src/turn/executor_tests.rs`
+- `crates/core/src/attachment_model_service_tests.rs`
+- `crates/app-server-client/src/client_tests.rs`
+- `crates/core/src/attachment_preparation.rs`
+- `crates/core/src/context/planner.rs`
+- `crates/core/src/context/input_limits.rs`
+- `crates/model-provider/src/request_settings.rs`
+- `crates/core/src/context/assembler.rs`
+- `crates/model-provider/src/image_request_tests.rs`
+- `crates/app-server/src/tool_executor_adapter_tests.rs`
+- `crates/model-provider/src/image_request.rs`
+- `crates/rollout-trace/src/budget.rs`
+- `crates/app-server/src/audio_tests.rs`
+- `crates/model-provider/src/model_tests.rs`
+- `crates/app-server/src/dynamic_tools.rs`
+- `crates/app-server/src/tool_executor_adapter.rs`
+- `crates/app-server/src/task_delivery_host_tests.rs`
+- `crates/app-server/src/server/attachment_operations.rs`
+- `crates/ext/mcp/src/composition.rs`
+- `crates/app-server/src/server/attachment_operations_tests.rs`
+- `crates/ext/image-generation/src/tool.rs`
+- `crates/model-tokenizer/src/registry_tests.rs`
+- `crates/model-tokenizer/src/request.rs`
+- `crates/protocol/src/contract_tests.rs`
+- `crates/app-server-protocol/src/schema_fixtures.rs`
+
+该列表的测试与实现只允许闭合新 variant 的相关 hunk；测试覆盖 MCP SDK 字节、混合内容、原预算、hash、模型输入、恢复和 readonly preview。更远的新调用边先重做准入。
+
+TS 精确范围：既有 platform/agentHost/common/agentService.ts 与 browser/appServerAgentService.ts / 现有 adapter tests 转换 Artifact 为深层领域值（bytes 为 Uint8Array）；Chat 的既有 chatListItems / ChatListWidget / toolInvocationPart / attachmentsPart 区分资源与图片/音频。新增上游同路径 common/widget/chatResponseResourceFileSystemProvider.ts，由 chat.contribution 单例及原 FileService 注册；仅实现真实消费的 associate / readonly filesystem 契约，不补未消费的 session 或 export 命令。新增上游同路径 browser/widget/chatContentParts/chatResourceGroupWidget.ts，真实工具结果和孤立结果都调用，资源正文只用 textContent / 原 readonly editor。样式追加既有 chatMarkdownPart.css 的资源组件职责。既有 transcript / widget / agentHost / Sessions fixtures 与测试机械同步 domain variant；chat.json 添加中文。完成本阶段后继续真实 resource link、MCP Apps 与语音，嵌入资源通过不代表 active App 已实现。
+
+MCP 嵌入数据验证：正常 Chat 单测全选覆盖 20 文件（首次 145 项中只读 FileService 同步拒绝断言错误，已在原测试修复并单独 2 项通过）；agentHost 9 项通过。完整 Chromium transcript 19 项通过，含英文/中文资源展开、原始 JSON/CRLF 复制、只读编辑器、安全文本、行顺序/保留节点与键盘焦点、dark/light/HC、资源释放。Rust Protocol 58、Tools 40、MCP 14 项通过，真实三个模型 endpoint 的 inert Artifact replay 定向测试通过。App Server check、MCP warnings、依赖检查通过；共享 fixture appTools.integration.ts 仅补其已消费的 Disposable value import，解除正常 browser 编译阻塞。资源链接与 active Apps 尚未计为完成。
+
+## MCP 资源链接实际读取准入
+
+用户在实际工具结果中打开 resource_link → ChatResourceGroupWidget → IAgentThreadService.readToolResource（只传 Session / Thread / Item / contentIndex，不接收任意 URI）→ 新 tool/resource/open → 原 read_session_thread 中同 Turn 的 ToolResult 和 ToolCall frozen binding → 原 TurnExecutor / ToolService → 原 Composite / Reloadable 绑定服务 → 原 MCP extension 的连接授权 fence / worker → 原 McpRuntime / RmcpClient resources/read → 验证单一原 URI 结果 → 原 connection ResourceStore / read / release → 既有 readonly response FileService 与 Editor。链接描述保存在 ToolOutputArtifactSource.ResourceLink 和现有 JSON data 中，未读取时只代表服务器描述；读取内容不改写原 Thread 工具结果。仅用户操作开始读取，行释放、请求取消、连接关闭淘汰读取；旧连接/目录/插件/工具 generation 拒绝重新绑定同名 server/tool。
+
+准确后端范围：既有 crates/protocol/src/tool_output_artifact.rs 增加实际消费的 ResourceLink source；既有 crates/ash-mcp/src/output.rs/tests 解码 SDK resource_link 并保留 inert descriptor；既有 crates/rmcp-client/src/{lib.rs,client.rs,client_tests.rs}、crates/ash-mcp/src/{session.rs,runtime.rs,runtime_tests.rs} 接入资源读取/取消与原身份校验；既有 crates/ext/mcp/src/{runtime.rs,composition.rs,runtime_tests.rs,composition_tests.rs} 沿原 worker 和权限 fence；既有 crates/core/src/{services.rs,turn/executor.rs} 提供仅被上述链消费的 read_resource 与绑定校验；既有 crates/app-server/src/tool_composition.rs 两种组合服务机械转发，server/mcp_operations.rs / server.rs 增加正式入口/取消，app-server-protocol/protocol/mcp.rs / registry.rs 增加正式 typed params/response/cancellation，原 server/request_processing.rs 的 control lane 补新增 cancel method。原 managed/gateway 若新 Session scoped method 未自动路由，仅追加对应选择 hunk。协议/后端原测试文件覆盖来源/连接隔离、摘要/上限、取消、断线与旧代次；拒绝缺 binding 的旧历史链接，而不猜测新来源。
+
+准确前端范围：既有 agentHost/common/agentService.ts / browser/appServerAgentService.ts 与原 tests 加领域读取及机械转换，生成类型仍只在 adapter；ChatResourceGroupWidget 原 FileService association 不缓存竞争后台状态，读取仅产生当前行只读 association，原 ToolInvocationPart / ChatListWidget 传入已有 resource coordinates。既有 Chat/agentHost/Sessions fake service 的必需 method 同步编译。原 transcript browser fixture/spec 验证实际正式 adapter、取消、错误/晚到与 readonly resource；chat.json 提供中文文本。后续 active Apps 的脚本/UI 不通过此 inert 读取入口自动执行。
+
+资源链接后端验证准确追加：新增 crates/app-server/src/server/mcp_resource_tests.rs 并在 server.rs 注册 sibling test，仅测试上述正式 RPC 对 canonical ToolCall/ToolResult 的选择、frozen binding、原 ResourceStore connection 权限、旧绑定拒绝和取消。该测试文件由 Rust server endpoint 拥有，不新增产品实现载体。Shell/Tasks 原测试闭合 ContentPart 的单一 Artifact 忽略分支，不改变已有测试目的。
+
+资源链接验证结果：正常 renderer 类型检查 3768 文件通过；agentHost / ChatListWidget 定向单测 21 项通过；Chromium 3 项通过（en/zh-CN、原坐标、读取前无 IO、摘要校验和释放、重复打开复用、移除取消与晚到 handle 释放）。真实 App Server RPC 定向测试通过（1 项，canonical ToolCall/ToolResult、同连接读取、其他连接拒绝、错误坐标/任意 URI 拒绝、旧 binding、cancel-before-start）。MCP 16 项、SDK 5 项通过，extension 与 App Server all-target warnings、协议类型检查通过；追加 SDK resource/read 真实取消与 extension worker 读取测试仍在执行。链接读取不重新执行工具，不改写原 ToolResult，不以读取成功计为 MCP Apps 已完成。
+
+资源链接追加验证已通过：RMCP 6 项含真正 resources/read 的对端取消；MCP extension worker 3 项含连续 Tokio runtime 的同步资源桥。资源控制 RPC 已进入原 Control lane，取消不会排在等待完成的普通读取后面。
+
+## MCP App 声明与隔离握手准入
+
+模型实际 MCP 工具结果 → 原 startup catalog 的 `_meta.ui.resourceUri` → 同连接/目录代次中的 ToolOutputArtifactSource.McpApp（保留仅视图消费的 `_meta`）→ agentHost 领域值 → 原 ChatToolInvocationPart → 上游同路径 ChatMcpAppSubPart → IAgentThreadService.readToolResource 原来源绑定 → 正式 MCP resources/read → 现有 IWebviewService 的隔离 origin / resource worker → 标准 ui/initialize / initialized / tool-input / tool-result。未声明 App 的 HTML 仍按 inert resource 展示。App 输出不是新工具执行状态；纯本地交互、尺寸/主题/生命周期由原 Webview 与 Chat 行拥有，工具执行、上下文/消息和文件授权仍由原后端/Chat owner 决定。
+
+本阶段准确 Rust 路径：既有 crates/ash-mcp/src/{catalog.rs,catalog_tests.rs,runtime.rs,runtime_tests.rs} 在不可变工具目录保留并校验 `ui://` URI、输出真实 App 描述；crates/rmcp-client/src/{client.rs,client_tests.rs} 与 ash-mcp/runtime.rs 仅在接入宿主明确宣告时协商标准稳定 `io.modelcontextprotocol/ui` MIME capability。crates/protocol/src/tool_output_artifact.rs 在已有 source 增加实际消费的 McpApp、model_text 不向模型回放视图元数据；原 app-server/server/mcp_operations.rs 允许同 canonical result 的 McpApp URI，仍沿原 binding / ResourceStore。不增加 URI 任意读取或脚本执行的后端入口。元数据预算仍走原输出边界，截断不可冒充完整 App 数据。App 资源 MIME 必须为标准 HTML profile，任何读取失败保留文本工具结果。
+
+准确前端路径：已确认的 agentHost/common/agentService.ts / browser/appServerAgentService.ts / 既有 tests 机械增加 McpApp source。新增上游同路径 browser/widget/chatContentParts/toolInvocationParts/chatMcpAppSubPart.ts，只由原工具结果组件实际创建；既有 toolInvocationPart / ChatResourceGroupWidget 区分已声明 App 和 inert 资源，既有 chatMarkdownPart.css 仅追加 App 容器职责。原 Webview 双方已有 browser/webview.ts、webviewElement.ts 与 pre/index.html 增加明确选定的原始 JSON-RPC 消息形式：只接收当前 inner frame，包裹其当前 document channel 经原 isolated bootstrap 转发；不为 Chat 另造 iframe resource owner，不改变其他 extension webview 的既有协议。App 模式保留默认无外网 CSP、无 localResourceRoots 和权限；仅支持已实际实现的 host capabilities，未知/未授权工具调用返回标准错误，不能伪装执行成功。既有 Webview unit/browser fixtures/tests 验证跨 frame/代次隔离与旧 API 不退化；原 Chat transcript fixture/tests、chat.json 与台账同步英文/中文、真实 UI 握手、主题、尺寸、移除/迟到/teardown。后续 Core 授权的 App tools/call 与 Chat 消息/context 将另按实际调用入口闭合，本阶段不计为全部 MCP Apps 完成。
+
+App MIME 协商追加准确 hunk：既有 crates/ext/mcp/src/composition.rs 的 start_mcp_tools_with_updates 在原 App Server runtime options 开启稳定 UI MIME。直接 McpRuntime 的默认调用仍不宣告 UI，具有图形 Chat consumer 的 App Server composition 明确开启，文本结果仍保留给其他消费者。协议与摘要测试追加 crates/protocol/src/contract_tests.rs，证明只给 View 的元数据不会进入模型正文。
+
+SDK UI capability 序列化追加准确依赖：crates/rmcp-client/Cargo.toml / Cargo.lock 使用 workspace 已有 serde_json（SDK 的 serde_json 重导出受未启用 macros feature 控制，不为一个值扩大 SDK features）。仅用于正式协商消息构造与相关真实 SDK 测试，不增加版本。

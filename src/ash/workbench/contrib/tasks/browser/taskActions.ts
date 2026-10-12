@@ -73,7 +73,7 @@ function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): v
 		const folder = resource && workspace!.getWorkspaceFolder(resource);
 		if (folder && resource) {
 			const relative = resource.path.slice(folder.uri.path.replace(/\/+$/, '').length + 1).toLowerCase();
-			const matching = grouped.filter(task => typeof task.groupIsDefault === 'string' && match(task.groupIsDefault.toLowerCase(), relative));
+			const matching = grouped.filter(task => task.dirId === folder.id && typeof task.groupIsDefault === 'string' && match(task.groupIsDefault.toLowerCase(), relative));
 			if (matching.length) return { tasks: matching, isDefault: true };
 		}
 		const defaults = grouped.filter(task => task.groupIsDefault === true);

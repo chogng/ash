@@ -53,6 +53,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	private readonly bootstrapUrl: URL;
 	private readonly localResourceRoots: readonly URI[];
 	private readonly allowScripts: boolean;
+	private readonly messageProtocol: 'mcp' | undefined;
 	private readonly resourceRequests = this._register(new MutableDisposable());
 	private documentCancellation: CancellationTokenSource | undefined;
 	private isBootstrapReady = false;
@@ -93,6 +94,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		this.bootstrapUrl.hash = new URLSearchParams({ channel: this.instanceChannel }).toString();
 		this.localResourceRoots = [...(initInfo.contentOptions?.localResourceRoots ?? [])];
 		this.allowScripts = initInfo.contentOptions?.allowScripts === true;
+		this.messageProtocol = initInfo.contentOptions?.messageProtocol;
 		this.forwardKeyboardEvents = initInfo.options.forwardKeyboardEvents === true;
 		const element = h(mainWindow.document, "iframe");
 		this.element = element;
@@ -100,6 +102,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		element.className = "ash-webview";
 		element.tabIndex = 0;
 		element.setAttribute("sandbox", "allow-scripts allow-same-origin");
+		if (this.messageProtocol === 'mcp') element.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-write 'none'");
 		element.setAttribute("referrerpolicy", "no-referrer");
 		element.setAttribute("title", validateTitle(initInfo.title ?? "Webview"));
 		element.style.border = "0";
@@ -260,6 +263,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 				documentChannel: this.channel,
 				title: this.element.title,
 				html: createWebviewDocument(this.channel, this.html, this.forwardKeyboardEvents, this.allowScripts),
+				messageProtocol: this.messageProtocol,
 			});
 		}
 	}

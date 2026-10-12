@@ -14,7 +14,7 @@ import { IConfigurationResolverService } from '../../../src/ash/workbench/servic
 import { ConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/browser/configurationResolverService.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import { posix } from '../../../src/ash/base/common/path.js';
-import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../src/ash/workbench/api/browser/mainThreadTerminalService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
@@ -80,9 +80,10 @@ setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
 	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => lifetime.add(services.createInstance(TerminalGroupService)));
 	if (!services.has(IStorageService)) services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', flushInterval: 0 })));
-	if (!services.has(IEnvironmentVariableService)) services.registerSingleton(IEnvironmentVariableService, () => lifetime.add(services.createInstance(EnvironmentVariableService)));
+	if (!services.has(IEnvironmentVariableService)) services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	if (!services.has(IHoverService)) services.registerInstance(IHoverService, lifetime.add(new HoverService(services.get(IConfigurationService), lifetime.add(new BrowserContextViewService(document.body)), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
-	services.registerInstance(IExtensionService, { terminalProfiles: [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
+	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
+	services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	services.registerInstance(IPathService, { path: Promise.resolve(posix), resolvedUserHome: URI.file('/home/test'), userHome: async () => URI.file('/home/test'), getPath: async () => posix, getOperatingSystem: async () => OperatingSystem.Linux, fileURI: async (path: string) => URI.file(path) } as unknown as IPathService);
 	services.registerInstance(IConfigurationResolverService, lifetime.add(services.createInstance(ConfigurationResolverService)));
 }
@@ -350,8 +351,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			const digest = `sha256:${'a'.repeat(64)}`;
 			const extension = services.get(IExtensionService);
 			const bridge = lifetime.add(services.createInstance(MainThreadTerminalService));
+			Object.assign(services.get(ITerminalContributionService), { terminalProfiles: [{ extensionIdentifier: 'acme.extension', id: 'shell', title: 'Extension Shell', options: { icon: { id: 'terminal-git-bash' }, color: 'terminal.ansiGreen' } }] });
 			Object.assign(extension, {
-				terminalProfiles: [{ extensionIdentifier: 'acme.extension', id: 'shell', title: 'Extension Shell', options: { icon: { id: 'terminal-git-bash' }, color: 'terminal.ansiGreen' } }],
 				currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] },
 				activateByEvent: async (event: string) => {
 					if (event !== 'onTerminalProfile:shell') throw new Error(`Unexpected activation: ${event}`);
@@ -383,6 +384,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		pane.layout(Math.max(0, root.clientHeight - pane.partTitleProjection.actions!.offsetHeight), 0, root.clientWidth);
 		return {
 			configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
+			environment: enabled => enabled ? services.get(IEnvironmentVariableService).set('acme.environment', { persistent: false, map: new Map([['MODE', { type: 1, value: 'extension' }]]) }) : services.get(IEnvironmentVariableService).delete('acme.environment'),
 			createdProfiles: () => [...createdProfiles],
 			launches: () => [...launches],
 			defaultProfile: () => profileService.getDefaultProfile()?.profileId,
@@ -432,6 +434,7 @@ declare global {
 		}[];
 		ashTerminalPaneIntegration: {
 			configure(key: string, value: unknown): Promise<void>;
+			environment(enabled: boolean): void;
 			createdProfiles(): readonly string[];
 			launches(): readonly { profile: unknown; env: unknown; cwd: unknown; }[];
 			defaultProfile(): string | undefined;

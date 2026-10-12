@@ -7,7 +7,8 @@ import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection, TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
-import type Severity from '../../../../base/common/severity.js';
+import type { ITerminalStatus } from '../common/terminal.js';
+import type { ITerminalCapabilityStore } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 
 /** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {
@@ -85,6 +86,7 @@ export interface ITerminalInstance extends IDisposable {
 	readonly initialCwd: string;
 	readonly cwd?: string;
 	readonly shellIntegration?: ITerminalShellIntegration;
+	readonly capabilities?: ITerminalCapabilityStore;
 	readonly title: string;
 	readonly profile: ITerminalProfile;
 	readonly shellLaunchConfig?: Readonly<IShellLaunchConfig>;
@@ -196,12 +198,6 @@ export interface ITerminalGroupService extends IDisposable {
 export const ITerminalGroupService = createServiceIdentifier<ITerminalGroupService>('terminalGroupService');
 
 /** Display messages are independent of the instance's process and connection state. */
-export interface ITerminalStatus {
-	readonly id: string;
-	readonly severity: Severity;
-	readonly tooltip: string;
-}
-
 export interface ITerminalStatusList {
 	readonly primary: ITerminalStatus | undefined;
 	readonly statuses: readonly ITerminalStatus[];

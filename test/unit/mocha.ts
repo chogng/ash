@@ -11,7 +11,7 @@ interface Selection {
 }
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
-const compiledDirectory = resolve(desktopDirectory, '.build/desktop/test');
+const compiledDirectory = resolve(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(desktopDirectory, '.build/desktop/test'));
 
 export async function runUnitTests(patterns: readonly string[], editorEnvironment: boolean): Promise<void> {
 	const requiredVersion = readFileSync(resolve(desktopDirectory, '.nvmrc'), 'utf8').trim();

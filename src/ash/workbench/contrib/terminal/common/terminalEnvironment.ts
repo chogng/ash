@@ -12,7 +12,7 @@ export async function createTerminalEnvironment(
 	for (const [name, mutator] of mutations) {
 		const key = caseSensitive ? name : Object.keys(env).find(key => key.toLowerCase() === name.toLowerCase()) ?? Object.keys(inherited).find(key => key.toLowerCase() === name.toLowerCase()) ?? name;
 		const value = await resolve(mutator.value);
-		const current = Object.hasOwn(env, key) ? env[key] ?? '' : inherited[key] ?? '';
+		const current = Object.hasOwn(env, key) ? env[key] ?? '' : Object.hasOwn(inherited, key) ? inherited[key]! : '';
 		const result = mutator.type === EnvironmentVariableMutatorType.Replace ? value : mutator.type === EnvironmentVariableMutatorType.Append ? current + value : value + current;
 		Object.defineProperty(env, key, { value: result, enumerable: true, configurable: true, writable: true });
 	}

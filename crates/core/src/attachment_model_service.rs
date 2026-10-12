@@ -75,6 +75,7 @@ impl AttachmentModelService {
                             detail: *detail,
                         })
                     }
+                    ContentPart::Artifact { artifact } => Some(ContentPart::Text(artifact.model_text())),
                     ContentPart::Text(_) | ContentPart::ImageUrl { .. } => None,
                 };
                 if let Some(replacement) = replacement {

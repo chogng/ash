@@ -351,7 +351,8 @@ fn start_mcp_tools_with_updates(
     let mut options = McpRuntimeOptions::new("ash-app-server", env!("CARGO_PKG_VERSION"))
         .with_startup_policy(McpStartupPolicy::RequireAll)
         .with_catalog_generation(catalog_generation)
-        .with_first_connection_generation(catalog_generation);
+        .with_first_connection_generation(catalog_generation)
+        .with_mcp_apps();
     if let Some(updates) = &updates {
         options = options
             .with_client_host(updates.client_host())
@@ -638,6 +639,27 @@ fn invocation_capabilities(
 }
 
 impl ToolService for McpToolService {
+    fn read_resource(
+        &self,
+        call: &ToolCall,
+        uri: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
+        // Reuses current connector/plugin fences before any peer request. No tool is re-executed.
+        self.review_request(call)?;
+        let prepared = self.prepared_call(call)?;
+        let resource = self
+            .owner
+            .read_resource(
+                prepared.binding().clone(),
+                uri.to_owned(),
+                cancellation.clone(),
+            )
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
+        self.review_request(call)?;
+        Ok(resource)
+    }
+
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.owner.definitions().to_vec()
     }
@@ -783,6 +805,9 @@ fn protocol_execution_output(output: ToolOutput) -> Result<ToolExecutionOutput, 
         .content()
         .iter()
         .map(|content| match content {
+            ToolContent::Artifact(artifact) => ContentPart::Artifact {
+                artifact: artifact.clone(),
+            },
             ToolContent::Text(text) => ContentPart::Text(text.clone()),
             ToolContent::Audio { url } => ContentPart::AudioUrl { url: url.clone() },
             ToolContent::Image { url, detail } => ContentPart::ImageUrl {

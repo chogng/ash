@@ -5,7 +5,8 @@ use std::time::Duration;
 use rmcp::model::{
     CallToolRequest, CallToolRequestParams, CallToolResult, ClientInfo, ClientRequest,
     ElicitationCapability, FormElicitationCapability, Implementation, ListToolsRequest,
-    ListToolsResult, PaginatedRequestParams, ServerInfo, ServerResult,
+    ListToolsResult, PaginatedRequestParams, ReadResourceRequest, ReadResourceRequestParams,
+    ReadResourceResult, ServerInfo, ServerResult,
 };
 use rmcp::service::{
     ClientServiceExt, PeerRequestOptions, RequestHandle, RoleClient, RunningService, ServiceError,
@@ -82,6 +83,22 @@ impl RmcpClientOptions {
             ElicitationCapability::new()
                 .with_form(FormElicitationCapability::new().with_schema_validation(false)),
         );
+        self
+    }
+
+    /// Negotiates the stable MCP Apps MIME after the product host installs an isolated UI consumer.
+    pub fn with_mcp_apps(mut self) -> Self {
+        self.client_info
+            .capabilities
+            .extensions
+            .get_or_insert_with(Default::default)
+            .insert(
+                "io.modelcontextprotocol/ui".into(),
+                serde_json::Map::from_iter([(
+                    "mimeTypes".into(),
+                    serde_json::json!(["text/html;profile=mcp-app"]),
+                )]),
+            );
         self
     }
 
@@ -237,6 +254,33 @@ impl RmcpClient {
             ServerResult::CallToolResult(result) => Ok(result),
             _ => Err(RmcpClientError::Request {
                 operation: "tools/call",
+                source: ServiceError::UnexpectedResponse,
+            }),
+        }
+    }
+
+    /// Reads a resource from this exact session and propagates request cancellation to the peer.
+    pub async fn read_resource_with_cancellation<F>(
+        &self,
+        uri: String,
+        cancellation: F,
+    ) -> Result<ReadResourceResult, RmcpClientError>
+    where
+        F: Future<Output = String>,
+    {
+        match self
+            .send_request_with_cancellation(
+                "resources/read",
+                ClientRequest::ReadResourceRequest(ReadResourceRequest::new(
+                    ReadResourceRequestParams::new(uri),
+                )),
+                cancellation,
+            )
+            .await?
+        {
+            ServerResult::ReadResourceResult(result) => Ok(result),
+            _ => Err(RmcpClientError::Request {
+                operation: "resources/read",
                 source: ServiceError::UnexpectedResponse,
             }),
         }

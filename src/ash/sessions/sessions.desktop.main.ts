@@ -6,6 +6,7 @@ import { localize2 } from '../nls.js';
 import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
 import './sessions.common.main.js';
+import '../workbench/contrib/terminal/electron-browser/terminal.contribution.js';
 import '../workbench/services/clipboard/electron-browser/clipboardService.js';
 import '../workbench/services/process/electron-browser/processService.js';
 import '../workbench/contrib/processExplorer/electron-browser/processExplorer.contribution.js';

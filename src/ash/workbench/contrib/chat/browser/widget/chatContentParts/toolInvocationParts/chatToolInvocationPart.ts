@@ -1,3 +1,5 @@
+import { ChatMcpAppSubPart } from './chatMcpAppSubPart.js';
+import { ChatResourceGroupWidget } from '../chatResourceGroupWidget.js';
 import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import '../media/chatCollapsibleContentPart.css';
@@ -20,6 +22,10 @@ export class ChatToolInvocationPart extends Disposable {
 	private readonly stderr: HTMLElement;
 	private readonly result: HTMLElement;
 	private readonly mediaChanges = this._register(new MutableDisposable());
+	private readonly app = this._register(new MutableDisposable<ChatMcpAppSubPart>());
+	private readonly appChanges = this._register(new MutableDisposable());
+	private readonly resources = this._register(new MutableDisposable<ChatResourceGroupWidget>());
+	private readonly resourceChanges = this._register(new MutableDisposable());
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	private readonly _onDidChangeHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this._onDidChangeHeight.event;
@@ -68,10 +74,10 @@ export class ChatToolInvocationPart extends Disposable {
 		this.setText(this.parameters, call.argumentsJson, localize('chat.tool.input', 'Input'));
 		this.setText(this.stdout, output.filter(value => value.stream === 'stdout').map(value => value.text).join('\n'), localize('chat.tool.stdout', 'Standard output'));
 		this.setText(this.stderr, output.filter(value => value.stream === 'stderr').map(value => value.text).join('\n'), localize('chat.tool.stderr', 'Standard error'));
-		const resultText = result?.text || result?.content?.flatMap(part => part.type === 'text' ? [part.text] : []).join('\n') || '';
+		const resultText = result?.content ? result.content.flatMap(part => part.type === 'text' ? [part.text] : []).join('\n') : result?.text ?? '';
 		this.setText(this.result, resultText, result?.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'));
 		const content = result?.content ?? [];
-		if (content.some(part => part.type !== 'text')) {
+		if (content.some(part => part.type !== 'text' && part.type !== 'artifact')) {
 			if (!this.media.value) {
 				const media = this.instantiation.createInstance(ChatAttachmentsContentPart, { ownerDocument: this.domNode.ownerDocument, variables: content, source });
 				this.media.value = media;
@@ -79,6 +85,27 @@ export class ChatToolInvocationPart extends Disposable {
 				this.mediaChanges.value = media.onDidChangeHeight(() => this._onDidChangeHeight.fire());
 			} else this.media.value.updateVariables(content, source);
 		} else { this.mediaChanges.clear(); this.media.clear(); }
+		if (content.some(part => part.type === 'artifact' && part.artifact.source.type !== 'mcpApp')) {
+			if (!this.resources.value) {
+				const resources = this.instantiation.createInstance(ChatResourceGroupWidget, this.domNode.ownerDocument);
+				this.resources.value = resources;
+				this.domNode.append(resources.domNode);
+				this.resourceChanges.value = resources.onDidChangeHeight(() => this._onDidChangeHeight.fire());
+			}
+			this.resources.value.render(content, JSON.stringify([source?.sessionId, source?.threadId, result?.itemId]), source);
+		} else { this.resourceChanges.clear(); this.resources.clear(); }
+		const appIndex = content.findIndex(part => part.type === 'artifact' && part.artifact.source.type === 'mcpApp');
+		const artifact = content[appIndex];
+		if (source && result && artifact?.type === 'artifact' && artifact.artifact.source.type === 'mcpApp') {
+			const coordinate = { sessionId: source.sessionId, threadId: source.threadId, itemId: result.itemId, contentIndex: appIndex };
+			const identity = JSON.stringify([coordinate, artifact.artifact.source, artifact.artifact.contentDigest]);
+			if (this.app.value?.identity !== identity) {
+				const app = this.instantiation.createInstance(ChatMcpAppSubPart, this.domNode.ownerDocument, coordinate, artifact.artifact, call.argumentsJson, result);
+				this.app.value = app;
+				this.appChanges.value = app.onDidChangeHeight(() => this._onDidChangeHeight.fire());
+				this.domNode.append(app.domNode);
+			} else this.app.value.update(call.argumentsJson, result);
+		} else { this.appChanges.clear(); this.app.clear(); }
 	}
 
 	private setText(element: HTMLElement, text: string, label?: string): void {

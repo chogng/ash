@@ -1,3 +1,4 @@
+import { createUuid } from '../../../base/common/uuid.js';
 import { canceled } from '../../../base/common/errors.js';
 import { createAppServerResourceApi, readAppServerResource } from './appServerApi.js';
 import { Event } from '../../../base/common/event.js';
@@ -15,6 +16,7 @@ import type {
 } from '../../../../../.build/protocol/typescript/index.js';
 import type {
 	AgentResponse,
+	ChatContentPart,
 	Thread,
 	ThreadItem,
 	ThreadTranscriptEntry,
@@ -68,6 +70,7 @@ export function createDisconnectedAgentThreadService(unavailable: UnavailableOpe
 		onDidUpdateThread: Event.None,
 		onDidUpdateThreadTranscript: Event.None,
 		readAttachment: () => unavailable('thread.readAttachment'),
+		readToolResource: () => unavailable('thread.readToolResource'),
 		readHistoryState: () => unavailable('thread.readHistoryState'),
 		moveHistory: () => unavailable('thread.moveHistory'),
 		readContext: () => unavailable('thread.readContext'),
@@ -161,6 +164,22 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 			const resource = await appServerRequest(connection, 'attachment/resource/open', { ...source });
 			const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 16 * 1024 * 1024, signal, generation);
 			return { bytes, mimeType: resource.mimeType };
+		},
+		readToolResource: async (source, signal) => {
+			if (signal?.aborted) throw canceled();
+			const generation = connection.generation;
+			const operationId = createUuid();
+			const request = appServerRequest(connection, 'tool/resource/open', { ...source, operationId });
+			const cancel = (): void => {
+				if (connection.generation === generation) void appServerRequest(connection, 'tool/resource/cancel', { sessionId: source.sessionId, threadId: source.threadId, operationId }).catch(() => undefined);
+			};
+			signal?.addEventListener('abort', cancel, { once: true });
+			if (signal?.aborted) cancel();
+			try {
+				const resource = await request;
+				const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 262_144, signal, generation);
+				return { bytes, mimeType: resource.mimeType };
+			} finally { signal?.removeEventListener('abort', cancel); }
 		},
 		readHistoryState: async params => {
 			try {
@@ -558,13 +577,24 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 		}
 		case 'toolResult': return {
 			...item,
-			content: item.content?.map(part => {
+			content: item.content == null ? item.content : item.content.map((part): ChatContentPart => {
 				switch (part.type) {
+					case 'artifact': {
+						const artifact = part.artifact;
+						const data = artifact.data;
+						return {
+							type: 'artifact', artifact: {
+								...artifact, source: { ...artifact.source },
+								data: data.type === 'binary' ? { type: 'bytes', bytes: Uint8Array.from(data.bytes) }
+									: data.type === 'json' ? { type: 'json', json: normalizeArtifactJson(data.json) } : { ...data },
+							},
+						};
+					}
 					case 'imageAttachment': return { ...part, attachment: { ...part.attachment } };
 					case 'audioAttachment': return { ...part, attachment: { ...part.attachment } };
 					default: return { ...part };
 				}
-			}) ?? item.content,
+			}),
 		};
 		default: return { ...item };
 	}
@@ -634,4 +664,10 @@ function toAgentExecutionNode(node: AgentNodeDto): AgentExecutionNode {
 		joins: node.joins?.map((join) => ({ status: join.status })),
 		children: node.children?.map(toAgentExecutionNode)
 	};
+}
+
+
+function normalizeArtifactJson(json: string): string {
+	JSON.parse(json);
+	return json;
 }

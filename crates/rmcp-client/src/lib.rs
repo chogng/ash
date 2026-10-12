@@ -13,7 +13,8 @@ pub use rmcp::model::RequestId as McpRequestId;
 pub use rmcp::model::{
     CallToolRequestParams, CallToolResult, ClientInfo, ContentBlock, ElicitRequestParams,
     ElicitResult, ElicitationAction, Implementation, JsonObject, ListToolsResult,
-    PaginatedRequestParams, ProgressNotificationParam, ServerInfo, Tool,
+    PaginatedRequestParams, ProgressNotificationParam, ReadResourceRequestParams,
+    ReadResourceResult, ResourceContents, ServerInfo, Tool,
 };
 pub use transport::{BearerToken, HttpAuthorization, StdioServerCommand, StreamableHttpServer};
 

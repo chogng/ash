@@ -21,7 +21,7 @@ import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITermi
 import { TerminalGroupService } from './terminalGroupService.js';
 import { setupTerminalCommands } from './terminalCommands.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { BrowserTerminalProfileResolverService } from './terminalProfileResolverService.js';
@@ -30,12 +30,14 @@ import { TerminalConfigurationService } from './terminalConfigurationService.js'
 import { TerminalProfileService } from './terminalProfileService.js';
 import { TerminalService } from './terminalService.js';
 import { TerminalMainContribution } from './terminalMainContribution.js';
+import { AgentHostOutputChannel } from './agentHostOutputChannel.js';
 import { IEnvironmentVariableService } from '../common/environmentVariable.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 
 // Ash creates its view services with the Parts; host terminal requests need both owners ready.
 registerWorkbenchContribution(TerminalMainContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(TerminalMainContribution));
+registerWorkbenchContribution(AgentHostOutputChannel.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AgentHostOutputChannel));
 
 registerWorkbenchServiceContribution({
 	service: ITerminalService,
@@ -53,7 +55,7 @@ registerSingleton(ITerminalGroupService, TerminalGroupService, InstantiationType
 
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileService,
-	dependencies: [ITerminalService, ITerminalProcessService, IConfigurationService, IWorkspaceContextService, IExtensionService],
+	dependencies: [ITerminalService, ITerminalProcessService, IConfigurationService, IWorkspaceContextService, IExtensionService, ITerminalContributionService],
 	install: context => context.register(context.container.createInstance(TerminalProfileService)),
 });
 

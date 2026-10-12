@@ -66,7 +66,8 @@ impl AppServer {
                     ContentPart::AudioAttachment { attachment } => {
                         AttachmentRef::Audio(attachment.clone())
                     }
-                    ContentPart::Text(_)
+                    ContentPart::Artifact { .. }
+                    | ContentPart::Text(_)
                     | ContentPart::ImageUrl { .. }
                     | ContentPart::AudioUrl { .. } => return Err(invalid_attachment_params()),
                 }

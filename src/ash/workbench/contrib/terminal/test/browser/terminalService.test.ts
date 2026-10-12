@@ -18,6 +18,8 @@ import { URI } from "../../../../../base/common/uri.js";
 import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminal.js";
 import { TerminalService } from "../../browser/terminalService.js";
 import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
+import { AgentHostTerminalService } from '../../browser/agentHostTerminalService.js';
+import { BasePty } from '../../common/basePty.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from "../../../../services/terminal/browser/terminal.js";
 import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
 
@@ -484,6 +486,54 @@ test('TerminalService rejects missing process and workspace registrations before
 
 suite('TerminalService lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const disposeEarly of [false, true]) test(`retired PTY cleanup preserves its replacement registration with early disposal ${disposeEarly}`, async () => {
+		const release = deferred<void>();
+		const processes = new TestTerminalProcessService([]);
+		processes.closeGates.push(release.promise);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using backend = services.createInstance(AgentHostTerminalService);
+		const options = { rows: 24, cols: 80, profile: { type: 'default' as const } };
+		using first = await backend.createProcess(options, 1);
+		const closing = first.close();
+		if (disposeEarly) first.dispose();
+		using replacement = await backend.createProcess(options, 1);
+		release.resolve();
+		await closing;
+		backend.dispose();
+		await replacement.close();
+		assert.deepEqual(processes.closeCalls, ['terminal-1', 'terminal-2']);
+	});
+
+	test('custom PTY output normalizes strings and preserves structured event identity and commit promises', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const service = services.get(ITerminalService);
+		const commit = Promise.resolve();
+		const structured: import('../../../../../platform/terminal/common/terminal.js').IProcessDataEvent = { data: new TextEncoder().encode('structured'), trackCommit: true, writePromise: commit };
+		class TestPty extends BasePty<string | typeof structured> {
+			async start(): Promise<void> {
+				this.handleData('string output');
+				this.handleData(structured);
+			}
+			shutdown(): void { this.handleExit(0); }
+		}
+		const instance = await service.createTerminal({
+			dimensions: { rows: 24, cols: 80 }, deferStart: true,
+			config: { name: 'Custom PTY', customPtyImplementation: id => new TestPty(id, false) },
+		});
+		const output: typeof structured[] = [];
+		using listener = instance.onDidWriteData(event => output.push(event));
+		instance.start();
+		await waitFor(() => output.length === 2);
+		assert.equal(new TextDecoder().decode(output[0]!.data), 'string output');
+		assert.equal(output[0]!.trackCommit, false);
+		assert.equal(output[1], structured);
+		assert.equal(output[1]!.writePromise, commit);
+		await service.closeTerminal(instance);
+	});
 
 	test('sendText normalizes Enter, executes once, and permits insertion without execution', async () => {
 		const processes = new TestTerminalProcessService([]);

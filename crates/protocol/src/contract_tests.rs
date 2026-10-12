@@ -2,6 +2,38 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn tool_artifact_json_retains_exact_text_and_hashes_its_utf8_bytes() {
+    let json_text = " {\n  \"text\": \"中文\", \"markup\": \"<svg/>\"\n}\n";
+    let artifact = ToolOutputArtifact::new(
+        ToolOutputArtifactSource::StructuredResult,
+        "application/json".into(),
+        ToolOutputArtifactData::Json {
+            json: json_text.into(),
+        },
+    );
+    assert_eq!(artifact.model_text(), json_text);
+    assert_eq!(
+        artifact.content_digest,
+        ContentDigest::sha256(json_text.as_bytes())
+    );
+    let wire = serde_json::to_value(&artifact).unwrap();
+    assert_eq!(wire["data"], json!({"type":"json", "json":json_text}));
+    assert_eq!(
+        serde_json::from_value::<ToolOutputArtifact>(wire).unwrap(),
+        artifact
+    );
+    let truncated = artifact.truncated_text(" {\n".into());
+    assert!(truncated.truncated);
+    assert_eq!(truncated.content_digest, ContentDigest::sha256(b" {\n"));
+    assert_eq!(
+        truncated.data,
+        ToolOutputArtifactData::Text {
+            text: " {\n".into()
+        }
+    );
+}
+
+#[test]
 fn assistant_message_phase_is_optional_and_unknown_values_round_trip() {
     let old = json!({"type":"agentMessage", "itemId":"item", "turnId":"turn", "text":"done"});
     let item: ThreadItem = serde_json::from_value(old.clone()).unwrap();
@@ -1433,5 +1465,58 @@ fn tool_selection_round_trips_and_legacy_profiles_default_to_all_enabled() {
         serde_json::from_value::<ToolProfileSnapshot>(serde_json::to_value(&profile).unwrap())
             .unwrap(),
         profile
+    );
+}
+
+#[test]
+fn tool_result_artifacts_round_trip_through_canonical_content_and_thread_items() {
+    let artifact = ToolOutputArtifact::new(
+        ToolOutputArtifactSource::EmbeddedResource {
+            uri: "docs://binary.bin".into(),
+        },
+        "application/octet-stream".into(),
+        ToolOutputArtifactData::Binary {
+            bytes: vec![0, 127, 255],
+        },
+    );
+    let content = vec![
+        ContentPart::Text("before".into()),
+        ContentPart::Artifact {
+            artifact: artifact.clone(),
+        },
+    ];
+    let wire = serde_json::to_value(&content).unwrap();
+    assert_eq!(
+        wire[1]["artifact"]["data"],
+        json!({"type":"binary","bytes":[0,127,255]})
+    );
+    assert_eq!(
+        serde_json::from_value::<Vec<ContentPart>>(wire).unwrap(),
+        content
+    );
+    let value = json!({"type":"toolResult","itemId":"item","turnId":"turn","toolCallId":"call","text":"before","isError":false,"content":content});
+    let item = serde_json::from_value::<ThreadItem>(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(item).unwrap(), value);
+}
+
+#[test]
+fn mcp_app_metadata_is_only_visible_to_the_view_and_never_replayed_to_the_model() {
+    let app = ToolOutputArtifact::new(
+        ToolOutputArtifactSource::McpApp {
+            uri: "ui://chart".into(),
+        },
+        "text/html;profile=mcp-app".into(),
+        ToolOutputArtifactData::Json {
+            json: "{\"viewOnly\":\"secret\"}".into(),
+        },
+    );
+    assert_eq!(app.model_text(), "");
+    assert_eq!(
+        app.truncated_text("clipped metadata".into()).model_text(),
+        ""
+    );
+    assert_eq!(
+        serde_json::from_value::<ToolOutputArtifact>(serde_json::to_value(&app).unwrap()).unwrap(),
+        app
     );
 }

@@ -1,5 +1,9 @@
 {
   "ash": {
+    "terminal.output.host": "终端宿主",
+    "terminal.native.closing": "正在关闭终端",
+    "terminal.native.closeFailed": "无法关闭终端 {0}：{1}",
+    "terminal.environment.activeInfo": "以下扩展为新终端配置环境变量：{0}",
     "terminal.environment.invalidCollection": "终端环境变量集合无效。",
     "terminal.config.showLinkHover": "指向终端链接时显示包含 URL 的悬浮提示。",
     "color.scmGraph.historyItemRefColor": "历史条目引用的颜色。",

@@ -15,7 +15,12 @@ struct TestServer;
 
 impl ServerHandler for TestServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+        ServerInfo::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
     }
 
     async fn list_tools(
@@ -27,6 +32,33 @@ impl ServerHandler for TestServer {
             tools: vec![Tool::new("echo", "Echo input", Arc::new(JsonObject::new()))],
             ..Default::default()
         })
+    }
+
+    async fn read_resource(
+        &self,
+        request: rmcp::model::ReadResourceRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, rmcp::ErrorData> {
+        assert_eq!(
+            context
+                .peer
+                .peer_info()
+                .unwrap()
+                .capabilities
+                .extensions
+                .as_ref()
+                .unwrap()["io.modelcontextprotocol/ui"]["mimeTypes"],
+            serde_json::json!(["text/html;profile=mcp-app"])
+        );
+        Ok(rmcp::model::ReadResourceResult::new(vec![
+            rmcp::model::ResourceContents::TextResourceContents {
+                uri: request.uri,
+                mime_type: Some("text/markdown".into()),
+                text: "# Review\r\n中文\r\n".into(),
+                meta: None,
+            },
+        ])
+        .into())
     }
 
     async fn call_tool(
@@ -50,11 +82,13 @@ async fn initializes_lists_and_calls_tools_over_an_in_process_transport() {
             .await
             .expect("join test server")
     });
-    let options = RmcpClientOptions::new("ash-rmcp-client-test", "0").with_timeouts(RmcpTimeouts {
-        initialize: Duration::from_secs(2),
-        request: Duration::from_secs(2),
-        shutdown: Duration::from_secs(2),
-    });
+    let options = RmcpClientOptions::new("ash-rmcp-client-test", "0")
+        .with_mcp_apps()
+        .with_timeouts(RmcpTimeouts {
+            initialize: Duration::from_secs(2),
+            request: Duration::from_secs(2),
+            shutdown: Duration::from_secs(2),
+        });
     let client = RmcpClient::connect(client_transport, options)
         .await
         .expect("initialize client");
@@ -70,6 +104,15 @@ async fn initializes_lists_and_calls_tools_over_an_in_process_transport() {
         .expect("call tool");
     assert_eq!(result.is_error, Some(false));
     assert_eq!(result.content.len(), 1);
+
+    let resource = client
+        .read_resource_with_cancellation("docs://review.md".into(), std::future::pending())
+        .await
+        .unwrap();
+    assert_eq!(resource.contents.len(), 1);
+    assert!(
+        matches!(&resource.contents[0], rmcp::model::ResourceContents::TextResourceContents { uri, text, .. } if uri == "docs://review.md" && text == "# Review\r\n中文\r\n")
+    );
 
     client.shutdown().await.expect("shutdown client");
     server.await.expect("server task");
@@ -94,7 +137,22 @@ struct CancellationServer {
 
 impl ServerHandler for CancellationServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+        ServerInfo::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
+    }
+
+    async fn read_resource(
+        &self,
+        _: rmcp::model::ReadResourceRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, rmcp::ErrorData> {
+        context.ct.cancelled().await;
+        self.cancelled.notify_one();
+        Ok(rmcp::model::ReadResourceResult::new(Vec::new()).into())
     }
 
     async fn call_tool(
@@ -262,4 +320,43 @@ async fn streamable_http_does_not_follow_redirects_or_replay_bearer_tokens() {
         destination.accept().unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock
     );
+}
+
+#[tokio::test]
+async fn cancelling_a_resource_read_reaches_the_peer_request() {
+    let (server_transport, client_transport) = tokio::io::duplex(8 * 1024);
+    let cancelled = Arc::new(Notify::new());
+    let server_cancelled = cancelled.clone();
+    let server = tokio::spawn(async move {
+        CancellationServer {
+            cancelled: server_cancelled,
+        }
+        .serve(server_transport)
+        .await
+        .unwrap()
+        .waiting()
+        .await
+        .unwrap()
+    });
+    let client = RmcpClient::connect(
+        client_transport,
+        RmcpClientOptions::new("resource-test", "0"),
+    )
+    .await
+    .unwrap();
+    let error = client
+        .read_resource_with_cancellation("docs://waiting".into(), async {
+            tokio::task::yield_now().await;
+            "resource removed".into()
+        })
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, RmcpClientError::Cancelled { operation: "resources/read", reason } if reason == "resource removed")
+    );
+    tokio::time::timeout(Duration::from_secs(1), cancelled.notified())
+        .await
+        .unwrap();
+    client.shutdown().await.unwrap();
+    server.await.unwrap();
 }

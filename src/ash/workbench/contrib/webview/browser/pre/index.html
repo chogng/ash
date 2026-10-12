@@ -20,6 +20,7 @@
 				let frame;
 				let documentChannel;
 				let documentContent;
+				let messageProtocol;
 				let nextRequest = 0;
 				const resourcePorts = new Map();
 				let registration;
@@ -58,6 +59,10 @@
 				});
 				window.addEventListener('message', event => {
 					if (closed) return;
+					if (messageProtocol === 'mcp' && event.source === frame?.contentWindow && event.data?.jsonrpc === '2.0' && (typeof event.data.method !== 'string' || !event.data.method.startsWith('ui/notifications/sandbox-'))) {
+						host.postMessage({ channel: documentChannel, message: event.data }, '*');
+						return;
+					}
 					const messageChannel = event.data?.channel;
 					if (event.source === frame?.contentWindow && [documentChannel, `${documentChannel}:lifecycle`, `${documentChannel}:keyboard`].includes(messageChannel)) {
 						host.postMessage(event.data, '*');
@@ -70,11 +75,13 @@
 							discardRequests();
 							documentChannel = message.documentChannel;
 							documentContent = message.html;
+							messageProtocol = message.messageProtocol;
 							document.title = message.title;
 							frame?.remove();
 							frame = document.createElement('iframe');
 							frame.sandbox = 'allow-scripts allow-same-origin';
 							frame.title = message.title;
+							if (messageProtocol === 'mcp') frame.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-write 'none'");
 							frame.src = new URL(`document/${encodeURIComponent(documentChannel)}`, workerUrl).href;
 							document.body.append(frame);
 							break;

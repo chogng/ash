@@ -489,7 +489,8 @@ fn task_delivery_replays_one_remote_session_and_executes_after_source_disconnect
         .flat_map(|message| &message.content)
         .filter_map(|content| match content {
             ContentPart::Text(text) => Some(text.as_str()),
-            ContentPart::AudioAttachment { .. }
+            ContentPart::Artifact { .. }
+            | ContentPart::AudioAttachment { .. }
             | ContentPart::AudioUrl { .. }
             | ContentPart::ImageAttachment { .. }
             | ContentPart::ImageUrl { .. } => None,

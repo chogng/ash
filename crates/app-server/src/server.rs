@@ -2905,6 +2905,12 @@ impl AppServer {
             Some(ClientMethod::ResourceRelease) => {
                 self.resource_release(connection, &request.params)
             }
+            Some(ClientMethod::ToolResourceOpen) => {
+                self.tool_resource_open(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::ToolResourceCancel) => {
+                self.tool_resource_cancel(connection, &request.params)
+            }
             Some(ClientMethod::AttachmentResourceOpen) => {
                 self.attachment_resource_open(connection, &request.params)
             }
@@ -3436,3 +3442,7 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
         )
     }
 }
+
+#[cfg(test)]
+#[path = "server/mcp_resource_tests.rs"]
+mod mcp_resource_tests;

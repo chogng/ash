@@ -1,6 +1,6 @@
 import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
 import { ShellQuoting } from '../../common/taskService.js';
-import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../../contrib/terminal/browser/terminalProfileResolverService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -391,6 +391,7 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 }
 
 function registerTaskProfiles(services: InstantiationService): void {
+	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
 	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: { applyToProcessEnvironment: async () => { } }, onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
 	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
@@ -2477,7 +2478,7 @@ suite('Task instance policies through the execution owners', () => {
 			const third = tasks.run(task);
 			const thirdOutcome = third.then(run => ({ run, error: undefined }), error => ({ run: undefined, error }));
 			await closing.p;
-			assert.equal(peer.creations, 2, 'replacement cannot spawn before release');
+			assert.deepEqual({ created: peer.creations }, { created: 2 }, 'replacement cannot spawn before release');
 			const canceled = new AbortController();
 			const canceledAdmission = assert.rejects(tasks.run(task, canceled.signal), isCancellationError);
 			const fourth = tasks.run(task);
@@ -2488,9 +2489,13 @@ suite('Task instance policies through the execution owners', () => {
 			if (instancePolicy === 'terminateOldest') assert.equal(thirdResult.error, undefined);
 			else if (thirdResult.run) assert.equal(thirdResult.run.status, 'canceled');
 			if (thirdResult.error) assert.ok(isCancellationError(thirdResult.error));
-			assert.deepEqual(peer.closed, instancePolicy === 'terminateOldest' ? ['policy-1', 'policy-2'] : ['policy-2', 'policy-3']);
+			// The newest reservation can be canceled before spawning. In that case
+			// the fourth dispatch creates process 3 and there is no process 3 to close.
+			const canceledBeforeSpawn = instancePolicy === 'terminateNewest' && peer.creations === 3;
+			if (canceledBeforeSpawn) assert.ok(isCancellationError(thirdResult.error));
+			assert.deepEqual(peer.closed, instancePolicy === 'terminateOldest' ? ['policy-1', 'policy-2'] : canceledBeforeSpawn ? ['policy-2'] : ['policy-2', 'policy-3']);
 			assert.deepEqual(tasks.activeRuns.map(run => run.terminalId), instancePolicy === 'terminateOldest' ? [thirdResult.run!.terminalId, fourthRun.terminalId] : [first.terminalId, fourthRun.terminalId]);
-			assert.equal(peer.creations, 4);
+			assert.equal(peer.creations, canceledBeforeSpawn ? 3 : 4);
 			assert.equal(second.status, 'canceled');
 			for (const run of tasks.activeRuns) await tasks.terminate(run);
 		});
@@ -2587,8 +2592,104 @@ suite('Agent Task runs through the shared execution owner', () => {
 		const terminals = resources.add(new FakeTerminalService());
 		const services = taskServices(resources, new FakeFileService(root, documents), workspace, terminals);
 		const service = resources.add(services.createInstance(TaskService));
-		return { service, terminals, documents, workspace };
+		return { service, terminals, documents, workspace, services };
 	}
+
+	for (const exitCode of [0, 1]) {
+		test(`forwards status and completion when a process exits with ${exitCode} during start publication`, async () => {
+			using resources = new DisposableStore();
+			const { service, terminals } = assemble(resources, [{ label: 'Fast', type: 'process', command: 'fast' }]);
+			const task = (await service.refresh())[0]!;
+			resources.add(service.onDidStartTask(() => terminals.instances[0]!.exit(exitCode)));
+			const run = service.start(task, new AbortController().signal, (await service.describe(task)).revision);
+			const statuses: string[] = [];
+			resources.add(run.onDidChangeStatus(status => statuses.push(status)));
+			const waitingController = new AbortController();
+			resources.add(toDisposable(() => waitingController.abort()));
+			const waiting = waitForTask(run, waitingController.signal);
+			void waiting.catch(() => undefined);
+			assert.equal(await run.completion, exitCode);
+			const expected = exitCode === 0 ? 'succeeded' : 'failed';
+			assert.deepEqual({ status: run.status, waited: await waiting, statuses }, { status: expected, waited: expected, statuses: [expected] });
+		});
+	}
+
+	test('forwards an already completed compound task without subscribing to a retired producer', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals } = assemble(resources, [{ label: 'Prepare', command: 'prepare' }, { label: 'All', dependsOn: 'Prepare' }]);
+		const task = (await service.refresh()).find(task => task.label === 'All')!;
+		resources.add(service.onDidStartTask(run => { if (run.task.label === 'Prepare') terminals.instances[0]!.exit(0); }));
+		const run = service.start(task, new AbortController().signal, (await service.describe(task)).revision);
+		const statuses: string[] = [];
+		resources.add(run.onDidChangeStatus(status => statuses.push(status)));
+		const waitingController = new AbortController();
+		resources.add(toDisposable(() => waitingController.abort()));
+		const waiting = waitForTask(run, waitingController.signal);
+		void waiting.catch(() => undefined);
+		assert.equal(await run.completion, undefined);
+		assert.deepEqual({ status: run.status, waited: await waiting, statuses }, { status: 'succeeded', waited: 'succeeded', statuses: ['succeeded'] });
+	});
+
+	for (const catalogSource of ['configuration', 'provider'] as const) {
+		test(`${catalogSource} refresh retains instance capacity until canceled process release is acknowledged`, async () => {
+			using resources = new DisposableStore();
+			const configuration = { label: 'Limited', command: 'limited', runOptions: { instancePolicy: 'silent' } };
+			const { service, terminals, documents } = assemble(resources, catalogSource === 'configuration' ? [configuration] : []);
+			const providerTask: TaskProviderTask = { ...configuration, id: 'limited', group: 'build', runOptions: { instancePolicy: 'silent' } };
+			const registration = catalogSource === 'provider' ? resources.add(service.registerTaskProviders([{ id: 'limited', provideTasks: () => [providerTask] }])) : undefined;
+			const first = await service.run((await service.refresh())[0]!);
+			const closing = new DeferredPromise<void>();
+			const release = new DeferredPromise<void>();
+			const close = terminals.closeTerminal.bind(terminals);
+			terminals.closeTerminal = async terminal => { void closing.complete(undefined); await release.p; await close(terminal); };
+			const stopping = service.terminate(first);
+			try {
+				await closing.p;
+				if (registration) registration.replace([{ id: 'limited', provideTasks: () => [{ ...providerTask, detail: 'Updated detail' }] }]);
+				else documents['.vscode/tasks.json'] = JSON.stringify({ version: '2.0.0', tasks: [{ ...configuration, detail: 'Updated detail' }] });
+				const task = (await service.refresh())[0]!;
+				assert.equal(await service.run(task), first);
+				assert.equal(terminals.instances.length, 1, 'pending release still occupies the configured instance limit');
+				void release.complete(undefined);
+				await stopping;
+				const replacement = await service.run(task);
+				assert.notEqual(replacement.runId, first.runId);
+				assert.equal(terminals.instances.length, 2);
+				await service.terminate(replacement);
+			} finally {
+				void release.complete(undefined);
+				await stopping;
+			}
+		});
+	}
+
+	test('isolates concurrent diagnostics and clears only completed runs when the same task runs again', async () => {
+		using resources = new DisposableStore();
+		const { service, terminals, services, workspace } = assemble(resources, [{ label: 'Compile', command: 'compile', problemMatcher: '$tsc', runOptions: { instanceLimit: 2 } }]);
+		const task = (await service.refresh())[0]!;
+		const markers = services.get(IMarkerService);
+		const first = await service.run(task);
+		terminals.instances[0]!.output('first.ts(1,2): error TS1000: First failure\n');
+		const second = await service.run(task);
+		assert.deepEqual(markers.getAll().map(marker => marker.message), ['First failure'], 'starting a concurrent run preserves live diagnostics');
+		terminals.instances[1]!.output('second.ts(1,2): error TS1001: Second failure\n');
+		assert.deepEqual(markers.getAll().map(marker => marker.message).sort(), ['First failure', 'Second failure']);
+		assert.equal(new Set(markers.getAll().map(marker => marker.owner)).size, 2);
+		terminals.instances[0]!.exit(0);
+		await first.completion;
+		const third = await service.run(task);
+		assert.deepEqual(markers.getAll().map(marker => marker.message), ['Second failure'], 'rerun clears completed diagnostics but preserves the other live run');
+		terminals.instances.find(terminal => terminal.id === third.terminalId)!.output('third.ts(1,2): error TS1002: Third failure\n');
+		assert.deepEqual(markers.getAll().map(marker => marker.message).sort(), ['Second failure', 'Third failure']);
+		await service.terminate(second);
+		await service.terminate(third);
+		const fourth = await service.run(task);
+		assert.deepEqual(markers.getAll(), [], 'a sequential rerun clears all completed diagnostics for this task');
+		terminals.instances.find(terminal => terminal.id === fourth.terminalId)!.output('fourth.ts(1,2): error TS1003: Fourth failure\n');
+		await service.terminate(fourth);
+		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+		assert.deepEqual(markers.getAll(), [], 'workspace retirement clears every run diagnostic owner');
+	});
 
 	test('returns a Run ID while dependencies run and cancels the same execution tree', async () => {
 		using resources = new DisposableStore();

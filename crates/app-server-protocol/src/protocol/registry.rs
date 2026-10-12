@@ -1662,6 +1662,10 @@ use crate::protocol::mcp::McpServerStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::mcp::McpServerStatusResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolResourceCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::mcp::ToolResourceOpenParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::memory::MemoryAddParams;
 use crate::protocol::memory::MemoryChanged;
 #[cfg(any(test, feature = "export"))]
@@ -2550,6 +2554,12 @@ use ash_protocol::ToolCallCaller;
 use ash_protocol::ToolExecutionAuthority;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolMode;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolOutputArtifact;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolOutputArtifactData;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolOutputArtifactSource;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolOutputStream;
 #[cfg(any(test, feature = "export"))]
@@ -4196,6 +4206,17 @@ client_methods! {
         response: (),
         serialization: ResourceExclusive("resourceId"),
     },
+    ToolResourceOpen => "tool/resource/open" {
+        params: ToolResourceOpenParams,
+        response: ResourceMetadataResult,
+        serialization: SessionSharedRead,
+        cancellation: "operationId",
+    },
+    ToolResourceCancel => "tool/resource/cancel" {
+        params: ToolResourceCancelParams,
+        response: (),
+        serialization: None,
+    },
     AttachmentResourceOpen => "attachment/resource/open" {
         params: AttachmentResourceOpenParams,
         response: ResourceMetadataResult,
@@ -5531,6 +5552,8 @@ typescript_bindings! {
     ConnectorsChanged,
     McpSecretDto,
     McpOAuthStartParams,
+    ToolResourceOpenParams,
+    ToolResourceCancelParams,
     McpOAuthStartResult,
     McpOAuthCompleteParams,
     McpOAuthMutationParams,
@@ -6150,6 +6173,9 @@ typescript_bindings! {
     Turn,
     Thread,
     ToolExecutionAuthority,
+    ToolOutputArtifact,
+    ToolOutputArtifactData,
+    ToolOutputArtifactSource,
     ToolOutputStream,
     ProcessExitStatus,
     ProcessExecutionOutput,

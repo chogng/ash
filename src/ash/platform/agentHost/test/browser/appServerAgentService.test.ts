@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Emitter } from '../../../../base/common/event.js';
-import type { ServerNotification } from '../../../../../../.build/protocol/typescript/index.js';
+import type { ServerNotification, ToolOutputArtifact } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ThreadTranscriptUpdateEnvelope } from '../../common/agentService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -209,6 +209,75 @@ test('Agent Thread notifications detach tool provenance and rich results from tr
 });
 
 
+test('Agent artifact notifications preserve exact payloads and detach binary bytes and source metadata', () => {
+	const source = { type: 'embeddedResource' as const, uri: 'file:///resource/data' };
+	const text = { type: 'text' as const, text: '<script>untrusted()</script>中文' };
+	const binary = { type: 'binary' as const, bytes: [0, 127, 255] };
+	const json = { type: 'json' as const, json: ' {\n  "text": "中文", "markup": "<svg/>"\n}\n' };
+	const artifacts: ToolOutputArtifact[] = [
+		{ source, mimeType: 'text/html', data: text, contentDigest: 'sha256:' + 'a'.repeat(64), truncated: false },
+		{ source, mimeType: 'application/octet-stream', data: binary, contentDigest: 'sha256:' + 'b'.repeat(64), truncated: false },
+		{ source: { type: 'structuredResult' }, mimeType: 'application/json', data: json, contentDigest: 'sha256:' + 'c'.repeat(64), truncated: true },
+	];
+	using notifications = new Emitter<ServerNotification>();
+	const service = createAppServerAgentThreadService({ onNotification: listener => notifications.event(listener) } as AppServerProtocolClient);
+	let converted: ThreadTranscriptUpdateEnvelope | undefined;
+	using subscription = service.onDidUpdateThreadTranscript(update => { converted = update; });
+	notifications.fire({
+		method: 'session/thread/transcript/update', params: {
+			sessionId: 'session', threadId: 'thread', revision: 1, durableSequence: 1,
+			changes: [{
+				type: 'upsert', entry: {
+					type: 'item', entryId: 'result', turnId: 'turn', transient: false, item: {
+						type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'tool', text: '', isError: false,
+						content: artifacts.map(artifact => ({ type: 'artifact', artifact })),
+					}
+				}
+			}],
+		}
+	});
+	assert.ok(converted);
+	const change = converted.changes[0];
+	assert.ok(change.type === 'upsert' && change.entry.type === 'item' && change.entry.item.type === 'toolResult');
+	const content = change.entry.item.content;
+	assert.deepEqual(content, [
+		{ type: 'artifact', artifact: { ...artifacts[0], source: { ...source }, data: { ...text } } },
+		{ type: 'artifact', artifact: { ...artifacts[1], source: { ...source }, data: { type: 'bytes', bytes: new Uint8Array([0, 127, 255]) } } },
+		{ type: 'artifact', artifact: { ...artifacts[2], source: { type: 'structuredResult' }, data: { ...json } } },
+	]);
+	const snapshot = structuredClone(content);
+	source.uri = 'file:///changed';
+	text.text = 'changed';
+	binary.bytes[0] = 42;
+	binary.bytes.push(64);
+	json.json = '{}';
+	assert.deepEqual(content, snapshot, 'retained domain content does not alias transport objects');
+});
+
+test('Agent tool result conversion retains null, omitted and empty content', () => {
+	using notifications = new Emitter<ServerNotification>();
+	const service = createAppServerAgentThreadService({ onNotification: listener => notifications.event(listener) } as AppServerProtocolClient);
+	const contentValues: unknown[] = [];
+	using subscription = service.onDidUpdateThreadTranscript(update => {
+		const change = update.changes[0];
+		assert.ok(change.type === 'upsert' && change.entry.type === 'item' && change.entry.item.type === 'toolResult');
+		contentValues.push(change.entry.item.content);
+	});
+	for (const content of [undefined, null, []]) notifications.fire({
+		method: 'session/thread/transcript/update', params: {
+			sessionId: 'session', threadId: 'thread', revision: 1, durableSequence: 1,
+			changes: [{
+				type: 'upsert', entry: {
+					type: 'item', entryId: 'result', turnId: 'turn', transient: false, item: {
+						type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'tool', text: 'result', isError: false, content,
+					}
+				}
+			}],
+		}
+	});
+	assert.deepEqual(contentValues, [undefined, null, []]);
+});
+
 test('Agent attachment reads use the exact Item scope, verified resources and cancellation cleanup', async () => {
 	for (const mode of ['read', 'abort', 'replace'] as const) {
 		const requests: { method: string; params: unknown; }[] = [];
@@ -240,5 +309,43 @@ test('Agent attachment reads use the exact Item scope, verified resources and ca
 		assert.deepEqual(requests[0], { method: 'attachment/resource/open', params: source });
 		assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
 		assert.equal(requests.filter(request => request.method === 'resource/read').length, mode === 'abort' ? 0 : 1);
+	}
+});
+
+test('Agent linked resource reads use canonical coordinates and cancel the original operation before releasing late handles', async () => {
+	for (const mode of ['read', 'abort', 'replace'] as const) {
+		const requests: { method: string; params: unknown; }[] = [];
+		const controller = new AbortController();
+		const bytes = Buffer.from('# Original\r\n中文\r\n');
+		let generation = 1;
+		const service = createAppServerAgentThreadService({
+			get generation() { return generation; },
+			async request(definition: { method: string; }, params: unknown) {
+				requests.push({ method: definition.method, params });
+				switch (definition.method) {
+					case 'tool/resource/open': {
+						if (mode === 'abort') controller.abort();
+						return { resourceId: 'linked', size: bytes.length, mimeType: 'text/markdown', sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
+					}
+					case 'tool/resource/cancel': return null;
+					case 'resource/read': {
+						if (mode === 'replace') generation++;
+						return { resourceId: 'linked', offset: 0, decodedLength: bytes.length, dataBase64: bytes.toString('base64'), eof: true };
+					}
+					case 'resource/release': return null;
+					default: throw new Error('Unexpected request');
+				}
+			},
+		} as AppServerProtocolClient);
+		const source = { sessionId: 'session', threadId: 'thread', itemId: 'result', contentIndex: 2 };
+		const result = service.readToolResource(source, controller.signal);
+		if (mode === 'read') assert.deepEqual(await result, { bytes: new Uint8Array(bytes), mimeType: 'text/markdown' });
+		else await assert.rejects(result);
+		assert.equal(requests[0].method, 'tool/resource/open');
+		assert.deepEqual(Object.keys(requests[0].params as object).sort(), ['contentIndex', 'itemId', 'operationId', 'sessionId', 'threadId']);
+		assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
+		const cancellations = requests.filter(request => request.method === 'tool/resource/cancel');
+		assert.equal(cancellations.length, mode === 'abort' ? 1 : 0);
+		if (mode === 'abort') assert.deepEqual(cancellations[0].params, { sessionId: source.sessionId, threadId: source.threadId, operationId: (requests[0].params as { operationId: string; }).operationId });
 	}
 });

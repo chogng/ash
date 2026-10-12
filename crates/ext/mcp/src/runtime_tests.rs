@@ -27,7 +27,7 @@ struct FakeSession(McpServerId);
 
 impl McpSession for FakeSession {
     fn server_info(&self) -> ServerInfo {
-        ServerInfo::default()
+        serde_json::from_value(serde_json::json!({"protocolVersion":"2025-11-25","capabilities":{"resources":{}},"serverInfo":{"name":"test","version":"0"}})).unwrap()
     }
 
     fn list_tools(&self, cursor: McpPageCursor) -> McpSessionFuture<'_, ListToolsResult> {
@@ -53,6 +53,23 @@ impl McpSession for FakeSession {
             Ok(CallToolResult::success(vec![ContentBlock::text(
                 self.0.to_string(),
             )]))
+        })
+    }
+
+    fn read_resource(
+        &self,
+        uri: String,
+        _: &ash_async_utils::CancellationToken,
+    ) -> McpSessionFuture<'_, ash_rmcp_client::ReadResourceResult> {
+        Box::pin(async move {
+            Ok(ash_rmcp_client::ReadResourceResult::new(vec![
+                ash_rmcp_client::ResourceContents::TextResourceContents {
+                    uri,
+                    mime_type: Some("text/plain".into()),
+                    text: self.0.to_string(),
+                    meta: None,
+                },
+            ]))
         })
     }
 
@@ -93,6 +110,16 @@ fn bridges_sync_calls_to_continuously_running_async_runtime() {
 
     assert_eq!(output.status(), ToolOutputStatus::Success);
     assert_eq!(output.content(), &[ToolContent::Text(server.to_string())]);
+    let resource = owner
+        .read_resource(
+            owner.resolve(&tool_name).unwrap().clone(),
+            "docs://original".into(),
+            CancellationSource::new().token(),
+        )
+        .unwrap();
+    assert!(
+        matches!(resource.data, ash_protocol::ToolOutputArtifactData::Text { text } if text == server.as_str())
+    );
 }
 
 #[test]

@@ -4,6 +4,20 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { ICreateContributedTerminalProfileOptions, IExtensionTerminalProfile, IShellLaunchConfig, ITerminalProfile, TerminalArguments } from '../../../../platform/terminal/common/terminal.js';
 import type { OperatingSystem } from '../../../../base/common/platform.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
+import type Severity from '../../../../base/common/severity.js';
+
+export interface ITerminalStatus {
+	readonly id: string;
+	readonly severity: Severity;
+	readonly tooltip: string;
+}
+
+export interface ITerminalContributionService extends IDisposable {
+	readonly terminalProfiles: readonly IExtensionTerminalProfile[];
+	readonly onDidChangeTerminalProfiles: Event<readonly IExtensionTerminalProfile[]>;
+}
+
+export const ITerminalContributionService = createServiceIdentifier<ITerminalContributionService>('terminalContributionService');
 
 /** Available trusted shells and the effective interactive default in this window. */
 export interface ITerminalProfileService extends IDisposable {

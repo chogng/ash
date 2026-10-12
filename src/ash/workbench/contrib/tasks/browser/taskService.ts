@@ -151,6 +151,7 @@ export class TaskService extends Disposable implements ITaskService {
 		const controller = new AbortController();
 		const emitter = new Emitter<TaskRunStatus>();
 		const readyEmitter = new Emitter<void>();
+		let statusListener: IDisposable | undefined;
 		let readyListener: IDisposable | undefined;
 		const completion = new DeferredPromise<number | undefined>();
 		void completion.p.catch(() => undefined);
@@ -171,17 +172,29 @@ export class TaskService extends Disposable implements ITaskService {
 			onDidChangeStatus: emitter.event, completion: completion.p,
 			readOutput: (cursor, limit) => current ? current.readOutput(cursor, limit) : readTaskOutput(preparationError, 0, cursor, limit),
 		};
+		const bindRun = (value: ITaskRun): void => {
+			if (current === value) return;
+			current = value;
+			// Start observers can finish the producer before dispatch returns. Subscribe
+			// when it is published, and replay final state for already completed runs.
+			if (value.status === 'running') {
+				statusListener = value.onDidChangeStatus(status => emitter.fire(status));
+				readyListener = value.onDidBecomeReady?.(() => readyEmitter.fire());
+			} else {
+				emitter.fire(value.status);
+			}
+			if (value.isReady) readyEmitter.fire();
+		};
 		const abort = (): void => controller.abort();
 		signal.addEventListener('abort', abort, { once: true });
-		const operation = this.dispatch(task, controller.signal, false, undefined, expectedRevision, run.runId, value => { current = value; readyListener = value.onDidBecomeReady?.(() => readyEmitter.fire()); if (value.isReady) readyEmitter.fire(); });
+		const operation = this.dispatch(task, controller.signal, false, undefined, expectedRevision, run.runId, bindRun);
 		this.retainedRuns.set(run.runId, { run, dispatch: { controller, operation } });
 		this.latestRun = run;
 		this.stateEmitter.fire(run);
 		void operation.then(async value => {
-			current = value;
-			const listener = value.onDidChangeStatus(value => emitter.fire(value));
-			try { await completion.complete(await value.completion); }
-			finally { listener.dispose(); }
+			// Joining a reserved instance returns its producer without publishing a start.
+			bindRun(value);
+			await completion.complete(await value.completion);
 		}, error => {
 			const retained = this.retainedRuns.get(run.runId);
 			if (retained) { retained.completedAt = Date.now(); this.latestRun = run; }
@@ -192,7 +205,7 @@ export class TaskService extends Disposable implements ITaskService {
 			emitter.fire(status);
 			this.stateEmitter.fire(run);
 			void completion.error(error);
-		}).catch(error => { void completion.error(error); }).finally(() => { signal.removeEventListener('abort', abort); readyListener?.dispose(); readyEmitter.dispose(); emitter.dispose(); });
+		}).catch(error => { void completion.error(error); }).finally(() => { signal.removeEventListener('abort', abort); statusListener?.dispose(); readyListener?.dispose(); readyEmitter.dispose(); emitter.dispose(); });
 		return run;
 	}
 
@@ -654,7 +667,8 @@ export class TaskService extends Disposable implements ITaskService {
 	private setTasks(tasks: readonly IWorkspaceTask[]): void {
 		if (taskListsEqual(this.currentTasks, tasks)) return;
 		this.catalogGeneration++;
-		this.pendingRuns.clear();
+		// A catalog revision invalidates preparation, not its resource lease. Each
+		// reservation retires only after dispatch rollback or producer release.
 		this.currentTasks = tasks;
 		this.changeTasksEmitter.fire(tasks);
 	}
@@ -688,7 +702,6 @@ export class TaskService extends Disposable implements ITaskService {
 		if (this.isDisposed) return;
 		const changedProviders = new Set(providerIds);
 		for (const dispatch of this.dispatches) dispatch.abort();
-		this.pendingRuns.clear();
 		for (const run of this.activeRuns) {
 			const providerId = run.task.providerId ?? taskProviderId(run.task);
 			if (providerId && changedProviders.has(providerId) && run.task.execution?.type === 'custom') void this.terminate(run).catch(error => this.reportError(error));

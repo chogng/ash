@@ -58,6 +58,10 @@ export class TerminalInstanceService extends Disposable {
 				options.dimensions,
 				this.backend,
 			);
+			// Acquire the custom handle before this async factory yields. If its window
+			// closes before publication, disposing the instance must still release the host PTY.
+			try { instance.prepareCustomProcess(); }
+			catch (error) { instance.dispose(); throw error; }
 			return instance;
 		}
 		const workspaceFolder = this.requireWorkspaceFolder(options.dirId);

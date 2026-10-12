@@ -26,6 +26,7 @@ mod tool_binding;
 mod tool_execution;
 mod tool_mode;
 mod tool_name;
+mod tool_output_artifact;
 mod turn;
 mod turn_execution;
 
@@ -297,6 +298,9 @@ pub use tool_execution::ToolReplaySafety;
 pub use tool_mode::ToolMode;
 pub use tool_name::InvalidToolName;
 pub use tool_name::ToolName;
+pub use tool_output_artifact::ToolOutputArtifact;
+pub use tool_output_artifact::ToolOutputArtifactData;
+pub use tool_output_artifact::ToolOutputArtifactSource;
 pub use turn::InstructionText;
 pub use turn::InvalidTurnInstructions;
 pub use turn::ModelInstructionMessages;
