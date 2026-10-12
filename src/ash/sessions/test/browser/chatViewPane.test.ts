@@ -100,6 +100,7 @@ const inputResources = new DisposableStore();
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(IMenuService, menus ?? new MenuService(inputResources.add(new CommandService(services)), services.get(IContextKeyService)));

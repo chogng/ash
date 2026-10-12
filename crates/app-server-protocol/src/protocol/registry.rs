@@ -1078,6 +1078,10 @@ use crate::protocol::git::GitOperationResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitPathsParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitPullModeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitPullParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitReferenceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitReferenceKindDto;
@@ -4773,7 +4777,7 @@ client_methods! {
         serialization: RepositoryExclusive,
     },
     GitPull => "git/pull" {
-        params: GitRepositoryParams,
+        params: GitPullParams,
         response: GitOperationResult,
         serialization: RepositoryExclusive,
     },
@@ -6573,6 +6577,8 @@ typescript_bindings! {
     GitCloneResult,
     GitFetchModeDto,
     GitFetchParams,
+    GitPullModeDto,
+    GitPullParams,
     GitRepositoryDto,
     GitRepositoriesResult,
     GitRepositoryChangeDto,

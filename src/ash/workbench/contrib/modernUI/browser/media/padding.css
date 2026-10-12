@@ -1,7 +1,3 @@
-.ash-workbench.modern-ui .ash-sidebar-part .ash-pane-view-header {
-	margin: 0 var(--ash-spacing-size80);
-}
-
 /* Inset row hit areas without shrinking the viewport that positions the scrollbar. */
 .ash-workbench.modern-ui .ash-sidebar-part .ash-list-row {
 	margin: 0 var(--ash-spacing-size80);

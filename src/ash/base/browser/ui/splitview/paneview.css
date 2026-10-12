@@ -44,7 +44,7 @@
 	color: inherit;
 	cursor: pointer;
 	font: inherit;
-	padding: 0 2px;
+	padding: 0;
 	text-align: left;
 }
 .ash-pane-view-header-button:hover {

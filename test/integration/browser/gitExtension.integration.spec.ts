@@ -236,3 +236,131 @@ for (const language of ['en', 'zh-CN']) test(`disabled Git stays inactive after 
 		expect(errors).toEqual([]);
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
+
+
+for (const activation of ['click', 'keyboard'] as const) test(`Git statusbar ${activation} synchronizes through the Worker and disables pending actions`, async ({ page }) => {
+	const errors = collectErrors(page);
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true); await window.gitExtensionIntegration.activate('en'); });
+		const sync = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]');
+		const branch = page.locator('[data-statusbar-item-id="ash.status.git.branch"] [role="button"]');
+		await expect(sync).toHaveText('3↓ 2↑');
+		if (activation === 'click') await sync.click();
+		else { await sync.focus(); await page.keyboard.press('Enter'); }
+		await expect(sync).toHaveAttribute('aria-disabled', 'true');
+		await expect(branch).toHaveAttribute('aria-disabled', 'true');
+		await expect(sync).toHaveAttribute('aria-label', 'Synchronizing Changes…');
+		await sync.click({ force: true });
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull').length)).toBe(1);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/push'))).toEqual([]);
+		await page.evaluate(() => window.gitStatusbarIntegration.release());
+		await expect(sync).not.toHaveAttribute('aria-disabled');
+		await expect(sync).toHaveText('');
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull' || call.method === 'git/push'))).toEqual([
+			{ method: 'git/pull', params: { repositoryId: 'root', mode: 'sync' } },
+			{ method: 'git/push', params: { repositoryId: 'root' } },
+		]);
+		expect(errors).toEqual([]);
+	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
+});
+
+for (const activation of ['statusbar', 'command'] as const) test(`Git statusbar publishes a branch without upstream through the Worker via ${activation}`, async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		const publish = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]');
+		await expect(publish).toHaveAttribute('aria-label', 'Publish Git branch main');
+		if (activation === 'statusbar') await publish.click();
+		else await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/command').map(call => call.params))).toEqual([
+			{ repositoryId: 'root', command: { kind: 'publishBranch', remote: 'origin', name: 'main', branch: 'main', expectedHead: 'a'.repeat(40) } },
+		]);
+		await expect(publish).toHaveAttribute('aria-label', /Synchronize Git changes/);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git statusbar does not push after a failed pull through the Worker', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true, true); await window.gitExtensionIntegration.activate('en'); });
+		const sync = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]');
+		await expect(sync).toHaveText('3↓ 2↑');
+		await sync.click();
+		await expect(sync).toHaveAttribute('aria-disabled', 'true');
+		await page.evaluate(() => window.gitStatusbarIntegration.release());
+		await expect(sync).not.toHaveAttribute('aria-disabled');
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/push'))).toEqual([]);
+		await expect(sync).toHaveText('3↓ 2↑');
+	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
+});
+
+
+for (const command of ['git.pullRebase', 'git.syncRebase'] as const) test(`Git statusbar explicit rebase reaches the backend through ${command}`, async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true); await window.gitExtensionIntegration.activate('en'); });
+		await expect(page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]')).toHaveText('3↓ 2↑');
+		const invocation = page.evaluate(id => window.gitExtensionIntegration.invoke(id, ['root']), command);
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull'))).toEqual([
+			{ method: 'git/pull', params: { repositoryId: 'root', mode: 'rebase' } },
+		]);
+		await page.evaluate(() => window.gitStatusbarIntegration.release());
+		await invocation;
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/push').length)).toBe(command === 'git.syncRebase' ? 1 : 0);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
+});
+
+
+test('Git rebase command labels are localized in Chinese', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => window.gitExtensionIntegration.activate('zh-CN'));
+		const labels = await page.evaluate(() => window.gitStatusbarIntegration.commandLabels());
+		expect(labels.filter(command => command.id === 'git.pullRebase' || command.id === 'git.syncRebase').sort((left, right) => left.id.localeCompare(right.id))).toEqual([
+			{ id: 'git.pullRebase', title: '拉取（变基）' },
+			{ id: 'git.syncRebase', title: '同步更改（变基）' },
+		]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+
+for (const language of ['en', 'zh-CN']) test(`Git rebase setting reads and writes the shared profile through Settings UI in ${language}`, async ({ page }, testInfo) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async lang => { await window.gitExtensionIntegration.activate(lang); window.gitSettingsIntegration.mount(lang); }, language);
+		const label = language === 'zh-CN' ? '同步时变基' : 'Rebase When Sync';
+		const toggle = page.getByRole('switch', { name: label, exact: true });
+		await expect(toggle).toHaveAttribute('aria-checked', 'false');
+		await toggle.focus();
+		await page.keyboard.press('Space');
+		await expect(toggle).toHaveAttribute('aria-checked', 'true');
+		await expect.poll(() => page.evaluate(() => window.gitSettingsIntegration.profile())).toEqual({ autofetch: 'off', autofetchPeriod: 180, rebaseWhenSync: true });
+		await page.evaluate(() => window.gitSettingsIntegration.externalChange(false));
+		await expect(toggle).toHaveAttribute('aria-checked', 'false');
+		await toggle.click();
+		await expect.poll(() => page.evaluate(() => window.gitSettingsIntegration.profile().rebaseWhenSync)).toBe(true);
+		await page.locator('#git-settings .ash-setting-item-actions-trigger').click();
+		await page.evaluate(() => window.gitSettingsIntegration.reset());
+		await expect(toggle).toHaveAttribute('aria-checked', 'false');
+		expect(await page.evaluate(() => window.gitSettingsIntegration.profile())).toEqual({ autofetch: 'off', autofetchPeriod: 180, rebaseWhenSync: false });
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+		await testInfo.attach(`git-rebase-setting-${language}`, { body: await page.locator('#git-settings').screenshot(), contentType: 'image/png' });
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git rebase Settings UI keeps the saved value when writing fails', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { await window.gitExtensionIntegration.activate('en'); window.gitSettingsIntegration.mount(); });
+		const toggle = page.getByRole('switch', { name: 'Rebase When Sync', exact: true });
+		await expect(toggle).toHaveAttribute('aria-checked', 'false');
+		await page.evaluate(() => window.gitSettingsIntegration.rejectWrites());
+		await toggle.click();
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().errors.some(error => error.includes('Settings save rejected')))).toBe(true);
+		await expect(toggle).toHaveAttribute('aria-checked', 'false');
+		expect(await page.evaluate(() => window.gitSettingsIntegration.profile().rebaseWhenSync)).toBe(false);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});

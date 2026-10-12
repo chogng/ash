@@ -202,6 +202,22 @@ test('inactive editor opens keep the selected tab and its content visible', asyn
 	dom.window.close();
 });
 
+test('forceReload replaces the resolved pane while retaining one editor tab', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	const panes: TestEditorPane[] = [];
+	using registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.reload', '.ts', () => trackPane(panes, 'ash.test.reload')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	const original = input('C:/project/review.ts');
+	await editor.openEditor(original, { pinned: true });
+	await editor.openEditor({ ...original, label: 'Selected capture' }, { pinned: true, forceReload: true });
+	assert.equal(panes.length, 2);
+	assert.equal(panes[0]!.disposed, true);
+	assert.equal(editor.activeGroup.inputs.length, 1);
+	assert.equal(editor.activeInput?.label, 'Selected capture');
+});
+
 test('single-content editor groups replace pinned and sticky content without creating another group', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const panes: TestEditorPane[] = [];
@@ -2092,7 +2108,7 @@ test("Editor tabs keep sticky editors in their own row across working-set restor
 	);
 	assert.ok(unstick);
 	const unpin = editor.domNode.querySelector<HTMLButtonElement>('.ash-sticky-editor-tabs-row .ash-tab-primary-action button')!;
-	assert.equal(unpin.getAttribute('aria-label'), 'Unpin Editor');
+	assert.equal(unpin.getAttribute('aria-label'), 'Unpin');
 	assert.equal(editor.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-tab-close-action'), null);
 	const activeBeforeUnpin = editor.activeGroup.activeInput;
 	unpin.focus();

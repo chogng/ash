@@ -178,7 +178,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			const label = labels.get(editor.input)!;
 			let primaryAction = this.unpinActions.get(editor.instanceId);
 			if (editor.sticky && !primaryAction) {
-				const unpinLabel = localize("workbench.unpinEditor", "Unpin Editor");
+				const unpinLabel = localize("workbench.unpinEditor", "Unpin");
 				primaryAction = {
 					id: "workbench.action.unpinActiveEditor",
 					label: unpinLabel,
@@ -199,8 +199,8 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				if (!closeAction) {
 					closeAction = {
 						id: TAB_CLOSE_ACTION_ID,
-						label: localize('workbench.closeEditor', 'Close Tab'),
-						tooltip: localize('workbench.closeEditor', 'Close Tab'),
+						label: localize('workbench.closeEditor', 'Close'),
+						tooltip: localize('workbench.closeEditor', 'Close'),
 						icon: Lxicon.close,
 						enabled: false,
 						run: () => this.delegate.close(editor.input),
@@ -210,11 +210,11 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				primaryAction = closeAction;
 			}
 			const stateLabel = editor.hasExternalChange ? "conflict with changes on disk" : editor.isDirty ? "unsaved changes" : undefined;
-			let ariaDescription = localize("workbench.editorUnpinnedTabHint", "Use Pin Editor to pin this tab.");
+			let ariaDescription = localize("workbench.editorUnpinnedTabHint", "Use Pin to pin this tab.");
 			if (editor.sticky) {
-				ariaDescription = localize("workbench.editorPinnedTabHint", "Pinned tab. Use Unpin Editor to unpin.");
+				ariaDescription = localize("workbench.editorPinnedTabHint", "Pinned tab. Use Unpin to unpin.");
 			} else if (editor.preview) {
-				ariaDescription = localize("workbench.editorPreviewTabHint", "Double-click or use Keep Open to keep this tab open. Use Pin Editor to pin this tab.");
+				ariaDescription = localize("workbench.editorPreviewTabHint", "Double-click or use Keep Open to keep this tab open. Use Pin to pin this tab.");
 			}
 			return {
 				id: editor.instanceId,
@@ -255,12 +255,13 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			const label = labels.get(editor.input)!;
 			const icon = editor.input.getIcon?.();
 			const resource = EditorResourceAccessor.getOriginalUri(editor.input, { supportSideBySide: SideBySideEditor.BOTH });
-			const signature = JSON.stringify([resource, label.name, label.description, icon]);
+			const extraClasses = editor.input.getLabelExtraClasses?.();
+			const signature = JSON.stringify([resource, label.name, label.description, icon, extraClasses]);
 			// Resource labels recreate their text when updated; selection must retain the click target.
 			if (rendered.signature !== signature) {
 				rendered.signature = signature;
 				const ariaLabel = label.description ? `${label.name}, ${label.description}` : label.name;
-				rendered.label.setResource({ resource, name: label.name, description: label.description }, { ariaLabel, forceLabel: true, icon, fileDecorations: { colors: true, badges: true } });
+				rendered.label.setResource({ resource, name: label.name, description: label.description }, { ariaLabel, forceLabel: true, icon, extraClasses, fileDecorations: { colors: true, badges: true } });
 			}
 			this.updateTabAriaLabel(editor, rendered.label);
 		}

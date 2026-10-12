@@ -769,7 +769,7 @@
     },
     "GitConfig": {
       "additionalProperties": false,
-      "description": "Profile-wide automatic Git fetch preference, interpreted by App Server.",
+      "description": "Profile-wide Git behavior interpreted by App Server.",
       "properties": {
         "autofetch": {
           "$ref": "#/$defs/GitAutoFetchMode",
@@ -780,6 +780,11 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "rebaseWhenSync": {
+          "default": false,
+          "description": "Force rebase during synchronization; otherwise use repository Git configuration.",
+          "type": "boolean"
         }
       },
       "type": "object"

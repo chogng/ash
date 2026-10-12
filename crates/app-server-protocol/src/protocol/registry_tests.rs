@@ -788,3 +788,41 @@ fn extension_source_mutations_have_strict_inputs_and_exclusive_serialization() {
     unexpected["replace"] = serde_json::json!(true);
     assert!(serde_json::from_value::<ExtensionsAddSourceParams>(unexpected).is_err());
 }
+
+#[test]
+fn git_pull_modes_roundtrip_and_keep_repository_serialization() {
+    use crate::protocol::config::GitConfigDto;
+    use crate::protocol::git::GitPullModeDto;
+    use crate::protocol::git::GitPullParams;
+    let legacy: GitPullParams =
+        serde_json::from_value(serde_json::json!({"repositoryId":"repo"})).unwrap();
+    assert_eq!(legacy.mode, None);
+    assert_eq!(GitPullModeDto::default(), GitPullModeDto::Configured);
+    for mode in ["configured", "rebase", "sync"] {
+        let value = serde_json::json!({"repositoryId":"repo", "mode":mode});
+        let params: GitPullParams = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(params).unwrap(), value);
+        assert_eq!(
+            definition("git/pull").serialization_scope(&value).unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: Some("repo".into()),
+                access: SerializationAccess::Exclusive
+            })
+        );
+    }
+    for value in [
+        serde_json::json!({"mode":"force"}),
+        serde_json::json!({"mode":true}),
+        serde_json::json!({"unexpected":true}),
+    ] {
+        assert!(serde_json::from_value::<GitPullParams>(value).is_err());
+    }
+    let config: GitConfigDto =
+        serde_json::from_value(serde_json::json!({"autofetch":"off","autofetchPeriod":180}))
+            .unwrap();
+    assert!(!config.rebase_when_sync);
+    assert_eq!(
+        serde_json::to_value(config).unwrap()["rebaseWhenSync"],
+        false
+    );
+}

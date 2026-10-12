@@ -625,7 +625,7 @@ impl AppServer {
     }
 }
 
-fn config_error(_: ash_config::ConfigError) -> RpcError {
+pub(super) fn config_error(_: ash_config::ConfigError) -> RpcError {
     RpcError::new(-32030, AppServerErrorName::ConfigUnavailable)
 }
 
@@ -811,6 +811,7 @@ fn git_config_dto(config: GitConfig) -> GitConfigDto {
             GitAutoFetchMode::All => GitAutoFetchModeDto::All,
         },
         autofetch_period: config.autofetch_period,
+        rebase_when_sync: config.rebase_when_sync,
     }
 }
 
@@ -822,6 +823,7 @@ fn git_config_from_dto(config: GitConfigDto) -> GitConfig {
             GitAutoFetchModeDto::All => GitAutoFetchMode::All,
         },
         autofetch_period: config.autofetch_period,
+        rebase_when_sync: config.rebase_when_sync,
     }
 }
 

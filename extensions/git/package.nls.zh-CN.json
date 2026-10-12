@@ -422,5 +422,14 @@
   "command.git.graph.compareWithRemote": "与远端比较…",
   "command.git.graph.compareWithMergeBase": "与共同祖先比较…",
   "command.git.copyCommitId": "复制提交哈希",
-  "command.git.copyCommitMessage": "复制提交消息"
+  "command.git.copyCommitMessage": "复制提交消息",
+  "git.menu.sync": "同步更改",
+  "git.status.synchronizing": "正在同步更改…",
+  "git.status.operationRunning": "正在执行 Git 操作…",
+  "git.menu.pullRebase": "拉取（变基）",
+  "git.menu.syncRebase": "同步更改（变基）",
+  "command.git.updateRebaseWhenSync": "git.updateRebaseWhenSync",
+  "git.rebaseWhenSync.title": "同步时变基",
+  "git.rebaseWhenSync.description": "运行同步命令时强制 Git 使用变基。",
+  "git.rebaseWhenSync.invalid": "“同步时变基”必须为布尔值。"
 }

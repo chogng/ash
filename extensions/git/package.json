@@ -414,9 +414,28 @@
         "enablement": "!scmBusy"
       },
       {
+        "command": "git.sync",
+        "title": "%git.menu.sync%",
+        "icon": "$(sync)",
+        "category": "Git",
+        "enablement": "!scmBusy"
+      },
+      {
+        "command": "git.syncRebase",
+        "title": "%git.menu.syncRebase%",
+        "category": "Git",
+        "enablement": "!scmBusy"
+      },
+      {
         "command": "git.pull",
         "title": "%git.menu.pull%",
         "icon": "$(repo-pull)",
+        "category": "Git",
+        "enablement": "!scmBusy"
+      },
+      {
+        "command": "git.pullRebase",
+        "title": "%git.menu.pullRebase%",
         "category": "Git",
         "enablement": "!scmBusy"
       },
@@ -623,6 +642,10 @@
         "icon": "$(repo-push)",
         "category": "Git",
         "enablement": "!scmBusy"
+      },
+      {
+        "command": "git.updateRebaseWhenSync",
+        "title": "%command.git.updateRebaseWhenSync%"
       }
     ],
     "colors": [
@@ -794,22 +817,22 @@
         {
           "command": "git.fetchAll",
           "when": "scmHistoryProviderId == git",
-          "group": "navigation@1"
+          "group": "navigation@900"
         },
         {
           "command": "git.pull",
           "when": "scmHistoryProviderId == git",
-          "group": "navigation@2"
+          "group": "navigation@901"
         },
         {
           "command": "git.push",
           "when": "scmHistoryProviderId == git && scmCurrentHistoryItemRefHasRemote",
-          "group": "navigation@3"
+          "group": "navigation@902"
         },
         {
           "command": "git.publish",
           "when": "scmHistoryProviderId == git && scmCurrentHistoryItemRefHasCommit && !scmCurrentHistoryItemRefHasRemote",
-          "group": "navigation@3"
+          "group": "navigation@903"
         }
       ],
       "scm/historyItem/context": [
@@ -1253,6 +1276,22 @@
             "readCommand": "git.readSettings",
             "writeCommand": "git.updateAutoFetchPeriod",
             "property": "autoFetchPeriod"
+          }
+        },
+        "git.rebaseWhenSync": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "%git.rebaseWhenSync.description%",
+          "ashSetting": {
+            "valueType": "boolean",
+            "title": "%git.rebaseWhenSync.title%",
+            "description": "%git.rebaseWhenSync.description%"
+          },
+          "ashBinding": {
+            "readCommand": "git.readSettings",
+            "writeCommand": "git.updateRebaseWhenSync",
+            "property": "rebaseWhenSync"
           }
         }
       }

@@ -12,7 +12,7 @@ pub enum GitAutoFetchMode {
     All,
 }
 
-/// Profile-wide automatic Git fetch preference, interpreted by App Server.
+/// Profile-wide Git behavior interpreted by App Server.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -21,6 +21,9 @@ pub struct GitConfig {
     pub autofetch: GitAutoFetchMode,
     #[serde(default = "default_period")]
     pub autofetch_period: u32,
+    /// Force rebase during synchronization; otherwise use repository Git configuration.
+    #[serde(default)]
+    pub rebase_when_sync: bool,
 }
 
 impl Default for GitConfig {
@@ -28,6 +31,7 @@ impl Default for GitConfig {
         Self {
             autofetch: GitAutoFetchMode::Off,
             autofetch_period: default_period(),
+            rebase_when_sync: false,
         }
     }
 }

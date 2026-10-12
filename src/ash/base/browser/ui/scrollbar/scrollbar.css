@@ -124,6 +124,9 @@
 }
 
 .ash-scrollbar-track:focus-visible {
+	/* Reveal only the keyboard-focused control, not every bar around a focused editor. */
+	opacity: 1;
+	pointer-events: auto;
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
@@ -202,6 +205,8 @@
 }
 
 .ash-scrollbar-arrow:focus-visible {
+	opacity: 1;
+	pointer-events: auto;
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

@@ -66,7 +66,7 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 			await provider(id)?.runTitleOperation(() => git.fetch(id, target));
 		});
 	}
-	register('git.publish', async value => {
+	const publish = async (value?: unknown): Promise<void> => {
 		const id = (await git.getRepository(repositoryId(value))).id;
 		const status = await git.status(id);
 		if (status.head.type !== 'branch') { ctx.notifications.info(localize('git.publishNeedsCommit', 'Create a commit on a branch before publishing it.')); return; }
@@ -75,8 +75,22 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 		if (!remotes.length) { ctx.notifications.info(localize('git.publishNeedsRemote', 'Add a Git remote before publishing this branch.')); return; }
 		const remote = remotes.length === 1 ? remotes[0] : (await pickGitItem(ctx.input, remotes.map(remote => ({ label: remote, remote })), localize('git.publishChooseRemote', 'Choose the remote to publish this branch to')))?.remote;
 		if (!remote) { return; }
-		await provider(id)?.runTitleOperation(() => git.executeCommand({ kind: 'publishBranch', remote, name: head.name, branch: head.name, expectedHead: head.objectId }, id));
-	});
+		await provider(id)?.runTitleOperation(async () => {
+			const result = await git.executeCommand({ kind: 'publishBranch', remote, name: head.name, branch: head.name, expectedHead: head.objectId }, id);
+			return result.status;
+		});
+	};
+	register('git.publish', publish);
+	for (const [id, mode] of [['git.sync', 'sync'], ['git.syncRebase', 'rebase']] as const) {
+		register(id, async value => {
+			const current = provider(value);
+			if (!current || current.isBusy) return;
+			const status = await git.status(current.id);
+			if (status.head.type === 'branch' && !status.head.upstream) await publish(current.id);
+			else await current.sync(mode);
+		});
+	}
+	register('git.pullRebase', value => provider(value)?.runTitleOperation(() => git.pull(repositoryId(value), 'rebase')));
 	for (const method of ['pull', 'push'] as const) { register(`git.${method}`, value => provider(value)?.runTitleOperation(() => git[method](repositoryId(value)))); }
 	for (const definition of repositoryCommands) {
 		register(definition.id, async value => {
@@ -124,7 +138,11 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 		target.input.value = message; const objectId = await target.commit({}, async () => (await pickGitItem(ctx.input, [{ label: localize('git.commitStaged', 'Staged changes'), scope: 'staged' as const }, { label: localize('git.commitTracked', 'Tracked changes only'), scope: 'tracked' as const }, { label: localize('git.commitIncludingUntracked', 'Tracked and untracked changes'), scope: 'includeUntracked' as const }], localize('git.commitScope', 'Choose changes to commit')))?.scope);
 		if (push && objectId) await target.runTitleOperation(() => git.push(target.id));
 	});
-	register('git.readSettings', async () => { await git.refreshAutoFetch(); return { autoFetch: git.autoFetch, autoFetchPeriod: git.autoFetchPeriod }; });
+	register('git.readSettings', () => git.readSettings());
+	register('git.updateRebaseWhenSync', value => {
+		if (typeof value !== 'boolean') throw new TypeError(localize('git.rebaseWhenSync.invalid', 'Rebase When Sync must be a boolean.'));
+		return git.setRebaseWhenSync(value);
+	});
 	register('git.updateAutoFetch', value => git.setAutoFetch(value as false | true | 'all'));
 	register('git.updateAutoFetchPeriod', value => git.setAutoFetchPeriod(Number(value)));
 	register('ash.git.pull', value => commands.executeCommand('git.pull', value));

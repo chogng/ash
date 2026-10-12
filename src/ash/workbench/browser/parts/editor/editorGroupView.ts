@@ -516,7 +516,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		} catch (error) {
 			return this.showOpenError(input, options, error, existing);
 		}
-		if (existing?.paneInstance.pane.id === descriptor.id) {
+		if (existing?.paneInstance.pane.id === descriptor.id && !options.forceReload) {
 			const wasPreview = existing.preview;
 			const previousIndex = this.model.indexOf(input);
 			this.model.updateEditor(input, options);
@@ -962,6 +962,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 }
 
 function applyEditorOpenOptions(pane: IEditorPane, options: EditorOpenOptions): void {
+	if (options.viewState && isEditorPaneWithViewState(pane)) { pane.restoreViewState(options.viewState); }
 	if (!options.selection) return;
 	if (isEditorPaneWithSelection(pane)) {
 		pane.restoreSelection(options.selection, options.selectionSource ?? TextEditorSelectionSource.NAVIGATION);

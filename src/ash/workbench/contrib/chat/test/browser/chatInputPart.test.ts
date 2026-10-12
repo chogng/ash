@@ -1,3 +1,5 @@
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -66,6 +68,7 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 		registerTestDictationOnboarding(services);
 	}
 	const partServices = inputResources.add(services.createChild());
+	if (!partServices.has(IEditorService)) partServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	if (!partServices.has(IMessageHistoryService)) partServices.registerInstance(IMessageHistoryService, undefined);
 	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
 	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);

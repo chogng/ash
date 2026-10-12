@@ -3,6 +3,7 @@ import { localize } from '../../nls.js';
 import type { IChatService, TurnChangeFile, TurnChangeSetSummary, TurnCommitPreview } from '../../workbench/services/chat/common/chatService.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import type { IActiveSessionThread } from '../services/sessions/common/session.js';
+import { createSessionFileChange } from '../services/sessions/common/session.js';
 
 export type TurnMultiDiffScope = 'currentTurn' | 'throughCurrentTurn' | 'previousTurn';
 
@@ -27,7 +28,7 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 			if (existing) {
 				existing.after = contents.after ?? '';
 				existing.binary ||= contents.binary;
-				existing.latestChangeSetId = changeSet.changeSetId;
+				existing.latestSummary = details.summary;
 				continue;
 			}
 			composed.set(file.path, {
@@ -35,8 +36,7 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 				binary: contents.binary,
 				before: contents.before ?? '',
 				after: contents.after ?? '',
-				firstChangeSetId: changeSet.changeSetId,
-				latestChangeSetId: changeSet.changeSetId,
+				firstSummary: details.summary, latestSummary: details.summary,
 			});
 		}
 	}
@@ -57,8 +57,8 @@ interface ComposedTurnFile {
 	binary: boolean;
 	readonly before: string;
 	after: string;
-	readonly firstChangeSetId: string;
-	latestChangeSetId: string;
+	readonly firstSummary: TurnChangeSetSummary;
+	latestSummary: TurnChangeSetSummary;
 }
 
 function selectChangeSets(changeSets: readonly TurnChangeSetSummary[], scope: TurnMultiDiffScope): readonly TurnChangeSetSummary[] {
@@ -69,16 +69,17 @@ function selectChangeSets(changeSets: readonly TurnChangeSetSummary[], scope: Tu
 }
 
 function turnFileInput(file: ComposedTurnFile): MultiDiffEditorInputItem {
-	const encodedPath = file.file.path.split('/').map(encodeURIComponent).join('/');
+	const first = createSessionFileChange(file.firstSummary, file.file);
+	const latest = createSessionFileChange(file.latestSummary, file.file);
 	const previousPath = file.file.previousPath ?? file.file.path;
 	const original = {
-		resource: URI.parse(`ash-turn-diff:/${file.firstChangeSetId}/before/${encodedPath}`),
+		resource: first.originalUri,
 		label: `${basename(previousPath)} (Before)`,
 		readOnly: true,
 		initialText: file.before,
 	};
 	const modified = {
-		resource: URI.parse(`ash-turn-diff:/${file.latestChangeSetId}/after/${encodedPath}`),
+		resource: latest.modifiedUri,
 		label: `${basename(file.file.path)} (After)`,
 		readOnly: true,
 		initialText: file.after,

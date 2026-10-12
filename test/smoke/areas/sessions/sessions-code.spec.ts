@@ -227,8 +227,8 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	await files.click();
 	await files.press('Delete');
 	await expect(files).toBeVisible();
-	await expect(title.getByRole('button', { name: 'Close Tab', exact: true })).toHaveCount(2);
-	for (const close of await title.getByRole('button', { name: 'Close Tab', exact: true }).all()) {
+	await expect(title.getByRole('button', { name: 'Close', exact: true })).toHaveCount(2);
+	for (const close of await title.getByRole('button', { name: 'Close', exact: true }).all()) {
 		await expect(close).toBeDisabled();
 	}
 	await title.getByRole('button', { name: 'Show editor', exact: true }).click();

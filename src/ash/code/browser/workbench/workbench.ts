@@ -24,6 +24,7 @@ try {
 	await import('../../../sessions/contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 	await import('../../../sessions/browser/workbenchChat.contribution.js');
 	await import('../../../sessions/browser/turnMultiDiffSource.contribution.js');
+	await import('../../../sessions/contrib/changes/browser/changesMultiDiffSourceResolver.js');
 	registerAction2(class OpenCodeSessionsAction extends Action2 {
 		constructor() {
 			super({

@@ -4,6 +4,7 @@ use crate::GitChangeStatus;
 use crate::GitClient;
 use crate::GitError;
 use crate::GitHead;
+use crate::GitPullMode;
 use crate::test_support::TestBareRepository;
 use crate::test_support::TestRepository;
 use std::path::PathBuf;
@@ -415,7 +416,7 @@ async fn stages_unstages_discards_and_commits_selected_paths() {
 }
 
 #[tokio::test]
-async fn fetches_fast_forward_pulls_and_pushes_against_a_local_remote() {
+async fn fetches_pulls_and_pushes_against_a_local_remote() {
     let origin = TestBareRepository::init();
     let first = TestRepository::clone_from(origin.root());
     first.write("shared.txt", "initial\n");
@@ -436,7 +437,10 @@ async fn fetches_fast_forward_pulls_and_pushes_against_a_local_remote() {
         second.git(&["rev-parse", "refs/remotes/origin/main"]),
         first_head
     );
-    client.pull_fast_forward(&second_repository).await.unwrap();
+    client
+        .pull(&second_repository, GitPullMode::Configured)
+        .await
+        .unwrap();
     assert_eq!(second.read("shared.txt"), "from first\n");
     assert_eq!(second.git(&["rev-parse", "HEAD"]), first_head);
 
@@ -446,7 +450,10 @@ async fn fetches_fast_forward_pulls_and_pushes_against_a_local_remote() {
     let second_head = second.git(&["rev-parse", "HEAD"]);
     assert_eq!(origin.git(&["rev-parse", "refs/heads/main"]), second_head);
 
-    client.pull_fast_forward(&first_repository).await.unwrap();
+    client
+        .pull(&first_repository, GitPullMode::Configured)
+        .await
+        .unwrap();
     first.write("first-only.txt", "upstream\n");
     first.commit_all("upstream divergence");
     client.push(&first_repository).await.unwrap();
@@ -454,12 +461,15 @@ async fn fetches_fast_forward_pulls_and_pushes_against_a_local_remote() {
     second.commit_all("local divergence");
     let local_head = second.git(&["rev-parse", "HEAD"]);
 
-    let error = client
-        .pull_fast_forward(&second_repository)
+    client
+        .pull(&second_repository, GitPullMode::Configured)
         .await
-        .expect_err("a non-fast-forward pull must fail");
-    assert!(matches!(error, GitError::CommandFailed { .. }));
-    assert_eq!(second.git(&["rev-parse", "HEAD"]), local_head);
+        .unwrap();
+    let parents = second.git(&["rev-list", "--parents", "-n", "1", "HEAD"]);
+    assert_eq!(parents.split_whitespace().count(), 3);
+    assert_eq!(second.git(&["rev-parse", "HEAD^1"]), local_head);
+    assert_eq!(second.read("first-only.txt"), "upstream\n");
+    assert_eq!(second.read("second-only.txt"), "local\n");
 }
 
 #[tokio::test]
@@ -558,4 +568,106 @@ async fn rejected_branch_switch_preserves_the_current_branch_and_worktree() {
     assert!(matches!(error, GitError::CommandFailed { .. }));
     assert_eq!(repository.git(&["branch", "--show-current"]), "main");
     assert_eq!(repository.read("tracked.txt"), "local\n");
+}
+
+#[tokio::test]
+async fn pull_obeys_repository_and_branch_rebase_policy_and_explicit_override() {
+    for (repository_rebase, branch_rebase, mode, merge) in [
+        ("true", None, GitPullMode::Configured, false),
+        ("true", Some("false"), GitPullMode::Configured, true),
+        ("false", Some("true"), GitPullMode::Configured, false),
+        ("false", None, GitPullMode::Rebase, false),
+    ] {
+        let (origin, target, remote_head, local_head) = diverged_pull_repositories(false);
+        target.git(&["config", "pull.rebase", repository_rebase]);
+        if let Some(value) = branch_rebase {
+            target.git(&["config", "branch.main.rebase", value]);
+        }
+        if mode == GitPullMode::Rebase {
+            target.git(&["config", "pull.ff", "only"]);
+        }
+        let client = GitClient::system();
+        let opened = client.open_repository(target.root()).await.unwrap();
+        client.pull(&opened, mode).await.unwrap();
+        let parents = target.git(&["rev-list", "--parents", "-n", "1", "HEAD"]);
+        assert_eq!(
+            parents.split_whitespace().count(),
+            if merge { 3 } else { 2 }
+        );
+        if merge {
+            assert_eq!(target.git(&["rev-parse", "HEAD^1"]), local_head);
+            assert_eq!(target.git(&["rev-parse", "HEAD^2"]), remote_head);
+        } else {
+            assert_ne!(target.git(&["rev-parse", "HEAD"]), local_head);
+            assert_eq!(target.git(&["rev-parse", "HEAD^"]), remote_head);
+        }
+        assert_eq!(target.read("remote.txt"), "remote\n");
+        assert_eq!(target.read("local.txt"), "local\n");
+        assert_eq!(origin.git(&["rev-parse", "main"]), remote_head);
+    }
+}
+
+#[tokio::test]
+async fn pull_preserves_explicit_fast_forward_only_configuration() {
+    let (_origin, target, _remote_head, local_head) = diverged_pull_repositories(false);
+    target.git(&["config", "pull.rebase", "false"]);
+    target.git(&["config", "pull.ff", "only"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(target.root()).await.unwrap();
+    assert!(client.pull(&opened, GitPullMode::Configured).await.is_err());
+    assert_eq!(target.git(&["rev-parse", "HEAD"]), local_head);
+    assert_eq!(client.integration_state(&opened), None);
+}
+
+#[tokio::test]
+async fn conflicted_pull_retains_git_integration_and_can_be_aborted() {
+    for mode in [GitPullMode::Configured, GitPullMode::Rebase] {
+        let (origin, target, remote_head, local_head) = diverged_pull_repositories(true);
+        target.git(&["config", "pull.rebase", "false"]);
+        let client = GitClient::system();
+        let opened = client.open_repository(target.root()).await.unwrap();
+        assert!(client.pull(&opened, mode).await.is_err());
+        let operation = match mode {
+            GitPullMode::Configured => crate::GitIntegration::Merge,
+            GitPullMode::Rebase => crate::GitIntegration::Rebase,
+        };
+        assert_eq!(client.integration_state(&opened), Some(operation));
+        let snapshot = client.snapshot(&opened).await.unwrap();
+        assert!(
+            snapshot
+                .changes()
+                .iter()
+                .any(|change| change.is_conflicted())
+        );
+        assert_eq!(origin.git(&["rev-parse", "main"]), remote_head);
+        client
+            .execute_command(&opened, &crate::GitCommand::Abort { operation })
+            .await
+            .unwrap();
+        assert_eq!(client.integration_state(&opened), None);
+        assert_eq!(target.git(&["rev-parse", "HEAD"]), local_head);
+        assert_eq!(target.read("shared.txt"), "local\n");
+    }
+}
+
+fn diverged_pull_repositories(
+    conflict: bool,
+) -> (TestBareRepository, TestRepository, String, String) {
+    let origin = TestBareRepository::init();
+    let source = TestRepository::clone_from(origin.root());
+    source.write("shared.txt", "base\n");
+    source.commit_all("base");
+    source.git(&["push", "--set-upstream", "origin", "main"]);
+    let target = TestRepository::clone_from(origin.root());
+    source.write(
+        if conflict { "shared.txt" } else { "remote.txt" },
+        "remote\n",
+    );
+    source.commit_all("remote change");
+    source.git(&["push", "origin", "main"]);
+    let remote_head = source.git(&["rev-parse", "HEAD"]);
+    target.write(if conflict { "shared.txt" } else { "local.txt" }, "local\n");
+    target.commit_all("local change");
+    let local_head = target.git(&["rev-parse", "HEAD"]);
+    (origin, target, remote_head, local_head)
 }

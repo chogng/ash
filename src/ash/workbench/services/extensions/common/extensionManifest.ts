@@ -133,7 +133,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		contributes: Object.freeze({
 			terminalProfiles: parseTerminalProfiles(contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
-			configuration: parseConfigurations(contributes.configuration),
+			configuration: parseConfigurations(contributes.configuration, Object.freeze({ id: descriptor.id, displayName })),
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
 			viewsWelcome: parseViewsWelcome(contributes.viewsWelcome),
 			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),
@@ -177,7 +177,7 @@ function parseLocalizations(value: unknown): readonly ILocalizationContribution[
 	});
 }
 
-function parseConfigurations(value: unknown): readonly IConfigurationNode[] {
+function parseConfigurations(value: unknown, extensionInfo: { readonly id: string; readonly displayName: string; }): readonly IConfigurationNode[] {
 	if (value === undefined) return Object.freeze([]);
 	const scopes: Readonly<Record<string, ConfigurationScope>> = { application: ConfigurationScope.APPLICATION, machine: ConfigurationScope.MACHINE, window: ConfigurationScope.WINDOW, resource: ConfigurationScope.RESOURCE, 'language-overridable': ConfigurationScope.LANGUAGE_OVERRIDABLE, 'machine-overridable': ConfigurationScope.MACHINE_OVERRIDABLE };
 	const parseNode = (value: unknown): IConfigurationNode => {
@@ -199,7 +199,7 @@ function parseConfigurations(value: unknown): readonly IConfigurationNode[] {
 			properties[key] = Object.freeze({ ...schema, scope }) as IConfigurationPropertySchema;
 		}
 		if (node.allOf !== undefined && !Array.isArray(node.allOf)) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'allOf'));
-		return Object.freeze({ ...(typeof node.id === 'string' ? { id: node.id } : {}), ...(typeof node.title === 'string' ? { title: node.title } : {}), properties: Object.freeze(properties), ...(Array.isArray(node.allOf) ? { allOf: Object.freeze(node.allOf.map(parseNode)) } : {}) });
+		return Object.freeze({ extensionInfo, ...(typeof node.id === 'string' ? { id: node.id } : {}), ...(typeof node.title === 'string' ? { title: node.title } : {}), properties: Object.freeze(properties), ...(Array.isArray(node.allOf) ? { allOf: Object.freeze(node.allOf.map(parseNode)) } : {}) });
 	};
 	const nodes = Array.isArray(value) ? value : [value];
 	if (nodes.length > 64) throw new RangeError(localize('configuration.contributionLimit', 'An extension may contribute at most {0} configuration sections.', 64));

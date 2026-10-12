@@ -52,7 +52,8 @@ export interface ISCMStatusBarCommand {
 	readonly tooltip: string;
 	readonly priority: number;
 	readonly compactGroup?: string;
-	run(): unknown;
+	/** Omitted while the command is unavailable; the status remains visible. */
+	run?(): unknown;
 }
 
 export type ISCMConflictContent = { readonly kind: 'missing'; } | { readonly kind: 'binary'; } | { readonly kind: 'text'; readonly text: string; };

@@ -1,3 +1,6 @@
+import './changesMultiDiffSourceResolver.js';
+import './changesActions.js';
+import './changesetReviewActions.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import './changesViewActions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -14,8 +17,11 @@ import { getSessionsChangesAccessibilityProviders } from './sessionsChangesAcces
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { IChangesViewService } from '../common/changesViewService.js';
 import { ChangesViewService } from './changesViewService.js';
+import { ISessionChangesService } from '../common/sessionChangesService.js';
+import { SessionChangesService } from './sessionChangesService.js';
 
 registerSingleton(IChangesViewService, ChangesViewService, InstantiationType.Delayed);
+registerSingleton(ISessionChangesService, SessionChangesService, InstantiationType.Delayed);
 
 registerEditorPane({
 	id: 'ash.sessions.changesEditor',

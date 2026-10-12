@@ -558,7 +558,7 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 		await workbench.menus.select(application, async () => {
 			if (keyboard) { await tab.focus(); await tab.press('Shift+F10'); }
 			else { await tab.click({ button: 'right' }); }
-		}, [label]);
+		}, label.startsWith('Split ') ? ['Split', label] : [label]);
 	};
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const source = workbench.editors.groupAt(0);
@@ -580,7 +580,7 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 	const originalBounds = (await source.element.boundingBox())!;
 	const copiedBounds = (await copied.element.boundingBox())!;
 	expect(copiedBounds.x).toBeGreaterThan(originalBounds.x);
-	await choose(copied.tabs, 'Close All Tabs in Group', true);
+	await choose(copied.tabs, 'Close All in Group', true);
 	await expect(copied.tabs).toHaveCount(0);
 	await expect(workbench.editors.groups).toHaveCount(1);
 	await expect(source.tabs).toHaveCount(3);
@@ -594,13 +594,13 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 	expect(await downTabs.evaluateAll(tabs => tabs.map(tab => tab.getAttribute('aria-label')))).toEqual(names.slice(0, 2));
 	const downBounds = (await down.boundingBox())!;
 	expect(downBounds.y).toBeGreaterThan((await source.element.boundingBox())!.y);
-	await choose(downTabs.first(), 'Close All Tabs in Group');
+	await choose(downTabs.first(), 'Close All in Group');
 	await expect(workbench.editors.groups.filter({ has: page.getByRole('tab', { name: names[0], exact: true }) })).toHaveCount(1);
 	await third.click();
-	await choose(second, 'Close Tabs to the Right', true);
+	await choose(second, 'Close to the Right', true);
 	await expect(third).toHaveCount(0);
 	await expect(source.tabs).toHaveCount(2);
-	await choose(first, 'Pin Editor', true);
+	await choose(first, 'Pin', true);
 	await expect(first).toHaveAttribute('aria-description', /Pinned tab/u);
 	const previousTabCount = await source.tabs.count();
 	await page.keyboard.press('ControlOrMeta+N');
@@ -610,7 +610,7 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 	await source.content.getByRole('textbox', { name: dirtyName, exact: true }).focus();
 	await page.keyboard.insertText('unsaved text');
 	await expect(dirty).toHaveAttribute('aria-label', /unsaved changes/u);
-	await choose(second, 'Close Saved Tabs in Group');
+	await choose(second, 'Close Saved');
 	await expect(second).toHaveCount(0);
 	await expect(first).toHaveCount(1);
 	await expect(dirty).toHaveCount(1);
@@ -645,7 +645,7 @@ test('editor tabs distinguish the active document from the tab strip across them
 		await tab.press('Alt+Enter');
 		await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab.checked')).toHaveCSS('background-color', documentColor);
 		await expect(strip).toHaveCSS('background-color', stripColor);
-		await active.getByRole('button', { name: 'Unpin Editor', exact: true }).click();
+		await active.getByRole('button', { name: 'Unpin', exact: true }).click();
 	}
 });
 
@@ -703,7 +703,7 @@ test('pin commands follow the focused inactive tab and preserve editor selection
 	await expect(second).toHaveAttribute('aria-selected', 'true');
 	await expect(first).toBeFocused();
 	await first.press('Alt+Enter');
-	await group.title.locator('.ash-sticky-editor-tabs-row').getByRole('button', { name: 'Unpin Editor', exact: true }).click();
+	await group.title.locator('.ash-sticky-editor-tabs-row').getByRole('button', { name: 'Unpin', exact: true }).click();
 	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
 	await expect(second).toHaveAttribute('aria-selected', 'true');
 	await expect(first).toHaveAttribute('aria-selected', 'false');
@@ -719,7 +719,7 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', /^Untitled-/u);
 	const untitledName = await ordinary.getByRole('tab').getAttribute('aria-label');
 	await expect(ordinary.locator('.ash-tab-close-action')).toHaveCount(1);
-	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-description', /Pin Editor to pin/u);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-description', /Pin to pin/u);
 	const colors = await ordinary.evaluate(element => {
 		const reference = document.createElement('span');
 		reference.style.background = 'var(--ash-editor-background)';
@@ -742,10 +742,10 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');
 	await expect(sticky).toHaveCount(1);
 	await expect(sticky).toHaveCSS('border-bottom-width', '0px');
-	const unpin = sticky.getByRole('button', { name: 'Unpin Editor', exact: true });
+	const unpin = sticky.getByRole('button', { name: 'Unpin', exact: true });
 	await expect(sticky.locator('.ash-tab-close-action')).toHaveCount(0);
 	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
-	await expect(sticky.getByRole('tab')).toHaveAttribute('aria-description', /Unpin Editor to unpin/u);
+	await expect(sticky.getByRole('tab')).toHaveAttribute('aria-description', /Unpin to unpin/u);
 	await page.mouse.move(0, 0);
 	await sticky.getByRole('tab').blur();
 	await expect(unpin).toBeVisible();
@@ -787,12 +787,12 @@ test('editor tab menu targets the clicked tab and opens from the keyboard', { ta
 	let remaining = group.element.getByRole('tab', { name: remainingName! });
 	await first.click({ button: 'right' });
 	const menu = page.getByRole('menu').last();
-	await expect(menu.getByRole('menuitem', { name: 'Close Tab', exact: true })).toBeVisible();
-	await expect(menu.getByRole('menuitem', { name: 'Close Tabs to the Left' })).toBeDisabled();
-	await expect(menu.getByRole('menuitem', { name: 'Close Tabs to the Right' })).toBeEnabled();
-	await expect(menu.getByRole('menuitem', { name: 'Close Saved Tabs in Group' })).toBeVisible();
-	await expect(menu.getByRole('menuitem', { name: 'Close All Tabs in Group' })).toBeVisible();
-	await menu.getByRole('menuitem', { name: 'Close Tab', exact: true }).click();
+	await expect(menu.getByRole('menuitem', { name: 'Close', exact: true })).toBeVisible();
+	await expect(menu.getByRole('menuitem', { name: 'Close to the Left' })).toBeDisabled();
+	await expect(menu.getByRole('menuitem', { name: 'Close to the Right' })).toBeEnabled();
+	await expect(menu.getByRole('menuitem', { name: 'Close Saved' })).toBeVisible();
+	await expect(menu.getByRole('menuitem', { name: 'Close All in Group' })).toBeVisible();
+	await menu.getByRole('menuitem', { name: 'Close', exact: true }).click();
 	await expect(first).toHaveCount(0);
 	await expect(remaining).toHaveCount(1);
 	await remaining.focus();
@@ -809,27 +809,27 @@ test('editor tab menu targets the clicked tab and opens from the keyboard', { ta
 	const thirdName = await untitledTabs.last().getAttribute('aria-label');
 	const third = group.element.getByRole('tab', { name: thirdName!, exact: true });
 	await middle.click({ button: 'right' });
-	await expect(menu.getByRole('menuitem', { name: 'Close Tabs to the Left' })).toBeEnabled();
-	await expect(menu.getByRole('menuitem', { name: 'Close Tabs to the Right' })).toBeEnabled();
-	await menu.getByRole('menuitem', { name: 'Close Tabs to the Left' }).click();
+	await expect(menu.getByRole('menuitem', { name: 'Close to the Left' })).toBeEnabled();
+	await expect(menu.getByRole('menuitem', { name: 'Close to the Right' })).toBeEnabled();
+	await menu.getByRole('menuitem', { name: 'Close to the Left' }).click();
 	await expect(remaining).toHaveCount(0);
 	remaining = middle;
 	await expect(remaining).toHaveCount(1);
 	await expect(third).toHaveCount(1);
 	await remaining.focus();
 	await remaining.press('Shift+F10');
-	await expect(menu.getByRole('menuitem', { name: 'Close Tabs to the Left' })).toBeDisabled();
-	await menu.getByRole('menuitem', { name: 'Close Tabs to the Right' }).click();
+	await expect(menu.getByRole('menuitem', { name: 'Close to the Left' })).toBeDisabled();
+	await menu.getByRole('menuitem', { name: 'Close to the Right' }).click();
 	await expect(third).toHaveCount(0);
 	await remaining.focus();
 	await remaining.press('Shift+F10');
-	await expect(menu.getByRole('menuitem', { name: 'Pin Editor' })).toBeVisible();
-	await menu.getByRole('menuitem', { name: 'Pin Editor' }).click();
+	await expect(menu.getByRole('menuitem', { name: 'Pin' })).toBeVisible();
+	await menu.getByRole('menuitem', { name: 'Pin' }).click();
 	await expect(remaining).toHaveAttribute('aria-description', /Pinned tab/u);
 	await createUntitled();
 	await expect(untitledTabs).toHaveCount(2);
 	await remaining.click({ button: 'right' });
-	await menu.getByRole('menuitem', { name: 'Close Other Tabs in Group' }).click();
+	await menu.getByRole('menuitem', { name: 'Close Others' }).click();
 	await expect(group.tabs).toHaveCount(1);
 	await expect(remaining).toHaveCount(1);
 	await createUntitled();
@@ -851,10 +851,10 @@ test('macOS Electron editor tab menu targets mouse and keyboard actions', { tag:
 
 	const first = group.element.getByRole('tab', { name: firstName!, exact: true });
 	const remaining = group.element.getByRole('tab', { name: remainingName!, exact: true });
-	await workbench.menus.select(application, () => first.click({ button: 'right' }), ['Close Tab']);
+	await workbench.menus.select(application, () => first.click({ button: 'right' }), ['Close']);
 	await expect(first).toHaveCount(0);
 	await expect(remaining).toHaveCount(1);
-	await workbench.menus.select(application, async () => { await remaining.focus(); await remaining.press('Shift+F10'); }, ['Pin Editor']);
+	await workbench.menus.select(application, async () => { await remaining.focus(); await remaining.press('Shift+F10'); }, ['Pin']);
 	await expect(remaining).toHaveAttribute('aria-description', /Pinned tab/u);
 });
 

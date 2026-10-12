@@ -106,6 +106,8 @@ export interface IResourceEditorInput {
 	/** Also signals a change to the editor's custom icon. */
 	readonly onDidChangeLabel?: Event<void>;
 	getIcon?(): ThemeIcon | URI | undefined;
+	/** Styling belongs to the input's product while the shared tabs own label rendering. */
+	getLabelExtraClasses?(): readonly string[];
 	readonly readOnly?: boolean;
 	/** Whether the resource path is meaningful to show as breadcrumbs. */
 	readonly showBreadcrumbs?: boolean;

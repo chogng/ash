@@ -69,7 +69,10 @@ Git 自动获取由 App Server 对已授权可修改的仓库逐个调度，Desk
 [git]
 autofetch = "default"
 autofetchPeriod = 180
+rebaseWhenSync = false
 ```
+
+`rebaseWhenSync` 控制同步（先拉取再推送）的整合策略，默认 `false`。设为 `true` 时同步强制使用变基；关闭时遵循 Git 的 `branch.<分支名>.rebase` 和 `pull.rebase`，未配置策略则使用合并。普通拉取不读取这个同步偏好，直接遵循 Git 配置；显式“拉取（变基）”和“同步更改（变基）”强制变基。Git 的 `pull.ff` 在普通拉取中仍生效，显式变基优先于 `pull.ff=only`。设置 UI 的 Extensions → Git 页面也提供 `Git: Rebase When Sync` 开关，默认关闭，可恢复默认值。开关直接读写共享 profile 的 `[git]`，不写入 Desktop 的展示设置。
 
 Desktop 旧的 `git.autofetch` 和 `git.autofetchPeriod` 设备设置只用于一次性迁移，后续通过 `config/read` 和 `config/update` 读写 `[git]`。
 

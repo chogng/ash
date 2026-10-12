@@ -267,6 +267,39 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 	assert.equal(defaults.get('editor.test.patterns').valueType, 'stringMap');
 });
 
+test('Extension settings use catalog identities and standard schemas without a product layout entry', () => {
+	const registry = new ConfigurationRegistry();
+	const parsed = parseExtensionManifest(JSON.stringify({
+		name: 'sample', publisher: 'test', version: '1.0.0', displayName: '示例扩展',
+		contributes: {
+			configuration: [{
+				id: 'preferences', title: 'Sample settings', properties: {
+					'editor.sample.enabled': { type: 'boolean', default: true, description: 'Enable sample' },
+					'sample.count': { type: 'integer', default: 2, minimum: 1, maximum: 10 },
+					'sample.mode': { type: 'string', enum: ['first', 'second'], default: 'first' },
+					'sample.text': { type: 'string', default: '', markdownDescription: 'Sample text' },
+					'sample.rules': { type: 'array', default: [], items: { type: 'string' } },
+					'sample.hidden': { type: 'boolean', default: false, included: false },
+				}, allOf: [{ properties: { 'sample.nested': { type: 'boolean', default: false } } }],
+			}]
+		},
+	}), { id: 'test.sample', name: 'sample', publisher: 'test', version: '1.0.0' });
+	registry.updateConfigurations({ add: [...parsed.contributes.configuration], remove: [] });
+	const defaults = new DefaultSettings(registry);
+	assert.deepEqual(defaults.all.map(setting => [setting.id, setting.valueType]), [
+		['editor.sample.enabled', 'boolean'], ['sample.count', 'number'], ['sample.mode', 'select'],
+		['sample.text', 'text'], ['sample.rules', 'complex'], ['sample.nested', 'boolean'],
+	]);
+	const layout = createSettingsLayout(defaults.all);
+	const extension = layout.find(category => category.id === 'extension.test.sample')!;
+	assert.equal(extension.descriptor.label, '示例扩展');
+	assert.equal(findSettingCategory(layout, 'editor.sample.enabled'), extension.id, 'extension ownership wins over product key patterns');
+	assert.equal(defaults.get('sample.text').description, 'Sample text');
+	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
+	registry.updateConfigurations({ add: [], remove: [...parsed.contributes.configuration] });
+	assert.equal(createSettingsLayout(new DefaultSettings(registry).all).some(category => category.id === extension.id), false);
+});
+
 test('URL rule suggestions follow extension registration without changing saved IDs', async () => {
 	using resources = new DisposableStore();
 	const { updateContributedOpeners } = await import('../../../externalUriOpener/common/configuration.js');
@@ -762,8 +795,12 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'voice-input');
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), true);
+	assert.equal(findSettingCategory(layout, GitConfiguration.autofetch), 'extension.ash.git');
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
+	assert.equal(findSettingCategory(layout, GitConfiguration.rebaseWhenSync), 'extension.ash.git');
+	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.rebaseWhenSync)?.defaultValue, false);
+	assert.equal(defaults.get(GitConfiguration.rebaseWhenSync).valueType, 'boolean');
 	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text', 'stringMap'].includes(setting.valueType)), true);
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
@@ -1182,12 +1219,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const autoFetchChanged = disposables.add(new Emitter<void>());
 	let autoFetch: false | true | 'all' = false;
 	let autoFetchPeriod = 180;
+	let rebaseWhenSync = false;
 	const gitService = {
 		onDidChangeAutoFetch: autoFetchChanged.event,
 		get autoFetch() { return autoFetch; },
 		get autoFetchPeriod() { return autoFetchPeriod; },
 		setAutoFetch: async (value: false | true | 'all') => { autoFetch = value; autoFetchChanged.fire(); },
 		setAutoFetchPeriod: async (value: number) => { autoFetchPeriod = value; autoFetchChanged.fire(); },
+		setRebaseWhenSync: async (value: boolean) => { rebaseWhenSync = value; autoFetchChanged.fire(); },
 	} as IGitService;
 	const model = { provider: 'openai', model: 'gpt-test' };
 	const modelsChanged = disposables.add(new Emitter<void>());
@@ -1249,9 +1288,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IContextMenuService, contextMenuProvider);
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(LocalizationServiceId, workbenchLocalization);
-	disposables.add(CommandsRegistry.register('git.readSettings', () => ({ autoFetch, autoFetchPeriod })));
+	disposables.add(CommandsRegistry.register('git.readSettings', () => ({ autoFetch, autoFetchPeriod, rebaseWhenSync })));
 	disposables.add(CommandsRegistry.register('git.updateAutoFetch', async (_accessor, value) => gitService.setAutoFetch(value as false | true | 'all')));
 	disposables.add(CommandsRegistry.register('git.updateAutoFetchPeriod', async (_accessor, value) => gitService.setAutoFetchPeriod(value as number)));
+	disposables.add(CommandsRegistry.register('git.updateRebaseWhenSync', async (_accessor, value) => gitService.setRebaseWhenSync(value as boolean)));
 	services.registerInstance(IServerEventApi, { subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })) });
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
@@ -1469,7 +1509,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	hideMenu?.(false);
 	assert.equal(languageControl.textContent, 'English');
 	assert.equal(configuration.inspect(LocalizationConfiguration.locale).userValue, undefined);
-	await preferences.openSettings({ section: 'source-control' });
+	await preferences.openSettings({ section: 'extension.ash.git' });
 	const autofetchControl = root.querySelector<HTMLElement>(`[data-configuration-key="${GitConfiguration.autofetch}"]`);
 	assert.ok(autofetchControl);
 	const autofetchButton = autofetchControl.querySelector<HTMLButtonElement>('[role="combobox"]');
@@ -1484,6 +1524,49 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	ownerDocument.getElementById(autofetchListId)?.querySelectorAll<HTMLElement>('[role="option"]')[2]?.click();
 	await nextTurn();
 	assert.equal(autoFetch, 'all');
+
+	const rebaseControl = root.querySelector<HTMLElement>(`[data-configuration-key="${GitConfiguration.rebaseWhenSync}"]`);
+	assert.ok(rebaseControl);
+	assert.equal(rebaseControl.getAttribute('role'), 'switch');
+	assert.equal(rebaseControl.getAttribute('aria-label'), 'Rebase When Sync');
+	assert.equal(rebaseControl.getAttribute('aria-checked'), 'false');
+	rebaseControl.click();
+	await nextTurn();
+	assert.equal(rebaseWhenSync, true);
+	assert.equal(rebaseControl.getAttribute('aria-checked'), 'true');
+	assert.equal(configuration.inspect(GitConfiguration.rebaseWhenSync).userLocalValue, undefined);
+	root.querySelector<HTMLButtonElement>(`[data-settings-item-id="${GitConfiguration.rebaseWhenSync}"] .ash-setting-item-actions-trigger`)!.click();
+	await menuActions.find(action => action.id === 'settings.resetSetting')!.run();
+	hideMenu?.(false);
+	assert.equal(rebaseWhenSync, false);
+	assert.equal(rebaseControl.getAttribute('aria-checked'), 'false');
+	assert.equal(autoFetch, 'all');
+
+	const extensionNodes = [...parseExtensionManifest(JSON.stringify({
+		name: 'live', publisher: 'test', version: '1.0.0', displayName: 'Live extension',
+		contributes: { configuration: { properties: { 'live.enabled': { type: 'boolean', default: false, description: 'Enable live extension' } } } },
+	}), { id: 'test.live', name: 'live', publisher: 'test', version: '1.0.0' }).contributes.configuration];
+	configurationRegistry.updateConfigurations({ add: extensionNodes, remove: [] });
+	try {
+		await preferences.openSettings({ section: 'extension.test.live' });
+		assert.equal(root.querySelector('[data-settings-group-id="extensions"]')?.textContent, 'Extensions');
+		assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Live extension');
+		const enabled = root.querySelector<HTMLInputElement>('[data-configuration-key="live.enabled"]')!;
+		enabled.click();
+		await nextTurn();
+		assert.equal(configuration.getValue('live.enabled'), true);
+		await preferences.openSettings({ query: '@modified @id:live.enabled' });
+		assert.equal(root.querySelector('[data-settings-category-id="extension.test.live"]')?.textContent, 'Live extension');
+		assert.ok(root.querySelector('[data-settings-item-id="live.enabled"]'));
+		await preferences.openSettings({ section: 'extension.test.live' });
+		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
+		assert.equal(root.querySelector('[data-settings-category-id="extension.test.live"]'), null);
+		assert.equal(root.querySelector('[data-settings-item-id="live.enabled"]'), null);
+		assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Application');
+		assert.equal(JSON.parse((await configuration.read()).source)['live.enabled'], true, 'withdrawal preserves saved extension values');
+	} finally {
+		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
+	}
 
 	await preferences.openSettings({ section: 'general' });
 	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`);

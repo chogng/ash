@@ -5,7 +5,7 @@ import type { IRegisteredConfiguration } from '../../../../platform/configuratio
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
 
-export type SettingValueType = 'boolean' | 'number' | 'select' | 'text' | 'stringMap';
+export type SettingValueType = 'boolean' | 'number' | 'select' | 'text' | 'stringMap' | 'complex';
 export type SettingsPresentation = 'editor' | 'general';
 
 export interface SettingValueBinding<T> {
@@ -76,7 +76,13 @@ export interface IStringMapSetting extends ISettingBase {
 	readonly duplicateMessage: string;
 }
 
-export type ISetting = IBooleanSetting | INumberSetting | ISelectSetting | ITextSetting | IStringMapSetting;
+export interface IComplexSetting extends ISettingBase {
+	readonly valueType: 'complex';
+	readonly binding?: never;
+	readonly configuration: IRegisteredConfiguration;
+}
+
+export type ISetting = IBooleanSetting | INumberSetting | ISelectSetting | ITextSetting | IStringMapSetting | IComplexSetting;
 
 export interface ISelectSettingOption {
 	readonly value: string | boolean;

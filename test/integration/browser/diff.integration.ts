@@ -94,6 +94,19 @@ import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHo
 async function createGitMultiDiffEditorInput(...args: Parameters<typeof gitMultiDiffInput>) { return parseExtensionEditorInput(normalizeExtensionHostPayload(JSON.parse(JSON.stringify(await gitMultiDiffInput(...args), wireReplacer)))); }
 function wireReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown { return this[key] instanceof URI ? this[key].toString() : value; }
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
+import { SessionChangesEditorInput } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditorInput.js';
+import { ISessionChangesService } from '../../../src/ash/sessions/contrib/changes/common/sessionChangesService.js';
+import { SessionChangesService } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesService.js';
+import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
+import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/common/changesViewService.js';
+import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/browser/changesViewService.js';
+import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
+import { IResourceLabelService } from '../../../src/ash/workbench/browser/labels.js';
+import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import '../../../src/ash/sessions/contrib/changes/browser/changesActions.js';
+import '../../../src/ash/sessions/contrib/changes/browser/changesetReviewActions.js';
 import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
@@ -214,17 +227,33 @@ function makeTitleGitStatus(paths: readonly string[], revision: number, reposito
 	};
 }
 let titleTheme: TestThemeService | undefined;
+let sessionTheme: TestThemeService | undefined;
+let sessionRevision = 1;
+const sessionOpenedFiles: string[] = [];
 let focusedHistoryView: string | undefined;
 
 function createSessionChangesPane(): SessionChangesEditor {
 	if (!sessionServices) {
-		sessionServices = resources.add(editorServices.createChild());
+		if (!editorServices.has(IRendererHostService)) { editorServices.registerInstance(IRendererHostService, createDisconnectedRendererApi()); }
+		const parentServices = resources.add(createTestEditorServices(undefined, editorServices));
+		if (!editorServices.has(IFileService)) { editorServices.registerInstance(IFileService, parentServices.get(IFileService)); }
+		sessionServices = resources.add(parentServices.createChild());
 		sessionServices.registerInstance(IMultiDiffSourceResolverService, resources.add(new MultiDiffSourceResolverService()));
-		sessionServices.registerInstance(IThemeService, editorServices.themeService);
+		sessionTheme = resources.add(new TestThemeService(darkColorTheme));
+		sessionServices.registerInstance(IThemeService, sessionTheme);
+		resources.add(bindColorTheme(sessionTheme, document.getElementById('session-changes')!));
 		sessionServices.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'diff-integration', flushInterval: 0 })));
 		sessionServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
 		sessionServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-		sessionServices.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'review' }, { sessionId: 'other' }] } as unknown as ISessionsManagementService);
+		const sessions = [{ sessionId: 'review', chats: [{ threadId: 'review-thread' }], workspace: { authorityId: 'local', root: '/workspace' } }, { sessionId: 'other', chats: [{ threadId: 'other-thread' }] }];
+		sessionServices.registerInstance(ISessionsManagementService, { sessions } as unknown as ISessionsManagementService);
+		sessionServices.registerInstance(ISessionsService, { onDidChange: Event.None, activeSelection: { kind: 'session', active: { session: sessions[0], threadId: 'review-thread' } } } as unknown as ISessionsService);
+		sessionServices.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async input => { sessionOpenedFiles.push(input.resource.toString()); } } as IEditorService);
+		sessionServices.registerInstance(IEditorPart, { get activePane() { return sessionPane.value; } } as IEditorPart);
+		sessionServices.registerSingleton(ISessionChangesService, () => sessionServices!.createInstance(SessionChangesService));
+		sessionServices.registerSingleton(IChangesViewService, () => sessionServices!.createInstance(ChangesViewService));
+		sessionServices.registerSingleton(ICommandService, () => resources.add(new CommandService(sessionServices!)));
+		sessionServices.registerSingleton(IMenuService, () => sessionServices!.createInstance(MenuService));
 		const summary: TurnChangeSetSummary = {
 			changeSetId: 'review-change', sessionId: 'review', threadId: 'review-thread', turnId: 'review-turn', repositoryId: 'review-repository',
 			captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], revision: 1,
@@ -233,8 +262,8 @@ function createSessionChangesPane(): SessionChangesEditor {
 		sessionServices.registerInstance(IChatService, {
 			onDidUpdateTurnChanges: sessionChanges.event,
 			onDidBecomeReady: Event.None,
-			listTurnChanges: async () => [summary],
-			readTurnChange: async () => ({ summary, files: Array.from({ length: 8 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })) }),
+			listTurnChanges: async (sessionId: string, threadId: string) => [{ ...summary, sessionId, threadId, revision: sessionRevision }],
+			readTurnChange: async (sessionId: string, threadId: string) => ({ summary: { ...summary, sessionId, threadId, revision: sessionRevision }, files: Array.from({ length: 8 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })) }),
 			readTurnChangeFile: async (_sessionId: string, _threadId: string, _changeSetId: string, path: string) => ({ path, binary: false, truncated: false, before: `before\n${'shared\n'.repeat(30)}`, after: `after\n${'shared\n'.repeat(30)}` }),
 		} as unknown as IChatService);
 		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, {
@@ -244,8 +273,19 @@ function createSessionChangesPane(): SessionChangesEditor {
 		} satisfies ITextResourceStore, {}));
 		resources.add(EditorPanes.registerEditorPane({
 			id: 'integration.sessionMultiDiff', name: 'Session review', canOpen: matchMultiDiffEditor,
-			create: () => sessionServices!.createInstance(MultiDiffEditor, { modelService: models, createComputationService: () => service.createComputationService(), lineHeight: 0 }),
+			create: () => sessionServices!.createInstance(MultiDiffEditor, {
+				modelService: models, createComputationService: () => service.createComputationService(), lineHeight: 0, activeEditorId: SessionChangesEditor.ID,
+				fileActions: { menuService: sessionServices!.get(IMenuService), contextMenuProvider: sessionServices!.get(IContextMenuService), contextKeyService: sessionServices!.get(IContextKeyService) },
+			}),
 		}));
+		const badgeContainer = document.createElement('div');
+		badgeContainer.id = 'session-changes-label';
+		document.getElementById('session-changes')!.append(badgeContainer);
+		resources.add(toDisposable(() => badgeContainer.remove()));
+		const labels = resources.add(sessionServices.get(IResourceLabelService).createGroup());
+		const label = labels.create(badgeContainer);
+		const input = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'));
+		label.setResource({ resource: input.resource, name: input.label }, { forceLabel: true, extraClasses: input.getLabelExtraClasses(), fileDecorations: { colors: true, badges: true } });
 	}
 	const pane = sessionServices.createInstance(SessionChangesEditor, {});
 	sessionPane.value = pane;
@@ -516,6 +556,19 @@ const harness = {
 	},
 	setSessionChangesVisible(visible: boolean): void { sessionPane.value!.setVisible(visible); },
 	refreshSessionChanges(): void { sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
+	async revealSessionFile(index: number): Promise<void> {
+		const changeset = await sessionServices!.get(ISessionChangesService).resolveChangeset(URI.parse('ash-session:/review?thread=review-thread'), 'review-change');
+		const change = changeset.changes.get()[index]!;
+		sessionPane.value!.restoreViewState({ revealData: { resource: { original: change.originalUri, modified: change.modifiedUri }, range: new Range(15, 1, 15, 2) } });
+	},
+	async reviewSessionFile(index: number, revision = sessionRevision): Promise<void> {
+		const resource = URI.parse(`ash-turn-diff:/review-change/file-${index}.ts?session=review&thread=review-thread&revision=${revision}&side=after`);
+		await sessionServices!.get(ICommandService).executeCommand('changeset.review', { resource });
+	},
+	sessionReviewState(): readonly string[] { return [...sessionServices!.get(IChangesViewService).reviewedFilesObs.get()]; },
+	sessionTheme(name: 'dark' | 'light' | 'contrast'): void { sessionTheme!.setColorTheme(name === 'light' ? lightColorTheme : name === 'contrast' ? highContrastDarkColorTheme : darkColorTheme); },
+	advanceSessionRevision(): void { sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
+	sessionOpenedFiles(): readonly string[] { return sessionOpenedFiles; },
 	readSessionViewState(): unknown {
 		const pane = sessionPane.value!;
 		return isEditorPaneWithViewState(pane) ? pane.saveViewState() : null;

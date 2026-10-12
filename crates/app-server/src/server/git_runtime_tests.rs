@@ -453,6 +453,7 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
                 git: Patch::Value(GitConfig {
                     autofetch: GitAutoFetchMode::Default,
                     autofetch_period: 1,
+                    rebase_when_sync: false,
                 }),
                 gui: Patch::Missing,
                 tui: Patch::Missing,
@@ -1123,7 +1124,11 @@ fn fetch_then_pull_reuses_fetched_history_and_ref_only_fetch_preserves_cursors()
     let page = runtime.graph(1, limit, None).unwrap();
     assert_eq!(page.commits[0].object_id, third);
     let pulled = runtime
-        .pull_fast_forward_for(None, &cancellation.token())
+        .pull_for(
+            None,
+            ash_git::GitPullMode::Configured,
+            &cancellation.token(),
+        )
         .unwrap();
     assert_ne!(pulled.head, fetched.head);
     let refs = runtime.history_refs_for(None).unwrap();
@@ -1901,4 +1906,139 @@ fn filtered_graph_cursor_is_bound_to_selection_and_binary_history_retains_bytes(
             .unwrap(),
         [0, 1, 255]
     );
+}
+
+#[test]
+fn pull_sync_reads_the_current_shared_preference_without_changing_plain_pull() {
+    let (source, target) = pull_test_repositories();
+    target.git(&["config", "pull.rebase", "false"]);
+    let directory = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(directory.path().join("config.sqlite3")).unwrap());
+    let server = crate::AppServer::new(
+        Arc::new(ash_core::ThreadController::with_store(Arc::new(
+            ash_core::InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(
+            ash_model_provider::EchoModel,
+        ))),
+    )
+    .with_ephemeral_env_state()
+    .with_config_store(config)
+    .with_git_root(mutation_authorization(target.root()))
+    .unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    for (index, (mode, rebase_when_sync, merge)) in [
+        ("sync", false, true),
+        ("sync", true, false),
+        ("configured", true, true),
+        ("rebase", false, false),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let revision = server.config_read().unwrap()["revision"].clone();
+        server
+            .config_update(&serde_json::json!({
+                "commandId":format!("pull-policy-{index}"), "expectedRevision":revision,
+                "git":{"autofetch":"off", "autofetchPeriod":180, "rebaseWhenSync":rebase_when_sync}
+            }))
+            .unwrap();
+        assert_eq!(
+            server.config_read().unwrap()["git"]["rebaseWhenSync"],
+            rebase_when_sync
+        );
+        source.write(&format!("remote-{index}.txt"), "remote\n");
+        source.git(&["add", "."]);
+        source.git(&["commit", "-m", "remote divergence"]);
+        target.write(&format!("local-{index}.txt"), "local\n");
+        target.git(&["add", "."]);
+        target.git(&["commit", "-m", "local divergence"]);
+        let old_head = target.git_output(&["rev-parse", "HEAD"]);
+        let response = server
+            .git_pull(&serde_json::json!({"mode":mode}), &cancellation.token())
+            .unwrap();
+        assert_eq!(response["status"]["head"]["type"], "branch");
+        let parents = target.git_output(&["rev-list", "--parents", "-n", "1", "HEAD"]);
+        assert_eq!(
+            parents.split_whitespace().count(),
+            if merge { 3 } else { 2 }
+        );
+        if merge {
+            assert_eq!(target.git_output(&["rev-parse", "HEAD^1"]), old_head);
+        } else {
+            assert_ne!(target.git_output(&["rev-parse", "HEAD"]), old_head);
+        }
+        assert_eq!(
+            std::fs::read_to_string(target.root().join(format!("remote-{index}.txt"))).unwrap(),
+            "remote\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(target.root().join(format!("local-{index}.txt"))).unwrap(),
+            "local\n"
+        );
+    }
+}
+
+#[test]
+fn conflicted_pull_publishes_scm_state_and_retains_continue_abort_operation() {
+    use ash_git::GitCommand;
+    use ash_git::GitIntegration;
+    for (mode, operation) in [
+        (ash_git::GitPullMode::Configured, GitIntegration::Merge),
+        (ash_git::GitPullMode::Rebase, GitIntegration::Rebase),
+    ] {
+        let (source, target) = pull_test_repositories();
+        target.git(&["config", "pull.rebase", "false"]);
+        source.write("shared.txt", "remote\n");
+        source.git(&["add", "."]);
+        source.git(&["commit", "-m", "remote conflict"]);
+        target.write("shared.txt", "local\n");
+        target.git(&["add", "."]);
+        target.git(&["commit", "-m", "local conflict"]);
+        let original_head = target.git_output(&["rev-parse", "HEAD"]);
+        let broker = Arc::new(UpdateBroker::default());
+        let queue = NotificationQueue::default();
+        broker.register(1, false, &queue);
+        let runtime = GitRuntime::new(mutation_authorization(target.root()), broker).unwrap();
+        queue.drain();
+        let cancellation = ash_async_utils::CancellationSource::new();
+        assert!(runtime.pull_for(None, mode, &cancellation.token()).is_err());
+        let updates = queue.drain();
+        let status = &updates
+            .iter()
+            .find(|event| event["method"] == "git/statusChanged")
+            .unwrap()["params"]["status"];
+        assert!(
+            status["changes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|change| change["conflicted"] == true)
+        );
+        assert_eq!(
+            runtime.catalog_for(None).unwrap().operation,
+            Some(operation)
+        );
+        runtime
+            .command_for(
+                None,
+                &GitCommand::Abort { operation },
+                &cancellation.token(),
+            )
+            .unwrap();
+        assert_eq!(runtime.catalog_for(None).unwrap().operation, None);
+        assert_eq!(target.git_output(&["rev-parse", "HEAD"]), original_head);
+    }
+}
+
+fn pull_test_repositories() -> (TestRepository, TestRepository) {
+    let source = TestRepository::init();
+    source.write("shared.txt", "base\n");
+    source.git(&["add", "."]);
+    source.git(&["commit", "-m", "base"]);
+    let target = TestRepository::init();
+    target.git(&["remote", "add", "origin", source.root().to_str().unwrap()]);
+    target.git(&["fetch", "origin"]);
+    target.git(&["switch", "-C", "main", "--track", "origin/main"]);
+    (source, target)
 }

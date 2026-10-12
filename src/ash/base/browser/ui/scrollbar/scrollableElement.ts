@@ -66,6 +66,7 @@ const initialState: ScrollableElementState = {
 	maximumTop: 0,
 };
 let nextScrollableId = 1;
+const SCROLLBAR_HIDE_DELAY = 500;
 
 /**
  * Themeable two-axis scroll container with managed wheel and pointer input.
@@ -85,7 +86,6 @@ export class ScrollableElement extends Disposable {
 	private readonly cornerNode: FastDomNode<HTMLDivElement>;
 	private options: ResolvedScrollableElementOptions;
 	private hovered = false;
-	private focused = false;
 	private scrolling = false;
 	private readonly onScrollOption: ((position: ScrollPosition) => void) | undefined;
 	private readonly onDidScrollEmitter: Emitter<ScrollableScrollEvent>;
@@ -155,21 +155,14 @@ export class ScrollableElement extends Disposable {
 		);
 		container.append(element);
 		this.hovered = element.matches(':hover');
-		this.focused = element.contains(ownerDocument.activeElement);
 		this._register(addDisposableListener(element, 'mouseenter', () => {
 			this.hovered = true;
 			this.updateVisibility();
 		}));
 		this._register(addDisposableListener(element, 'mouseleave', () => {
 			this.hovered = false;
-			this.updateVisibility();
-		}));
-		this._register(addDisposableListener(element, 'focusin', () => {
-			this.focused = true;
-			this.updateVisibility();
-		}));
-		this._register(addDisposableListener(element, 'focusout', (event: FocusEvent) => {
-			this.focused = element.contains(event.relatedTarget as Node | null);
+			this.scrolling = false;
+			this.scrollActivityTimeout.clear();
 			this.updateVisibility();
 		}));
 		this.updateVisibility();
@@ -594,11 +587,12 @@ export class ScrollableElement extends Disposable {
 			this.scrollActivityTimeout.clear();
 			this.scrolling = false;
 			this.updateVisibility();
-		}, 700);
+		}, SCROLLBAR_HIDE_DELAY);
 	}
 
 	private updateVisibility(): void {
-		const visible = this.hovered || this.focused || this.scrolling;
+		// Text focus is independent of scrollbar activity, including keyboard scrolling.
+		const visible = this.hovered || this.scrolling;
 		this.horizontal.setShouldBeVisible(visible);
 		this.vertical.setShouldBeVisible(visible);
 	}
@@ -682,7 +676,6 @@ export class SmoothScrollableElement extends Disposable {
 	private horizontalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
 	private verticalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
 	private hovered = false;
-	private focused = false;
 	private scrolling = false;
 	private readonly activity: RunOnceScheduler;
 	private readonly arrows: { button: HTMLButtonElement; axis: ScrollbarAxis; direction: number; }[] = [];
@@ -778,28 +771,21 @@ export class SmoothScrollableElement extends Disposable {
 		this.activity = this._register(new RunOnceScheduler(() => {
 			this.scrolling = false;
 			this.updateVisibility();
-		}, 700));
+		}, SCROLLBAR_HIDE_DELAY));
 		const eventTarget = options.listenOnDomNode ?? root;
 		for (const type of ['pointerdown', 'keydown']) {
 			this._register(addDisposableListener(eventTarget, type, () => this.inertia.clear(), true));
 		}
 		this._register(addDisposableListener(element.ownerDocument.defaultView!, 'blur', () => this.inertia.clear()));
 		this.hovered = eventTarget.matches(':hover');
-		this.focused = eventTarget.contains(element.ownerDocument.activeElement);
 		this._register(addDisposableListener(eventTarget, 'mouseenter', () => {
 			this.hovered = true;
 			this.updateVisibility();
 		}));
 		this._register(addDisposableListener(eventTarget, 'mouseleave', () => {
 			this.hovered = false;
-			this.updateVisibility();
-		}));
-		this._register(addDisposableListener(eventTarget, 'focusin', () => {
-			this.focused = true;
-			this.updateVisibility();
-		}));
-		this._register(addDisposableListener(eventTarget, 'focusout', (event: FocusEvent) => {
-			this.focused = eventTarget.contains(event.relatedTarget as Node | null);
+			this.scrolling = false;
+			this.activity.cancel();
 			this.updateVisibility();
 		}));
 		this._register(addDisposableListener(eventTarget, 'wheel', (event: WheelEvent) => {
@@ -964,7 +950,7 @@ export class SmoothScrollableElement extends Disposable {
 	}
 
 	private updateVisibility(): void {
-		const reveal = this.hovered || this.focused || this.scrolling;
+		const reveal = this.hovered || this.scrolling;
 		this.horizontal.setVisibility(this.options.horizontal ?? ScrollbarVisibilityOption.Auto);
 		this.vertical.setVisibility(this.options.vertical ?? ScrollbarVisibilityOption.Auto);
 		this.horizontal.setShouldBeVisible(reveal);

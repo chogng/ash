@@ -6,6 +6,14 @@ use crate::GitResult;
 use crate::client::validate_argument;
 use crate::error::invalid_command as invalid;
 use std::ffi::OsString;
+
+/// Integration selection for a pull; Git configuration remains authoritative in configured mode.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitPullMode {
+    Configured,
+    Rebase,
+}
+
 /// Fetch and push URLs configured for one named remote.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitRemote {
@@ -269,12 +277,55 @@ impl GitClient {
         Ok(())
     }
 
-    /// Pulls the configured upstream only when it can fast-forward.
-    pub async fn pull_fast_forward(&self, repository: &GitRepository) -> GitResult<()> {
-        self.run_mutation(repository.worktree_root(), ["pull", "--ff-only"])
+    /// Pulls the configured upstream, honoring Git settings unless rebase is explicit.
+    pub async fn pull(&self, repository: &GitRepository, mode: GitPullMode) -> GitResult<()> {
+        let mut arguments = vec!["pull", "--no-edit"];
+        match mode {
+            GitPullMode::Rebase => arguments.push("--rebase"),
+            GitPullMode::Configured => {
+                // Modern Git requires a divergence policy. Supply the merge default only
+                // when neither branch nor repository/global configuration selected rebase.
+                if !self.has_pull_rebase_configuration(repository).await? {
+                    arguments.push("--no-rebase");
+                }
+            }
+        }
+        self.run_mutation(repository.worktree_root(), arguments)
             .await?
             .require_success()?;
         Ok(())
+    }
+
+    async fn has_pull_rebase_configuration(&self, repository: &GitRepository) -> GitResult<bool> {
+        let branch = self
+            .run_query_unchecked(
+                repository.worktree_root(),
+                ["symbolic-ref", "--quiet", "--short", "HEAD"],
+            )
+            .await?;
+        let mut keys = vec!["pull.rebase".to_owned()];
+        if branch.status.success() {
+            let name = std::str::from_utf8(&branch.stdout)
+                .map_err(|_| {
+                    GitError::invalid_output(&branch.command, "branch name was not UTF-8")
+                })?
+                .trim_end();
+            keys.push(format!("branch.{name}.rebase"));
+        } else if branch.status.code() != Some(1) {
+            branch.require_success()?;
+        }
+        for key in keys {
+            let output = self
+                .run_configuration_probe(repository.worktree_root(), ["config", "--get", &key])
+                .await?;
+            if output.status.success() {
+                return Ok(true);
+            }
+            if output.status.code() != Some(1) {
+                output.require_success()?;
+            }
+        }
+        Ok(false)
     }
 
     /// Pushes the current branch to its configured upstream.

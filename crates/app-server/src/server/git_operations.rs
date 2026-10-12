@@ -51,6 +51,8 @@ use ash_app_server_protocol::protocol::git::GitIntegrationDto;
 use ash_app_server_protocol::protocol::git::GitNamedRefDto;
 use ash_app_server_protocol::protocol::git::GitOperationResult;
 use ash_app_server_protocol::protocol::git::GitPathsParams;
+use ash_app_server_protocol::protocol::git::GitPullModeDto;
+use ash_app_server_protocol::protocol::git::GitPullParams;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
 use ash_app_server_protocol::protocol::git::GitStashDto;
 use ash_app_server_protocol::protocol::git::GitStashModeDto;
@@ -66,6 +68,7 @@ use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
 use ash_async_utils::CancellationToken;
 use ash_async_utils::FutureCancellationExt;
 use ash_git::GitError;
+use ash_git::GitPullMode;
 use ash_protocol::HookEvent;
 use core_api::HookEventDecision;
 use core_api::HookEventRequest;
@@ -799,10 +802,27 @@ impl AppServer {
         value: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: GitRepositoryParams = decode(value)?;
+        let params: GitPullParams = decode(value)?;
+        let mode = match params.mode.unwrap_or_default() {
+            GitPullModeDto::Configured => GitPullMode::Configured,
+            GitPullModeDto::Rebase => GitPullMode::Rebase,
+            GitPullModeDto::Sync => {
+                let snapshot = self
+                    .config
+                    .as_ref()
+                    .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                    .read_snapshot()
+                    .map_err(super::config_operations::config_error)?;
+                if snapshot.values.git.rebase_when_sync {
+                    GitPullMode::Rebase
+                } else {
+                    GitPullMode::Configured
+                }
+            }
+        };
         let status = self
             .git_runtime_service()?
-            .pull_fast_forward_for(params.repository_id.as_deref(), cancellation)
+            .pull_for(params.repository_id.as_deref(), mode, cancellation)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }

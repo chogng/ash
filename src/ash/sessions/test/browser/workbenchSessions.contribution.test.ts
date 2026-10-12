@@ -40,6 +40,7 @@ for (const [name, value] of Object.entries({
 await import('../../contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 await import('../../browser/workbenchChat.contribution.js');
 await import('../../browser/turnMultiDiffSource.contribution.js');
+await import('../../contrib/changes/browser/changesMultiDiffSourceResolver.js');
 
 test('Sessions registers its regular Workbench service and starts its catalog', async () => {
 	let subscriptions = 0;

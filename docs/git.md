@@ -56,7 +56,7 @@ Git 查询和修改使用不同 capability：
 | 部分暂存               | `git.stageHunk`、`git.unstageHunk` 选择文件与更改块；`git.stageSelectedRanges`、`git.unstageSelectedRanges` 使用编辑器选区                                                                                                                                        | Rust 重新计算 diff，检查两侧内容并持有 Git index 锁后更新 index；不修改工作文件；冲突、重命名、子模块、二进制和非 UTF-8 文件不支持部分操作                                    |
 | 查看 history graph     | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，首屏读取一页，后续随列表渲染范围追加页面，按 lane 分配颜色并显示 local/remote refs；列表按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 从本地分支、已 fetch 的远端分支、标签和当前 HEAD 遍历；stash、内部引用及其他工作树的 detached HEAD 不作为起点；自动 fetch 需主动开启；binary 或超限文件不作为文本 editor 打开 |
 | 自动获取远端更新       | App Server 读取共享 `[git]` 配置并逐仓库调度；`autofetch` 默认为 `"off"`，`"default"` 获取默认远端，`"all"` 获取全部远端；`autofetchPeriod` 默认 180 秒                                                                                                           | 三端共用配置，不提供仓库级覆盖；只对有修改授权的仓库执行，各仓库独立定时获取；只更新远端引用，不执行 pull                                                                     |
-| 拉取远端               | 只允许 fast-forward                                                                                                                                                                                                                                               | 需要交互认证时失败                                                                                                                                                            |
+| 拉取远端               | 遵循 Git 的分支／仓库变基配置；未配置时合并；同步可由共享 `rebaseWhenSync` 强制变基                                                                                                                                                                               | 需要交互认证时失败                                                                                                                                                            |
 | 提交和推送             | 使用系统 Git 的当前仓库配置                                                                                                                                                                                                                                       | 尚无凭据提示和进度 UI                                                                                                                                                         |
 
 ## SCM 提交工作流
@@ -309,7 +309,7 @@ Thread 提交不走普通 `git/commit`。`git-turn-changes` 保存每轮不可�
   命名远端模式沿用仓库修改授权、操作锁、连接取消与状态更新链路；Git 后端在执行前重新检查该仓库实际配置的远端名，
   拒绝已删除、未配置或选项形式的名字，再以独立 argv 执行 `git fetch --prune -- <remote>`，失败不回退到默认或全部远端。
   获取操作不修改 HEAD、index 或工作文件。
-  `git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
+  `git/pull` 的 `mode` 为 `configured`（默认）、`rebase` 或 `sync`；`sync` 读取共享 `[git].rebaseWhenSync`，冲突失败后仍发布真实 SCM 状态。`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 文件、提交和切分支操作返回新的 `GitStatusResult`；创建/删除分支返回分支列表，后端同时推进状态 revision、清理旧 graph cursor 并通知所有连接。worktree 操作返回路径或清单，不改变当前检出的分支；首次打开 View 也会自动刷新；
 - App Server Git runtime 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms
@@ -351,7 +351,7 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 - 交互 Git 写入和 Turn 目标发布按仓库 common directory 共用操作锁；连接取消会中止已接入取消信号的 Git 请求，但尚无用户可见的 queue、progress 或取消按钮；
 - App Server 已支持分支改名、远端分支删除和 tag 管理；不提供强制删除或凭据提示；
 - 部分暂存要求每侧文本不超过 2 MiB，且 diff 满足后端计算上限；冲突、重命名、子模块、二进制和非 UTF-8 内容不能部分暂存；
-- pull 固定为 fast-forward only；discard 不删除 untracked 文件；
+- pull 按 Git 配置整合分叉，同步可强制变基；整合冲突时停止推送，使用已有 Continue/Abort 操作继续或中止；discard 不删除 untracked 文件；
 - 当前 registry 来自已授权目录集合，不接受客户端提交任意 repository root；
 - 工作树 change row 已经由 Git provider 接入共享 Editor 服务，支持工作文件或 index 的差异打开；
   分组的 View All 使用 MultiDiff，history changed-file row 支持 commit/parent 文本 Diff。

@@ -43,6 +43,8 @@ pub struct GitConfigDto {
     pub autofetch: GitAutoFetchModeDto,
     #[schemars(range(min = 1, max = 86400))]
     pub autofetch_period: u32,
+    #[serde(default)]
+    pub rebase_when_sync: bool,
 }
 
 impl Default for GitConfigDto {
@@ -50,6 +52,7 @@ impl Default for GitConfigDto {
         Self {
             autofetch: GitAutoFetchModeDto::Off,
             autofetch_period: 180,
+            rebase_when_sync: false,
         }
     }
 }

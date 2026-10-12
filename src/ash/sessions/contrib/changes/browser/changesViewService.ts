@@ -1,4 +1,4 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -9,6 +9,7 @@ import type {
 } from '../common/changesViewService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 
 /** View snapshots survive hiding a pane without becoming another owner of Turn state. */
 export class ChangesViewService extends Disposable implements IChangesViewService {
@@ -24,6 +25,7 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 	constructor(
 		@IStorageService private readonly storage: IStorageService,
 		@ISessionsService private readonly sessions: ISessionsService,
+		@IContextKeyService context: IContextKeyService,
 	) {
 		super();
 		const restore = (): void => {
@@ -41,6 +43,11 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 		};
 		this._register(sessions.onDidChange(updateSections));
 		updateSections();
+		const reviewedResources = context.createKey<readonly string[]>('sessions.changesReviewedFiles', []);
+		const updateReviewed = (): void => reviewedResources.set([...this.reviewed.get()].flatMap(resource => [resource, `${resource}&side=before`, `${resource}&side=after`]));
+		this._register(this.reviewed.onDidChange(updateReviewed));
+		this._register(toDisposable(() => reviewedResources.reset()));
+		updateReviewed();
 	}
 
 	public setSectionCollapsed(resource: URI, section: ChangesViewSection, collapsed: boolean): void {

@@ -77,6 +77,7 @@ export class MenuId {
 	static readonly EditorTitle = new MenuId("EditorTitle");
 	static readonly DiffEditorViewSubmenu = new MenuId('DiffEditorViewSubmenu');
 	static readonly EditorTitleContext = new MenuId("EditorTitleContext");
+	static readonly EditorSplitMoveSubmenu = new MenuId('EditorSplitMoveSubmenu');
 	static readonly TouchBarContext = new MenuId("TouchBarContext");
 	static readonly EditorContext = new MenuId("EditorContext");
 	static readonly EditorContextPeek = new MenuId('EditorContextPeek');

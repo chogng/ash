@@ -24,14 +24,14 @@ export interface TOCTreeOptions {
 
 /** Projects the product hierarchy and contributed layout groups into Settings TOC entries. */
 export class TOCTreeModel {
-	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsContentItem>) { }
+	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsContentItem>, private readonly navigation: () => readonly SettingsNavigationDescriptor[] = () => SettingsNavigation) { }
 
 	public get hasModifiedFilter(): boolean {
 		return this.content.hasModifiedFilter;
 	}
 
 	public get children(): readonly ObjectTreeElement<SettingsTOCEntry>[] {
-		return SettingsNavigation.flatMap(entry => {
+		return this.navigation().flatMap(entry => {
 			const node = this.navigationElement(entry);
 			return node ? [node] : [];
 		});

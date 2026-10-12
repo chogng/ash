@@ -1,7 +1,7 @@
 import type { Event } from '../../../sdk/browser/index.js';
 import type { CancellationToken } from '../../../sdk/browser/index.js';
 import type { URI } from '../../../sdk/browser/index.js';
-import type { GitAutofetch } from './configuration.js';
+import type { GitAutofetch, GitSettings } from './configuration.js';
 
 export type GitChangeStatus = "unmodified" | "modified" | "added" | "deleted" | "renamed" | "copied" | "typeChanged" | "unmerged" | "untracked" | "ignored";
 
@@ -225,6 +225,9 @@ export interface GitCatalog {
 
 export type GitFetchTarget = 'default' | 'all' | { readonly remote: string; };
 
+/** Pull integration policy; sync resolves the shared rebaseWhenSync preference in App Server. */
+export type GitPullMode = 'configured' | 'rebase' | 'sync';
+
 export interface GitCommandResult {
 	readonly status: GitStatus;
 	readonly outcome: 'completed' | 'conflicted';
@@ -257,6 +260,8 @@ export interface IGitService {
 	readonly onDidChangeAutoFetch: Event<void>;
 	readonly autoFetch: GitAutofetch;
 	readonly autoFetchPeriod: number;
+	readSettings(): Promise<GitSettings>;
+	setRebaseWhenSync(value: boolean): Promise<void>;
 	setAutoFetch(value: GitAutofetch): Promise<void>;
 	setAutoFetchPeriod(seconds: number): Promise<void>;
 	readonly onDidChangeStatus: Event<GitStatus>;
@@ -302,7 +307,7 @@ export interface IGitService {
 	discardWorktree(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
 	commit(message: string, repositoryId?: string, options?: GitCommitOptions): Promise<GitCommitResult>;
 	fetch(repositoryId?: string, target?: GitFetchTarget): Promise<GitStatus>;
-	pull(repositoryId?: string): Promise<GitStatus>;
+	pull(repositoryId?: string, mode?: GitPullMode): Promise<GitStatus>;
 	push(repositoryId?: string): Promise<GitStatus>;
 }
 

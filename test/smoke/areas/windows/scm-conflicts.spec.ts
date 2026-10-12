@@ -106,8 +106,8 @@ test('SCM keeps an explicitly handled base result when the merge editor reopens'
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
 	await page.keyboard.press('F1');
 	const picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('Close Tab');
-	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close Tab$/u }).click();
+	await picker.getByRole('combobox').fill('Close');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close$/u }).click();
 	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
 	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Base');
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
@@ -130,8 +130,8 @@ test('SCM requires review of an existing manual result and preserves the decisio
 	await page.getByRole('button', { name: 'Mark Handled' }).click();
 	await page.keyboard.press('F1');
 	const picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('Close Tab');
-	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close Tab$/u }).click();
+	await picker.getByRole('combobox').fill('Close');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close$/u }).click();
 	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
 	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Manual resolution');
 	await page.getByRole('button', { name: 'Complete Merge' }).click();
@@ -153,8 +153,8 @@ test('SCM preserves a manually edited result after saving and reopening', { tag:
 	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const reviewed = true;\n');
 	await page.keyboard.press('F1');
 	const picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('Close Tab');
-	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close Tab$/u }).click();
+	await picker.getByRole('combobox').fill('Close');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close$/u }).click();
 	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
 	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Manual resolution');
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');

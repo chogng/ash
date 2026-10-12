@@ -146,8 +146,8 @@ test('Pinned editor action preserves its target and keyboard focus across state 
 		const pinned = { ...descriptor(first), sticky: true };
 		control.setEditors([pinned, descriptor(second)], second);
 		const unpin = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-primary-action.custom-action button')!;
-		assert.equal(unpin.getAttribute('aria-label'), '取消固定编辑器');
-		assert.equal(unpin.title, '取消固定编辑器');
+		assert.equal(unpin.getAttribute('aria-label'), '取消固定');
+		assert.equal(unpin.title, '取消固定');
 		unpin.focus();
 		control.setEditors([{ ...pinned, isDirty: true }, descriptor(second)], second);
 		assert.equal(dom.window.document.activeElement, unpin);
@@ -194,7 +194,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	const secondTab = tabs[1];
 	assert.ok(firstTab);
 	assert.ok(secondTab);
-	assert.match(firstTab.querySelector('.ash-tab-label')?.getAttribute('aria-description') ?? '', /Pin Editor to pin/u);
+	assert.match(firstTab.querySelector('.ash-tab-label')?.getAttribute('aria-description') ?? '', /Pin to pin/u);
 	Object.defineProperty(secondTab, "getBoundingClientRect", {
 		value: () => ({ left: 100, width: 100 }),
 	});

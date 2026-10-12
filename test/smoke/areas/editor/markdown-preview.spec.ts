@@ -154,7 +154,7 @@ test('Markdown tab menus reopen the clicked document while another tab is active
 	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 	await expect(frame.getByRole('heading', { name: 'First document', exact: true })).toBeVisible();
 	await expect(group.tabs).toHaveCount(4);
-	await workbench.menus.select(application, () => group.tabs.filter({ hasText: 'second.md' }).click({ button: 'right' }), ['Reopen Editor With...']);
+	await workbench.menus.select(application, () => group.tabs.filter({ hasText: 'second.md' }).click({ button: 'right' }), ['Reopen With...']);
 	await workbench.quickaccess.select('Markdown Preview');
 	await expect(frame.getByRole('heading', { name: 'Second document', exact: true })).toBeVisible();
 	await expect(group.tabs).toHaveCount(4);

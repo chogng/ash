@@ -1,3 +1,4 @@
+import '../../../../../../editor/test/browser/testEditorDom.js';
 import { Event } from '../../../../../../base/common/event.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -21,8 +22,10 @@ import { ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, Editor
 import type { IEditorGroup } from '../../../../../services/editor/common/editorGroupsService.js';
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
 import { IHistoryService } from '../../../../../services/history/common/history.js';
+import { SubmenuAction } from '../../../../../../base/common/actions.js';
 
 test('tab close and split menus operate on the clicked group and selected editors', async () => {
+	await import('../../editor.contribution.js');
 	const { CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID } = await import('../../editorCommands.js');
 	const { CloseAllEditorsCommandId, ReopenClosedEditorCommandId } = await import('../../editorActions.js');
 	const inputs = ['sticky', 'clicked', 'dirty', 'saved'].map(name => ({ resource: URI.file(`/project/${name}.ts`) }));
@@ -63,12 +66,12 @@ test('tab close and split menus operate on the clicked group and selected editor
 	const argument = { groupId: group.id, editorIndex: 1 };
 	const close = () => menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '1_close')![1];
 	assert.deepEqual(close().map(action => [action.id, action.label]), [
-		['workbench.action.closeActiveEditor', 'Close Tab'],
-		[CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID, 'Close Other Tabs in Group'],
-		['workbench.action.closeEditorsToTheLeft', 'Close Tabs to the Left'],
-		[CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, 'Close Tabs to the Right'],
-		[CLOSE_SAVED_EDITORS_COMMAND_ID, 'Close Saved Tabs in Group'],
-		[CLOSE_EDITORS_IN_GROUP_COMMAND_ID, 'Close All Tabs in Group'],
+		['workbench.action.closeActiveEditor', 'Close'],
+		[CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID, 'Close Others'],
+		['workbench.action.closeEditorsToTheLeft', 'Close to the Left'],
+		[CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, 'Close to the Right'],
+		[CLOSE_SAVED_EDITORS_COMMAND_ID, 'Close Saved'],
+		[CLOSE_EDITORS_IN_GROUP_COMMAND_ID, 'Close All in Group'],
 		[CloseAllEditorsCommandId, 'Close All Tabs'],
 	]);
 	for (const [id, expected] of [
@@ -111,7 +114,12 @@ test('tab close and split menus operate on the clicked group and selected editor
 	closed.length = 0;
 	await commands.executeCommand('workbench.action.closeEditorsToTheLeft', argument);
 	assert.deepEqual(closed, []);
-	const split = menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '5_split')![1];
+	const splitGroup = menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '5_split')![1];
+	assert.equal(splitGroup.length, 1);
+	const submenu = splitGroup[0];
+	assert.ok(submenu instanceof SubmenuAction);
+	assert.equal(submenu.label, 'Split');
+	const split = submenu.actions;
 	assert.deepEqual(split.map(action => action.label), ['Split Up', 'Split Down', 'Split Left', 'Split Right']);
 	for (const action of split) await action.run();
 	assert.deepEqual(splits, [Direction.Up, Direction.Down, Direction.Left, Direction.Right].map(direction => [group.id, [inputs[1], inputs[3]], direction]));

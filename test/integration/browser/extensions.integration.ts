@@ -1,3 +1,19 @@
+import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
+import { ConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
+import { parseExtensionManifest } from '../../../src/ash/workbench/services/extensions/common/extensionManifest.js';
+import { DefaultSettings } from '../../../src/ash/workbench/services/preferences/common/settingsModels.js';
+import { createSettingsLayout, settingsRootNodes } from '../../../src/ash/workbench/contrib/preferences/browser/settingsLayout.js';
+import { SettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsRenderers.js';
+import { SettingsTreeModel, type SettingsContentItem } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTree } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTree.js';
+import { TOCTree, TOCTreeModel } from '../../../src/ash/workbench/contrib/preferences/browser/tocTree.js';
+import type { ISetting } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
+import '../../../src/ash/workbench/contrib/preferences/browser/media/settingsEditor.css';
+import { localize } from '../../../src/ash/nls.js';
+import chineseSettingsMessages from '../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
 import '../../../src/ash/base/browser/ui/styles.css';
 import { IGlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionManagement.js';
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
@@ -77,7 +93,7 @@ import { setNlsMessages } from '../../../src/ash/nls.js';
 import chineseMessages from '../../../extensions/language-pack-zh-cn/translations/extensions.json' with { type: 'json' };
 
 if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', chineseMessages);
+	setNlsMessages('zh-CN', { ...chineseMessages, ...chineseSettingsMessages });
 }
 
 const disposables = new DisposableStore();
@@ -335,7 +351,73 @@ document.getElementById('lsp')!.append(lsp.domNode);
 lsp.setInput(createSettingsEditorInput());
 lsp.setVisible(true);
 
+let settingsConfiguration: WorkbenchConfigurationService | undefined;
+function prepareSettings(): void {
+	for (const element of document.querySelectorAll('body > main')) (element as HTMLElement).style.display = 'none';
+	const host = document.createElement('div');
+	host.id = 'extension-settings';
+	host.className = 'ash-settings-editor';
+	host.style.width = '1000px';
+	const layoutElement = document.createElement('div');
+	layoutElement.className = 'ash-settings-layout';
+	const navigation = document.createElement('nav');
+	navigation.className = 'ash-settings-sidebar';
+	const content = document.createElement('main');
+	content.className = 'ash-settings-page';
+	layoutElement.append(navigation, content);
+	host.append(layoutElement);
+	document.body.append(host);
+	disposables.add(toDisposable(() => host.remove()));
+	const registry = new ConfigurationRegistry();
+	registry.updateConfigurations({
+		add: [...parseExtensionManifest(JSON.stringify({
+			name: 'sample', publisher: 'test', version: '1.0.0', displayName: 'Sample extension',
+			contributes: {
+				configuration: {
+					properties: {
+						'sample.enabled': { type: 'boolean', default: false },
+						'sample.count': { type: 'integer', default: 2, minimum: 1, maximum: 10 },
+						'sample.text': { type: 'string', default: 'original' },
+						'sample.mode': { type: 'string', enum: ['first', 'second'], default: 'first' },
+						'sample.rules': { type: 'array', default: [], items: { type: 'string' } },
+					}
+				}
+			},
+		}), { id: 'test.sample', name: 'sample', publisher: 'test', version: '1.0.0' }).contributes.configuration], remove: []
+	});
+	settingsConfiguration = disposables.add(new WorkbenchConfigurationService({ registry }));
+	const settingServices = new InstantiationService();
+	settingServices.registerInstance(IConfigurationService, settingsConfiguration);
+	settingServices.registerInstance(IContextViewService, services.get(IContextViewService));
+	settingServices.registerInstance(IClipboardService, disposables.add(new BrowserClipboardService(navigator.clipboard)));
+	settingServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
+	const layout = createSettingsLayout(new DefaultSettings(registry).all).filter(entry => entry.id.startsWith('extension.'));
+	const model = disposables.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
+	model.setChildren(settingsRootNodes(layout));
+	model.setNavigationTarget('extension.test.sample');
+	const renderer = disposables.add(settingServices.createInstance(SettingsRenderer, content, {
+		onStatus: (message: string) => { requests.push(['settingsStatus', message]); },
+		onOpenSettings: async (key: string) => { requests.push(['settingsJson', key]); },
+	}));
+	disposables.add(new SettingsTree(content, {
+		model, rootClassName: 'ash-settings-content-tree', groupClassName: 'ash-configuration-settings-group',
+		groupDescriptionClassName: 'ash-configuration-settings-group-description', itemsClassName: 'ash-configuration-settings-list',
+		renderItem: item => 'domNode' in item.value ? item.value.domNode : renderer.render(item.value),
+		updateItem: item => { if (!('domNode' in item.value)) renderer.update(item.value); }, disposeItem: item => renderer.disposeSetting(item.id),
+	}));
+	const toc = disposables.add(new TOCTree(navigation, new TOCTreeModel(model, () => [{
+		id: 'extensions', label: localize({ bundle: 'ash.settings', key: 'groups.extensions.label' }, 'Extensions'), description: '', categories: layout.map(entry => entry.descriptor),
+	}]), {
+		ariaLabel: 'Settings categories', categoryLabel: category => category.label, categoryDescription: category => category.description,
+		groupLabel: group => group.label, groupDescription: group => group.description,
+	}));
+	disposables.add(toc.onDidOpen(entry => model.setNavigationTarget(entry.category.id)));
+	toc.domFocus();
+}
+
 window.ashExtensionsIntegration = {
+	prepareSettings,
+	readSetting: (key: string) => settingsConfiguration!.getValue(key),
 	requests,
 	setRecommendations: async (content: string) => { await files.writeFile({ resource: recommendationsResource, content }); recommendationChanges.fire({ resources: [recommendationsResource] }); },
 	leaveWorkspace: () => workspace.updateWorkspace({ id: 'empty', folders: [] }),
@@ -368,6 +450,6 @@ window.ashExtensionsIntegration = {
 };
 declare global {
 	interface Window {
-		ashExtensionsIntegration: { openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

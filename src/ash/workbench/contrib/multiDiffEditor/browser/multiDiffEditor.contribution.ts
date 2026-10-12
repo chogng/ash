@@ -31,6 +31,7 @@ registerEditorPane({
 		if (!instantiationService) throw new Error('Stanza Multi Diff requires the Workbench instantiation service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		return instantiationService.createInstance(MultiDiffEditor, {
+			activeEditorId: options.input?.editorId,
 			modelService: getBrowserTextModelService(resourceStore, instantiationService),
 			createComputationService: () => diffService.createComputationService(),
 			editorService: instantiationService.getOptional(IEditorService),

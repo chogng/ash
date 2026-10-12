@@ -1,6 +1,95 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`SCM diff shows suggested file context and sends the staged version in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => {
+			window.ashChatInputIntegration.showModels();
+			window.ashChatInputIntegration.setActiveDiff('git-change:/staged/example.ts?side=original', 'git-change:/staged/example.ts?side=modified', 'Staged version');
+		});
+		const row = page.locator('.ash-chat-suggested-context');
+		const button = row.getByRole('button', { name: locale === 'en' ? 'Add example.ts to context' : '将 example.ts 添加到上下文' });
+		await expect(button).toBeVisible();
+		await button.press('Enter');
+		await expect(row).toBeHidden();
+		const input = page.locator('.ash-chat-textarea-input');
+		await expect(input).toBeFocused();
+		await input.fill('Review this file');
+		await input.press('Enter');
+		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'example.ts', content: 'Staged version' }]));
+		await expect(button).toBeVisible();
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
+		test(`Suggested file context attaches only on intent and sends once in ${locale} ${theme}`, async ({ page }) => {
+			await page.goto(`/chatInput.html?locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const row = page.locator('.ash-chat-suggested-context');
+			const input = page.locator('.ash-chat-textarea-input');
+			const submission = page.getByLabel('Submission', { exact: true });
+			await expect(row).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.setActiveFile('file:///workspace/edited.ts'));
+			const add = row.getByRole('button', { name: locale === 'en' ? 'Add edited.ts to context' : '将 edited.ts 添加到上下文' });
+			await expect(add).toBeVisible();
+			if (locale === 'en' && theme === 'light') await page.locator('main').screenshot({ path: test.info().outputPath('suggested-context.png') });
+			await input.fill('Without context');
+			await input.press('Enter');
+			await expect(submission).toHaveText('[]');
+			await expect(add).toBeVisible();
+			await input.press('Shift+Tab');
+			await expect(add).toBeFocused();
+			await expect(add).toHaveCSS('outline-style', 'solid');
+			await add.press('Space');
+			await expect(row).toBeHidden();
+			await expect(input).toBeFocused();
+			await expect(page.locator('.ash-chat-input-attachments')).toContainText('edited.ts');
+			await input.fill('Read the unsaved file');
+			await input.press('Enter');
+			await expect(submission).toHaveText(JSON.stringify([{ name: 'edited.ts', content: 'Unsaved editor text' }]));
+			await expect(page.locator('.ash-chat-input-attachments')).toBeHidden();
+			await expect(add).toBeVisible();
+			await input.fill('Following message');
+			await input.press('Enter');
+			await expect(submission).toHaveText('[]');
+			await page.evaluate(() => window.ashChatInputIntegration.setActiveFile('file:///workspace/a-very-long-file-name-that-must-not-overflow-the-composer.ts'));
+			await page.locator('main').evaluate(element => { element.style.width = '240px'; });
+			await expect(row.locator('.ash-button-label')).toHaveCSS('text-overflow', 'ellipsis');
+			const bounds = await row.boundingBox();
+			const buttonBounds = await row.locator('button').boundingBox();
+			expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+			await page.evaluate(() => window.ashChatInputIntegration.setActiveFile('private:settings'));
+			await expect(row).toBeHidden();
+		});
+	}
+}
+
+test('Suggested file context follows editor changes, removes duplicates and keeps failed submissions', async ({ page }) => {
+	await page.goto('/chatInput.html?sendFailure=1');
+	await page.evaluate(() => { window.ashChatInputIntegration.showModels(); window.ashChatInputIntegration.setActiveFile('file:///workspace/edited.ts'); });
+	const row = page.locator('.ash-chat-suggested-context');
+	await row.getByRole('button').click();
+	await expect(row).toBeHidden();
+	await page.getByRole('button', { name: 'Remove edited.ts', exact: true }).click();
+	await expect(row).toBeVisible();
+	await row.getByRole('button').click();
+	await expect(row).toBeHidden();
+	await page.evaluate(() => window.ashChatInputIntegration.setActiveFile('file:///workspace/other.ts'));
+	await expect(row.getByRole('button')).toHaveAccessibleName('Add other.ts to context');
+	const input = page.locator('.ash-chat-textarea-input');
+	await input.fill('Keep for retry');
+	await input.press('Enter');
+	await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'edited.ts', content: 'Unsaved editor text' }]));
+	await expect(input).toHaveValue('Keep for retry');
+	await expect(page.getByRole('button', { name: 'Remove edited.ts', exact: true })).toBeVisible();
+	await page.evaluate(() => window.ashChatInputIntegration.setActiveFile('file:///workspace/edited.ts'));
+	await expect(row).toBeHidden();
+	await page.evaluate(() => window.ashChatInputIntegration.setActiveFile());
+	await expect(row).toBeHidden();
+});
+
+for (const locale of ['en', 'zh-CN']) {
 	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 		test(`Context usage hover keeps two lines in ${locale} ${theme}`, async ({ page }) => {
 			await page.goto(`/chatInput.html?contextHover=1&locale=${locale}&theme=${theme}`);

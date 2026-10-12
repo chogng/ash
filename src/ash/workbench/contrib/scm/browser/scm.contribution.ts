@@ -308,7 +308,7 @@ registerAction2(class SCMHistoryRefreshAction extends Action2 {
 			tooltip: localize('scm.history.refresh', 'Refresh source control history'),
 			icon: Lxicon.refresh,
 			precondition: SCMHistoryBusyContext.isEqualTo(false),
-			menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 4 },
+			menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 1000 },
 		});
 	}
 

@@ -210,6 +210,7 @@ Pills (radius ≈ half the height) are **fully round** (`--ash-cornerRadius-circ
 
 Padding, margin, and gap come from the **spacing ramp** (0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40).
 - **Decision rule:** a value either lands *on* the ramp or it doesn't. Off-scale values (3, 5, 7, 14, 26…) break the rhythm; snap to the nearest step, ties rounding up. Report rhythm bugs as *"this is off the spacing ramp,"* not *"add a couple of pixels."*
+- **Pane title rows:** span the full pane width without margin. Use padding to control content spacing from the pane edges so the row background and hit area extend to those edges.
 - **Serves:** *Room to breathe* (2), *Sameness signals sameness* (6).
 
 <a id="type-ramp"></a>

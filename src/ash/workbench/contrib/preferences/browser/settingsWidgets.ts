@@ -20,7 +20,7 @@ import { HoverConfiguration } from '../../../../platform/hover/common/hoverServi
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
-import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
+import type { IBooleanSetting, IComplexSetting, INumberSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
 import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
@@ -226,6 +226,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	private readonly descriptionDomNode: HTMLSpanElement;
 	private readonly indicators: SettingsTreeIndicatorsLabel;
 	private readonly titleDomNode: HTMLSpanElement;
+	private pendingFocus: HTMLElement | undefined;
 
 	protected constructor(container: HTMLElement, descriptor: TSetting, binding: SettingValueBinding<TValue>, private readonly options: SettingWidgetOptions, configurationService: IConfigurationService, contextViewProvider: IContextViewProvider, instantiationService: IInstantiationService, kind?: 'select' | 'toggle') {
 		super();
@@ -295,7 +296,17 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			this.domNode.classList.toggle('is-configured', isConfigured);
 			if (isConfigured) this.domNode.setAttribute('aria-describedby', this.indicators.configuredDescriptionId);
 			else this.domNode.removeAttribute('aria-describedby');
+			const document = this.domNode.ownerDocument;
+			if (state.isPending && !this.pendingFocus) {
+				const active = getActiveElement(document);
+				if (active instanceof document.defaultView!.HTMLElement && this.domNode.contains(active)) this.pendingFocus = active;
+			}
 			renderState(state);
+			if (!state.isPending && this.pendingFocus) {
+				// Disabling a saving control blurs it. Restore focus only if the user has not moved elsewhere.
+				if (getActiveElement(document) === document.body && this.pendingFocus.isConnected) this.pendingFocus.focus();
+				this.pendingFocus = undefined;
+			}
 		};
 		this._register(this.model.onDidChange(render));
 		render(this.model.state);
@@ -792,6 +803,28 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 	}
 }
 
+/** Complex extension values keep schema validation and editing in the shared JSON editor. */
+class ComplexSettingWidget extends AbstractSettingWidget<IComplexSetting, unknown> {
+	constructor(container: HTMLElement, descriptor: IComplexSetting, options: SettingWidgetOptions,
+		@IConfigurationService configurationService: IConfigurationService,
+		@IContextViewService contextViewProvider: IContextViewService,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
+		super(container, descriptor, configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService);
+		this.domNode.dataset.configurationKey = descriptor.id;
+		const button = this._register(new Button(this.domNode, {
+			label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
+			onClick: () => {
+				void options.onOpenSettings?.(descriptor.id).catch(error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true));
+			},
+		}));
+		this.domNode.prepend(this.copyDomNode);
+		this.bindState(state => { button.enabled = !state.isPending && options.onOpenSettings !== undefined; });
+	}
+
+	protected updateControl(_descriptor: IComplexSetting): void { }
+}
+
 export function createSettingWidget(container: HTMLElement, setting: ISetting, options: SettingWidgetOptions, instantiationService: IInstantiationService): SettingWidget {
 	switch (setting.valueType) {
 		case 'boolean':
@@ -804,6 +837,8 @@ export function createSettingWidget(container: HTMLElement, setting: ISetting, o
 			return instantiationService.createInstance(TextSettingWidget, container, setting, options);
 		case 'stringMap':
 			return instantiationService.createInstance(StringMapSettingWidget, container, setting, options);
+		case 'complex':
+			return instantiationService.createInstance(ComplexSettingWidget, container, setting, options);
 	}
 }
 

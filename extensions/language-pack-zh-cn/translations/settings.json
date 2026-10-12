@@ -360,7 +360,9 @@
     "categories.voice-input.description": "选择本地或云端转写，并管理听写模型。",
     "hooks.managementLink": "在 Agent 自定义中管理 Hooks。",
     "hooks.managementLinkHelp": "打开“管理 Hooks”，搜索事件、检查声明、编辑 TOML，或让 Ash 帮忙配置 Hook。",
-    "hooks.manage": "管理 Hooks"
+    "hooks.manage": "管理 Hooks",
+    "groups.extensions.label": "扩展",
+    "groups.extensions.description": "配置已安装的扩展。"
   },
   "ash": {
     "color.settings.focusedRowBackground": "包含键盘焦点的设置行的背景色。",

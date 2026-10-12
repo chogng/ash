@@ -229,3 +229,18 @@ test('SCM bridges advertised reference filters, upstream changes and immutable b
 	bytes = null;
 	assert.deepEqual((await history.resolveHistoryItemChangeContents('head', change)).original, { kind: 'binary' });
 });
+
+
+test('SCM status command availability survives the extension bridge', async () => {
+	const calls: JsonValue[] = [];
+	const command = { id: 'git.sync', text: '3↓ 0↑', ariaLabel: 'Sync', tooltip: 'Sync', priority: 800, enabled: false };
+	const snapshot = { ...(provider() as Record<string, JsonValue>), statusBarCommands: [command] };
+	const value = fixture(async request => { calls.push(request.payload); return null; }, [snapshot]);
+	using cleanup = value.lifetime;
+	const repository = value.scm.getRepository('repo')!;
+	const statusCommands = () => repository.provider.statusBarCommands;
+	assert.equal(statusCommands()[0]?.run, undefined);
+	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, statusBarCommands: [{ ...command, enabled: true }] }]);
+	await statusCommands()[0]?.run?.();
+	assert.ok(calls.some(call => typeof call === 'object' && call !== null && 'method' in call && call.method === 'statusBar' && call.commandId === 'git.sync'));
+});

@@ -41,6 +41,8 @@ import { MultiDiffEditorToolbar } from './multiDiffEditorToolbar.js';
 import { localize } from '../../../../nls.js';
 import { extname } from '../../../../base/common/path.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
+import { Range } from '../../../../editor/common/core/range.js';
+import type { IMultiDiffEditorOptionsViewState } from '../../../../editor/common/multiDiffEditor.js';
 import {
 	ActiveEditorContext, ActiveEditorReadonlyContext, ResourceContext, ResourceSchemeContext,
 	ResourcePathContext, ResourceFilenameContext, ResourceDirnameContext, ResourceExtensionContext,
@@ -50,6 +52,8 @@ import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfigura
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 
 export interface MultiDiffEditorOptions {
+	/** A composed editor retains its own menu identity while reusing this comparison widget. */
+	readonly activeEditorId?: string;
 	readonly modelService: ITextModelResourceService;
 	readonly createComputationService: () => IDocumentDiffProvider & IDisposable;
 	readonly lineHeight?: number;
@@ -185,6 +189,11 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	public restoreViewState(state: unknown): void {
 		const editor = this.session.value?.editor;
 		if (!editor) throw new Error('Multi-diff editor view-state restoration is unavailable');
+		if (state && typeof state === 'object' && 'revealData' in state) {
+			const reveal = (state as IMultiDiffEditorOptionsViewState).revealData;
+			if (reveal) { editor.reveal(reveal.resource, { range: reveal.range ? Range.lift(reveal.range) : undefined, highlight: false }); }
+			return;
+		}
 		editor.restoreViewState(state);
 	}
 
@@ -411,7 +420,7 @@ class MultiDiffEditorSession extends Disposable {
 		}
 		const resources = new DisposableStore();
 		const scoped = resources.add(options.fileActions!.contextKeyService.createScoped(container));
-		ActiveEditorContext.bindTo(scoped).set(MULTI_DIFF_EDITOR_ID);
+		ActiveEditorContext.bindTo(scoped).set(options.activeEditorId ?? MULTI_DIFF_EDITOR_ID);
 		const resource = (input.goToFile ?? input.modified).resource;
 		ActiveEditorReadonlyContext.bindTo(scoped).set(input.modified.readOnly === true);
 		ResourceContext.bindTo(scoped).set(resource.toString());
@@ -485,6 +494,7 @@ class MultiDiffEditorSession extends Disposable {
 			this.inputsById.set(id, item);
 			return resources.add(new DocumentDiffItem({
 				id, label: item.label, binary: item.binary,
+				originalUri: item.original.resource, modifiedUri: item.modified.resource,
 				originalLabel: item.original.label, modifiedLabel: item.modified.label,
 				readOnly: item.modified.readOnly,
 			}, item.binary ? undefined : () => this.loadItem(item, this.options.modelService, this.computationService, this.configuration, resources, abort.signal)));

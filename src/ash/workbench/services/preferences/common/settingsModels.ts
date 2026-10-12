@@ -99,7 +99,8 @@ export function configurationSettingBinding<T>(configurationService: IConfigurat
 		id: configuration.key,
 		defaultValue: configurationService.inspect<T>(configuration.key).defaultValue!,
 		onDidChange: listener => configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(configuration.key)) listener();
+			// Catalog withdrawal can notify configuration consumers before the editor releases controls.
+			if (event.affectsConfiguration(configuration.key) && configurationService.keys().default.includes(configuration.key)) listener();
 		}),
 		getValue: () => configurationService.getValue<T>(configuration.key),
 		isDefault: () => configurationService.inspect<T>(configuration.key).userLocalValue === undefined,
@@ -114,8 +115,12 @@ export class DefaultSettings {
 
 	constructor(registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)) {
 		for (const configuration of registry.getRegisteredConfigurations()) {
-			if (!configuration.setting) continue;
-			this.settings.set(configuration.key, registeredSetting(configuration, configuration.setting));
+			const schema = configuration.setting ?? (configuration.source ? contributedSettingSchema(configuration) : undefined);
+			if (schema) {
+				this.settings.set(configuration.key, registeredSetting(configuration, schema));
+			} else if (configuration.source) {
+				this.settings.set(configuration.key, { ...contributedSettingCopy(configuration), valueType: 'complex', configuration });
+			}
 		}
 	}
 
@@ -130,12 +135,38 @@ export class DefaultSettings {
 	}
 }
 
+/** Standard extension schemas use the same controls as product settings. */
+function contributedSettingSchema(configuration: IRegisteredConfiguration): IConfigurationSettingSchema | undefined {
+	const schema = configuration.schema;
+	if (!schema) return undefined;
+	const base = contributedSettingCopy(configuration);
+	if (schema.enum?.length && schema.enum.every(value => typeof value === 'string' || typeof value === 'boolean')) {
+		return { ...base, valueType: 'select', options: schema.enum.map(value => ({ value: value as string | boolean, label: String(value) })) };
+	}
+	switch (schema.type) {
+		case 'boolean': return { ...base, valueType: 'boolean' };
+		case 'integer':
+		case 'number': return { ...base, valueType: 'number', minimum: schema.minimum ?? -Number.MAX_VALUE, maximum: schema.maximum ?? Number.MAX_VALUE };
+		case 'string': return { ...base, valueType: 'text', placeholder: '' };
+		default: return undefined;
+	}
+}
+
+function contributedSettingCopy(configuration: IRegisteredConfiguration): { id: string; title: string; description: string; keywords: readonly string[]; } {
+	return {
+		id: configuration.key,
+		title: configuration.schema?.title ?? configuration.key,
+		description: configuration.schema?.description ?? configuration.schema?.markdownDescription ?? '',
+		keywords: [configuration.source!.id, configuration.source!.displayName ?? ''],
+	};
+}
+
 function registeredSetting(configuration: IRegisteredConfiguration, schema: IConfigurationSettingSchema): ISetting {
 	const base = {
 		id: configuration.key,
 		title: schema.title,
 		description: schema.description,
-		keywords: schema.keywords,
+		keywords: configuration.source ? [...new Set([configuration.source.id, configuration.source.displayName ?? '', ...(schema.keywords ?? [])])] : schema.keywords,
 	};
 	switch (schema.valueType) {
 		case 'boolean':
@@ -156,12 +187,16 @@ function registeredSetting(configuration: IRegisteredConfiguration, schema: ICon
 	}
 }
 
-/** Owns the immutable Settings projection and transient editor status. */
+/** Owns catalog metadata and transient editor status; bindings own setting values. */
 export class SettingsEditorModel extends Disposable implements ISettingsEditorModel {
 	private readonly statusEmitter = this._register(new Emitter<SettingsStatus>());
 
 	public readonly onDidChangeStatus = this.statusEmitter.event;
-	public readonly settings: readonly ISetting[];
+	private entries: readonly ISetting[] = [];
+
+	public get settings(): readonly ISetting[] {
+		return this.entries;
+	}
 
 	public readonly reportStatus = (message: string, isError: boolean): void => {
 		this.statusEmitter.fire({ message, isError });
@@ -169,11 +204,16 @@ export class SettingsEditorModel extends Disposable implements ISettingsEditorMo
 
 	constructor(settings: readonly ISetting[]) {
 		super();
+		this.setSettings(settings);
+	}
+
+	/** Replaces catalog metadata while configuration and domain bindings retain value ownership. */
+	public setSettings(settings: readonly ISetting[]): void {
 		const ids = new Set<string>();
 		for (const setting of settings) {
 			if (ids.has(setting.id)) throw new Error(`Setting is already registered: ${setting.id}`);
 			ids.add(setting.id);
 		}
-		this.settings = Object.freeze([...settings]);
+		this.entries = Object.freeze([...settings]);
 	}
 }

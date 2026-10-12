@@ -161,39 +161,41 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 	}
 	appendNode(svg, circleIndex, kind, circleColorIndex);
 	svg.dataset.nodeX = String(LaneWidth * (circleIndex + 1));
-	svg.style.width = `${LaneWidth * (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length, 1) + 1)}px`;
+	// Include the title gutter in the graph width so expanded changes share its alignment.
+	svg.style.width = `${LaneWidth * (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length, 1) + 1) + 4}px`;
 	svg.style.height = `${LaneHeight}px`;
 	return svg;
 }
 
-function appendPath(svg: SVGSVGElement, data: string, colorIndex: number): void {
+function appendPath(svg: SVGSVGElement, data: string, colorIndex: number): SVGPathElement {
 	const path = createSvgElement(svg.ownerDocument, "path");
 	path.classList.add("ash-scm-graph-path");
 	path.dataset.laneColor = String(colorIndex);
 	path.setAttribute("d", data);
 	svg.append(path);
+	return path;
 }
 
 function appendNode(svg: SVGSVGElement, index: number, kind: GraphNodeKind, colorIndex: number): void {
 	if (kind === 'incoming-changes' || kind === 'outgoing-changes') {
-		appendCircle(svg, index, 7, 'outer', colorIndex);
+		appendCircle(svg, index, 6, 'outer', colorIndex);
 		const x = LaneWidth * (index + 1);
 		const y = LaneHeight / 2;
 		const direction = kind === 'incoming-changes' ? 1 : -1;
-		appendPath(svg, `M ${x} ${y - direction * 4} V ${y + direction * 4} M ${x - 3} ${y + direction} L ${x} ${y + direction * 4} L ${x + 3} ${y + direction}`, colorIndex);
+		appendPath(svg, `M ${x} ${y - direction * 3} V ${y + direction * 3} M ${x - 2} ${y + direction} L ${x} ${y + direction * 3} L ${x + 2} ${y + direction}`, colorIndex).classList.add('ash-scm-graph-node-icon');
 		return;
 	}
 	if (kind === "head") {
-		appendCircle(svg, index, 7, "outer", colorIndex);
+		appendCircle(svg, index, 6, "outer", colorIndex);
 		appendCircle(svg, index, 2, "inner", colorIndex);
 		return;
 	}
 	if (kind === "merge") {
-		appendCircle(svg, index, 6, "outer", colorIndex);
-		appendCircle(svg, index, 3, "inner", colorIndex);
+		appendCircle(svg, index, 5, "outer", colorIndex);
+		appendCircle(svg, index, 2, "inner", colorIndex);
 		return;
 	}
-	appendCircle(svg, index, 5, "single", colorIndex);
+	appendCircle(svg, index, 4, "single", colorIndex);
 }
 
 function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: "inner" | "outer" | "single", colorIndex: number): void {

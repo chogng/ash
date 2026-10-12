@@ -47,6 +47,7 @@ pub use references::GitCommandOutcome;
 pub use references::GitIntegration;
 pub use references::GitReferenceState;
 pub use references::GitStashMode;
+pub use remote::GitPullMode;
 pub use remote::GitRemote;
 pub use remote::GitRemoteIdentity;
 pub use remote::GitRemoteProvider;

@@ -129,10 +129,10 @@ GitClient::worktrees
    └─ git worktree list --porcelain -z
       └─ GitWorktree + GitWorktreeAvailability
 
-GitClient::commit / fetch / pull_fast_forward / push
+GitClient::commit / fetch / pull / push
 └─ GitClient::run_mutation[_with_stdin]
    └─ optional add --update/--all → commit --file=- [--amend] [--signoff]
-      | fetch --all --prune | pull --ff-only | push
+      | fetch --all --prune | pull [--no-rebase | --rebase] --no-edit | push
 
 GitClient::apply_patch
 ├─ extract_patch_paths
@@ -228,7 +228,7 @@ Git revision 或复制统计规则。
 不提供跨进程 Git 写入的原子 CAS。
 Message 从 stdin 读取，成功后返回 HEAD object ID。暂存成功而创建提交失败时保留真实 index，调用方应刷新状态，
 不能假设回滚。Remote mutation non-interactive；`fetch_default` 获取默认远端并 prune，`fetch` 获取全部远端并 prune，
-`pull_fast_forward` 明确使用 `--ff-only`，`push` 使用 repository 当前 upstream/default。
+`pull` 接受 `GitPullMode::Configured` 或 `Rebase`：前者遵循 Git 的分支及仓库/全局变基配置，未配置时采用合并；后者显式使用 `--rebase`。`pull.ff` 由 Git 处理，冲突保留进行中的 merge/rebase 状态；调用方负责发布失败后的真实 snapshot。`push` 使用 repository 当前 upstream/default。
 
 ## 补丁契约
 

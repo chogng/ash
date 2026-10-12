@@ -26,6 +26,8 @@ Preferences 拥有设置页的呈现模型，不接管领域业务状态。配�
 
 例如，一个布尔配置的接入链路是：功能模块注册配置 → 布局引用 setting ID → Preferences 构造布尔设置模型并渲染开关 → 配置服务保存 → 功能模块应用新值。功能模块无需提供一张设置页面。
 
+扩展贡献由配置注册表保留目录身份。Preferences 根据标准 schema 生成控件，并在“扩展”父分类下按扩展展示，不要求扩展修改产品布局。复杂值通过共享用户设置 JSONC 编辑器编辑；注册表更新会刷新已打开的页面，移除扩展会释放控件与 binding，但不会删除已保存配置。
+
 主要入口是 [Configuration Registry](../../../platform/configuration/common/configurationRegistry.ts)、[Settings 模型](../../services/preferences/common/settingsModels.ts)、[分类布局](browser/settingsLayout.ts) 和 [设置 renderer](browser/settingsRenderers.ts)。普通配置不得绕过这条链路，另造一套仅在图形页面中可用的读写与渲染机制。
 
 ## 非配置内容：提供数据和操作

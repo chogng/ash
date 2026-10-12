@@ -13,8 +13,8 @@ test('Git SCM title contributions use compact product icons and the public histo
 	assert.equal(menus.SCMHistoryTitle, undefined);
 	for (const menu of ['scm/title', 'scm/history/title']) {
 		const primary = menus[menu].filter(item => item.group?.split('@')[0] === 'navigation');
-		// Push and Publish use one slot with mutually exclusive repository contexts.
-		assert.ok(new Set(primary.map(item => item.group)).size <= 3, `${menu} leaves room for the pane title`);
+		// Push and Publish are mutually exclusive even though their sort positions differ.
+		assert.ok(primary.length <= 4, `${menu} leaves room for the pane title`);
 		for (const item of primary) {
 			const command = manifest.contributes.commands.find(command => command.command === item.command);
 			assert.ok(command, item.command);
@@ -43,6 +43,7 @@ test('Git extension localizes its own labels and parameterized accessibility tex
 	try {
 		assert.equal(localize('git.ignored', 'Ignored by Git'), '被 Git 忽略');
 		assert.equal(localize('git.autofetch.title', 'Auto Fetch'), '自动获取远端更新');
+		assert.equal(localize('git.rebaseWhenSync.title', 'Rebase When Sync'), '同步时变基');
 		assert.equal(localize('git.status.branch', 'Git branch {0}', 'feature'), 'Git 分支 feature');
 	} finally { setLanguage('en'); }
 });

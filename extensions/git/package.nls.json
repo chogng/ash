@@ -365,5 +365,14 @@
   "command.git.graph.compareWithRemote": "Compare with Remote…",
   "command.git.graph.compareWithMergeBase": "Compare with Merge Base…",
   "command.git.copyCommitId": "Copy Commit Hash",
-  "command.git.copyCommitMessage": "Copy Commit Message"
+  "command.git.copyCommitMessage": "Copy Commit Message",
+  "git.menu.sync": "Synchronize Changes",
+  "git.status.synchronizing": "Synchronizing Changes…",
+  "git.status.operationRunning": "Git operation in progress…",
+  "git.menu.pullRebase": "Pull (Rebase)",
+  "git.menu.syncRebase": "Synchronize Changes (Rebase)",
+  "command.git.updateRebaseWhenSync": "git.updateRebaseWhenSync",
+  "git.rebaseWhenSync.title": "Rebase When Sync",
+  "git.rebaseWhenSync.description": "Force Git to use rebase when running the sync command.",
+  "git.rebaseWhenSync.invalid": "Rebase When Sync must be a boolean."
 }

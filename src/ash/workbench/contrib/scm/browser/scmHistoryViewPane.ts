@@ -48,7 +48,7 @@ registerAction2(class extends Action2 {
 		super({
 			id: 'workbench.scm.action.graph.viewChanges',
 			title: localize2({ bundle: 'ash', key: 'scm.history.openChanges' }, 'Open Changes'),
-			icon: Lxicon.diff,
+			icon: Lxicon.diffMultiple1,
 			f1: false,
 			menu: { id: MenuId.SCMHistoryItemContext, group: 'inline', order: 1 },
 		});
@@ -137,7 +137,7 @@ registerAction2(class extends Action2 {
 		super({
 			id: 'workbench.scm.action.graph.pickHistoryItemRefs',
 			title: localize2('scm.history.filter', 'Filter History References'),
-			icon: Lxicon.filter,
+			icon: Lxicon.gitBranch,
 			precondition: HistoryRefsAvailable.isEqualTo(true),
 			menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 1 },
 		});
@@ -153,7 +153,7 @@ for (const mode of ['list', 'tree'] as const) {
 				id: `workbench.scm.action.graph.set${mode === 'list' ? 'List' : 'Tree'}ViewMode`,
 				title: mode === 'list' ? localize2('scm.history.viewAsList', 'View as List') : localize2('scm.history.viewAsTree', 'View as Tree'),
 				icon: mode === 'list' ? Lxicon.listUnordered : Lxicon.folders,
-				menu: { id: MenuId.SCMHistoryTitle, group: 'view', order: mode === 'list' ? 1 : 2 },
+				menu: { id: MenuId.SCMHistoryTitle, group: '9_viewmode', order: mode === 'list' ? 1 : 2 },
 				toggled: HistoryViewMode.isEqualTo(mode),
 			});
 		}

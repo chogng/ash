@@ -27,7 +27,7 @@ export class FilesAndFoldersPickerPick {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) { }
 
-	public async asAttachment(resource: URI, kind: FileKind, signal: AbortSignal): Promise<ChatContextAttachment> {
+	public async asAttachment(resource: URI, kind: FileKind, signal: AbortSignal, initialText?: string): Promise<ChatContextAttachment> {
 		const name = basename(resource) || resource.path;
 		let content: string;
 		if (kind === FileKind.Directory) {
@@ -41,7 +41,8 @@ export class FilesAndFoldersPickerPick {
 			if (found.totalMatches > found.matches.length) content += `\n… (${found.totalMatches - found.matches.length} additional files)`;
 		} else {
 			const copy = this.workingCopies.get(resource).find(candidate => candidate.backupKind === 'text');
-			content = copy ? copy.backup() : (await this.files.readFile(resource)).content;
+			// Versioned editor inputs can display a Git snapshot without a filesystem provider.
+			content = copy ? copy.backup() : initialText ?? (await this.files.readFile(resource)).content;
 			if (content.includes('\0') || !content.trim()) throw new Error(localize('chat.context.invalidText', '{0} must contain nonempty UTF-8 text', name));
 		}
 		return { id: `file:${extUri.getComparisonKey(resource)}`, kind: kind === FileKind.Directory ? 'directory' : 'file', resource, name, resolve: async () => ({ name, content }) };

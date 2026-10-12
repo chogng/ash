@@ -1,4 +1,4 @@
-import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails, GitFetchTarget, GitCommitOptions } from './types.js';
+import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails, GitFetchTarget, GitCommitOptions, GitPullMode } from './types.js';
 import type { ConfigReadResult, GitCommitParams, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from '../../../.build/protocol/typescript/index.js';
 import { Emitter } from './support.js';
 import { CancellationToken } from './support.js';
@@ -11,7 +11,7 @@ import type { IGitApi } from './backend.js';
 import type { ExtensionLog } from './support.js';
 import { getRemoteWorkspacePath, isRemoteResource } from './support.js';
 import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitConflictFile, type GitConflictResolution, type GitCommitChanges, type GitComparisonChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "./types.js";
-import { GitConfiguration, type GitAutofetch } from './configuration.js';
+import { GitConfiguration, type GitAutofetch, type GitSettings } from './configuration.js';
 import type { GitHistoryRefs, GitWorktree } from './types.js';
 
 export interface GitServiceOptions {
@@ -406,14 +406,35 @@ export class GitService extends Disposable implements IGitService {
 		return toGitStatus((await this.api.fetch({ repositoryId: repository.id, mode: target })).status, repository);
 	}
 
-	async pull(repositoryId?: string): Promise<GitStatus> {
+	async pull(repositoryId?: string, mode: GitPullMode = 'configured'): Promise<GitStatus> {
 		const repository = await this.getRepository(repositoryId);
-		return toGitStatus((await this.api.pull({ repositoryId: repository.id })).status, repository);
+		return toGitStatus((await this.api.pull({ repositoryId: repository.id, ...(mode === 'configured' ? {} : { mode }) })).status, repository);
 	}
 
 	async push(repositoryId?: string): Promise<GitStatus> {
 		const repository = await this.getRepository(repositoryId);
 		return toGitStatus((await this.api.push({ repositoryId: repository.id })).status, repository);
+	}
+
+	/** Settings UI reads the shared profile through this domain contract. */
+	async readSettings(): Promise<GitSettings> {
+		await this.ensureLegacyMigration();
+		const { git } = await this.api.readConfig();
+		return {
+			autoFetch: git.autofetch === 'off' ? false : git.autofetch === 'default' ? true : 'all',
+			autoFetchPeriod: git.autofetchPeriod,
+			rebaseWhenSync: git.rebaseWhenSync,
+		};
+	}
+
+	async setRebaseWhenSync(value: boolean): Promise<void> {
+		await this.ensureLegacyMigration();
+		const current = await this.api.readConfig();
+		await this.api.updateConfig({
+			commandId: `desktop-git-${crypto.randomUUID()}`,
+			expectedRevision: current.revision,
+			git: { ...current.git, rebaseWhenSync: value },
+		});
 	}
 
 	async setAutoFetch(value: GitAutofetch): Promise<void> {
@@ -469,6 +490,7 @@ export class GitService extends Disposable implements IGitService {
 		if (legacyPeriod !== undefined && (typeof legacyPeriod !== 'number' || !Number.isSafeInteger(legacyPeriod) || legacyPeriod < 1 || legacyPeriod > 86400)) throw new TypeError('Invalid legacy Git autofetch period');
 		const current = await this.api.readConfig();
 		const desired: GitConfigDto = {
+			...current.git,
 			autofetch: legacyMode === undefined ? current.git.autofetch : legacyMode === false ? 'off' : legacyMode === true ? 'default' : 'all',
 			autofetchPeriod: legacyPeriod ?? current.git.autofetchPeriod,
 		};

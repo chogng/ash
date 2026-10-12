@@ -18,10 +18,21 @@ import { ISessionsManagementService } from '../../../../services/sessions/common
 import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
 import { URI } from '../../../../../base/common/uri.js';
 import '../../browser/changes.contribution.js';
+import { ISessionChangesService } from '../../common/sessionChangesService.js';
+import { SessionChangesService } from '../../browser/sessionChangesService.js';
+import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
+import { IDecorationsService } from '../../../../../workbench/services/decorations/common/decorations.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 
 test('a hidden Changes editor ignores a late ledger result and loads fresh content when shown', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using services = new InstantiationService();
+	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { } } as unknown as IEditorService);
+	services.registerInstance(IDecorationsService, { registerDecorationsProvider: () => toDisposable(() => { }) } as unknown as IDecorationsService);
+	services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 	using configuration = new InMemoryConfigurationService();
 	using context = new ContextKeyService();
 	using changes = new Emitter<{ sessionId: string; threadId: string; }>();

@@ -50,6 +50,7 @@ use ash_git::GitCommitChange;
 use ash_git::GitGraph;
 use ash_git::GitGraphCursor;
 use ash_git::GitHead;
+use ash_git::GitPullMode;
 use ash_git::GitReferenceKind;
 use ash_git::GitRemoteProvider;
 use ash_git::GitRepository;
@@ -695,13 +696,13 @@ impl GitRuntime {
         self.fetch_for(None, GitFetchModeDto::All, cancellation)
     }
 
-    pub(super) fn pull_fast_forward_for(
+    pub(super) fn pull_for(
         &self,
         repository_id: Option<&str>,
+        mode: GitPullMode,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.repository(repository_id)?
-            .pull_fast_forward(cancellation)
+        self.repository(repository_id)?.pull(mode, cancellation)
     }
 
     pub(super) fn push_for(
@@ -1356,11 +1357,15 @@ impl GitRepositoryRuntime {
         )
     }
 
-    pub(super) fn pull_fast_forward(
+    pub(super) fn pull(
         &self,
+        mode: GitPullMode,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::pull_fast_forward, cancellation)
+        self.mutate_remote(
+            |service, cancellation| service.pull(mode, cancellation),
+            cancellation,
+        )
     }
 
     pub(super) fn push(

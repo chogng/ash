@@ -16,7 +16,7 @@ import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widge
 import { DIFF_OPEN_SIDE, GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE, registerDiffEditorCommands } from "./diffEditorCommands.js";
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
-import { ActiveEditorContext } from '../../../common/contextkeys.js';
+import { ActiveEditorContext, EditorsVisibleContext } from '../../../common/contextkeys.js';
 import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import { EditorAutoSave } from "./editorAutoSave.js";
 import { IEditorPart } from "./editorPart.js";
@@ -31,6 +31,13 @@ registerAction2(ChangeEncodingAction);
 EditorPanes.registerEditorPane(binaryDiffEditorDescriptor());
 
 registerDiffEditorCommands();
+
+MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
+	submenu: MenuId.EditorSplitMoveSubmenu,
+	title: localize('workbench.splitMenu', 'Split'),
+	group: '5_split', order: 15,
+	when: EditorsVisibleContext.isEqualTo(true),
+});
 
 const diffEditorActive = ActiveEditorContext.isEqualTo(DIFF_EDITOR_ID);
 MenusRegistry.appendMenuItem(MenuId.EditorTitle, {

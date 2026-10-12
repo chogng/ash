@@ -26,6 +26,14 @@ import {
 	MULTI_DIFF_HORIZONTAL_INSET,
 } from './diffEditorItemTemplate.js';
 import { type IDocumentDiffItem } from './model.js';
+import { extUri } from '../../../../base/common/resources.js';
+import type { IMultiDiffResourceId } from '../../../common/multiDiffEditor.js';
+import type { Range } from '../../../common/core/range.js';
+
+export interface RevealOptions {
+	readonly range?: Range;
+	readonly highlight: boolean;
+}
 import { MultiDiffEditorLogger } from './multiDiffEditorLogging.js';
 import {
 	DEFAULT_LINE_HEIGHT,
@@ -345,6 +353,34 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (!this.viewModel.expandAll()) return;
 		for (const section of this.sections.values()) section.setCollapsed(false);
 		this.refreshLayout();
+	}
+
+	/** Reveal an explicitly requested file through the existing viewport and collapse state. */
+	public reveal(resource: IMultiDiffResourceId, options?: RevealOptions): void {
+		const index = this.items.findIndex(item => extUri.isEqual(item.originalUri, resource.original) && extUri.isEqual(item.modifiedUri, resource.modified));
+		if (index < 0) { return; }
+		this.cancelPendingNavigation();
+		const item = this.items[index]!;
+		if (this.viewModel.expand(item.id)) {
+			this.sections.get(index)?.setCollapsed(false);
+			this.refreshLayout();
+		}
+		this.activateItem(item.id);
+		this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
+		this.project();
+		if (options?.range) {
+			const range = options.range;
+			const generation = this.navigationGeneration;
+			// A requested row can be outside the mounted viewport and still resolving.
+			void item.resolve().then(() => {
+				if (this.isDisposed || generation !== this.navigationGeneration || !this.items.includes(item) || this.viewModel.isCollapsed(item.id)) { return; }
+				this.project();
+				const editor = this.sections.get(index)?.editor;
+				const control = item.modifiedUri ? editor?.modifiedEditor : editor?.originalEditor;
+				control?.revealRange(range);
+				if (options.highlight) { control?.setSelection(range); }
+			}, () => { /* The file header owns reporting its resolution error. */ });
+		}
 	}
 
 	private updateWordWrap(): void {

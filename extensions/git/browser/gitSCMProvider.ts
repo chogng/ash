@@ -17,7 +17,7 @@ import type { ISCMConflictProvider, ISCMInput, ISCMProvider, ISCMResource, ISCMR
 import { GitSwitchBranchCommandId } from './commandIds.js';
 import type { CommandClient, DialogClient, EditorClient, ViewsClient, WorkingCopyClient } from './editors.js';
 import { gitErrorMessage } from './gitError.js';
-import type { GitChangeFileComparison, GitChangeStatus, GitCommitOptions, GitHead, GitRepository, GitRepositoryChange, GitStatus, IGitService } from './types.js';
+import type { GitChangeFileComparison, GitChangeStatus, GitCommitOptions, GitHead, GitPullMode, GitRepository, GitRepositoryChange, GitStatus, IGitService } from './types.js';
 import { GitHistoryProvider } from './gitHistoryProvider.js';
 
 type ChangeSide = 'index' | 'worktree';
@@ -56,6 +56,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	private readonly retiredStreams = new Set<string>();
 	private requestRevision = 0;
 	private busy = false;
+	private syncing = false;
 	private operation: Promise<unknown> = Promise.resolve();
 	private inputValue = '';
 	private inputRevision = 0;
@@ -107,7 +108,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		void this.refresh();
 	}
 
-	public get isBusy(): boolean { return this.busy; }
+	public get isBusy(): boolean { return this.busy || this.syncing; }
 	public get statusMessage(): string { return this.message; }
 	public get activeRepositoryName(): string | undefined {
 		const head = this.status?.head;
@@ -117,8 +118,8 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	public get statusBarCommands(): readonly ISCMStatusBarCommand[] {
 		const head = this.status?.head;
 		if (!head) return [];
-		const branch = branchCommand(head, this.id, this.services.commandService);
-		const sync = syncCommand(head, this.services.viewsService);
+		const branch = branchCommand(head, this.id, this.services.commandService, this.isBusy);
+		const sync = syncCommand(head, this.id, this.services.commandService, this.isBusy, this.syncing);
 		return [branch, sync];
 	}
 
@@ -217,7 +218,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 
 	private group(status: GitStatus, id: string, label: string, changes: readonly GitRepositoryChange[], side: ChangeSide): ISCMResourceGroup {
 		const actions: IAction[] = [];
-		if (changes.some(change => !change.conflicted)) actions.push(this.action(`scm.section.viewAll.${side}.${id}`, localize('git.viewAll', 'View All {0}', label), Lxicon.codeReview, () => this.openChanges(status, label, changes, side)));
+		if (changes.some(change => !change.conflicted)) actions.push(this.action(`scm.section.viewAll.${side}.${id}`, localize('git.viewAll', 'View All {0}', label), Lxicon.diffMultiple1, () => this.openChanges(status, label, changes, side)));
 		if (side === 'index') {
 			actions.push(this.pathAction('scm.section.unstageAll', localize('git.menu.unstageAll', 'Unstage All Changes'), 'unstage', uniquePaths(changes.flatMap(changePaths))));
 		} else {
@@ -267,6 +268,32 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			this.acceptStatus(await operation());
 			if (this.status) this.setMessage(statusSummary(this.status));
 		});
+	}
+
+	/** Pull before pushing, keeping both steps in the provider's repository operation queue. */
+	public async sync(mode: GitPullMode = 'sync'): Promise<void> {
+		if (this.isDisposed || this.isBusy) return;
+		// Claim the action before the queue starts so rapid activations cannot enqueue another sync.
+		this.syncing = true;
+		this.changeEmitter.fire();
+		try {
+			await this.runAction(async () => {
+				const before = await this.gitService.status(this.id);
+				this.acceptStatus(before);
+				if (this.isDisposed || before.head.type !== 'branch' || !before.head.upstream) return;
+				this.setMessage(localize('git.status.synchronizing', 'Synchronizing Changes…'));
+				const pulled = await this.gitService.pull(this.id, mode);
+				this.acceptStatus(pulled);
+				// A concurrent checkout or unresolved integration must not push a different branch.
+				if (this.isDisposed || pulled.head.type !== 'branch' || pulled.head.name !== before.head.name
+					|| pulled.head.upstream?.name !== before.head.upstream.name || pulled.changes.some(change => change.conflicted)) return;
+				this.acceptStatus(await this.gitService.push(this.id));
+				if (this.status) this.setMessage(statusSummary(this.status));
+			});
+		} finally {
+			this.syncing = false;
+			this.changeEmitter.fire();
+		}
 	}
 
 	public async stageAll(): Promise<void> {
@@ -449,8 +476,11 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	}
 }
 
-function branchCommand(head: GitHead, repositoryId: string, commandService: CommandClient): ISCMStatusBarCommand {
-	const shared = { id: 'ash.status.git.branch', priority: 900, compactGroup: 'ash.status.git', run: () => commandService.executeCommand(GitSwitchBranchCommandId, repositoryId) };
+function branchCommand(head: GitHead, repositoryId: string, commandService: CommandClient, busy: boolean): ISCMStatusBarCommand {
+	const shared = {
+		id: 'ash.status.git.branch', priority: 900, compactGroup: 'ash.status.git',
+		run: busy ? undefined : () => commandService.executeCommand(GitSwitchBranchCommandId, repositoryId),
+	};
 	switch (head.type) {
 		case 'branch': return { ...shared, icon: Lxicon.gitBranch, text: head.name, ariaLabel: localize('git.status.branch', 'Git branch {0}', head.name), tooltip: head.upstream ? localize('git.status.tracks', '{0} tracks {1}', head.name, head.upstream.name) : localize('git.status.noUpstream', '{0} has no upstream', head.name) };
 		case 'unborn': return { ...shared, icon: Lxicon.gitBranch, text: head.name, ariaLabel: localize('git.status.unborn', 'Unborn Git branch {0}', head.name), tooltip: localize('git.status.noCommits', '{0} has no commits', head.name) };
@@ -461,13 +491,29 @@ function branchCommand(head: GitHead, repositoryId: string, commandService: Comm
 	}
 }
 
-function syncCommand(head: GitHead, viewsService: ViewsClient): ISCMStatusBarCommand {
-	const shared = { id: 'ash.status.git.sync', priority: 800, compactGroup: 'ash.status.git', run: () => viewsService.focusView('ash.gitView') };
+function syncCommand(head: GitHead, repositoryId: string, commandService: CommandClient, busy: boolean, syncing: boolean): ISCMStatusBarCommand {
+	const shared = { id: 'ash.status.git.sync', priority: 800, compactGroup: 'ash.status.git' };
+	if (syncing || busy) {
+		const message = syncing
+			? localize('git.status.synchronizing', 'Synchronizing Changes…')
+			: localize('git.status.operationRunning', 'Git operation in progress…');
+		return { ...shared, icon: Lxicon.sync, text: '', ariaLabel: message, tooltip: message };
+	}
 	if (head.type !== 'branch') return { ...shared, icon: Lxicon.sync, text: '', ariaLabel: localize('git.status.noBranch', 'No Git branch to synchronize'), tooltip: localize('git.status.noBranch', 'No Git branch to synchronize') };
-	if (!head.upstream) return { ...shared, icon: Lxicon.repoPush, text: '', ariaLabel: localize('git.status.publish', 'Publish Git branch {0}', head.name), tooltip: localize('git.status.noUpstream', '{0} has no upstream', head.name) };
+	if (!head.upstream) return {
+		...shared, icon: Lxicon.repoPush, text: '',
+		ariaLabel: localize('git.status.publish', 'Publish Git branch {0}', head.name),
+		tooltip: localize('git.status.noUpstream', '{0} has no upstream', head.name),
+		run: () => commandService.executeCommand('git.publish', repositoryId),
+	};
 	const { ahead, behind, name } = head.upstream;
 	const summary = localize(ahead + behind === 1 ? 'git.status.syncOne' : 'git.status.syncMany', ahead + behind === 1 ? '{0} incoming and {1} outgoing change' : '{0} incoming and {1} outgoing changes', behind, ahead);
-	return { ...shared, icon: Lxicon.sync, text: ahead === 0 && behind === 0 ? '' : `${behind}↓ ${ahead}↑`, ariaLabel: localize('git.status.sync', 'Synchronize Git changes, {0}', summary), tooltip: localize('git.status.syncTooltip', 'Synchronize Changes with {0}: {1}', name, summary) };
+	return {
+		...shared, icon: Lxicon.sync, text: ahead === 0 && behind === 0 ? '' : `${behind}↓ ${ahead}↑`,
+		ariaLabel: localize('git.status.sync', 'Synchronize Git changes, {0}', summary),
+		tooltip: localize('git.status.syncTooltip', 'Synchronize Changes with {0}: {1}', name, summary),
+		run: () => commandService.executeCommand('git.sync', repositoryId),
+	};
 }
 
 function changePaths(change: GitRepositoryChange): string[] { return change.originalPath ? [change.originalPath, change.path] : [change.path]; }

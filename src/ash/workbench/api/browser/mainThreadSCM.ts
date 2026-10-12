@@ -378,7 +378,12 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		}));
 	}
 	public get statusBarCommands(): ISCMProvider['statusBarCommands'] {
-		return this.snapshot.statusBarCommands.map(entry => ({ id: string(entry.id), text: string(entry.text), ariaLabel: string(entry.ariaLabel), tooltip: string(entry.tooltip), priority: number(entry.priority), compactGroup: optionalString(entry.compactGroup), icon: entry.icon ? Icon.fromId(string(entry.icon)) : undefined, run: () => this.call('statusBar', { commandId: entry.id }).catch(this.reportError) }));
+		return this.snapshot.statusBarCommands.map(entry => ({
+			id: string(entry.id), text: string(entry.text), ariaLabel: string(entry.ariaLabel),
+			tooltip: string(entry.tooltip), priority: number(entry.priority), compactGroup: optionalString(entry.compactGroup),
+			icon: entry.icon ? Icon.fromId(string(entry.icon)) : undefined,
+			run: entry.enabled === false ? undefined : () => this.call('statusBar', { commandId: entry.id }).catch(this.reportError),
+		}));
 	}
 	private action(value: JsonValue): IAction {
 		const action = object(value);
@@ -481,7 +486,13 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 		}
 	}
 	const statusBarCommands = array(entry.statusBarCommands).map(object);
-	for (const command of statusBarCommands) { string(command.id); string(command.text); string(command.ariaLabel); string(command.tooltip); number(command.priority); optionalString(command.icon); optionalString(command.compactGroup); }
+	for (const command of statusBarCommands) {
+		string(command.id); string(command.text); string(command.ariaLabel); string(command.tooltip);
+		number(command.priority); optionalString(command.icon); optionalString(command.compactGroup);
+		if (command.enabled !== undefined && typeof command.enabled !== 'boolean') {
+			throw new TypeError('Invalid SCM status command availability');
+		}
+	}
 	if (entry.rootUri != null) { URI.parse(string(entry.rootUri)); }
 	const selectionRevision = entry.selectionRevision == null ? 0 : number(entry.selectionRevision);
 	if (!Number.isSafeInteger(selectionRevision) || selectionRevision < 0) { throw new TypeError('Invalid SCM selection revision'); }

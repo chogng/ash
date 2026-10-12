@@ -168,7 +168,7 @@ suite('Workbench localization', () => {
 			localization.translate('ash', 'workbench.closeEditorsInGroup', ''),
 			localization.translate('ash', 'workbench.closeAllEditors', ''),
 			localization.translate('ash', 'workbench.reopenClosedEditor', ''),
-		], ['Close Tab', 'Close Other Tabs in Group', 'Close Tabs to the Left', 'Close Tabs to the Right', 'Close Saved Tabs in Group', 'Close All Tabs in Group', 'Close All Tabs', 'Reopen Closed Tab']);
+		], ['Close', 'Close Others', 'Close to the Left', 'Close to the Right', 'Close Saved', 'Close All in Group', 'Close All Tabs', 'Reopen Closed Tab']);
 		initializeTestLocalization('zh-CN');
 		assert.equal(localization.translate('ash', 'sessions.chat.welcome', 'What can we work on?'), '今天想做些什么？');
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View')), '在资源管理器视图中显示');
@@ -282,15 +282,15 @@ suite('Workbench localization', () => {
 		assert.equal(localization.translate('ash', 'quickHelp.dialog', 'Quick Access Help'), '快速访问帮助');
 		assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
 		assert.deepEqual([
-			localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Use Unpin Editor to unpin.'),
-			localization.translate('ash', 'workbench.editorPreviewTabHint', 'Double-click or use Keep Open to keep this tab open. Use Pin Editor to pin this tab.'),
-			localization.translate('ash', 'workbench.editorUnpinnedTabHint', 'Use Pin Editor to pin this tab.'),
-		], ['已固定的标签。使用“取消固定编辑器”可取消固定。', '双击或使用“保持打开”可保留此标签。使用“固定编辑器”可固定此标签。', '使用“固定编辑器”可固定此标签。']);
+			localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Use Unpin to unpin.'),
+			localization.translate('ash', 'workbench.editorPreviewTabHint', 'Double-click or use Keep Open to keep this tab open. Use Pin to pin this tab.'),
+			localization.translate('ash', 'workbench.editorUnpinnedTabHint', 'Use Pin to pin this tab.'),
+		], ['已固定的标签。使用“取消固定”可取消固定。', '双击或使用“保持打开”可保留此标签。使用“固定”可固定此标签。', '使用“固定”可固定此标签。']);
 		assert.deepEqual([
-			localization.translate('ash', 'workbench.closeOtherEditors', 'Close Other Tabs in Group'),
-			localization.translate('ash', 'workbench.pinEditor', 'Pin Editor'),
-			localization.translate('ash', 'workbench.unpinEditor', 'Unpin Editor'),
-		], ['关闭此组其他标签页', '固定编辑器', '取消固定编辑器']);
+			localization.translate('ash', 'workbench.closeOtherEditors', 'Close Others'),
+			localization.translate('ash', 'workbench.pinEditor', 'Pin'),
+			localization.translate('ash', 'workbench.unpinEditor', 'Unpin'),
+		], ['关闭其他', '固定', '取消固定']);
 		assert.deepEqual([
 			localization.translate('ash', 'workbench.closeFolder', 'Close Folder'),
 			localization.translate('ash', 'workbench.closeWorkspace', 'Close Workspace'),
@@ -437,13 +437,14 @@ suite('Workbench localization', () => {
 		assert.equal(localize('workspaceTrust.restrictedStatusDetail', 'Some workspace features are limited by directory permissions.'), '目录权限限制了部分工作区功能。');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), '复制路径');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), '复制相对路径');
-		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close Tabs to the Left')), '关闭左侧标签页');
-		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close Tab')), '关闭标签页');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close to the Left')), '关闭左侧');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close')), '关闭');
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All Tabs')), '关闭所有标签页');
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.reopenClosedEditor' }, 'Reopen Closed Tab')), '重新打开已关闭的标签页');
-		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close Tabs to the Right')), '关闭右侧标签页');
-		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeSavedEditors' }, 'Close Saved Tabs in Group')), '关闭此组已保存的标签页');
-		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsInGroup' }, 'Close All Tabs in Group')), '关闭此组所有标签页');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right')), '关闭右侧');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeSavedEditors' }, 'Close Saved')), '关闭已保存');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsInGroup' }, 'Close All in Group')), '关闭组内全部');
+		assert.equal(localize('workbench.splitMenu', 'Split'), '拆分');
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorUp' }, 'Split Up')), '向上拆分');
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorDown' }, 'Split Down')), '向下拆分');
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorLeft' }, 'Split Left')), '向左拆分');

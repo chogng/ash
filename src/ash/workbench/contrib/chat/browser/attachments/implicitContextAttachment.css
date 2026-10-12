@@ -1,0 +1,27 @@
+.ash-chat-suggested-context {
+	display: flex;
+	min-width: 0;
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80) 0;
+}
+
+.ash-chat-suggested-context[hidden] {
+	display: none;
+}
+
+.ash-chat-suggested-context > .ash-button {
+	min-width: 0;
+	max-width: 100%;
+	color: var(--ash-description-foreground);
+	border: var(--ash-strokeThickness) dashed var(--ash-contrastBorder);
+}
+
+.ash-chat-suggested-context .ash-button-label {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-chat-suggested-context .ash-icon-label-icon .ash-icon {
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
+}

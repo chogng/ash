@@ -1,6 +1,73 @@
 import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agentService.js';
 export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agentService.js';
 import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
+import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
+import type { IObservable } from '../../../../base/common/observable.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { ThemeIcon } from '../../../../base/common/themables.js';
+
+export const enum SessionChangesetOperationScope {
+	Changeset = 'changeset',
+	Resource = 'resource',
+	Range = 'range',
+}
+
+export const enum SessionChangesetOperationStatus {
+	Idle = 'idle',
+	Running = 'running',
+	Error = 'error',
+	Disabled = 'disabled',
+}
+
+export interface ISessionChangesetOperation {
+	readonly id: string;
+	readonly label: string;
+	readonly description?: string;
+	readonly icon?: ThemeIcon;
+	readonly group?: string;
+	readonly scopes: SessionChangesetOperationScope[];
+	readonly status: SessionChangesetOperationStatus;
+}
+
+export type ISessionChangesetOperationTarget = { readonly kind: 'resource'; readonly resource: URI; };
+
+/** A captured file keeps its review identity separate from its two content resources. */
+export interface ISessionFileChange {
+	readonly uri: URI;
+	readonly originalUri: URI;
+	readonly modifiedUri: URI;
+	readonly insertions: number;
+	readonly deletions: number;
+	readonly summary: TurnChangeSetSummary;
+	readonly file: TurnChangeFile;
+}
+
+/** A read-only snapshot of a Turn capture; backend state remains owned by ChatService. */
+export interface ISessionChangeset {
+	readonly id: string;
+	readonly resource?: URI;
+	readonly label: string;
+	readonly isEnabled: IObservable<boolean>;
+	readonly isDefault: IObservable<boolean>;
+	readonly isLoadingChanges: IObservable<boolean>;
+	readonly changes: IObservable<readonly ISessionFileChange[]>;
+	readonly operations: IObservable<readonly ISessionChangesetOperation[]>;
+	readonly originalCheckpointRef: IObservable<string | undefined>;
+	readonly modifiedCheckpointRef: IObservable<string | undefined>;
+	readonly capabilities?: { readonly review?: boolean; };
+	invokeOperation(operationId: string, target?: ISessionChangesetOperationTarget, meta?: Record<string, unknown>): Promise<void>;
+}
+
+export function createSessionFileChange(summary: TurnChangeSetSummary, file: TurnChangeFile): ISessionFileChange {
+	const uri = URI.from({
+		scheme: 'ash-turn-diff', path: `/${summary.changeSetId}/${file.path}`,
+		query: `session=${encodeURIComponent(summary.sessionId)}&thread=${encodeURIComponent(summary.threadId)}&revision=${summary.revision}`,
+	});
+	return {
+		uri, originalUri: uri.with({ query: `${uri.query}&side=before` }), modifiedUri: uri.with({ query: `${uri.query}&side=after` }),
+		insertions: file.additions, deletions: file.deletions, summary, file,
+	};
+}
 
 // Shared Chat identities live below Sessions so both window modes use one contract.
 export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';

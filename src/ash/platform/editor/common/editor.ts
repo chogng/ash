@@ -14,6 +14,8 @@ export function isResolvedEditorModel(model: IDisposable | undefined | null): mo
 
 /** Editor activation preferences shared by resource-navigation surfaces. */
 export interface IEditorOptions {
+	/** Re-resolves an existing input when the caller changes its content selection. */
+	readonly forceReload?: boolean;
 	/** Keeps the opened resource as a durable tab instead of a replaceable preview. */
 	readonly pinned?: boolean;
 	/** Reveals an existing tab in its group before opening another copy. */

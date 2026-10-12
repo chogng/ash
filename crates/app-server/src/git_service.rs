@@ -17,6 +17,7 @@ use ash_git::GitError;
 use ash_git::GitGraph;
 use ash_git::GitGraphCursor;
 use ash_git::GitPathspecSet;
+use ash_git::GitPullMode;
 use ash_git::GitRepository;
 use ash_git::GitRepositorySnapshot;
 use ash_git::GitTextDiffLimits;
@@ -137,7 +138,7 @@ enum GitRemoteMutation<'a> {
     FetchDefault,
     Fetch,
     FetchRemote(&'a str),
-    PullFastForward,
+    Pull(GitPullMode),
     Push,
 }
 
@@ -876,11 +877,12 @@ impl GitService {
         self.mutate_remote(GitRemoteMutation::FetchRemote(name), cancellation)
     }
 
-    pub(crate) fn pull_fast_forward(
+    pub(crate) fn pull(
         &self,
+        mode: GitPullMode,
         cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.mutate_remote(GitRemoteMutation::PullFastForward, cancellation)
+        self.mutate_remote(GitRemoteMutation::Pull(mode), cancellation)
     }
 
     pub(crate) fn push(
@@ -934,9 +936,7 @@ impl GitService {
                     GitRemoteMutation::FetchRemote(name) => {
                         self.client.fetch_remote(&repository, name).await
                     }
-                    GitRemoteMutation::PullFastForward => {
-                        self.client.pull_fast_forward(&repository).await
-                    }
+                    GitRemoteMutation::Pull(mode) => self.client.pull(&repository, mode).await,
                     GitRemoteMutation::Push => self.client.push(&repository).await,
                 }
                 .map_err(GitServiceError::Git)?;

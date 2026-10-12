@@ -52,7 +52,7 @@ export function getSessionsChangesAccessibilityProviders(): readonly IAccessible
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsChanges,
 					{ type },
-					() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('sessions.changes.editorHelp', 'Changes editor\nCompare the selected conversation’s file changes. Use Tab to move between comparisons and their controls. Press Alt+F2 to read before and after contents. Toggle details switches the matching file list. Hide editor keeps the shared tabs and Details visible; Show editor restores your open files.'),
+					() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('sessions.changes.editorHelp', 'Changes editor\nCompare the selected conversation’s file changes. Use Tab to move between comparisons and their controls. Press Alt+F2 to read before and after contents. Toggle details switches the matching file list. Hide editor keeps the shared tabs and Details visible; Show editor restores your open files.') + '\n' + localize('sessions.changes.editorActionsHelp', 'Use the file toolbar to mark a file Viewed, open its workspace file, expand the full file or collapse unchanged regions. Marking Viewed collapses that comparison; marking it unviewed expands it. Read markers belong to the captured revision.'),
 					() => pane.focus(),
 					AccessibilityVerbositySettingId.SessionsChanges,
 				);

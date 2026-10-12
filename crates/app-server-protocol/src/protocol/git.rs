@@ -13,6 +13,28 @@ pub struct GitRepositoryParams {
     pub repository_id: Option<String>,
 }
 
+/// How a pull selects its integration policy. Sync resolves the shared profile setting.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitPullModeDto {
+    #[default]
+    Configured,
+    Rebase,
+    Sync,
+}
+
+/// Pull one repository using Git configuration, an explicit rebase, or the sync preference.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitPullParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mode: Option<GitPullModeDto>,
+}
+
 /// Bounded paths relative to one authorized repository; directories do not expand recursively.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

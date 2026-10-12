@@ -1,14 +1,12 @@
 import { h } from '../../../../base/browser/dom.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
+import type { ISessionFileChange } from '../../../services/sessions/common/session.js';
+import { getChangesEditorFileStats } from './changesEditorLabels.js';
 
-export interface IChangesFileItem {
+export interface IChangesFileItem extends ISessionFileChange {
 	readonly type: 'file';
 	readonly id: string;
-	readonly summary: TurnChangeSetSummary;
-	readonly file: TurnChangeFile;
 	readonly turnNumber: number;
 }
 
@@ -19,18 +17,6 @@ interface ChangesFolderItem {
 }
 
 export type ChangesTreeElement = IChangesFileItem | ChangesFolderItem;
-
-/** Review identity includes the revision so a changed capture cannot inherit a read marker. */
-export function getChangesFileUri(row: IChangesFileItem): URI {
-	return URI.from({
-		scheme: 'ash-turn-diff',
-		path: `/${row.summary.changeSetId}/${row.file.path}`,
-		query: new URLSearchParams({
-			session: row.summary.sessionId, thread: row.summary.threadId,
-			revision: String(row.summary.revision),
-		}).toString(),
-	});
-}
 
 export function isChangesFileItem(element: ChangesTreeElement): element is IChangesFileItem {
 	return element.type === 'file';
@@ -80,7 +66,8 @@ export class ChangesTreeRenderer {
 		label.textContent = treeMode && !row.file.previousPath ? row.file.path.split('/').at(-1)! : path;
 		label.title = path;
 		const counts = h(this.document, 'span');
-		counts.textContent = `+${row.file.additions} −${row.file.deletions}`;
+		const statistics = getChangesEditorFileStats(row.uri, [row])!;
+		counts.textContent = `+${statistics.insertions} −${statistics.deletions}`;
 		const state = h(this.document, 'span', { className: 'ash-sessions-change-state' });
 		state.textContent = [
 			localize('sessions.changes.turn', 'Turn {0}', row.turnNumber), fileState(row),

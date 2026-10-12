@@ -288,10 +288,10 @@ test('file tab copy and reveal actions target inactive and selected files', { ta
 	await expect(explorerAction).toBeVisible();
 	const labels = await menu.getByRole('menuitem').evaluateAll(items => items.map(item => item.getAttribute('aria-label')));
 	const copyIndex = labels.indexOf('Copy Path');
-	expect(copyIndex).toBeGreaterThan(labels.indexOf('Reopen Editor With...'));
+	expect(copyIndex).toBeGreaterThan(labels.indexOf('Reopen With...'));
 	expect(labels.slice(copyIndex, copyIndex + 3)).toEqual(['Copy Path', 'Copy Relative Path', 'Reveal in Explorer View']);
-	expect(labels.indexOf('Pin Editor')).toBeGreaterThan(copyIndex + 2);
-	expect(labels.indexOf('Split Up')).toBeGreaterThan(labels.indexOf('Pin Editor'));
+	expect(labels.indexOf('Pin')).toBeGreaterThan(copyIndex + 2);
+	expect(labels.indexOf('Split')).toBeGreaterThan(labels.indexOf('Pin'));
 	if (target.kind === 'electron') {
 		const osLabel = process.platform === 'darwin' ? 'Reveal in Finder' : process.platform === 'win32' ? 'Reveal in File Explorer' : 'Open Containing Folder';
 		expect(labels.indexOf(osLabel)).toBe(copyIndex + 3);
@@ -484,7 +484,7 @@ test("Show All Editors searches recent editors and restores editor focus", { tag
 	await expect(search).toHaveValue("edt mru ");
 	await search.fill("edt mru main");
 	const otherEditor = picker.locator('.ash-quick-pick-row-content').filter({ hasText: 'main.rs' });
-	await otherEditor.getByRole('button', { name: 'Close Tab' }).click();
+	await otherEditor.getByRole('button', { name: 'Close' }).click();
 	await expect(otherEditor).toHaveCount(0);
 	await expect(picker).toBeVisible();
 	await expect(group.tabs).toHaveCount(1);
@@ -512,8 +512,8 @@ test("Editor tabs support modifier selection and close the selected set", { tag:
 	await page.keyboard.press("F1");
 	const picker = page.locator(".ash-quick-pick");
 	const search = picker.getByRole("combobox");
-	await search.fill(">Close Tab");
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: /^Close Tab$/u })).toBeVisible();
+	await search.fill(">Close");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: /^Close$/u })).toBeVisible();
 	await search.press("Enter");
 	await expect(group.tabs).toHaveCount(0);
 });
@@ -608,7 +608,7 @@ test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-a
 		};
 	});
 	expect(appearance.background).toBe(appearance.editorBackground);
-	expect(appearance.actionLabel).toBe('Unpin Editor');
+	expect(appearance.actionLabel).toBe('Unpin');
 	expect(appearance.icon).toBe('pinned');
 	expect(appearance.closeActions).toBe(0);
 	const stickyBox = await sticky.boundingBox();
@@ -616,7 +616,7 @@ test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-a
 	expect(stickyBox).not.toBeNull();
 	expect(ordinaryBox).not.toBeNull();
 	expect(ordinaryBox!.y).toBeGreaterThanOrEqual(stickyBox!.y + stickyBox!.height);
-	const unpin = sticky.getByRole('button', { name: 'Unpin Editor', exact: true });
+	const unpin = sticky.getByRole('button', { name: 'Unpin', exact: true });
 	await expect(unpin).toBeVisible();
 	const editorInput = group.content.getByRole('textbox', { name: 'main.ts', exact: true });
 	await editorInput.focus();
@@ -775,7 +775,7 @@ test("Compare open files as binary shows both byte views", { tag: ['@browser-app
 	}
 });
 
-test("Reopen Editor With switches the active file to Binary Editor", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test("Reopen With switches the active file to Binary Editor", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
 	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
@@ -875,8 +875,8 @@ test("Close Editor command closes the active tab", { tag: ['@browser-app-server'
 
 	await page.keyboard.press("F1");
 	const picker = page.locator(".ash-quick-pick");
-	await picker.getByRole("combobox").fill(">Close Tab");
-	await picker.locator(".ash-quick-pick-row-label", { hasText: /^Close Tab$/u }).click();
+	await picker.getByRole("combobox").fill(">Close");
+	await picker.locator(".ash-quick-pick-row-label", { hasText: /^Close$/u }).click();
 	await expect(group.tabs).toHaveCount(0);
 });
 

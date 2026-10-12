@@ -59,7 +59,7 @@ export interface IStringMapConfigurationSettingSchema extends IConfigurationSett
 	readonly duplicateMessage: string;
 }
 
-export type IConfigurationSettingSchema = IBooleanConfigurationSettingSchema | INumberConfigurationSettingSchema | ISelectConfigurationSettingSchema | ITextConfigurationSettingSchema | IStringMapConfigurationSettingSchema;
+export type IConfigurationSettingSchema = IBooleanConfigurationSettingSchema | INumberConfigurationSettingSchema | ISelectConfigurationSettingSchema<string | boolean> | ITextConfigurationSettingSchema | IStringMapConfigurationSettingSchema;
 
 export type ConfigurationSettingSchemaFor<T> =
 	[T] extends [boolean] ? IBooleanConfigurationSettingSchema
@@ -69,8 +69,15 @@ export type ConfigurationSettingSchemaFor<T> =
 	: [T] extends [Record<string, unknown>] ? IStringMapConfigurationSettingSchema
 	: never;
 
+export interface IExtensionInfo {
+	readonly id: string;
+	readonly displayName?: string;
+}
+
 export interface IRegisteredConfiguration<T = unknown> {
 	readonly key: string;
+	/** Catalog identity supplied by the extension owner, never inferred from a setting key. */
+	readonly source?: IExtensionInfo;
 	readonly defaultValue: T;
 	readonly parse: (value: unknown) => T;
 	readonly serialize: (value: T) => unknown;
@@ -104,6 +111,7 @@ export interface IConfigurationRegistry {
 }
 
 export interface IConfigurationNode {
+	readonly extensionInfo?: IExtensionInfo;
 	readonly id?: string;
 	readonly title?: string;
 	readonly description?: string;
@@ -140,7 +148,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 		for (const node of add) {
 			if (nodes.has(node)) continue;
 			const keys: string[] = [];
-			const visit = (node: IConfigurationNode, inheritedScope?: ConfigurationScope): void => {
+			const visit = (node: IConfigurationNode, inheritedScope?: ConfigurationScope, source = node.extensionInfo): void => {
 				for (const [key, schema] of Object.entries(node.properties ?? {})) {
 					if (schema.included === false) continue;
 					if (!isConfigurationKey(key) || next.has(key)) throw new TypeError(localize('configuration.contributedKey', "Invalid or duplicate contributed setting '{0}'.", key));
@@ -151,10 +159,10 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 					};
 					const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
 					const defaultValue = schema.default === undefined ? (type === 'string' ? '' : type === 'boolean' ? false : type === 'number' || type === 'integer' ? 0 : type === 'array' ? [] : type === 'object' ? {} : null) : schema.default;
-					next.set(key, Object.freeze({ key, defaultValue: parse(defaultValue), parse, serialize: parse, schema, setting: schema.ashSetting, extensionBinding: schema.ashBinding, scope: schema.scope ?? node.scope ?? inheritedScope ?? ConfigurationScope.WINDOW }));
+					next.set(key, Object.freeze({ key, source, defaultValue: parse(defaultValue), parse, serialize: parse, schema, setting: schema.ashSetting, extensionBinding: schema.ashBinding, scope: schema.scope ?? node.scope ?? inheritedScope ?? ConfigurationScope.WINDOW }));
 					keys.push(key); properties.add(key);
 				}
-				for (const child of node.allOf ?? []) visit(child, node.scope ?? inheritedScope);
+				for (const child of node.allOf ?? []) visit(child, node.scope ?? inheritedScope, source);
 			};
 			visit(node);
 			nodes.set(node, keys);

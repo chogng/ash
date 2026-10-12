@@ -24,6 +24,7 @@ try {
 	await import('../../../sessions/contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 	await import('../../../sessions/browser/workbenchChat.contribution.js');
 	await import('../../../sessions/browser/turnMultiDiffSource.contribution.js');
+	await import('../../../sessions/contrib/changes/browser/changesMultiDiffSourceResolver.js');
 	const { main } = await import('../../../workbench/electron-browser/desktop.main.js');
 	performance.mark('ash.desktop.contributions-ready');
 	await main({ productName: AshWorkbenchName }, [createAppServerDebugAdapterCapability]);

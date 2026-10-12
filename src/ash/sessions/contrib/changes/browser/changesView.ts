@@ -30,11 +30,13 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import { IChangesViewService } from '../common/changesViewService.js';
 import { ChangesViewMode } from '../common/changes.js';
 import {
-	buildTreeChildren, ChangesTreeRenderer, fileState, getChangesFileUri,
+	buildTreeChildren, ChangesTreeRenderer, fileState,
 	isChangesFileItem, type ChangesTreeElement, type IChangesFileItem,
 } from './changesViewRenderer.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { autorun } from '../../../../base/common/observable.js';
+import { findChangesEditorFileChange, getChangesEditorFileResource } from './changesEditorLabels.js';
+import { createSessionFileChange } from '../../../services/sessions/common/session.js';
 
 /** Reviews immutable Turn changes for the selected Code conversation. */
 export class ChangesViewPane extends ViewPane {
@@ -155,7 +157,7 @@ export class ChangesViewPane extends ViewPane {
 			modelOptions: { identityProvider: { getId: row => row.id }, defaultCollapseState: 'expanded' },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => isChangesFileItem(row) ? row.file.path : row.name },
 			renderElement: row => renderer.renderElement(row,
-				isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesFileUri(row).toString()),
+				isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()),
 				this.viewMode === ChangesViewMode.Tree),
 		}));
 		this._register(autorun(reader => {
@@ -218,7 +220,7 @@ export class ChangesViewPane extends ViewPane {
 			`${row.file.path}: +${row.file.additions} −${row.file.deletions}`,
 			localize('sessions.changes.turn', 'Turn {0}', row.turnNumber),
 			fileState(row),
-			this.viewState.reviewedFilesObs.get().has(getChangesFileUri(row).toString()) ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
+			this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()) ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
 			selected.has(row) ? localize('sessions.changes.fileSelected', 'Selected') : undefined,
 			row.summary.failureMessage,
 			...row.summary.warnings,
@@ -247,7 +249,7 @@ export class ChangesViewPane extends ViewPane {
 
 	private setReviewState(reviewed: boolean): void {
 		if (!this.isVisible() || this.loading) { return; }
-		this.viewState.setChangesetFilesReviewState(this.tree.selection.filter(isChangesFileItem).map(getChangesFileUri), reviewed);
+		this.viewState.setChangesetFilesReviewState(this.tree.selection.filter(isChangesFileItem).map(getChangesEditorFileResource), reviewed);
 	}
 
 	private saveTreeState(): void {
@@ -331,7 +333,7 @@ export class ChangesViewPane extends ViewPane {
 			this.loading = false;
 			this.rows = details.flatMap((details, index) => details.files.map(file => ({
 				type: 'file' as const, id: `${details.summary.changeSetId}:${file.path}`,
-				summary: details.summary, file, turnNumber: index + 1,
+				...createSessionFileChange(details.summary, file), turnNumber: index + 1,
 			})));
 			const selectedTurn = this.changesetId;
 			this.changesetPicker.replaceChildren();
@@ -399,10 +401,11 @@ export class ChangesViewPane extends ViewPane {
 		if (!this.isVisible() || this.loading) { return; }
 		const ownerEpoch = this.ownerEpoch;
 		const summary = row.summary;
+		const resource = getChangesEditorFileResource(row);
 		const contents = await this.chat.readTurnChangeFile(summary.sessionId, summary.threadId, summary.changeSetId, row.file.path);
-		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
+		// A refresh can replace a capture without changing the selected conversation.
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) { return; }
 		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
-		const resource = getChangesFileUri(row);
 		const before = resource.with({ query: `${resource.query}&side=before` });
 		const after = resource.with({ query: `${resource.query}&side=after` });
 		if (contents.binary) {

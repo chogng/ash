@@ -229,6 +229,59 @@ async function settle(): Promise<void> { await new Promise<void>(resolve => setI
 suite('Changes visibility lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	for (const revision of [1, 2]) test(`a pending file comparison survives only an unchanged capture revision (${revision})`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>');
+		using browserOwner = toDisposable(() => browser.window.close());
+		using services = new InstantiationService();
+		registerChecksServices(services);
+		using changed = new Emitter<void>();
+		using ledgerChanged = new Emitter<{ sessionId: string; threadId: string; }>();
+		using configuration = new WorkbenchConfigurationService();
+		using contexts = new ContextKeyService();
+		using notifications = new NotificationService();
+		const pendingFile = new DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }>();
+		const opened: IResourceEditorInput[] = [];
+		using openedOwner = toDisposable(() => {
+			for (const input of opened) {
+				if (isDiffEditorInput(input)) { input.dispose(); }
+			}
+		});
+		let details = changes('a');
+		let reads = 0;
+		services.registerInstance(ISessionsService, {
+			onDidChange: changed.event, activeSelection: selected('a'),
+		} as unknown as ISessionsService);
+		services.registerInstance(IChatService, {
+			onDidUpdateTurnChanges: ledgerChanged.event,
+			onDidBecomeReady: Event.None,
+			listTurnChanges: async () => [details.summary],
+			readTurnChange: async () => details,
+			readTurnChangeFile: async () => { reads++; return pendingFile.p; },
+		} as unknown as IChatService);
+		services.registerInstance(IEditorService, {
+			...emptyEditorServiceState, openEditor: async (input: IResourceEditorInput) => { opened.push(input); },
+		} as unknown as IEditorService);
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IContextKeyService, contexts);
+		services.registerInstance(INotificationService, notifications);
+		services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
+		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+		services.registerSingleton(IChangesViewService, () => services.createInstance(ChangesViewService));
+		using view = registerTestComponentServices(services).createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
+		view.setVisible(true);
+		await settle();
+		const tree = view.element.querySelector<HTMLElement>('[role="tree"]')!;
+		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+		await settle();
+		assert.equal(reads, 1);
+		details = { ...details, summary: { ...details.summary, revision } };
+		ledgerChanged.fire({ sessionId: 'a', threadId: 'a-thread' });
+		await settle();
+		await pendingFile.complete({ path: 'main.ts', binary: false, truncated: false, before: 'before', after: 'after' });
+		await settle();
+		assert.equal(opened.length, revision === 1 ? 1 : 0);
+	});
+
 	test('hidden views stop ledger reads, ignore late operations and restore live accessibility content', async () => {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		using browserOwner = toDisposable(() => browser.window.close());

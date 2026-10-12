@@ -530,3 +530,42 @@ for (const theme of ['light', 'dark', 'hc']) {
 		await page.screenshot({ path: `.build/desktop/ui-previews/extensions-panes-${theme}.png` });
 	});
 }
+
+for (const theme of ['light', 'dark', 'hc']) {
+	test(`extension settings support keyboard navigation and shared controls in Chinese (${theme})`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=zh-CN&theme=${theme}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.prepareSettings());
+		const settings = page.locator('#extension-settings');
+		const tree = settings.getByRole('tree');
+		await expect(tree).toBeFocused();
+		await expect(tree.getByText('扩展', { exact: true })).toBeVisible();
+		await tree.press('ArrowRight');
+		await tree.press('ArrowDown');
+		await tree.press('Enter');
+		await expect(tree.getByRole('treeitem', { name: 'Sample extension' })).toHaveAttribute('aria-selected', 'true');
+		const toggle = settings.getByRole('switch', { name: 'sample.enabled', exact: true });
+		await toggle.focus();
+		await toggle.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.readSetting('sample.enabled'))).toBe(true);
+		await expect(toggle).toBeFocused();
+		const count = settings.getByRole('spinbutton', { name: 'sample.count', exact: true });
+		await count.fill('4');
+		await count.press('Tab');
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.readSetting('sample.count'))).toBe(4);
+		const text = settings.getByRole('textbox', { name: 'sample.text', exact: true });
+		await text.fill('updated');
+		await text.press('Tab');
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.readSetting('sample.text'))).toBe('updated');
+		const mode = settings.getByRole('combobox', { name: 'sample.mode', exact: true });
+		await mode.focus();
+		await mode.press('Enter');
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.readSetting('sample.mode'))).toBe('second');
+		const complex = settings.locator('[data-configuration-key="sample.rules"]');
+		await complex.getByRole('button', { name: '在 JSON 中编辑', exact: true }).click();
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'settingsJson'))).toEqual([['settingsJson', 'sample.rules']]);
+		await page.evaluate(() => window.ashExtensionsIntegration.dispose());
+		await expect(settings).toHaveCount(0);
+	});
+}

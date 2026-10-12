@@ -2,7 +2,7 @@ import { backend } from 'ash';
 import { CancellationToken, CancellationError, AppServerRemoteError } from './support.js';
 import type { GitCompareChangesParams, GitCompareChangesResult, GitCommitMessageResult, GitCommitDetailsResult } from '../../../.build/protocol/typescript/index.js';
 import type { GitInitParams, GitCatalogResult, GitCommandParams, GitCommandResult, GitIndexDiffResult, GitIndexEditParams } from '../../../.build/protocol/typescript/index.js';
-import type { ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitConflictFileParams, GitConflictFileResult, GitCompleteConflictParams, GitCloneParams, GitCloneResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryRefsResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../../.build/protocol/typescript/index.js";
+import type { ConfigCommandResult, ConfigReadResult, GitPullParams, ConfigUpdateParams, GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitConflictFileParams, GitConflictFileResult, GitCompleteConflictParams, GitCloneParams, GitCloneResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryRefsResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../../.build/protocol/typescript/index.js";
 import type { GitCheckIgnoreParams, GitCheckIgnoreResult } from '../../../.build/protocol/typescript/index.js';
 import type { GitBranchCreateParams, GitBranchDeleteParams, GitWorktreeCreateParams, GitWorktreeCreateResult, GitWorktreeDeleteParams, GitWorktreeListResult, GitWorktreeResolveParams, GitWorktreeResolveResult } from '../../../.build/protocol/typescript/index.js';
 
@@ -42,7 +42,7 @@ export interface IGitApi {
 	discardWorktree(params: GitPathsParams): Promise<GitOperationResult>;
 	commit(params: GitCommitParams): Promise<GitCommitResult>;
 	fetch(params: GitFetchParams): Promise<GitOperationResult>;
-	pull(params: GitRepositoryParams): Promise<GitOperationResult>;
+	pull(params: GitPullParams): Promise<GitOperationResult>;
 	push(params: GitRepositoryParams): Promise<GitOperationResult>;
 }
 

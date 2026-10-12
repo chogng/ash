@@ -132,6 +132,23 @@ fn git_autofetch_is_shared_and_validated() {
 }
 
 #[test]
+fn git_sync_rebase_preference_defaults_and_roundtrips() {
+    let original = toml::from_str::<UserConfigDocument>("[git]\nautofetch = 'default'\n").unwrap();
+    assert!(!ResolvedConfig::from(&original).git.rebase_when_sync);
+    for rebase in [false, true] {
+        let document =
+            toml::from_str::<UserConfigDocument>(&format!("[git]\nrebaseWhenSync = {rebase}\n"))
+                .unwrap();
+        document.validate().unwrap();
+        assert_eq!(ResolvedConfig::from(&document).git.rebase_when_sync, rebase);
+        let serialized = toml::to_string(&document).unwrap();
+        let restored = toml::from_str::<UserConfigDocument>(&serialized).unwrap();
+        assert_eq!(ResolvedConfig::from(&restored).git.rebase_when_sync, rebase);
+    }
+    assert!(toml::from_str::<UserConfigDocument>("[git]\nrebaseWhenSync = 'true'\n").is_err());
+}
+
+#[test]
 fn tool_search_defaults_to_lexical_and_requires_a_configured_embedding_model() {
     let default_document = toml::from_str::<UserConfigDocument>("").unwrap();
     assert_eq!(

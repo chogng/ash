@@ -1,6 +1,51 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ShowLightbulbIconMode } from '../../../src/ash/editor/common/config/editorOptions.js';
 
+test('editor auto scrollbars hide while text retains focus and reveal on hover or scrolling', async ({ page }) => {
+	await page.clock.install();
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareScrollGeometry(100));
+	const editor = page.locator('#caller > .stanza-editor');
+	const input = editor.locator('.stanza-editor-input');
+	const track = editor.locator('.ash-scrollbar-track-vertical');
+	await expect(input).toBeFocused();
+	await page.mouse.move(900, 600);
+	await expect(track).toHaveCSS('opacity', '0');
+	await editor.hover();
+	await expect(track).toHaveCSS('opacity', '1');
+	await page.clock.runFor(800);
+	await expect(track).toHaveCSS('opacity', '1');
+	await page.mouse.move(900, 600);
+	await expect(track).toHaveCSS('opacity', '0');
+	await input.press('PageDown');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBeGreaterThan(0);
+	await expect(track).toHaveCSS('opacity', '1');
+	await expect(track).toHaveCSS('opacity', '0');
+	await expect(input).toBeFocused();
+	// Keyboard users can still see and operate the scrollbar itself.
+	await track.focus();
+	await expect(track).toHaveCSS('opacity', '1');
+	await expect(track).toHaveCSS('outline-style', 'solid');
+	await track.press('ArrowDown');
+	await expect(track).toBeFocused();
+	await input.focus();
+	await expect(track).toHaveCSS('opacity', '0');
+	await editor.hover();
+	const thumb = track.locator('.ash-scrollbar-thumb');
+	await thumb.hover();
+	await page.mouse.down();
+	try {
+		await page.mouse.move(900, 600);
+		await page.clock.runFor(800);
+		await expect(track).toHaveClass(/active/);
+		await expect(track).toHaveCSS('opacity', '1');
+	} finally {
+		await page.mouse.up();
+	}
+	await expect(track).toHaveCSS('opacity', '0');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('editor context menu runs navigation, rename and formatting through the focused editor', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

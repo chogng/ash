@@ -16,7 +16,7 @@ import { h } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -33,7 +33,7 @@ import { IAppServerRemoteAgentService } from '../../../services/remote/common/ap
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../services/localization/common/locale.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
-import type { IOpenSettingsOptions, ISelectSetting, ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
+import type { IOpenSettingsOptions, ISelectSetting, ISetting } from '../../../services/preferences/common/preferences.js';
 import { SettingsEditorInput, isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
@@ -47,7 +47,7 @@ import { DictationSettingsContent } from '../../chat/browser/speechToText/dictat
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 import { SettingsSearchWidget } from './settingsWidgets.js';
-import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor } from './settingsLayout.js';
+import { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsNavigation, type SettingsLayoutCategory, type SettingsNavigationDescriptor, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor } from './settingsLayout.js';
 import { SettingsTree } from './settingsTree.js';
 import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from './settingsTreeModels.js';
 import { TOCTree, TOCTreeModel, type SettingsTOCOpenEntry } from './tocTree.js';
@@ -70,7 +70,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private readonly localizationService: ILocalizationService;
 	private navigationEmpty!: HTMLParagraphElement;
 	private navigationScrollable!: ScrollableElement;
-	private readonly settingsModel: ISettingsEditorModel;
+	private readonly settingsModel: SettingsEditorModel;
+	private settingsLayout: readonly SettingsLayoutCategory[] = [];
+	private readonly extensionBindings = this._register(new DisposableMap<string, ExtensionSettingBinding>());
 	private agentCapabilitiesSettings!: AgentCapabilitiesSettings;
 	private languageServerSettings!: LanguageServerSettingsContent;
 	private readonly contents: SettingsContent[] = [];
@@ -89,7 +91,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		@IContextMenuService contextMenuProvider: IContextMenuProvider,
 		@IContextViewService contextViewProvider: IContextViewProvider,
 		@ILocalizationService localizationService: ILocalizationService,
-		@ILocaleService localeService: ILocaleService,
+		@ILocaleService private readonly localeService: ILocaleService,
 		@ILanguagePackService private readonly languagePackService: ILanguagePackService,
 		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
 		@IAppServerRemoteAgentService private readonly remoteAgentService: IAppServerRemoteAgentService,
@@ -102,30 +104,20 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		super(SettingsEditorId, themeService, storageService);
 		this.configurationService = configurationService;
 		this.localizationService = localizationService;
-		this.settingsModel = this._register(new SettingsEditorModel([
-			...new DefaultSettings().all.map(setting => {
-				if (setting.id === DESKTOP_UPDATE_POLICY_SETTING) return localUpdatePolicySetting(setting, configurationService);
-				if (setting.id === LocalizationConfiguration.locale) return displayLanguageSetting(setting, localeService, languagePackService, localizationService, configurationService);
-				if (setting.configuration.extensionBinding) {
-					const binding = this._register(this.instantiationService.createInstance(ExtensionSettingBinding, setting.configuration));
-					return { ...setting, binding } as ISetting;
-				}
-				return setting;
-			}),
-		]));
+		this.settingsModel = this._register(new SettingsEditorModel(this.registeredSettings()));
 		this.contextMenuProvider = contextMenuProvider;
 		this.contextViewProvider = contextViewProvider;
 	}
 
 	public override create(container: HTMLElement): void {
 		if (this.rootDomNode) throw new Error('Settings editor has already been created');
-		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
+		this.settingsLayout = createSettingsLayout(this.settingsModel.settings);
 		const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 		this.treeModel = this._register(new SettingsTreeModel<ISetting | SettingsContentItem>(id =>
 			// Service-owned rows have no user configuration key; explicit defaults still count as configured.
 			configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
 		));
-		this.treeModel.setChildren(settingsRootNodes(settingsLayout));
+		this.treeModel.setChildren(settingsRootNodes(this.settingsLayout));
 		const settingsRenderer = this._register(this.instantiationService.createInstance(SettingsRenderer, container, {
 			onStatus: this.settingsModel.reportStatus,
 			onOpenSettings: (key: string) => this.preferencesService.openUserSettings({ target: ConfigurationTarget.USER_LOCAL, revealSetting: { key, edit: true } }),
@@ -148,7 +140,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 
 		const navigation = h(ownerDocument, 'nav');
 		navigation.className = 'ash-settings-sidebar';
-		navigation.setAttribute('aria-label', 'Settings categories');
+		navigation.setAttribute('aria-label', this.localized('chrome.categories', 'Settings categories'));
 		this.navigationScrollable = this._register(new ScrollableElement(navigation, {
 			direction: 'vertical',
 			vertical: 'auto',
@@ -156,7 +148,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			wheel: { consume: 'when-scrolling' },
 		}));
 		this.navigationScrollable.element.classList.add('ash-settings-sidebar-scrollable');
-		this.tocTree = this._register(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(this.treeModel), {
+		this.tocTree = this._register(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(this.treeModel, () => this.navigation()), {
 			ariaLabel: this.localized('chrome.categories', 'Settings categories'),
 			categoryLabel: category => this.localizedCategoryLabel(category),
 			categoryDescription: category => this.localizedCategoryDescription(category),
@@ -257,6 +249,15 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}));
 		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.dirPermissionsService, this.localizationService));
 		this.renderCategory(initialCategory);
+		this._register(configurationRegistry.onDidUpdateConfiguration(({ properties }) => {
+			// Remove changed schemas first so keyed controls release their old value bindings.
+			this.treeModel.setChildren(settingsRootNodes(createSettingsLayout(this.settingsModel.settings.filter(setting => !properties.has(setting.id)))));
+			for (const id of properties) this.extensionBindings.deleteAndDispose(id);
+			this.settingsModel.setSettings(this.registeredSettings());
+			this.rebuildContent();
+			const category = this.settingsLayout.find(entry => entry.id === this.activeCategory.id)?.descriptor ?? SettingsCategories[0];
+			this.renderCategory(category);
+		}));
 		this._register(this.configurationService.onDidChangeConfiguration(() => {
 			if (new SettingsSearchQuery(this.searchWidget?.value ?? '').hasModifiedFilter) this.rebuildContent();
 		}));
@@ -306,7 +307,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			if (!target || target.element.kind !== 'group') throw new RangeError(`Settings target is not available: ${targetId}`);
 			let root = target;
 			while (root.parent?.element) root = root.parent;
-			const category = SettingsCategories.find(candidate => candidate.id === root.element.id)!;
+			const category = this.settingsLayout.find(candidate => candidate.id === root.element.id)!.descriptor;
 			this.searchWidget!.value = '';
 			this.search('');
 			this.renderCategory(category);
@@ -362,10 +363,38 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.navigationScrollable.layout();
 	}
 
+	private registeredSettings(): readonly ISetting[] {
+		return new DefaultSettings().all.map(setting => {
+			if (setting.id === DESKTOP_UPDATE_POLICY_SETTING) return localUpdatePolicySetting(setting, this.configurationService);
+			if (setting.id === LocalizationConfiguration.locale) return displayLanguageSetting(setting, this.localeService, this.languagePackService, this.localizationService, this.configurationService);
+			if (setting.configuration.extensionBinding && setting.valueType !== 'complex') {
+				let binding = this.extensionBindings.get(setting.id);
+				if (!binding) {
+					binding = this.instantiationService.createInstance(ExtensionSettingBinding, setting.configuration);
+					this.extensionBindings.set(setting.id, binding);
+				}
+				return { ...setting, binding } as ISetting;
+			}
+			return setting;
+		});
+	}
+
+	private navigation(): readonly SettingsNavigationDescriptor[] {
+		const categories = this.settingsLayout.filter(entry => entry.id.startsWith('extension.')).map(entry => entry.descriptor);
+		if (categories.length === 0) return SettingsNavigation;
+		return [...SettingsNavigation, {
+			id: 'extensions',
+			label: this.localized('groups.extensions.label', 'Extensions'),
+			description: this.localized('groups.extensions.description', 'Configure installed extensions.'),
+			categories,
+		}];
+	}
+
 	private rebuildContent(): void {
 		const query = new SettingsSearchQuery(this.searchWidget?.value ?? '');
 		const ownedSettings = new Set(this.contents.flatMap(content => content.settingIds ?? []));
-		const nodes: readonly SettingsTreeNode<ISetting | SettingsContentItem>[] = settingsRootNodes(createSettingsLayout(this.settingsModel.settings)).map(root => ({
+		this.settingsLayout = createSettingsLayout(this.settingsModel.settings);
+		const nodes: readonly SettingsTreeNode<ISetting | SettingsContentItem>[] = settingsRootNodes(this.settingsLayout).map(root => ({
 			...root,
 			children: [
 				...(root.children ?? []).map(group => ({ ...group, children: group.children?.filter(item => !ownedSettings.has(item.element.id)) })).filter(group => (group.children?.length ?? 0) > 0),
@@ -422,11 +451,11 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	}
 
 	private localizedCategoryLabel(category: SettingsCategoryDescriptor): string {
-		return this.localized(`categories.${category.id}.label`, category.label);
+		return category.id.startsWith('extension.') ? category.label : this.localized(`categories.${category.id}.label`, category.label);
 	}
 
 	private localizedCategoryDescription(category: SettingsCategoryDescriptor): string {
-		return this.localized(`categories.${category.id}.description`, category.description);
+		return category.id.startsWith('extension.') ? category.description : this.localized(`categories.${category.id}.description`, category.description);
 	}
 
 	private localizedGroupLabel(group: SettingsCategoryGroupDescriptor): string {

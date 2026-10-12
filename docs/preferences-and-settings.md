@@ -94,7 +94,7 @@ API key 输入框失焦即保存，清空即移除；成功保存不弹通知，
 | 页面组织 | `openPreferences()` 打开已注册的 `PreferencesEditor`；pane registry 负责页签、共享搜索与子页面生命周期。`openSettings(options)` 另有图形/JSON 路径 | `SettingsEditor` 直接打开到模态组。没有对应容器和 pane registry；这是实际差异，不能断言上游容器没有职责或必然多余                                                                                                                                                                     |
 | 打开契约 | `IOpenSettingsOptions` 包含配置目标、query、JSON 选择、folder URI、焦点与编辑器组等选项                                                            | `openSettings(options)` 支持 query、区段及本地用户目标；`openUserSettings()` 支持用户目标和顶层键定位。JSON、folder、焦点模式及编辑器组选项仍未覆盖                                                                                                                                   |
 | 配置目标 | Application、Local User、Remote User、Workspace、Folder 及语言设置入口                                                                             | 当前持久化写入限于 `USER`/`USER_LOCAL`；用户 JSONC 支持合法的语言覆盖块。资源级写入、远程和工作区目标未实现，不能把枚举或空配置层当作能力完成                                                                                                                                         |
-| 设置目录 | 配置 schema 进入设置模型；模型支持变更事件，渲染根据目标与配置状态更新                                                                             | `DefaultSettings` 只收集声明了 `.setting` 元数据的键；设置模型在创建时固定。布局未匹配到任一此类键会抛错。适用于当前静态目录，尚不是动态配置贡献链路                                                                                                                                  |
+| 设置目录 | 配置 schema 进入设置模型；模型支持变更事件，渲染根据目标与配置状态更新                                                                             | `DefaultSettings` 收集产品元数据及扩展标准 schema；注册表更新会刷新设置页。每个扩展有独立分类，复杂值通过共享 JSONC 编辑器修改；移除扩展保留已保存值。                                                                                                                                |
 | 搜索     | 支持配置状态、语言、扩展等语义过滤                                                                                                                 | 当前 `SettingsSearchQuery` 支持设置 ID、普通文本、`@id:` 和 `@modified`；`@lang:` 等仍会被当作普通文本。不能声明支持上游全部过滤条件                                                                                                                                                  |
 | 领域内容 | 配置系统保持配置语义，各领域保留业务状态                                                                                                           | GitHub 使用领域数据模型和共享 `SettingsSectionRenderer`；Hooks 用共享 renderer 提供管理入口，事件与声明由 Chat 的 Agent Customizations 编辑器呈现。Models、Skills 等仍以 `SettingsContent` 接入控件。Workbench 与 Sessions 共享部分 renderer 和内容实现，但 Sessions 仍手工组织设置项 |
 
@@ -115,6 +115,8 @@ API key 输入框失焦即保存，清空即移除；成功保存不弹通知，
 | `settingsSectionRenderer.ts`、`networkSettingsContent.ts`、`agentCapabilitiesSettings.ts` 及自有样式 | 无同路径文件                                                                        | Ash 特有的数据呈现与管理内容；本次仅记录，不改名、移动或删除                                       |
 
 配置源仍由配置 owner 管理。对齐页面与 API 时，不应将密钥、账号授权、模型发现、Hook 执行或临时 UI 状态改存为普通设置，也不应建立另一套持久化服务。
+
+扩展设置接入保留已确认的 Ash 图形设置职责：`settingsEditor.ts` 继续拥有页面，`settingsModels.ts` 继续将注册元数据转换成设置项；没有新增生产文件或并行配置 owner。对应上游的 `configurationRegistry.ts` 保留 `IConfigurationNode.extensionInfo` 与已注册项 `source` 的扩展身份语义；`settingsLayout.ts`、`tocTree.ts`、`settingsWidgets.ts` 在现有 Preferences 文件中承接动态分类与共用控件。扩展名称取本地化后的 manifest，配置值仍由原配置服务或扩展 binding 持有。
 
 ### 本次验证范围
 

@@ -1,8 +1,11 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
+import type { URI } from '../../../../base/common/uri.js';
 
 export interface IDocumentDiffItem {
+	readonly originalUri?: URI;
+	readonly modifiedUri?: URI;
 	readonly id: string;
 	readonly label: string;
 	readonly originalLabel?: string;
@@ -60,6 +63,8 @@ export function validateDocumentDiffItems(items: readonly IDocumentDiffItem[]): 
 }
 
 export interface DocumentDiffItemDescriptor {
+	readonly originalUri?: URI;
+	readonly modifiedUri?: URI;
 	readonly id: string;
 	readonly label: string;
 	readonly originalLabel?: string;
@@ -96,6 +101,8 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 	}
 
 	public get id(): string { return this.descriptor.id; }
+	public get originalUri(): URI | undefined { return this.descriptor.originalUri; }
+	public get modifiedUri(): URI | undefined { return this.descriptor.modifiedUri; }
 	public get label(): string { return this.descriptor.label; }
 	public get originalLabel(): string | undefined { return this.descriptor.originalLabel; }
 	public get modifiedLabel(): string | undefined { return this.descriptor.modifiedLabel; }

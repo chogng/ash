@@ -12,6 +12,38 @@ async function openDiffPage(page: Page, locale: DiffTestLocale = 'en'): Promise<
 	await page.waitForFunction(() => !!window.ashDiffIntegration);
 }
 
+for (const kind of ['diff', 'multidiff'] as const) {
+	test(`${kind} auto scrollbars hide while editor retains focus and reveal on hover or scrolling`, async ({ page }) => {
+		await page.clock.install();
+		await openDiffPage(page);
+		const text = Array.from({ length: 100 }, (_, index) => `line ${index} ${'long text '.repeat(40)}`).join('\n');
+		await page.evaluate(text => window.ashDiffIntegration.setComparisonText(text, text.replaceAll('line', 'changed')), text);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const host = page.locator(kind === 'diff' ? '#single' : '#multi');
+		await host.scrollIntoViewIfNeeded();
+		const input = host.locator('.stanza-diff-editor-side.modified .stanza-editor-input').first();
+		const vertical = kind === 'diff'
+			? host.locator('.stanza-diff-editor-side.modified .ash-scrollbar-track-vertical')
+			: host.locator('.stanza-multi-diff-editor-scrollbar > .ash-scrollbar-track-vertical');
+		const horizontal = host.locator('.stanza-diff-editor-side.modified .ash-scrollbar-track-horizontal').first();
+		await expect(vertical).not.toHaveAttribute('hidden');
+		await expect(horizontal).not.toHaveAttribute('hidden');
+		await input.focus();
+		await page.mouse.move(950, 50);
+		for (const track of [vertical, horizontal]) await expect(track).toHaveCSS('opacity', '0');
+		await host.locator('.stanza-diff-editor-side.modified').first().hover();
+		for (const track of [vertical, horizontal]) await expect(track).toHaveCSS('opacity', '1');
+		await page.clock.runFor(800);
+		for (const track of [vertical, horizontal]) await expect(track).toHaveCSS('opacity', '1');
+		await page.mouse.move(950, 50);
+		for (const track of [vertical, horizontal]) await expect(track).toHaveCSS('opacity', '0');
+		await input.press('PageDown');
+		await expect(vertical).toHaveCSS('opacity', '1');
+		await expect(vertical).toHaveCSS('opacity', '0');
+		await expect(input).toBeFocused();
+	});
+}
+
 test('sash dragging under CPU throttling retains inline diff zones and skips unaffected grid leaves', async ({ page }, testInfo) => {
 	await openDiffPage(page, 'zh-CN');
 	const shared = Array.from({ length: 200 }, (_, index) => `shared ${index}`).join('\n');
@@ -698,6 +730,40 @@ test('session Changes retains collapse and scroll through hiding, refresh and de
 	await expect(editor.locator('.stanza-diff-overview-marker').first()).toBeAttached();
 	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`session Changes reveals a lazy file, reviews its revision and decorates the input (${locale})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await openDiffPage(page, locale);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	const label = page.locator('#session-changes-label .ash-icon-label');
+	await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').content)).toBe('"8"');
+	for (const theme of ['dark', 'light', 'contrast'] as const) {
+		await page.evaluate(theme => window.ashDiffIntegration.sessionTheme(theme), theme);
+		await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+	}
+	await page.evaluate(() => window.ashDiffIntegration.revealSessionFile(7));
+	const row = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-7.ts', { exact: true }) });
+	const toggle = row.getByRole('button', { name: /file-7.ts/ });
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(row.locator('.stanza-diff-editor')).toBeVisible();
+	const viewed = row.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true });
+	await viewed.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=1']);
+	await viewed.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await row.getByRole('button', { name: localized(locale, 'Open File', '打开文件'), exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenedFiles())).toEqual(['file:/workspace/file-7.ts']);
+	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
+	await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(7, 1));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
+	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(7, 2));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=2']);
+	expect(errors).toEqual([]);
 });
 
 test('multi-diff exposes the active file control and retains it while focus leaves the editor', async ({ page }) => {
@@ -1468,6 +1534,42 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	});
 }
 
+test('inline empty diff markers use text highlight colors without a foreground fallback', async ({ page }, testInfo) => {
+	await openDiffPage(page, 'zh-CN');
+	await page.evaluate(() => window.ashDiffIntegration.setTheme('vs'));
+	await page.evaluate(() => {
+		window.ashDiffIntegration.setViewMode(false, false, 900);
+		window.ashDiffIntegration.setComparisonText(
+			'"description": "Profile-wide automatic Git fetch preference, interpreted by App Server"',
+			'"description": "Profile-wide Git behavior interpreted by App Server"',
+		);
+	});
+	const marker = page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added-empty').first();
+	await expect(marker).toBeVisible();
+	const highlightColor = await marker.evaluate(element => getComputedStyle(element).backgroundColor);
+	await page.evaluate(() => document.body.style.setProperty('--ash-diffEditor-insertedLineMarker', 'initial'));
+	await page.locator('#single').screenshot({ path: testInfo.outputPath('missing-marker-color.png') });
+	await expect(marker).toHaveCSS('border-left-color', highlightColor);
+	for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
+		await page.evaluate(theme => window.ashDiffIntegration.setTheme(theme), theme);
+		const colors = await marker.evaluate(element => {
+			const style = getComputedStyle(element);
+			return {
+				border: style.borderLeftColor,
+				background: style.backgroundColor,
+				marker: getComputedStyle(element.closest('.stanza-diff-editor')!.querySelector('.stanza-diff-insert-sign')!).color,
+			};
+		});
+		expect(colors.border).toBe(theme.startsWith('hc-') ? colors.marker : colors.background);
+		await page.locator('#single').screenshot({ path: testInfo.outputPath(`empty-marker-${theme}.png`) });
+	}
+	await page.evaluate(() => {
+		window.ashDiffIntegration.setTheme('vs');
+		document.body.style.setProperty('--ash-diffEditor-insertedTextBackground', 'initial');
+	});
+	await expect(marker).toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
+});
+
 test('inline changes mark the empty side of pure insertions and deletions', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('before after', 'before new after'));
@@ -1511,6 +1613,12 @@ for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
 					await expect(editor.locator('.view-line .stanza-editor-line-text')).toHaveText(text);
 					const marker = editor.locator(`.stanza-diff-inline-${kind}-empty`);
 					await expect(marker).toBeVisible();
+					const colors = await marker.evaluate((element, kind) => {
+						const style = getComputedStyle(element);
+						const sign = element.closest('.stanza-diff-editor')!.querySelector(kind === 'added' ? '.stanza-diff-insert-sign' : '.stanza-diff-remove-sign')!;
+						return { border: style.borderLeftColor, background: style.backgroundColor, marker: getComputedStyle(sign).color };
+					}, kind);
+					expect(colors.border).toBe(theme.startsWith('hc-') ? colors.marker : colors.background);
 					await expect.poll(async () => Math.abs(await editor.evaluate((root, position) => {
 						const line = root.querySelector('.view-line .stanza-editor-line-text')!;
 						const offset = position === 'middle' ? line.textContent!.indexOf(';') : position === 'start' ? 0 : line.textContent!.length;

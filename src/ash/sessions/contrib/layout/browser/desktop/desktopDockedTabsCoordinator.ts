@@ -4,10 +4,11 @@ import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../
 import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
+import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 
 /** Only settled session/reveal transitions seed tabs; ordinary closes never recreate defaults. */
 export class DesktopDockedTabsCoordinator {
-	constructor(@IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService) { }
+	constructor(@IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService, @ISessionChangesService private readonly changes: ISessionChangesService) { }
 
 	public async reconcile(selection: SessionsViewSelection, detailsOnly: boolean): Promise<void> {
 		const changes = new SessionChangesEditorInput(selection);
@@ -49,7 +50,7 @@ export class DesktopDockedTabsCoordinator {
 	}
 
 	public async openChanges(selection: SessionsViewSelection): Promise<void> {
-		await this.editors.openEditor(new SessionChangesEditorInput(selection), { pinned: true });
+		await this.changes.openChangesEditor(new SessionChangesEditorInput(selection).sessionResource, { changesetSelection: { kind: 'id', id: undefined } });
 	}
 
 	public isManaged(input: IResourceEditorInput): boolean {

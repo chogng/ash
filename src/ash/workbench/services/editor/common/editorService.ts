@@ -1,11 +1,12 @@
 import type { IEditorIdentifier, IEditorPane, IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { Range } from "../../../../editor/common/core/range.js";
-import type { IEditorOptions, TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
+import type { TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
+import type { IMultiDiffEditorOptions } from '../../../../editor/common/multiDiffEditor.js';
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 /** Optional caller preferences for opening and revealing an editor resource. */
-export interface EditorOpenOptions extends IEditorOptions {
+export interface EditorOpenOptions extends IMultiDiffEditorOptions {
 	/** Add or update the tab without selecting it when the group already has an active editor. */
 	readonly inactive?: boolean;
 	readonly preferredEditorId?: string;

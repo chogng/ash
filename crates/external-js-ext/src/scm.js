@@ -32,7 +32,11 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 				})),
 				input: { value: value.input.value, placeholder: value.input.placeholder, enabled: value.input.enabled, canAccept: value.input.canAccept, buttonLabel: value.input.buttonLabel, buttonTooltip: value.input.buttonTooltip },
 				activeRepositoryName: value.activeRepositoryName, statusMessage: value.statusMessage, isBusy: value.isBusy,
-				statusBarCommands: value.statusBarCommands.map(command => ({ id: command.id, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, priority: command.priority, compactGroup: command.compactGroup, icon: command.icon?.id })),
+				statusBarCommands: value.statusBarCommands.map(command => ({
+					id: command.id, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip,
+					priority: command.priority, compactGroup: command.compactGroup, icon: command.icon?.id,
+					enabled: typeof command.run === 'function',
+				})),
 				hasHistory: !!value.historyProvider, historyRef: value.historyProvider?.historyItemRef.get(), historyRevision: entry.historyRevision,
 				historyRemoteRef: value.historyProvider?.historyItemRemoteRef?.get(),
 				historyBaseRef: value.historyProvider?.historyItemBaseRef?.get(),
@@ -74,7 +78,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 				case 'activate': await provider.activate(); break;
 				case 'action': { const action = entry.actions.get(payload.actionId); if (!action?.enabled) throw new Error('SCM action is no longer available'); await action.run(); break; }
 				case 'open': { const resource = entry.resources.get(payload.resourceId); if (!resource) throw new Error('SCM resource was removed'); await resource.open(payload.options, payload.sideBySide); break; }
-				case 'statusBar': { const command = provider.statusBarCommands.find(command => command.id === payload.commandId); if (!command) throw new Error('SCM status command was removed'); await command.run(); break; }
+				case 'statusBar': { const command = provider.statusBarCommands.find(command => command.id === payload.commandId); if (!command?.run) throw new Error('SCM status command is no longer available'); await command.run(); break; }
 				case 'decoration': return serial(await entry.decorations?.provideDecorations(entry.parseUri(payload.resource), sdkToken(_context.cancellationToken)) ?? null);
 				case 'quickDiff': { const controller = new AbortController(); const listener = _context.cancellationToken.onCancellationRequested(() => controller.abort()); if (_context.cancellationToken.isCancellationRequested) controller.abort(); try { return serial(await entry.quickDiff?.provideOriginalResource(entry.parseUri(payload.resource), controller.signal) ?? null); } finally { listener.dispose(); } }
 				case 'history': {

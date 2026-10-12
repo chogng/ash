@@ -131,7 +131,8 @@
 	fill: none;
 	stroke: var(--scm-graph-lane-color, var(--scm-graph-accent));
 	stroke-linecap: round;
-	stroke-width: 1px;
+	stroke-linejoin: round;
+	stroke-width: var(--ash-strokeThickness);
 }
 
 .ash-scm-graph-node {
@@ -180,8 +181,18 @@
 	--scm-graph-lane-color: var(--scm-graph-lane-7);
 }
 
-.ash-scm-graph-graph.head > .ash-scm-graph-node.inner {
+.ash-scm-graph-node.outer {
 	fill: var(--scm-graph-row-background);
+	stroke: var(--scm-graph-lane-color, var(--scm-graph-accent));
+	stroke-width: 1.5px;
+}
+
+.ash-scm-graph-node.inner {
+	stroke: none;
+}
+
+.ash-scm-graph-node-icon {
+	stroke-width: 1.5px;
 }
 
 .ash-scm-graph-details {
@@ -316,11 +327,6 @@
 	border: 0;
 	border-radius: 0;
 	color: inherit;
-}
-
-.ash-scm-graph-graph.incoming-changes .ash-scm-graph-node,
-.ash-scm-graph-graph.outgoing-changes .ash-scm-graph-node {
-	stroke-dasharray: 2 2;
 }
 
 .ash-scm-graph-change-row {

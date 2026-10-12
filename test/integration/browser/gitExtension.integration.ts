@@ -17,7 +17,7 @@ import { DiffService } from '../../../src/ash/workbench/services/diff/browser/di
 import type { TextModelReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import type { IDecorationsProvider } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Event, Emitter } from '../../../src/ash/base/common/event.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -34,6 +34,9 @@ import { MainThreadExtensionBackend } from '../../../src/ash/workbench/api/brows
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
 import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
+import { ScmStatusContribution } from '../../../src/ash/workbench/contrib/scm/browser/activity.js';
+import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { StatusbarEntryItem } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarItem.js';
 import { ScmViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmViewPane.js';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
@@ -45,8 +48,24 @@ import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
 import { QuickDiffService } from '../../../src/ash/workbench/contrib/scm/common/quickDiffService.js';
 import { MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import type { IDecorationsService } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
-import type { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
-import type { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IServerEventApi, type IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import type { ServerNotification } from '../../../.build/protocol/typescript/index.js';
+import { ConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { IContextMenuService, IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import { ILogService } from '../../../src/ash/platform/log/common/log.js';
+import { DefaultSettings } from '../../../src/ash/workbench/services/preferences/common/settingsModels.js';
+import { parseExtensionManifest } from '../../../src/ash/workbench/services/extensions/common/extensionManifest.js';
+import { ExtensionSettingBinding } from '../../../src/ash/workbench/contrib/preferences/browser/extensionSettingBinding.js';
+import { SettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsRenderers.js';
+import type { IAction } from '../../../src/ash/base/common/actions.js';
+import gitManifest from '../../../extensions/git/package.json' with { type: 'json' };
+import gitEnglishMessages from '../../../extensions/git/package.nls.json' with { type: 'json' };
+import gitChineseMessages from '../../../extensions/git/package.nls.zh-CN.json' with { type: 'json' };
+import settingsChineseMessages from '../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
 import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import scmChineseMessages from '../../../extensions/language-pack-zh-cn/translations/scm.json' with { type: 'json' };
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
@@ -100,16 +119,50 @@ const errors: string[] = [];
 const requests: JsonValue[] = [];
 const answers: string[] = [];
 
+const configurationEvents = lifetime.add(new Emitter<ServerNotification>());
+let configurationRevision = 1;
+let sharedGit = { autofetch: 'off', autofetchPeriod: 180, rebaseWhenSync: false };
+let failSettingsWrite = false;
 let revision = 1;
 let clean = false;
-const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream: null }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false }] });
+let upstream: { name: string; ahead: number; behind: number; } | null = null;
+let pullGate: DeferredPromise<void> | undefined;
+let pullFailure = false;
+const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false }] });
 const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 	request: async (method, params): Promise<JsonValue> => {
 		calls.push({ method, params });
 		switch (method) {
-			case 'config/read': return { revision: 1, gitConfigured: true, git: { autofetch: 'off', autofetchPeriod: 180 } };
+			case 'config/read': return { revision: configurationRevision, gitConfigured: true, git: { ...sharedGit } };
+			case 'config/update': {
+				const update = params as { expectedRevision: number; git: typeof sharedGit; };
+				if (failSettingsWrite || update.expectedRevision !== configurationRevision) throw new Error('Settings save rejected');
+				sharedGit = { ...update.git };
+				configurationRevision++;
+				configurationEvents.fire({ method: 'config/changed', params: { revision: configurationRevision, generation: configurationRevision } });
+				return { revision: configurationRevision, disposition: 'applied' };
+			}
 			case 'git/repositories': return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
 			case 'git/status': return status();
+			case 'git/catalog': return { tags: [], stashes: [], remotes: ['origin'], upstreamRemote: upstream ? 'origin' : null, operation: null };
+			case 'git/pull':
+				await pullGate?.p;
+				if (pullFailure) throw new Error('Pull rejected');
+				if (upstream) upstream = { ...upstream, behind: 0 };
+				revision++;
+				return { status: status() };
+			case 'git/push':
+				if (upstream) upstream = { ...upstream, ahead: 0 };
+				revision++;
+				return { status: status() };
+			case 'git/command': {
+				const command = (params as { command: { kind: string; }; }).command;
+				if (command.kind !== 'publishBranch') throw new Error(`Unexpected Git command ${command.kind}`);
+				upstream = { name: 'origin/main', ahead: 0, behind: 0 };
+				revision++;
+				return { status: status(), outcome: 'completed', operation: null };
+			}
+
 			case 'git/branch/create': return { branches: [] };
 			case 'git/branch/list': return { branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }] };
 			case 'git/graph': return { commits: [{ objectId: 'a'.repeat(40), parentObjectIds: [], timestampSeconds: 1, subject: 'First commit' }], references: [], remotes: [], hasMore: false, nextCursor: null };
@@ -121,7 +174,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
-}, { getConnectionState: async () => 'ready', connectionGeneration: 1 } as IAppServerApi, { subscribe: Event.None }, workspace));
+}, { getConnectionState: async () => 'ready', connectionGeneration: 1 } as IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
 const host = lifetime.add(services.createInstance(BrowserExtensionHostApi, catalog, createDisconnectedExtensionHostApi(unavailable)));
 const scm = lifetime.add(new SCMService());
@@ -168,6 +221,10 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			bridge.set(source, operation.registrationId, operation.revision, operation.providers);
 			return { result: 'done' };
 		}
+		case 'executeCommand': {
+			const result = await invoke(operation.command, operation.arguments);
+			return { result: 'command', hasValue: result !== undefined, value: result ?? null };
+		}
 		case 'showQuickPick': requests.push(operation as unknown as JsonValue); return { result: 'selection', index: 0 };
 		case 'showMessage': if (operation.severity === 'error') errors.push(operation.message); return { result: 'done' };
 		default: throw new Error(`Unexpected public SDK request ${operation.operation}`);
@@ -175,7 +232,7 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 });
 lifetime.add(toDisposable(() => clientHandler.dispose()));
 async function activate(language = 'en') {
-	setNlsMessages(language, language === 'zh-CN' ? scmChineseMessages : {});
+	setNlsMessages(language, language === 'zh-CN' ? { ...scmChineseMessages, ...settingsChineseMessages } : {});
 	const snapshot = await host.reconcile('refresh'); bridge.update(snapshot);
 	return snapshot.extensions.map(value => ({ lifecycle: value.lifecycle, failure: value.failure, registrations: value.registrations.map(value => value.kind) }));
 }
@@ -198,6 +255,76 @@ window.gitExtensionIntegration = {
 	history: async () => scm.getRepository('root')!.provider.historyProvider!.provideHistoryItems({ limit: 1 }),
 	dispose: () => lifetime.dispose(),
 };
+
+const statusbar = lifetime.add(new StatusbarService());
+const statusItems = new Map<string, StatusbarEntryItem>();
+const statusHost = document.createElement('div');
+statusHost.id = 'git-statusbar';
+document.body.append(statusHost);
+lifetime.add(toDisposable(() => statusHost.remove()));
+services.registerInstance(ISCMViewService, view);
+services.registerInstance(IStatusbarService, statusbar);
+lifetime.add(services.createInstance(ScmStatusContribution));
+lifetime.add(statusbar.onDidChangeEntries(() => {
+	for (const { id, entry } of statusbar.getEntries(StatusbarAlignment.Left)) {
+		const item = statusItems.get(id);
+		if (item) item.update(entry);
+		else statusItems.set(id, lifetime.add(new StatusbarEntryItem(statusHost, id, entry)));
+	}
+}));
+const statusbarIntegration = {
+	configure(tracking: boolean, failPull = false) {
+		upstream = tracking ? { name: 'origin/main', ahead: 2, behind: 3 } : null;
+		pullGate = new DeferredPromise<void>();
+		pullFailure = failPull;
+	},
+	release: async () => { await pullGate?.complete(); pullGate = undefined; },
+	commandLabels: async () => (await host.list()).extensions.find(extension => extension.id === 'ash.git')!.registrations.flatMap(registration => registration.kind === 'command' ? [{ id: registration.command, title: registration.title }] : []),
+};
+declare global { interface Window { gitStatusbarIntegration: typeof statusbarIntegration; } }
+window.gitStatusbarIntegration = statusbarIntegration;
+
+let settingsMenuActions: readonly IAction[] = [];
+const gitSettingsIntegration = {
+	mount(language = 'en') {
+		const localized = language === 'zh-CN' ? gitChineseMessages : gitEnglishMessages;
+		const manifest = JSON.stringify(gitManifest, (_key, value) => typeof value === 'string'
+			? value.replace(/%([^%]+)%/g, (match, key) => (localized as Record<string, string>)[key] ?? match) : value);
+		const registry = new ConfigurationRegistry();
+		registry.updateConfigurations({ add: [...parseExtensionManifest(manifest, { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
+		const descriptor = new DefaultSettings(registry).get('git.rebaseWhenSync');
+		const ui = lifetime.add(new InstantiationService());
+		for (const id of ['git.readSettings', 'git.updateRebaseWhenSync']) {
+			lifetime.add(CommandsRegistry.register(id, (_accessor, ...args) => invoke(id, [...args])));
+		}
+		ui.registerInstance(ICommandService, commands);
+		ui.registerInstance(IServerEventApi, { subscribe: listener => configurationEvents.event(listener) });
+		ui.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error: (message, ...args) => { errors.push(`${message}: ${args.join(' ')}`); } } satisfies ILogService);
+		ui.registerInstance(IConfigurationService, configuration);
+		ui.registerInstance(IContextViewService, lifetime.add(new BrowserContextViewService(document.body)));
+		ui.registerInstance(IContextMenuService, { showContextMenu: options => { settingsMenuActions = options.getActions?.() ?? []; } } as IContextMenuService);
+		ui.registerInstance(IClipboardService, { writeText: async () => { } } as unknown as IClipboardService);
+		const container = document.createElement('div');
+		container.id = 'git-settings';
+		container.style.width = '620px';
+		document.body.append(container);
+		lifetime.add(toDisposable(() => container.remove()));
+		lifetime.add(bindColorTheme(new TestThemeService(lightColorTheme), container));
+		const binding = lifetime.add(ui.createInstance(ExtensionSettingBinding, descriptor.configuration));
+		const renderer = lifetime.add(ui.createInstance(SettingsRenderer, container, { onStatus: (message: string, isError: boolean) => { if (isError) errors.push(message); } }));
+		renderer.render({ ...descriptor, binding } as typeof descriptor);
+	},
+	profile: () => ({ ...sharedGit }),
+	rejectWrites: () => { failSettingsWrite = true; },
+	externalChange(value: boolean) {
+		sharedGit.rebaseWhenSync = value;
+		configurationRevision++;
+		configurationEvents.fire({ method: 'config/changed', params: { revision: configurationRevision, generation: configurationRevision } });
+	},
+	reset: async () => { await settingsMenuActions.find(action => action.id === 'settings.resetSetting')!.run(); },
+};
+declare global { interface Window { gitSettingsIntegration: typeof gitSettingsIntegration; } }
+window.gitSettingsIntegration = gitSettingsIntegration;
 
 let scmPaneTheme: TestThemeService | undefined;
 let scmPaneLayout: { readonly host: HTMLElement; readonly panes: PaneView; } | undefined;

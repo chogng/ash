@@ -1,6 +1,6 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../../workbench/common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { Dimension, h, addDisposableListener, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -17,10 +17,21 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { ISessionChangesService } from '../common/sessionChangesService.js';
+import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
+import type { ISessionFileChange } from '../../../services/sessions/common/session.js';
+import { findChangesEditorFileChange } from './changesEditorLabels.js';
+import { createMultiDiffEditorInput, multiDiffEditorItemKey } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import type { URI } from '../../../../base/common/uri.js';
+import type { MultiDiffEditorViewState } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorViewModel.js';
+import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+
+export const CHANGESET_REVIEW_ACTION_ID = 'changeset.review';
 
 /** Resolves the selected conversation's changes only while its editor content is visible. */
 export class SessionChangesEditor extends EditorPane implements IEditorPaneWithViewState {
-	public readonly id = 'ash.sessions.changesEditor';
+	public static readonly ID = 'ash.sessions.changesEditor';
+	public readonly id = SessionChangesEditor.ID;
 	public readonly viewStateTypeId = 'ash.sessions.changesEditor';
 	private readonly comparison = this._register(new MutableDisposable<IEditorPane>());
 	private domNode!: HTMLDivElement;
@@ -42,6 +53,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@ISessionChangesService private readonly changesService: ISessionChangesService,
 	) {
 		super('ash.sessions.changesEditor', themeService, storageService);
 		this._register(chat.onDidUpdateTurnChanges(event => {
@@ -138,8 +150,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		}
 	}
 
-	public override getControl(): IEditorControl | undefined {
-		return this.comparison.value?.getControl();
+	public override getControl(): DiffEditorWidget | undefined {
+		return this.comparison.value?.getControl() as DiffEditorWidget | undefined;
 	}
 
 	public saveViewState(): unknown {
@@ -154,6 +166,32 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		if (state != null && pane && isEditorPaneWithViewState(pane)) {
 			pane.restoreViewState(state);
 		}
+	}
+
+	public async getFileChange(resource: URI): Promise<ISessionFileChange | undefined> {
+		const comparison = this.comparisonInput;
+		const input = this.input;
+		if (!this.visible || !input || !comparison?.items.some(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, resource))) { return undefined; }
+		const id = resource.path.split('/')[1];
+		if (!id) { return undefined; }
+		const sessionResource = new SessionChangesEditorInput(input.resource).sessionResource;
+		const changeset = await this.changesService.resolveChangeset(sessionResource, id);
+		if (this.isDisposed || this.comparisonInput !== comparison || !changeset.isEnabled.get() || !changeset.capabilities?.review) { return undefined; }
+		return findChangesEditorFileChange(resource, changeset.changes.get());
+	}
+
+	public collapse(resource: URI): void { this.setFileCollapsed(resource, true); }
+	public expand(resource: URI): void { this.setFileCollapsed(resource, false); }
+
+	private setFileCollapsed(resource: URI, collapsed: boolean): void {
+		const item = this.comparisonInput?.items.find(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, resource));
+		const pane = this.comparison.value;
+		if (!item || !pane || !isEditorPaneWithViewState(pane)) { return; }
+		const state = pane.saveViewState() as MultiDiffEditorViewState;
+		const ids = new Set(state.collapsedItemIds);
+		const id = multiDiffEditorItemKey(item);
+		if (collapsed) { ids.add(id); } else { ids.delete(id); }
+		pane.restoreViewState({ ...state, collapsedItemIds: [...ids] });
 	}
 
 	private async refresh(signal?: AbortSignal): Promise<void> {
@@ -194,13 +232,28 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
 				return;
 			}
-			const comparison = await createTurnMultiDiffEditorInput(this.chat, { session, threadId }, 'throughCurrentTurn');
+			const selected = input instanceof SessionChangesEditorInput ? input.changesetSelection : undefined;
+			let comparison: MultiDiffEditorInput;
+			if (selected?.kind === 'transient') {
+				const items = await Promise.all(selected.changeset.changes.get().map(async change => {
+					const contents = await this.chat.readTurnChangeFile(change.summary.sessionId, change.summary.threadId, change.summary.changeSetId, change.file.path);
+					if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
+					return { label: change.file.path, binary: contents.binary,
+						original: { resource: change.originalUri, initialText: contents.before ?? '', readOnly: true },
+						modified: { resource: change.modifiedUri, initialText: contents.after ?? '', readOnly: true } };
+				}));
+				comparison = createMultiDiffEditorInput(input.resource, items, selected.changeset.label, { kind: 'snapshot', label: selected.changeset.label });
+			} else {
+				if (selected?.id) { await this.changesService.resolveChangeset(new SessionChangesEditorInput(input.resource).sessionResource, selected.id); }
+				comparison = await createTurnMultiDiffEditorInput(this.chat, { session, threadId }, 'throughCurrentTurn', selected?.id ? [selected.id] : undefined);
+			}
 			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
 				return;
 			}
-			const pane = await EditorPanes.getEditorPane(comparison)!.create(this.options);
+			const pane = await EditorPanes.getEditorPane(comparison)!.create({ ...this.options, input: { ...input, editorId: this.id } });
 			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { pane.dispose(); return; }
 			this.comparisonInput = comparison;
+			this.changesService.setChangesCount(input.resource, comparison.items.length);
 			this.comparison.value = pane;
 			pane.create(this.domNode);
 			// setInput waits for visible diff models, which need a nonzero viewport first.

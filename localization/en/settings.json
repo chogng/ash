@@ -269,7 +269,9 @@
     "categories.browser.label": "Browser",
     "categories.browser.description": "Choose where website links open.",
     "categories.voice-input.label": "Voice input",
-    "categories.voice-input.description": "Choose local or cloud transcription and manage dictation models."
+    "categories.voice-input.description": "Choose local or cloud transcription and manage dictation models.",
+    "groups.extensions.label": "Extensions",
+    "groups.extensions.description": "Configure installed extensions."
   },
   "ash.editor.find": {
     "globalFindClipboard.title": "Share find text",

@@ -28,6 +28,7 @@ export interface SettingsCategoryGroupDescriptor {
 export type SettingsNavigationDescriptor = SettingsCategoryDescriptor | SettingsCategoryGroupDescriptor;
 
 export interface SettingsLayoutCategory {
+	readonly descriptor: SettingsCategoryDescriptor;
 	readonly id: string;
 	readonly groups: readonly ISettingsGroup[];
 }
@@ -347,7 +348,7 @@ export const SettingsNavigation = [
 						id: 'source-control',
 						get label() { return localize('scm.settings.group', 'Source Control'); },
 						get description() { return localize('scm.settings.groupDescription', 'Configure source control providers and diff decorations.'); },
-						settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace', 'scm.graph.pageSize', 'scm.graph.pageOnScroll', 'scm.graph.badges', 'scm.graph.showIncomingChanges', 'scm.graph.showOutgoingChanges'],
+						settings: ['git.rebaseWhenSync', 'scm.diffDecorationsIgnoreTrimWhitespace', 'scm.graph.pageSize', 'scm.graph.pageOnScroll', 'scm.graph.badges', 'scm.graph.showIncomingChanges', 'scm.graph.showOutgoingChanges'],
 					},
 				],
 			},
@@ -516,8 +517,9 @@ export const SettingsCategories: readonly SettingsCategoryDescriptor[] = Setting
 
 /** Projects registered configuration settings through the canonical layout. */
 export function createSettingsLayout(settings: readonly ISetting[]): readonly SettingsLayoutCategory[] {
-	const remaining = new Map(settings.map(setting => [setting.id, setting]));
-	const categories = SettingsCategories.map(category => ({
+	const remaining = new Map(settings.filter(setting => !setting.configuration.source).map(setting => [setting.id, setting]));
+	const categories: SettingsLayoutCategory[] = SettingsCategories.map(category => ({
+		descriptor: category,
 		id: category.id,
 		groups: category.groups.map(group => {
 			const matches = [...remaining.values()].filter(setting => group.settings.some(pattern => matchesSettingId(setting.id, pattern)));
@@ -534,6 +536,31 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 	if (remaining.size > 0) {
 		const ids = [...remaining.keys()].sort().join(', ');
 		throw new Error(`Registered settings are missing from settingsLayout.ts: ${ids}`);
+	}
+	const extensions = new Map<string, ISetting[]>();
+	for (const setting of settings) {
+		const source = setting.configuration.source;
+		if (!source) continue;
+		const entries = extensions.get(source.id) ?? [];
+		entries.push(setting);
+		extensions.set(source.id, entries);
+	}
+	for (const [id, entries] of extensions) {
+		const source = entries[0].configuration.source!;
+		const label = source.displayName ?? id;
+		const descriptor: SettingsCategoryDescriptor = {
+			id: `extension.${id}`,
+			label,
+			description: '',
+			keywords: [id],
+			presentation: 'general',
+			groups: [],
+		};
+		categories.push({
+			id: descriptor.id,
+			descriptor,
+			groups: [{ id: 'settings', title: label, description: '', settings: entries.map(setting => ({ ...setting, presentation: descriptor.presentation })) }],
+		});
 	}
 	return categories;
 }
@@ -578,14 +605,14 @@ export class SettingsLayout {
 }
 
 export function settingsRootNodes(categories: readonly SettingsLayoutCategory[]): readonly SettingsTreeNode<ISetting>[] {
-	return SettingsCategories.map(category => ({
+	return categories.map(category => ({
 		element: {
 			kind: 'group',
 			id: category.id,
-			title: category.label,
-			description: category.description,
+			title: category.descriptor.label,
+			description: category.descriptor.description,
 		},
-		children: new SettingsLayout(category.id, categories.find(candidate => candidate.id === category.id)?.groups ?? []).nodes,
+		children: new SettingsLayout(category.id, category.groups).nodes,
 	}));
 }
 

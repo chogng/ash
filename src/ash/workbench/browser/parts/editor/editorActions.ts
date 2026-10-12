@@ -136,7 +136,7 @@ for (const definition of [
 				title: localize2({ bundle: 'ash', key: definition.key }, definition.title),
 				f1: true,
 				precondition: EditorsVisibleContext.isEqualTo(true),
-				menu: { id: MenuId.EditorTitleContext, group: '5_split', order: definition.order },
+				menu: { id: MenuId.EditorSplitMoveSubmenu, group: '1_split', order: definition.order },
 			});
 		}
 
@@ -163,7 +163,7 @@ registerAction2(class CloseLeftEditorsInGroupAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.closeEditorsToTheLeft',
-			title: localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close Tabs to the Left'),
+			title: localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close to the Left'),
 			f1: true,
 			precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorFirstInGroupContext.isEqualTo(false), MultipleEditorsSelectedInGroupContext.isEqualTo(false)),
 			menu: { id: MenuId.EditorTitleContext, group: '1_close', order: 25 },
