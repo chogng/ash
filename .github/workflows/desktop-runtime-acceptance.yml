@@ -17,7 +17,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [windows-latest, macos-15]
+        # The production packager compiles .icon assets with macOS 26's actool.
+        runner: [windows-latest, macos-26]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
@@ -47,7 +48,8 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: ". -> .build/cargo"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: desktop-runtime-${{ matrix.runner }}
+          save-if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - name: Sync locked tools and dependencies
         run: |
