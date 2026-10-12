@@ -53,3 +53,11 @@ test('Frontend CI retains Academic coverage in the unified Workbench projects', 
 		assert.match(stdout, /Total: [1-9]\d* tests? in 1 file/);
 	}
 });
+
+test('Frontend CI collects both mock Agent Task executions in its connected Electron step', { timeout: 15_000 }, async () => {
+	assert.match(workflow, /name: Test mock Agent process and shell Task execution\n\s+if: matrix.surface == 'electron'[\s\S]*?run: pnpm run test:smoke:desktop:no-compile test\/smoke\/areas\/tasks\/task-agent.spec.ts/u);
+	const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', 'electron-app-server', 'test/smoke/areas/tasks/task-agent.spec.ts', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
+	assert.match(stdout, /process › Mock Agent Task loop/u);
+	assert.match(stdout, /shell › Mock Agent Task loop/u);
+	assert.match(stdout, /Total: 2 tests in 1 file/u);
+});

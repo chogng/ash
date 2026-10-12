@@ -62,8 +62,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	async getProfiles(): Promise<readonly ITerminalProfile[]> {
-		this.requireWorkspaceFolder();
-		return this.processService.listProfiles();
+		const folder = this.requireWorkspaceFolder();
+		return this.processService.listProfiles(this.workspaceContext.getWorkspace().folders.length > 1 || folder.id.startsWith('session:') ? folder.id : undefined);
 	}
 
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
@@ -87,12 +87,12 @@ export class TerminalService extends Disposable implements ITerminalService {
 				name,
 				() => this.connectionState,
 				() => this.removeInstance(instance),
-				() => this._onDidChangeInstances.fire(),
+				() => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
 				{
 					create: options.config.customPtyImplementation,
 					instanceNumber,
 					dimensions: options.dimensions,
-					onTitleChanged: () => this._onDidChangeInstances.fire(),
+					onTitleChanged: () => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
 				},
 				undefined,
 				options.initialText ?? options.config.initialText,
@@ -159,7 +159,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			options.title,
 			() => this.connectionState,
 			() => this.removeInstance(instance),
-			() => this._onDidChangeInstances.fire(),
+			() => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
 			undefined,
 			Object.freeze({ ...launch, profile: profile.type === 'custom' ? profile : { type: 'profile' as const, profileId: created.profile.profileId } }),
 			options.initialText,

@@ -1,3 +1,5 @@
+import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { mock } from 'node:test';
@@ -76,6 +78,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { },
 	});
+	registerTestComponentServices(services, dom.window.document);
 	using layout = services.createInstance(TerminalTabbedView, parent);
 	const tabs = layout.element.querySelector<HTMLElement>('.ash-terminal-tabs')!;
 	dom.window.document.body.append(layout.element);
@@ -120,6 +123,10 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	assert.equal(panes[1]?.style.width, "500px");
 	assert.equal(layout.element.querySelector(":scope > .ash-sash"), hiddenSash);
 	assert.equal(layout.element.querySelector(":scope > .ash-sash")?.getAttribute("aria-label"), "Resize terminal instance list");
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 500);
+	using recreated = services.createInstance(TerminalTabbedView, parent);
+	recreated.layout(1_000, 200);
+	assert.equal(recreated.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')[1]?.style.width, '500px');
 	dom.window.close();
 });
 

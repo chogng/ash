@@ -137,3 +137,13 @@ Agent 通知边界追加准入：既有 platform/agentHost/common/agentService.t
 用户阅读历史图片/音频或工具媒体结果 → ChatListItems 保留已有 ThreadItem / ChatContentPart 与所属 Session/Thread → ChatAttachmentsContentPart → IAgentThreadService.readAttachment → 原 App Server ProtocolClient → attachment/resource/open → 既有 read_session_thread 与 Attachments 验证 → 原 ResourceStore 的连接所属 handle → 原 resource/read/release → Blob URL 与图片/音频控件。输入和工具媒体均由原 Rust 附件存储拥有；前端组件只拥有加载取消、播放和 object URL，移除/切换/断线不把迟到字节装入新行。不以客户端 digest 或 URL 提供任意存储访问。
 
 准确修改范围：既有 crates/attachments/src/{service.rs,audio.rs} 公开实际读取消费的验证端口；crates/app-server-protocol/src/protocol/{attachments.rs,registry.rs} 增加 Item 定位的媒体 resource 请求，现有生成器更新协议/schema/decoder；crates/app-server/src/{server.rs,server/attachment_operations.rs} 沿现有 Session/Thread 校验和 ResourceStore 接入，不新建 owner。验证追加 server/attachment_operations_tests.rs 并在 server.rs 注册 sibling test（Rust 独立测试文件），使用真实已存储用户与工具媒体、连接隔离、错误 Session/Thread/Item/index、取消与字节校验。platform/agentHost/common/agentService.ts 与 browser/appServerAgentService.ts 增加领域 readAttachment，复用原 readAppServerResource，不将 DTO 或 resource ID 暴露给产品。共用媒体展示落到上游同路径 browser/widget/chatContentParts/chatAttachmentsContentPart.ts，使用既有 DI 和原 Browser 控件，不复制上游内部实现；样式只追加现有 chatMarkdownPart.css 的该组件职责。已确认 chatListItems.ts / ChatListWidget、现有 toolInvocationPart、Sessions ChatWidgetModel 传递原线程身份；现有 Chat/agentHost/browser fixtures 验证真实读取、媒体、迟到回包、释放、键盘、主题和中文。其他模块改动保留。
+
+
+媒体验证结果：真实 Rust 持久图片、音频和工具结果的 Item 读取测试通过，资源拒绝其他连接，错误 Session/Item/index 不建立可用 handle。3 个前端套件 107 项通过；Chromium 历史/工具媒体、音频播放与释放、迟到读取取消等 11 项通过，另补同一 Thread 快照刷新时保留播放和 blob URL 的回归。协议生成、协议类型检查与协议测试通过；App Server warnings 检查通过。媒体读取沿 IAgentThreadService / 原 resource 适配器，UI 只在用户加载时创建 object URL，取消后仍由原 helper 释放晚到 resource；断线不会向新代次释放旧 handle。后续继续闭合流式 Markdown 与 Prompt，不将媒体通过作为整个任务结束。
+
+
+## 流式 Markdown 准入
+
+Agent Thread transcript delta → 原 ChatWidgetModel → 原 ChatListWidget 的同 Item 行 → ChatMarkdownContentPart.tryIncrementalUpdate → 当前 Ash MarkdownElement 的 sanitized 渲染 → 原 CodeBlockPart / Stanza model。只对追加或终态确认复用；正文被替换时由旧行释放并重建。part 拥有稳定根、单一当前 Markdown lifetime、按代码块序号保留的原编辑器和当前响应的图片读取；不改变 Base sanitizer、滚动 owner 或后台 transcript。终态按实际 incomplete-token 标志重新解析，已完成的普通块保留，代码模型更新保留选区/焦点。
+
+准确范围为双方已有 chatMarkdownContentPart.ts、codeBlockPart.ts、ChatListWidget 和既有 ChatListWidget/browser transcript 测试。tryIncrementalUpdate 采用上游已存在的公开职责与名称，参数使用当前 Ash IMarkdownString 与临时渲染标志；实现使用本地 sanitized node 的可复用块和已有模型，未引入上游 incremental morpher、私有 AST/动画或第二套模型。原 provider 装饰与 image resource lifetime 仍由当前 Markdown snapshot 拥有。测试覆盖连续 delta、未闭合 fence→闭合→终态、代码模型数、选区/焦点、静态段落选区、完整复制、替换、移除、链接及图片读取。通过此 slice 后继续 Prompt 与其他台账项。

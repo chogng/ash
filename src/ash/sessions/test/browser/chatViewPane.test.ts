@@ -1,4 +1,4 @@
-import { createAppServerAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
+import { createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
@@ -121,6 +121,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 }
 function createChatListWidget(container: HTMLElement, options: ConstructorParameters<typeof ChatListWidget>[1] = {}): InstanceType<typeof ChatListWidget> {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
+	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 	return services.createInstance(ChatListWidget, container, options);
 }
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -3302,7 +3303,10 @@ test("Audio history identifies the sender and recording duration", () => {
 		type: "userAudioAttachment", itemId: "audio", turnId: "turn",
 		attachment: { contentDigest: "sha256:audio", mediaType: "wav", encodedBytes: 32044, durationMs: 1001 },
 	})]);
-	assert.equal(list.element.textContent, "YouAudio (2 seconds)");
+	assert.equal(list.element.querySelector('.ash-chat-item-label')!.textContent, 'You');
+	assert.equal(list.element.querySelector('figcaption')!.textContent, 'Audio (2 seconds)');
+	assert.equal(list.element.querySelector('audio')!.controls, true);
+	assert.equal(list.element.querySelector('button')!.textContent, 'Load audio');
 	dom.window.close();
 });
 

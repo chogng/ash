@@ -1,3 +1,7 @@
+import { TerminalIconPicker } from './terminalIconPicker.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { terminalStrings } from '../common/terminalStrings.js';
+import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -13,7 +17,7 @@ import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../common
 import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
-import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 import type { TerminalViewPane } from './terminalView.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
 import { InstanceContext } from './terminalContextMenu.js';
@@ -21,6 +25,47 @@ import { InstanceContext } from './terminalContextMenu.js';
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
+	registerAction2(class RenameTerminalAction extends Action2 {
+		constructor() { super({ id: TerminalCommandId.Rename, title: localize2('terminal.rename.command', 'Terminal: Rename'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
+		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+			const instance = resolveInstance(accessor, context);
+			const editing = accessor.get(ITerminalEditingService);
+			if (instance && editing.getEditingTerminal() !== instance) await editing.rename(instance);
+		}
+	});
+	registerAction2(class ChangeTerminalIconAction extends Action2 {
+		constructor() { super({ id: TerminalCommandId.ChangeIcon, title: localize2('terminal.icon.command', 'Terminal: Change Icon'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
+		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+			const instance = resolveInstance(accessor, context);
+			if (!instance?.changeIcon) return;
+			using lifetime = new DisposableStore();
+			const picker = lifetime.add(accessor.get(IInstantiationService).createInstance(TerminalIconPicker));
+			const terminals = accessor.get(ITerminalService);
+			lifetime.add(terminals.onDidDisposeInstance(closed => { if (closed === instance) picker.dispose(); }));
+			const icon = await picker.pickIcons();
+			if (icon && terminals.instances.includes(instance)) await instance.changeIcon(icon);
+			instance.xterm?.focus();
+		}
+	});
+	registerAction2(class MoveTerminalToEditorAction extends Action2 {
+		constructor() { super({ id: TerminalCommandId.MoveToEditor, title: terminalStrings.moveToEditor, f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
+		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+			const instance = resolveInstance(accessor, context);
+			if (instance) await accessor.get(ITerminalEditorService).openEditor(instance);
+		}
+	});
+	registerAction2(class MoveTerminalToPanelAction extends Action2 {
+		constructor() { super({ id: TerminalCommandId.MoveToTerminalPanel, title: terminalStrings.moveToTerminalPanel, f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
+		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+			const instance = resolveInstance(accessor, context);
+			if (!instance) return;
+			await accessor.get(ITerminalEditorService).detachInstance(instance);
+			if (!accessor.get(ITerminalService).instances.includes(instance)) return;
+			instance.target = TerminalLocation.Panel;
+			accessor.get(ITerminalService).setActiveInstance(instance);
+			await accessor.get(ITerminalGroupService).showPanel(true);
+		}
+	});
 	registerAction2(class FocusTerminalAction extends Action2 {
 		constructor() {
 			super({
@@ -56,7 +101,7 @@ export function registerTerminalActions(): void {
 		}
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const parent = resolveInstance(accessor, context);
-			if (!parent || parent.state !== 'running' || parent.isReadOnly || parent.shellLaunchConfig?.customPtyImplementation) return;
+			if (!parent || parent.target === TerminalLocation.Editor || parent.state !== 'running' || parent.isReadOnly || parent.shellLaunchConfig?.customPtyImplementation) return;
 			await terminalView(accessor).createTerminal(parent.profile.profileId, true, parent);
 			accessor.get(ITerminalService).activeInstance?.xterm?.focus();
 		}
@@ -123,7 +168,7 @@ export function registerTerminalActions(): void {
 		constructor() {
 			super({
 				id: TerminalCommandId.ScrollToPreviousCommand,
-				title: localize2('workbench.action.terminal.scrollToPreviousCommand', 'Terminal: Scroll to Previous Command'),
+				title: terminalStrings.scrollToPreviousCommand,
 				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
 				keybinding: {
 					primary: KeyMod.CtrlCmd | KeyCode.UpArrow,
@@ -140,7 +185,7 @@ export function registerTerminalActions(): void {
 		constructor() {
 			super({
 				id: TerminalCommandId.ScrollToNextCommand,
-				title: localize2('workbench.action.terminal.scrollToNextCommand', 'Terminal: Scroll to Next Command'),
+				title: terminalStrings.scrollToNextCommand,
 				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
 				keybinding: {
 					primary: KeyMod.CtrlCmd | KeyCode.DownArrow,
@@ -154,16 +199,16 @@ export function registerTerminalActions(): void {
 		}
 	});
 	CommandsRegistry.register(TerminalCommandId.Relaunch, async (accessor, context) => {
-		if (context === undefined) return terminalView(accessor).relaunchActive();
-		const instance = resolveInstance(accessor, context)!;
-		if (instance.state === 'running' || instance.state === 'reconnecting') return;
+		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).relaunchActive();
+		const instance = resolveInstance(accessor, context);
+		if (!instance || instance.state === 'running' || instance.state === 'reconnecting') return;
 		await accessor.get(ITerminalService).relaunchTerminal(instance, instance.xterm?.dimensions() ?? { cols: 80, rows: 24 });
 	});
 	CommandsRegistry.register(TerminalCommandId.Kill, (accessor, context) => context === undefined
 		? terminalView(accessor).killActive() : accessor.get(ITerminalService).closeTerminal(resolveInstance(accessor, context)!));
 	CommandsRegistry.register(TerminalCommandId.Clear, (accessor, context) => {
-		if (context === undefined) return terminalView(accessor).clearActive();
-		resolveInstance(accessor, context)!.clearBuffer();
+		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).clearActive();
+		resolveInstance(accessor, context)?.clearBuffer();
 	});
 }
 

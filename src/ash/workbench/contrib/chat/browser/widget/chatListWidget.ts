@@ -1,3 +1,4 @@
+import { ChatAttachmentsContentPart } from './chatContentParts/chatAttachmentsContentPart.js';
 import './media/chatListWidget.css';
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
@@ -27,7 +28,7 @@ interface ChatListWidgetOptions {
 }
 
 class RenderedItem extends Disposable {
-	constructor(public item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore, public readonly toolPart?: ChatToolInvocationPart) {
+	constructor(public item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore, public readonly toolPart?: ChatToolInvocationPart, public readonly markdownPart?: ChatMarkdownContentPart) {
 		super();
 		this._register(disposables);
 	}
@@ -138,7 +139,13 @@ export class ChatListWidget extends DomWidget {
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
 			if (row?.toolPart && item.toolInvocation && row.toolPart.toolCallId === item.toolInvocation.call.toolCallId) {
-				row.toolPart.render(item.toolInvocation);
+				row.toolPart.render(item.toolInvocation, item.attachmentSource);
+				row.item = item;
+				row.element.classList.toggle('error', item.isError === true);
+				if (item.transient) row.element.dataset.transient = 'true';
+				else delete row.element.dataset.transient;
+			} else if (row?.markdownPart && !sameItem(row.item, item) && row.item.type === item.type && row.item.label === item.label && row.item.detail === item.detail && sameAction(row.item.action, item.action)
+				&& row.markdownPart.tryIncrementalUpdate({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, item.transient)) {
 				row.item = item;
 				row.element.classList.toggle('error', item.isError === true);
 				if (item.transient) row.element.dataset.transient = 'true';
@@ -249,8 +256,8 @@ export class ChatListWidget extends DomWidget {
 		if (item.transient) article.dataset.transient = "true";
 		if (item.isError) article.classList.add("error");
 		if (item.toolInvocation) {
-			const part = disposables.add(new ChatToolInvocationPart(article.ownerDocument, item.toolInvocation));
-			disposables.add(part.onDidChangeHeight(() => { if (this.visible) this.layout(); }));
+			const part = disposables.add(this.instantiationService.createInstance(ChatToolInvocationPart, article.ownerDocument, item.toolInvocation, item.attachmentSource));
+			disposables.add(part.onDidChangeHeight(() => { if (this.visible) this.layout(); this._onDidChangeContent.fire(); }));
 			article.append(part.domNode);
 			return new RenderedItem(item, article, disposables, part);
 		}
@@ -270,6 +277,7 @@ export class ChatListWidget extends DomWidget {
 			disposables.add(addDisposableListener(disclosure, "toggle", () => { this.advisorExpansion.set(item.id, disclosure.open); }));
 			article.append(body);
 		}
+		let markdownPart: ChatMarkdownContentPart | undefined;
 		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan" || item.type === "advisor") {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
@@ -279,11 +287,17 @@ export class ChatListWidget extends DomWidget {
 				linkHandler: (target: string) => this.onDidRequestLink?.(target),
 				imageResourceLoader: this.imageResourceLoader,
 			}));
+			markdownPart = markdown;
 			body.append(markdown.domNode);
 		} else {
 			const content = h(this.element.ownerDocument, "pre");
 			content.textContent = item.text;
 			body.append(content);
+		}
+		if (item.content?.some(part => part.type !== 'text')) {
+			const media = disposables.add(this.instantiationService.createInstance(ChatAttachmentsContentPart, { ownerDocument: article.ownerDocument, variables: item.content, source: item.attachmentSource }));
+			disposables.add(media.onDidChangeHeight(() => { if (this.visible) this.layout(); this._onDidChangeContent.fire(); }));
+			body.append(media.domNode);
 		}
 		if (this.onDidRequestMemoryReference) {
 			const references = [...new Set(item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
@@ -310,7 +324,7 @@ export class ChatListWidget extends DomWidget {
 			article.append(button);
 			disposables.add(addDisposableListener(button, "click", () => this.onDidRequestErrorAction?.(action)));
 		}
-		return new RenderedItem(item, article, disposables);
+		return new RenderedItem(item, article, disposables, undefined, markdownPart);
 	}
 }
 
@@ -318,6 +332,10 @@ function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 	return left.id === right.id && left.type === right.type && left.text === right.text
 		&& left.transient === right.transient && left.isError === right.isError
 		&& left.label === right.label && left.detail === right.detail && left.errorCode === right.errorCode
+		&& sameContent(left.content, right.content) && left.attachmentSource?.sessionId === right.attachmentSource?.sessionId
+		&& left.attachmentSource?.threadId === right.attachmentSource?.threadId
+		&& left.attachmentSource?.itemId === right.attachmentSource?.itemId
+		&& left.attachmentSource?.kind === right.attachmentSource?.kind
 		&& sameAction(left.action, right.action);
 }
 
@@ -336,20 +354,33 @@ function itemLabel(item: IChatListItem): string {
 		case "userImage":
 		case "userImageAttachment":
 		case "userAudioAttachment":
-			return "You";
+			return localize('chat.transcript.you', 'You');
 		case "agentMessage":
 			return "Ash";
 		case "reasoning":
-			return "Reasoning";
+			return localize('chat.transcript.reasoning', 'Reasoning');
 		case "plan":
-			return "Plan";
+			return localize('chat.transcript.plan', 'Plan');
 		case "toolCall":
-			return "Tool call";
+			return localize('chat.transcript.toolCall', 'Tool call');
 		case "toolResult":
-			return item.isError ? "Tool error" : "Tool result";
+			return item.isError ? localize('chat.transcript.toolError', 'Tool error') : localize('chat.transcript.toolResult', 'Tool result');
 		case "advisor":
 			return "Advisor";
 		case "turnError":
-			return "Error";
+			return localize('chat.transcript.error', 'Error');
 	}
+}
+
+
+function sameContent(left: IChatListItem['content'], right: IChatListItem['content']): boolean {
+	if (left === right) return true;
+	if (!left || !right || left.length !== right.length) return false;
+	return left.every((part, index) => {
+		const next = right[index];
+		if (part.type !== next.type) return false;
+		if (part.type === 'text') return next.type === 'text' && part.text === next.text;
+		if ('url' in part) return 'url' in next && part.url === next.url;
+		return 'attachment' in next && part.attachment.contentDigest === next.attachment.contentDigest;
+	});
 }

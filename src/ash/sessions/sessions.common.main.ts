@@ -1,3 +1,4 @@
+import '../workbench/contrib/terminal/terminal.all.js';
 // Register this renderer's Sessions colors before Workbench theme initialization.
 import './common/theme.js';
 // The independent Sessions renderer hosts the same text and diff editors as Code.

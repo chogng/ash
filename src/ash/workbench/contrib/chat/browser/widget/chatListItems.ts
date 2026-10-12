@@ -16,7 +16,7 @@ export interface IChatListItem {
 	readonly id: string;
 	readonly type: ThreadItem["type"] | "turnError" | "advisor" | 'hook';
 	readonly content?: readonly ChatContentPart[];
-	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; };
+	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; readonly kind: 'item' | 'toolResult'; };
 	readonly hookPart?: IChatHookPart;
 	readonly toolInvocation?: {
 		readonly call: Extract<ThreadItem, { readonly type: 'toolCall'; }>;
@@ -73,7 +73,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 	for (const entry of entries) if (entry.type === 'turnError') stoppedTurns.add(entry.turnId);
 	const calls = new Map(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolCall" && entry.item.name === "advisor" ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : []));
 	const results = new Set(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolResult" ? [key(entry.turnId, entry.item.toolCallId)] : []));
-	return entries.flatMap(entry => {
+	return entries.flatMap<IChatListItem>(entry => {
 		if (entry.type === 'toolOutput') {
 			const call = toolCalls.get(key(entry.turnId, entry.toolCallId));
 			if (call?.item.type === 'toolCall' && call.item.name !== 'advisor') return [];
@@ -88,7 +88,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 				text: [call.name, call.argumentsJson, ...output.map(value => `${value.stream}: ${value.text}`), result?.text].filter(Boolean).join('\n\n'),
 				transient: !result && !stoppedTurns.has(entry.turnId), isError: result?.isError,
 				toolInvocation: { call, result, output, stopped: stoppedTurns.has(entry.turnId) },
-				attachmentSource: source && result ? { ...source, itemId: result.itemId } : undefined,
+				...(source && result?.content?.some(part => part.type !== 'text') ? { attachmentSource: { ...source, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
 			}];
 		}
 		if (entry.type === 'item' && entry.item.type === 'toolResult') {
@@ -114,7 +114,8 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 			return [{ id: entry.entryId, type: "advisor" as const, text: advice, transient: false, isError: item.isError, label: `Advisor · ${modelLabel}`, detail: details }];
 		}
 		const item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
-		return [{ ...item, attachmentSource: source && entry.type === 'item' ? { ...source, itemId: entry.item.itemId } : undefined }];
+		return source && entry.type === 'item' && item.content?.some(part => part.type !== 'text')
+			? [{ ...item, attachmentSource: { ...source, itemId: entry.item.itemId, kind: entry.item.type === 'toolResult' ? 'toolResult' as const : 'item' as const } }] : [item];
 	});
 }
 

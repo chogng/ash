@@ -1,5 +1,33 @@
 # Terminal API 对齐状态
 
+## 统一装载本批准入（2026-10-12）
+
+现有 Sessions Desktop/Web 入口 → 新同路径 `terminal.all.ts` → 核心 terminal.contribution 与实际存在的 per-instance contributions；核心 contribution 专注终端注册，不再反向装载独立增强。准确范围：terminal.all.ts（仅 VS Code）、browser/terminal.contribution.ts（只迁移现有 7 条副作用 imports）、src/ash/sessions/sessions.common.main.ts（现有真实消费者，仅增加统一装载 import、原 registerTerminalView 保留）、既有 integration terminal fixture（相同装载链）、README、本台账。双方都有的入口沿用当前服务组装；不生成未安装增强、不增聚合导出/注册桥。采用 sessions skill；Desktop/Web 类型检查、全终端 Chromium/装载既有 unit 覆盖。
+
+## 面板列表宽度持久化本批准入（2026-10-12）
+
+用户鼠标/键盘调整现有实例列表 sash → 原 TerminalTabbedView/SplitView → 新同路径 `common/terminalStorageKeys.ts` 的标准水平宽度 key → 原 StorageService 工作区机器状态 → 再建视图/重载恢复宽度。唯一几何 owner 仍为现有 SplitView；存储边界拒绝非法、超范围数值，单实例隐藏列表不覆盖用户宽度；不保存第二份运行中 layout state。
+
+准确新增路径仅 VS Code：common/terminalStorageKeys.ts，仅导出真实使用的 TabsListWidthHorizontal。准确局部路径双方已有：browser/terminalTabbedView.ts（StorageService 构造注入/读取/保存）、test/browser/terminalTabsLayout.test.ts（实际 storage owner 的 fixture/重建断言）、test/browser/terminalTitleActions.test.ts（若 DI 需要只补 storage fixture）；现有 integration terminal fixture/spec（页面重载与非法 storage 值边界）、README、本台账。原 StorageService 是已批准跨宿主基础设施，无新持久化 backend 或自造 key；不创建未消费的垂直 orientation 和 layout serializers。
+
+## 标题与图标本批准入（2026-10-12）
+
+Rename / Change Icon 命令和实例菜单 → 新同路径 `browser/terminalEditingService.ts`（Quick Input 的编辑中实例和取消 lifetime）/`browser/terminalIconPicker.ts`（实际产品 icon registry 的搜索/选择）→ 原 TerminalInstance 的 rename/changeIcon → 原 TerminalService 刷新 labels → 面板列表和编辑器标签。标题/图标只由原实例拥有，Quick Input 不保存第二份 title；关闭目标取消选择，修改活动实例不会把选择写到另一个实例；Relaunch 保持用户元数据。
+
+准确新增路径仅 VS Code：上述 2 文件。准确局部路径双方已有：terminalInstance.ts（用户元数据）、terminalService.ts（已有 title callback 先刷新原组名，再发布 labels）、terminalActions.ts/terminalMenus.ts/common/terminal.ts（命令/菜单）、terminal.contribution.ts（delayed 注册）、terminalEditorInput.ts（已用原 label event）、terminalAccessibilityHelp.ts（发现性）；已批准服务契约 services/terminal/browser/terminal.ts；现有 integration fixture/spec、新 test/browser/terminalEditor.test.ts（元数据/资源回归）、terminalService.test.ts（复用）；zh-CN/workbench.json、README、本台账。采用现有 Quick Input 的键盘/焦点/取消路径，不添加无消费者 inline editing API 或其他新 owner；测试双语重命名、取消、图标搜索、关闭目标期间选择与复用。
+
+## xterm 标记与布局本批准入（2026-10-12）
+
+编辑区最小真实行为切片已通过：Chromium 5 项包含分屏、两种语言往返移动与失效资源恢复。继续下一批：原后端命令事件 → XtermTerminal → 新同路径 `browser/xterm/decorationAddon.ts` 唯一拥有屏幕 marker/decoration 及其监听生命周期 → 新 `markNavigationAddon.ts` 只读取已有屏幕 marker 导航 → 标准焦点命令。标记淘汰时立即释放事件监听，不再把已淘汰标记的 listeners 留到整屏 dispose。新 `decorationStyles.ts` 独立生成有 NLS 的状态说明供 tooltip/ARIA；新 `browser/media/xterm.css` 承接既有 Ash 屏幕几何/命令状态样式。没有 Shell parser、第二份 command history/capability store；这些 addons 的当前支持是显示/导航已提交后端事件，不声明完整上游 capability API。
+
+准确路径：上述 4 个缺失同路径文件（仅 VS Code）；双方已有 `browser/xterm/xtermTerminal.ts`（移出屏幕标记/导航 hunk）、`browser/media/terminal.css`（仅移出同一屏幕所拥有样式）、现有 integration fixture/spec（状态、trim/clear、跨 PTY 重用、双语/主题/焦点）。新增 `common/terminalStrings.ts`（仅 VS Code）集中真实消费的编辑区命令和导航 label；现有 terminalActions.ts/terminalEditorInput.ts/terminal.contribution.ts 仅迁移这些 label import。zh-CN/workbench.json、本台账、README 记录结果。标记对象继续属于同一屏幕，xterm 负责缓存淘汰，addons lifetime 跟随屏幕；不复制上游实现或私有结构。
+
+## 编辑区终端本批准入（2026-10-12）
+
+移动到编辑区/面板 → terminalActions → TerminalEditorService + 现有 EditorService/Groups → TerminalInstance 的 target、稳定 URI 与原 xterm → 面板组过滤并迁移同一屏幕 → 关闭编辑器释放原 PTY、移动保留实例。序列化只恢复资源身份，不执行或复活已失效进程；资源含本次实例的随机身份，旧工作集不会绑定新 Shell。
+
+准确新增路径（仅 VS Code）：`browser/terminalUri.ts`、`browser/terminalEditorInput.ts`、`browser/terminalEditorSerializer.ts`、`browser/terminalEditor.ts`、`browser/terminalEditorService.ts`。唯一 owner：TerminalService/Instance 拥有 PTY、屏幕及 target；EditorPart 拥有编辑器成员/生命周期；编辑区服务仅拥有输入值和订阅，不保留第二份活动实例。准确局部修改（双方都有）：`browser/terminalInstance.ts`（URI/target/event）、`browser/terminalGroupService.ts`（target 订阅和面板过滤）、`browser/terminalView.ts`（只附着面板实例）、`browser/terminalTabsList.ts`、`browser/terminalTabbedView.ts`（面板成员过滤）、`browser/terminalActions.ts`、`browser/terminal.contribution.ts`、`common/terminal.ts`（命令/DI/注册）、`browser/media/terminal.css`（编辑区几何）；已批准 Ash 契约 `services/terminal/browser/terminal.ts`（target/editor 服务契约）；`platform/terminal/common/terminal.ts`（标准 TerminalLocation enum）。验证文件：现有 terminal integration fixture/spec，新增同路径 `test/browser/terminalEditor.test.ts`；既有 terminalTabsLayout/terminalService tests，terminal 无障碍帮助、zh-CN/terminal.json、README 与本台账。平台范围参照 platform reference。所有其他变化保持；无上游私有结构或代码复制。
+
 ## 文件清单批处理（2026-10-12）
 
 按文件清单覆盖现有消费链，不创建无消费者的剩余文件。第一批准入：新建上游同路径 `browser/xterm/{xtermAddonImporter.ts,terminalFontRendering.ts,terminalFontRendering.css}` 与 `browser/{terminalIcons.ts,terminalTooltip.ts}`。Find → XtermTerminal → importer 的 search 构造加载；配置 fontRendering → 原 xterm 字体策略/atlas refresh；菜单/列表 → terminalIcons 与 getShellProcessTooltip → 当前实例只读 PID/cwd/profile/state。所有 screen、Shell 状态和 PTY 仍归原 owner；不构建第二个 capability store。Decoration/MarkNavigation 的完整上游端口需要下层 capability 契约，不能把当前状态 facade 当成已完成的 capability owner。

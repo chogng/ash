@@ -144,3 +144,94 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(errors).toEqual([]);
 	});
 }
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`persistent user and tool media load in the original Thread and release playback in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showMedia(false));
+		const imageRow = page.locator('[data-item-id="image"]');
+		const loadImage = imageRow.getByRole('button', { name: locale === 'en' ? 'Load image' : '加载图片' });
+		await loadImage.focus();
+		await loadImage.press('Enter');
+		await expect(imageRow.locator('img')).toBeVisible();
+		await expect.poll(() => imageRow.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(2);
+		const imageUrl = await imageRow.locator('img').getAttribute('src');
+		await expect(imageRow.locator('figure')).toBeFocused();
+		const audioRow = page.locator('[data-item-id="audio"]');
+		await audioRow.getByRole('button', { name: locale === 'en' ? 'Load audio' : '加载音频' }).click();
+		await expect(audioRow.locator('audio')).toBeVisible();
+		const audio = await audioRow.locator('audio').elementHandle();
+		await audioRow.locator('audio').evaluate(async player => { await (player as HTMLAudioElement).play(); });
+		await expect.poll(() => audioRow.locator('audio').evaluate(player => (player as HTMLAudioElement).paused)).toBe(false);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.refreshMedia());
+		expect(await audioRow.locator('audio').evaluate((player, previous) => player === previous, audio)).toBe(true);
+		await expect(imageRow.locator('img')).toHaveAttribute('src', imageUrl!);
+		await expect.poll(() => audioRow.locator('audio').evaluate(player => (player as HTMLAudioElement).paused)).toBe(false);
+		const tool = page.locator('.ash-chat-tool-invocation');
+		await tool.locator('summary').click();
+		await tool.getByRole('button', { name: locale === 'en' ? 'Load image' : '加载图片' }).click();
+		await expect(tool.locator('img')).toBeVisible();
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests)).toEqual([
+			{ sessionId: 'media-session', threadId: 'media-thread', itemId: 'image' },
+			{ sessionId: 'media-session', threadId: 'media-thread', itemId: 'audio' },
+			{ sessionId: 'media-session', threadId: 'media-thread', itemId: 'result', contentIndex: 1 },
+		]);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+		expect(await audio!.evaluate(player => ({ paused: (player as HTMLAudioElement).paused, source: player.getAttribute('src') }))).toEqual({ paused: true, source: null });
+		expect(await page.evaluate(async url => { try { await fetch(url!); return false; } catch { return true; } }, imageUrl)).toBe(true);
+		await audio?.dispose();
+		expect(errors).toEqual([]);
+	});
+}
+
+test('removing an attachment cancels its read and rejects a late media result', async ({ page }) => {
+	await page.goto('/chatTranscript.html');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.showMedia(true));
+	await page.locator('[data-item-id="image"]').getByRole('button', { name: 'Load image' }).click();
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length)).toBe(1);
+	await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().aborted)).toBe(true);
+	await page.evaluate(() => window.ashChatTranscriptIntegration.finishMedia());
+	await expect(page.locator('.ash-chat-media')).toHaveCount(0);
+});
+
+
+test('streaming Markdown retains completed text, one code model, selection and focus through completion', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/chatTranscript.html');
+	const first = 'Read this paragraph.\n\n```typescript\nconst first = 1;';
+	await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value, false), first);
+	const article = page.locator('[data-item-id="stream"]');
+	const paragraph = article.locator('p').first();
+	const editor = article.locator('.ash-chat-code-block .stanza-editor');
+	const original = await editor.elementHandle();
+	const paragraphNode = await paragraph.elementHandle();
+	await editor.click();
+	await page.keyboard.press('ControlOrMeta+A');
+	const selection = await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection);
+	await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value, false), `${first}\nconst second = 2;`);
+	expect(await editor.evaluate((element, previous) => element === previous, original)).toBe(true);
+	await expect(editor.locator('.stanza-editor-input')).toBeFocused();
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection)).toEqual(selection);
+	const complete = `${first}\nconst second = 2;\n\x60\x60\x60\n\nDone.`;
+	await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value, true), complete);
+	expect(await editor.evaluate((element, previous) => element === previous, original)).toBe(true);
+	expect(await paragraph.evaluate((element, previous) => element === previous, paragraphNode)).toBe(true);
+	await expect(editor.locator('.stanza-editor-input')).toBeFocused();
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(2);
+	await article.getByRole('button', { name: 'Copy', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('const first = 1;\nconst second = 2;');
+	await paragraph.evaluate(element => { const selection = window.getSelection()!; selection.setBaseAndExtent(element.firstChild!, 5, element.firstChild!, 9); });
+	await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value, true), `${complete} More.`);
+	expect(await page.evaluate(() => window.getSelection()!.toString())).toBe('this');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.stream('Rewritten reply.', true));
+	await expect(article.locator('.ash-chat-code-block')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(1);
+	await original?.dispose();
+	await paragraphNode?.dispose();
+	expect(errors).toEqual([]);
+});

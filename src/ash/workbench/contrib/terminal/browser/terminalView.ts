@@ -6,7 +6,7 @@ import {
 } from '../common/terminalContextKey.js';
 import { TerminalCommandId } from '../common/terminal.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
-import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, TerminalLocation, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { terminalProfileIcon } from "./terminalIcon.js";
 import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
@@ -132,6 +132,10 @@ export class TerminalViewPane extends ViewPane {
 	override focus(): void {
 		if (!this.isVisible() || this.isDisposed) return;
 		this.setExpanded(true);
+		if (!this.groups.activeGroup) {
+			const instance = this.groups.groups[0]?.activeInstance;
+			if (instance) this.terminalService.setActiveInstance(instance);
+		}
 		super.focus();
 		this.focusSource = this.element.ownerDocument.activeElement;
 		this.updateInstances();
@@ -265,7 +269,7 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private addInstance(instance: ITerminalInstance): void {
-		if (this.items.has(instance)) return;
+		if (this.items.has(instance) || instance.target === TerminalLocation.Editor) return;
 		this.groups.createGroup(instance).attachToElement(this.widgetsElement);
 		const item = new TerminalViewItem(
 			instance,
@@ -276,6 +280,10 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private updateInstances(): void {
+		for (const instance of this.items.keys()) {
+			if (instance.target === TerminalLocation.Editor) this.removeInstance(instance);
+		}
+		for (const instance of this.terminalService.instances) this.addInstance(instance);
 		this.render();
 		if (!this.isBodyVisible() || this.isDisposed) return;
 		const item = this.activeItem();
@@ -298,7 +306,7 @@ export class TerminalViewPane extends ViewPane {
 	private render(): void {
 		if (this.isDisposed) return;
 		const active = this.terminalService.activeInstance;
-		const instanceSwitcherPlacement = this.terminalService.instances.length > 1 ? "list" : "title";
+		const instanceSwitcherPlacement = active?.target === TerminalLocation.Editor ? "list" : this.groups.groups.flatMap(group => group.terminalInstances).length > 1 ? "list" : "title";
 		this.titleActions.setActiveInstance(active, instanceSwitcherPlacement);
 		for (const group of this.groups.groups) {
 			group.attachToElement(this.widgetsElement);
@@ -309,8 +317,10 @@ export class TerminalViewPane extends ViewPane {
 
 	private layoutGroups(): void {
 		const style = this.widgetsElement.ownerDocument.defaultView!.getComputedStyle(this.widgetsElement);
-		const width = this.widgetsElement.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-		const height = this.widgetsElement.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+		// A queued resize can observe detached panel content with empty computed padding.
+		const padding = (value: string): number => parseFloat(value) || 0;
+		const width = this.widgetsElement.clientWidth - padding(style.paddingLeft) - padding(style.paddingRight);
+		const height = this.widgetsElement.clientHeight - padding(style.paddingTop) - padding(style.paddingBottom);
 		for (const group of this.groups.groups) group.layout(Math.max(0, width), Math.max(0, height));
 	}
 

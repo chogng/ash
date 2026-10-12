@@ -23,6 +23,15 @@ pub struct TerminalProfile {
     pub is_default: bool,
 }
 
+/// Selects the authorized execution directory for shell profile discovery.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalProfileListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+}
+
 /// Authorized terminal profiles discovered by the local App Server composition.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -31,7 +31,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		@ITerminalService private readonly terminals: ITerminalService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-		@IWorkspaceContextService workspace: IWorkspaceContextService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IExtensionService private readonly extensions: IExtensionService,
 	) {
 		super();
@@ -109,9 +109,11 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		this.activated = true;
 		if (this.request) return this.request;
 		const revision = this.revision;
+		const folders = this.workspace.getWorkspace().folders;
+		const dirId = folders.length === 1 && folders[0]!.id.startsWith('session:') ? folders[0]!.id : undefined;
 		const request = this.terminals.getProfiles().then(async profiles => {
 			const resolved = await Promise.all(profiles.map(async profile => {
-				const result = await this.processes.resolveProfile({ type: 'profile', profileId: profile.profileId });
+				const result = await this.processes.resolveProfile({ type: 'profile', profileId: profile.profileId }, dirId);
 				return Object.freeze({ ...profile, profileName: profile.title, path: result.executable, args: (typeof result.args === 'string' ? result.args : Object.freeze([...result.args])), isAutoDetected: true });
 			}));
 			if (this.isDisposed || revision !== this.revision) throw new CancellationError();

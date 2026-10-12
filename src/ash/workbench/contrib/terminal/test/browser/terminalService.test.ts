@@ -51,6 +51,9 @@ test('a single Session folder keeps its process route through creation and closi
 	using workspace = new WorkspaceContextService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
 	using services = terminalServices(processService, workspace);
 	const service = services.get(ITerminalService);
+	const originalList = processService.listProfiles.bind(processService);
+	processService.listProfiles = async (dirId?: string) => { assert.equal(dirId, scope); return originalList(); };
+	await service.getProfiles();
 	const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 	assert.equal(processService.createCalls[0]?.dirId, scope);
 	workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
@@ -1618,4 +1621,27 @@ test('Terminal process failure retains its display reason and relaunch clears th
 	await terminals.relaunchTerminal(instance, { rows: 24, cols: 80 });
 	assert.equal(instance.state, 'running');
 	assert.deepEqual(instance.statusList?.statuses, []);
+});
+
+
+test('terminal title and icon editing survive process replacement and reset through the original owner', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using services = terminalServices(processes, folderWorkspaceContext());
+	const terminals = services.get(ITerminalService);
+	const first = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	const second = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	const resource = first.resource;
+	await first.rename!('User name');
+	await first.changeIcon!({ id: 'terminal-git-bash' });
+	assert.equal(first.title, 'User name');
+	assert.equal(second.title, 'cmd 2');
+	assert.equal(processes.createCalls.length, 2);
+	await terminals.relaunchTerminal(first, { rows: 30, cols: 100 });
+	assert.equal(first.title, 'User name');
+	assert.equal(first.profile.icon?.id, 'terminal-git-bash');
+	assert.equal(first.resource, resource);
+	await first.rename!('');
+	assert.equal(first.title, 'cmd 1');
+	await terminals.closeTerminal(second);
+	assert.equal(first.title, 'cmd');
 });

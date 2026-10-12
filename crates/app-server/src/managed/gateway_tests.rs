@@ -67,6 +67,7 @@ fn session_directory_file_requests_route_to_the_session_execution_authority() {
     }
     for method in [
         "terminal/create",
+        "terminal/profile/list",
         "terminal/read",
         "terminal/write",
         "terminal/close",

@@ -10,6 +10,9 @@ import { TerminalCreatingContext, TerminalHasActiveInstanceContext, TerminalActi
 /** Registers terminal menus once for the renderer; enablement comes from each window's context. */
 export function setupTerminalMenus(): void {
 	for (const item of [
+		{ id: TerminalCommandId.Rename, title: localize2('terminal.rename.menu', 'Rename Terminal') },
+		{ id: TerminalCommandId.ChangeIcon, title: localize2('terminal.icon.title', 'Change Terminal Icon') },
+		{ id: TerminalCommandId.MoveToEditor, title: localize2('terminal.editor.moveToEditorMenu', 'Move Terminal into Editor Area') },
 		{ id: TerminalCommandId.Split, title: localize2('terminal.group.splitMenu', 'Split Terminal'), when: TerminalActiveInstanceStateContext.isEqualTo('running') },
 		{ id: TerminalCommandId.Focus, title: localize2('terminal.context.focus', 'Focus Terminal') },
 		{ id: TerminalCommandId.Clear, title: localize2('terminal.context.clear', 'Clear Terminal') },

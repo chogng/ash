@@ -1,3 +1,4 @@
+import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { TabList, type TabListDropPosition } from '../../../../base/browser/ui/tablist/tabList.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -103,7 +104,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 				this.instanceListeners.set(instance, lifetime);
 			}
 		}
-		this.setTabs(this.terminals.instances.map(instance => ({
+		this.setTabs(this.terminals.instances.filter(instance => instance.target !== TerminalLocation.Editor).map(instance => ({
 			id: instance.id, value: instance, label: instance.title, tooltip: instance.title + getShellProcessTooltip(instance, true),
 			icon: terminalProfileIcon(instance.profile), state: instance.state, tabId: `${instance.id}-tab`,
 			renderLabel: (container: HTMLElement) => {
@@ -111,7 +112,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 				this.labels.set(instance, label);
 				return toDisposable(() => { this.labels.delete(instance); label.dispose(); });
 			},
-		})), this.terminals.activeInstance?.id);
+		})), this.terminals.activeInstance?.target === TerminalLocation.Editor ? undefined : this.terminals.activeInstance?.id);
 		for (const [instance, label] of this.labels) {
 			label.setLabel(instance.title, undefined, { icon: terminalProfileIcon(instance.profile) });
 			label.iconElement.style.color = instance.profile.color ? `var(${colorCssVariable(instance.profile.color)})` : '';

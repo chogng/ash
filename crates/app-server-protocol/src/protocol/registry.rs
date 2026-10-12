@@ -112,9 +112,10 @@ use crate::protocol::assets::AssetVersionParams;
 use crate::protocol::assets::AssetVersionResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentImportRemoteParams;
-use crate::protocol::attachments::AttachmentResourceOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentMaterializeResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::attachments::AttachmentResourceOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupContentDto;
 #[cfg(any(test, feature = "export"))]
@@ -2042,6 +2043,8 @@ use crate::protocol::terminal::TerminalProcessInfoParams;
 use crate::protocol::terminal::TerminalProcessReady;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfile;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalProfileListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfileListResult;
 #[cfg(any(test, feature = "export"))]
@@ -4927,7 +4930,7 @@ client_methods! {
         serialization: GlobalExclusive,
     },
     TerminalProfileList => "terminal/profile/list" {
-        params: EmptyParams,
+        params: TerminalProfileListParams,
         response: TerminalProfileListResult,
         serialization: GlobalSharedRead,
     },
@@ -6718,6 +6721,7 @@ typescript_bindings! {
     CloudCodebaseAuthorizeParams,
     CloudCodebaseStatusResult,
     TerminalProfile,
+    TerminalProfileListParams,
     TerminalProfileListResult,
     TerminalProfileResolveParams,
     TerminalProfileResolveResult,

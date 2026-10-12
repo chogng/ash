@@ -3,7 +3,6 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
-use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::terminal as wire;
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
@@ -44,10 +43,10 @@ impl AppServer {
     }
 
     pub(super) fn terminal_profile_list(&self, params: &Value) -> Result<Value, RpcError> {
-        let _: EmptyParams = decode(params)?;
+        let params: wire::TerminalProfileListParams = decode(params)?;
         result(&TerminalProfileListResult {
             profiles: self
-                .terminal_service()?
+                .terminal_service_for(params.dir_id.as_deref())?
                 .profiles()
                 .into_iter()
                 .map(profile_to_dto)
@@ -102,11 +101,12 @@ impl AppServer {
                 &path,
                 ash_file_access::Permission::ExecuteCommands,
             )?;
-            self.session_terminal_service(&session_id, &authorization)?.create_in_dir(
-                connection.connection_id,
-                create_request(params),
-                authorization,
-            )
+            self.session_terminal_service(&session_id, &authorization)?
+                .create_in_dir(
+                    connection.connection_id,
+                    create_request(params),
+                    authorization,
+                )
         } else {
             self.terminal_service_for(params.dir_id.as_deref())?
                 .create(connection.connection_id, create_request(params))

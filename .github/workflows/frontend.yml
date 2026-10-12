@@ -152,7 +152,12 @@ jobs:
         run: pnpm run test:smoke:browser:full:no-compile
       - name: Test connected Electron
         if: matrix.surface == 'electron'
-        run: pnpm run test:smoke:desktop:no-compile
+        run: pnpm run test:smoke:desktop:no-compile --grep-invert "Mock Agent Task loop"
+      - name: Test mock Agent process and shell Task execution
+        if: matrix.surface == 'electron'
+        # Real Agent/Core, approval, TaskService, exec-server and Desktop UI;
+        # only the loopback model Responses are mocked, with no account secrets.
+        run: pnpm run test:smoke:desktop:no-compile test/smoke/areas/tasks/task-agent.spec.ts
       - name: Upload test diagnostics
         if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

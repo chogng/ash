@@ -150,7 +150,9 @@ export class CodeBlockPart extends Disposable {
 			this.editor.setModel(model);
 			this.documentModel.value = model;
 		} else if (this.documentModel.value.getValue() !== data.text) {
+			const selections = this.editor.getSelections();
 			this.documentModel.value.setValue(data.text);
+			if (selections) this.editor.setSelections(selections);
 		}
 		this.updateOptions();
 		this.layout(width);

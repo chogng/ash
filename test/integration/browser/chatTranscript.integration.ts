@@ -1,3 +1,5 @@
+import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import toneWav from '../../../crates/utils/audio/tests/fixtures/tone.wav?url';
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotification } from '../../../.build/protocol/typescript/index.js';
 import type { ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agentService.js';
@@ -104,6 +106,22 @@ function receiveToolUpdate(params: TranscriptDto): ThreadTranscriptUpdateEnvelop
 	if (!latest) throw new Error('Expected an Agent Thread domain update');
 	return latest;
 }
+const imageBytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII='), character => character.charCodeAt(0));
+let mediaRequests: unknown[] = [];
+let delayMedia = false;
+let completeMedia: (() => void) | undefined;
+let mediaAborted = false;
+services.registerInstance(IAgentThreadService, {
+	...toolService,
+	readAttachment: async (source, signal) => {
+		mediaRequests.push(source);
+		signal?.addEventListener('abort', () => { mediaAborted = true; }, { once: true });
+		if (delayMedia) await new Promise<void>(resolve => { completeMedia = resolve; });
+		if (source.itemId === 'audio') return { bytes: new Uint8Array(await (await fetch(toneWav)).arrayBuffer()), mimeType: 'audio/wav' };
+		return { bytes: imageBytes, mimeType: 'image/png' };
+	},
+});
+let mediaEntries: ThreadTranscriptEntry[] = [];
 let toolEntries: ThreadTranscriptEntry[] = [];
 let text = 'Reply with `inline`.\n\n```typescript\nconst code = "<safe>";\nsecond line\n```';
 list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]);
@@ -117,10 +135,15 @@ declare global {
 			setCodeLineHeight(height: number): Promise<void>;
 			setTheme(value: 'dark' | 'light' | 'hc'): void;
 			refresh(): void;
+			stream(value: string, complete: boolean): void;
 			showLongCode(): string;
 			showTool(): void;
 			openAccessibleView(help: boolean): boolean;
 			updateTool(finish: boolean): void;
+			showMedia(delay: boolean): void;
+			refreshMedia(): void;
+			finishMedia(): void;
+			mediaState(): { requests: readonly unknown[]; aborted: boolean; };
 			remove(): void;
 			dispose(): void;
 		};
@@ -140,6 +163,7 @@ window.ashChatTranscriptIntegration = {
 		const palette = value === 'dark' ? darkColorTheme : value === 'light' ? lightColorTheme : highContrastDarkColorTheme;
 		theme.setColorTheme(palette);
 	},
+	stream: (value, complete) => list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]),
 	refresh: () => list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]),
 	showLongCode: () => {
 		const code = Array.from({ length: 80 }, (_, index) => `const value${index} = ${index};`).join('\n');
@@ -171,6 +195,22 @@ window.ashChatTranscriptIntegration = {
 		toolEntries.push(...update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []));
 		list.render(chatTranscriptListItems(toolEntries));
 	},
+	showMedia: delay => {
+		delayMedia = delay;
+		mediaRequests = [];
+		mediaAborted = false;
+		const source = { sessionId: 'media-session', threadId: 'media-thread' };
+		mediaEntries = [
+			{ type: 'item', entryId: 'image', turnId: 'turn', transient: false, item: { type: 'userImageAttachment', itemId: 'image', turnId: 'turn', attachment: { contentDigest: 'sha256:image', mediaType: 'png', encodedBytes: imageBytes.length, width: 2, height: 1 } } },
+			{ type: 'item', entryId: 'audio', turnId: 'turn', transient: false, item: { type: 'userAudioAttachment', itemId: 'audio', turnId: 'turn', attachment: { contentDigest: 'sha256:audio', mediaType: 'wav', encodedBytes: 32044, durationMs: 1000 } } },
+			{ type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'tool', name: 'image-tool', argumentsJson: '{}' } },
+			{ type: 'item', entryId: 'result', turnId: 'turn', transient: false, item: { type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'tool', text: 'Result', isError: false, content: [{ type: 'text', text: 'Result' }, { type: 'imageAttachment', detail: 'auto', attachment: { contentDigest: 'sha256:image', mediaType: 'png', encodedBytes: imageBytes.length, width: 2, height: 1 } }] } },
+		];
+		list.render(chatTranscriptListItems(mediaEntries, undefined, [], source));
+	},
+	refreshMedia: () => list.render(chatTranscriptListItems(mediaEntries, undefined, [], { sessionId: 'media-session', threadId: 'media-thread' })),
+	finishMedia: () => completeMedia?.(),
+	mediaState: () => ({ requests: mediaRequests, aborted: mediaAborted }),
 	remove: () => list.render([]),
 	dispose: () => resources.dispose(),
 };

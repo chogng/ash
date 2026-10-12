@@ -23,6 +23,10 @@ interface RunningApplication {
 interface PlaywrightFixtures {
 	readonly testTargetSupport: void;
 	readonly electronWindowMode: ElectronWindowMode | undefined;
+	/** Product arguments for a test-owned Electron launch, such as --agents-window. */
+	readonly electronArgs: readonly string[];
+	/** JSON settings seeded in this Electron fixture's isolated profile before launch. */
+	readonly electronUserSettings: Readonly<Record<string, unknown>> | undefined;
 	readonly webAppServer: WebLaunchResult | undefined;
 	readonly runningApplication: RunningApplication;
 	readonly restartWorkbench: RunningApplication['restart'];
@@ -57,6 +61,8 @@ export const test = base.extend<PlaywrightFixtures>({
 		await use();
 	}, { auto: true }],
 	electronWindowMode: [undefined, { option: true }],
+	electronArgs: [[], { option: true }],
+	electronUserSettings: [undefined, { option: true }],
 	includeLargeTestFile: [false, { option: true }],
 	gitRepository: [false, { option: true }],
 	gitMergeConflict: [false, { option: true }],
@@ -85,7 +91,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode, electronArgs, electronUserSettings }, use, testInfo) => {
 		if (backendFixture && githubAccount) { throw new Error('Backend fixture and GitHub account fixture both select product services'); }
 		// Evidence scenarios opt into full recording; the launchers own every page until cleanup.
 		const videoOptions = typeof video === 'string' ? { mode: video, size: undefined } : video;
@@ -157,11 +163,17 @@ export const test = base.extend<PlaywrightFixtures>({
 			appServerMode: target.appServerMode, userDataDirectory, recordVideo,
 			productServicesPath: backendFixture?.productServicesPath ?? (githubAccount ? join(userDataDirectory, 'product-services.json') : undefined),
 			windowMode: electronWindowMode,
+			extraArgs: electronArgs,
 			workspaceDirectory: openWorkspace ? testWorkspace.directory : undefined,
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,
 		};
 		try {
 			if (backendFixture) { await backendFixture.prepareProfile(join(userDataDirectory, 'profile')); }
+			if (electronUserSettings) {
+				const profileDirectory = join(userDataDirectory, 'profile');
+				await mkdir(profileDirectory, { recursive: true });
+				await writeFile(join(profileDirectory, 'settings.json'), JSON.stringify(electronUserSettings) + '\n');
+			}
 			if (githubAccount && options.productServicesPath) {
 				await writeFile(options.productServicesPath, JSON.stringify({ schemaVersion: 3, githubAccount }) + '\n');
 			}

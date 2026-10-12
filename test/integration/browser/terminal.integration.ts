@@ -238,7 +238,7 @@ declare global {
 
 // Exercise the production pane with controlled process and workspace boundaries.
 if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(location.search).has('windows')) {
-	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
+	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
 	// An existing instance retains its screen when the pane takes over its DOM.
 	if (!new URLSearchParams(location.search).has('existing')) widget.dispose();
 	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { CommandService }, { URI }] = await Promise.all([
@@ -454,7 +454,7 @@ declare global {
 }
 
 if (new URLSearchParams(location.search).has('assembly')) {
-	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
+	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
 	const [{ InstantiationService }, { ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }] = await Promise.all([
 		import('../../../src/ash/platform/instantiation/common/instantiationService.js'),
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
@@ -533,7 +533,7 @@ declare global {
 
 if (new URLSearchParams(location.search).has('embedder')) {
 	widget.dispose();
-	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
+	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
 	const [{ IEmbedderTerminalService }, { TerminalMainContribution }, { getSingletonServiceDescriptors }, { ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }, { WorkbenchContributionsRegistry, WorkbenchPhase }] = await Promise.all([
 		import('../../../src/ash/workbench/services/terminal/common/embedderTerminalService.js'),
 		import('../../../src/ash/workbench/contrib/terminal/browser/terminalMainContribution.js'),
@@ -615,7 +615,7 @@ declare global {
 
 if (new URLSearchParams(location.search).has('stream')) {
 	widget.dispose();
-	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
+	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
 	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }] = await Promise.all([
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
 		import('../../../src/ash/platform/terminal/common/terminal.js'),
@@ -713,7 +713,7 @@ declare global {
 
 if (new URLSearchParams(location.search).has('input')) {
 	widget.dispose();
-	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
+	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
 	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }] = await Promise.all([
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
 		import('../../../src/ash/platform/terminal/common/terminal.js'),
@@ -832,8 +832,54 @@ if (new URLSearchParams(location.search).has('input')) {
 			services.registerInstance(IWorkbenchLayoutService, layout);
 			groupPane = store.add(services.createInstance(TerminalViewPane, root, { id: 'ash.terminal', title: 'Terminal' }));
 			groupPane.setVisible(true); groupPane.setExpanded(true); groupPane.layout(root.clientHeight, 0, root.clientWidth);
+			if (new URLSearchParams(location.search).has('editor')) {
+				const [{ EditorPart }, { BrowserEditorService }, { IEditorService }, { IEditorGroupsService }, { TestUriIdentityServices }, { IUriIdentityService }] = await Promise.all([
+					import('../../../src/ash/workbench/browser/parts/editor/editorPart.js'),
+					import('../../../src/ash/workbench/services/editor/browser/browserEditorService.js'),
+					import('../../../src/ash/workbench/services/editor/common/editorService.js'),
+					import('../../../src/ash/workbench/services/editor/common/editorGroupsService.js'),
+					import('../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js'),
+					import('../../../src/ash/platform/uriIdentity/common/uriIdentity.js'),
+				]);
+				const identities = store.add(new TestUriIdentityServices());
+				services.registerInstance(IUriIdentityService, identities.get(IUriIdentityService));
+				const editorHost = document.createElement('div');
+				editorHost.style.height = '300px';
+				root.append(editorHost);
+				const { createTestEditorServices } = await import('../../../src/ash/workbench/test/common/testEditorServices.js');
+				const editorServices = store.add(createTestEditorServices(services.get(IConfigurationService), services));
+				const part = store.add(editorServices.createInstance(EditorPart, editorHost, { configurationService: services.get(IConfigurationService) }));
+				part.layout({ width: 900, height: 300 });
+				const editors = store.add(new BrowserEditorService(part));
+				services.registerInstance(IEditorService, editors);
+				services.registerInstance(IEditorGroupsService, editors);
+				const [{ ITerminalEditorService }, { TerminalEditorService }] = await Promise.all([
+					import('../../../src/ash/workbench/services/terminal/browser/terminal.js'),
+					import('../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js'),
+				]);
+				services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService));
+				window.ashTerminalEditorIntegration = {
+					state: () => ({ instances: terminals.instances.length, created: nextTerminal, editorTabs: editors.groups.flatMap(group => group.inputs).length, originalScreen: terminal.xterm === screen, target: terminal.target }),
+					disconnect: () => connectionChanged.fire('stopped'),
+					close: async () => { const input = editors.activeEditor; if (input) await editors.activeGroup.closeEditor(input); },
+					restore: async () => {
+						const { EditorInputSerializers } = await import('../../../src/ash/workbench/services/editor/common/editorInputSerializer.js');
+						const input = editors.activeEditor!;
+						const saved = EditorInputSerializers.serialize(input);
+						await editors.activeGroup.closeEditor(input);
+						await terminal.close();
+						await editors.openEditor(EditorInputSerializers.deserialize(saved), { pinned: true });
+					},
+				};
+			}
+			const [{ ITerminalEditingService }, { TerminalEditingService }] = await Promise.all([
+				import('../../../src/ash/workbench/services/terminal/browser/terminal.js'),
+				import('../../../src/ash/workbench/contrib/terminal/browser/terminalEditingService.js'),
+			]);
+			services.registerSingleton(ITerminalEditingService, () => services.createInstance(TerminalEditingService));
 			window.ashTerminalGroupsIntegration = {
 				command: (id, args) => commands.executeCommand(id, args),
+				metadata: () => ({ title: terminals.activeInstance?.title, icon: terminals.activeInstance?.profile.icon?.id, created: nextTerminal }),
 				groups: () => services.get(ITerminalGroupService).groups.map(group => group.terminalInstances.map(instance => instance.id)),
 				active: () => terminals.activeInstance?.id,
 				writes: () => routedWrites,
@@ -957,7 +1003,14 @@ declare global {
 			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight'): void;
 			errors(): readonly string[];
 		};
+		ashTerminalEditorIntegration: {
+			disconnect(): void;
+			state(): { instances: number; created: number; editorTabs: number; originalScreen: boolean; target: number | undefined; };
+			close(): Promise<void>;
+			restore(): Promise<void>;
+		};
 		ashTerminalGroupsIntegration: {
+			metadata(): { title: string | undefined; icon: string | undefined; created: number; };
 			command(id: string, args?: unknown): Promise<unknown>;
 			groups(): readonly (readonly string[])[];
 			active(): string | undefined;

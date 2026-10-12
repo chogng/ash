@@ -23,6 +23,10 @@ export interface ISerializedTerminalInstanceContext {
 }
 
 export const enum TerminalCommandId {
+	Rename = 'workbench.action.terminal.rename',
+	ChangeIcon = 'workbench.action.terminal.changeIcon',
+	MoveToEditor = 'workbench.action.terminal.moveToEditor',
+	MoveToTerminalPanel = 'workbench.action.terminal.moveToTerminalPanel',
 	New = 'workbench.action.terminal.new',
 	NewWithProfile = 'workbench.action.terminal.newWithProfile',
 	SelectDefaultProfile = 'workbench.action.terminal.selectDefaultProfile',

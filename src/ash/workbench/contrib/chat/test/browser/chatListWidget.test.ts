@@ -182,3 +182,22 @@ test('tool invocation summaries and sections use the Chinese locale', () => {
 		assert.equal(widget.element.querySelector('[role="log"]')!.getAttribute('aria-label'), '聊天记录');
 	} finally { resetNlsResolver(); }
 });
+
+
+test('streaming Markdown reuses static blocks and code editors, then releases rewritten code', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+	const text = 'Stable text.\n\n```ts\nconst a = 1;';
+	widget.render([{ id: 'reply', type: 'agentMessage', text, transient: true }]);
+	const paragraph = widget.element.querySelector('p');
+	const code = widget.element.querySelector('.stanza-editor');
+	widget.render([{ id: 'reply', type: 'agentMessage', text: `${text}\nconst b = 2;`, transient: true }]);
+	assert.equal(widget.element.querySelector('p'), paragraph);
+	assert.equal(widget.element.querySelector('.stanza-editor'), code);
+	widget.render([{ id: 'reply', type: 'agentMessage', text: `${text}\nconst b = 2;\n\x60\x60\x60\n\nDone.`, transient: false }]);
+	assert.equal(widget.element.querySelector('p'), paragraph);
+	assert.equal(widget.element.querySelector('.stanza-editor'), code);
+	widget.render([{ id: 'reply', type: 'agentMessage', text: 'Replacement', transient: false }]);
+	assert.equal(widget.element.querySelector('.stanza-editor'), null);
+});

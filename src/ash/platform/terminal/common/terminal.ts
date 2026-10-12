@@ -163,7 +163,7 @@ export interface ITerminalProcessCloseOptions {
 export interface ITerminalProcessService {
 	/** Initialized execution host OS; unavailable before connection readiness. */
 	readonly operatingSystem?: OperatingSystem;
-	listProfiles(): Promise<readonly ITerminalProcessProfile[]>;
+	listProfiles(dirId?: string): Promise<readonly ITerminalProcessProfile[]>;
 	resolveProfile(profile: TerminalProcessProfileSelection, dirId?: string): Promise<ITerminalResolvedProfile>;
 	/** Reads requested variables from the selected execution host; missing values are omitted. */
 	getEnvironment(names?: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>>;
@@ -235,3 +235,6 @@ export interface ITerminalChildProcess extends IDisposable {
 	input?(data: string): void;
 	resize?(cols: number, rows: number): void;
 }
+
+/** Workbench host for a terminal screen; moving it retains the process. */
+export enum TerminalLocation { Panel = 1, Editor = 2 }

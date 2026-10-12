@@ -118,7 +118,7 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 			throw new Error(localize('terminal.profile.windowsCommandLine', 'Raw command line strings are only supported on Windows.'));
 		}
 		const args = typeof profile.args === 'string' ? await resolve(profile.args) : await Promise.all((profile.args ?? []).map(resolve));
-		const result = await this.processes.resolveProfile({ type: 'custom', name: profile.profileName, path, args });
+		const result = await this.processes.resolveProfile({ type: 'custom', name: profile.profileName, path, args }, this.sessionFolderId());
 		return { ...profile, path: result.executable, args: result.args };
 	}
 

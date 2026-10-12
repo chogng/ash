@@ -1,12 +1,14 @@
+import { TerminalEditingService } from './terminalEditingService.js';
+import { terminalStrings } from '../common/terminalStrings.js';
+import { registerEditorPane } from '../../../browser/editor.js';
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
+import { EditorInputSerializers } from '../../../services/editor/common/editorInputSerializer.js';
+import { TerminalEditor } from './terminalEditor.js';
+import { TerminalEditorInput } from './terminalEditorInput.js';
+import { TerminalInputSerializer } from './terminalEditorSerializer.js';
+import { TerminalEditorService } from './terminalEditorService.js';
 import { registerTerminalActions } from './terminalActions.js';
 import { setupTerminalMenus } from './terminalMenus.js';
-import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
-import '../../terminalContrib/links/browser/terminal.links.contribution.js';
-import '../../terminalContrib/find/browser/terminal.find.contribution.js';
-import '../../terminalContrib/accessibility/browser/terminal.accessibility.contribution.js';
-import '../../terminalContrib/history/browser/terminal.history.contribution.js';
-import '../../terminalContrib/clipboard/browser/terminal.clipboard.contribution.js';
-import '../../terminalContrib/sendSequence/browser/terminal.sendSequence.contribution.js';
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { TERMINAL_VIEW_ID } from "../common/terminal.js";
@@ -15,7 +17,7 @@ import { ITerminalProcessService } from '../../../../platform/terminal/common/te
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { ITerminalConfigurationService } from './terminal.js';
-import { ITerminalService, ITerminalGroupService } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService } from '../../../services/terminal/browser/terminal.js';
 import { TerminalGroupService } from './terminalGroupService.js';
 import { setupTerminalCommands } from './terminalCommands.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
@@ -85,3 +87,17 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
 		ctorDescriptor: new SyncDescriptor(TerminalViewPane),
 	}]);
 }
+
+registerSingleton(ITerminalEditorService, TerminalEditorService, InstantiationType.Delayed);
+EditorInputSerializers.registerStatic(new TerminalInputSerializer());
+registerEditorPane({
+	id: TerminalEditorInput.ID,
+	name: terminalStrings.terminal,
+	canOpen: input => input instanceof TerminalEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	create: options => {
+		if (!options.instantiationService) throw new Error('Terminal editor requires the window service container');
+		return options.instantiationService.createInstance(TerminalEditor);
+	},
+});
+
+registerSingleton(ITerminalEditingService, TerminalEditingService, InstantiationType.Delayed);

@@ -78,7 +78,6 @@ pub struct AttachmentMaterializeResult {
     pub attachment: AttachmentRef,
 }
 
-
 /// Opens only a stored media part of an Item in the selected Session's Thread.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

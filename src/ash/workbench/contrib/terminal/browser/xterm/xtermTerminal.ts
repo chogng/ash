@@ -1,10 +1,13 @@
+import { DecorationAddon } from './decorationAddon.js';
+import { MarkNavigationAddon } from './markNavigationAddon.js';
+import '../media/xterm.css';
 import { selectionBackground, selectionForeground } from "../../../../../platform/theme/common/colors/baseColors.js";
 import type { IColorTheme } from "../../../../../platform/theme/common/themeService.js";
 import * as terminalColors from "../../common/terminalColorRegistry.js";
 
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon, ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
-import type { Terminal, IDecoration, IMarker, ITheme, ITerminalOptions } from "@xterm/xterm";
+import type { Terminal, ITheme, ITerminalOptions } from "@xterm/xterm";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
@@ -13,7 +16,7 @@ import { computeLinks } from "../../../../../editor/common/languages/linkCompute
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
 import { localize } from "../../../../../nls.js";
 import { ITerminalConfigurationService } from "../terminal.js";
-import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance, IXtermTerminal } from "../../../../services/terminal/browser/terminal.js";
+import type { ITerminalDimensions, ITerminalInstance, IXtermTerminal } from "../../../../services/terminal/browser/terminal.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
 import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';
@@ -37,8 +40,8 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private readonly pendingWrites: ((terminal: Terminal) => void)[] = [];
 	private focusSource: Element | null | undefined;
 	private readonly alternateScroll = new AlternateScrollMode();
-	private readonly commandDecorations = new Map<string, TerminalCommandDecoration>();
-	private readonly commandMarkers = new Map<string, IMarker>();
+	private readonly decorationAddon = this._register(new DecorationAddon());
+	private readonly markNavigationAddon = this._register(new MarkNavigationAddon(() => this.decorationAddon.markers));
 	private visible = false;
 	private readonly resizeDebouncer: TerminalResizeDebouncer = this._register(new TerminalResizeDebouncer(
 		() => this.visible,
@@ -78,7 +81,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this._register(instance.onDidChangeCommandStatus((event) => {
 			// The screen survives reuse while backend command IDs are scoped to one PTY.
 			const processId = instance.processId;
-			this.writeWhenReady(terminal => this.renderCommandStatus(terminal, event, processId));
+			this.writeWhenReady(() => this.decorationAddon.registerCommandDecoration(event, processId));
 		}));
 		this._register(instance.onDidChangeState((state) => {
 			this.element.dataset.state = state;
@@ -125,6 +128,8 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this._register(toDisposable(() => terminal.dispose()));
 		this.fitAddon = new FitAddon();
 		terminal.loadAddon(this.fitAddon);
+		terminal.loadAddon(this.decorationAddon);
+		terminal.loadAddon(this.markNavigationAddon);
 		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }));
 		terminal.open(this.element);
 		updateTerminalFontRendering(terminal, this.configuration.config.fontRendering);
@@ -377,81 +382,8 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		));
 	}
 
-	private renderCommandStatus(terminal: Terminal, event: ITerminalCommandStatusEvent, processId: number): void {
-		const key = `${processId}:${event.commandId}`;
-		let item = this.commandDecorations.get(key);
-		if (!item) {
-			let marker = this.commandMarkers.get(key);
-			if (!marker || marker.isDisposed) {
-				marker = terminal.registerMarker(0);
-				if (!marker) return;
-				this.commandMarkers.set(key, marker);
-				const markerLifetime = marker.onDispose(() => this.commandMarkers.delete(key));
-				this._register(toDisposable(() => markerLifetime.dispose()));
-			}
-			const decoration = terminal.registerDecoration({ marker, width: 1, layer: "top" });
-			if (!decoration) return;
-			item = { event, decoration };
-			this.commandDecorations.set(key, item);
-			const renderListener = decoration.onRender((element) => this.presentCommandStatus(element, item!));
-			const disposeListener = decoration.onDispose(() => this.commandDecorations.delete(key));
-			this._register(toDisposable(() => renderListener.dispose()));
-			this._register(toDisposable(() => disposeListener.dispose()));
-			this._register(toDisposable(() => decoration.dispose()));
-		} else {
-			item.event = event;
-		}
-		if (item.decoration.element) this.presentCommandStatus(item.decoration.element, item);
-	}
-
-	private presentCommandStatus(element: HTMLElement, item: TerminalCommandDecoration): void {
-		const { status, exitCode } = item.event;
-		element.classList.remove("running", "completed", "succeeded", "failed", "canceled");
-		element.classList.add("ash-terminal-command-status", status);
-		element.dataset.commandStatus = status;
-		const label = terminalCommandStatusLabel(status, exitCode);
-		element.setAttribute("role", "img");
-		element.setAttribute("aria-label", label);
-		element.title = label;
-	}
-
-	public scrollToPreviousCommand(): void {
-		this.scrollToAdjacentCommand('previous');
-	}
-
-	public scrollToNextCommand(): void {
-		this.scrollToAdjacentCommand('next');
-	}
-
-	private scrollToAdjacentCommand(direction: 'previous' | 'next'): void {
-		const terminal = this.terminal;
-		const buffer = terminal?.buffer.active;
-		if (!terminal || !buffer || buffer.type !== 'normal') return;
-
-		const currentLine = buffer.viewportY;
-		const markers = [...this.commandMarkers.values()]
-			.filter(marker => !marker.isDisposed)
-			.sort((left, right) => left.line - right.line);
-		const target = direction === 'previous'
-			? markers.filter(marker => marker.line < currentLine).at(-1)
-			: markers.find(marker => marker.line > currentLine);
-		if (target) terminal.scrollToLine(target.line);
-	}
-}
-
-interface TerminalCommandDecoration {
-	event: ITerminalCommandStatusEvent;
-	readonly decoration: IDecoration;
-}
-
-function terminalCommandStatusLabel(status: ITerminalCommandStatusEvent["status"], exitCode: number | undefined): string {
-	switch (status) {
-		case "running": return "Command is running";
-		case "completed": return "Command completed; exit code unavailable";
-		case "succeeded": return "Command completed successfully";
-		case "failed": return exitCode === undefined ? "Command failed" : `Command failed with exit code ${exitCode}`;
-		case "canceled": return "Command was canceled";
-	}
+	public scrollToPreviousCommand(): void { this.markNavigationAddon.scrollToPreviousMark(); }
+	public scrollToNextCommand(): void { this.markNavigationAddon.scrollToNextMark(); }
 }
 
 /** Projects the workbench theme into xterm's renderer theme contract. */

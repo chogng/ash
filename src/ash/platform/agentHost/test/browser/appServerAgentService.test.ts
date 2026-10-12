@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Emitter } from '../../../../base/common/event.js';
 import type { ServerNotification } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ThreadTranscriptUpdateEnvelope } from '../../common/agentService.js';
@@ -205,4 +206,39 @@ test('Agent Thread notifications detach tool provenance and rich results from tr
 	const result = converted.changes[1];
 	assert.ok(result.type === 'upsert' && result.entry.type === 'item' && result.entry.item.type === 'toolResult');
 	assert.deepEqual(result.entry.item.content, [{ type: 'imageAttachment', detail: 'high', attachment: { contentDigest: 'digest', mediaType: 'png', encodedBytes: 42, width: 4, height: 5 } }, { type: 'text', text: 'result' }]);
+});
+
+
+test('Agent attachment reads use the exact Item scope, verified resources and cancellation cleanup', async () => {
+	for (const mode of ['read', 'abort', 'replace'] as const) {
+		const requests: { method: string; params: unknown; }[] = [];
+		const controller = new AbortController();
+		const bytes = Buffer.from('verified media');
+		let generation = 1;
+		const service = createAppServerAgentThreadService({
+			get generation() { return generation; },
+			async request(definition: { method: string; }, params: unknown) {
+				requests.push({ method: definition.method, params });
+				switch (definition.method) {
+					case 'attachment/resource/open': {
+						if (mode === 'abort') controller.abort();
+						return { resourceId: 'media', size: bytes.length, mimeType: 'image/png', sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
+					}
+					case 'resource/read': {
+						if (mode === 'replace') generation++;
+						return { resourceId: 'media', offset: 0, decodedLength: bytes.length, dataBase64: bytes.toString('base64'), eof: true };
+					}
+					case 'resource/release': return null;
+					default: throw new Error('Unexpected request');
+				}
+			},
+		} as AppServerProtocolClient);
+		const source = { sessionId: 'session', threadId: 'thread', itemId: 'result', contentIndex: 2 };
+		const read = service.readAttachment(source, controller.signal);
+		if (mode === 'read') assert.deepEqual(await read, { bytes: new Uint8Array(bytes), mimeType: 'image/png' });
+		else await assert.rejects(read);
+		assert.deepEqual(requests[0], { method: 'attachment/resource/open', params: source });
+		assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
+		assert.equal(requests.filter(request => request.method === 'resource/read').length, mode === 'abort' ? 0 : 1);
+	}
 });

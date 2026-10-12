@@ -1,3 +1,4 @@
+import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -8,6 +9,7 @@ import { TerminalGroup } from './terminalGroup.js';
 
 /** Owns panel membership, deriving active selection from the window's TerminalService. */
 export class TerminalGroupService extends Disposable implements ITerminalGroupService {
+	private readonly instanceLifetimes = this._register(new DisposableMap<ITerminalInstance, DisposableStore>());
 	private readonly groupLifetimes = this._register(new DisposableMap<ITerminalGroup, DisposableStore>());
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChangeGroups = this.changed.event;
@@ -18,12 +20,24 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		@IViewsService private readonly views: IViewsService,
 	) {
 		super();
-		for (const instance of terminals.instances) this.createGroup(instance);
-		this._register(terminals.onDidCreateInstance(instance => this.createGroup(instance)));
+		for (const instance of terminals.instances) this.observeInstance(instance);
+		this._register(terminals.onDidCreateInstance(instance => this.observeInstance(instance)));
 		this._register(terminals.onDidDisposeInstance(instance => {
+			this.instanceLifetimes.deleteAndDispose(instance);
 			const group = this.getGroupForInstance(instance);
 			if (group) group.removeInstance(instance);
 		}));
+	}
+
+	private observeInstance(instance: ITerminalInstance): void {
+		const lifetime = new DisposableStore();
+		const update = (): void => {
+			if (instance.target === TerminalLocation.Editor) this.getGroupForInstance(instance)?.removeInstance(instance);
+			else this.createGroup(instance);
+		};
+		if (instance.onDidChangeTarget) lifetime.add(instance.onDidChangeTarget(update));
+		this.instanceLifetimes.set(instance, lifetime);
+		update();
 	}
 
 	get groups(): readonly ITerminalGroup[] { return [...this.groupLifetimes.keys()]; }
@@ -32,6 +46,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	}
 
 	createGroup(instance: ITerminalInstance): ITerminalGroup {
+		if (instance.target === TerminalLocation.Editor) throw new Error('Editor terminals do not belong to a panel group');
 		const existing = this.getGroupForInstance(instance);
 		if (existing) return existing;
 		const lifetime = new DisposableStore();

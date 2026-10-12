@@ -300,6 +300,28 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(resolver.getDefaultIcon().id, 'terminal');
 	});
 
+	test('shell profile and environment resolution retain a single Session directory grant', async () => {
+		using owner = new DisposableStore();
+		const { services, workspace, processes } = createServices(owner);
+		const scope = 'session:thread%3Aone:%2Fsession-workspace';
+		workspace.updateWorkspace({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
+		const calls: string[] = [];
+		const originalResolve = processes.resolveProfile;
+		Object.assign(processes, {
+			getEnvironment: async (_names: unknown, dirId: string | undefined) => { assert.equal(dirId, scope); calls.push('environment'); return { PATH: '/session/bin' }; },
+			resolveProfile: async (selection: Parameters<typeof originalResolve>[0], dirId: string | undefined) => { assert.equal(dirId, scope); calls.push(selection.type); return originalResolve(selection); },
+		});
+		const resolver = services.get(ITerminalProfileResolverService);
+		const options = { os: OperatingSystem.Windows, remoteAuthority: undefined };
+		const shell = { executable: '/session/shell', args: ['${env:PATH}'] };
+		await resolver.resolveShellLaunchConfig(shell, options);
+		assert.deepEqual(shell.args, ['/session/bin']);
+		assert.ok(calls.includes('custom'));
+		assert.ok(calls.includes('environment'));
+		await resolver.getDefaultProfile(options);
+		assert.ok(calls.includes('profile'));
+	});
+
 	for (const args of ['/d /s /c "echo ${env:PROFILE_VALUE}"', '']) test(`Windows resolver preserves raw profile and launch arguments ${JSON.stringify(args)}`, async () => {
 		using owner = new DisposableStore();
 		const { services, configuration, launches } = createServices(owner, true);

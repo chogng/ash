@@ -17,8 +17,8 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 
 	get operatingSystem() { return this.connection.operatingSystem; }
 
-	async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
-		const result = await appServerRequest(this.connection, "terminal/profile/list", {});
+	async listProfiles(dirId?: string): Promise<readonly ITerminalProcessProfile[]> {
+		const result = await appServerRequest(this.connection, "terminal/profile/list", { dirId });
 		return result.profiles;
 	}
 

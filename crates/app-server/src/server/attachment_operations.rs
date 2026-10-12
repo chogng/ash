@@ -1,7 +1,6 @@
 use ash_app_server_protocol::protocol::attachments::AttachmentImportRemoteParams;
-use ash_app_server_protocol::protocol::attachments::AttachmentResourceOpenParams;
-use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use ash_app_server_protocol::protocol::attachments::AttachmentMaterializeResult;
+use ash_app_server_protocol::protocol::attachments::AttachmentResourceOpenParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadCancelParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadFinishParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadStartParams;
@@ -9,6 +8,7 @@ use ash_app_server_protocol::protocol::attachments::AttachmentUploadStartResult;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteResult;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde_json::Value;
@@ -17,6 +17,7 @@ use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
 use super::decode;
+use super::operations::resource_rpc_error;
 use super::result;
 use crate::attachment_upload_store::AttachmentUploadContent;
 use crate::attachment_upload_store::AttachmentUploadError;
@@ -25,7 +26,6 @@ use ash_protocol::AttachmentRef;
 use ash_protocol::ContentPart;
 use ash_protocol::ThreadItem;
 use std::time::Duration;
-use super::operations::resource_rpc_error;
 
 impl AppServer {
     pub(super) fn attachment_resource_open(
@@ -35,51 +35,87 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: AttachmentResourceOpenParams = decode(params)?;
         let thread = self.read_session_thread(&params.session_id, &params.thread_id)?;
-        let item = thread.turns.iter().flat_map(|turn| &turn.items)
+        let item = thread
+            .turns
+            .iter()
+            .flat_map(|turn| &turn.items)
             .find(|item| item.item_id() == &params.item_id)
             .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::ResourceNotFound))?;
         let attachment = match item {
             ThreadItem::UserImageAttachment { attachment, .. } => {
-                if params.content_index.is_some() { return Err(invalid_attachment_params()); }
+                if params.content_index.is_some() {
+                    return Err(invalid_attachment_params());
+                }
                 AttachmentRef::Image(attachment.clone())
             }
             ThreadItem::UserAudioAttachment { attachment, .. } => {
-                if params.content_index.is_some() { return Err(invalid_attachment_params()); }
+                if params.content_index.is_some() {
+                    return Err(invalid_attachment_params());
+                }
                 AttachmentRef::Audio(attachment.clone())
             }
             ThreadItem::ToolResult { content, .. } => {
-                let part = params.content_index.and_then(|index| content.as_ref()?.get(index))
+                let part = params
+                    .content_index
+                    .and_then(|index| content.as_ref()?.get(index))
                     .ok_or_else(invalid_attachment_params)?;
                 match part {
-                    ContentPart::ImageAttachment { attachment, .. } => AttachmentRef::Image(attachment.clone()),
-                    ContentPart::AudioAttachment { attachment } => AttachmentRef::Audio(attachment.clone()),
-                    ContentPart::Text(_) | ContentPart::ImageUrl { .. } | ContentPart::AudioUrl { .. } => return Err(invalid_attachment_params()),
+                    ContentPart::ImageAttachment { attachment, .. } => {
+                        AttachmentRef::Image(attachment.clone())
+                    }
+                    ContentPart::AudioAttachment { attachment } => {
+                        AttachmentRef::Audio(attachment.clone())
+                    }
+                    ContentPart::Text(_)
+                    | ContentPart::ImageUrl { .. }
+                    | ContentPart::AudioUrl { .. } => return Err(invalid_attachment_params()),
                 }
             }
-            ThreadItem::UserMessage { .. } | ThreadItem::UserContext { .. } | ThreadItem::UserImage { .. }
-            | ThreadItem::AgentMessage { .. } | ThreadItem::Reasoning { .. } | ThreadItem::Plan { .. }
+            ThreadItem::UserMessage { .. }
+            | ThreadItem::UserContext { .. }
+            | ThreadItem::UserImage { .. }
+            | ThreadItem::AgentMessage { .. }
+            | ThreadItem::Reasoning { .. }
+            | ThreadItem::Plan { .. }
             | ThreadItem::ToolCall { .. } => return Err(invalid_attachment_params()),
         };
         let attachments = self.threads.attachments();
         let (mime_type, bytes, maximum) = match attachment {
             AttachmentRef::Image(reference) => (
                 reference.media_type.mime_type(),
-                attachments.read_image(&reference).map_err(|_| invalid_attachment_params())?.to_vec(),
+                attachments
+                    .read_image(&reference)
+                    .map_err(|_| invalid_attachment_params())?
+                    .to_vec(),
                 ash_attachments::MAX_IMAGE_ATTACHMENT_BYTES,
             ),
             AttachmentRef::Audio(reference) => (
                 reference.media_type.mime_type(),
-                attachments.read_audio(&reference).map_err(|_| invalid_attachment_params())?.bytes().to_vec(),
+                attachments
+                    .read_audio(&reference)
+                    .map_err(|_| invalid_attachment_params())?
+                    .bytes()
+                    .to_vec(),
                 ash_attachments::MAX_AUDIO_ATTACHMENT_BYTES,
             ),
         };
-        let resource = self.resources.lock()
+        let resource = self
+            .resources
+            .lock()
             .map_err(|_| internal_attachment_error())?
-            .create_with_limit(connection.connection_id, mime_type.to_owned(), bytes, Duration::from_secs(300), maximum)
+            .create_with_limit(
+                connection.connection_id,
+                mime_type.to_owned(),
+                bytes,
+                Duration::from_secs(300),
+                maximum,
+            )
             .map_err(resource_rpc_error)?;
         result(&ResourceMetadataResult {
-            resource_id: resource.resource_id, mime_type: resource.mime_type,
-            size: resource.size, sha256: resource.sha256,
+            resource_id: resource.resource_id,
+            mime_type: resource.mime_type,
+            size: resource.size,
+            sha256: resource.sha256,
         })
     }
 

@@ -589,16 +589,32 @@ fn dir_mutation_requires_a_dir_permissions_host_connection() {
 fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_terminal() {
     let dir = TestDir::new("projectless-session-terminal", "fixture.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
-    server.commit_limited_dir_runtime(
-        Grant::for_environment(dir.root(), GrantSource::HostConfiguration,
-            Permissions::new([Permission::ReadFiles, Permission::BrowseFiles,
-                Permission::InspectRepository, Permission::WatchFiles, Permission::SearchFiles])),
-        server.local_env_host.as_ref().unwrap(),
-    ).unwrap();
-    let session = server.start_thread(StartThreadRequest {
-        execution_target: None, branch_name: None, agent_id: None, agent: None,
-        command_id: CommandId::new("projectless-terminal-session").unwrap(), title: "fixture".into(),
-    }).unwrap();
+    server
+        .commit_limited_dir_runtime(
+            Grant::for_environment(
+                dir.root(),
+                GrantSource::HostConfiguration,
+                Permissions::new([
+                    Permission::ReadFiles,
+                    Permission::BrowseFiles,
+                    Permission::InspectRepository,
+                    Permission::WatchFiles,
+                    Permission::SearchFiles,
+                ]),
+            ),
+            server.local_env_host.as_ref().unwrap(),
+        )
+        .unwrap();
+    let session = server
+        .start_thread(StartThreadRequest {
+            execution_target: None,
+            branch_name: None,
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("projectless-terminal-session").unwrap(),
+            title: "fixture".into(),
+        })
+        .unwrap();
     let mut connection = server.product_host_connection();
     server.handle_json(&mut connection, &serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
         "clientInfo":{"name":"fixture","version":"1"},"capabilities":{"dirPermissionsHost":{"version":1}}
@@ -609,16 +625,48 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
         }
     }).to_string())).unwrap();
     assert!(granted.get("error").is_none(), "{granted}");
-    let encoded_session: String = url::form_urlencoded::byte_serialize(session.session_id.as_str().as_bytes()).collect();
-    let encoded_path: String = url::form_urlencoded::byte_serialize(dir.path.to_str().unwrap().as_bytes()).collect();
+    let encoded_session: String =
+        url::form_urlencoded::byte_serialize(session.session_id.as_str().as_bytes()).collect();
+    let encoded_path: String =
+        url::form_urlencoded::byte_serialize(dir.path.to_str().unwrap().as_bytes()).collect();
     let scope = format!("session:{encoded_session}:{encoded_path}");
+    let profiles: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc":"2.0","id":30,"method":"terminal/profile/list","params":{"dirId":scope}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert!(
+        profiles["result"]["profiles"]
+            .as_array()
+            .is_some_and(|profiles| !profiles.is_empty()),
+        "{profiles}"
+    );
+    let unscoped_profiles: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc":"2.0","id":31,"method":"terminal/profile/list","params":{}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(unscoped_profiles["error"]["message"], "TerminalUnavailable");
     let created: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection, &serde_json::json!({
         "jsonrpc":"2.0","id":3,"method":"terminal/create","params":{
             "dirId":scope,"rows":24,"cols":80,"profile":{"type":"default"},"lifecycle":{"type":"connectionOwned"}
         }
     }).to_string())).unwrap();
     assert!(created.get("error").is_none(), "{created}");
-    assert_eq!(created["result"]["ready"]["cwd"], dir.path.to_str().unwrap());
+    assert_eq!(
+        created["result"]["ready"]["cwd"],
+        dir.path.to_str().unwrap()
+    );
     let terminal_id = created["result"]["terminalId"].as_str().unwrap();
     let unscoped: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection, &serde_json::json!({
         "jsonrpc":"2.0","id":4,"method":"terminal/create","params":{

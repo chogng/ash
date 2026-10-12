@@ -1,7 +1,9 @@
+import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
+import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import '../media/chatCollapsibleContentPart.css';
 import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../../nls.js';
 import type { ChatToolCallBinding } from '../../../../../../services/chat/common/chatService.js';
 import type { IChatListItem } from '../../chatListItems.js';
@@ -17,10 +19,12 @@ export class ChatToolInvocationPart extends Disposable {
 	private readonly stdout: HTMLElement;
 	private readonly stderr: HTMLElement;
 	private readonly result: HTMLElement;
+	private readonly mediaChanges = this._register(new MutableDisposable());
+	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	private readonly _onDidChangeHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this._onDidChangeHeight.event;
 
-	constructor(document: Document, invocation: NonNullable<IChatListItem['toolInvocation']>) {
+	constructor(document: Document, invocation: NonNullable<IChatListItem['toolInvocation']>, source: IChatListItem['attachmentSource'], @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this.toolCallId = invocation.call.toolCallId;
 		this.domNode = h(document, 'details');
@@ -38,11 +42,11 @@ export class ChatToolInvocationPart extends Disposable {
 		this.domNode.append(this.summary, this.source, this.activity, this.parameters, this.stdout, this.stderr, this.result);
 		this._register(addDisposableListener(this.domNode, 'toggle', () => this._onDidChangeHeight.fire()));
 		this._register(toDisposable(() => this.domNode.remove()));
-		this.render(invocation);
+		this.render(invocation, source);
 	}
 
 	/** Updates text in place so a streaming result retains its disclosure and keyboard focus. */
-	public render(invocation: NonNullable<IChatListItem['toolInvocation']>): void {
+	public render(invocation: NonNullable<IChatListItem['toolInvocation']>, source?: IChatListItem['attachmentSource']): void {
 		const { call, result, output, stopped } = invocation;
 		this.summary.textContent = result
 			? result.isError ? localize('chat.tool.failed', '{0} · Failed', call.name) : localize('chat.tool.completed', '{0} · Completed', call.name)
@@ -66,6 +70,15 @@ export class ChatToolInvocationPart extends Disposable {
 		this.setText(this.stderr, output.filter(value => value.stream === 'stderr').map(value => value.text).join('\n'), localize('chat.tool.stderr', 'Standard error'));
 		const resultText = result?.text || result?.content?.flatMap(part => part.type === 'text' ? [part.text] : []).join('\n') || '';
 		this.setText(this.result, resultText, result?.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'));
+		const content = result?.content ?? [];
+		if (content.some(part => part.type !== 'text')) {
+			if (!this.media.value) {
+				const media = this.instantiation.createInstance(ChatAttachmentsContentPart, { ownerDocument: this.domNode.ownerDocument, variables: content, source });
+				this.media.value = media;
+				this.domNode.append(media.domNode);
+				this.mediaChanges.value = media.onDidChangeHeight(() => this._onDidChangeHeight.fire());
+			} else this.media.value.updateVariables(content, source);
+		} else { this.mediaChanges.clear(); this.media.clear(); }
 	}
 
 	private setText(element: HTMLElement, text: string, label?: string): void {

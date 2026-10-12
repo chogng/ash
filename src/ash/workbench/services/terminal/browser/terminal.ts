@@ -1,10 +1,11 @@
+import type { URI } from '../../../../base/common/uri.js';
 import type { Terminal } from '@xterm/xterm';
 import type { ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
 import type { IView } from "../../../common/views.js";
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection } from '../../../../platform/terminal/common/terminal.js';
+import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection, TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type Severity from '../../../../base/common/severity.js';
 
@@ -74,6 +75,9 @@ export type ITerminalCreateOptions = {
 /** One interactive terminal independently of its transport representation. */
 export interface ITerminalInstance extends IDisposable {
 	readonly isReadOnly?: boolean;
+	readonly resource?: URI;
+	target?: TerminalLocation;
+	readonly onDidChangeTarget?: Event<TerminalLocation | undefined>;
 	readonly id: string;
 	readonly instanceId: number;
 	readonly dirId: string;
@@ -95,6 +99,8 @@ export interface ITerminalInstance extends IDisposable {
 	readonly xterm: IXtermTerminal | undefined;
 	readonly xtermReadyPromise: Promise<IXtermTerminal | undefined>;
 	getContribution<T extends ITerminalContribution>(id: string): T | null;
+	rename?(title?: string): Promise<void>;
+	changeIcon?(icon?: ThemeIcon): Promise<ThemeIcon | undefined>;
 	start(): void;
 	attachToElement(container: HTMLElement): void;
 	detachFromElement(): void;
@@ -202,3 +208,18 @@ export interface ITerminalStatusList {
 	add(status: ITerminalStatus): void;
 	remove(status: ITerminalStatus | string): void;
 }
+
+/** Editor operations for the same window-owned terminal instances. */
+export interface ITerminalEditorService {
+	openEditor(instance: ITerminalInstance): Promise<void>;
+	detachInstance(instance: ITerminalInstance): Promise<void>;
+	getInstanceFromResource(resource: URI): ITerminalInstance | undefined;
+}
+export const ITerminalEditorService = createServiceIdentifier<ITerminalEditorService>('terminalEditorService');
+
+/** Temporary title editing, separate from the instance's title state. */
+export interface ITerminalEditingService {
+	getEditingTerminal(): ITerminalInstance | undefined;
+	rename(instance: ITerminalInstance): Promise<void>;
+}
+export const ITerminalEditingService = createServiceIdentifier<ITerminalEditingService>('terminalEditingService');

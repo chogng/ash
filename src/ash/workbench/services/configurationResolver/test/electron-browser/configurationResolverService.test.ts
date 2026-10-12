@@ -47,6 +47,14 @@ function testRendererHost(os = OperatingSystem.Linux): IRendererHost {
 }
 
 suite('ConfigurationResolverService', () => {
+	test('named environment lookup retains a single Session directory grant', async () => {
+		const scope = 'session:thread%3Aone:%2Fsession-workspace';
+		using workspace = new WorkspaceContextService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
+		using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace], [ITerminalProcessService, { getEnvironment: async (names: readonly string[], dirId: string | undefined) => { assert.deepEqual(names, ['PATH']); assert.equal(dirId, scope); return { PATH: '/session/bin' }; } }]));
+		services.registerSingleton(ICommandService, () => new CommandService(services));
+		assert.equal(await services.get(IConfigurationResolverService).resolveAsync(workspace.getWorkspace().folders[0], '${env:PATH}'), '/session/bin');
+	});
+
 	for (const os of [OperatingSystem.Windows, OperatingSystem.Linux, OperatingSystem.Macintosh]) {
 		test(`explicit environment resolution uses execution host case rules without acquiring host environment ${os}`, async () => {
 			using workspace = new WorkspaceContextService({ id: 'environment', uri: URI.file('/work/project') });

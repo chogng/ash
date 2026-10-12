@@ -820,7 +820,7 @@ test('terminal browser list menu keeps its captured instance after active select
 	const tabs = page.getByRole('tablist', { name: 'Terminal instances' });
 	await expect(tabs.getByRole('tab')).toHaveCount(2);
 	const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
-	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Clear Terminal', 'Focus Terminal', 'Kill Terminal', 'Split Terminal']);
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Change Terminal Icon', 'Clear Terminal', 'Focus Terminal', 'Kill Terminal', 'Move Terminal into Editor Area', 'Rename Terminal', 'Split Terminal']);
 	await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[0]!);
 	await tabs.getByRole('tab').first().click({ button: 'right' });
 	await expect(page.getByRole('menu')).toBeVisible();
@@ -845,7 +845,7 @@ test('terminal browser list menu supports keyboard dismissal and Chinese labels'
 	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 	const tab = page.getByRole('tablist', { name: '终端实例' }).getByRole('tab').first();
 	await tab.focus();
-	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['拆分终端', '清除终端', '终止终端', '聚焦终端'].sort());
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['拆分终端', '清除终端', '终止终端', '聚焦终端', '重命名终端', '更改终端图标', '将终端移入编辑区'].sort());
 	await tab.press('Shift+F10');
 	await expect(page.getByRole('menu')).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: '聚焦终端', exact: true })).toBeVisible();
@@ -1258,4 +1258,92 @@ test('terminal error tooltip explains a refused input operation and relaunch rem
 	await expect(active).not.toHaveAttribute('title', /Terminal write denied/);
 	await expect(page.locator('.ash-terminal-group-pane')).toHaveCount(2);
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal editor moves the original screen and process between hosts in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/terminal.html?input&groups&editor&locale=${locale}`);
+		await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalEditorIntegration)), errors })).toEqual({ ready: true, errors: [] });
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('preserved editor output'));
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
+		await expect(page.locator('.ash-terminal-editor .xterm-rows')).toContainText('preserved editor output');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 1, editorTabs: 1, originalScreen: true, target: 2 });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([]);
+		await page.locator('.ash-terminal-editor .xterm-helper-textarea').press('x');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().some(write => write.data === 'x'))).toBe(true);
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToTerminalPanel'));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 1, editorTabs: 0, originalScreen: true, target: 1 });
+		await expect(page.locator('.ash-terminal-widgets .xterm-rows')).toContainText('preserved editor output');
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
+		await page.evaluate(() => window.ashTerminalEditorIntegration.close());
+		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().instances)).toBe(0);
+		await expect(page.locator('.ash-terminal-editor')).toHaveCount(0);
+		expect(errors).toEqual([]);
+	});
+}
+
+test('terminal editor restoration displays an unavailable resource without starting a shell', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups&editor&locale=zh-CN');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashTerminalEditorIntegration))).toBe(true);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
+	await page.evaluate(() => window.ashTerminalEditorIntegration.restore());
+	await expect(page.locator('.ash-terminal-editor')).toContainText('此终端已不可用');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 0, created: 1, editorTabs: 1 });
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal rename and icon selection update the original instance in ${locale}`, async ({ page }) => {
+		await page.goto(`/terminal.html?input&groups&locale=${locale}`);
+		await expect.poll(() => page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration))).toBe(true);
+		const before = await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata());
+		const renaming = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.rename'));
+		const name = locale === 'zh-CN' ? '重命名终端' : 'Rename Terminal';
+		const dialog = page.getByRole('dialog', { name, exact: true });
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('textbox').fill('My shell');
+		await dialog.getByRole('textbox').press('Enter');
+		await renaming;
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.metadata())).toMatchObject({ title: 'My shell', created: before.created });
+		await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+		const canceled = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.rename'));
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('textbox').fill('Canceled');
+		await dialog.getByRole('textbox').press('Escape');
+		await canceled;
+		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().title)).toBe('My shell');
+		const choosing = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.changeIcon'));
+		const icons = page.getByRole('combobox');
+		await expect(icons).toBeVisible();
+		await icons.fill('terminal-git-bash');
+		await page.getByRole('option', { name: /terminal-git-bash/ }).click();
+		await choosing;
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.metadata())).toMatchObject({ title: 'My shell', icon: 'terminal-git-bash', created: before.created });
+		await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+	});
+}
+
+test('closing a terminal cancels its pending name interaction', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration))).toBe(true);
+	const renaming = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.rename'));
+	await expect(page.getByRole('dialog', { name: 'Rename Terminal', exact: true })).toBeVisible();
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.close());
+	await renaming;
+	await expect(page.getByRole('dialog', { name: 'Rename Terminal', exact: true })).toHaveCount(0);
+});
+
+
+test('terminal Clear and Relaunch commands operate on the active editor instance', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups&editor');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashTerminalEditorIntegration))).toBe(true);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('editor output\r\n'.repeat(50)));
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
+	await expect(page.locator('.ash-terminal-editor .xterm-rows')).toContainText('editor output');
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.clear'));
+	await expect(page.locator('.ash-terminal-editor .xterm-rows')).not.toContainText('editor output');
+	await page.evaluate(() => window.ashTerminalEditorIntegration.disconnect());
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.relaunch'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 2, editorTabs: 1, originalScreen: true, target: 2 });
 });

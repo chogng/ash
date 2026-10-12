@@ -31,3 +31,42 @@
 	border-radius: 0 0 var(--ash-cornerRadius-medium)
 		var(--ash-cornerRadius-medium);
 }
+
+
+.ash-chat-media-attachments {
+	min-width: 0;
+}
+.ash-chat-media {
+	margin: 8px 0;
+	min-width: 0;
+}
+.ash-chat-media > figcaption {
+	margin-bottom: 4px;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-chat-media > img {
+	max-width: 100%;
+	max-height: 480px;
+	object-fit: contain;
+}
+.ash-chat-media > audio {
+	max-width: 100%;
+}
+.ash-chat-media > button {
+	padding: 4px 8px;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-button-secondaryBackground);
+	color: var(--ash-button-foreground);
+	font: inherit;
+	cursor: pointer;
+}
+.ash-chat-media > button:hover {
+	background: var(--ash-button-hoverBackground);
+}
+.ash-chat-media:focus-visible,
+.ash-chat-media > button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

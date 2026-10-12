@@ -1,9 +1,14 @@
+import type { ThemeIcon } from '../../../../base/common/themables.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { getTerminalUri } from './terminalUri.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { CancellationError, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import {
 	ITerminalProcessService,
+	TerminalLocation,
 	ProcessPropertyType,
 	type IShellLaunchConfig,
 	type ITerminalChildProcess,
@@ -30,6 +35,17 @@ export interface CustomTerminalProcessOptions {
 }
 
 export class TerminalInstance extends Disposable implements ITerminalInstance {
+	readonly resource: URI;
+	private hostTarget: TerminalLocation | undefined = TerminalLocation.Panel;
+	private readonly targetChanged = this._register(new Emitter<TerminalLocation | undefined>());
+	readonly onDidChangeTarget = this.targetChanged.event;
+	get target(): TerminalLocation | undefined { return this.hostTarget; }
+	set target(value: TerminalLocation | undefined) {
+		if (this.hostTarget === value) return;
+		this.hostTarget = value;
+		this.targetChanged.fire(value);
+		this.onTitleChanged();
+	}
 	readonly statusList = this._register(new TerminalStatusList());
 	private readonly pendingOutput: IProcessDataEvent[] = [];
 	private readonly pendingScreenData: Uint8Array[] = [];
@@ -70,6 +86,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private relaunchTask: Promise<void> | undefined;
 	private serverTerminalId: string;
 	private _profile: ITerminalProfile;
+	private customIcon: ThemeIcon | undefined;
 	private _title: string;
 	private pollGeneration = 0;
 
@@ -104,6 +121,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.serverTerminalId = serverTerminalId;
 		this._profile = profile;
 		this._title = title;
+		this.resource = getTerminalUri(generateUuid(), instanceNumber, title);
 		this.onClosed = onClosed;
 		this.writeInitialText();
 		// Creation listeners may send input before output polling starts. The ready
@@ -168,7 +186,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	get profile(): ITerminalProfile {
-		return this._profile;
+		return this.customIcon ? Object.freeze({ ...this._profile, icon: this.customIcon }) : this._profile;
 	}
 
 	get title(): string {
@@ -179,6 +197,19 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	setTitle(title: string): void {
 		this._title = title;
+	}
+
+	async rename(title?: string): Promise<void> {
+		if (this.closed || this.isDisposed) return;
+		this._customTitle = title || undefined;
+		this.onTitleChanged();
+	}
+
+	async changeIcon(icon?: ThemeIcon): Promise<ThemeIcon | undefined> {
+		if (this.closed || this.isDisposed) return undefined;
+		this.customIcon = icon;
+		this.onTitleChanged();
+		return this.profile.icon;
 	}
 
 	public prepareCustomProcess(): void {
