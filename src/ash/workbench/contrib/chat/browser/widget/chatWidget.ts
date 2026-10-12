@@ -1,3 +1,6 @@
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { approvalModeDefinition } from '../../../../../platform/sessions/common/approvalModes.js';
+import { localize } from '../../../../../nls.js';
 import './media/chat.css';
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import type { Event } from "../../../../../base/common/event.js";
@@ -77,6 +80,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
 		createInputPart: ((container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart) | undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IDialogService dialogs: IDialogService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -114,6 +118,20 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			listAgents: () => this.model.listAgents(),
 			selectAgent: agent => this.model.selectAgent(agent),
 			selectMode: mode => this.model.selectMode(mode),
+			selectApprovalMode: async mode => {
+				const identity = this.model.threadId ?? this.model.untitledSessionId;
+				const definition = approvalModeDefinition(mode);
+				if (definition.requiresConfirmation) {
+					const result = await dialogs.confirm({
+						message: localize('sessions.chat.permission.fullWarning', 'Skip most permission approvals?'),
+						detail: localize('sessions.chat.permission.fullDetail', 'Commands may change or delete files and perform external actions without asking. File and network access limits still apply. Plan and Ask remain analysis modes.'),
+						primaryButton: localize(definition.label.key, definition.label.text),
+					});
+					if (!result.confirmed) return;
+				}
+				if (!this.isDisposed && identity === (this.model.threadId ?? this.model.untitledSessionId)) this.model.selectApprovalMode(mode);
+			},
+			showContextUsage: detail => dialogs.info(localize('chat.input.contextUsage', 'Context usage'), detail),
 			openModelSettings: (category = 'models') => commandService.executeCommand(OpenSettingsCommandId, { section: category }),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};

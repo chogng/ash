@@ -4,6 +4,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { createDiffEditorInput, isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { IEditorPart } from './editorPart.js';
 import { TextDiffEditor } from './textDiffEditor.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
 
 export const IDiffEditorCommandsService = createServiceIdentifier<IDiffEditorCommandsService>('diffEditorCommandsService');
 
@@ -31,18 +32,31 @@ export class DiffEditorCommandsService implements IDiffEditorCommandsService {
 		@IEditorPart private readonly editorPart: IEditorPart,
 		@IEditorService private readonly editorService: IEditorService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ILogService private readonly logService: ILogService,
 	) { }
 
 	async toggleRenderSideBySide(): Promise<void> {
 		if (!this.activeControl()) return;
 		const key = 'diffEditor.renderSideBySide';
-		await this.configurationService.updateValue(key, !this.configurationService.getValue<boolean>(key));
+		try {
+			await this.configurationService.updateValue(key, !this.configurationService.getValue<boolean>(key));
+			this.logService.info('diffEditor.commands', 'Toggled diff layout', this.configurationService.getValue<boolean>(key));
+		} catch (error) {
+			this.logService.error('diffEditor.commands', 'Failed to toggle diff layout', error);
+			throw error;
+		}
 	}
 
 	async setViewMode(mode: DiffEditorViewMode): Promise<void> {
 		if (!this.activeControl()) return;
-		await this.configurationService.updateValue('diffEditor.renderSideBySide', mode !== 'inline');
-		await this.configurationService.updateValue('diffEditor.useInlineViewWhenSpaceIsLimited', mode === 'automatic');
+		try {
+			await this.configurationService.updateValue('diffEditor.renderSideBySide', mode !== 'inline');
+			await this.configurationService.updateValue('diffEditor.useInlineViewWhenSpaceIsLimited', mode === 'automatic');
+			this.logService.info('diffEditor.commands', 'Set diff layout', mode);
+		} catch (error) {
+			this.logService.error('diffEditor.commands', 'Failed to set diff layout', error);
+			throw error;
+		}
 	}
 
 	navigateInDiffEditor(next: boolean): void {
@@ -86,6 +100,15 @@ export class DiffEditorCommandsService implements IDiffEditorCommandsService {
 
 	private activeControl() {
 		const pane = this.editorPart.activePane;
-		return pane instanceof TextDiffEditor ? pane.getControl() : undefined;
+		const matchesType = pane instanceof TextDiffEditor;
+		const control = matchesType ? pane.getControl() : undefined;
+		this.logService.info('diffEditor.commands', 'Resolved active diff control', {
+			paneId: pane?.id,
+			paneType: pane?.constructor.name,
+			matchesType,
+			sameConstructor: pane?.constructor === TextDiffEditor,
+			hasControl: Boolean(control),
+		});
+		return control;
 	}
 }

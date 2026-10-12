@@ -147,6 +147,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const chatService: IChatService & ILanguageModelsService = {
 		configureAdvisor: async () => { },
 		consultAdvisor: async () => { },
+		readContextUsage: async () => { throw new Error('No active Thread'); },
 		readAdvisorDefault: async () => null,
 		saveAdvisorDefault: async () => { },
 		onDidChangeSession: Event.None,

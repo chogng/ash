@@ -1,3 +1,4 @@
+import type { ChatContextUsage } from '../../workbench/services/chat/common/chatService.js';
 import { IExecutionSettingsService } from '../../platform/execution/common/executionSettingsService.js';
 import { CancellationToken } from '../../base/common/cancellation.js';
 import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -43,6 +44,8 @@ export class ChatWidgetModel extends Disposable {
 	private transcriptRevision = 0;
 	private selection: ChatWidgetSelection;
 	private _thread: Thread | undefined;
+	private contextUsage: ChatContextUsage | undefined;
+	private contextUsageRequest = 0;
 	private _interaction: TurnInteraction | undefined;
 	private _state: ChatWidgetState = "loading";
 	private _error: string | undefined;
@@ -115,6 +118,7 @@ export class ChatWidgetModel extends Disposable {
 			phase: this._state,
 			error: this._error,
 			canInterrupt: this.canInterrupt,
+			contextUsage: this.contextUsage,
 			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? this.defaultApprovalMode.get(),
 			models: this._models,
 			modelsError: this.modelsError,
@@ -619,6 +623,8 @@ export class ChatWidgetModel extends Disposable {
 		const generation = ++this.generation;
 		const oldThreadId = this._thread?.threadId;
 		this._thread = undefined;
+		this.contextUsage = undefined;
+		this.contextUsageRequest++;
 		this._interaction = undefined;
 		this.transcriptEntries = [];
 		this.transcriptRevision = 0;
@@ -635,6 +641,7 @@ export class ChatWidgetModel extends Disposable {
 			const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0, this);
 			if (this.isDisposed || generation !== this.generation) return;
 			this._thread = result.thread;
+			void this.loadContextUsage(generation);
 			if (!this.selectedModes.has(active.threadId)) {
 				this.selectedModes.set(active.threadId, result.thread.turns.at(-1)?.mode ?? 'agent');
 			}
@@ -671,6 +678,23 @@ export class ChatWidgetModel extends Disposable {
 			active ? this.subscribe(active) : Promise.resolve(),
 			this.loadCatalogs(),
 		]);
+	}
+
+	private async loadContextUsage(threadGeneration: number): Promise<void> {
+		const active = this.activeSession;
+		if (!active) return;
+		const request = ++this.contextUsageRequest;
+		try {
+			const usage = await this.chatService.readContextUsage(active.session.sessionId, active.threadId);
+			if (this.isDisposed || threadGeneration !== this.generation || request !== this.contextUsageRequest) return;
+			this.contextUsage = usage;
+			this._onDidChange.fire();
+		} catch {
+			if (this.isDisposed || threadGeneration !== this.generation || request !== this.contextUsageRequest) return;
+			// An unavailable estimate must not leave a previous thread's capacity visible.
+			this.contextUsage = undefined;
+			this._onDidChange.fire();
+		}
 	}
 
 	private async loadQueue(): Promise<void> {
@@ -808,6 +832,7 @@ export class ChatWidgetModel extends Disposable {
 				result.thread.threadId !== this.threadId
 			) return;
 			this._thread = result.thread;
+			void this.loadContextUsage(generation);
 			if (result.transcript.revision >= this.transcriptRevision) {
 				this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
 				this.transcriptRevision = result.transcript.revision;

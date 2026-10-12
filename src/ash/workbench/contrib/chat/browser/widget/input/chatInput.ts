@@ -1,3 +1,4 @@
+import type { ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../../platform/agentHost/common/appServerApi.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
@@ -25,6 +26,7 @@ export interface ChatInputState {
 	readonly error?: string;
 	readonly canInterrupt: boolean;
 	readonly approvalMode: ApprovalMode;
+	readonly contextUsage?: ChatContextUsage;
 	readonly models: readonly ModelCatalogEntry[];
 	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];
@@ -50,6 +52,8 @@ export interface ChatInputDelegate {
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
 	selectMode(mode: ChatMode): void;
+	selectApprovalMode?(mode: ApprovalMode): Promise<void>;
+	showContextUsage?(detail: string): Promise<void>;
 	openModelSettings(category?: 'models' | 'dictation'): Promise<void>;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 }

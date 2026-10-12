@@ -67,7 +67,50 @@
 
 .ash-chat-input-status-toolbar {
 	flex: 0 0 auto;
-	margin-left: auto;
+}
+
+.ash-chat-input-context-toolbar,
+.ash-chat-input-feedback-toolbar {
+	flex: 0 0 auto;
+}
+
+.ash-chat-context-usage-button {
+	gap: 0;
+}
+
+.ash-chat-context-usage-ring {
+	inline-size: var(--ash-lxiconFontSize);
+	block-size: var(--ash-lxiconFontSize);
+	flex-shrink: 0;
+	fill: none;
+	/* A capacity meter needs a legible arc at icon size. */
+	stroke-width: calc(2 * var(--ash-strokeThickness));
+	transform: rotate(-90deg);
+}
+
+.ash-chat-context-usage-track {
+	stroke: var(--ash-input-border);
+}
+
+.ash-chat-context-usage-value {
+	stroke: currentColor;
+}
+
+.ash-chat-context-usage-value.empty {
+	display: none;
+}
+
+.ash-chat-status-summary {
+	min-width: 0;
+	max-width: 100%;
+	flex: 0 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-chat-status-summary:empty {
+	display: none;
 }
 
 .ash-chat-status {

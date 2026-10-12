@@ -76,7 +76,7 @@ import { IChatService } from '../../../src/ash/workbench/services/chat/common/ch
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
+	interface Window { ashChatInputIntegration: { setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -416,7 +416,8 @@ const delegate: ChatInputDelegate = {
 		automatic = true;
 		renderModels();
 	},
-	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, openModelSettings: async () => { recordDestination({ settings: 'models' }); },
+	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
+	showContextUsage: async detail => { recordDestination({ contextDetail: detail }); }, openModelSettings: async () => { recordDestination({ settings: 'models' }); },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
@@ -425,8 +426,9 @@ const part = resources.add(services.createInstance(ChatInputPart, document.query
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
 }));
-const state: ChatInputState = {
-	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+let state: ChatInputState = {
+	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready',
+	contextUsage: { estimatedTokens: 200, contextWindow: 1000, autoCompactAt: 800, categories: [{ category: 'conversation', tokens: 200 }], latestRequestTokens: 180 }, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 	interaction: {
 		requestId: 'approval', request: {
 			type: 'approval', request: {
@@ -447,10 +449,13 @@ const state: ChatInputState = {
 	},
 };
 function renderModels(): void {
-	part.render({ ...state, models, selectedModel, isAutomaticModel: automatic, selectedReasoningEffort, interaction: undefined });
+	state = { ...state, models, selectedModel, isAutomaticModel: automatic, selectedReasoningEffort };
+	part.render({ ...state, interaction: undefined });
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	setFooterPhase: (phase, error) => { state = { ...state, phase, error, interaction: undefined }; part.render(state); },
+	setContextUsage: (available, capacity, estimatedTokens = 200) => { state = { ...state, contextUsage: available ? { estimatedTokens, contextWindow: capacity, categories: [{ category: 'conversation', tokens: 200 }] } : undefined, interaction: undefined }; part.render(state); },
 	setFooterStatus: visible => footerStatusVisible.set(visible),
 	removeFooterStatus: () => footerStatus?.dispose(),
 	historyState: () => ({ writes: historyWrites, submissions: historySubmissions, reads: historyReads }),

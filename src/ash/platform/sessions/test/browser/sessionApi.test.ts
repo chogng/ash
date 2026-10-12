@@ -67,3 +67,17 @@ test('Review model saves only independent review settings with the current confi
 		{ expectedRevision: 9, approvalReviewModel: { type: 'automatic' } },
 	]);
 });
+
+
+test('Thread context inspection reads usage in the selected session and thread scope', async () => {
+	const requests: unknown[] = [];
+	const result = { context: { estimatedTokens: 123 }, toolDefinitions: [] };
+	const connection = {
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			return result;
+		},
+	} as unknown as AppServerProtocolClient;
+	assert.equal(await createAppServerThreadApi(connection).readContext({ sessionId: 'session-a', threadId: 'thread-b' }), result);
+	assert.deepEqual(requests, [{ method: 'context/read', params: { scope: { type: 'thread', sessionId: 'session-a', threadId: 'thread-b' }, detail: 'usage' } }]);
+});

@@ -263,7 +263,7 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
 		{ severity: NotificationSeverity.Error, message: 'Dictation failed: Error: HTTP 403' },
 	]);
-	assert.equal(part.element.querySelector('.ash-chat-status')?.textContent, 'Loading chat...');
+	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
 });
 
 test('Chat keeps model preparation in settings and reads it only when dictation is requested', async () => {
@@ -328,7 +328,7 @@ test('Chat dictation session failure appears in notifications and releases the m
 	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
 		{ severity: NotificationSeverity.Error, message: 'Dictation failed: HTTP 403' },
 	]);
-	assert.equal(part.element.querySelector('.ash-chat-status')?.textContent, 'Loading chat...');
+	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
 	assert.notEqual(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')?.getAttribute('aria-pressed'), 'true');
 });
 

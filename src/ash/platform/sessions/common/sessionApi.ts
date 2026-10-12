@@ -1,3 +1,4 @@
+import type { ContextReadResult } from '../../../../../.build/protocol/typescript/index.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { AdvisorConfig, AdvisorConfigureResult, CollaborationMode, AgentRoleListResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionTraceReadParams, SessionTraceReadResult, SessionTraceDiagnosticsReadParams, SessionTraceDiagnosticsReadResult, SessionTracePayloadReadParams, SessionTracePayloadReadResult, SessionTraceGraphReadResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../.build/protocol/typescript/index.js";
 import type { ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult } from '../../../../../.build/protocol/typescript/index.js';
@@ -110,6 +111,7 @@ export interface IModelApi {
 export interface IThreadApi {
 	checkpoints(params: MessageCheckpointsParams): Promise<MessageCheckpointsResult>;
 	restoreMessage(params: SessionOperationInput<'restoreMessage'>): Promise<SessionThreadResult>;
+	readContext(params: SessionThreadReadParams): Promise<ContextReadResult>;
 	readTrace(params: SessionTraceReadParams): Promise<SessionTraceReadResult>;
 	readTraceDiagnostics(params: SessionTraceDiagnosticsReadParams): Promise<SessionTraceDiagnosticsReadResult>;
 	readTracePayload(params: SessionTracePayloadReadParams): Promise<SessionTracePayloadReadResult>;

@@ -50,6 +50,7 @@ export function createDisconnectedThreadApi(unavailable: UnavailableOperation): 
 	return {
 		checkpoints: () => unavailable('thread.checkpoints'),
 		restoreMessage: () => unavailable('thread.restoreMessage'),
+		readContext: () => unavailable("thread.readContext"),
 		readTrace: () => unavailable('thread.readTrace'),
 		readTraceDiagnostics: () => unavailable('thread.readTraceDiagnostics'),
 		readTracePayload: () => unavailable('thread.readTracePayload'),
@@ -191,6 +192,7 @@ export function createAppServerThreadApi(connection: AppServerProtocolClient): I
 		restoreMessage: params => appServerRequest(connection, 'session/request', sessionRequest(params, {
 			type: 'restoreMessage', threadId: params.threadId, itemId: params.itemId, boundary: params.boundary, title: params.title,
 		})).then(sessionThreadResult),
+		readContext: params => appServerRequest(connection, "context/read", { scope: { type: "thread", ...params }, detail: "usage" }),
 		readTrace: params => appServerRequest(connection, 'session/trace/read', params),
 		readTraceDiagnostics: params => appServerRequest(connection, 'session/trace/diagnostics/read', params),
 		readTracePayload: params => appServerRequest(connection, 'session/trace/payload/read', params),

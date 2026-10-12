@@ -848,7 +848,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const toolbar = item.getByRole('toolbar');
 			await page.mouse.move(0, 0);
 			await expect(item).toHaveCSS('opacity', '0');
-			await gutter.hover();
+			await gutter.hover({ position: { x: 10, y: 1 } });
 			await expect(item).toHaveCSS('opacity', '1');
 			const colors = await toolbar.evaluate(node => ({
 				background: getComputedStyle(node).backgroundColor,
@@ -859,6 +859,19 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			expect(colors.background).not.toBe(colors.gutter);
 			expect(colors.background).toMatch(/^rgb\(/);
 			expect(colors.buttons).toEqual([colors.foreground, colors.foreground]);
+			const buttons = toolbar.getByRole('button');
+			const restingBackgrounds = await buttons.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor));
+			for (let index = 0; index < 2; index++) {
+				await buttons.nth(index).hover();
+				const hoveredBackgrounds = await buttons.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor));
+				expect(hoveredBackgrounds[index]).not.toBe(restingBackgrounds[index]);
+				expect(hoveredBackgrounds[1 - index]).toBe(restingBackgrounds[1 - index]);
+				await expect(toolbar).toHaveCSS('background-color', colors.background);
+				await expect(buttons.nth(index)).toHaveCSS('color', colors.foreground);
+			}
+			await testInfo.attach('diff-gutter-button-hover', { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+			await gutter.hover({ position: { x: 10, y: 1 } });
+			expect(await buttons.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor))).toEqual(restingBackgrounds);
 			for (const icon of await toolbar.locator('svg.ash-icon').all()) {
 				await expect(icon).toHaveCSS('width', '16px');
 				await expect(icon).toHaveCSS('height', '16px');
@@ -1656,7 +1669,7 @@ for (const theme of ['vs', 'vs-dark', 'hc-black']) {
 			expect(bar.left).toBe(0);
 			expect(bar.right).toBeGreaterThanOrEqual(0);
 			expect(bar.right).toBeLessThanOrEqual(20);
-			expect(bar.height).toBe(24);
+			expect(bar.height).toBe(40);
 		}
 		await expect(bars.first()).toHaveCSS('font-size', '13px');
 		await expect(bars.first()).toHaveCSS('font-family', 'sans-serif');
@@ -1666,10 +1679,131 @@ for (const theme of ['vs', 'vs-dark', 'hc-black']) {
 		await expect.poll(() => side.locator('.view-lines').evaluate(node => node.getBoundingClientRect().left)).toBeLessThan((await side.boundingBox())!.x);
 		expect(await geometry()).toEqual(before);
 		await page.evaluate(() => window.ashDiffIntegration.setFontOptions({ fontSize: 20, lineHeight: 32 }));
-		await expect(bars.first()).toHaveCSS('height', '24px');
+		await expect(bars.first()).toHaveCSS('height', '40px');
 		await expect(bars.first()).toHaveCSS('font-size', '13px');
 		await expect.poll(() => geometry().then(rows => rows[1].top)).toBeGreaterThan(before[1].top);
 	});
+}
+
+test('hidden region drag can reverse after fully revealing and ends when the feature is disabled', async ({ page }) => {
+	await openDiffPage(page);
+	const original = Array.from({ length: 20 }, (_, index) => `shared ${index + 1}`);
+	const modified = original.map((line, index) => index === 0 || index >= 15 ? `changed ${line}` : line);
+	await page.evaluate(([left, right]) => {
+		window.ashDiffIntegration.setTheme('vs');
+		window.ashDiffIntegration.setComparisonText(left, right);
+		window.ashDiffIntegration.setHiddenRegions(true);
+	}, [original.join('\n'), modified.join('\n')]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const region = page.locator('#single .stanza-diff-editor-side.modified .ash-diff-hidden-region');
+	const count = region.locator('.ash-diff-hidden-region-count');
+	const handle = region.locator('.ash-diff-hidden-region-above');
+	await expect(count).toHaveText('12 hidden lines');
+	const bounds = (await handle.boundingBox())!;
+	const lineHeight = await page.locator('#single .modified .view-line').first().evaluate(node => parseFloat(getComputedStyle(node).lineHeight));
+	const x = bounds.x + bounds.width / 2;
+	const y = bounds.y + bounds.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x, y + 14 * lineHeight);
+	await expect(count).toHaveText('0 hidden lines');
+	await page.mouse.move(x, y + 11 * lineHeight);
+	await expect(count).toHaveText('1 hidden lines');
+	await page.mouse.move(x, y);
+	await expect(count).toHaveText('12 hidden lines');
+	await page.mouse.up();
+	await expect(count).toHaveText('12 hidden lines');
+	await handle.focus();
+	await page.keyboard.press('Space');
+	await expect(count).toHaveText('10 hidden lines');
+	await handle.click({ button: 'right' });
+	await expect(count).toHaveText('10 hidden lines');
+	await page.keyboard.press('Escape');
+	const next = (await handle.boundingBox())!;
+	await page.mouse.move(x, next.y + next.height / 2);
+	await page.mouse.down();
+	await page.evaluate(() => window.ashDiffIntegration.setHiddenRegions(false));
+	await page.mouse.move(x, next.y + next.height / 2 + lineHeight);
+	await page.mouse.up();
+	await expect(page.locator('#single .ash-diff-hidden-region')).toHaveCount(0);
+	await page.evaluate(() => window.ashDiffIntegration.setHiddenRegions(true));
+	await expect(count).toHaveText('12 hidden lines');
+});
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const mode of ['side by side', 'inline', 'multi'] as const) {
+		test(`hidden region edges reveal continuously without overlapping content (${locale}, ${mode})`, async ({ page }, testInfo) => {
+			await openDiffPage(page, locale);
+			const original = Array.from({ length: 80 }, (_, index) => `shared line ${index + 1}`);
+			const modified = original.map((line, index) => index === 0 || index >= 40 ? `changed ${line}` : line);
+			await page.evaluate(([left, right, inline]) => {
+				window.ashDiffIntegration.setTheme('vs');
+				window.ashDiffIntegration.setComparisonText(left, right);
+				window.ashDiffIntegration.setHiddenRegions(true);
+				window.ashDiffIntegration.setViewMode(inline, false, 900);
+			}, [original.join('\n'), modified.join('\n'), mode === 'inline'] as const);
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+			const host = page.locator(mode === 'multi' ? '#multi' : '#single');
+			const side = host.locator('.stanza-diff-editor-side.modified').first();
+			const region = side.locator('.ash-diff-hidden-region').first();
+			const count = region.locator('.ash-diff-hidden-region-count');
+			const above = region.locator('.ash-diff-hidden-region-above');
+			const below = region.locator('.ash-diff-hidden-region-below');
+			await expect(region).toBeVisible();
+			const initial = Number((await count.textContent())!.match(/\d+/)![0]);
+			const lineHeight = await side.locator('.view-line').first().evaluate(node => parseFloat(getComputedStyle(node).lineHeight));
+			const geometry = await region.evaluate(node => {
+				const rect = (selector: string) => {
+					const bounds = node.querySelector(selector)!.getBoundingClientRect();
+					return { top: bounds.top, bottom: bounds.bottom, height: bounds.height };
+				};
+				return { above: rect('.ash-diff-hidden-region-above'), content: rect('.ash-diff-hidden-region-content'), below: rect('.ash-diff-hidden-region-below') };
+			});
+			expect(geometry.above.height).toBeGreaterThanOrEqual(8);
+			expect(geometry.below.height).toBeGreaterThanOrEqual(8);
+			expect(geometry.above.bottom).toBeLessThanOrEqual(geometry.content.top);
+			expect(geometry.below.top).toBeGreaterThanOrEqual(geometry.content.bottom);
+			await expect(above).toHaveAttribute('aria-description', localized(locale,
+				'Drag to reveal or hide unchanged lines. Press Enter or Space to reveal more lines.',
+				'拖动可显示或隐藏未修改的行。按 Enter 或空格可显示更多行。'));
+			const retained = await above.elementHandle();
+			const start = (await above.boundingBox())!;
+			const x = start.x + start.width / 2;
+			const y = start.y + start.height / 2;
+			await page.mouse.move(x, y);
+			await page.mouse.down();
+			await page.mouse.move(x, y + 2 * lineHeight, { steps: 4 });
+			await expect(count).toHaveText(localized(locale, `${initial - 2} hidden lines`, `隐藏 ${initial - 2} 行`));
+			expect(await retained!.evaluate(node => node.isConnected)).toBe(true);
+			await page.mouse.move(x, y + lineHeight);
+			await expect(count).toHaveText(localized(locale, `${initial - 1} hidden lines`, `隐藏 ${initial - 1} 行`));
+			await page.mouse.up();
+			await expect(above).not.toHaveClass(/dragging/);
+			await expect(count).toHaveText(localized(locale, `${initial - 1} hidden lines`, `隐藏 ${initial - 1} 行`));
+			await retained!.dispose();
+			const lowerContext = side.locator('.view-line').filter({ hasText: 'changed shared line 41' }).first();
+			const anchorTop = (await lowerContext.boundingBox())!.y - (await side.boundingBox())!.y;
+			const bottom = (await below.boundingBox())!;
+			await page.mouse.move(x, bottom.y + bottom.height / 2);
+			await page.mouse.down();
+			await page.mouse.move(x, bottom.y + bottom.height / 2 - 2 * lineHeight, { steps: 4 });
+			await expect(count).toHaveText(localized(locale, `${initial - 3} hidden lines`, `隐藏 ${initial - 3} 行`));
+			await page.mouse.up();
+			await expect.poll(async () => (await lowerContext.boundingBox())!.y - (await side.boundingBox())!.y).toBe(anchorTop);
+			if (mode !== 'inline') {
+				await expect(host.locator('.stanza-diff-editor-side.original .ash-diff-hidden-region-count').first()).toHaveText(await count.textContent() ?? '');
+			}
+			const revealCount = Number((await above.getAttribute('aria-label'))!.match(/\d+/)![0]);
+			await above.focus();
+			await page.keyboard.press('Tab');
+			await page.keyboard.press('Shift+Tab');
+			await expect(above).toBeFocused();
+			await expect(above).toHaveCSS('outline-style', 'solid');
+			await page.keyboard.press('Enter');
+			await expect(count).toHaveText(localized(locale, `${initial - 3 - revealCount} hidden lines`, `隐藏 ${initial - 3 - revealCount} 行`));
+			await host.screenshot({ path: testInfo.outputPath('hidden-region-edges.png') });
+		});
+	}
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
@@ -1775,7 +1909,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(regions.first().locator('.ash-diff-hidden-region-count')).toHaveText(localized(locale, '34 hidden lines', '隐藏 34 行'));
 		await expect(regions.first()).toBeVisible();
 		await expect(regions.first().locator('.ash-diff-hidden-region-content')).toHaveCSS('display', 'flex');
-		await expect(regions.first()).toHaveCSS('height', '24px');
+		await expect(regions.first()).toHaveCSS('height', '40px');
 		const lineIsVisible = (ranges: number[][]) => ranges.some(([start, end]) => start <= 5 && 5 <= end);
 		expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).original)).toBe(false);
 		expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).modified)).toBe(false);
@@ -1786,7 +1920,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			document.documentElement.style.setProperty('--ash-strokeThickness', '1px');
 			document.documentElement.style.setProperty('--ash-focusBorder', 'rgb(100, 150, 200)');
 		});
-		await expect(regions.first().locator('.ash-diff-hidden-region-content')).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
+		await expect(regions.first().locator('.ash-diff-hidden-region-above')).toHaveCSS('cursor', 'ns-resize');
+		expect(await regions.first().locator('.ash-diff-hidden-region-above').evaluate(node => getComputedStyle(node, '::after').backgroundColor)).toBe('rgb(10, 20, 30)');
 		const showMore = regions.first().getByRole('button', { name: localized(locale, 'Show 2 more lines above', '向上显示更多 2 行') });
 		await showMore.focus();
 		await page.keyboard.press('Tab');

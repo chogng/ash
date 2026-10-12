@@ -187,6 +187,19 @@ export interface Turn {
 	readonly error?: TurnError | null;
 }
 
+/** Current context estimate and execution capacity, independently of accumulated billing usage. */
+export interface ChatContextUsage {
+	readonly estimatedTokens: number;
+	readonly contextWindow?: number;
+	readonly autoCompactAt?: number;
+	readonly model?: ModelRef;
+	readonly latestRequestTokens?: number;
+	readonly categories: readonly {
+		readonly category: 'systemPrompt' | 'systemTools' | 'memoryFiles' | 'skills' | 'conversation';
+		readonly tokens: number;
+	}[];
+}
+
 export interface ModelUsageTotal {
 	readonly reported: number;
 	readonly complete: boolean;
@@ -506,6 +519,7 @@ export interface IChatService {
 	readonly onDidChangeQueue: Event<void>;
 	listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
 	readThread(sessionId: SessionId, threadId: ThreadId): Promise<ThreadRead>;
+	readContextUsage(sessionId: SessionId, threadId: ThreadId): Promise<ChatContextUsage>;
 	/** The owner retains the subscription across refreshes/reconnects until explicitly released. */
 	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId, owner: object): Promise<void>;

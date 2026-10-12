@@ -538,7 +538,7 @@ const harness = {
 		return { title: setting.title, description: setting.description };
 	},
 	setTheme(themeId: string): { marker: string; background: string; } {
-		themeBinding ??= resources.add(bindColorTheme(editorServices.themeService, document.getElementById('single')!));
+		themeBinding ??= resources.add(bindColorTheme(editorServices.themeService, document.body));
 		editorServices.themeService.setTheme(themeId);
 		const theme = editorServices.themeService.getColorTheme();
 		const cssColor = (id: string) => {

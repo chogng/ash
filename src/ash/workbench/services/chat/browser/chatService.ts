@@ -1,3 +1,4 @@
+import type { ChatContextUsage } from '../common/chatService.js';
 import { localize } from '../../../../nls.js';
 import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRefDto, Thread as ThreadDto, ThreadItem as ThreadItemDto, ThreadTranscriptEntry as ThreadTranscriptEntryDto, ThreadTranscriptSnapshot as ThreadTranscriptSnapshotDto, ThreadTranscriptUpdateEnvelope as ThreadTranscriptUpdateEnvelopeDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto, TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from "../../../../../../.build/protocol/typescript/index.js";
 import { Emitter } from "../../../../base/common/event.js";
@@ -98,6 +99,18 @@ export class ChatService extends Disposable implements IChatService {
 	async restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }> {
 		const result = await this.threadApi.restoreMessage({ ...options, commandId: createUuid() });
 		return { sessionId: result.session.sessionId, threadId: result.threadId };
+	}
+
+	async readContextUsage(sessionId: SessionId, threadId: ThreadId): Promise<ChatContextUsage> {
+		const { context } = await this.threadApi.readContext({ sessionId, threadId });
+		return {
+			estimatedTokens: context.estimatedTokens,
+			contextWindow: context.allocation?.contextWindow,
+			autoCompactAt: context.allocation?.autoCompactAt,
+			model: context.model ?? undefined,
+			latestRequestTokens: context.latestRequest?.usedTokens,
+			categories: context.categories.map(({ category, tokens }) => ({ category, tokens })),
+		};
 	}
 
 	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {

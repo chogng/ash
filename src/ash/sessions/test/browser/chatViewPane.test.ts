@@ -99,6 +99,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IContextViewService, contextView);
+	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
@@ -332,6 +333,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	using keybindingFiles = new KeybindingTestServices();
 	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
+	editorServices.registerInstance(IDialogService, recordingDialogService([]));
 	using preferences: PreferencesService = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
@@ -853,6 +855,7 @@ test('sending from one session preserves a later draft during first-session crea
 		undefined,
 		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel),
 		editorServices,
+		recordingDialogService([]),
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
@@ -861,7 +864,7 @@ test('sending from one session preserves a later draft during first-session crea
 	assert.equal(input?.classList.contains('chat-composer'), true);
 	const welcomeTip = input?.querySelector('.ash-chat-input-tip');
 	assert.ok(welcomeTip);
-	assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status')?.textContent], ['true', '']);
+	assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent], ['true', '']);
 	await widgetModel.initialize();
 	assert.equal(input?.getAttribute('aria-busy'), 'false');
 	assert.equal(input?.querySelector('.ash-chat-input-tip'), welcomeTip);
@@ -874,7 +877,7 @@ test('sending from one session preserves a later draft during first-session crea
 	const chatModel = createWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
 	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
 		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
-		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices);
+		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]));
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }] };
 	chatWidget.restoreDraft(chatDraft);
@@ -1194,7 +1197,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("empty"), true);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("has-conversation"), false);
-	assert.match(pane.element.querySelector<HTMLElement>(".ash-chat-status")?.textContent ?? "", /Cannot create Session/);
+	assert.match(pane.element.querySelector<HTMLElement>(".ash-chat-status, .ash-chat-status-summary")?.textContent ?? "", /Cannot create Session/);
 
 	dom.window.close();
 });
@@ -3113,6 +3116,14 @@ function fakeApi(options: FakeOptions = {}): {
 			list: async (_reload: string, sessionId?: string) => { skillListRequests.push(sessionId); return { generation: 1, skills: options.skills ?? [] }; },
 		},
 		thread: {
+			readContext: async () => ({
+				context: {
+					estimatedTokens: 200, estimatorRevision: 'test', model: { provider: 'test', model: 'test-model' },
+					compactionPolicy: { mode: 'summary', summaryTokens: 100, recentTokens: 100 },
+					allocation: { contextWindow: 1000, autoCompactWindow: 1000, autoCompactAt: 800, autoCompactBuffer: 0, reservedOutput: 100, safetyMargin: 100 },
+					categories: [{ category: 'conversation', tokens: 200, sources: [] }], latestRequest: { usedTokens: 180, source: 'estimated' },
+				}, toolDefinitions: []
+			}),
 			configureAdvisor: async (params: SessionOperationInput<"configureAdvisor">) => { advisorRequests.push(params); return { sequence: params.expectedSequence + 1 }; },
 			read: async () => {
 				const value = currentThread();
@@ -3440,6 +3451,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	using keybindingFiles = new KeybindingTestServices();
 	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
+	editorServices.registerInstance(IDialogService, recordingDialogService([]));
 	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
@@ -3485,6 +3497,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	services.registerInstance(IDialogService, recordingDialogService(messages));
 	using keybindingFiles = new KeybindingTestServices();
 	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
+	editorServices.registerInstance(IDialogService, recordingDialogService([]));
 	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
@@ -3687,4 +3700,66 @@ test('ChatWidgetModel inherits profile approval and preserves a conversation ove
 	const overridden = new Promise<void>(resolve => { const subscription = model.onDidChange(() => { subscription.dispose(); resolve(); }); });
 	mode = 'auto'; changed.fire(); await overridden;
 	assert.equal(model.inputState.approvalMode, 'manual');
+});
+
+
+test('Chat context usage refresh ignores an estimate from an older connection', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	const sample = await fake.api.thread.readContext({ sessionId: 'session-1', threadId: 'thread-1' });
+	const oldRead = new DeferredPromise<typeof sample>();
+	const currentRead = new DeferredPromise<typeof sample>();
+	let reads = 0;
+	using chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, readContext: () => (++reads === 1 ? oldRead : currentRead).p } });
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const contextUsage = () => model.inputState.contextUsage;
+	await waitFor(() => reads === 1);
+	assert.deepEqual(contextUsage(), undefined);
+	fake.emitReady();
+	await waitFor(() => reads === 2);
+	await currentRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 400 } });
+	await waitFor(() => contextUsage()?.estimatedTokens === 400);
+	assert.deepEqual(contextUsage(), {
+		estimatedTokens: 400, contextWindow: 1000, autoCompactAt: 800,
+		model: { provider: 'test', model: 'test-model' }, latestRequestTokens: 180,
+		categories: [{ category: 'conversation', tokens: 200 }],
+	});
+	await oldRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 100 } });
+	await nextTask();
+	assert.equal(contextUsage()?.estimatedTokens, 400);
+});
+
+test('Chat footer permission changes use the current model and confirm full access', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	using contextView = new BrowserContextViewService(document.body);
+	const services = createInputServices(contextView, chat);
+	let confirmed = false;
+	let confirmations = 0;
+	const dialogs = { ...recordingDialogService([]), confirm: async () => { confirmations++; return { confirmed }; } };
+	const delegates: ChatInputDelegate[] = [];
+	using widget = new ChatWidget(document.body, 'footer-permissions', model, () => { },
+		{} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications,
+		undefined, undefined, undefined, (container, delegate) => {
+			delegates.push(delegate);
+			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
+		}, services, dialogs);
+	const delegate = delegates[0]!;
+	assert.ok(delegate.selectApprovalMode);
+	await delegate.selectApprovalMode('auto');
+	assert.equal(model.inputState.approvalMode, 'auto');
+	assert.equal(confirmations, 0);
+	await delegate.selectApprovalMode('bypassPermissions');
+	assert.equal(model.inputState.approvalMode, 'auto');
+	assert.equal(confirmations, 1);
+	confirmed = true;
+	await delegate.selectApprovalMode('bypassPermissions');
+	assert.equal(model.inputState.approvalMode, 'bypassPermissions');
+	assert.equal(confirmations, 2);
 });

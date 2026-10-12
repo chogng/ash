@@ -239,13 +239,17 @@
 }
 
 .ash-diff-hidden-region {
-	height: 24px;
+	display: grid;
+	grid-template-rows: 8px 24px 8px;
+	height: 40px;
 	font-family: var(--ash-font-family, sans-serif);
 	font-size: var(--ash-fontSize-body1);
 	font-weight: var(--ash-fontWeight-regular);
 }
 
 .ash-diff-hidden-region-content {
+	grid-row: 2;
+	grid-column: 1;
 	display: flex;
 	align-items: center;
 	gap: 4px;
@@ -261,8 +265,6 @@
 		--ash-diffEditor-unchangedRegionBackground,
 		var(--ash-editor-background)
 	);
-	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	white-space: nowrap;
 }
 
@@ -281,23 +283,52 @@
 }
 
 .ash-diff-hidden-region > .ash-button {
-	position: absolute;
-	left: 0;
-	z-index: 1;
+	position: relative;
+	grid-column: 1;
+	box-sizing: border-box;
 	width: 100%;
-	height: 4px;
+	height: 100%;
 	min-height: 0;
 	padding: 0;
 	border: 0;
 	border-radius: 0;
+	background: transparent;
+	cursor: ns-resize;
+	touch-action: none;
+	user-select: none;
+}
+
+.ash-diff-hidden-region > .ash-button > .ash-button-content {
+	display: none;
+}
+
+.ash-diff-hidden-region > .ash-button::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 0;
+	right: 0;
+	height: var(--ash-strokeThickness);
+	background: var(--ash-widget-border);
+	pointer-events: none;
+}
+
+.ash-diff-hidden-region > .ash-button:hover {
+	background: transparent;
+}
+
+.ash-diff-hidden-region > .ash-button:hover::after,
+.ash-diff-hidden-region > .ash-button:focus-visible::after,
+.ash-diff-hidden-region > .ash-button.dragging::after {
+	background: var(--ash-sash-hoverBackground, var(--ash-focusBorder));
 }
 
 .ash-diff-hidden-region-above {
-	top: 0;
+	grid-row: 1;
 }
 
 .ash-diff-hidden-region-below {
-	bottom: 0;
+	grid-row: 3;
 }
 
 .ash-diff-hidden-region-count {
@@ -348,9 +379,9 @@
 	text-overflow: ellipsis;
 }
 
-[data-color-scheme="hcDark"] .ash-diff-hidden-region-content,
-[data-color-scheme="hcLight"] .ash-diff-hidden-region-content {
-	border-color: var(--ash-contrastBorder);
+[data-color-scheme="hcDark"] .ash-diff-hidden-region > .ash-button::after,
+[data-color-scheme="hcLight"] .ash-diff-hidden-region > .ash-button::after {
+	background: var(--ash-contrastBorder);
 }
 
 .ash-diff-revert,
@@ -421,6 +452,10 @@
 	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-editorGutter-itemGlyphForeground);
 	background: var(--ash-editorGutter-itemBackground);
+}
+
+.ash-diff-gutter-item .ash-action-view-item > .ash-button:not(:disabled):hover {
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 [data-color-scheme="hcDark"] .ash-diff-gutter-item::before,

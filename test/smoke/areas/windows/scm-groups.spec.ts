@@ -522,6 +522,22 @@ test.describe('SCM editor groups', () => {
 		});
 	}
 
+	test('SCM diff title menu switches layout and checked state', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+		const group = workbench.editors.groupAt(0);
+		const diff = group.content.locator('.stanza-diff-editor:visible');
+		const more = group.title.getByRole('button', { name: 'More Actions', exact: true });
+		await expect(diff).toBeVisible();
+		await workbench.menus.select(application, () => more.click(), ['Diff View', 'Inline']);
+		await expect(diff).toHaveClass(/inline-view/u);
+		const viewItems = await workbench.menus.inspect(application, () => more.click(), ['Diff View']);
+		expect(viewItems.filter(item => item.checked).map(item => item.label)).toEqual(['Inline']);
+		await workbench.menus.select(application, () => more.click(), ['Diff View', 'Side by Side']);
+		await expect(diff).not.toHaveClass(/inline-view/u);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`SCM diff title actions navigate changes and reuse file preview tabs in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }) => {
 			const original = Array.from({ length: 24 }, (_, index) => `const line${index + 1} = ${index + 1};`);

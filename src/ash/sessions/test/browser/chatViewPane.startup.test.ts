@@ -169,6 +169,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 	return {
 		configureAdvisor: async () => { },
 		consultAdvisor: async () => { },
+		readContextUsage: async () => { throw new Error('No active Thread'); },
 		readAdvisorDefault: async () => null,
 		saveAdvisorDefault: async () => { },
 		onDidChangeSession: neverEvent<{ sessionId: string; agentTreeChanged: boolean; }>(),
