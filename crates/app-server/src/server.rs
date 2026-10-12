@@ -72,6 +72,8 @@ mod asset_operations;
 #[cfg(test)]
 mod asset_operations_tests;
 mod attachment_operations;
+#[cfg(test)]
+mod attachment_operations_tests;
 mod automation_execution;
 mod automation_operations;
 mod backup_operations;
@@ -2902,6 +2904,9 @@ impl AppServer {
             Some(ClientMethod::ResourceRead) => self.resource_read(connection, &request.params),
             Some(ClientMethod::ResourceRelease) => {
                 self.resource_release(connection, &request.params)
+            }
+            Some(ClientMethod::AttachmentResourceOpen) => {
+                self.attachment_resource_open(connection, &request.params)
             }
             Some(ClientMethod::AttachmentUploadStart) => {
                 self.attachment_upload_start(connection, &request.params)

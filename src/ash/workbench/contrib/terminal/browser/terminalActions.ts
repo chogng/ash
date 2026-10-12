@@ -13,7 +13,7 @@ import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../common
 import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
-import { ITerminalService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 import type { TerminalViewPane } from './terminalView.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
 import { InstanceContext } from './terminalContextMenu.js';
@@ -42,6 +42,54 @@ export function registerTerminalActions(): void {
 	});
 
 	CommandsRegistry.register(TerminalCommandId.New, accessor => terminalView(accessor).createTerminal());
+	registerAction2(class SplitTerminalAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.Split, title: localize2('terminal.group.split', 'Terminal: Split Terminal'), f1: true,
+				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+				keybinding: {
+					primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Digit5,
+					mac: { primary: KeyMod.CtrlCmd | KeyCode.Backslash },
+					when: TerminalContextKeys.focus.isEqualTo(true), weight: KeybindingWeight.WorkbenchContrib,
+				},
+			});
+		}
+		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+			const parent = resolveInstance(accessor, context);
+			if (!parent || parent.state !== 'running' || parent.isReadOnly || parent.shellLaunchConfig?.customPtyImplementation) return;
+			await terminalView(accessor).createTerminal(parent.profile.profileId, true, parent);
+			accessor.get(ITerminalService).activeInstance?.xterm?.focus();
+		}
+	});
+	for (const [id, title, direction, key] of [
+		[TerminalCommandId.FocusNextPane, localize2('terminal.group.next', 'Terminal: Focus Next Pane'), 'next', KeyCode.RightArrow],
+		[TerminalCommandId.FocusPreviousPane, localize2('terminal.group.previous', 'Terminal: Focus Previous Pane'), 'previous', KeyCode.LeftArrow],
+	] as const) {
+		registerAction2(class FocusTerminalPaneAction extends Action2 {
+			constructor() {
+				super({
+					id, title, f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+					keybinding: { primary: KeyMod.CtrlCmd | KeyMod.Alt | key, when: TerminalContextKeys.focus.isEqualTo(true), weight: KeybindingWeight.WorkbenchContrib },
+				});
+			}
+			override run(accessor: ServicesAccessor): void {
+				const group = accessor.get(ITerminalGroupService).activeGroup;
+				if (direction === 'next') group?.focusNextPane();
+				else group?.focusPreviousPane();
+			}
+		});
+	}
+	registerAction2(class UnsplitTerminalAction extends Action2 {
+		constructor() {
+			super({ id: TerminalCommandId.Unsplit, title: localize2('terminal.group.unsplit', 'Terminal: Unsplit Terminal'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) });
+		}
+		override run(accessor: ServicesAccessor, context?: unknown): void {
+			const instance = resolveInstance(accessor, context);
+			if (!instance) return;
+			accessor.get(ITerminalGroupService).unsplitInstance(instance);
+			instance.xterm?.focus();
+		}
+	});
 	registerAction2(class NewWithProfileAction extends Action2 {
 		constructor() {
 			super({ id: TerminalCommandId.NewWithProfile, title: localize2('terminal.profile.newCommand', 'Terminal: Create New Terminal With Profile'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });

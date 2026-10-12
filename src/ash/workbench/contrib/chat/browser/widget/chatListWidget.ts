@@ -1,6 +1,7 @@
 import './media/chatListWidget.css';
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
+import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from "../../../../../base/common/lifecycle.js";
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
@@ -12,6 +13,9 @@ import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfig
 import { ChatEditorConfiguration } from '../../common/constants.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import { ChatToolInvocationPart } from './chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
+import { createUuid } from '../../../../../base/common/uuid.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { localize } from '../../../../../nls.js';
 import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
 
@@ -54,6 +58,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly onDidRequestMemoryReference: ((reference: string) => void) | undefined;
 	private readonly onDidRequestLink: ((target: string) => void) | undefined;
 	private readonly imageResourceLoader: ChatListWidgetOptions['imageResourceLoader'];
+	private readonly _onDidChangeContent = this._register(new Emitter<void>());
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private visible = false;
 	private shouldFollow = true;
@@ -79,6 +84,24 @@ export class ChatListWidget extends DomWidget {
 		this.transcript.setAttribute("role", "log");
 		this.transcript.setAttribute('aria-label', localize('chat.transcript.label', 'Chat transcript'));
 		this.transcript.setAttribute("aria-live", "polite");
+		const accessibilityId = createUuid();
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			this._register(AccessibleViewRegistry.register({
+				type, priority: 100, name: `chatTranscript-${type}-${accessibilityId}`,
+				getProvider: () => {
+					const active = this.element.ownerDocument.activeElement as HTMLElement | null;
+					if (!active || !this.transcript.contains(active)) return undefined;
+					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
+						if (type === AccessibleViewType.Help) return localize('chat.transcript.help', 'Chat responses\nUse Tab and Shift+Tab to reach response links, code block actions and tool summaries. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Streaming updates keep focus and expansion. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.');
+						return [...this.renderedItems].map(([, row]) => row.toolPart
+							? [...row.toolPart.domNode.children].map(child => child.textContent).filter(Boolean).join('\n\n')
+							: [itemLabel(row.item), row.item.text, row.item.detail].filter(Boolean).join('\n\n')).join('\n\n');
+					}, () => { if (active.isConnected) active.focus(); }, AccessibilityVerbositySettingId.Chat);
+					provider.onDidChangeContent = this._onDidChangeContent.event;
+					return provider;
+				},
+			}));
+		}
 		this.updateCodeBlockOptions();
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			const keys = [...Object.values(ChatEditorConfiguration), CodeEditorConfiguration.fontFamily, CodeEditorConfiguration.fontSize, CodeEditorConfiguration.lineHeight];
@@ -130,6 +153,7 @@ export class ChatListWidget extends DomWidget {
 		}
 		for (const id of this.advisorExpansion.keys()) if (!ids.has(id)) this.advisorExpansion.delete(id);
 		if (this.visible) this.layout(anchor);
+		this._onDidChangeContent.fire();
 	}
 
 	setVisible(visible: boolean): void {

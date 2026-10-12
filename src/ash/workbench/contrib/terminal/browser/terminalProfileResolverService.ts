@@ -37,7 +37,7 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 	async getEnvironment(remoteAuthority: string | undefined): Promise<Readonly<Record<string, string>>> {
 		this.assertAuthority(remoteAuthority);
 		const generation = this.generation;
-		const environment = await this.processes.getEnvironment();
+		const environment = await this.processes.getEnvironment(undefined, this.sessionFolderId());
 		this.assertCurrent(generation);
 		return environment;
 	}
@@ -60,7 +60,7 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 			};
 		}
 		if (!profile) {
-			const resolved = await this.processes.resolveProfile({ type: 'default' });
+			const resolved = await this.processes.resolveProfile({ type: 'default' }, this.sessionFolderId());
 			this.assertCurrent(generation);
 			return { ...resolved.profile, profileName: resolved.profile.title, path: resolved.executable, args: resolved.args };
 		}
@@ -120,6 +120,11 @@ export class BrowserTerminalProfileResolverService extends Disposable implements
 		const args = typeof profile.args === 'string' ? await resolve(profile.args) : await Promise.all((profile.args ?? []).map(resolve));
 		const result = await this.processes.resolveProfile({ type: 'custom', name: profile.profileName, path, args });
 		return { ...profile, path: result.executable, args: result.args };
+	}
+
+	private sessionFolderId(): string | undefined {
+		const folders = this.workspace.getWorkspace().folders;
+		return folders.length === 1 && folders[0]!.id.startsWith('session:') ? folders[0]!.id : undefined;
 	}
 
 	private assertAuthority(remoteAuthority: string | undefined): void {

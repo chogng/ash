@@ -1,3 +1,8 @@
+import '../../../src/ash/base/browser/ui/splitview/splitview.css';
+import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
+import { TerminalGroupService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalGroupService.js';
+import { ITerminalGroupService } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
@@ -67,7 +72,9 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const store = new DisposableStore();
+setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
+	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => lifetime.add(services.createInstance(TerminalGroupService)));
 	if (!services.has(IStorageService)) {
 		services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', backend: window.localStorage, flushInterval: 0 })));
 	}
@@ -367,7 +374,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getWorkspace: () => workspace,
 			getWorkbenchState: () => 2,
 			getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
-		}, services, profileService, resolver, services.get(ITerminalProcessService)));
+		}, services, profileService, resolver, services.get(ITerminalProcessService), services.get(ITerminalGroupService)));
 		root.append(pane.partTitleProjection.actions!);
 		if (new URLSearchParams(location.search).has('browser')) pane.layout(root.clientHeight - pane.partTitleProjection.actions!.offsetHeight, 0, root.clientWidth);
 		return {
@@ -716,6 +723,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	]);
 	const clipboardFixture = new URLSearchParams(location.search).has('clipboard');
 	const sequenceFixture = new URLSearchParams(location.search).has('sequence');
+	const groupFixture = new URLSearchParams(location.search).has('groups');
 	let clipboardText = '';
 	const copied: string[] = [];
 	let clipboardReads = 0;
@@ -740,20 +748,24 @@ if (new URLSearchParams(location.search).has('input')) {
 	}
 	const connectionChanged = store.add(new Emitter<import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 	const writes: Array<string | number[]> = [];
+	const routedWrites: { terminalId: string; data: string | number[]; }[] = [];
+	const sizes: { terminalId: string; cols: number; rows: number; }[] = [];
 	const queuedOutput = [new TextEncoder().encode('retained screen\r\n\x1b[c')];
 	let sequence = 0;
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
+		operatingSystem: OperatingSystem.Linux,
 		resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => ({ terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
 		write: async options => {
 			writes.push(typeof options.data === 'string' ? options.data : [...options.data]);
+			routedWrites.push({ terminalId: options.terminalId, data: typeof options.data === 'string' ? options.data : [...options.data] });
 			if (holdInput) {
 				holdInput = false;
 				await new Promise<void>((resolve, reject) => { releaseInput = failed => failed ? reject(new Error('Terminal write denied')) : resolve(); });
 			}
 		},
-		resize: async () => { }, close: async () => { }, getConnectionState: async () => 'ready', onConnectionState: connectionChanged.event,
+		resize: async options => { sizes.push({ terminalId: options.terminalId, cols: options.cols, rows: options.rows }); }, close: async () => { }, getConnectionState: async () => 'ready', onConnectionState: connectionChanged.event,
 		read: async options => ({
 			terminalId: options.terminalId, chunks: queuedOutput.splice(0).map(data => ({ sequence: ++sequence, data })), nextSequence: sequence,
 			outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined,
@@ -766,7 +778,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	const terminals = services.get(ITerminalService);
 	store.add(terminals.onDidCreateInstance(instance => {
 		instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
-		if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture) {
+		if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture || groupFixture) {
 			instance.xterm!.setVisible(true);
 			instance.xterm!.focus();
 		}
@@ -775,11 +787,15 @@ if (new URLSearchParams(location.search).has('input')) {
 	const screen = (await terminal.xtermReadyPromise)!;
 	screen.setVisible(true);
 	screen.focus();
-	if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture) {
+	if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture || groupFixture) {
 		TerminalHasActiveInstanceContext.bindTo(services.get(IContextKeyService)).set(true);
 		const commands = store.add(new CommandService(services));
 		services.registerInstance(ICommandService, commands);
-		services.registerInstance(IViewsService, { openView: async () => undefined } as unknown as IViewsService);
+		let groupPane: import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js').TerminalViewPane | undefined;
+		services.registerInstance(IViewsService, {
+			openView: async () => { groupPane?.setVisible(true); groupPane?.focus(); return groupPane ?? null; },
+			getViewWithId: () => groupPane ?? null,
+		} as unknown as IViewsService);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(ILogService, new NullLoggerService());
 		const notifications = store.add(new NotificationService());
@@ -794,6 +810,40 @@ if (new URLSearchParams(location.search).has('input')) {
 			ownerDocument: document, commandService: commands, contextKeyService: services.get(IContextKeyService), keyboardLayoutService: layouts,
 		}));
 		await keybindings.initialize();
+		if (groupFixture) {
+			const [{ TerminalViewPane }, { IWorkbenchLayoutService }, { MenuService }] = await Promise.all([
+				import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js'),
+				import('../../../src/ash/workbench/services/layout/browser/layoutService.js'),
+				import('../../../src/ash/platform/actions/common/menuService.js'),
+			]);
+			const root = document.querySelector<HTMLElement>('#terminal')!;
+			root.style.display = 'flex'; root.style.flexDirection = 'column';
+			services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+			registerTestDictationOnboarding(services);
+			services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
+			services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => { }, cancelPreparation: async () => { }, start: async () => ({ stop: async () => { } }) });
+			services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
+			const layout = Object.assign(store.add(new BrowserLayoutService({ root })), {
+				onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
+				setLayoutStyle: () => { }, getVisibleNeighborPart: () => undefined, isPanelMaximized: () => false,
+				toggleMaximizedPanel: () => { }, getPartSize: () => ({ width: root.clientWidth, height: root.clientHeight }),
+				resizePart: () => { }, showPart: () => { }, showParts: () => { }, hideParts: () => { },
+			});
+			services.registerInstance(IWorkbenchLayoutService, layout);
+			groupPane = store.add(services.createInstance(TerminalViewPane, root, { id: 'ash.terminal', title: 'Terminal' }));
+			groupPane.setVisible(true); groupPane.setExpanded(true); groupPane.layout(root.clientHeight, 0, root.clientWidth);
+			window.ashTerminalGroupsIntegration = {
+				command: (id, args) => commands.executeCommand(id, args),
+				groups: () => services.get(ITerminalGroupService).groups.map(group => group.terminalInstances.map(instance => instance.id)),
+				active: () => terminals.activeInstance?.id,
+				writes: () => routedWrites,
+				clearWrites: () => { routedWrites.length = 0; },
+				sizes: () => sizes,
+				feed: text => { screen.raw.write(text); },
+				close: () => terminals.closeTerminal(terminals.activeInstance!),
+				dispose: () => groupPane?.dispose(),
+			};
+		}
 		if (sequenceFixture) {
 			window.ashTerminalSequenceIntegration = {
 				command: args => commands.executeCommand('workbench.action.terminal.sendSequence', args),
@@ -906,6 +956,17 @@ declare global {
 			help(): Promise<string>;
 			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight'): void;
 			errors(): readonly string[];
+		};
+		ashTerminalGroupsIntegration: {
+			command(id: string, args?: unknown): Promise<unknown>;
+			groups(): readonly (readonly string[])[];
+			active(): string | undefined;
+			writes(): readonly { terminalId: string; data: string | number[]; }[];
+			clearWrites(): void;
+			sizes(): readonly { terminalId: string; cols: number; rows: number; }[];
+			feed(text: string): void;
+			close(): Promise<void>;
+			dispose(): void;
 		};
 		ashTerminalSequenceIntegration: {
 			command(args?: unknown): Promise<unknown>;

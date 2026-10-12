@@ -1,6 +1,5 @@
 import type { ChatContextUsage } from '../common/chatService.js';
 import type { AgentInput } from '../../../../platform/agentHost/common/agentService.js';
-import { toThreadUpdate, toThreadTranscriptUpdate } from '../../../../platform/agentHost/browser/appServerAgentService.js';
 import { localize } from '../../../../nls.js';
 import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from "../../../../base/common/event.js";
@@ -51,11 +50,11 @@ export class ChatService extends Disposable implements IChatService {
 		@IServerEventApi eventApi: IServerEventApi,
 	) {
 		super();
+		this._register(threadApi.onDidUpdateThread(event => this._onDidUpdateThread.fire(event)));
+		this._register(threadApi.onDidUpdateThreadTranscript(event => this._onDidUpdateThreadTranscript.fire(event)));
 		const events = eventApi.subscribe((event) => {
 			if (event.method === 'session/changed') this._onDidChangeSession.fire({ ...event.params });
 			if (event.method === "queue/changed") this._onDidChangeQueue.fire();
-			if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
-			if (event.method === "session/thread/transcript/update") this._onDidUpdateThreadTranscript.fire(toThreadTranscriptUpdate(event.params));
 			if (event.method === "thread/goal/updated") this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
 			if (event.method === "thread/goal/cleared") this._onDidUpdateGoal.fire({ threadId: event.params.threadId });
 			if (event.method === "turnChanges/changed") this._onDidUpdateTurnChanges.fire({

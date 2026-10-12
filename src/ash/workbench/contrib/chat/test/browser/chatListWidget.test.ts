@@ -1,9 +1,11 @@
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { test } from 'mocha';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -105,5 +107,78 @@ test('Hook summaries use the active Chinese locale', () => {
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 		widget.render([{ id: 'hook', type: 'hook', text: 'reason', transient: false, hookPart: { kind: 'hook', hookType: 'preToolUse', stopReason: 'reason', toolDisplayName: 'shell-command' } }]);
 		assert.match(widget.element.querySelector('summary')!.textContent!, /已阻断 shell-command/);
+	} finally { resetNlsResolver(); }
+});
+
+
+test('tool evidence is Turn-scoped and keeps result-before-call and orphan output', () => {
+	const call = (turnId: string): ThreadTranscriptEntry => ({ type: 'item', entryId: `call:${turnId}`, turnId, transient: false, item: { type: 'toolCall', itemId: `call:${turnId}`, turnId, toolCallId: 'reused', name: 'read', argumentsJson: '{}' } });
+	const result: ThreadTranscriptEntry = { type: 'item', entryId: 'result', turnId: 'first', transient: false, item: { type: 'toolResult', itemId: 'result', turnId: 'first', toolCallId: 'reused', text: 'first result', isError: false } };
+	const output: ThreadTranscriptEntry = { type: 'toolOutput', entryId: 'output', turnId: 'second', toolCallId: 'reused', stream: 'stdout', text: 'second output' };
+	const orphan: ThreadTranscriptEntry = { type: 'toolOutput', entryId: 'orphan', turnId: 'third', toolCallId: 'missing', stream: 'stderr', text: 'orphan output' };
+	const items = chatTranscriptListItems([result, call('first'), output, call('second'), orphan]);
+	assert.deepEqual(items.map(item => item.id), ['call:first', 'call:second', 'orphan']);
+	assert.equal(items[0].toolInvocation?.result?.text, 'first result');
+	assert.deepEqual(items[0].toolInvocation?.output, []);
+	assert.equal(items[1].toolInvocation?.result, undefined);
+	assert.deepEqual(items[1].toolInvocation?.output, [output]);
+	assert.equal(items[2].text, 'orphan output');
+	assert.equal(chatTranscriptListItems([result])[0].text, 'first result');
+	const stopped = chatTranscriptListItems([call('second'), { type: 'turnError', entryId: 'error', turnId: 'second', error: { code: 'connectionFailed', message: 'lost', retryable: true } }]);
+	assert.equal(stopped[0].toolInvocation?.stopped, true);
+	assert.equal(stopped[0].transient, false);
+});
+
+test('streaming tool content preserves disclosure focus, failure state and restored expansion', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const container = document.createElement('main');
+	document.body.append(container);
+	resources.add(toDisposable(() => container.remove()));
+	using widget = services.createInstance(ChatListWidget, container, {});
+	const entries: ThreadTranscriptEntry[] = [{ type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'tool', name: 'shell', argumentsJson: '{}' } }];
+	widget.render(chatTranscriptListItems(entries));
+	const disclosure = widget.element.querySelector<HTMLDetailsElement>('details')!;
+	const summary = disclosure.querySelector<HTMLElement>('summary')!;
+	assert.equal(disclosure.open, false);
+	disclosure.open = true;
+	summary.focus();
+	entries.push({ type: 'toolOutput', entryId: 'stdout', turnId: 'turn', toolCallId: 'tool', stream: 'stdout', text: '<img src=x onerror=alert(1)>' });
+	widget.render(chatTranscriptListItems(entries));
+	assert.equal(widget.element.querySelector('details'), disclosure);
+	assert.equal(disclosure.open, true);
+	assert.equal(document.activeElement, summary);
+	assert.equal(disclosure.querySelector('img'), null);
+	assert.match(disclosure.textContent!, /Standard output\n<img/);
+	entries.push({ type: 'item', entryId: 'result', turnId: 'turn', transient: false, item: { type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'tool', text: 'rejected', isError: true } });
+	widget.render(chatTranscriptListItems(entries));
+	assert.equal(summary.textContent, 'shell · Failed');
+	assert.equal(disclosure.classList.contains('error'), true);
+	assert.equal(document.activeElement, summary);
+	const provider = services.invokeFunction(accessor => AccessibleViewRegistry.getImplementations().filter(implementation => implementation.type === AccessibleViewType.View && implementation.name.startsWith('chatTranscript-')).map(implementation => implementation.getProvider(accessor)).find(provider => provider !== undefined)!);
+	assert.match(provider.provideContent(), /Standard output\n<img/);
+	provider.dispose();
+	assert.equal(document.activeElement, summary);
+	const help = services.invokeFunction(accessor => AccessibleViewRegistry.getImplementations().filter(implementation => implementation.type === AccessibleViewType.Help && implementation.name.startsWith('chatTranscript-')).map(implementation => implementation.getProvider(accessor)).find(provider => provider !== undefined)!);
+	assert.match(help.provideContent(), /tool summary/);
+	help.dispose();
+	const state = widget.getViewState();
+	using restored = services.createInstance(ChatListWidget, document.createElement('main'), {});
+	restored.restoreViewState(state, chatTranscriptListItems(entries));
+	assert.equal(restored.element.querySelector<HTMLDetailsElement>('details')!.open, true);
+	widget.render([]);
+	assert.equal(disclosure.isConnected, false);
+});
+
+test('tool invocation summaries and sections use the Chinese locale', () => {
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	try {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+		widget.render(chatTranscriptListItems([{ type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'read', name: 'read', argumentsJson: '{}' } }]));
+		assert.equal(widget.element.querySelector('summary')!.textContent, 'read · 等待结果');
+		assert.match(widget.element.textContent!, /输入\n\{\}/);
+		assert.equal(widget.element.querySelector('[role="log"]')!.getAttribute('aria-label'), '聊天记录');
 	} finally { resetNlsResolver(); }
 });

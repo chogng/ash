@@ -4,6 +4,9 @@ use ash_protocol::AttachmentRef;
 use ash_protocol::AudioMediaType;
 use ash_protocol::ImageDetail;
 use ash_protocol::ImageMediaType;
+use ash_protocol::ItemId;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -73,4 +76,18 @@ pub struct AttachmentImportRemoteParams {
 #[serde(rename_all = "camelCase")]
 pub struct AttachmentMaterializeResult {
     pub attachment: AttachmentRef,
+}
+
+
+/// Opens only a stored media part of an Item in the selected Session's Thread.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AttachmentResourceOpenParams {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub item_id: ItemId,
+    /// Required for a tool-result content part; omitted for a user media Item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub content_index: Option<usize>,
 }

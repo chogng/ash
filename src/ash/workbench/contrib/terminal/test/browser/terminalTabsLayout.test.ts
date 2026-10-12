@@ -1,3 +1,5 @@
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { mock } from 'node:test';
 import { TerminalResizeDebouncer } from '../../browser/terminalResizeDebouncer.js';
 import type { XtermTerminal } from '../../browser/xterm/xtermTerminal.js';
@@ -19,6 +21,7 @@ import { JSDOM } from "jsdom";
 import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -46,6 +49,7 @@ suiteTeardown(() => {
 
 test("Terminal instance list sash resizes the right column within its bounds", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
+	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 	const parent = h(dom.window.document, 'main');
 	using changed = new Emitter<void>();
 	const createInstance = (id: string): ITerminalInstance => ({

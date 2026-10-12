@@ -25,7 +25,7 @@ import { AppServerRemoteError } from "../../../../platform/agentHost/common/appS
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
-import { type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type IXtermTerminal } from "../../../services/terminal/browser/terminal.js";
+import { type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, ITerminalGroupService, type IXtermTerminal } from "../../../services/terminal/browser/terminal.js";
 
 import { TerminalTabbedView } from "./terminalTabbedView.js";
 import "./media/terminal.css";
@@ -57,6 +57,7 @@ export class TerminalViewPane extends ViewPane {
 		@ITerminalProfileService private readonly profileService: ITerminalProfileService,
 		@ITerminalProfileResolverService private readonly profileResolver: ITerminalProfileResolverService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
+		@ITerminalGroupService private readonly groups: ITerminalGroupService,
 	) {
 		super(container, options);
 		this.terminalService = terminalService;
@@ -88,6 +89,7 @@ export class TerminalViewPane extends ViewPane {
 		}));
 		this._register(terminalService.onDidChangeActiveInstance(() => this.updateInstances()));
 		this._register(terminalService.onDidChangeInstances(() => this.updateInstances()));
+		this._register(groups.onDidChangeGroups(() => this.updateInstances()));
 		this._register(this.onDidChangeBodyVisibility(visible => {
 			if (visible) {
 				queueMicrotask(() => {
@@ -107,7 +109,7 @@ export class TerminalViewPane extends ViewPane {
 		this._register(observeResize([this.tabsLayout.element, this.widgetsElement], () => {
 			const bounds = this.tabsLayout.element.getBoundingClientRect();
 			this.tabsLayout.layout(bounds.width, bounds.height);
-			this.activeItem()?.widget.fit();
+			this.layoutGroups();
 		}));
 		this.render();
 		queueMicrotask(() => {
@@ -163,7 +165,7 @@ export class TerminalViewPane extends ViewPane {
 		if (this.isBodyVisible() && !this.isDisposed && this.terminalService.instances.length === 0) await this.createTerminal(undefined, false);
 	}
 
-	public async createTerminal(profileId?: string, focus = true): Promise<void> {
+	public async createTerminal(profileId?: string, focus = true, parent?: ITerminalInstance): Promise<void> {
 		if (this.creating || this.isDisposed) return;
 		if (!this.hasWorkspaceFolder()) {
 			this.setStatus("Open a folder to use the terminal.");
@@ -181,25 +183,37 @@ export class TerminalViewPane extends ViewPane {
 				if (!this.profileService.availableProfiles.length) await this.profileService.refreshAvailableProfiles();
 				if (this.isDisposed) return;
 			}
-			const contributed = profileId === undefined ? await this.profileService.getContributedDefaultProfile({}) : this.profileService.contributedProfiles.find(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`);
+			const contributed = parent ? undefined : profileId === undefined ? await this.profileService.getContributedDefaultProfile({}) : this.profileService.contributedProfiles.find(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`);
 			if (contributed) {
 				const provider = this.profileService.getContributedProfileProvider(contributed.extensionIdentifier, contributed.id);
 				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', contributed.title));
 				await provider.createContributedTerminalProfile(contributed.options ?? {});
 				return;
 			}
-			const profile = profileId === undefined ? this.profileService.getDefaultProfile() : this.profileService.availableProfiles.find(profile => profile.profileId === profileId);
+			const profile = parent ? this.profileService.availableProfiles.find(profile => profile.profileId === parent.profile.profileId)
+				: profileId === undefined ? this.profileService.getDefaultProfile() : this.profileService.availableProfiles.find(profile => profile.profileId === profileId);
 			const os = this.processes.operatingSystem;
 			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
-			const shell: IShellLaunchConfig = profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color } : {};
+			const shell: IShellLaunchConfig = parent?.shellLaunchConfig?.executable ? { ...parent.shellLaunchConfig }
+				: profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color } : {};
+			if (parent) shell.cwd = parent.cwd ?? parent.initialCwd;
 			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: this.workspaceContext.getWorkspace().folders[0]?.uri.authority || undefined });
 			if (this.isDisposed) return;
-			await this.terminalService.createTerminal({
+			if (parent && (!this.terminalService.instances.includes(parent) || parent.state !== 'running')) return;
+			const created = await this.terminalService.createTerminal({
+				dirId: parent?.dirId,
 				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
 				title: profile?.overrideName ? profile.profileName : undefined,
 				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
 				env: shell.env, cwd: shell.cwd, icon: shell.icon, color: shell.color,
 			});
+			if (parent) {
+				if (this.isDisposed || !this.terminalService.instances.includes(parent) || parent.state !== 'running') {
+					await this.terminalService.closeTerminal(created);
+					return;
+				}
+				this.groups.joinInstances([parent, created]);
+			}
 		} catch (error) {
 			if (!this.isDisposed) {
 				this.focusSource = undefined;
@@ -239,7 +253,10 @@ export class TerminalViewPane extends ViewPane {
 		const instance = this.terminalService.activeInstance;
 		if (!instance) return;
 		await this.terminalService.closeTerminal(instance);
-		if (!this.isDisposed) this.layoutService.hidePart("panel");
+		if (!this.isDisposed) {
+			if (this.terminalService.instances.length === 0) this.layoutService.hidePart("panel");
+			else this.terminalService.activeInstance?.xterm?.focus();
+		}
 	}
 
 	public clearActive(): void {
@@ -249,7 +266,7 @@ export class TerminalViewPane extends ViewPane {
 
 	private addInstance(instance: ITerminalInstance): void {
 		if (this.items.has(instance)) return;
-		instance.attachToElement(this.widgetsElement);
+		this.groups.createGroup(instance).attachToElement(this.widgetsElement);
 		const item = new TerminalViewItem(
 			instance,
 			instance.xterm!,
@@ -283,9 +300,18 @@ export class TerminalViewPane extends ViewPane {
 		const active = this.terminalService.activeInstance;
 		const instanceSwitcherPlacement = this.terminalService.instances.length > 1 ? "list" : "title";
 		this.titleActions.setActiveInstance(active, instanceSwitcherPlacement);
-		for (const [instance, item] of this.items) {
-			item.widget.setVisible(this.isBodyVisible() && !this.isDisposed && instance === active);
+		for (const group of this.groups.groups) {
+			group.attachToElement(this.widgetsElement);
+			group.setVisible(this.isBodyVisible() && group === this.groups.activeGroup);
 		}
+		this.layoutGroups();
+	}
+
+	private layoutGroups(): void {
+		const style = this.widgetsElement.ownerDocument.defaultView!.getComputedStyle(this.widgetsElement);
+		const width = this.widgetsElement.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+		const height = this.widgetsElement.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+		for (const group of this.groups.groups) group.layout(Math.max(0, width), Math.max(0, height));
 	}
 
 	private activeItem(): TerminalViewItem | undefined {

@@ -1,3 +1,4 @@
+import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { SkillReference } from './appServerApi.js';
 import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } from './agentModels.js';
@@ -726,7 +727,19 @@ export interface IRestoreMessageOptions {
 	readonly commandId: string;
 }
 
+/** Locates a stored media part without exposing a backend path or accepting a storage digest. */
+export interface AgentAttachmentSource {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly itemId: string;
+	readonly contentIndex?: number;
+}
+
 export interface IAgentThreadService {
+	/** Domain notifications from this renderer's connection; disposing the listener releases it. */
+	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
+	readonly onDidUpdateThreadTranscript: Event<ThreadTranscriptUpdateEnvelope>;
+	readAttachment(source: AgentAttachmentSource, signal?: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string; }>;
 	readHistoryState(params: { readonly sessionId: string; readonly threadId: string; }): Promise<AgentThreadHistoryState>;
 	moveHistory(params: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; readonly commandId: string; }): Promise<void>;
 	readContext(params: { readonly sessionId: string; readonly threadId: string; }): Promise<{ readonly context: AgentContextUsage; }>;

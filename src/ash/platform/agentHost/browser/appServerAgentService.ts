@@ -1,3 +1,6 @@
+import { canceled } from '../../../base/common/errors.js';
+import { createAppServerResourceApi, readAppServerResource } from './appServerApi.js';
+import { Event } from '../../../base/common/event.js';
 import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agentService.js';
 import { AppServerRemoteError } from '../common/appServerError.js';
 import { AgentThreadHistoryConflictError } from '../common/agentService.js';
@@ -62,6 +65,9 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 
 export function createDisconnectedAgentThreadService(unavailable: UnavailableOperation): IAgentThreadService {
 	return {
+		onDidUpdateThread: Event.None,
+		onDidUpdateThreadTranscript: Event.None,
+		readAttachment: () => unavailable('thread.readAttachment'),
 		readHistoryState: () => unavailable('thread.readHistoryState'),
 		moveHistory: () => unavailable('thread.moveHistory'),
 		readContext: () => unavailable('thread.readContext'),
@@ -143,6 +149,19 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient): IAgentThreadService {
 	return {
+		onDidUpdateThread: Event.any<ThreadUpdateEnvelope>((listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'session/thread/update') listener.call(thisArgs, toThreadUpdate(event.params));
+		})),
+		onDidUpdateThreadTranscript: Event.any<ThreadTranscriptUpdateEnvelope>((listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'session/thread/transcript/update') listener.call(thisArgs, toThreadTranscriptUpdate(event.params));
+		})),
+		readAttachment: async (source, signal) => {
+			if (signal?.aborted) throw canceled();
+			const generation = connection.generation;
+			const resource = await appServerRequest(connection, 'attachment/resource/open', { ...source });
+			const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 16 * 1024 * 1024, signal, generation);
+			return { bytes, mimeType: resource.mimeType };
+		},
 		readHistoryState: async params => {
 			try {
 				const result = await appServerRequest(connection, 'session/thread/history', params);
@@ -415,7 +434,7 @@ function toThread(thread: ThreadDto): Thread {
 	};
 }
 
-export function toThreadUpdate(update: ThreadUpdateEnvelopeDto): ThreadUpdateEnvelope {
+function toThreadUpdate(update: ThreadUpdateEnvelopeDto): ThreadUpdateEnvelope {
 	return {
 		sessionId: update.sessionId,
 		threadId: update.threadId,
@@ -463,7 +482,7 @@ function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto): Thre
 	};
 }
 
-export function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): ThreadTranscriptUpdateEnvelope {
+function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): ThreadTranscriptUpdateEnvelope {
 	return {
 		sessionId: update.sessionId,
 		threadId: update.threadId,
@@ -521,8 +540,8 @@ function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscr
 }
 
 function toThreadItem(item: ThreadItemDto): ThreadItem {
-	// Do not leak nested transport values into retained Chat snapshots. Reads and notifications
-	// use the same conversion so tool provenance and rich result content survive both paths.
+	// Detach tool provenance and result content from transport values before Chat retains them.
+	// Reads and notifications share this conversion.
 	switch (item.type) {
 		case 'toolCall': {
 			const binding = item.binding;
@@ -539,8 +558,13 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 		}
 		case 'toolResult': return {
 			...item,
-			content: item.content?.map(part => part.type === 'imageAttachment' || part.type === 'audioAttachment'
-				? { ...part, attachment: { ...part.attachment } } : { ...part }) ?? item.content,
+			content: item.content?.map(part => {
+				switch (part.type) {
+					case 'imageAttachment': return { ...part, attachment: { ...part.attachment } };
+					case 'audioAttachment': return { ...part, attachment: { ...part.attachment } };
+					default: return { ...part };
+				}
+			}) ?? item.content,
 		};
 		default: return { ...item };
 	}

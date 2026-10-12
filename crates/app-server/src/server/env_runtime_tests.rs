@@ -589,6 +589,12 @@ fn dir_mutation_requires_a_dir_permissions_host_connection() {
 fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_terminal() {
     let dir = TestDir::new("projectless-session-terminal", "fixture.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server.commit_limited_dir_runtime(
+        Grant::for_environment(dir.root(), GrantSource::HostConfiguration,
+            Permissions::new([Permission::ReadFiles, Permission::BrowseFiles,
+                Permission::InspectRepository, Permission::WatchFiles, Permission::SearchFiles])),
+        server.local_env_host.as_ref().unwrap(),
+    ).unwrap();
     let session = server.start_thread(StartThreadRequest {
         execution_target: None, branch_name: None, agent_id: None, agent: None,
         command_id: CommandId::new("projectless-terminal-session").unwrap(), title: "fixture".into(),

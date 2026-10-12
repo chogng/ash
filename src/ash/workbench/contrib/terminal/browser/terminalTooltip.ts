@@ -9,6 +9,7 @@ export function getShellProcessTooltip(instance: ITerminalInstance, showDetailed
 		const cwd = instance.cwd ?? instance.initialCwd;
 		if (cwd) lines.push(localize('terminal.tooltip.cwd', 'Working directory: {0}', cwd));
 		if (instance.exitCode !== undefined) lines.push(localize('terminal.tooltip.exitCode', 'Exit code: {0}', instance.exitCode));
+		for (const status of instance.statusList?.statuses ?? []) lines.push(status.tooltip);
 	}
 	return `\n${lines.join('\n')}`;
 }

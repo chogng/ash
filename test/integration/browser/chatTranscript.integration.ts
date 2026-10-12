@@ -1,8 +1,14 @@
+import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
+import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotification } from '../../../.build/protocol/typescript/index.js';
+import type { ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
+import { AccessibleViewType } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.contribution.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/editor/browser/coreCommands.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Selection } from '../../../src/ash/editor/common/core/selection.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
@@ -11,6 +17,9 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { chatTranscriptListItems } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
+import { createAppServerAgentThreadService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
+import type { ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
@@ -82,8 +91,20 @@ services.registerInstance(IEditorService, {
 const root = document.createElement('main');
 root.style.cssText = 'display:flex;width:600px;height:400px';
 document.body.append(root);
+services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
+const accessibleView = resources.add(services.createInstance(AccessibleViewService));
 const list = resources.add(services.createInstance(ChatListWidget, root, {}));
 list.setVisible(true);
+const toolNotifications = resources.add(new Emitter<ServerNotification>());
+const toolService = createAppServerAgentThreadService({ onNotification: listener => toolNotifications.event(listener) } as AppServerProtocolClient);
+function receiveToolUpdate(params: TranscriptDto): ThreadTranscriptUpdateEnvelope {
+	let latest: ThreadTranscriptUpdateEnvelope | undefined;
+	using subscription = toolService.onDidUpdateThreadTranscript(update => { latest = update; });
+	toolNotifications.fire({ method: 'session/thread/transcript/update', params });
+	if (!latest) throw new Error('Expected an Agent Thread domain update');
+	return latest;
+}
+let toolEntries: ThreadTranscriptEntry[] = [];
 let text = 'Reply with `inline`.\n\n```typescript\nconst code = "<safe>";\nsecond line\n```';
 list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]);
 
@@ -97,6 +118,9 @@ declare global {
 			setTheme(value: 'dark' | 'light' | 'hc'): void;
 			refresh(): void;
 			showLongCode(): string;
+			showTool(): void;
+			openAccessibleView(help: boolean): boolean;
+			updateTool(finish: boolean): void;
 			remove(): void;
 			dispose(): void;
 		};
@@ -122,6 +146,30 @@ window.ashChatTranscriptIntegration = {
 		text = `\`\`\`typescript\n${code}\n\`\`\``;
 		list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]);
 		return code;
+	},
+	openAccessibleView: help => accessibleView.show(help ? AccessibleViewType.Help : AccessibleViewType.View),
+	showTool: () => {
+		const update = receiveToolUpdate({
+			sessionId: 'session', threadId: 'thread', revision: 2, durableSequence: 1, changes: [{
+				type: 'upsert', entry: {
+					type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: {
+						type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'shell', name: 'shell', argumentsJson: '{"command":"echo <safe>"}',
+						binding: { registryGeneration: 1, definitionDigest: 'digest', sourceChain: [{ type: 'product', component: 'shell' }], caller: { type: 'direct' }, activity: { type: 'command', program: 'echo', arguments: ['<safe>'], workingDirectory: '/remote/project' } },
+					}
+				}
+			}]
+		});
+		toolEntries = update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []);
+		list.render(chatTranscriptListItems(toolEntries));
+	},
+	updateTool: finish => {
+		const update = receiveToolUpdate({
+			sessionId: 'session', threadId: 'thread', revision: finish ? 4 : 3, durableSequence: finish ? 2 : 1, changes: finish
+				? [{ type: 'upsert', entry: { type: 'item', entryId: 'result', turnId: 'turn', transient: false, item: { type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'shell', text: 'Denied <script>alert(1)</script>', isError: true } } }]
+				: [{ type: 'upsert', entry: { type: 'toolOutput', entryId: 'stdout', turnId: 'turn', toolCallId: 'shell', stream: 'stdout', text: '<img src=x onerror=alert(1)>' } }, { type: 'upsert', entry: { type: 'toolOutput', entryId: 'stderr', turnId: 'turn', toolCallId: 'shell', stream: 'stderr', text: 'warning' } }],
+		});
+		toolEntries.push(...update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []));
+		list.render(chatTranscriptListItems(toolEntries));
 	},
 	remove: () => list.render([]),
 	dispose: () => resources.dispose(),

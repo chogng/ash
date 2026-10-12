@@ -217,7 +217,7 @@ export class ChatWidgetModel extends Disposable {
 
 	get items(): readonly IChatListItem[] {
 		const latestTurnId = this._thread?.turns.at(-1)?.turnId;
-		return chatTranscriptListItems(this.transcriptEntries, latestTurnId, this._thread?.turns);
+		return chatTranscriptListItems(this.transcriptEntries, latestTurnId, this._thread?.turns, this._thread);
 	}
 
 	get interaction(): TurnInteraction | undefined {

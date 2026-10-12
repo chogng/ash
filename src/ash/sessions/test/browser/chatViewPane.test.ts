@@ -1,5 +1,6 @@
-import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
+import { createAppServerAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
+import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -3061,6 +3062,7 @@ function fakeApi(options: FakeOptions = {}): {
 			list: async (_reload: string, sessionId?: string) => { skillListRequests.push(sessionId); return { generation: 1, skills: options.skills ?? [] }; },
 		},
 		thread: {
+			...createAppServerAgentThreadService({ onNotification: (listener: (event: ServerNotification) => void) => { listeners.add(listener); return toDisposable(() => listeners.delete(listener)); } } as AppServerProtocolClient),
 			readContext: async () => ({
 				context: {
 					estimatedTokens: 200, estimatorRevision: 'test', model: { provider: 'test', model: 'test-model' },
@@ -3724,3 +3726,27 @@ async function chooseConversation(pane: InstanceType<typeof ChatViewPane>, dom: 
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
 	await nextTask();
 }
+
+
+test('ChatWidgetModel connects agentHost tool transcript updates to a retained call and interrupted Turn', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const original = { ...thread('initial'), sequence: 1 };
+	let currentThread: Thread = { ...original, turns: [{ ...original.turns[0], status: 'running', items: [{ type: 'toolCall', itemId: 'call', turnId: 'turn-1', toolCallId: 'tool', name: 'shell', argumentsJson: '{}' }] }] };
+	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const callId = model.items[0].id;
+	assert.equal(model.items[0].toolInvocation?.call.name, 'shell');
+	assert.equal(model.items[0].toolInvocation?.stopped, false);
+	fake.emit({ method: 'session/thread/transcript/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 1, revision: 2, changes: [{ type: 'upsert', entry: { type: 'toolOutput', entryId: 'output', turnId: 'turn-1', toolCallId: 'tool', stream: 'stdout', text: 'streaming' } }] } });
+	assert.equal(model.items.length, 1);
+	assert.equal(model.items[0].id, callId);
+	assert.equal(model.items[0].toolInvocation?.output[0].text, 'streaming');
+	currentThread = { ...currentThread, turns: currentThread.turns.map(turn => ({ ...turn, status: 'interrupted' })) };
+	fake.emitReady();
+	await waitFor(() => model.items[0]?.toolInvocation?.stopped === true);
+	assert.equal(model.items[0].toolInvocation?.result, undefined);
+	assert.equal(model.items[0].transient, false);
+});

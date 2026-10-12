@@ -125,6 +125,22 @@
 	padding-left: var(--ash-terminal-command-gutter-width);
 }
 
+.ash-terminal-group,
+.ash-terminal-group-pane {
+	min-width: 0;
+	min-height: 0;
+	width: 100%;
+	height: 100%;
+}
+
+.ash-terminal-group[hidden] {
+	display: none;
+}
+
+.ash-terminal-group-pane {
+	display: flex;
+}
+
 .ash-terminal-instance .xterm {
 	height: 100%;
 }

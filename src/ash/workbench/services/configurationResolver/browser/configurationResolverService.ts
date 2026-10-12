@@ -125,7 +125,8 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 		const editor = editorReferences.length ? this.instantiation.createInstance(ActiveEditorVariableResolver).snapshot() : undefined;
 		if (names.size && folder && !selected) throw new Error(localize('configurationResolver.missingFolder', "Cannot resolve '{0}': open or select the referenced workspace folder.", folder.name));
 		if (names.has('')) throw new Error(localize('configurationResolver.missingEnvironmentName', 'An environment variable name is required.'));
-		let environment: Readonly<Record<string, string | undefined>> = suppliedEnvironment ?? (names.size ? await this.processes.getEnvironment([...names], folders.length > 1 ? selected?.id : undefined) : {});
+		const processFolderId = folders.length > 1 || selected?.id.startsWith('session:') ? selected?.id : undefined;
+		let environment: Readonly<Record<string, string | undefined>> = suppliedEnvironment ?? (names.size ? await this.processes.getEnvironment([...names], processFolderId) : {});
 		let windowsEnvironment = false;
 		if (suppliedEnvironment && names.size) {
 			const os = await this.paths.getOperatingSystem(folder?.uri ?? URI.file('/'));

@@ -2,7 +2,7 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { TabList, type TabListDropPosition } from '../../../../base/browser/ui/tablist/tabList.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
-import { DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { killTerminalIcon } from './terminalIcons.js';
 import { getShellProcessTooltip } from './terminalTooltip.js';
 import { localize } from '../../../../nls.js';
@@ -96,7 +96,12 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 			if (!this.terminals.instances.includes(instance)) this.instanceListeners.deleteAndDispose(instance);
 		}
 		for (const instance of this.terminals.instances) {
-			if (!this.instanceListeners.has(instance)) this.instanceListeners.set(instance, instance.onDidChangeState(() => this.refresh()));
+			if (!this.instanceListeners.has(instance)) {
+				const lifetime = new DisposableStore();
+				lifetime.add(instance.onDidChangeState(() => this.refresh()));
+				if (instance.statusList) lifetime.add(instance.statusList.onDidChangePrimaryStatus(() => this.refresh()));
+				this.instanceListeners.set(instance, lifetime);
+			}
 		}
 		this.setTabs(this.terminals.instances.map(instance => ({
 			id: instance.id, value: instance, label: instance.title, tooltip: instance.title + getShellProcessTooltip(instance, true),

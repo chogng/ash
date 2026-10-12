@@ -1,3 +1,6 @@
+import { Emitter } from '../../../../base/common/event.js';
+import type { ServerNotification } from '../../../../../../.build/protocol/typescript/index.js';
+import type { ThreadTranscriptUpdateEnvelope } from '../../common/agentService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { AppServerRemoteError } from '../../common/appServerError.js';
@@ -167,4 +170,39 @@ test('history actions use the same Thread and exact sequence and map structured 
 	conflict = true;
 	await assert.rejects(service.moveHistory({ ...options, commandId: 'redo', direction: 'redo' }), AgentThreadHistoryConflictError);
 	await assert.rejects(service.readHistoryState({ sessionId: 'session', threadId: 'thread' }), AgentThreadHistoryConflictError);
+});
+
+
+test('Agent Thread notifications detach tool provenance and rich results from transport values', () => {
+	const binding = {
+		registryGeneration: 3, definitionDigest: 'digest', sourceChain: [{ type: 'mcp' as const, serverId: 'remote', remoteName: 'shell', catalogGeneration: 4, connectionGeneration: 5 }],
+		activity: { type: 'command' as const, program: 'echo', arguments: ['hello'], workingDirectory: '/remote' },
+		caller: { type: 'codeMode' as const, parentToolCallId: 'parent', cellId: 'cell', runtimeCallId: 'runtime' },
+	};
+	const attachment = { contentDigest: 'digest', mediaType: 'png' as const, encodedBytes: 42, width: 4, height: 5 };
+	const entries = [
+		{ type: 'item' as const, entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall' as const, itemId: 'call', turnId: 'turn', toolCallId: 'tool', name: 'shell', argumentsJson: '{}', binding } },
+		{ type: 'item' as const, entryId: 'result', turnId: 'turn', transient: false, item: { type: 'toolResult' as const, itemId: 'result', turnId: 'turn', toolCallId: 'tool', text: '', isError: false, content: [{ type: 'imageAttachment' as const, detail: 'high' as const, attachment }, { type: 'text' as const, text: 'result' }] } },
+	];
+	using notifications = new Emitter<ServerNotification>();
+	const service = createAppServerAgentThreadService({ onNotification: listener => notifications.event(listener) } as AppServerProtocolClient);
+	let converted: ThreadTranscriptUpdateEnvelope | undefined;
+	using subscription = service.onDidUpdateThreadTranscript(update => { converted = update; });
+	notifications.fire({ method: 'session/thread/transcript/update', params: { sessionId: 'session', threadId: 'thread', revision: 3, durableSequence: 2, changes: entries.map(entry => ({ type: 'upsert' as const, entry })) } });
+	assert.ok(converted);
+	assert.deepEqual(converted.changes, entries.map(entry => ({ type: 'upsert', entry })));
+	binding.activity.arguments.push('changed');
+	binding.sourceChain[0].serverId = 'changed';
+	binding.caller.parentToolCallId = 'changed';
+	attachment.width = 100;
+	assert.notDeepEqual(converted.changes, entries.map(entry => ({ type: 'upsert', entry })));
+	const call = converted.changes[0];
+	assert.ok(call.type === 'upsert' && call.entry.type === 'item' && call.entry.item.type === 'toolCall');
+	assert.equal(call.entry.item.binding!.sourceChain[0].type, 'mcp');
+	assert.ok(call.entry.item.binding!.activity?.type === 'command');
+	assert.deepEqual(call.entry.item.binding.activity.arguments, ['hello']);
+	assert.deepEqual(call.entry.item.binding.caller, { type: 'codeMode', parentToolCallId: 'parent', cellId: 'cell', runtimeCallId: 'runtime' });
+	const result = converted.changes[1];
+	assert.ok(result.type === 'upsert' && result.entry.type === 'item' && result.entry.item.type === 'toolResult');
+	assert.deepEqual(result.entry.item.content, [{ type: 'imageAttachment', detail: 'high', attachment: { contentDigest: 'digest', mediaType: 'png', encodedBytes: 42, width: 4, height: 5 } }, { type: 'text', text: 'result' }]);
 });

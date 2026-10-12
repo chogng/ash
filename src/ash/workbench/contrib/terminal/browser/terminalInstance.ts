@@ -19,6 +19,8 @@ import { TerminalExtensionsRegistry } from './terminalExtensions.js';
 import { TerminalProcessManager } from './terminalProcessManager.js';
 import { XtermTerminal } from './xterm/xtermTerminal.js';
 import { localize } from '../../../../nls.js';
+import Severity from '../../../../base/common/severity.js';
+import { TerminalStatusList } from './terminalStatusList.js';
 
 export interface CustomTerminalProcessOptions {
 	readonly create: NonNullable<IShellLaunchConfig['customPtyImplementation']>;
@@ -28,6 +30,7 @@ export interface CustomTerminalProcessOptions {
 }
 
 export class TerminalInstance extends Disposable implements ITerminalInstance {
+	readonly statusList = this._register(new TerminalStatusList());
 	private readonly pendingOutput: IProcessDataEvent[] = [];
 	private readonly pendingScreenData: Uint8Array[] = [];
 	private pendingScreenBytes = 0;
@@ -138,6 +141,21 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	public get processId(): number {
 		return this.processReady.pid;
+	}
+
+	/** A fresh view of the immutable launch snapshot; split callers cannot mutate relaunch data. */
+	public get shellLaunchConfig(): Readonly<IShellLaunchConfig> {
+		const profile = this.launch?.profile;
+		return Object.freeze({
+			name: this.title,
+			executable: profile?.type === 'custom' ? profile.path : undefined,
+			args: profile?.type === 'custom' ? profile.args : undefined,
+			env: this.launch?.env,
+			cwd: this.launch?.cwd,
+			icon: this.profile.icon,
+			color: this.profile.color,
+			customPtyImplementation: this.custom?.create,
+		});
 	}
 
 	public get instanceId(): number { return this.instanceNumber; }
@@ -563,6 +581,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	private createShellProcessManager(): void {
+		this.statusList.remove('process-error');
 		const lifetime = new DisposableStore();
 		this.shellLifetime.value = lifetime;
 		const manager = this.instantiationService.createInstance(TerminalProcessManager, {
@@ -570,7 +589,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			terminalId: this.serverTerminalId,
 		});
 		this.shellProcessManager = lifetime.add(manager);
-		lifetime.add(manager.onProcessError(() => this.setState('error')));
+		lifetime.add(manager.onProcessError(error => {
+			this.statusList.add({
+				id: 'process-error', severity: Severity.Error,
+				tooltip: localize('terminal.status.processError', 'Terminal process failed: {0}', error instanceof Error ? error.message : String(error)),
+			});
+			this.setState('error');
+		}));
 		lifetime.add(manager.onProcessData(event => this.handleProcessData(event)));
 		lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
 		lifetime.add(manager.onOutputGap(() => {

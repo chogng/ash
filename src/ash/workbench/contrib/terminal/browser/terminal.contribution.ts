@@ -15,7 +15,10 @@ import { ITerminalProcessService } from '../../../../platform/terminal/common/te
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { ITerminalConfigurationService } from './terminal.js';
-import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService } from '../../../services/terminal/browser/terminal.js';
+import { TerminalGroupService } from './terminalGroupService.js';
+import { setupTerminalCommands } from './terminalCommands.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
@@ -43,6 +46,8 @@ registerWorkbenchServiceContribution({
 	install: context => context.register(context.container.createInstance(TerminalConfigurationService)),
 });
 
+registerSingleton(ITerminalGroupService, TerminalGroupService, InstantiationType.Delayed);
+
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileService,
 	dependencies: [ITerminalService, ITerminalProcessService, IConfigurationService, IWorkspaceContextService, IExtensionService],
@@ -58,6 +63,7 @@ registerWorkbenchServiceContribution({
 export { TERMINAL_VIEW_ID } from "../common/terminal.js";
 
 registerTerminalActions();
+setupTerminalCommands();
 setupTerminalMenus();
 
 /** Registers the integrated terminal in the Workbench panel. */

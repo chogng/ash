@@ -6,6 +6,7 @@ import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
+import type Severity from '../../../../base/common/severity.js';
 
 /** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {
@@ -82,6 +83,8 @@ export interface ITerminalInstance extends IDisposable {
 	readonly shellIntegration?: ITerminalShellIntegration;
 	readonly title: string;
 	readonly profile: ITerminalProfile;
+	readonly shellLaunchConfig?: Readonly<IShellLaunchConfig>;
+	readonly statusList?: ITerminalStatusList;
 	readonly state: TerminalInstanceState;
 	readonly exitCode: number | undefined;
 	readonly onDidWriteData: Event<IProcessDataEvent>;
@@ -154,3 +157,48 @@ export interface ITerminalService extends IDisposable {
 }
 
 export const ITerminalService = createServiceIdentifier<ITerminalService>("terminalService");
+
+/** Panel grouping owns membership and geometry; instances retain their process and screen. */
+export interface ITerminalGroup extends IDisposable {
+	readonly terminalInstances: readonly ITerminalInstance[];
+	readonly activeInstance: ITerminalInstance | undefined;
+	readonly title: string;
+	readonly onInstancesChanged: Event<void>;
+	addInstance(instance: ITerminalInstance): void;
+	removeInstance(instance: ITerminalInstance): void;
+	attachToElement(element: HTMLElement): void;
+	setVisible(visible: boolean): void;
+	layout(width: number, height: number): void;
+	focusPreviousPane(): void;
+	focusNextPane(): void;
+}
+
+export interface ITerminalGroupService extends IDisposable {
+	readonly groups: readonly ITerminalGroup[];
+	readonly activeGroup: ITerminalGroup | undefined;
+	readonly onDidChangeGroups: Event<void>;
+	createGroup(instance: ITerminalInstance): ITerminalGroup;
+	getGroupForInstance(instance: ITerminalInstance): ITerminalGroup | undefined;
+	joinInstances(instances: readonly ITerminalInstance[]): void;
+	unsplitInstance(instance: ITerminalInstance): void;
+	instanceIsSplit(instance: ITerminalInstance): boolean;
+	setActiveInstanceByIndex(index: number): void;
+	showPanel(focus?: boolean): Promise<void>;
+}
+
+export const ITerminalGroupService = createServiceIdentifier<ITerminalGroupService>('terminalGroupService');
+
+/** Display messages are independent of the instance's process and connection state. */
+export interface ITerminalStatus {
+	readonly id: string;
+	readonly severity: Severity;
+	readonly tooltip: string;
+}
+
+export interface ITerminalStatusList {
+	readonly primary: ITerminalStatus | undefined;
+	readonly statuses: readonly ITerminalStatus[];
+	readonly onDidChangePrimaryStatus: Event<ITerminalStatus | undefined>;
+	add(status: ITerminalStatus): void;
+	remove(status: ITerminalStatus | string): void;
+}

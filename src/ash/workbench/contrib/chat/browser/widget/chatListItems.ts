@@ -1,4 +1,4 @@
-import type { IChatHookPart, PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from "../../../../services/chat/common/chatService.js";
+import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from "../../../../services/chat/common/chatService.js";
 import { localize } from "../../../../../nls.js";
 
 export type ChatTurnErrorAction =
@@ -15,6 +15,8 @@ interface ChatTurnErrorListItemOptions {
 export interface IChatListItem {
 	readonly id: string;
 	readonly type: ThreadItem["type"] | "turnError" | "advisor" | 'hook';
+	readonly content?: readonly ChatContentPart[];
+	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; };
 	readonly hookPart?: IChatHookPart;
 	readonly toolInvocation?: {
 		readonly call: Extract<ThreadItem, { readonly type: 'toolCall'; }>;
@@ -53,8 +55,8 @@ function chatPlanUpdateListItem(turnId: string, plan: PlanUpdate): IChatListItem
 	};
 }
 
-/** Groups an advisor call and its result into one inspectable consultation. */
-export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[], latestTurnId?: string, turns: readonly Turn[] = []): readonly IChatListItem[] {
+/** Associates backend tool evidence within a Turn while preserving transcript order. */
+export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[], latestTurnId?: string, turns: readonly Turn[] = [], source?: { readonly sessionId: string; readonly threadId: string; }): readonly IChatListItem[] {
 	// Call IDs are provider-owned and can be reused in another Turn. Keep presentation identity scoped.
 	const key = (turnId: string, toolCallId: string) => JSON.stringify([turnId, toolCallId]);
 	const toolCalls = new Map(entries.flatMap(entry => entry.type === 'item' && entry.item.type === 'toolCall' ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : []));
@@ -72,7 +74,10 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 	const calls = new Map(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolCall" && entry.item.name === "advisor" ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : []));
 	const results = new Set(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolResult" ? [key(entry.turnId, entry.item.toolCallId)] : []));
 	return entries.flatMap(entry => {
-		if (entry.type === 'toolOutput' && toolCalls.has(key(entry.turnId, entry.toolCallId))) return [];
+		if (entry.type === 'toolOutput') {
+			const call = toolCalls.get(key(entry.turnId, entry.toolCallId));
+			if (call?.item.type === 'toolCall' && call.item.name !== 'advisor') return [];
+		}
 		if (entry.type === 'item' && entry.item.type === 'toolCall' && entry.item.name !== 'advisor') {
 			const call = entry.item;
 			const identity = key(entry.turnId, call.toolCallId);
@@ -83,6 +88,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 				text: [call.name, call.argumentsJson, ...output.map(value => `${value.stream}: ${value.text}`), result?.text].filter(Boolean).join('\n\n'),
 				transient: !result && !stoppedTurns.has(entry.turnId), isError: result?.isError,
 				toolInvocation: { call, result, output, stopped: stoppedTurns.has(entry.turnId) },
+				attachmentSource: source && result ? { ...source, itemId: result.itemId } : undefined,
 			}];
 		}
 		if (entry.type === 'item' && entry.item.type === 'toolResult') {
@@ -107,7 +113,8 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 			const details = [typeof result.question === "string" ? result.question : undefined, typeof result.sourceSequence === "number" ? `Conversation sequence ${result.sourceSequence}` : undefined, usage ? `Tokens: ${usage.inputTokens ?? "unknown"} input · ${usage.outputTokens ?? "unknown"} output` : undefined].filter(Boolean).join(" · ");
 			return [{ id: entry.entryId, type: "advisor" as const, text: advice, transient: false, isError: item.isError, label: `Advisor · ${modelLabel}`, detail: details }];
 		}
-		return [chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId })];
+		const item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
+		return [{ ...item, attachmentSource: source && entry.type === 'item' ? { ...source, itemId: entry.item.itemId } : undefined }];
 	});
 }
 
@@ -240,19 +247,14 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 				text: item.name,
 				transient,
 			};
-		case "userImage":
-		case "userImageAttachment":
-			return {
-				id: item.itemId,
-				type: item.type,
-				text: "Image",
-				transient,
-			};
+		case 'userImage': return { id: item.itemId, type: item.type, text: localize('chat.media.image', 'Image'), transient, content: [{ type: 'imageUrl', url: item.url, detail: 'auto' }] };
+		case 'userImageAttachment': return { id: item.itemId, type: item.type, text: localize('chat.media.image', 'Image'), transient, content: [{ type: 'imageAttachment', attachment: item.attachment, detail: 'auto' }] };
 		case "userAudioAttachment":
 			return {
 				id: item.itemId,
 				type: item.type,
-				text: `Audio (${Math.ceil(item.attachment.durationMs / 1000)} seconds)`,
+				text: localize('chat.media.audioDuration', 'Audio ({0} seconds)', Math.ceil(item.attachment.durationMs / 1000)),
+				content: [{ type: 'audioAttachment', attachment: item.attachment }],
 				transient,
 			};
 		case "toolCall":
@@ -269,6 +271,7 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 				text: item.text,
 				transient,
 				isError: item.isError,
+				content: item.content ?? undefined,
 			};
 	}
 }

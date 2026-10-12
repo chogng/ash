@@ -6,6 +6,7 @@
 | -------- | --: | ------: | -----: | -----: | ---------: |
 | 首次审计 |  95 |     965 |     72 |     23 |        893 |
 | 本批前   | 108 |     965 |     90 |     18 |        875 |
+| 本批后   | 112 |     965 |     93 |     19 |        872 |
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
@@ -117,3 +118,22 @@ start 绑定调用连接、目标 Thread 和媒体代次；stop 只关闭该会�
 准确范围：Chat 双方已有的 browser/widget/chatListWidget.ts 只增加工具内容组件接入、更新和视图状态；已确认 Ash 的 browser/widget/chatListItems.ts 只关联工具条目并保留文本可访问内容；双方有同路径的 browser/widget/chatContentParts/toolInvocationParts/chatToolInvocationPart.ts 在 Ash 缺失，原路径独立实现；样式落上游同路径 browser/widget/chatContentParts/media/chatCollapsibleContentPart.css，仅由新组件拥有。browser/widget/input/chatInputPart.ts 更新现有帮助。已确认的 src/ash/sessions/browser/chatWidgetModel.ts 仅把原 Thread 的 Turn 状态交给渲染转换，不改变订阅 owner；采用 sessions skill。agentHost 的既有 browser/appServerAgentService.ts 只转换工具调用/结果的嵌套领域值，Thread read、subscribe 和 notification 共用该边界；平台 owner 按 Sessions README 已确认的共享 Agent 领域归属保留，应用 app-server-api-integration skill。验证路径为现有 ChatListWidget、agentHost adapter 与 Sessions ChatViewPane 单测，以及 chatTranscript.integration.ts/spec.ts；另仅更新 chat.json 中文和本台账。其他路径只读，已有 Tasks/Terminal/Rust 修改保留。
 
 上游证据只取同路径、ChatToolInvocationPart 的 domNode/toolCallId/onDidChangeHeight 公共职责、renderer 对调用 ID 的复用，以及工具调用可检查输入、流式输出和终态的可观察行为；不复制上游私有 subpart/observable/MCP 实现。Ash 直接使用其已有 ThreadItem / ChatToolCallBinding / ThreadTranscriptEntry，不引入 AHP 或生成 DTO 到内容组件。检验需覆盖真实 adapter→领域值→组件、跨 Turn 同 ID、结果/输出乱序、孤立结果、失败/中断、快照与增量、展开和焦点保留、主题/窄宽度、安全文本、中文、移除与释放。
+
+Agent 通知边界追加准入：既有 platform/agentHost/common/agentService.ts 在 IAgentThreadService 提供领域 onDidUpdateThread / onDidUpdateThreadTranscript；既有 browser/appServerAgentService.ts 把已生成 decoder 校验的 notification 转为该领域事件，订阅随消费者的 IDisposable 释放，断开版本仍提供 Event.None。既有 workbench/services/chat/browser/chatService.ts 退出 Thread DTO 转换和 platform/browser adapter 导入，直接订阅上述领域事件；生成协议、Main、Rust 与连接拓扑不变。真实调用方为两种 Workbench 的既有 ChatService 装配；定向 adapter 测试验证 thisArgs、DisposableStore、不同 method 过滤和释放，Sessions 原 fakeApi 只改为使用正式 adapter 的通知契约，并覆盖重连与共享订阅。未新增 service、执行状态或 transport。
+
+通知验证追加现有 platform/agentHost/test/browser/webRendererApi.test.ts：复用其 FakeTransport 与真实 AppServerProtocolClient，通过生成 decoder 后从 IAgentThreadService 观察领域事件、关闭/重连和 listener 释放；不建立测试专用生产端口。
+
+无障碍追加：原 ChatListWidget 在回复元素获得焦点时提供现有 Chat verbosity 作用域下的帮助和 Accessible View，纯文本包含折叠工具的来源、目标、输入、输出与终态；关闭恢复原元素焦点。provider 由 widget 的 DisposableStore 拥有，不新增设置或 provider identity。现有 ChatListWidget 单测覆盖 provider 内容与 focus return。
+
+本批结果：工具调用在原 Chat 渲染链保留一行身份，调用输入、来源链、执行目标、stdout/stderr 与结果由 agentHost 的既有领域值提供；以 Turn + toolCallId 隔离，同 ID 的其他 Turn 不混入。孤立结果和输出继续显示，不凭终止推断成功；Advisor 保留原专用展示。流式更新复用 DOM，保持展开和键盘焦点；窗口内视图恢复包含展开状态。无障碍帮助与纯文本阅读接入现有 Chat 设置，折叠详情可读，正文随领域更新刷新；关闭返回原焦点。Thread notification 的转换退出 ChatService，收敛到 IAgentThreadService 的领域事件；无外部生产调用方的两个旧转换 export 已移除，测试也沿正式事件端口接入。嵌套工具来源和结果在 adapter 内转换；注册、断线代次、共享订阅与后端执行 owner 沿用现有实现。
+
+完整定向单测 4 文件 172 项通过；Chromium 8 项通过，覆盖英文/中文、原代码块/Skill 场景、工具流式内容、真实键盘和焦点、plain-text 阅读的动态更新与关闭、dark/light/HC、窄容器和移除。Renderer 类型检查 3719 文件通过，unit 与 browser TypeScript 编译通过；14 个 TS 格式、组件 CSS stylelint 和 Chat CSS ownership audit 通过（没有相同或仅品牌替换的上游 CSS，没有上游 root/token）。语言生成仅保留已有的 editorGutter 缺译。没有执行真实模型账号、MCP 服务或远程 SSH；这些结果覆盖生成 decoder、真实协议 client 和前端领域/UI，不等于外部供应商验收。全目录数字包含共享工作区同期的上下文附件变化，仅表示路径关系；没有把整个 Chat 或 agentHost 标记为完成。工具 rich media、完整增量 Markdown、引用/交互式 MCP 和语音仍按上方缺口继续拆解。
+
+共享工作区本轮另一任务执行了 rebase，并把部分本批初始修改带入其 Terminal 提交。仅合并 ChatInputPart 中双方的帮助与建议上下文内容，保留其他任务的源代码和分支操作；本批后续差异仍在当前 checkout。
+
+
+## 持久媒体与连续补全（2026-10-12）
+
+用户阅读历史图片/音频或工具媒体结果 → ChatListItems 保留已有 ThreadItem / ChatContentPart 与所属 Session/Thread → ChatAttachmentsContentPart → IAgentThreadService.readAttachment → 原 App Server ProtocolClient → attachment/resource/open → 既有 read_session_thread 与 Attachments 验证 → 原 ResourceStore 的连接所属 handle → 原 resource/read/release → Blob URL 与图片/音频控件。输入和工具媒体均由原 Rust 附件存储拥有；前端组件只拥有加载取消、播放和 object URL，移除/切换/断线不把迟到字节装入新行。不以客户端 digest 或 URL 提供任意存储访问。
+
+准确修改范围：既有 crates/attachments/src/{service.rs,audio.rs} 公开实际读取消费的验证端口；crates/app-server-protocol/src/protocol/{attachments.rs,registry.rs} 增加 Item 定位的媒体 resource 请求，现有生成器更新协议/schema/decoder；crates/app-server/src/{server.rs,server/attachment_operations.rs} 沿现有 Session/Thread 校验和 ResourceStore 接入，不新建 owner。验证追加 server/attachment_operations_tests.rs 并在 server.rs 注册 sibling test（Rust 独立测试文件），使用真实已存储用户与工具媒体、连接隔离、错误 Session/Thread/Item/index、取消与字节校验。platform/agentHost/common/agentService.ts 与 browser/appServerAgentService.ts 增加领域 readAttachment，复用原 readAppServerResource，不将 DTO 或 resource ID 暴露给产品。共用媒体展示落到上游同路径 browser/widget/chatContentParts/chatAttachmentsContentPart.ts，使用既有 DI 和原 Browser 控件，不复制上游内部实现；样式只追加现有 chatMarkdownPart.css 的该组件职责。已确认 chatListItems.ts / ChatListWidget、现有 toolInvocationPart、Sessions ChatWidgetModel 传递原线程身份；现有 Chat/agentHost/browser fixtures 验证真实读取、媒体、迟到回包、释放、键盘、主题和中文。其他模块改动保留。

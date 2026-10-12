@@ -49,7 +49,8 @@ impl Attachments {
         Ok(reference)
     }
 
-    fn read_audio(&self, reference: &AudioAttachmentRef) -> Result<EncodedAudio, AttachmentError> {
+    /// Reads stored audio and verifies its format, length, digest and duration.
+    pub fn read_audio(&self, reference: &AudioAttachmentRef) -> Result<EncodedAudio, AttachmentError> {
         if reference.duration_ms == 0 || reference.duration_ms > ::audio::MAX_AUDIO_DURATION_MS {
             return Err(AttachmentError::Corrupt);
         }

@@ -1,3 +1,8 @@
+import { ITerminalGroupService } from '../../../../services/terminal/browser/terminal.js';
+import { TerminalGroupService } from '../../browser/terminalGroupService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
 
@@ -19,6 +24,7 @@ import type { ITerminalInstance } from "../../../../services/terminal/browser/te
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -256,6 +262,8 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	});
 	services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None } as ITerminalProcessService);
+	services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
+	services.registerInstance(ITerminalGroupService, resources.add(services.createInstance(TerminalGroupService)));
 	services.registerInstance(IExtensionService, { terminalProfiles: [], onDidChange: Event.None } as unknown as IExtensionService);
 	services.registerInstance(ITerminalProfileService, resources.add(services.createInstance(TerminalProfileService)));
 	services.registerInstance(ITerminalProfileResolverService, { resolveShellLaunchConfig: async () => { throw new Error('Unexpected shell resolution'); } } as unknown as ITerminalProfileResolverService);

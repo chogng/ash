@@ -87,3 +87,60 @@ test('Response code blocks cap their viewport while copying the complete long so
 	await page.locator('.ash-chat-code-block').getByRole('button', { name: 'Copy', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(code);
 });
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`agentHost tool progress retains keyboard focus, expansion and safe content in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showTool());
+		const tool = page.locator('.ash-chat-tool-invocation');
+		const summary = tool.locator('summary');
+		await expect(tool).not.toHaveAttribute('open');
+		await expect(summary).toHaveText(locale === 'en' ? 'shell · Awaiting result' : 'shell · 等待结果');
+		await summary.focus();
+		await summary.press('Enter');
+		await expect(tool).toHaveAttribute('open', '');
+		const original = await tool.elementHandle();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.updateTool(false));
+		expect(await tool.evaluate((element, previous) => element === previous, original)).toBe(true);
+		await expect(summary).toBeFocused();
+		await expect(tool).toContainText('/remote/project');
+		await expect(tool).toContainText('<img src=x onerror=alert(1)>');
+		await expect(tool).toContainText('warning');
+		await expect(tool.locator('img, script')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(false))).toBe(true);
+		const accessibleText = page.locator('.ash-accessible-view-content');
+		await expect(accessibleText).toHaveValue(/<img src=x onerror=alert\(1\)>/);
+		await expect(accessibleText).toHaveAttribute('readonly', '');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.updateTool(true));
+		await expect(accessibleText).toHaveValue(/Denied <script>/);
+		await page.keyboard.press('Escape');
+		await expect(accessibleText).toHaveCount(0);
+		await expect(summary).toBeFocused();
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true))).toBe(true);
+		await expect(accessibleText).toHaveValue(locale === 'en' ? /tool summary/ : /工具摘要/);
+		await page.keyboard.press('Escape');
+		await expect(accessibleText).toHaveCount(0);
+		await expect(summary).toHaveText(locale === 'en' ? 'shell · Failed' : 'shell · 失败');
+		await expect(summary).toBeFocused();
+		await expect(tool).toHaveAttribute('open', '');
+		for (const palette of ['dark', 'light', 'hc'] as const) {
+			await page.evaluate(value => window.ashChatTranscriptIntegration.setTheme(value), palette);
+			await expect(summary).toHaveCSS('outline-style', 'solid');
+			expect(await summary.evaluate(element => getComputedStyle(element).outlineColor === getComputedStyle(element).color)).toBe(false);
+		}
+		await page.evaluate(() => { document.querySelector<HTMLElement>('main')!.style.width = '180px'; });
+		expect(await tool.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await summary.press('Space');
+		await expect(tool).not.toHaveAttribute('open');
+		await summary.press('Space');
+		await expect(tool).toHaveAttribute('open', '');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+		await expect(tool).toHaveCount(0);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.dispose());
+		await original?.dispose();
+		expect(errors).toEqual([]);
+	});
+}

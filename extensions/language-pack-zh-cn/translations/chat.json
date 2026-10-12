@@ -707,7 +707,8 @@
     "chat.tool.searchTarget": "搜索：{0}",
     "chat.tool.listTarget": "列出：{0}",
     "chat.tool.run": "运行",
-    "chat.tool.help": "工具调用显示为折叠摘要。使用 Tab 到达摘要，按 Enter 或空格展开输入、来源、执行目标、标准输出、标准错误和结果。流式更新会保留焦点和展开状态。调用失败时显示错误；已结束但没有结果的轮次不会显示为成功。"
+    "chat.tool.help": "工具调用显示为折叠摘要。使用 Tab 到达摘要，按 Enter 或空格展开输入、来源、执行目标、标准输出、标准错误和结果。流式更新会保留焦点和展开状态。调用失败时显示错误；已结束但没有结果的轮次不会显示为成功。",
+    "chat.transcript.help": "聊天回复\n使用 Tab 和 Shift+Tab 到达回复链接、代码块操作和工具摘要。按 Enter 或空格展开或折叠工具的输入、来源、执行目标、输出和结果。流式更新会保留焦点和展开状态。失败调用显示错误；已结束但没有结果的轮次不会显示为成功。使用 <keybinding:editor.action.accessibleView> 将聊天记录作为纯文本阅读，包含折叠的工具详情。关闭阅读视图后，焦点返回回复。"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

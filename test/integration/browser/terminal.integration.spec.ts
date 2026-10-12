@@ -635,7 +635,7 @@ test('terminal commands stay in their window after another view is created and d
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?windows');
-	await page.waitForFunction(() => Boolean(window.ashTerminalWindowsIntegration));
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalWindowsIntegration)), errors })).toEqual({ ready: true, errors: [] });
 	await page.evaluate(() => window.ashTerminalWindowsIntegration.forEach(pane => pane.panel(true)));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalWindowsIntegration.map(pane => pane.counts().creates))).toEqual([1, 1]);
 	const first = page.locator('#window-0');
@@ -820,7 +820,7 @@ test('terminal browser list menu keeps its captured instance after active select
 	const tabs = page.getByRole('tablist', { name: 'Terminal instances' });
 	await expect(tabs.getByRole('tab')).toHaveCount(2);
 	const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
-	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Clear Terminal', 'Focus Terminal', 'Kill Terminal']);
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Clear Terminal', 'Focus Terminal', 'Kill Terminal', 'Split Terminal']);
 	await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[0]!);
 	await tabs.getByRole('tab').first().click({ button: 'right' });
 	await expect(page.getByRole('menu')).toBeVisible();
@@ -845,7 +845,7 @@ test('terminal browser list menu supports keyboard dismissal and Chinese labels'
 	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 	const tab = page.getByRole('tablist', { name: '终端实例' }).getByRole('tab').first();
 	await tab.focus();
-	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['清除终端', '终止终端', '聚焦终端'].sort());
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['拆分终端', '清除终端', '终止终端', '聚焦终端'].sort());
 	await tab.press('Shift+F10');
 	await expect(page.getByRole('menu')).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: '聚焦终端', exact: true })).toBeVisible();
@@ -1175,4 +1175,87 @@ test('terminal font rendering updates the existing screen without replacing its 
 	await expect(page.locator('.xterm')).not.toHaveClass(/ash-terminal-font-grayscale/);
 	await expect(page.locator('.xterm-rows')).toContainText('font policy retained');
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});
+
+
+test('terminal Split creates independent processes, preserves output and moves focus between panes', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?input&groups');
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration)), errors })).toEqual({ ready: true, errors: [] });
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('original pane output'));
+	await expect(page.locator('.xterm-rows')).toContainText('original pane output');
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-1', 'terminal-instance-2']]);
+	const panes = page.locator('.ash-terminal-group-pane');
+	await expect(panes).toHaveCount(2);
+	await expect(panes.nth(0).locator('.xterm-rows')).toContainText('original pane output');
+	await expect(panes.nth(1).locator('.xterm-helper-textarea')).toBeFocused();
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.clearWrites());
+	await page.keyboard.type('right input');
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.focusPreviousPane'));
+	await expect(panes.nth(0).locator('.xterm-helper-textarea')).toBeFocused();
+	await page.keyboard.type('left input');
+	await expect.poll(() => page.evaluate(() => ['input-shell-2', 'input-shell-1'].map(id => ({
+		terminalId: id,
+		data: window.ashTerminalGroupsIntegration.writes().filter(write => write.terminalId === id).map(write => write.data).join(''),
+	})))).toEqual([
+		{ terminalId: 'input-shell-2', data: 'right input' },
+		{ terminalId: 'input-shell-1', data: 'left input' },
+	]);
+	const left = (await panes.nth(0).boundingBox())!;
+	const right = (await panes.nth(1).boundingBox())!;
+	expect(left.width).toBeGreaterThan(120); expect(right.width).toBeGreaterThan(120);
+	expect(right.x).toBeGreaterThanOrEqual(left.x + left.width - 1);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.kill'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-2']]);
+	await expect(panes).toHaveCount(1);
+	await expect(panes.locator('.xterm-helper-textarea')).toBeFocused();
+	expect(errors).toEqual([]);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
+});
+
+
+test('terminal split sash accepts keyboard resizing and Unsplit retains both processes', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?input&groups&locale=zh-CN');
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration)), errors })).toEqual({ ready: true, errors: [] });
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
+	await expect(page.locator('.ash-terminal-group-pane')).toHaveCount(2);
+	const left = page.locator('.ash-terminal-group-pane').nth(0);
+	const initialWidth = (await left.boundingBox())!.width;
+	const sash = page.getByRole('separator', { name: '调整终端窗格大小' });
+	await sash.focus();
+	await sash.press('ArrowRight');
+	await expect.poll(async () => (await left.boundingBox())!.width).toBeGreaterThan(initialWidth);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.sizes().some(size => size.terminalId === 'input-shell-1'))).toBe(true);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.unsplit'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-1'], ['terminal-instance-2']]);
+	await expect(page.locator('.ash-terminal-group:not([hidden])')).toHaveCount(1);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.focusAtIndex1'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe('terminal-instance-1');
+	await expect(page.locator('.ash-terminal-group:not([hidden]) .xterm-helper-textarea')).toBeFocused();
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.close());
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.close());
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
+});
+
+
+test('terminal error tooltip explains a refused input operation and relaunch removes the old reason', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups&clipboard&locale=zh-CN');
+	await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
+	await expect(page.getByRole('tab')).toHaveCount(2);
+	await page.evaluate(() => window.ashTerminalClipboardIntegration.holdInput());
+	const sending = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.sendSequence', { text: 'failure input' }).catch(error => String(error.message)));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().some(write => write.data === 'failure input'))).toBe(true);
+	await page.evaluate(() => window.ashTerminalClipboardIntegration.releaseInput(true));
+	expect(await sending).toBe('Terminal write denied');
+	const active = page.getByRole('tab', { selected: true });
+	await expect(active).toHaveAttribute('title', /终端进程失败：Terminal write denied/);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.relaunch'));
+	await expect(active).not.toHaveAttribute('title', /Terminal write denied/);
+	await expect(page.locator('.ash-terminal-group-pane')).toHaveCount(2);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
 });

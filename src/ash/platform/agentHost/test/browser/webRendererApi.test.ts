@@ -1,10 +1,12 @@
+import { createAppServerAgentThreadService } from '../../browser/appServerAgentService.js';
+import type { ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../common/agentService.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
 import { AppServerProtocolDecodeError, decodeAppServerServerResponse } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../common/appServerError.js";
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../../../../../.build/protocol/typescript/index.js";
@@ -1196,4 +1198,37 @@ test('the generated protocol client decodes external catalog scopes and revocati
 	const expected: ServerNotification[] = ['scope-a', null].map(identity => ({ method: 'provider/models/updated', params: { connection: 'kimi-cli', catalogScope: { connection: 'kimi-cli', identity }, result: { type: 'empty' } } }));
 	for (const notification of expected) { transport.emitNotification(notification); }
 	assert.deepEqual(observed, expected);
+});
+
+
+test('Agent Thread domain events cross the real decoder and release listeners across reconnects', async () => {
+	const transport = new FakeTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const service = createAppServerAgentThreadService(client);
+	const updates: ThreadUpdateEnvelope[] = [];
+	const receiver = { transcripts: [] as ThreadTranscriptUpdateEnvelope[] };
+	using subscriptions = new DisposableStore();
+	service.onDidUpdateThread(update => updates.push(update), undefined, subscriptions);
+	service.onDidUpdateThreadTranscript(function (this: typeof receiver, update) { this.transcripts.push(update); }, receiver, subscriptions);
+	await client.connect();
+	const call: ServerNotification = { method: 'session/thread/update', params: { sessionId: 'session', threadId: 'thread', durableSequence: 1, update: { type: 'itemStarted', turnId: 'turn', item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'tool', name: 'shell', argumentsJson: '{}' } } } };
+	const transcript: ServerNotification = { method: 'session/thread/transcript/update', params: { sessionId: 'session', threadId: 'thread', durableSequence: 1, revision: 2, changes: [{ type: 'upsert', entry: { type: 'toolOutput', entryId: 'output', turnId: 'turn', toolCallId: 'tool', stream: 'stdout', text: 'hello' } }] } };
+	transport.emitNotification(call);
+	transport.emitNotification(transcript);
+	transport.emitNotification({ method: 'queue/changed', params: {} });
+	assert.equal(updates.length, 1);
+	assert.equal(receiver.transcripts.length, 1);
+	assert.deepEqual(receiver.transcripts[0], transcript.params);
+	client.disconnect();
+	transport.emitNotification(call);
+	assert.equal(updates.length, 1);
+	await client.connect();
+	transport.emitNotification(call);
+	assert.equal(updates.length, 2);
+	subscriptions.dispose();
+	transport.emitNotification(call);
+	transport.emitNotification(transcript);
+	assert.equal(updates.length, 2);
+	assert.equal(receiver.transcripts.length, 1);
 });

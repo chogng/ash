@@ -1,3 +1,5 @@
+import { TerminalGroupService } from '../../browser/terminalGroupService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IQuickInputService, type IInputOptions } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
@@ -1547,4 +1549,73 @@ suite('Terminal Send Sequence', () => {
 		await sending;
 		assert.deepEqual(processes.writeCalls, [{ terminalId: 'terminal-1', data: 'sent' }]);
 	});
+});
+
+
+suite('TerminalService panel groups', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('join and unsplit retain each original process and select panes through the instance owner', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
+		const terminals = services.get(ITerminalService);
+		const first = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		const second = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		using groups = services.createInstance(TerminalGroupService);
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[first], [second]]);
+		groups.joinInstances([first, second]);
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[first, second]]);
+		assert.equal(groups.instanceIsSplit(first), true);
+		assert.equal(groups.activeGroup, groups.getGroupForInstance(second));
+		groups.activeGroup!.focusPreviousPane();
+		assert.equal(terminals.activeInstance, first);
+		groups.unsplitInstance(second);
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[first], [second]]);
+		groups.setActiveInstanceByIndex(1);
+		assert.equal(terminals.activeInstance, second);
+		assert.equal(processes.createCalls.length, 2);
+		assert.deepEqual(processes.closeCalls, []);
+		await terminals.closeTerminal(first);
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[second]]);
+	});
+
+	test('groups observe future creation and remove empty groups after the original close event', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
+		const terminals = services.get(ITerminalService);
+		using groups = services.createInstance(TerminalGroupService);
+		const first = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		const second = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		groups.joinInstances([first, second, second]);
+		await terminals.closeTerminal(second);
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[first]]);
+		await terminals.closeTerminal(first);
+		assert.deepEqual(groups.groups, []);
+		assert.equal(groups.activeGroup, undefined);
+	});
+});
+
+
+test('Terminal process failure retains its display reason and relaunch clears the old message', async () => {
+	using workspace = folderWorkspaceContext();
+	const processes = new TestTerminalProcessService([]);
+	using services = terminalServices(processes, workspace);
+	const terminals = services.get(ITerminalService);
+	const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	const acknowledgement = deferred<void>();
+	processes.writeGates.push(acknowledgement.promise);
+	const failure = new Error('execution host refused input');
+	const sending = assert.rejects(instance.sendText('input', false), error => error === failure);
+	await waitFor(() => processes.writeCalls.length === 1);
+	acknowledgement.reject(failure);
+	await sending;
+	assert.equal(instance.state, 'error');
+	assert.equal(instance.statusList?.primary?.tooltip, 'Terminal process failed: execution host refused input');
+	await terminals.relaunchTerminal(instance, { rows: 24, cols: 80 });
+	assert.equal(instance.state, 'running');
+	assert.deepEqual(instance.statusList?.statuses, []);
 });

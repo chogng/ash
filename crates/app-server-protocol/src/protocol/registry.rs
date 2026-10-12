@@ -112,6 +112,7 @@ use crate::protocol::assets::AssetVersionParams;
 use crate::protocol::assets::AssetVersionResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentImportRemoteParams;
+use crate::protocol::attachments::AttachmentResourceOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentMaterializeResult;
 #[cfg(any(test, feature = "export"))]
@@ -4192,6 +4193,11 @@ client_methods! {
         response: (),
         serialization: ResourceExclusive("resourceId"),
     },
+    AttachmentResourceOpen => "attachment/resource/open" {
+        params: AttachmentResourceOpenParams,
+        response: ResourceMetadataResult,
+        serialization: SessionSharedRead,
+    },
     AttachmentUploadStart => "attachment/upload/start" {
         params: AttachmentUploadStartParams,
         response: AttachmentUploadStartResult,
@@ -6412,6 +6418,7 @@ typescript_bindings! {
     AttachmentUploadFinishParams,
     AttachmentUploadCancelParams,
     AttachmentImportRemoteParams,
+    AttachmentResourceOpenParams,
     AttachmentMaterializeResult,
     FsFileType,
     FsFileWriteMode,

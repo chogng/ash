@@ -86,14 +86,14 @@ impl Attachments {
     }
 
     pub fn verify(&self, reference: &ImageAttachmentRef) -> Result<(), AttachmentError> {
-        self.read_verified(reference).map(|_| ())
+        self.read_image(reference).map(|_| ())
     }
 
     pub fn materialize_data_url(
         &self,
         reference: &ImageAttachmentRef,
     ) -> Result<String, AttachmentError> {
-        let bytes = self.read_verified(reference)?;
+        let bytes = self.read_image(reference)?;
         Ok(data_url_from_bytes(
             reference.media_type.mime_type(),
             &bytes,
@@ -106,7 +106,7 @@ impl Attachments {
         reference: &ImageAttachmentRef,
         limits: PromptImageResizeLimits,
     ) -> Result<String, AttachmentError> {
-        let bytes = self.read_verified(reference)?;
+        let bytes = self.read_image(reference)?;
         let image = load_for_prompt_bytes(
             Path::new("<provider-bound-attachment>"),
             bytes.to_vec(),
@@ -130,7 +130,8 @@ impl Attachments {
         Ok(image.into_data_url())
     }
 
-    fn read_verified(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
+    /// Resolves immutable image bytes after verifying the stored reference and encoding.
+    pub fn read_image(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
         validate_reference_shape(reference)?;
         let bytes = self
             .store
