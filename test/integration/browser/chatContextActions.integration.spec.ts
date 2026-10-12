@@ -143,6 +143,12 @@ test('attachment menu flips below Add, fits a narrow viewport, follows resize an
 	await expect(message).toBeFocused();
 	await add.press('Enter');
 	await picker.getByRole('combobox').press('Tab');
+	await expect.poll(() => picker.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	await page.keyboard.press('Escape');
+	await expect(picker).toHaveCount(0);
+	await expect(add).toBeFocused();
+	await add.press('Enter');
+	await picker.getByRole('combobox').press('Shift+Tab');
 	await expect(picker).toHaveCount(0);
 	await expect(add).toHaveAttribute('aria-expanded', 'false');
 });
