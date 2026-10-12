@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
 
 test('Output channels open from the product command palette', async ({ workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
@@ -261,6 +262,29 @@ test('release notes external links use the product opener from the keyboard', as
 		if (electron) {
 			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
 		}
+	}
+});
+
+test('desktop blocked navigation retains the current document IPC', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
+	const electron = application as ElectronApplication;
+	const page = workbench.page;
+	await installMainChannelTestClient(page);
+	const configuration = await page.evaluate(() => globalThis.ashTestMainProcess.call('configuration', 'read'));
+	const originalUrl = page.url();
+	const navigation = await electron.evaluateHandle(({ BrowserWindow }, originalUrl) => {
+		const result = { navigation: undefined as { url: string; prevented: boolean; } | undefined };
+		const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === originalUrl)!;
+		window.webContents.once('will-navigate', (event, url) => { result.navigation = { url, prevented: event.defaultPrevented }; });
+		return result;
+	}, originalUrl);
+	try {
+		const href = 'https://example.test/blocked-product-navigation';
+		await page.evaluate(href => { location.href = href; }, href);
+		await expect.poll(() => navigation.evaluate(result => result.navigation)).toEqual({ url: href, prevented: true });
+		expect(page.url()).toBe(originalUrl);
+		expect(await page.evaluate(() => globalThis.ashTestMainProcess.call('configuration', 'read'))).toEqual(configuration);
+	} finally {
+		await navigation.dispose();
 	}
 });
 

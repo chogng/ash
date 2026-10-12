@@ -122,14 +122,14 @@ export class AppServerConnectionRelay extends Disposable {
 		const reset = (): void => { void this.stop(); };
 		renderer.on('render-process-gone', reset);
 		// Initial navigation must keep the connection started before the window loaded.
-		const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
-			if (!mainFrame || inPlace) { return; }
+		// did-navigate commits a main-frame document; blocked attempts retain its connection.
+		const navigating = (): void => {
 			this.navigationGeneration++;
 			if (this.nonce !== undefined) { reset(); }
 		};
-		renderer.on('did-start-navigation', navigating);
+		renderer.on('did-navigate', navigating);
 		this._register(toDisposable(() => renderer.removeListener('render-process-gone', reset)));
-		this._register(toDisposable(() => renderer.removeListener('did-start-navigation', navigating)));
+		this._register(toDisposable(() => renderer.removeListener('did-navigate', navigating)));
 		return [{
 			channel: 'ash:app-server:acquire',
 			validate: value => {

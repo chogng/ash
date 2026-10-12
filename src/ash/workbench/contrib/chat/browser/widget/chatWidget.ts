@@ -131,7 +131,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				}
 				if (!this.isDisposed && identity === (this.model.threadId ?? this.model.untitledSessionId)) this.model.selectApprovalMode(mode);
 			},
-			showContextUsage: detail => dialogs.info(localize('chat.input.contextUsage', 'Context usage'), detail),
 			openModelSettings: (category = 'models') => commandService.executeCommand(OpenSettingsCommandId, { section: category }),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};

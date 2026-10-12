@@ -1399,8 +1399,10 @@ export class AshApplication extends Disposable {
 		};
 		// BrowserWindow releases its webContents getter on close; cleanup owns the original emitter.
 		const webContents = window.webContents;
-		// Product pages never navigate to link destinations; Browser views own separate webContents.
-		const preventNavigation = (event: ElectronEvent): void => event.preventDefault();
+		// Reloads replace the product document; link destinations belong to the Browser views.
+		const preventNavigation = (event: ElectronEvent, url: string): void => {
+			if (url !== webContents.getURL()) { event.preventDefault(); }
+		};
 		webContents.on('will-navigate', preventNavigation);
 		windowDisposables.add(toDisposable(() => webContents.off('will-navigate', preventNavigation)));
 		webContents.on('did-create-window', onDidCreateWindow);

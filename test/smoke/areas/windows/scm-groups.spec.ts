@@ -538,6 +538,35 @@ test.describe('SCM editor groups', () => {
 		await expect(diff).not.toHaveClass(/inline-view/u);
 	});
 
+	test('SCM diff layout commands work after a renderer-initiated reload', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+		await expect(page.locator('.stanza-diff-editor:visible')).toBeVisible();
+		await page.evaluate(() => { document.body.dataset.beforeReload = 'yes'; });
+		// Vite falls back to this renderer navigation when an editor cannot accept HMR.
+		await Promise.all([
+			page.waitForEvent('domcontentloaded', { timeout: 10_000 }),
+			page.evaluate(() => { location.reload(); }),
+		]);
+		await workbench.waitForReady();
+		expect(await page.evaluate(() => document.body.dataset.beforeReload)).toBeUndefined();
+		const sourceControlAfterReload = page.getByRole('tab', { name: /^Source Control(?:,|$)/u });
+		if (await sourceControlAfterReload.getAttribute('aria-selected') !== 'true' || !await page.locator('[data-part="sidebar"]').isVisible()) {
+			await sourceControlAfterReload.click();
+		}
+		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+		const group = workbench.editors.groupAt(0);
+		const diff = group.content.locator('.stanza-diff-editor:visible');
+		const more = group.title.getByRole('button', { name: 'More Actions', exact: true });
+		await workbench.menus.select(application, () => more.click(), ['Diff View', 'Inline']);
+		await expect(diff).toHaveClass(/inline-view/u);
+		const items = await workbench.menus.inspect(application, () => more.click(), ['Diff View']);
+		expect(items.filter(item => item.checked).map(item => item.label)).toEqual(['Inline']);
+		await workbench.quickaccess.runCommand('toggle.diff.renderSideBySide');
+		await expect(diff).not.toHaveClass(/inline-view/u);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`SCM diff title actions navigate changes and reuse file preview tabs in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }) => {
 			const original = Array.from({ length: 24 }, (_, index) => `const line${index + 1} = ${index + 1};`);

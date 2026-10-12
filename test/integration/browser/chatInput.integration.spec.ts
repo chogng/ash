@@ -5,6 +5,7 @@ for (const locale of ['en', 'zh-CN']) {
 		test(`Chat footer actions stay below the input and accept keyboard commands in ${locale} ${theme}`, async ({ page }) => {
 			await page.goto(`/chatInput.html?footerStatus=1&locale=${locale}&theme=${theme}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			await page.locator('main').evaluate(element => { element.style.marginTop = '420px'; });
 			const input = page.locator('.ash-chat-textarea-input');
 			await input.fill('Keep my draft');
 			const footer = page.locator('.ash-chat-secondary-toolbar');
@@ -38,7 +39,25 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(page.getByLabel('Opened sources')).toHaveText('[{"approvalMode":"auto"}]');
 			await context.focus();
 			await page.keyboard.press('Enter');
-			await expect(page.getByLabel('Opened sources')).toContainText(locale === 'en' ? 'Estimated current context: 200 tokens' : '当前上下文估算：200 个 token');
+			const details = page.getByRole('dialog', { name: locale === 'en' ? 'Context usage' : '上下文用量' });
+			await expect(details).toBeVisible();
+			await expect(details).toBeFocused();
+			await expect(context).toHaveAttribute('aria-expanded', 'true');
+			await expect(details.locator('.ash-chat-context-details-summary')).toHaveText(locale === 'en' ? '200 / 1,000 tokens · 20%' : '200 / 1,000 个 token · 20%');
+			await expect(details.getByRole('rowheader', { name: locale === 'en' ? 'Remaining space' : '剩余空间' }).locator('..')).toContainText('800');
+			const detailsBounds = (await details.boundingBox())!;
+			const contextBounds = (await context.boundingBox())!;
+			expect(detailsBounds.y + detailsBounds.height).toBeLessThanOrEqual(contextBounds.y);
+			await page.keyboard.press('Escape');
+			await expect(details).toBeHidden();
+			await expect(context).toBeFocused();
+			await expect(context).toHaveAttribute('aria-expanded', 'false');
+			await context.click();
+			await page.keyboard.press('Tab');
+			await expect(details.getByRole('button', { name: locale === 'en' ? 'Close context usage details' : '关闭上下文用量明细' })).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(details).toBeHidden();
+			await context.focus();
 			await page.evaluate(() => window.ashChatInputIntegration.setFooterStatus(true));
 			await expect(status).toBeVisible();
 			await page.keyboard.press('Tab');
@@ -76,6 +95,14 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(ring.locator('.ash-chat-context-usage-value')).toBeHidden();
 			await expect(context).toHaveAttribute('title', locale === 'en' ? 'Estimated context: 200 tokens\nContext capacity is unavailable.' : '上下文估算：200 个 token\n无法获取上下文容量。');
 			await expect(context).not.toHaveAttribute('aria-label', /%/);
+			await context.click();
+			await expect(details).toBeVisible();
+			await expect(details.locator('.ash-chat-context-details-summary')).toHaveText(locale === 'en' ? '200 tokens · Capacity unavailable' : '200 个 token · 容量未知');
+			await expect(details).not.toContainText('%');
+			await expect(details.getByRole('columnheader')).toHaveCount(2);
+			await expect(details.locator('.ash-chat-context-details-bar').locator('span')).toHaveCount(0);
+			await expect(details.getByRole('rowheader', { name: locale === 'en' ? 'Remaining space' : '剩余空间' })).toHaveCount(0);
+			await page.keyboard.press('Escape');
 			await context.focus();
 			const retainedButton = await context.elementHandle();
 			await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true, 1000, 500));
@@ -83,6 +110,23 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(context).toBeFocused();
 			expect(await retainedButton!.evaluate(element => element.isConnected)).toBe(true);
 			await expect(ring.locator('.ash-chat-context-usage-value')).toHaveAttribute('stroke-dasharray', '50 50');
+			await context.click();
+			await expect(details).toBeVisible();
+			const close = details.getByRole('button', { name: locale === 'en' ? 'Close context usage details' : '关闭上下文用量明细' });
+			await close.focus();
+			await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true, 1000, 600));
+			await expect(details.locator('.ash-chat-context-details-summary')).toContainText('60%');
+			await expect(close).toBeFocused();
+			await close.click();
+			await expect(details).toBeHidden();
+			await expect(context).toBeFocused();
+			await context.click();
+			await context.click();
+			await expect(details).toBeHidden();
+			await context.click();
+			await input.click({ position: { x: 8, y: 8 } });
+			await expect(details).toBeHidden();
+			await expect(input).toBeFocused();
 			await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true, 1000, 0));
 			await expect(context).toHaveAttribute('aria-label', /0%/);
 			await expect(ring.locator('.ash-chat-context-usage-value')).toBeHidden();
@@ -95,8 +139,11 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(page.getByRole('switch', { name: locale === 'en' ? 'Auto' : '自动', exact: true })).not.toBeChecked();
 			await page.getByRole('menuitem', { name: locale === 'en' ? 'Add Models' : '添加模型' }).click();
 			await expect(page.getByLabel('Opened sources')).toContainText('"settings":"models"');
+			await context.click();
+			await expect(details).toBeVisible();
 			await page.evaluate(() => window.ashChatInputIntegration.dispose());
 			await expect(footer).toHaveCount(0);
+			await expect(details).toHaveCount(0);
 		});
 	}
 }

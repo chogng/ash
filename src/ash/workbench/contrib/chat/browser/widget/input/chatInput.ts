@@ -53,7 +53,6 @@ export interface ChatInputDelegate {
 	selectAgent(agent: ChatAgent | undefined): void;
 	selectMode(mode: ChatMode): void;
 	selectApprovalMode?(mode: ApprovalMode): Promise<void>;
-	showContextUsage?(detail: string): Promise<void>;
 	openModelSettings(category?: 'models' | 'dictation'): Promise<void>;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 }

@@ -43,7 +43,7 @@ import { INotificationService } from '../../../src/ash/platform/notification/com
 import { ActionWidgetService, IActionWidgetService } from '../../../src/ash/platform/actionWidget/browser/actionWidget.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../src/ash/workbench/services/chat/common/modelCatalog.js';
-import type { ModelRef } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import type { ChatContextUsage, ModelRef } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
@@ -61,13 +61,7 @@ import { IDictationService } from '../../../src/ash/platform/dictation/common/di
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
-import { formatNlsMessage, localize, setNlsResolver } from '../../../src/ash/nls.js';
-import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
-import { HoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
-import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
-import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
-import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
-import '../../../src/ash/base/browser/ui/dialog/dialog.css';
+import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -405,15 +399,6 @@ errorOutput.setAttribute('aria-label', 'Context error');
 document.body.append(errorOutput);
 resources.add(notifications.onDidAdd(item => { errorOutput.textContent = item.message; }));
 
-const previewDialogs = new URLSearchParams(location.search).has('footerPreview') ? resources.add(new DialogService()) : undefined;
-if (previewDialogs) {
-	resources.add(new DialogHandlerContribution(previewDialogs.model, new BrowserDialogHandler(document.body)));
-	const hover = resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), {
-		showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
-	}));
-	resources.add(setHoverDelegate(hover));
-}
-
 const delegate: ChatInputDelegate = {
 	send: async (_text, _mode, _skills, contexts) => {
 		historySubmissions.push({ text: _text, skills: _skills });
@@ -432,7 +417,7 @@ const delegate: ChatInputDelegate = {
 		renderModels();
 	},
 	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
-	showContextUsage: async detail => { recordDestination({ contextDetail: detail }); await previewDialogs?.info(localize('chat.input.contextUsage', 'Context usage'), detail); }, openModelSettings: async () => { recordDestination({ settings: 'models' }); },
+	openModelSettings: async () => { recordDestination({ settings: 'models' }); },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
@@ -441,9 +426,23 @@ const part = resources.add(services.createInstance(ChatInputPart, document.query
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
 }));
+function sampleContextCategories(tokens: number): ChatContextUsage['categories'] {
+	const systemPrompt = Math.floor(tokens * 0.2);
+	const systemTools = Math.floor(tokens * 0.4);
+	const memoryFiles = Math.floor(tokens * 0.1);
+	const skills = Math.floor(tokens * 0.05);
+	return [
+		{ category: 'systemPrompt', tokens: systemPrompt },
+		{ category: 'systemTools', tokens: systemTools },
+		{ category: 'memoryFiles', tokens: memoryFiles },
+		{ category: 'skills', tokens: skills },
+		{ category: 'conversation', tokens: tokens - systemPrompt - systemTools - memoryFiles - skills },
+	];
+}
+
 let state: ChatInputState = {
 	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready',
-	contextUsage: { estimatedTokens: 200, contextWindow: 1000, autoCompactAt: 800, categories: [{ category: 'conversation', tokens: 200 }], latestRequestTokens: 180 }, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+	contextUsage: { estimatedTokens: 200, contextWindow: 1000, autoCompactAt: 800, categories: sampleContextCategories(200), latestRequestTokens: 180 }, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 	interaction: {
 		requestId: 'approval', request: {
 			type: 'approval', request: {
@@ -470,7 +469,7 @@ function renderModels(): void {
 part.render(state);
 window.ashChatInputIntegration = {
 	setFooterPhase: (phase, error) => { state = { ...state, phase, error, interaction: undefined }; part.render(state); },
-	setContextUsage: (available, capacity, estimatedTokens = 200) => { state = { ...state, contextUsage: available ? { estimatedTokens, contextWindow: capacity, categories: [{ category: 'conversation', tokens: 200 }] } : undefined, interaction: undefined }; part.render(state); },
+	setContextUsage: (available, capacity, estimatedTokens = 200) => { state = { ...state, contextUsage: available ? { estimatedTokens, contextWindow: capacity, categories: sampleContextCategories(estimatedTokens), latestRequestTokens: 180 } : undefined, interaction: undefined }; part.render(state); },
 	setFooterStatus: visible => footerStatusVisible.set(visible),
 	removeFooterStatus: () => footerStatus?.dispose(),
 	historyState: () => ({ writes: historyWrites, submissions: historySubmissions, reads: historyReads }),

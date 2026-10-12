@@ -53,13 +53,12 @@ export class Server extends IPCServer {
 		const remove = (): void => {
 			if (this.renderers.get(sender.id) === renderer) { this.registrations.deleteAndDispose(sender.id); }
 		};
-		const navigate = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
-			if (mainFrame && !inPlace) { document.clear(); }
-		};
-		sender.on('did-start-navigation', navigate);
+		// A blocked navigation keeps the current document and its IPC client alive.
+		const navigate = (): void => document.clear();
+		sender.on('did-navigate', navigate);
 		sender.on('destroyed', remove);
 		resources.add(toDisposable(() => {
-			sender.off('did-start-navigation', navigate);
+			sender.off('did-navigate', navigate);
 			sender.off('destroyed', remove);
 			if (this.renderers.get(sender.id) === renderer) { this.renderers.delete(sender.id); }
 		}));
