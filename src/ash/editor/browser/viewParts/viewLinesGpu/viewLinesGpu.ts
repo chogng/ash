@@ -49,6 +49,7 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 	private readonly rasterizer = this._register(new MutableDisposable<GlyphRasterizer>());
 	private device: GPUDevice | undefined;
 	private initialized = false;
+	private failed = false;
 	private lastLineGeometries: ReadonlyMap<number, GpuLineGeometry> | undefined;
 	private lastViewportData: ViewportData | undefined;
 	private visibleObjectCount = 0;
@@ -200,7 +201,8 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 	}
 
 	private fallbackToDom(): void {
-		if (this.isDisposed) return;
+		if (this.isDisposed || this.failed) return;
+		this.failed = true;
 		this.initialized = false;
 		this.device = undefined;
 		this.lastLineGeometries = undefined;

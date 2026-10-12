@@ -35,6 +35,7 @@ interface GpuTextIntegrationHarness {
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
 	loseDevice(): Promise<void>;
+	mountReplacementGpuEditor(): Promise<{ deviceReady: boolean; canvasCount: number; }>;
 	setBracketColor(color: string): void;
 	setSelectionColor(color: string): void;
 	prepareBracketText(length: number): void;
@@ -101,6 +102,17 @@ window.ashGpuTextIntegration = {
 		if (!device) throw new Error('GPU editor has no initialized device');
 		device.destroy();
 		await device.lost;
+	},
+	mountReplacementGpuEditor: async () => {
+		const replacementContainer = document.createElement('div');
+		replacementContainer.id = 'replacement-gpu-editor';
+		Object.assign(replacementContainer.style, { position: 'absolute', top: '320px', width: '800px', height: '300px' });
+		document.body.append(replacementContainer);
+		disposables.add(toDisposable(() => replacementContainer.remove()));
+		const replacement = disposables.add(stanzaApi.editor.create(replacementContainer, { model, experimentalGpuAcceleration: 'on' }));
+		replacement.layout({ width: 800, height: 300 });
+		await ViewGpuContext.device;
+		return { deviceReady: Boolean(ViewGpuContext.deviceSync), canvasCount: replacementContainer.querySelectorAll('canvas.stanza-editor-gpu-canvas').length };
 	},
 	prepareBracketText: length => {
 		editor.updateOptions({ wordWrap: 'off' });

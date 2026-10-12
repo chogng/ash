@@ -42,7 +42,7 @@ test.afterEach(async ({ page }) => {
 test('GPU device loss restores DOM text, caret and typing without another GPU frame', async ({ page }) => {
 	await page.goto('/gpuText.html');
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
-	const input = page.locator('.stanza-editor-input');
+	const input = page.locator('#editor-root .stanza-editor-input');
 	await input.focus();
 	await page.keyboard.press('Control+Home');
 	await page.keyboard.press('ArrowRight');
@@ -63,9 +63,15 @@ test('GPU device loss restores DOM text, caret and typing without another GPU fr
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue() === window.ashGpuTextIntegration.initialText)).toBe(true);
 	expect(await page.evaluate(() => window.ashGpuTextIntegration.readGpuFrameTrace())).toEqual([]);
+	expect(await page.evaluate(() => window.ashGpuTextIntegration.mountReplacementGpuEditor())).toEqual({ deviceReady: true, canvasCount: 1 });
+	await expect(page.locator('#replacement-gpu-editor .view-line.gpu-rendered').first()).toBeAttached();
+	await input.focus();
+	await page.keyboard.insertText('Y');
+	await expect(page.locator('#editor-root .view-line.gpu-rendered')).toHaveCount(0);
+	await expect(page.locator('#editor-root .view-line').first()).toContainText('iYnterface');
 });
 
-for (const failure of ['missing-api', 'missing-context', 'no-adapter', 'device-rejected'] as const) {
+for (const failure of ['missing-api', 'missing-context', 'no-adapter', 'device-rejected', 'frame-rejected'] as const) {
 	test(`GPU initialization falls back to editable DOM text for ${failure}`, async ({ page }) => {
 		await page.addInitScript(failure => {
 			if (failure === 'missing-api') {
@@ -75,6 +81,23 @@ for (const failure of ['missing-api', 'missing-context', 'no-adapter', 'device-r
 				HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
 					return type === 'webgpu' ? null : Reflect.apply(getContext, this, [type, ...args]);
 				} as typeof getContext;
+			} else if (failure === 'frame-rejected') {
+				const requestAdapter = navigator.gpu.requestAdapter;
+				navigator.gpu.requestAdapter = async options => {
+					const adapter = await requestAdapter.call(navigator.gpu, options);
+					if (!adapter) return null;
+					const requestDevice = adapter.requestDevice;
+					adapter.requestDevice = async descriptor => {
+						const device = await requestDevice.call(adapter, descriptor);
+						const createPipeline = device.createRenderPipeline;
+						device.createRenderPipeline = descriptor => {
+							if (descriptor.label === 'Ash ViewLinesGpu pipeline') throw new Error('Deliberate GPU frame failure');
+							return createPipeline.call(device, descriptor);
+						};
+						return device;
+					};
+					return adapter;
+				};
 			} else {
 				navigator.gpu.requestAdapter = async () => failure === 'no-adapter' ? null : {
 					requestDevice: async () => { throw new Error('Deliberate device rejection'); },

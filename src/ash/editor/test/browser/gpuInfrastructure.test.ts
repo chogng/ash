@@ -353,6 +353,8 @@ for (const failure of ['initialization', 'device-loss'] as const) {
 }
 
 test('ViewGpuContext exposes observable canvas geometry and releases view handlers', async () => {
+	const pendingAdapter = new DeferredPromise<GPUAdapter | null>();
+	let destroyedLateDevices = 0;
 	const resizeCallbacks: ResizeObserverCallback[] = [];
 	let disconnected = false;
 	class TestResizeObserver implements ResizeObserver {
@@ -376,7 +378,7 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 		configurable: true,
 		value: {
 			getPreferredCanvasFormat: () => 'bgra8unorm',
-			requestAdapter: () => new Promise<GPUAdapter | null>(() => { }),
+			requestAdapter: () => pendingAdapter.p,
 		},
 	});
 	const configurationEmitter = new Emitter<{ hasChanged(option: EditorOption): boolean; }>();
@@ -442,6 +444,13 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 
 		gpuContext.dispose();
 		assert.deepEqual({ handlerCount: handlers.size, disconnected, connected: gpuContext.canvas.domNode.isConnected }, { handlerCount: 0, disconnected: true, connected: false });
+		const pendingDevice = ViewGpuContext.device!;
+		browserEnvironment.window.dispatchEvent(new browserEnvironment.window.Event('pagehide'));
+		await pendingAdapter.complete({
+			requestDevice: async () => ({ destroy: () => { destroyedLateDevices++; } }) as GPUDevice,
+		} as GPUAdapter);
+		await assert.rejects(pendingDevice, { name: 'CancellationError' });
+		assert.deepEqual({ destroyedLateDevices, device: ViewGpuContext.device, ready: ViewGpuContext.deviceSync }, { destroyedLateDevices: 1, device: undefined, ready: undefined });
 	} finally {
 		browserEnvironment.window.dispatchEvent(new browserEnvironment.window.Event('pagehide'));
 		configurationEmitter.dispose();

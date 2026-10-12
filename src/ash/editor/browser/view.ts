@@ -358,7 +358,9 @@ export class View extends ViewEventHandler {
 		}));
 		this.viewLinesGpu = this.viewGpuContext
 			? this.registerViewPart(new ViewLinesGpu(this.viewContext, this.viewGpuContext, () => {
-				// GPU initialization changes which text rows the DOM renderer owns.
+				// A backend transition changes retained row content even when the model
+				// and viewport are unchanged; scheduling alone does not dirty those rows.
+				this.viewLines.onFlushed();
 				this.viewLines.forceShouldRender();
 				this.scheduleProjection();
 			}))
@@ -1002,6 +1004,11 @@ export class View extends ViewEventHandler {
 				if (this.viewLinesGpu?.shouldRender()) {
 					this.viewLinesGpu.renderText(viewportData);
 					this.viewLinesGpu.onDidRender();
+					if (this.viewLines.shouldRender()) {
+						// A failed GPU frame restores DOM glyphs before Parts measure this frame.
+						this.viewLines.renderText(viewportData);
+						this.viewLines.onDidRender();
+					}
 				}
 				const textLayout = this.viewport.layout;
 				this.domNode.domNode.classList.toggle("horizontally-scrollable", textLayout.maximumScrollPosition.left > 0);

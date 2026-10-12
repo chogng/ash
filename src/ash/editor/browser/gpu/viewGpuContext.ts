@@ -111,6 +111,8 @@ export class ViewGpuContext extends Disposable {
 				sharedDevicePagehideListener = addDisposableListener(ownerWindow, 'pagehide', () => ViewGpuContext.disposeSharedResources(), { once: true });
 			}
 			const view = new WeakRef(this);
+			// A view joining an already-ready shared device can render synchronously.
+			this.activeDevice = ViewGpuContext.deviceSync;
 			void ViewGpuContext.device.then(device => {
 				const context = view.deref();
 				if (context && !context.isDisposed) context.activeDevice = device;
