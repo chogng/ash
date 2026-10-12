@@ -70,6 +70,7 @@ test("a context menu that cannot be shown releases its execution resources", asy
 		inChordMode: false,
 		registerSchemaContribution: () => Disposable.None,
 		getKeybindings: () => [],
+		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
 		resolveKeybinding() { throw new Error("Not used"); },
 		resolveUserBinding() { return undefined; },

@@ -21,7 +21,7 @@ import {
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js';
-import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
+import { ISpeechService } from '../../../speech/common/speechService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
@@ -63,7 +63,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
-		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
+		@ISpeechService private readonly speech: ISpeechService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();

@@ -1,3 +1,5 @@
+import { PartsSplash } from '../contrib/splash/browser/partsSplash.js';
+import { ISplashStorageService } from '../contrib/splash/browser/splash.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
@@ -222,6 +224,7 @@ import { ITextMateService } from "../services/textMate/common/textMateService.js
 import { BrowserTextMateService } from "../services/textMate/browser/browserTextMateService.js";
 import { AppServerExtensionService } from "../services/extensions/browser/appServerExtensionService.js";
 import { IExtensionService } from "../services/extensions/common/extensionService.js";
+import { ISnippetsService } from '../contrib/snippets/browser/snippets.js';
 import { AppServerRemoteAgentService } from "../services/remote/browser/appServerRemoteAgentService.js";
 import { IAppServerRemoteAgentService } from "../services/remote/common/appServerRemoteAgentService.js";
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
@@ -713,8 +716,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, textMateService, languageService, languageConfigurationService, languageFeaturesService }));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, textMateService, languageService, languageConfigurationService }));
 		services.registerInstance(IExtensionService, extensionService);
+		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
 		services.registerInstance(IFileSearchService, api.hasAppServer ? api.fileSearch : services.createInstance(BrowserFileSearchService));
@@ -1179,6 +1183,7 @@ export class Workbench extends Disposable {
 		const paneRestoration = this.restoreActiveViewContainers();
 		lifecycleService.phase = LifecyclePhase.Ready;
 		contributions.advance(WorkbenchPhase.BlockRestore);
+		if (services.has(ISplashStorageService)) this._register(services.createInstance(PartsSplash));
 		layoutService.layout();
 		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
 		if (createWindow) {

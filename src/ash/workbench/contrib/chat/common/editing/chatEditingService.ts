@@ -1,5 +1,6 @@
 import type { Event } from '../../../../../base/common/event.js';
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
+import type { IObservable, IReader } from '../../../../../base/common/observable.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import type { LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
 import type { Range } from '../../../../../editor/common/core/range.js';
@@ -26,9 +27,25 @@ export interface IModifiedFileEntry extends IDisposable {
 	getAccessibleContent(): string;
 }
 
-/** Window-owned reviews of edits delivered to this window's document connection. */
+/**
+ * A service-owned view of a chat's pending reviews. Shared entries retain one baseline
+ * across chats. Consumers dispose their subscriptions; the service owns this lifetime.
+ */
+export interface IChatEditReviewSession extends IDisposable {
+	readonly isGlobalEditingSession: boolean;
+	readonly chatSessionResource: URI;
+	readonly onDidDispose: Event<void>;
+	readonly entries: IObservable<readonly IModifiedFileEntry[]>;
+	getEntry(uri: URI): IModifiedFileEntry | undefined;
+	readEntry(uri: URI, reader: IReader): IModifiedFileEntry | undefined;
+	accept(...uris: URI[]): Promise<void>;
+	reject(...uris: URI[]): Promise<void>;
+}
+
+/** Owns pending reviews and their chat attribution for this document connection. */
 export interface IChatEditingService {
 	readonly entries: readonly IModifiedFileEntry[];
+	readonly editingSessionsObs: IObservable<readonly IChatEditReviewSession[]>;
 	readonly onDidChange: Event<void>;
 	readonly onDidChangeAutoAccept: Event<IModifiedFileEntry>;
 	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean; }>;
@@ -37,8 +54,6 @@ export interface IChatEditingService {
 	cancelAutoAccept(entry: IModifiedFileEntry): void;
 	acceptEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void>;
 	rejectEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void>;
-	accept(...resources: URI[]): Promise<void>;
-	reject(...resources: URI[]): Promise<void>;
 }
 
 export const IChatEditingService = createServiceIdentifier<IChatEditingService>('chatEditingService');

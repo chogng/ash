@@ -57,6 +57,7 @@ export type ITerminalCreateOptions = {
 export interface ITerminalInstance extends IDisposable {
 	readonly isReadOnly?: boolean;
 	readonly id: string;
+	readonly instanceId: number;
 	readonly dirId: string;
 	readonly processId: number;
 	readonly initialCwd: string;

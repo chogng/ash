@@ -22,7 +22,8 @@ import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
-import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
+import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
@@ -34,6 +35,9 @@ import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/l
 import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
 import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
+import { TerminalHasActiveInstanceContext } from '../../../src/ash/workbench/contrib/terminal/common/terminalContextKey.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
@@ -188,7 +192,8 @@ declare global {
 // Exercise the production pane with controlled process and workspace boundaries.
 if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(location.search).has('windows')) {
 	await import('../../../src/ash/workbench/contrib/terminal/browser/terminal.contribution.js');
-	widget.dispose();
+	// An existing instance retains its screen when the pane takes over its DOM.
+	if (!new URLSearchParams(location.search).has('existing')) widget.dispose();
 	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { CommandService }, { URI }] = await Promise.all([
 		import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js'),
 		import('../../../src/ash/platform/contextkey/browser/contextKeyService.js'),
@@ -251,7 +256,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(IContextKeyService, context);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
-		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 		registerTestDictationOnboarding(services);
 		services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
@@ -591,15 +596,45 @@ if (new URLSearchParams(location.search).has('input')) {
 		import('../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js'),
 		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
 	]);
+	const clipboardFixture = new URLSearchParams(location.search).has('clipboard');
+	let clipboardText = '';
+	const copied: string[] = [];
+	let clipboardReads = 0;
+	let holdRead = false;
+	let releaseRead: ((text: string) => void) | undefined;
+	let rejectRead: (() => void) | undefined;
+	let pasteOperation: Promise<unknown> | undefined;
+	let pasteFinished = false;
+	let holdInput = false;
+	let releaseInput: ((failed: boolean) => void) | undefined;
+	let nextTerminal = 0;
+	if (clipboardFixture) {
+		widgetServices.registerInstance(IClipboardService, store.add(new BrowserClipboardService({
+			readText: async () => {
+				clipboardReads++;
+				if (!holdRead) return clipboardText;
+				holdRead = false;
+				return new Promise<string>((resolve, reject) => { releaseRead = resolve; rejectRead = () => reject(new Error('Clipboard access denied')); });
+			},
+			writeText: async (text: string) => { copied.push(text); },
+		} as Clipboard)));
+	}
+	const connectionChanged = store.add(new Emitter<import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 	const writes: Array<string | number[]> = [];
 	const queuedOutput = [new TextEncoder().encode('retained screen\r\n\x1b[c')];
 	let sequence = 0;
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		getEnvironment: async () => ({}), listProfiles: async () => [profile],
-		create: async () => ({ terminalId: 'input-shell', ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
-		write: async options => { writes.push(typeof options.data === 'string' ? options.data : [...options.data]); },
-		resize: async () => { }, close: async () => { }, getConnectionState: async () => 'ready', onConnectionState: Event.None,
+		create: async () => ({ terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
+		write: async options => {
+			writes.push(typeof options.data === 'string' ? options.data : [...options.data]);
+			if (holdInput) {
+				holdInput = false;
+				await new Promise<void>((resolve, reject) => { releaseInput = failed => failed ? reject(new Error('Terminal write denied')) : resolve(); });
+			}
+		},
+		resize: async () => { }, close: async () => { }, getConnectionState: async () => 'ready', onConnectionState: connectionChanged.event,
 		read: async options => ({
 			terminalId: options.terminalId, chunks: queuedOutput.splice(0).map(data => ({ sequence: ++sequence, data })), nextSequence: sequence,
 			outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined,
@@ -611,7 +646,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	const terminals = services.get(ITerminalService);
 	store.add(terminals.onDidCreateInstance(instance => {
 		instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
-		if (new URLSearchParams(location.search).has('find')) {
+		if (new URLSearchParams(location.search).has('find') || clipboardFixture) {
 			instance.xterm!.setVisible(true);
 			instance.xterm!.focus();
 		}
@@ -620,7 +655,8 @@ if (new URLSearchParams(location.search).has('input')) {
 	const screen = (await terminal.xtermReadyPromise)!;
 	screen.setVisible(true);
 	screen.focus();
-	if (new URLSearchParams(location.search).has('find')) {
+	if (new URLSearchParams(location.search).has('find') || clipboardFixture) {
+		TerminalHasActiveInstanceContext.bindTo(services.get(IContextKeyService)).set(true);
 		const commands = store.add(new CommandService(services));
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IViewsService, { openView: async () => undefined } as unknown as IViewsService);
@@ -635,6 +671,45 @@ if (new URLSearchParams(location.search).has('input')) {
 			ownerDocument: document, commandService: commands, contextKeyService: services.get(IContextKeyService), keyboardLayoutService: layouts,
 		}));
 		await keybindings.initialize();
+		if (clipboardFixture) {
+			window.ashTerminalClipboardIntegration = {
+				command: id => commands.executeCommand(id),
+				title: id => {
+					const title = CommandsRegistry.getCommands().get(id)?.metadata?.description;
+					return typeof title === 'string' ? title : title?.value;
+				},
+				copied,
+				setText: text => { clipboardText = text; },
+				reads: () => clipboardReads,
+				select: (start, length) => screen.raw.select(start, 0, length),
+				selection: () => screen.raw.getSelection(),
+				selectedContext: () => services.get(IContextKeyService).getContext(document.activeElement).getValue<boolean>('terminalTextSelectedInFocused') === true,
+				hold: () => { holdRead = true; },
+				beginPaste: () => {
+					pasteFinished = false;
+					pasteOperation = commands.executeCommand('workbench.action.terminal.paste').finally(() => { pasteFinished = true; });
+					void pasteOperation.catch(() => { });
+				},
+				finished: () => pasteFinished,
+				holdInput: () => { holdInput = true; },
+				releaseInput: failed => { releaseInput!(failed); releaseInput = undefined; },
+				release: text => { releaseRead!(text); releaseRead = undefined; },
+				reject: () => { rejectRead!(); rejectRead = undefined; },
+				finish: async () => { try { await pasteOperation; return undefined; } catch (error) { return (error as Error).message; } },
+				disconnect: () => { connectionChanged.fire('crashed'); return terminal.state; },
+				switchAway: async () => {
+					screen.setVisible(false);
+					const other = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+					(await other.xtermReadyPromise)!.focus();
+				},
+				switchBack: () => { terminals.activeInstance!.xterm!.setVisible(false); terminals.setActiveInstance(terminal); screen.setVisible(true); screen.focus(); },
+				help: async () => {
+					const { AccessibleViewRegistry } = await import('../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js');
+					const provider = AccessibleViewRegistry.getImplementations().find(item => item.name === 'terminal' && item.type === 'help')!.getProvider(services)!;
+					const content = provider.provideContent(); provider.dispose(); return content;
+				},
+			};
+		}
 		window.ashTerminalFindIntegration = {
 			command: id => commands.executeCommand(id),
 			context: () => {
@@ -668,6 +743,28 @@ if (new URLSearchParams(location.search).has('input')) {
 
 declare global {
 	interface Window {
+		ashTerminalClipboardIntegration: {
+			command(id: string): Promise<unknown>;
+			title(id: string): string | undefined;
+			readonly copied: readonly string[];
+			setText(text: string): void;
+			reads(): number;
+			select(start: number, length: number): void;
+			selection(): string;
+			selectedContext(): boolean;
+			hold(): void;
+			beginPaste(): void;
+			finished(): boolean;
+			holdInput(): void;
+			releaseInput(failed: boolean): void;
+			release(text: string): void;
+			reject(): void;
+			finish(): Promise<string | undefined>;
+			disconnect(): string;
+			switchAway(): Promise<void>;
+			switchBack(): void;
+			help(): Promise<string>;
+		};
 		ashTerminalFindIntegration: {
 			command(id: string): Promise<unknown>;
 			context(): { terminal: boolean; find: boolean; };

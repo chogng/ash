@@ -46,6 +46,21 @@ const { SessionsConfiguration } = await import('../../common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
 
+test('Sessions common entry registers the shared speech service for unavailable capture hosts', async () => {
+	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
+	const { ServiceCollection } = await import('../../../platform/instantiation/common/serviceCollection.js');
+	const { IDictationService } = await import('../../../platform/dictation/common/dictationService.js');
+	const { ISpeechService, SpeechToTextState } = await import('../../../workbench/contrib/speech/common/speechService.js');
+	const registrations = getSingletonServiceDescriptors().filter(([id]) => id === ISpeechService);
+	assert.equal(registrations.length, 1);
+	using services = new InstantiationService(new ServiceCollection(...registrations));
+	services.registerInstance(IDictationService, undefined);
+	const speech = services.get(ISpeechService);
+	assert.equal(speech.isConfigured, false);
+	await assert.rejects(speech.start(), /Dictation is unavailable/);
+	assert.equal(speech.state, SpeechToTextState.Idle);
+});
+
 test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, Creator, and Symphony actions', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();

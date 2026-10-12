@@ -1,3 +1,5 @@
+import './contrib/relauncher/browser/relauncher.contribution.js';
+import './contrib/splash/electron-browser/splash.contribution.js';
 import { IRemoteTunnelService } from '../platform/remoteTunnel/common/remoteTunnel.js';
 import { RemoteTunnelService } from '../platform/remoteTunnel/electron-browser/remoteTunnelService.js';
 import { ElectronElevatedFileService } from './services/files/electron-browser/elevatedFileService.js';

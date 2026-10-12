@@ -1,6 +1,6 @@
 {
   "ash.extensions": {
-    "accessibilityHelp": "扩展、插件、技能、MCP 服务器和推荐是可折叠的窗格。在窗格标题上按左右方向键可折叠或展开。打开 /extensions 浏览和管理扩展。使用“内置”查看随产品提供的扩展，使用“已安装”管理市场和本地扩展，离线时也可操作。按 Tab 在控件间移动，按方向键选择扩展，按 Enter 打开详情。列表或详情中的启用和禁用控制整个编辑器扩展，包括脚本、主题、语法和代码片段。语言包通过显示语言设置管理。执行授权和权限在详情中单独审核。使用“来源”添加或暂停 Ash 开放源。按 Escape 关闭此帮助。",
+    "accessibilityHelp": "扩展、插件、技能、MCP 服务器和推荐是可折叠的窗格。在窗格标题上按左右方向键可折叠或展开。打开 /extensions 浏览和管理扩展。按 Tab 在控件间移动，按方向键选择扩展，按 Enter 打开详情。列表或详情中的启用和禁用控制整个编辑器扩展，包括脚本、主题、语法和代码片段。语言包通过显示语言设置管理。执行授权和权限在详情中单独审核。按 Escape 关闭此帮助。",
     "searchExtensions": "搜索扩展",
     "searchLanguageExtensions": "搜索语言扩展",
     "searchPackages": "搜索扩展",
@@ -15,7 +15,6 @@
     "filterThemes": "主题",
     "loading": "正在加载 Extensions…",
     "unavailable": "Extensions 暂不可用。",
-    "noMatching": "没有匹配的扩展。",
     "packageCount": "{count} 个软件包",
     "packageCountPlural": "{count} 个软件包",
     "noTypeFound": "未找到 {type} 软件包",
@@ -63,7 +62,6 @@
     "sources": "来源",
     "refresh": "刷新",
     "results": "{0} 个扩展",
-    "sourcesUnavailable": "部分来源不可用：{0}",
     "verbosityTitle": "扩展辅助功能帮助",
     "verbosityDescription": "扩展获得焦点时播报键盘帮助。",
     "focusHint": "扩展。使用 Tab 导航，按 Alt+F1 获取帮助。",
@@ -135,7 +133,6 @@
     "skillNoDiagnostics": "没有技能诊断信息。",
     "mcpToolsHeading": "工具",
     "pluginPermissionsHeading": "权限",
-    "noMatchingPlugins": "没有匹配的插件。",
     "skillsVerbosityTitle": "技能无障碍帮助",
     "skillsVerbosityDescription": "在技能获得焦点时提示如何打开键盘操作帮助。",
     "recommendationsTooLarge": "推荐配置文件超过 2 MB。",

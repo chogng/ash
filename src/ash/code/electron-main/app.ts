@@ -52,7 +52,7 @@ import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from "../../pl
 import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
-import { colorSchemeChannel, nativeHostIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
@@ -1104,7 +1104,7 @@ export class AshApplication extends Disposable {
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
 			workspace: workspaceContext.getWorkspace(),
 			state: windowState,
-			backgroundColor: this.themeMainService.getBackgroundColor(),
+			backgroundColor: this.themeMainService.getBackgroundColor(`workbench:${workspaceContext.getWorkspace().id}`),
 			titleBarStyle,
 			webPreferences: this.createSandboxWebPreferences(),
 			title: AshWorkbenchName,
@@ -1295,6 +1295,7 @@ export class AshApplication extends Disposable {
 			windowOperationIpcRoute(this.windowsMainService, window),
 			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 			this.windowsMainService.fileOpenResponseIpcRoute(window),
+			...windowSplashIpcRoutes(this.themeMainService, () => `workbench:${workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 			...nativeHostIpcRoutes({
 				...this.windowHostOperations(window, windowControlsOverlay),
 				openWindow: async options => {
@@ -1369,8 +1370,6 @@ export class AshApplication extends Disposable {
 			isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
 			setWindowTheme: theme => {
 				controls.setTheme(theme);
-				window.setBackgroundColor(theme.backgroundColor);
-				void this.themeMainService.saveWindowTheme(theme).catch(error => console.error('Failed to save window theme', error));
 			},
 			setWindowDimmed: dimmed => controls.setDimmed(dimmed),
 			toggleDeveloperTools: () => window.webContents.toggleDevTools(),
@@ -1480,7 +1479,7 @@ export class AshApplication extends Disposable {
 			{
 				title: `${AshWorkbenchName} Sessions`,
 				titleBarStyle,
-				backgroundColor: this.themeMainService.getBackgroundColor(),
+				backgroundColor: this.themeMainService.getBackgroundColor(`sessions:${session.workspaceContext.getWorkspace().id}`),
 				icon: this.windowIconPath,
 				state: this.windowsMainService.getNewWindowState(sessionsWindowState, configurationValues(this.services.configuration.read().document), this.lifecycleMainService.wasRestarted),
 				webPreferences: this.createSandboxWebPreferences(),
@@ -1547,6 +1546,7 @@ export class AshApplication extends Disposable {
 						...browserViewIpcRoutes(browserServices.get(IBrowserViewMainService)),
 						...remoteWindowContext.ipcRoutes,
 						windowOperationIpcRoute(this.windowsMainService, window),
+						...windowSplashIpcRoutes(this.themeMainService, () => `sessions:${session.workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 						...nativeHostIpcRoutes({
 							...this.windowHostOperations(window, windowControlsOverlay),
 							openWindow: async options => {

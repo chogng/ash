@@ -1,41 +1,9 @@
-import { Emitter, type Event } from '../../../../../base/common/event.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { IDictationService, type IDictationSession, type IDictationOptions } from '../../../../../platform/dictation/common/dictationService.js';
-import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
-import type { ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
-import { localize } from '../../../../../nls.js';
-
-export const IChatSpeechToTextService = createDecorator<IChatSpeechToTextService>('chatSpeechToTextService');
-
-export enum ChatSpeechToTextState {
-	Idle = 'idle',
-	Recording = 'recording',
-	Transcribing = 'transcribing',
-}
-
-export interface IChatDictationTranscript {
-	readonly text: string;
-	readonly finalizedText: string;
-}
-
-export interface IChatSpeechToTextService {
-	readonly _serviceBrand: undefined;
-	readonly onDidChangeState: Event<ChatSpeechToTextState>;
-	readonly onDidUpdateTranscript: Event<IChatDictationTranscript>;
-	readonly onDidEnd: Event<string | undefined>;
-	readonly onDidChangePreparation: Event<void>;
-	readonly state: ChatSpeechToTextState;
-	readonly isBusy: boolean;
-	readonly isStarting: boolean;
-	readonly isConfigured: boolean;
-	getPreparation(): Promise<ILocalTranscriptionModelSnapshot | undefined>;
-	prepareModel(): Promise<void>;
-	cancelPreparation(): Promise<void>;
-	getOptions(): Promise<IDictationOptions>;
-	start(): Promise<void>;
-	stopAndTranscribe(): Promise<string | undefined>;
-	cancel(): Promise<void>;
-}
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { IDictationService, type IDictationSession, type IDictationOptions } from '../../../../platform/dictation/common/dictationService.js';
+import type { ILocalTranscriptionModelSnapshot } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { localize } from '../../../../nls.js';
+import { ISpeechService, SpeechToTextState, type ISpeechToTextTranscript } from '../common/speechService.js';
 
 interface Recording {
 	starting?: Promise<void>;
@@ -46,20 +14,20 @@ interface Recording {
 }
 
 /** One window owns capture orchestration; the host owns audio and backend execution. */
-export class ChatSpeechToTextService extends Disposable implements IChatSpeechToTextService {
+export class SpeechService extends Disposable implements ISpeechService {
 	public readonly _serviceBrand = undefined;
-	private readonly stateChanged = this._register(new Emitter<ChatSpeechToTextState>());
+	private readonly stateChanged = this._register(new Emitter<SpeechToTextState>());
 	public readonly onDidChangeState = this.stateChanged.event;
-	private readonly transcript = this._register(new Emitter<IChatDictationTranscript>());
+	private readonly transcript = this._register(new Emitter<ISpeechToTextTranscript>());
 	public readonly onDidUpdateTranscript = this.transcript.event;
 	private readonly ended = this._register(new Emitter<string | undefined>());
 	public readonly onDidEnd = this.ended.event;
 	private readonly preparationChanged = this._register(new Emitter<void>());
 	public readonly onDidChangePreparation = this.preparationChanged.event;
 	private recording: Recording | undefined;
-	private currentState = ChatSpeechToTextState.Idle;
-	public get state(): ChatSpeechToTextState { return this.currentState; }
-	public get isBusy(): boolean { return this.state !== ChatSpeechToTextState.Idle; }
+	private currentState = SpeechToTextState.Idle;
+	public get state(): SpeechToTextState { return this.currentState; }
+	public get isBusy(): boolean { return this.state !== SpeechToTextState.Idle; }
 	public get isStarting(): boolean { return !!this.recording && !this.recording.handle; }
 	public get isConfigured(): boolean { return !!this.backend; }
 
@@ -92,7 +60,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		if (this.isBusy) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
 		const recording: Recording = { finalizedText: '', cancelled: false };
 		this.recording = recording;
-		this.setState(ChatSpeechToTextState.Recording);
+		this.setState(SpeechToTextState.Recording);
 		recording.starting = this.startRecording(recording);
 		try {
 			await recording.starting;
@@ -116,7 +84,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 				this.ended.fire(error);
 				if (!recording.stopping) {
 					this.recording = undefined;
-					this.setState(ChatSpeechToTextState.Idle);
+					this.setState(SpeechToTextState.Idle);
 				}
 			});
 			if (this.recording !== recording || this.isDisposed) { await handle.stop(); }
@@ -124,7 +92,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		} catch (error) {
 			if (this.recording === recording) {
 				this.recording = undefined;
-				this.setState(ChatSpeechToTextState.Idle);
+				this.setState(SpeechToTextState.Idle);
 			}
 			throw error;
 		}
@@ -134,7 +102,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		const recording = this.recording;
 		if (!recording) { return Promise.resolve(undefined); }
 		if (recording.stopping) { return recording.stopping; }
-		this.setState(ChatSpeechToTextState.Transcribing);
+		this.setState(SpeechToTextState.Transcribing);
 		recording.stopping = this.stopRecording(recording);
 		return recording.stopping;
 	}
@@ -152,12 +120,12 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		} finally {
 			if (this.recording === recording) {
 				this.recording = undefined;
-				this.setState(ChatSpeechToTextState.Idle);
+				this.setState(SpeechToTextState.Idle);
 			}
 		}
 	}
 
-	private setState(state: ChatSpeechToTextState): void {
+	private setState(state: SpeechToTextState): void {
 		if (this.currentState === state) { return; }
 		this.currentState = state;
 		if (!this.isDisposed) { this.stateChanged.fire(state); }

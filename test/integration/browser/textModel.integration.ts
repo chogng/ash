@@ -1,3 +1,5 @@
+import { SnippetsService } from '../../../src/ash/workbench/contrib/snippets/browser/snippetsService.js';
+import { SnippetCompletionProvider } from '../../../src/ash/workbench/contrib/snippets/browser/snippetCompletionProvider.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import '../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css';
@@ -132,7 +134,9 @@ const configurationService = disposables.add(new WorkbenchConfigurationService()
 const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
 const languageFeaturesService = disposables.add(new LanguageFeaturesService());
 const textMateService = disposables.add(new BrowserTextMateService());
-const extensions = disposables.add(await createLanguageExtensions({ textMateService, languageService, languageConfigurationService, languageFeaturesService }));
+const extensions = disposables.add(await createLanguageExtensions({ textMateService, languageService, languageConfigurationService }));
+const snippets = disposables.add(new SnippetsService(extensions));
+disposables.add(new SnippetCompletionProvider(snippets, languageFeaturesService));
 await extensions.start();
 const models = disposables.add(uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
 	languageService, languageConfigurationService, languageFeaturesService,

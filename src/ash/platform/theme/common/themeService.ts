@@ -8,8 +8,33 @@ import {
 import type { ColorIdentifier, ResolvedColorContribution } from "./colorRegistry.js";
 import type { SizeContribution } from "./sizeRegistry.js";
 import type { SizeValue } from "./sizeUtils.js";
-import type { ColorScheme } from "./theme.js";
+import { ColorScheme } from './theme.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
+import { isRecord } from '../../../base/common/types.js';
+
+export const WINDOW_SPLASH_READ_CHANNEL = 'ash:theme:readWindowSplash';
+export const WINDOW_SPLASH_SAVE_CHANNEL = 'ash:theme:saveWindowSplash';
+
+/** A disposable startup rendering cache; the live theme and layout remain authoritative. */
+export interface IPartsSplash {
+	readonly baseTheme: ColorScheme;
+	readonly colorInfo: {
+		readonly background: string;
+		readonly foreground: string;
+	};
+}
+
+/** Persistence and IPC accept only resolved, opaque colors, never arbitrary CSS. */
+export function validatePartsSplash(value: unknown): IPartsSplash {
+	if (!isRecord(value) || !Object.values(ColorScheme).includes(value.baseTheme as ColorScheme) || !isRecord(value.colorInfo)) {
+		throw new TypeError('Invalid window splash');
+	}
+	const { background, foreground } = value.colorInfo;
+	if (typeof background !== 'string' || typeof foreground !== 'string' || !/^#[0-9a-f]{6}$/i.test(background) || !/^#[0-9a-f]{6}$/i.test(foreground)) {
+		throw new TypeError('Invalid window splash colors');
+	}
+	return { baseTheme: value.baseTheme as ColorScheme, colorInfo: { background, foreground } };
+}
 
 export type ThemeColors = Readonly<Record<ColorIdentifier, string>>;
 

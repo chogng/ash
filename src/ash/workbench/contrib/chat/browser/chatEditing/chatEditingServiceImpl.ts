@@ -2,21 +2,28 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { TaskQueue, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { observableFromEvent, type IObservable, type IReader } from '../../../../../base/common/observable.js';
 import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
-import type { URI } from '../../../../../base/common/uri.js';
+import { Schemas } from '../../../../../base/common/network.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { IBulkEditService, ResourceFileEdit, ResourceTextEdit, type IBulkEditResult, ResourceEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import type { LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../../nls.js';
-import { IChatEditingService, type IModifiedFileEntry, type IModifiedFileEntryChangeHunk } from '../../common/editing/chatEditingService.js';
+import { IChatEditingService, type IChatEditReviewSession, type IModifiedFileEntry, type IModifiedFileEntryChangeHunk } from '../../common/editing/chatEditingService.js';
 import { ChatEditingModifiedDocumentEntry } from './chatEditingModifiedDocumentEntry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ChatEditSource, ChatEditOutcome } from '../../../../services/chat/common/chatService.js';
 import { autoAcceptDelaySetting } from '../../common/constants.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
-interface AutoAcceptReview {
-	readonly turns: Map<string, ChatEditOutcome | 'pending'>;
+interface ReviewTurn {
+	readonly source: ChatEditSource;
+	readonly outcome: ChatEditOutcome | 'pending';
+}
+
+interface EntryReview {
+	readonly turns: Map<string, ReviewTurn>;
 	cancelled: boolean;
 	deadline: number | undefined;
 	revision: number;
@@ -26,18 +33,23 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly reviews = this._register(new DisposableMap<string, IModifiedFileEntry>());
+	private readonly sessions = this._register(new DisposableMap<string, ChatEditReviewSession>());
+	public readonly editingSessionsObs: IObservable<readonly IChatEditReviewSession[]> = observableFromEvent(
+		this, this.onDidChange, () => [...this.sessions].map(([, session]) => session),
+	);
 	private readonly operations = new TaskQueue();
+	private applyingEdits = false;
 	private readonly autoAcceptChanged = this._register(new Emitter<IModifiedFileEntry>());
 	public readonly onDidChangeAutoAccept = this.autoAcceptChanged.event;
-	private readonly autoAccept = new Map<IModifiedFileEntry, AutoAcceptReview>();
+	private readonly entryReviews = new Map<IModifiedFileEntry, EntryReview>();
 	private readonly countdown = this._register(new RunOnceScheduler(() => this.tick(), 1000));
 
 	constructor(@IBulkEditService private readonly bulkEdits: IBulkEditService, @ITextModelResourceService private readonly models: ITextModelResourceService, @IConfigurationService private readonly configuration: IConfigurationService, @IAccessibilitySignalService private readonly signals: IAccessibilitySignalService) {
 		super();
-		this._register(toDisposable(() => { this.operations.clearPending(); this.autoAccept.clear(); }));
+		this._register(toDisposable(() => { this.operations.clearPending(); this.entryReviews.clear(); }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(autoAcceptDelaySetting)) {
-				for (const [entry, review] of this.autoAccept) { this.startCountdown(entry, review); }
+				for (const [entry, review] of this.entryReviews) { this.startCountdown(entry, review); }
 				this.scheduleTick();
 			}
 		}));
@@ -54,6 +66,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		signal.throwIfAborted();
 		const edits = ResourceEdit.convert(edit);
 		const documents = new Set<ChatEditingModifiedDocumentEntry>();
+		this.applyingEdits = true;
 		try {
 			const fileEdits = edits.filter((edit): edit is ResourceFileEdit => edit instanceof ResourceFileEdit);
 			const resources = new Map<string, URI>();
@@ -67,12 +80,12 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				if (entry.resources.some(resource => resources.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)))) { previous.set(key, entry); }
 			}
 			const atomic = fileEdits.length > 0 || [...previous.values()].some(entry => entry instanceof ChatEditingFileOperationEntry);
-			const turns = new Map<string, ChatEditOutcome | 'pending'>();
+			const turns = new Map<string, ReviewTurn>();
 			for (const entry of previous.values()) {
-				for (const [key, outcome] of this.autoAccept.get(entry)?.turns ?? []) { turns.set(key, outcome); }
+				for (const [key, outcome] of this.entryReviews.get(entry)?.turns ?? []) { turns.set(key, outcome); }
 				this.cancelAutoAccept(entry);
 			}
-			turns.set(JSON.stringify([source.threadId, source.turnId]), 'pending');
+			turns.set(JSON.stringify([source.threadId, source.turnId]), { source, outcome: 'pending' });
 			if (atomic) {
 				// A later tool may edit a newly created or moved file. Its inverse joins the
 				// earlier operation so review never restores only half of a resource change.
@@ -105,7 +118,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				const retained: IModifiedFileEntry[] = [];
 				for (const key of previous.keys()) {
 					const entry = this.reviews.deleteAndLeak(key);
-					if (entry) { this.autoAccept.delete(entry); retained.push(entry); }
+					if (entry) { this.entryReviews.delete(entry); retained.push(entry); }
 				}
 				const entry = new ChatEditingFileOperationEntry([...resources.values()], result.undo, retained, () => this.remove(entry.id), () => this.changed.fire());
 				this.reviews.set(entry.id, entry);
@@ -114,64 +127,99 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				void this.signals.playSignal(AccessibilitySignal.chatEditModifiedFile);
 				for (const entry of this.entries) {
 					if (entry.resources.some(resource => resources.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)))) {
-						const entryTurns = atomic ? new Map(turns) : new Map(this.autoAccept.get(entry)?.turns);
-						entryTurns.set(JSON.stringify([source.threadId, source.turnId]), 'pending');
-						this.autoAccept.set(entry, { turns: entryTurns, cancelled: false, deadline: undefined, revision: 0 });
+						const entryTurns = atomic ? new Map(turns) : new Map(this.entryReviews.get(entry)?.turns);
+						entryTurns.set(JSON.stringify([source.threadId, source.turnId]), { source, outcome: 'pending' });
+						this.entryReviews.set(entry, { turns: entryTurns, cancelled: false, deadline: undefined, revision: 0 });
 					}
 				}
 			}
 			return result;
 		} finally {
 			for (const entry of documents) { entry.endAgentEdit(); }
+			this.applyingEdits = false;
+			this.synchronizeSessions();
 			this.changed.fire();
 		}
 	}
 
 	public acceptEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
+		const contributors = new Set([...this.entryReviews.get(entry)?.turns.values() ?? []].map(turn => turn.source.threadId));
 		this.cancelAutoAccept(entry);
-		return this.operations.schedule(async () => { this.requireEntry(entry); await entry.accept(hunk); void this.signals.playSignal(AccessibilitySignal.editsKept); });
+		return this.operations.schedule(async () => {
+			this.requireEntry(entry, contributors);
+			await entry.accept(hunk);
+			void this.signals.playSignal(AccessibilitySignal.editsKept);
+		});
 	}
 
 	public rejectEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
+		const contributors = new Set([...this.entryReviews.get(entry)?.turns.values() ?? []].map(turn => turn.source.threadId));
 		this.cancelAutoAccept(entry);
-		return this.operations.schedule(async () => { this.requireEntry(entry); await entry.reject(hunk); void this.signals.playSignal(AccessibilitySignal.editsUndone); });
-	}
-
-	public accept(...resources: URI[]): Promise<void> {
-		for (const entry of this.selected(resources)) { this.cancelAutoAccept(entry); }
 		return this.operations.schedule(async () => {
-			this.assertNotDisposed();
-			const selected = this.selected(resources);
-			for (const entry of selected) { await entry.accept(); }
-			if (selected.length) { void this.signals.playSignal(AccessibilitySignal.editsKept); }
+			this.requireEntry(entry, contributors);
+			await entry.reject(hunk);
+			void this.signals.playSignal(AccessibilitySignal.editsUndone);
 		});
 	}
 
-	public reject(...resources: URI[]): Promise<void> {
-		for (const entry of this.selected(resources)) { this.cancelAutoAccept(entry); }
-		return this.operations.schedule(async () => {
-			this.assertNotDisposed();
-			const selected = this.selected(resources);
-			for (const entry of selected) { await entry.reject(); }
-			if (selected.length) { void this.signals.playSignal(AccessibilitySignal.editsUndone); }
-		});
+	private ensureSession(threadId: string): void {
+		if (this.sessions.has(threadId)) { return; }
+		const resource = URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: new URLSearchParams({ threadId }).toString() });
+		const entries = observableFromEvent(this, this.onDidChange, () => this.entriesForThread(threadId));
+		this.sessions.set(threadId, new ChatEditReviewSession(resource, entries, (accept, resources) => this.decideSession(threadId, accept, resources)));
 	}
 
-	private requireEntry(entry: IModifiedFileEntry): void {
+	private entriesForThread(threadId: string): readonly IModifiedFileEntry[] {
+		return this.entries.filter(entry => [...this.entryReviews.get(entry)?.turns.values() ?? []].some(turn => turn.source.threadId === threadId));
+	}
+
+	private synchronizeSessions(): void {
+		const activeThreads = new Set<string>();
+		for (const review of this.entryReviews.values()) {
+			for (const turn of review.turns.values()) { activeThreads.add(turn.source.threadId); }
+		}
+		for (const threadId of activeThreads) { this.ensureSession(threadId); }
+		for (const [threadId] of this.sessions) {
+			if (!activeThreads.has(threadId)) { this.sessions.deleteAndDispose(threadId); }
+		}
+	}
+
+	private async decideSession(threadId: string, accept: boolean, resources: readonly URI[]): Promise<void> {
+		const select = (): readonly IModifiedFileEntry[] => {
+			const entries = this.entriesForThread(threadId).filter(entry => resources.length === 0 || entry.resources.some(resource => resources.some(selected => extUriBiasedIgnorePathCase.isEqual(selected, resource))));
+			// Validate the whole selection before changing anything. A shared baseline
+			// cannot be decided by one chat without also deciding another chat's edits.
+			if (entries.some(entry => [...this.entryReviews.get(entry)!.turns.values()].some(turn => turn.source.threadId !== threadId))) {
+				throw new Error(localize('chatEditing.sharedReview', 'These changes include edits from other chats. Review the shared file or change set separately.'));
+			}
+			return entries;
+		};
 		this.assertNotDisposed();
-		if (!this.entries.includes(entry)) { throw new Error(localize('chatEditing.stale', 'The change has changed. Review it again.')); }
+		for (const entry of select()) { this.cancelAutoAccept(entry); }
+		return this.operations.schedule(async () => {
+			this.assertNotDisposed();
+			const selected = select();
+			for (const entry of selected) {
+				this.cancelAutoAccept(entry);
+				if (accept) { await entry.accept(); } else { await entry.reject(); }
+			}
+			if (selected.length) { void this.signals.playSignal(accept ? AccessibilitySignal.editsKept : AccessibilitySignal.editsUndone); }
+		});
 	}
 
-	private selected(resources: readonly URI[]): readonly IModifiedFileEntry[] {
-		return this.entries.filter(entry => resources.length === 0 || entry.resources.some(resource => resources.some(selected => extUriBiasedIgnorePathCase.isEqual(selected, resource))));
+	private requireEntry(entry: IModifiedFileEntry, contributors: ReadonlySet<string>): void {
+		this.assertNotDisposed();
+		if (!this.entries.includes(entry) || [...this.entryReviews.get(entry)?.turns.values() ?? []].some(turn => !contributors.has(turn.source.threadId))) {
+			throw new Error(localize('chatEditing.stale', 'The change has changed. Review it again.'));
+		}
 	}
 
 	public finishTurn(source: ChatEditSource, outcome: ChatEditOutcome): Promise<void> {
 		return this.operations.schedule(async () => {
 			const key = JSON.stringify([source.threadId, source.turnId]);
-			for (const [entry, review] of this.autoAccept) {
-				if (review.turns.get(key) === 'pending') {
-					review.turns.set(key, outcome);
+			for (const [entry, review] of this.entryReviews) {
+				if (review.turns.get(key)?.outcome === 'pending') {
+					review.turns.set(key, { source, outcome });
 					this.startCountdown(entry, review);
 				}
 			}
@@ -180,12 +228,12 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	}
 
 	public getAutoAcceptCountdown(entry: IModifiedFileEntry): number | undefined {
-		const deadline = this.autoAccept.get(entry)?.deadline;
+		const deadline = this.entryReviews.get(entry)?.deadline;
 		return deadline === undefined ? undefined : Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
 	}
 
 	public cancelAutoAccept(entry: IModifiedFileEntry): void {
-		const review = this.autoAccept.get(entry);
+		const review = this.entryReviews.get(entry);
 		if (!review) { return; }
 		review.cancelled = true;
 		review.revision++;
@@ -194,28 +242,28 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		this.scheduleTick();
 	}
 
-	private startCountdown(entry: IModifiedFileEntry, review: AutoAcceptReview): void {
+	private startCountdown(entry: IModifiedFileEntry, review: EntryReview): void {
 		const delay = this.configuration.getValue<number>(autoAcceptDelaySetting);
 		review.revision++;
-		review.deadline = delay > 0 && !review.cancelled && [...review.turns.values()].every(outcome => outcome === 'completed') ? Date.now() + delay * 1000 : undefined;
+		review.deadline = delay > 0 && !review.cancelled && [...review.turns.values()].every(turn => turn.outcome === 'completed') ? Date.now() + delay * 1000 : undefined;
 		this.autoAcceptChanged.fire(entry);
 	}
 
 	private scheduleTick(): void {
 		this.countdown.cancel();
-		const deadlines = [...this.autoAccept.values()].flatMap(review => review.deadline === undefined ? [] : [review.deadline]);
+		const deadlines = [...this.entryReviews.values()].flatMap(review => review.deadline === undefined ? [] : [review.deadline]);
 		if (deadlines.length > 0) { this.countdown.schedule(Math.max(0, Math.min(1000, Math.min(...deadlines) - Date.now()))); }
 	}
 
 	private tick(): void {
-		for (const [entry, review] of this.autoAccept) {
+		for (const [entry, review] of this.entryReviews) {
 			if (review.deadline === undefined) { continue; }
 			if (review.deadline <= Date.now()) {
 				const revision = review.revision;
 				review.deadline = undefined;
 				// Recheck inside the edit queue: a newer tool write or cancellation wins over an expired timer.
 				void this.operations.scheduleSkipIfCleared(async () => {
-					if (this.autoAccept.get(entry) === review && review.revision === revision && !review.cancelled && [...review.turns.values()].every(outcome => outcome === 'completed')) {
+					if (this.entryReviews.get(entry) === review && review.revision === revision && !review.cancelled && [...review.turns.values()].every(turn => turn.outcome === 'completed')) {
 						await entry.accept();
 						void this.signals.playSignal(AccessibilitySignal.editsKept);
 					}
@@ -227,10 +275,48 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 
 	private remove(key: string): void {
 		const entry = this.reviews.get(key);
-		if (entry) { this.autoAccept.delete(entry); }
+		if (entry) { this.entryReviews.delete(entry); }
 		this.reviews.deleteAndDispose(key);
+		if (!this.applyingEdits) { this.synchronizeSessions(); }
 		this.scheduleTick();
 		this.changed.fire();
+	}
+}
+
+/** A disposable view of service-owned entries; it never owns another text baseline. */
+class ChatEditReviewSession extends Disposable implements IChatEditReviewSession {
+	public readonly isGlobalEditingSession = false;
+	private readonly disposed = this._register(new Emitter<void>());
+	public readonly onDidDispose = this.disposed.event;
+
+	constructor(
+		public readonly chatSessionResource: URI,
+		public readonly entries: IObservable<readonly IModifiedFileEntry[]>,
+		private readonly decide: (accept: boolean, resources: readonly URI[]) => Promise<void>,
+	) { super(); }
+
+	public getEntry(uri: URI): IModifiedFileEntry | undefined {
+		return this.entries.get().find(entry => entry.resources.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, uri)));
+	}
+
+	public readEntry(uri: URI, reader: IReader): IModifiedFileEntry | undefined {
+		return this.entries.read(reader).find(entry => entry.resources.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, uri)));
+	}
+
+	public async accept(...uris: URI[]): Promise<void> {
+		this.assertNotDisposed();
+		await this.decide(true, uris);
+	}
+
+	public async reject(...uris: URI[]): Promise<void> {
+		this.assertNotDisposed();
+		await this.decide(false, uris);
+	}
+
+	public override dispose(): void {
+		if (this.isDisposed) { return; }
+		this.disposed.fire();
+		super.dispose();
 	}
 }
 

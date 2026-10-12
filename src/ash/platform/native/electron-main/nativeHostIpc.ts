@@ -2,6 +2,7 @@ import type { OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveD
 import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import type { IThemeMainService } from '../../theme/electron-main/themeMainService.js';
+import { WINDOW_SPLASH_READ_CHANNEL, WINDOW_SPLASH_SAVE_CHANNEL, validatePartsSplash, type IPartsSplash } from '../../theme/common/themeService.js';
 import type {
 	IpcRoute,
 } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -174,4 +175,27 @@ export function colorSchemeChannel(service: IThemeMainService): IServerChannel {
 			return service.onDidChangeColorScheme as Event<T>;
 		},
 	};
+}
+
+/** The trusted window host supplies the cache scope; renderers cannot write another window's state. */
+export function windowSplashIpcRoutes(service: IThemeMainService, scope: () => string, setBackground: (color: string) => void): readonly IpcRoute<unknown, unknown>[] {
+	return [
+		{
+			channel: WINDOW_SPLASH_READ_CHANNEL,
+			validate: value => {
+				if (value !== undefined) throw new TypeError('Window splash reads accept no arguments');
+				return undefined;
+			},
+			invoke: () => service.getWindowSplash(scope()),
+		},
+		{
+			channel: WINDOW_SPLASH_SAVE_CHANNEL,
+			validate: validatePartsSplash,
+			invoke: value => {
+				const splash = value as IPartsSplash;
+				setBackground(splash.colorInfo.background);
+				return service.saveWindowSplash(scope(), splash);
+			},
+		},
+	];
 }

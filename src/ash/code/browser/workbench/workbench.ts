@@ -1,3 +1,4 @@
+import { readBrowserPartsSplash, showPartsSplash } from '../../../workbench/contrib/splash/browser/splash.js';
 import { AshWorkbenchName } from '../../common/application.js';
 import { showStartupError } from '../../../workbench/browser/startupError.js';
 import { IndexedDbConfigurationApi } from '../../../platform/configuration/browser/indexedDbConfigurationApi.js';
@@ -12,6 +13,7 @@ import { codeSessionsProfile } from '../../common/codeSessionsProfile.js';
 import { createAppServerDebugAdapterCapability } from '../../../platform/debug/browser/appServerDebugAdapterProcessService.js';
 
 try {
+	showPartsSplash(document, readBrowserPartsSplash(window));
 	{
 		using configuration = new IndexedDbConfigurationApi();
 		await initializeBrowserLocalization(configuration, new BrowserLanguagePackStore());

@@ -7,7 +7,6 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { ITaskService } from '../../../services/tasks/common/taskService.js';
 import { ITerminalService, type ITerminalInstance } from '../../terminal/browser/terminal.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
-import { ChatSpeechToTextState, IChatSpeechToTextService } from '../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { SaveAccessibilitySignal } from './saveAccessibilitySignal.js';
 import { AccessibilitySignalDebuggerContribution } from './accessibilitySignalDebuggerContribution.js';
 import { EditorTextPropertySignalsContribution } from './editorTextPropertySignalsContribution.js';
@@ -96,26 +95,10 @@ class ChatAccessibilityContribution extends Disposable {
 	}
 }
 
-class VoiceRecordingAccessibilityContribution extends Disposable {
-	constructor(@IChatSpeechToTextService speech: IChatSpeechToTextService, @IAccessibilitySignalService signals: IAccessibilitySignalService) {
-		super();
-		let recordingAnnounced = speech.state === ChatSpeechToTextState.Recording && !speech.isStarting;
-		this._register(speech.onDidChangeState(state => {
-			if (state === ChatSpeechToTextState.Recording && !speech.isStarting && !recordingAnnounced) {
-				recordingAnnounced = true;
-				void signals.playSignal(AccessibilitySignal.voiceRecordingStarted);
-			} else if (state === ChatSpeechToTextState.Idle && recordingAnnounced) {
-				recordingAnnounced = false;
-				void signals.playSignal(AccessibilitySignal.voiceRecordingStopped);
-			}
-		}));
-	}
-}
 
 for (const [id, contribution] of [
 	['workbench.contrib.terminalAccessibilitySignals', TerminalAccessibilityContribution],
 	['workbench.contrib.chatAccessibilitySignals', ChatAccessibilityContribution],
-	['workbench.contrib.voiceRecordingAccessibilitySignals', VoiceRecordingAccessibilityContribution],
 	['workbench.contrib.saveAccessibilitySignals', SaveAccessibilitySignal],
 	['workbench.contrib.debugAccessibilitySignals', AccessibilitySignalDebuggerContribution],
 	['workbench.contrib.editorTextPropertySignals', EditorTextPropertySignalsContribution],

@@ -125,6 +125,8 @@ export class WorkbenchKeybindingService
 	private singleModifierCandidate: SingleModifierKey | undefined;
 	private disabledIme = false;
 	private troubleshootingEnabled = false;
+	private currentDispatch: { readonly command: string; readonly event: KeyboardEvent; } | undefined;
+	private holdMode: { readonly event: KeyboardEvent; readonly promise: Promise<void>; readonly finish: () => void; } | undefined;
 
 	readonly onDidUpdateKeybindings = this._onDidUpdateKeybindings.event;
 	readonly onDidLog = this._onDidLog.event;
@@ -160,6 +162,7 @@ export class WorkbenchKeybindingService
 		);
 
 		this._register(toDisposable(() => {
+			this.finishHoldMode();
 			this.leaveChordMode();
 			this.isComposingKey.reset();
 		}));
@@ -185,7 +188,10 @@ export class WorkbenchKeybindingService
 		this.attachWindow(this.ownerWindow);
 		for (const { window } of getWindows()) this.attachWindow(window);
 		this._register(onDidRegisterWindow(({ window }) => this.attachWindow(window)));
-		this._register(onWillUnregisterWindow(({ window }) => this.windowListeners.deleteAndDispose(window)));
+		this._register(onWillUnregisterWindow(({ window }) => {
+			if (this.holdMode && keyboardEventWindow(this.holdMode.event, this.ownerWindow) === window) this.finishHoldMode();
+			this.windowListeners.deleteAndDispose(window);
+		}));
 	}
 
 	/** Called by the window owner after service registration; file events use the same load queue. */
@@ -323,12 +329,14 @@ export class WorkbenchKeybindingService
 		listeners.add(addDisposableListener(document, "keydown", (event: KeyboardEvent) => this.dispatchEvent(event), true));
 		listeners.add(addDisposableListener(document, "keyup", (event: KeyboardEvent) => this.dispatchKeyupEvent(event), true));
 		listeners.add(addDisposableListener(document, "compositionstart", () => {
+			this.finishHoldMode();
 			this.isComposingKey.set(true);
 			this.singleModifierCandidate = undefined;
 			this.leaveChordMode();
 		}, true));
 		listeners.add(addDisposableListener(document, "compositionend", () => this.isComposingKey.set(false), true));
 		listeners.add(addDisposableListener(targetWindow, "blur", () => {
+			if (this.holdMode && keyboardEventWindow(this.holdMode.event, this.ownerWindow) === targetWindow) this.finishHoldMode();
 			this.singleModifierCandidate = undefined;
 			this.leaveChordMode();
 		}));
@@ -384,7 +392,28 @@ export class WorkbenchKeybindingService
 	/**
 	 * Dispatches one native event and returns whether a keybinding consumed it.
 	 */
+	enableKeybindingHoldMode(commandId: string): Promise<void> | undefined {
+		const invocation = this.currentDispatch;
+		if (!invocation || invocation.command !== commandId || invocation.event.type === 'keyup') return undefined;
+		if (this.holdMode) return this.holdMode.promise;
+		let finish!: () => void;
+		const promise = new Promise<void>(resolve => { finish = resolve; });
+		this.holdMode = { event: invocation.event, promise, finish };
+		return promise;
+	}
+
+	private finishHoldMode(): void {
+		const held = this.holdMode;
+		this.holdMode = undefined;
+		held?.finish();
+	}
+
 	dispatchEvent(browserEvent: KeyboardEvent): boolean {
+		if (this.holdMode && sameKeyboardKey(this.holdMode.event, browserEvent)) {
+			browserEvent.preventDefault();
+			browserEvent.stopPropagation();
+			return true;
+		}
 		if (this.contextKeyService.getContext(keyboardEventTarget(browserEvent)).getValue(KeybindingContextKeys.isRecording.key)) {
 			this.singleModifierCandidate = undefined;
 			this.leaveChordMode();
@@ -439,6 +468,14 @@ export class WorkbenchKeybindingService
 
 	/** Dispatches a modifier-only binding after the key is released unused. */
 	dispatchKeyupEvent(browserEvent: KeyboardEvent): boolean {
+		const held = this.holdMode?.event;
+		if (held && (sameKeyboardKey(held, browserEvent)
+			|| (held.ctrlKey && !browserEvent.ctrlKey)
+			|| (held.altKey && !browserEvent.altKey)
+			|| (held.shiftKey && !browserEvent.shiftKey)
+			|| (held.metaKey && !browserEvent.metaKey))) {
+			this.finishHoldMode();
+		}
 		if (this.contextKeyService.getContext(keyboardEventTarget(browserEvent)).getValue(KeybindingContextKeys.isRecording.key)) {
 			this.singleModifierCandidate = undefined;
 			return false;
@@ -500,9 +537,16 @@ export class WorkbenchKeybindingService
 			case KeybindingResolveKind.Command:
 				this.leaveChordMode();
 				event.stop();
-				void this.commandService
-					.executeCommand(result.command, ...result.args)
-					.catch((error: unknown) => this.notificationService.warning(getErrorMessage(error)));
+				this.currentDispatch = { command: result.command, event: browserEvent };
+				try {
+					void this.commandService.executeCommand(result.command, ...result.args)
+						.catch((error: unknown) => {
+							if (this.holdMode?.event === browserEvent) this.finishHoldMode();
+							this.notificationService.warning(getErrorMessage(error));
+						});
+				} finally {
+					this.currentDispatch = undefined;
+				}
 				return true;
 
 			case KeybindingResolveKind.Blocked:
@@ -643,6 +687,15 @@ function formatKeyboardEvent(event: KeybindingEvent): string {
 		altGraph: event.altGraphKey,
 		composing: event.isComposing,
 	});
+}
+
+function sameKeyboardKey(left: KeyboardEvent, right: KeyboardEvent): boolean {
+	return left.code && right.code ? left.code === right.code : left.key === right.key;
+}
+
+function keyboardEventWindow(event: KeyboardEvent, fallback: Window): Window {
+	const target = keyboardEventTarget(event);
+	return event.view ?? target?.ownerDocument?.defaultView ?? fallback;
 }
 
 function formatResolveResult(result: KeybindingResolveResult): string {

@@ -1,5 +1,23 @@
 # Terminal API 对齐状态
 
+## Clipboard 本批准入（2026-10-11）
+
+用户复制／粘贴终端文本 → 当前窗口命令和 `TerminalClipboardContribution` → 实例唯一 xterm 选区／`sendText` → 既有进程管理器与平台输入确认。屏幕仍拥有选区；剪贴板服务仍拥有宿主访问；贡献只拥有异步操作的实例身份与失效代次，不新建进程或输出副本。
+
+准确修改范围：新增上游同路径 `src/ash/workbench/contrib/terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts`；双方已有的 `terminal/browser/terminal.contribution.ts` 只增加装载，`terminal/common/{terminal.ts,terminalContextKey.ts}` 只补被命令消费的标准 ID 和焦点选区键；`terminalContrib/accessibility/browser/terminalAccessibilityHelp.ts` 只增加剪贴板说明。配套范围为中文 `workbench.json`、既有 `test/integration/browser/terminal.integration{,.spec}.ts`、本台账与 Terminal／TerminalContrib README。其他代码只读；没有移动或删除文件。
+
+复制读取解析后的屏幕选区；没有选区时不写空剪贴板，Ctrl+C 继续进入 Shell。macOS 使用 Command+C，Windows/Linux 使用 Ctrl+Shift+C；Windows 另在选区存在时将 Ctrl+C 绑定为复制并清除。清除只在剪贴板写入成功且原选区仍未改变时执行。`terminalTextSelectedInFocused` 在 xterm textarea 的子作用域绑定，继承既有终端焦点上下文，失焦和贡献释放时退出。
+
+粘贴命令由当前宿主剪贴板服务读文本，再使用实例 `sendText(text, false, true)`，保留现有换行归一、child bracketed paste 与后端确认语义；读取拒绝及输入失败返回原始错误。读取期间关闭、退出、连接状态变化或切换活动实例会使旧操作失效，切换回来也不发送旧文本。只读、已退出、隐藏或未附着的屏幕不发送命令粘贴。Linux 的 selection clipboard 使用已有 `readText('selection')` 契约与 Shift+Insert；本轮 macOS 验证未覆盖 Linux 系统 selection clipboard。
+
+注册入口、公开契约和快捷键只参考上游公开声明与用户行为；贡献实现沿用 Ash 的实例注册、DOM 作用域和 Promise 输入队列。没有引入上游私有实现、配置服务、HTML 复制、资源粘贴、copy-on-selection 或多行粘贴确认；这些仍是后续完整 Clipboard 能力的待补项，浏览器原生粘贴继续由现有 xterm 输入链处理。
+
+验证：正常 `pnpm test:unit` 的 Terminal 实例、Tabs 与标题动作共 51 项通过，runner 自测 9 项通过。Chromium Terminal 全量 47 项通过，其中新增剪贴板 9 项。首次 Renderer 类型检查及最终终端浏览器定向类型检查通过；7 个修改的 TS 文件格式检查通过。中文命令标题与剪贴板帮助有真实浏览器断言，新增 5 条翻译；首次全仓本地化检查的 `ash/color.editorGutter.itemBackground` 缺词位于本轮范围之外；随后共享工作树的其他能力改动增加缺词，本轮新增剪贴板词条均齐全。
+
+正常浏览器入口的全套类型检查被未修改的 `test/integration/browser/diff.integration.ts:340` 阻塞：菜单联合类型存在没有 `group` 的成员。终端使用继承原配置且禁止输出的 `.build/desktop/terminal-browser-check.json` 完成定向检查，再运行原 `test/integration/browser/run.ts`；未放宽类型规则或修改该错误。追加中文命令标题断言后，Find、Terminal 标题动作与 Clipboard 的中文场景共 3 项独立重跑通过。共享工作树随后发生范围外的编辑器／键绑定契约变动，正常浏览器入口曾另报 11 个 fixture 的 `visibleEditorPanes`／`enableKeybindingHoldMode` 缺项；未改这些消费者，终端定向检查继续通过。最后 Renderer 复查另受范围外 `scrollLocking`／`snippets` 的 10 项契约错误阻塞，不能将当前共享工作树的全仓检查记为通过。初次拒绝读取用例在启动设备查询应答尚未发送时清空记录，现已等待真实输入队列应答；没有弱化断言。全量测试发现两个旧隐藏终端 fixture 先销毁实例屏幕后又写入旧引用，已仅修正 fixture，使 existing 实例随 View 接管保留原屏幕，原输出、延迟加载和焦点断言保持。
+
+当前生产文件调查：`platform/terminal` 4/46（双方 1、已批准 Ash 专属适配器 3、上游缺失 45）；`services/terminal` 1/1；`contrib/terminal` 18/89（全为同路径）；`terminalContrib` 12/170（全为同路径）。数字只记录路径关系，不代表完整 API 或行为完成率。现有 accessibility 贡献已经装载，本轮只扩展并验证剪贴板帮助，不将其完整输出能力记为本轮实现。
+
 ## Find 本批准入
 
 用户在终端执行 Find → 当前窗口命令与 `ITerminalInstance.getContribution` → `TerminalFindContribution` / `TerminalFindWidget` → 该实例唯一 `XtermTerminal` 的 SearchAddon → 匹配选区、高亮、结果数与焦点恢复 → 浏览器真实输入断言和 Web / Electron 产品场景。实例拥有贡献，屏幕拥有搜索插件，Find 控件拥有查询与选项；不复制上游私有结构、DOM 或 CSS。

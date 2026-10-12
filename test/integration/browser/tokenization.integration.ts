@@ -1,3 +1,5 @@
+import { SnippetsService } from '../../../src/ash/workbench/contrib/snippets/browser/snippetsService.js';
+import { SnippetCompletionProvider } from '../../../src/ash/workbench/contrib/snippets/browser/snippetCompletionProvider.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import * as stanza from '../../../src/ash/editor/editor.main.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
@@ -18,8 +20,9 @@ const extensions = store.add(await createLanguageExtensions({
 	textMateService: textMate,
 	languageService: services.languageService,
 	languageConfigurationService: services.languageConfigurationService,
-	languageFeaturesService: services.languageFeaturesService,
 }));
+const snippets = store.add(new SnippetsService(extensions));
+store.add(new SnippetCompletionProvider(snippets, services.languageFeaturesService));
 await extensions.start();
 
 let analyzeCalls = 0;

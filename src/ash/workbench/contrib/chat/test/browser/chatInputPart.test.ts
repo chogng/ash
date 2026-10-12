@@ -6,7 +6,8 @@ import { IQuickInputService } from '../../../../../platform/quickinput/common/qu
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { registerTestDictationOnboarding } from '../../../../test/common/testDictationServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ChatSpeechToTextService, ChatSpeechToTextState, IChatSpeechToTextService } from '../../browser/speechToText/chatSpeechToTextService.js';
+import { SpeechToTextState, ISpeechService } from '../../../speech/common/speechService.js';
+import { SpeechService } from '../../../speech/browser/speechService.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ChatInputEditors } from '../../browser/widget/input/chatInputEditorRegistry.js';
 import assert from 'node:assert/strict';
@@ -61,7 +62,7 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 	const services = sharedServices ?? inputResources.add(new InstantiationService());
 	if (!sharedServices) {
 		services.registerInstance(IDictationService, service);
-		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 		registerTestDictationOnboarding(services);
 	}
 	const partServices = inputResources.add(services.createChild());
@@ -389,14 +390,14 @@ test('Shared dictation only changes its owning input and returns the complete tr
 		},
 	};
 	services.registerInstance(IDictationService, backend);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);
-	const speech = services.get(IChatSpeechToTextService);
+	const speech = services.get(ISpeechService);
 	using firstNotifications = new NotificationService();
 	using secondNotifications = new NotificationService();
 	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
-	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
+	const started = waitForSpeechState(speech, SpeechToTextState.Recording);
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await started;
 	transcript('first', true);
@@ -426,23 +427,23 @@ test('Hiding the recording input discards stop-time text and permits another inp
 		},
 	};
 	services.registerInstance(IDictationService, backend);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);
-	const speech = services.get(IChatSpeechToTextService);
+	const speech = services.get(ISpeechService);
 	using first = inputPart(sharedNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(sharedNotifications, undefined, 'agent', {}, services);
-	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
+	const started = waitForSpeechState(speech, SpeechToTextState.Recording);
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await started;
 	transcript('interim', false);
 	first.setVisible(false);
 	await stopReady;
-	const idle = waitForSpeechState(speech, ChatSpeechToTextState.Idle);
+	const idle = waitForSpeechState(speech, SpeechToTextState.Idle);
 	finishStop();
 	await idle;
 	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value], ['', '']);
 	assert.equal(first.element.querySelector('.ash-chat-dictation-preview')!.textContent, '');
-	const restarted = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
+	const restarted = waitForSpeechState(speech, SpeechToTextState.Recording);
 	second.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await restarted;
 	transcript('new input', true);
@@ -464,22 +465,22 @@ test('A failed shared session notifies its owning input only', async () => {
 		cancelPreparation: async () => { },
 		start: async (_onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => { ended = onEnded; return { stop: async () => { } }; },
 	});
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);
-	const speech = services.get(IChatSpeechToTextService);
+	const speech = services.get(ISpeechService);
 	using firstNotifications = new NotificationService();
 	using secondNotifications = new NotificationService();
 	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
-	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
+	const started = waitForSpeechState(speech, SpeechToTextState.Recording);
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await started;
 	ended('capture lost');
 	assert.deepEqual([firstNotifications.getNotifications().map(item => item.message), secondNotifications.getNotifications().map(item => item.message)], [['Dictation failed: capture lost'], []]);
-	assert.equal(speech.state, ChatSpeechToTextState.Idle);
+	assert.equal(speech.state, SpeechToTextState.Idle);
 });
 
-function waitForSpeechState(service: IChatSpeechToTextService, state: ChatSpeechToTextState): Promise<void> {
+function waitForSpeechState(service: ISpeechService, state: SpeechToTextState): Promise<void> {
 	return new Promise(resolve => {
 		const subscription = service.onDidChangeState(next => {
 			if (next === state) {
@@ -492,7 +493,7 @@ function waitForSpeechState(service: IChatSpeechToTextService, state: ChatSpeech
 
 test('Input construction rejects a missing window dictation service', () => {
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: chatSpeechToTextService/);
+	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: speechService/);
 });
 
 test('approval shows every exact target as text and dispatches both decisions', async () => {

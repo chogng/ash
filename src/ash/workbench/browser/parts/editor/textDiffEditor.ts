@@ -12,7 +12,7 @@ import { ScrollType } from '../../../../editor/common/editorCommon.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { assertDefined } from "../../../../base/common/types.js";
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions } from '../../../common/editor.js';
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IEditorPaneWithScrolling, type IEditorPaneScrollPosition, type IResourceEditorInput, type ISaveOptions } from '../../../common/editor.js';
 
 import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
@@ -45,7 +45,9 @@ export interface DiffEditorPaneOptions {
 }
 
 /** Workbench pane that owns an editable comparison over two acquired text references. */
-export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelection {
+export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelection, IEditorPaneWithScrolling {
+	private readonly scrollChangeEmitter = this._register(new Emitter<void>());
+	readonly onDidChangeScroll = this.scrollChangeEmitter.event;
 	readonly id = DIFF_EDITOR_ID;
 	private readonly session = this._register(new MutableDisposable<DiffEditorPaneSession>());
 	private readonly selectionListener = this._register(new MutableDisposable<IDisposable>());
@@ -63,6 +65,15 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 
 	public override getControl(): DiffEditorWidget | undefined {
 		return this.session.value?.editor;
+	}
+
+	getScrollPosition(): IEditorPaneScrollPosition {
+		const editor = this.getControl()?.modifiedEditor;
+		return { scrollTop: editor?.getScrollTop() ?? 0, scrollLeft: editor?.getScrollLeft() };
+	}
+
+	setScrollPosition(position: IEditorPaneScrollPosition): void {
+		this.getControl()?.modifiedEditor.setScrollPosition(position);
 	}
 
 	getSelection(): Range | undefined {
@@ -139,6 +150,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 		this.selectionListener.clear();
 		this.session.value = next;
 		const listeners = new DisposableStore();
+		listeners.add(next.editor.modifiedEditor.onDidScrollChange(() => this.scrollChangeEmitter.fire()));
 		listeners.add(next.editor.modifiedEditor.onDidChangeCursorSelection(event => {
 			this.selectionChangeEmitter.fire(toEditorPaneSelectionChangeReason(event.source));
 		}));

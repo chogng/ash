@@ -4,7 +4,7 @@ import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ExtensionThemeSource } from "./extensionTheme.js";
 import type { ExtensionDebugAdapterSource } from "./extensionDebugAdapter.js";
-import type { ExtensionFileTemplateSource } from "./extensionFileTemplate.js";
+import type { ExtensionFileTemplateSource, ExtensionFileTemplateDefinition } from "./extensionFileTemplate.js";
 export type { ExtensionDebugAdapterContribution, ExtensionGrammarContribution, ExtensionLanguageContribution, ExtensionManifest, ExtensionSnippetContribution, ExtensionThemeContribution } from "./extensionManifest.js";
 export type { ExtensionDebugAdapterDefinition, ExtensionDebugAdapterSource } from "./extensionDebugAdapter.js";
 export type { ExtensionThemeCatalog, ExtensionThemeDefinition, ExtensionThemeSource, ExtensionThemeTokenColorRule, ExtensionThemeTokenColorSettings } from "./extensionTheme.js";
@@ -48,6 +48,22 @@ export interface ExtensionServiceFailure {
 	readonly error: unknown;
 }
 
+/** Generation-bound text resources delivered to the snippet domain owner. */
+export interface ExtensionSnippetFile {
+	readonly extensionId: string;
+	readonly source: string;
+	readonly location: URI;
+	readonly languageIds: readonly string[];
+	readonly content: string;
+}
+
+/** A prepared snippet update participates in the extension catalog transaction. */
+export interface ExtensionSnippetActivation {
+	readonly fileTemplates: readonly ExtensionFileTemplateDefinition[];
+	commit(): void;
+	rollback(): void;
+}
+
 /** Workbench-owned extension lifecycle and declarative contribution boundary. */
 export interface IExtensionService extends IDisposable {
 	readonly currentCatalog: ExtensionCatalog;
@@ -62,6 +78,8 @@ export interface IExtensionService extends IDisposable {
 	activateByEvent(event: string, signal?: AbortSignal): Promise<void>;
 	/** The executable host owns this registration; declaration-only hosts have no handler. */
 	registerActivationHandler(handler: (event: string, signal?: AbortSignal) => Promise<void>): IDisposable;
+	/** The snippet owner validates resources before any contribution generation is committed. */
+	registerSnippetHandler(handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation): IDisposable;
 }
 
 export const IExtensionService = createServiceIdentifier<IExtensionService>("extensionService");

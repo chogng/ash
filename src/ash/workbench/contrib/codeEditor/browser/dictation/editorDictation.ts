@@ -13,7 +13,7 @@ import { MenuId, registerAction2 } from '../../../../../platform/actions/common/
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService, SpeechToTextState } from '../../../speech/common/speechService.js';
 import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 
@@ -26,7 +26,7 @@ export class EditorDictation extends Disposable {
 	constructor(
 		private readonly editor: ICodeEditor,
 		@IInstantiationService instantiation: IInstantiationService,
-		@IChatSpeechToTextService speech: IChatSpeechToTextService,
+		@ISpeechService speech: ISpeechService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IEditorService editorService: IEditorService,
 		@IPreferencesService preferences: IPreferencesService,
@@ -70,7 +70,7 @@ export class EditorDictation extends Disposable {
 		this._register(this.session.onDidEnd(error => { if (error) { notifications.error(error); } }));
 		this._register(speech.onDidChangeState(() => {
 			controls.hidden = !this.session.isActive;
-			stop.enabled = !speech.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
+			stop.enabled = !speech.isStarting && speech.state !== SpeechToTextState.Transcribing;
 		}));
 		controls.hidden = true;
 		this.widget = {

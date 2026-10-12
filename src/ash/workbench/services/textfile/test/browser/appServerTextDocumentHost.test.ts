@@ -31,6 +31,8 @@ import { BrowserWorkingCopyService } from '../../../workingCopy/browser/browserW
 import { IWorkingCopyService, type IWorkingCopy } from '../../../workingCopy/common/workingCopyService.js';
 import { AppServerTextDocumentHost } from '../../browser/appServerTextDocumentHost.js';
 import { ChatEditingService } from '../../../../contrib/chat/browser/chatEditing/chatEditingServiceImpl.js';
+import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
+import { resetNlsResolver } from '../../../../../nls.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
@@ -212,8 +214,22 @@ test('Agent review keeps a user replacement inside a pending change', async () =
 	const id = await snapshot(host.transport, resource);
 	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] });
 	reference.model.applyOperations([{ range: new Range(1, 1, 1, 12), text: 'user first' }]);
-	await host.editing.reject();
+	await reviewSession(host).reject();
 	assert.equal(reference.model.getText(), 'user first\nseparator\nlast');
+});
+
+test('replacing an unchanged line between Agent hunks keeps both hunks reviewable', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/user-boundaries.txt');
+	host.files.contents.set(resource.toString(), 'first\nseparator\nlast');
+	using reference = await host.models.acquire({ resource }, new AbortController().signal);
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text: 'agent first\nseparator\nagent last' }] });
+	reference.model.applyOperations([{ range: new Range(2, 1, 3, 1), text: 'user separator\n' }]);
+	assert.equal(host.editing.entries[0]!.hunks.length, 2);
+	await reviewSession(host).reject();
+	assert.equal(reference.model.getText(), 'first\nuser separator\nlast');
+	assert.equal(host.files.contents.get(resource.toString()), 'first\nuser separator\nlast');
 });
 
 test('consecutive Agent edits keep one review baseline and accepting releases it', async () => {
@@ -226,10 +242,134 @@ test('consecutive Agent edits keep one review baseline and accepting releases it
 	}
 	assert.equal(host.editing.entries.length, 1);
 	assert.equal(host.editing.entries[0]!.hunks[0]!.originalText, 'original');
-	await host.editing.accept();
+	await reviewSession(host).accept();
 	assert.equal(host.editing.entries.length, 0);
 	assert.equal(host.models.getModel(resource), null);
 	assert.equal(host.files.contents.get(resource.toString()), 'second agent');
+});
+
+test('chat review sessions decide only their own files and release their final entries', async () => {
+	using host = await fixture();
+	const first = URI.file('c:/workspace/first-chat.txt');
+	const second = URI.file('c:/workspace/second-chat.txt');
+	for (const [resource, threadId] of [[first, 'first-chat'], [second, 'second-chat']] as const) {
+		host.files.contents.set(resource.toString(), 'original');
+		const id = await snapshot(host.transport, resource);
+		assert.deepEqual(await host.transport.call('textDocument/apply', { threadId, turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text: threadId }] }), { kind: 'applied' });
+	}
+	const firstSession = reviewSession(host, 'first-chat');
+	const secondSession = reviewSession(host, 'second-chat');
+	assert.deepEqual(firstSession.entries.get(), [firstSession.getEntry(first)]);
+	assert.deepEqual(secondSession.entries.get(), [secondSession.getEntry(second)]);
+	assert.equal(firstSession.getEntry(second), undefined);
+	let disposed = 0;
+	using listener = firstSession.onDidDispose(() => disposed++);
+	await firstSession.reject();
+	assert.deepEqual([...host.files.contents], [[first.toString(), 'original'], [second.toString(), 'second-chat']]);
+	assert.equal(disposed, 1);
+	assert.deepEqual(host.editing.editingSessionsObs.get(), [secondSession]);
+	await assert.rejects(firstSession.accept());
+	await secondSession.accept();
+	assert.equal(host.models.getModel(first), null);
+	assert.equal(host.models.getModel(second), null);
+	assert.deepEqual(host.editing.editingSessionsObs.get(), []);
+});
+
+for (const [locale, message] of [
+	['en', 'These changes include edits from other chats. Review the shared file or change set separately.'],
+	['zh-CN', '这些更改包含其他对话的编辑。请单独审阅共享文件或更改集。'],
+] as const) {
+	test(`shared text reviews retain one baseline, require a combined decision and preserve user edits (${locale})`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			using host = await fixture();
+			const shared = URI.file('c:/workspace/shared-text.txt');
+			const own = URI.file('c:/workspace/own.txt');
+			host.files.contents.set(shared.toString(), 'first\nseparator\nlast');
+			using reference = await host.models.acquire({ resource: shared }, new AbortController().signal);
+			for (const [threadId, text] of [['first-chat', 'agent first\nseparator\nlast'], ['second-chat', 'agent first\nseparator\nagent last']] as const) {
+				const id = await snapshot(host.transport, shared);
+				assert.deepEqual(await host.transport.call('textDocument/apply', { threadId, turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text }] }), { kind: 'applied' });
+			}
+			await host.transport.call('textDocument/apply', { threadId: 'first-chat', turnId: 'own-turn', changes: [{ kind: 'create', path: own.fsPath, text: 'own' }] });
+			const first = reviewSession(host, 'first-chat');
+			const second = reviewSession(host, 'second-chat');
+			const entry = first.getEntry(shared)!;
+			assert.equal(second.getEntry(shared), entry);
+			assert.equal(host.editing.entries.length, 2);
+			for (const operation of [() => first.accept(), () => first.reject(), () => second.reject(shared)]) {
+				await assert.rejects(operation(), error => error instanceof Error && error.message === message);
+			}
+			assert.equal(host.files.contents.get(own.toString()), 'own');
+			assert.equal(first.entries.get().length, 2);
+			reference.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: 'user ' }]);
+			await host.editing.rejectEntry(entry);
+			assert.equal(reference.model.getText(), 'first\nuser separator\nlast');
+			assert.equal(host.files.contents.get(shared.toString()), 'first\nuser separator\nlast');
+			assert.deepEqual(host.editing.editingSessionsObs.get(), [first]);
+			await first.accept(own);
+			assert.deepEqual(host.editing.entries, []);
+		} finally { resetNlsResolver(); }
+	});
+}
+
+test('an atomic review retains both chats when a second chat edits and moves a created file', async () => {
+	using host = await fixture();
+	const source = URI.file('c:/workspace/shared-created.txt');
+	const target = URI.file('c:/workspace/shared-moved.txt');
+	await host.transport.call('textDocument/apply', { threadId: 'first-chat', turnId: 'create', changes: [{ kind: 'create', path: source.fsPath, text: 'first' }] });
+	const first = reviewSession(host, 'first-chat');
+	const id = await snapshot(host.transport, source);
+	await host.transport.call('textDocument/apply', { threadId: 'second-chat', turnId: 'move', changes: [{ kind: 'move', snapshot: id, target: target.fsPath, text: 'second' }] });
+	const entry = first.getEntry(source)!;
+	assert.equal(entry, reviewSession(host, 'second-chat').getEntry(target));
+	assert.equal(first, reviewSession(host, 'first-chat'));
+	assert.deepEqual(entry.resources.map(resource => resource.toString()), [source.toString(), target.toString()]);
+	await assert.rejects(first.reject(), /other chats/);
+	await host.editing.rejectEntry(entry);
+	assert.deepEqual([...host.files.contents], []);
+	assert.deepEqual(host.editing.editingSessionsObs.get(), []);
+});
+
+test('a queued chat decision rechecks attribution after another chat writes the same file', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/shared-in-flight.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { threadId: 'first-chat', turnId: 'first', changes: [{ kind: 'update', snapshot: id, text: 'first' }] });
+	const session = reviewSession(host, 'first-chat');
+	const gate = new DeferredPromise<void>();
+	const started = new DeferredPromise<void>();
+	const apply = host.bulk.apply.bind(host.bulk);
+	host.bulk.apply = async (edit, options) => { void started.complete(); await gate.p; return apply(edit, options); };
+	const write = host.editing.applyEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 6), text: 'second' }] }] }, new AbortController().signal, { threadId: 'second-chat', turnId: 'second' });
+	await started.p;
+	const rejected = assert.rejects(session.reject(), /other chats/);
+	const staleFileDecision = assert.rejects(host.editing.rejectEntry(host.editing.entries[0]!), /Review it again/);
+	const staleFileAcceptance = assert.rejects(host.editing.acceptEntry(host.editing.entries[0]!), /Review it again/);
+	void gate.complete();
+	await Promise.all([write, rejected, staleFileDecision, staleFileAcceptance]);
+	assert.equal(host.models.getModel(resource)?.getText(), 'second');
+	assert.equal(host.editing.entries.length, 1);
+	assert.equal(host.editing.editingSessionsObs.get().length, 2);
+});
+
+test('shared text reviews wait for every contributing chat before automatic acceptance', async () => {
+	using host = await fixture();
+	await host.configuration.updateValue('chat.editing.autoAcceptDelay', 5);
+	const resource = URI.file('c:/workspace/shared-countdown.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	for (const threadId of ['first-chat', 'second-chat']) {
+		const id = await snapshot(host.transport, resource);
+		await host.transport.call('textDocument/apply', { threadId, turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text: threadId }] });
+	}
+	const entry = host.editing.entries[0]!;
+	host.transport.finishTurn('second-chat', 'turn');
+	await flushReviews(host);
+	assert.equal(host.editing.getAutoAcceptCountdown(entry), undefined);
+	host.transport.finishTurn('first-chat', 'turn');
+	await flushReviews(host);
+	assert.equal(host.editing.getAutoAcceptCountdown(entry), 5);
 });
 
 for (const [before, after] of [['first\nlast', 'first'], ['first', 'first\nlast'], ['', 'new'], ['old', ''], ['first\n', 'first'], ['first', 'first\n']] as const) {
@@ -239,7 +379,7 @@ for (const [before, after] of [['first\nlast', 'first'], ['first', 'first\nlast'
 		host.files.contents.set(resource.toString(), before);
 		const id = await snapshot(host.transport, resource);
 		assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: after }] }), { kind: 'applied' });
-		await host.editing.reject();
+		await reviewSession(host).reject();
 		assert.equal(host.files.contents.get(resource.toString()), before);
 	});
 }
@@ -256,7 +396,7 @@ test('Agent review rejects an atomic create, move and delete batch', async () =>
 	const b = await snapshot(host.transport, moved);
 	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'delete', snapshot: a }, { kind: 'move', snapshot: b, target: target.fsPath, text: 'agent moved' }, { kind: 'create', path: created.fsPath, text: 'created' }] }), { kind: 'applied' });
 	assert.equal(host.editing.entries.length, 1);
-	await host.editing.reject();
+	await reviewSession(host).reject();
 	assert.deepEqual([...host.files.contents].sort(), [[deleted.toString(), '\uFEFFdeleted\r\n'], [moved.toString(), 'moved']].sort());
 });
 
@@ -267,7 +407,7 @@ test('Agent review combines creating and subsequently editing the same file', as
 	const id = await snapshot(host.transport, resource);
 	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'updated' }] }), { kind: 'applied' });
 	assert.equal(host.editing.entries.length, 1);
-	await host.editing.reject();
+	await reviewSession(host).reject();
 	assert.equal(host.files.contents.has(resource.toString()), false);
 });
 
@@ -280,7 +420,7 @@ test('Agent review combines modifying and subsequently moving the same file', as
 	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: first, text: 'updated' }] });
 	const second = await snapshot(host.transport, resource);
 	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'move', snapshot: second, target: target.fsPath, text: 'moved' }] }), { kind: 'applied' });
-	await host.editing.reject();
+	await reviewSession(host).reject();
 	assert.deepEqual([...host.files.contents], [[resource.toString(), 'original']]);
 });
 
@@ -453,7 +593,7 @@ for (const eol of ['\n', '\r\n']) {
 		assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: id, text: 'agent\n' }] }), { kind: 'applied' });
 		assert.equal(host.files.contents.get(resource.toString()), '\uFEFFagent' + eol);
 		assert.equal(host.editing.entries.length, 1);
-		await host.editing.accept(resource);
+		await reviewSession(host).accept(resource);
 		assert.equal(host.models.getModel(resource), null);
 	});
 }
@@ -560,6 +700,12 @@ test('closing during model resolution releases the late model reference', async 
 	assert.equal(host.models.getModel(resource), null);
 });
 
+
+function reviewSession(host: Awaited<ReturnType<typeof fixture>>, threadId = 'review-thread') {
+	const session = host.editing.editingSessionsObs.get().find(session => new URLSearchParams(session.chatSessionResource.query).get('threadId') === threadId);
+	assert.ok(session, `Missing review session for ${threadId}`);
+	return session;
+}
 
 async function createReview(host: Awaited<ReturnType<typeof fixture>>, name: string, turnId = 'review-turn') {
 	const resource = URI.file('c:/workspace/' + name);

@@ -22,7 +22,8 @@ import { FileDialogService } from '../../../workbench/services/dialogs/browser/f
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/workspaceOpenService.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
+import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
@@ -234,7 +235,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: ready.event, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 	services.registerInstance(IDictationService, undefined);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	using notifications = new NotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);

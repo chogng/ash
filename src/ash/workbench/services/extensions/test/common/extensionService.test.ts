@@ -24,7 +24,7 @@ import type { ServerNotification } from "../../../../../../../.build/protocol/ty
 import { AppServerExtensionService } from "../../browser/appServerExtensionService.js";
 import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from "../../common/extensionService.js";
 import { parseJsonc } from "../../common/jsonc.js";
-import { createExtensionSnippetProvider, parseExtensionSnippetFile } from "../../common/extensionSnippetProvider.js";
+import { SnippetsService } from '../../../../contrib/snippets/browser/snippetsService.js';
 import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
 import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapter.js";
 import { DebugAdapterFactoriesRegistry } from "../../../debug/common/debugAdapterFactory.js";
@@ -37,10 +37,6 @@ import { TextMateGrammarService } from "../../../textMate/common/textMateGrammar
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { URI } from "../../../../../base/common/uri.js";
-import { Position } from "../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../editor/common/core/range.js";
-import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';
-import { TextModel } from "../../../../../editor/common/model/textModel.js";
 
 const descriptorManifest = JSON.stringify({
 	name: "demo",
@@ -61,25 +57,6 @@ const descriptor: ExtensionDescriptor = Object.freeze({
 	manifestJson: descriptorManifest,
 	manifestSha256: digestText(descriptorManifest),
 	packageSha256: `sha256:${"b".repeat(64)}`,
-});
-
-test("extension snippets use one-based editor positions and ranges", async () => {
-	const provider = createExtensionSnippetProvider("ash.demo.snippets", "typescript", [{
-		name: "log",
-		prefixes: ["log"],
-		body: "console.log($1)",
-	}]);
-	using model = new TextModel("first line\n  lo");
-	const position = new Position(2, 5);
-	const result = await provider.provideCompletions({
-		requestId: 1,
-		languageId: "typescript",
-		position,
-		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: model.createVersionedSnapshot(),
-	}, new AbortController().signal);
-
-	assert.deepEqual(result?.items[0]?.range, new Range(2, 3, 2, 5));
 });
 
 test("parses TextMate grammar contributions and normalizes package-relative paths", () => {
@@ -209,16 +186,7 @@ test("preserves language, snippet, theme, and advanced TextMate metadata", () =>
 	assert.deepEqual(manifest.contributes.grammars[0]!.balancedBracketScopes, ["*"]);
 });
 
-test("parses JSONC snippet files and validates extension theme catalogs", () => {
-	const snippets = parseExtensionSnippetFile(parseJsonc(`{
-    // comment
-    "for": { "prefix": ["for", "loop"], "body": ["for (const item of items) {", "  $0", "}"], },
-  }`, "snippet test"), "snippet test");
-	assert.deepEqual(snippets[0], {
-		name: "for",
-		prefixes: ["for", "loop"],
-		body: "for (const item of items) {\n  $0\n}",
-	});
+test("validates extension theme catalogs", () => {
 
 	const theme = parseExtensionTheme({
 		tokenColors: [{ scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#6A9955", fontStyle: "italic" } }],
@@ -562,7 +530,7 @@ test("publishes one coherent contribution generation to registry listeners", asy
 	};
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages }, createEmptyTestLanguagePacks());
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService }, createEmptyTestLanguagePacks());
 	const observations: Array<{ readonly themeCount: number; readonly adapterCount: number; readonly generation: number; }> = [];
 	using listener = languageService.languages.onDidChange(() => observations.push({
 		themeCount: service.themes.currentCatalog.themes.length,
@@ -715,7 +683,8 @@ test('the packaged browser catalog activates Markdown grammar and configuration 
 	const bundle = JSON.parse(await readFile('src/ash/platform/extensions/common/generated/browser.json', 'utf8'));
 	using languages = new LanguageFeaturesService();
 	using languageService = new LanguageService();
-	using service = new AppServerExtensionService({ api: { list: async () => bundle.catalog, resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64'))) }, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages }, createEmptyTestLanguagePacks());
+	using service = new AppServerExtensionService({ api: { list: async () => bundle.catalog, resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64'))) }, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService }, createEmptyTestLanguagePacks());
+	using snippets = new SnippetsService(service);
 	await service.start();
 	assert.equal(languageService.guessLanguageIdByFilepathOrFirstLine(URI.file('/notes/draft.md')), 'markdown');
 	assert.equal(languageService.createByMimeType('text/markdown').languageId, 'markdown');

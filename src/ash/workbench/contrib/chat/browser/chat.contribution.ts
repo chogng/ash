@@ -19,13 +19,11 @@ import { IInstantiationService } from "../../../../platform/instantiation/common
 import { ChatInputEditor } from "./widget/input/chatInputEditor.js";
 import { ChatInputEditors } from "./widget/input/chatInputEditorRegistry.js";
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from './speechToText/chatSpeechToTextService.js';
 import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
 
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
 
-registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
 registerChatActions();
 registerChatCodeBlockActions();

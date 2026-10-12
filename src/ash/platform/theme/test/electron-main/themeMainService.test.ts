@@ -7,6 +7,7 @@ import { StateService } from '../../../state/node/stateService.js';
 import { ThemeMainService } from '../../electron-main/themeMainServiceImpl.js';
 import { resolveBrowserWindowOptions } from '../../../windows/electron-main/windows.js';
 import { defaultWindowState } from '../../../window/electron-main/window.js';
+import { ColorScheme } from '../../common/theme.js';
 import { WorkbenchState } from '../../../workspace/common/workspace.js';
 
 test('the first window follows system light, dark and high contrast themes without cached colors', async () => {
@@ -43,13 +44,16 @@ test('Main publishes distinct OS schemes and restores the saved frame color befo
 		system.shouldUseHighContrastColors = true;
 		for (const listener of listeners) { listener(); }
 		assert.deepEqual(schemes, [{ dark: true, highContrast: false }, { dark: true, highContrast: true }]);
-		await main.saveWindowTheme({ backgroundColor: '#123456', symbolColor: '#ffffff', backdropColor: '#00000080' });
+		await main.saveWindowSplash('workbench:fixture', { baseTheme: ColorScheme.Dark, colorInfo: { background: '#123456', foreground: '#ffffff' } });
 		await state.close();
 		const restored = await StateService.create(join(directory, 'state.json'));
 		using next = new ThemeMainService(system, restored);
-		assert.equal(next.getBackgroundColor(), '#123456');
+		assert.equal(next.getBackgroundColor('workbench:fixture'), '#123456');
+		assert.equal(next.getBackgroundColor('sessions:fixture'), '#000000');
+		restored.setItem('windowSplash.workbench:broken', { colorInfo: { background: 'url(secret)' } });
+		assert.equal(next.getBackgroundColor('workbench:broken'), '#000000');
 		const options = resolveBrowserWindowOptions({
-			state: defaultWindowState(WorkbenchState.FOLDER), platform: 'win32', backgroundColor: next.getBackgroundColor(),
+			state: defaultWindowState(WorkbenchState.FOLDER), platform: 'win32', backgroundColor: next.getBackgroundColor('workbench:fixture'),
 			webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 		});
 		assert.equal(options.backgroundColor, '#123456');

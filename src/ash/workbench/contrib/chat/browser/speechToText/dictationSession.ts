@@ -11,7 +11,7 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { isModelPreparing, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { localize } from '../../../../../nls.js';
 import { IDictationOnboardingService } from './dictationOnboarding.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState } from './chatSpeechToTextService.js';
+import { ISpeechService, SpeechToTextState } from '../../../speech/common/speechService.js';
 
 /** The target editor owns text and undo history; interim recognition stays outside its model. */
 interface DictationTarget { insertText(text: string): void; focus(): void; }
@@ -31,7 +31,7 @@ export class DictationSession extends Disposable {
 		private readonly preview: HTMLElement,
 		private readonly isVisible: () => boolean,
 		private readonly showPreparation: (snapshot: ILocalTranscriptionModelSnapshot) => Promise<void>,
-		@IChatSpeechToTextService private readonly service: IChatSpeechToTextService,
+		@ISpeechService private readonly service: ISpeechService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 	) {
 		super();
@@ -44,8 +44,8 @@ export class DictationSession extends Disposable {
 				return service.isConfigured ? localize('chat.input.dictate', 'Dictate message') : localize('chat.input.dictationUnavailable', 'Dictation is unavailable');
 			},
 			icon: Lxicon.mic,
-			get enabled() { return service.isConfigured && (!service.isBusy || session.active) && !service.isStarting && service.state !== ChatSpeechToTextState.Transcribing; },
-			get checked() { return session.active && service.state === ChatSpeechToTextState.Recording; },
+			get enabled() { return service.isConfigured && (!service.isBusy || session.active) && !service.isStarting && service.state !== SpeechToTextState.Transcribing; },
+			get checked() { return session.active && service.state === SpeechToTextState.Recording; },
 			run: () => this.toggle(),
 		};
 		const clearPreview = (): void => { preview.textContent = ''; preview.hidden = true; };
@@ -63,7 +63,7 @@ export class DictationSession extends Disposable {
 		}));
 		this._register(service.onDidEnd(error => { if (this.active) { this.ended.fire(error); } }));
 		this._register(service.onDidChangeState(state => {
-			if (state === ChatSpeechToTextState.Idle) {
+			if (state === SpeechToTextState.Idle) {
 				this.active = false;
 				clearPreview();
 			}

@@ -19,8 +19,8 @@
     "chatEditing.reject": "Reject file changes",
     "chatEditing.acceptSet": "Accept change set",
     "chatEditing.rejectSet": "Reject change set",
-    "chatEditing.acceptAll": "Accept all Agent changes",
-    "chatEditing.rejectAll": "Reject all Agent changes",
+    "chatEditing.acceptAll": "Accept all Agent changes in a chat",
+    "chatEditing.rejectAll": "Reject all Agent changes in a chat",
     "chatEditing.accepted": "Changes accepted.",
     "chatEditing.rejected": "Changes rejected.",
     "chatEditing.reviewed": "Changes reviewed.",
@@ -35,7 +35,7 @@
     "chatEditing.stale": "The change has changed. Review it again.",
     "chatEditing.verbosity": "Agent changes accessibility help",
     "chatEditing.verbosityDescription": "Announce how to open accessibility help when reviewing Agent changes.",
-    "chatEditing.help": "Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Cancel automatic acceptance to keep reviewing when a countdown appears. Press Escape to return to the editor. Use the Review Agent changes command to review closed or deleted files.",
+    "chatEditing.help": "Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Shared file changes affect all contributing chats. Accept all and Reject all apply to the chosen chat and require shared changes to be reviewed separately. Cancel automatic acceptance to keep reviewing when a countdown appears. Press Escape to return to the editor. Use the Review Agent changes command to choose a chat and review closed or deleted files.",
     "network.disconnected": "App Server is disconnected.",
     "network.loading": "Reading network configuration…",
     "network.empty": "No service hosts are configured.",
@@ -231,6 +231,14 @@
     "agentTrace.navigationContext": "Viewing Session {0} · Thread {1} · Turn {2}",
     "agentTrace.offlineContext": "Offline capture. Choose Import in Trace to load a saved file.",
     "agentTrace.navigationHelp": "Trace is an independent Activity Bar destination. Resume restores the last saved Session, Thread and Turn location. View current conversation opens the selected conversation at its current Thread and latest recorded Turn. Changing the conversation does not silently change the trace being reviewed. Open offline capture opens the import page; imported file contents stay in the editor and must be imported again after closing the window. Tab moves between navigation actions. Enter or Space activates an action. Use the Trace tree and detail tabs to read saved evidence. Escape closes this help.",
-    "agentTrace.activityHelp": "Trace opens saved execution in its own page. Resume keeps the last reviewed location; the View Execution Trace command and View current conversation explicitly locate the selected Thread and latest recorded Turn."
+    "agentTrace.activityHelp": "Trace opens saved execution in its own page. Resume keeps the last reviewed location; the View Execution Trace command and View current conversation explicitly locate the selected Thread and latest recorded Turn.",
+    "chatEditing.selectChat": "Choose a chat to review its Agent changes",
+    "chatEditing.chat": "Chat {0}",
+    "chatEditing.sharedReview": "These changes include edits from other chats. Review the shared file or change set separately.",
+    "chatEditing.sharedContent": "Shared changes from {0} chats. Reviewing this file or change set affects all contributing chats.\n{1}",
+    "chatEditing.acceptShared": "Accept changes from {0} chats",
+    "chatEditing.rejectShared": "Reject changes from {0} chats",
+    "chatEditing.acceptSharedHunk": "Accept change from {0} chats",
+    "chatEditing.rejectSharedHunk": "Reject change from {0} chats"
   }
 }

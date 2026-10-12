@@ -1,4 +1,4 @@
-import type { IEditorIdentifier, IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
+import type { IEditorIdentifier, IEditorPane, IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { Range } from "../../../../editor/common/core/range.js";
 import type { IEditorOptions, TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
@@ -37,6 +37,7 @@ export interface IEditorService {
 	readonly onDidVisibleEditorsChange: Event<void>;
 	readonly activeEditor: IResourceEditorInput | undefined;
 	readonly visibleEditors: readonly IResourceEditorInput[];
+	readonly visibleEditorPanes: readonly IEditorPane[];
 	/** Resolves after displaying the resource or its error page; ignoreError leaves failures with the caller. */
 	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void>;
 	save(editors: IEditorIdentifier | readonly IEditorIdentifier[], options?: ISaveEditorsOptions): Promise<ISaveEditorsResult>;

@@ -52,6 +52,7 @@ function createServices(resources: DisposableStore): {
 		reload: async () => { },
 		activateByEvent: async () => { },
 		registerActivationHandler: () => toDisposable(() => { }),
+		registerSnippetHandler: () => toDisposable(() => { }),
 	});
 	Object.defineProperty(extensions, 'currentCatalog', { get: () => catalog });
 	resources.add(extensions);

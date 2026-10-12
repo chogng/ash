@@ -43,7 +43,11 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 				getProvider: () => {
 					const focused = this.domNode.ownerDocument.activeElement as HTMLElement;
 					if (!this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.ChatEditing, { type }, () => type === AccessibleViewType.Help ? localize('chatEditing.help', 'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Cancel automatic acceptance to keep reviewing when a countdown appears. Press Escape to return to the editor. Use the Review Agent changes command to review closed or deleted files.') : [this.entry?.getAccessibleContent(), this.countdownDomNode.textContent].filter(Boolean).join('\n'), () => focused.isConnected ? focused.focus() : this.editor.focus(), AccessibilityVerbositySettingId.ChatEditing);
+					return new AccessibleContentProvider(
+						AccessibleViewProviderId.ChatEditing, { type }, () => this.accessibleContent(type),
+						() => focused.isConnected ? focused.focus() : this.editor.focus(),
+						AccessibilityVerbositySettingId.ChatEditing,
+					);
 				},
 			}));
 		}
@@ -64,6 +68,18 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 	public getId(): string { return 'chat.edits.review'; }
 	public getDomNode(): HTMLElement { return this.domNode; }
 	public getPosition(): { preference: OverlayWidgetPositionPreference; } | null { return this.domNode.hidden ? null : { preference: OverlayWidgetPositionPreference.TOP_CENTER }; }
+
+	private accessibleContent(type: AccessibleViewType): string {
+		if (type === AccessibleViewType.Help) {
+			return localize('chatEditing.help', 'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Shared file changes affect all contributing chats. Accept all and Reject all apply to the chosen chat and require shared changes to be reviewed separately. Cancel automatic acceptance to keep reviewing when a countdown appears. Press Escape to return to the editor. Use the Review Agent changes command to choose a chat and review closed or deleted files.');
+		}
+		const chats = this.entry ? this.chatCount(this.entry) : 0;
+		const content = this.entry?.getAccessibleContent();
+		const review = chats > 1
+			? localize('chatEditing.sharedContent', 'Shared changes from {0} chats. Reviewing this file or change set affects all contributing chats.\n{1}', chats, content)
+			: content;
+		return [review, this.countdownDomNode.textContent].filter(Boolean).join('\n');
+	}
 
 	private render(): void {
 		const resource = this.editor.getModel()?.uri;
@@ -105,11 +121,24 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 
 	private renderActions(entry: IModifiedFileEntry): void {
 		const actions: IAction[] = [];
+		const chats = this.chatCount(entry);
 		if (entry.hunks.length > 0) {
 			actions.push(this.action('previous', localize('chatEditing.previous', 'Previous change'), Lxicon.chevronUp, () => this.navigate(-1)), this.action('next', localize('chatEditing.next', 'Next change'), Lxicon.chevronDown, () => this.navigate(1)));
-			actions.push(this.action('acceptHunk', localize('chatEditing.acceptHunk', 'Accept change'), Lxicon.check, () => this.decide(entry, true, entry.hunks[this.index])), this.action('rejectHunk', localize('chatEditing.rejectHunk', 'Reject change'), Lxicon.discard, () => this.decide(entry, false, entry.hunks[this.index])));
+			const acceptHunk = chats > 1 ? localize('chatEditing.acceptSharedHunk', 'Accept change from {0} chats', chats) : localize('chatEditing.acceptHunk', 'Accept change');
+			const rejectHunk = chats > 1 ? localize('chatEditing.rejectSharedHunk', 'Reject change from {0} chats', chats) : localize('chatEditing.rejectHunk', 'Reject change');
+			actions.push(
+				this.action('acceptHunk', acceptHunk, Lxicon.check, () => this.decide(entry, true, entry.hunks[this.index])),
+				this.action('rejectHunk', rejectHunk, Lxicon.discard, () => this.decide(entry, false, entry.hunks[this.index])),
+			);
 		}
-		actions.push(this.action('accept', entry.isFileOperation ? localize('chatEditing.acceptSet', 'Accept change set') : localize('chatEditing.accept', 'Accept file changes'), Lxicon.check, () => this.decide(entry, true)), this.action('reject', entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes'), Lxicon.discard, () => this.decide(entry, false)));
+		const acceptFile = chats > 1 ? localize('chatEditing.acceptShared', 'Accept changes from {0} chats', chats)
+			: entry.isFileOperation ? localize('chatEditing.acceptSet', 'Accept change set') : localize('chatEditing.accept', 'Accept file changes');
+		const rejectFile = chats > 1 ? localize('chatEditing.rejectShared', 'Reject changes from {0} chats', chats)
+			: entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes');
+		actions.push(
+			this.action('accept', acceptFile, Lxicon.check, () => this.decide(entry, true)),
+			this.action('reject', rejectFile, Lxicon.discard, () => this.decide(entry, false)),
+		);
 		if (this.countingDown) {
 			actions.push(this.action('cancelAutoAccept', localize('chatEditing.cancelAutoAccept', 'Cancel automatic acceptance'), Lxicon.close, () => {
 				this.editing.cancelAutoAccept(entry);
@@ -118,6 +147,10 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 			}));
 		}
 		this.toolbar.setActions(actions);
+	}
+
+	private chatCount(entry: IModifiedFileEntry): number {
+		return this.editing.editingSessionsObs.get().filter(session => session.getEntry(entry.modifiedURI) === entry).length;
 	}
 
 	private updateCountdown(): void {

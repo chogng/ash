@@ -103,6 +103,7 @@ export class MenuId {
 	static readonly SCMHistoryItemChangeContext = new MenuId("SCMHistoryItemChangeContext");
 	static readonly PanelTitle = new MenuId("PanelTitle");
 	static readonly TerminalTitle = new MenuId("TerminalTitle");
+	static readonly TerminalInstanceContext = new MenuId('TerminalInstanceContext');
 	static readonly MenubarMainMenu = new MenuId("MenubarMainMenu");
 	static readonly MenubarFileMenu = new MenuId("MenubarFileMenu");
 	static readonly MenubarEditMenu = new MenuId("MenubarEditMenu");

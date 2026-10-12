@@ -805,6 +805,14 @@ Manifest、配置、snippet、theme 和 debugger 解析及注册组成一条失�
 丢弃候选事件并恢复上一批可用状态。TextMate grammar 的 bytes 解析和 catalog materialization 仍由
 `TextMateGrammarService` 拥有；Worker 运行期的后续故障属于 TextMate 自身生命周期。
 
+扩展 snippet 的资源读取与 UTF-8 边界属于 `AppServerExtensionService`；它通过
+`IExtensionService.registerSnippetHandler` 将候选资源交给 `SnippetsService`，在提交前完成验证，
+并将 snippet 更新纳入同一提交与回滚事务。`contrib/snippets/browser/snippetsFile.ts` 拥有文件解析，
+`SnippetsService` 拥有当前定义，`SnippetCompletionProvider` 拥有唯一的 Workbench snippet 补全注册。
+补全接受沿用 editor 的 `SuggestModel`，占位符导航与释放沿用 `SnippetController2`、`SnippetSession`。
+Workbench 在启动扩展装载前创建 snippet owner；扩展服务不导入 contribution 实现。现有文件模板
+目录仍由扩展服务发布，使用同一次 snippet 解析的结果，模板应用行为留待后续迁移。
+
 ### 6.2 可执行调用与故障恢复
 
 启动和每次 invocation 都持有 live authority lease。caller cancellation 与 absolute UTC deadline 会发送

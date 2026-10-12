@@ -32,6 +32,24 @@ export interface IEditorPane extends IComposite, IDisposable {
 	saveAs?(resource: URI): Promise<void>;
 }
 
+export interface IEditorPaneScrollPosition {
+	readonly scrollTop: number;
+	readonly scrollLeft?: number;
+}
+
+export interface IEditorPaneWithScrolling extends IEditorPane {
+	readonly onDidChangeScroll: Event<void>;
+	getScrollPosition(): IEditorPaneScrollPosition;
+	setScrollPosition(position: IEditorPaneScrollPosition): void;
+}
+
+export function isEditorPaneWithScrolling(pane: IEditorPane | undefined): pane is IEditorPaneWithScrolling {
+	const candidate = pane as Partial<IEditorPaneWithScrolling> | undefined;
+	return typeof candidate?.onDidChangeScroll === 'function'
+		&& typeof candidate.getScrollPosition === 'function'
+		&& typeof candidate.setScrollPosition === 'function';
+}
+
 export function getEditorWorkingCopies(pane: IEditorPane): readonly IWorkingCopy[] {
 	return pane.getWorkingCopies?.() ?? (pane.workingCopy ? [pane.workingCopy] : []);
 }

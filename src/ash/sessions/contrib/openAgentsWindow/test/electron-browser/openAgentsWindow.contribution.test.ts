@@ -21,6 +21,7 @@ import { OpenAgentsWindowSystemWideKeybindingContribution } from '../../electron
 import { registerOpenAgentsWindowCommand } from '../../electron-browser/openAgentsWindowCommand.js';
 
 class TestKeybindingService extends Disposable implements IKeybindingService {
+	public enableKeybindingHoldMode(): Promise<void> | undefined { return undefined; }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidUpdateKeybindings = this.changed.event;
 	public bindings: readonly IUserFriendlyKeybinding[] = [];

@@ -1310,6 +1310,7 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	const previewPane = editor.groups[1]?.activePane as TestEditorPane;
 	assert.equal(editor.groups.length, 2);
 	assert.equal(service.count, 2);
+	assert.deepEqual(service.visibleEditorPanes, editor.groups.map(group => group.activePane));
 	assert.equal(editor.activeGroup, sourceGroup);
 	assert.deepEqual(editor.groups[1]?.inputs, [previewInput]);
 	assert.equal(previewPane.focusCount, 0);
@@ -3725,6 +3726,7 @@ function nextTask(): Promise<void> {
 }
 
 class TestKeybindingService implements IKeybindingService {
+	public enableKeybindingHoldMode(): Promise<void> | undefined { return undefined; }
 	registerSchemaContribution(): IDisposable { return Disposable.None; }
 	getKeybindings(): [] { return []; }
 	private readonly _onDidUpdateKeybindings = new Emitter<void>();

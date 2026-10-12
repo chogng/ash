@@ -1,12 +1,14 @@
 import { addDisposableListener, h } from '../../base/browser/dom.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { localize } from '../../nls.js';
+import { removePartsSplash } from '../contrib/splash/browser/splash.js';
 
 /**
  * Shows startup failures before Workbench services can report them.
  * Browser, desktop, and Sessions renderers share this DOM-only view and provide their own clipboard action.
  */
 export function showStartupError(error: unknown, writeClipboard: (text: string) => Promise<void>): IDisposable {
+	removePartsSplash(document);
 	console.error('Unable to start Ash', error);
 	const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 	const message = h(document, 'section');

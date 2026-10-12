@@ -26,7 +26,8 @@ import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '.
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
+import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
@@ -106,7 +107,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	services.registerInstance(IDictationService, undefined);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);
 	return services;
 }
@@ -808,7 +809,7 @@ test('sending from one session preserves a later draft during first-session crea
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
 	});
 	editorServices.registerInstance(IDictationService, undefined);
-	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
+	editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);

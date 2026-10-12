@@ -41,7 +41,9 @@ export default defineConfig(({ mode, command }) => {
 			import { BrowserLanguagePackStore } from '${moduleUrl('platform/languagePacks/browser/languagePackStore.ts')}';
 			import { initializeBrowserLocalization } from '${moduleUrl('workbench/services/localization/browser/localizationBootstrap.ts')}';
 			import { showStartupError } from '${moduleUrl('workbench/browser/startupError.ts')}';
+			import { readBrowserPartsSplash, showPartsSplash } from '${moduleUrl('workbench/contrib/splash/browser/splash.ts')}';
 			try {
+				showPartsSplash(document, readBrowserPartsSplash(window));
 				{
 					using configuration = new IndexedDbConfigurationApi();
 					await initializeBrowserLocalization(configuration, new BrowserLanguagePackStore());

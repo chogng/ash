@@ -136,7 +136,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			const editing = services.get(IChatEditingService);
 			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 		} : undefined,
-		contributionIds: ['workbench.contrib.sessionsLayout', 'sessions.contrib.multiDiffSource', 'workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID, 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.githubLinkPresentations', 'workbench.contrib.externalUriOpener', 'workbench.contrib.browserView', 'workbench.contrib.browserView.restore', 'workbench.contrib.chatAccessibilitySignals', 'workbench.contrib.voiceRecordingAccessibilitySignals', 'workbench.contrib.saveAccessibilitySignals'],
+		contributionIds: ['workbench.contrib.settingsChangeRelauncher', 'workbench.contrib.sessionsLayout', 'sessions.contrib.multiDiffSource', 'workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID, 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.githubLinkPresentations', 'workbench.contrib.url', 'workbench.contrib.externalUriOpener', 'workbench.contrib.browserView', 'workbench.contrib.browserView.restore', 'workbench.contrib.chatAccessibilitySignals', 'workbench.contrib.speechAccessibilitySignal', 'workbench.contrib.saveAccessibilitySignals'],
 		browserViewService: api.browserView,
 		createLogService: () => logger.createLogger('agents'),
 		createStorageService: async options => {
@@ -190,3 +190,4 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		throw error;
 	}
 }
+import '../../workbench/contrib/url/browser/url.contribution.js';

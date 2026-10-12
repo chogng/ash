@@ -1,4 +1,4 @@
-import type { IEditorIdentifier, IResourceEditorInput } from '../../../common/editor.js';
+import type { IEditorIdentifier, IEditorPane, IResourceEditorInput } from '../../../common/editor.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
@@ -17,6 +17,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	private readonly groupActivateEmitter = this._register(new Emitter<EditorGroupState>());
 	private activeEditorSignature: string;
 	private visibleEditorSignature: string;
+	private lastVisiblePanes: readonly IEditorPane[];
 
 	readonly onDidActiveEditorChange = this.activeEditorChangeEmitter.event;
 	readonly onDidVisibleEditorsChange = this.visibleEditorsChangeEmitter.event;
@@ -30,6 +31,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		super();
 		this.activeEditorSignature = this.getActiveEditorSignature();
 		this.visibleEditorSignature = this.getVisibleEditorSignature();
+		this.lastVisiblePanes = this.visibleEditorPanes;
 		this._register(editorPart.onDidChangeEditors(event => this.publishState(event)));
 	}
 
@@ -50,6 +52,12 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		const editors = this.editorPart.groups.flatMap(group => this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : []);
 		if (state.isModalEditorVisible && this.editorPart.activeInput) editors.unshift(this.editorPart.activeInput);
 		return Object.freeze(editors);
+	}
+
+	get visibleEditorPanes(): readonly IEditorPane[] {
+		const panes = this.editorPart.groups.flatMap(group => this.editorPart.isGroupVisible(group.id) && group.activePane ? [group.activePane] : []);
+		if (this.editorPart.isModalEditorVisible && this.editorPart.activePane) panes.unshift(this.editorPart.activePane);
+		return panes;
 	}
 
 	get groups(): readonly IEditorGroup[] {
@@ -115,7 +123,9 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 			this.activeEditorChangeEmitter.fire();
 		}
 		const visibleEditorSignature = this.getVisibleEditorSignature();
-		if (visibleEditorSignature !== this.visibleEditorSignature) {
+		const panes = this.visibleEditorPanes;
+		if (visibleEditorSignature !== this.visibleEditorSignature || panes.length !== this.lastVisiblePanes.length || panes.some((pane, index) => pane !== this.lastVisiblePanes[index])) {
+			this.lastVisiblePanes = panes;
 			this.visibleEditorSignature = visibleEditorSignature;
 			this.visibleEditorsChangeEmitter.fire();
 		}

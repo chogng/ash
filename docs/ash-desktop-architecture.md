@@ -831,8 +831,9 @@ Renderer 与 Stanza 共用 `build/desktop/vite/rendererOutput.ts` 的分包规�
 ### 6.6 听写设置与模型准备
 
 Workbench 的“常规 → 听写”和 Sessions 的“常规”页使用同一套听写内容，各自的设置
-外壳拥有导航、搜索和布局。`workbench/contrib/chat/browser/speechToText` 拥有听写设置、
-窗口共享的 `IChatSpeechToTextService` 和目标编辑器的听写会话；`platform/dictation` 负责麦克风与后端通信。
+外壳拥有导航、搜索和布局。`workbench/contrib/chat/browser/speechToText` 拥有听写设置和目标编辑器的听写会话；
+`workbench/contrib/speech` 拥有窗口共享的 `ISpeechService`、录音状态和录音无障碍提示，
+通过公共贡献入口注册；`platform/dictation` 负责麦克风与后端通信。
 Workbench 和 Sessions 各自在窗口服务容器中注册一个听写服务，输入区通过构造注入使用它，
 不各自创建录音状态。`DictationSession` 拥有当前编辑器的麦克风动作、模型就绪检查和转写插入，
 `DictationActionViewItem` 呈现按钮。输入区只组合工具栏、转写预览和错误通知。

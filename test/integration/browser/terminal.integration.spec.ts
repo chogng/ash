@@ -694,3 +694,118 @@ test('child alternate scroll mode controls wheel input and restores its saved va
 	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes.join(''))).toMatch(/^x(?:\x1b\[B)+$/u);
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
+
+test('terminal clipboard commands copy the parsed selection and preserve Shell Ctrl+C', async ({ page }) => {
+	await page.goto('/terminal.html?input&clipboard');
+	await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+	await page.evaluate(() => { window.ashTerminalInputIntegration.clear(); window.ashTerminalClipboardIntegration.select(0, 8); });
+	await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext())).toBe(true);
+	const copyKey = await page.evaluate(() => /Mac/u.test(navigator.platform) ? 'Meta+c' : 'Control+Shift+c');
+	await page.keyboard.press(copyKey);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained']);
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+	await page.getByRole('textbox', { name: 'Outside terminal' }).focus();
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext())).toBe(false);
+	await page.locator('.xterm-helper-textarea').focus();
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext())).toBe(true);
+	await page.evaluate(() => window.ashTerminalClipboardIntegration.command('workbench.action.terminal.copyAndClearSelection'));
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained', 'retained']);
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selection())).toBe('');
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext())).toBe(false);
+	await page.keyboard.press('Control+c');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x03']);
+	await page.evaluate(() => window.ashTerminalClipboardIntegration.command('workbench.action.terminal.copySelection'));
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained', 'retained']);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+test('terminal clipboard paste uses acknowledged input and the current child paste mode', async ({ page }) => {
+	await page.goto('/terminal.html?input&clipboard');
+	await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+	await page.evaluate(() => { window.ashTerminalInputIntegration.clear(); window.ashTerminalClipboardIntegration.setText('中文\r\nsecond'); });
+	const pasteKey = await page.evaluate(() => /Mac/u.test(navigator.platform) ? 'Meta+v' : /Linux/u.test(navigator.platform) ? 'Control+Shift+v' : 'Control+v');
+	await page.keyboard.press(pasteKey);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['中文\rsecond']);
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(1);
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b[?2004h'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.pasteMode())).toBe(true);
+	await page.evaluate(async () => { window.ashTerminalInputIntegration.clear(); await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste'); });
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[200~中文\rsecond\x1b[201~']);
+	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+	await page.getByRole('textbox', { name: 'Outside terminal' }).focus();
+	await page.keyboard.press(pasteKey);
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(2);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+for (const transition of ['close', 'switch', 'disconnect'] as const) {
+	test(`terminal clipboard drops a delayed read after ${transition}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/terminal.html?input&clipboard');
+		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+		await page.evaluate(() => { window.ashTerminalInputIntegration.clear(); window.ashTerminalClipboardIntegration.hold(); window.ashTerminalClipboardIntegration.beginPaste(); });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(1);
+		if (transition === 'close') await page.evaluate(() => window.ashTerminalInputIntegration.close());
+		else if (transition === 'disconnect') expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect())).toBe('disconnected');
+		else await page.evaluate(async () => { await window.ashTerminalClipboardIntegration.switchAway(); window.ashTerminalClipboardIntegration.switchBack(); });
+		await page.evaluate(() => window.ashTerminalClipboardIntegration.release('stale command'));
+		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBeUndefined();
+		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+		if (transition === 'switch') {
+			await page.evaluate(async () => { window.ashTerminalClipboardIntegration.setText('fresh'); await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste'); });
+			expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['fresh']);
+		}
+		if (transition !== 'close') await page.evaluate(() => window.ashTerminalInputIntegration.close());
+		expect(errors).toEqual([]);
+	});
+}
+
+test('terminal clipboard read failures reject the command without entering stdin', async ({ page }) => {
+	await page.goto('/terminal.html?input&clipboard');
+	await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+	await page.evaluate(() => { window.ashTerminalInputIntegration.clear(); window.ashTerminalClipboardIntegration.hold(); window.ashTerminalClipboardIntegration.beginPaste(); });
+	await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(1);
+	await page.evaluate(() => window.ashTerminalClipboardIntegration.reject());
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBe('Clipboard access denied');
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+test('terminal clipboard commands and accessibility help are localized in Chinese', async ({ page }) => {
+	await page.goto('/terminal.html?input&clipboard&locale=zh-CN');
+	await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.title('workbench.action.terminal.copySelection'))).toBe('终端：复制选区');
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.title('workbench.action.terminal.paste'))).toBe('终端：粘贴到活动终端');
+	const help = await page.evaluate(() => window.ashTerminalClipboardIntegration.help());
+	expect(help).toContain('复制选中的终端文本');
+	expect(help).toContain('将剪贴板文本粘贴到当前正在运行的终端');
+	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+for (const failed of [false, true]) {
+	test(`terminal clipboard paste ${failed ? 'rejects a failed' : 'waits for the'} process acknowledgement`, async ({ page }) => {
+		await page.goto('/terminal.html?input&clipboard');
+		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+		await page.evaluate(() => {
+			window.ashTerminalInputIntegration.clear(); window.ashTerminalClipboardIntegration.setText('acknowledged');
+			window.ashTerminalClipboardIntegration.holdInput(); window.ashTerminalClipboardIntegration.beginPaste();
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['acknowledged']);
+		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finished())).toBe(false);
+		await page.evaluate(failed => window.ashTerminalClipboardIntegration.releaseInput(failed), failed);
+		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBe(failed ? 'Terminal write denied' : undefined);
+		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finished())).toBe(true);
+		await page.evaluate(() => window.ashTerminalInputIntegration.close());
+	});
+}

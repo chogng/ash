@@ -4,7 +4,7 @@
 
 | Owner                                                      | 职责                                                                                                        |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `browser/terminal.contribution.ts`                         | 实例服务、View 与动作/菜单的装载入口，以及 find、links、voice 贡献                                          |
+| `browser/terminal.contribution.ts`                         | 实例服务、View 与动作/菜单的装载入口，以及 find、links、voice、accessibility、clipboard 贡献                                          |
 | `browser/terminalMainContribution.ts`                      | BlockRestore 时订阅宿主 PTY 创建通知，交给实例服务并显示 View                                               |
 | `browser/terminal.ts`                                      | `ITerminalService`、实例、profile、尺寸及前端事件契约                                                       |
 | `browser/terminalService.ts`                               | 窗口实例列表、顺序与活动项；创建实例并维护列表生命周期                                                      |
@@ -17,10 +17,11 @@
 | `browser/terminalActions.ts`、`terminalMenus.ts`           | 标准命令 ID 的静态注册与菜单；执行时从当前窗口 accessor 取得 View，不保存窗口回调                           |
 | `browser/terminalIcon.ts`                                  | Ash 可信 profile 标识的产品图标映射                                                                         |
 | `browser/media/terminal.css`、`terminalVoice.css`          | Ash 终端屏幕、Tab、标题与听写样式                                                                           |
-| `common/terminalColorRegistry.ts`、`terminalContextKey.ts` | 终端颜色 token、标题动作与 Find 焦点上下文；不保存实例或后端资源                                            |
+| `common/terminalColorRegistry.ts`、`terminalContextKey.ts` | 终端颜色 token、标题动作、Find 焦点与选区上下文；不保存实例或后端资源                                            |
 | `terminalContrib/find`                                     | 按实例保留的查找控件、标准命令和无障碍帮助；屏幕负责搜索与高亮                                              |
 | `terminalContrib/links`                                    | URL 用户命令，扫描与选择由屏幕实现，真实打开委托 Opener                                                     |
 | `terminalContrib/voice`                                    | 听写会话与动作，消费实例输入契约和已有 dictation 服务                                                       |
+| `terminalContrib/clipboard`                                 | 宿主剪贴板命令、焦点选区快捷键和异步读取失效；输入等待实例 sendText 的确认                                  |
 
 桌面原始输入链路是 xterm 的 onData/onBinary → TerminalInstance 绑定 → `TerminalProcessManager.write`/`processBinary` → `ITerminalProcessService.write` → Renderer protocol client → MessagePort → Main 透明 relay → App Server → `exec-server` → PTY。Tasks 与 DAP runInTerminal 使用创建参数中的进程或 Shell 执行配置；听写和用户文本通过实例 `sendText` 进入同一管理器。输出走相反方向，实例创建并保留唯一 xterm 屏幕；Rust Desktop 的终端网格属于另一个产品，并不作为 Electron 屏幕的后端副本。
 
@@ -28,7 +29,7 @@ Shell 实例从平台契约消费原始字节和前端退出码，不解析生�
 
 宿主提供的输出 PTY 从 `services/terminal/common/embedderTerminalService.ts` 经 `TerminalMainContribution` 接入同一个实例列表。实例先登记、发布再打开 PTY，保留界面订阅前的输出和退出；标题直接跟随宿主改名，后端连接变化不影响宿主 PTY。xterm 禁止输入，语音输入不启动；关闭与 Relaunch 使用宿主的生命周期，不请求 Rust Shell，也不要求打开 Workspace folder。宿主 PTY 无 OS 子进程，PID 使用 `-1`，cwd 为空。
 
-当前已有多实例、输入、主题、Tab、标题动作、Find、URL 与语音能力。Find 支持解析后的屏幕与回滚内容、大小写／整词／正则、匹配导航、结果读出和自己的无障碍帮助；终端输出专属 Accessible View、帮助与 verbosity 设置仍未接通。查找历史、命令历史、Quick Fix、Sticky Scroll、扩展提供 PTY、编辑区终端与真正的分组分屏也仍待补齐；不能根据 xterm 可用或上游文件名相同宣称完成这些贡献。
+当前已有多实例、输入、主题、Tab、标题动作、Find、URL、语音与文本剪贴板能力。Find 支持解析后的屏幕与回滚内容、大小写／整词／正则、匹配导航、结果读出和自己的无障碍帮助；终端输出专属 Accessible View、帮助与 verbosity 设置已有 accessibility 贡献接入，本轮只验证新增的剪贴板帮助。查找历史、命令历史、Quick Fix、Sticky Scroll、扩展提供 PTY、编辑区终端与真正的分组分屏也仍待补齐；不能根据 xterm 可用或上游文件名相同宣称完成这些贡献。
 
 `terminalExtensions.ts` 注册实际实例贡献；实例 attach 创建唯一屏幕后通过自己的 DI 作用域装配贡献，屏幕就绪时调用 `xtermReady`，关闭实例统一释放。`TerminalFindContribution` 只承接实例上下文、控件与命令，`TerminalFindWidget` 持有查询和选项，`XtermTerminal.findNext/findPrevious` 持有按需加载的 SearchAddon、高亮与结果事件。关闭 Find 使等待加载的旧查询失效，不向 PTY 发送搜索输入；切换实例不共享查询、匹配或服务作用域。标准贡献的其他进程／布局 hook 仍待真实消费者，当前不创建空能力。
 
@@ -62,3 +63,5 @@ Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共�
 `IShellLaunchConfig.waitOnExit` 由实例持有，可为布尔值、文本或退出码回调。任务完成提示只写入显示队列，不产生进程数据或 stdin；普通字符键和 Enter 关闭已退出的等待终端，工作台快捷键继续可用。任务复用完整替换退出策略；后台读取产生的终端应答不能触发关闭。
 
 终端无障碍贡献读取已解析的屏幕和滚动历史，提供随输出更新的只读视图与帮助，关闭后回到终端输入。`accessibility.verbosity.terminal` 控制输入标签中的帮助提示。贡献与屏幕同生命周期，内容提供者由无障碍对话框释放；查找贡献继续拥有终端焦点上下文。
+
+文本剪贴板由 `terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts` 随实例屏幕就绪挂载。复制只读原选区，粘贴调用既有宿主剪贴板服务与 `sendText(text, false, true)`；异步读取期间关闭、断线、退出或切换实例都会作废旧结果。输入不增加 Enter，遵守 child paste mode，并返回进程确认或失败。浏览器原生粘贴仍进入 xterm 原始输入；HTML／资源粘贴、自动复制与多行确认尚未接入。

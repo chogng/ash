@@ -378,6 +378,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this.providedModel.value = this.loadingProvidedInput.clearAndLeak();
 		this.languageId = resolvedModel.getLanguageId();
 		const statusListeners = new DisposableStore();
+		statusListeners.add(part.onDidScrollChange(() => this.scrollChangeEmitter.fire()));
 		// Declarative language registration can finish after a file has opened.
 		statusListeners.add(resolvedModel.onDidChangeLanguage(() => {
 			this.languageId = resolvedModel.getLanguageId();

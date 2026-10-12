@@ -16,7 +16,7 @@ import { IContextViewService } from '../../../src/ash/platform/contextview/brows
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
-import { IChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
@@ -38,7 +38,7 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { SlashCommandCatalog } from '../../../src/ash/workbench/contrib/chat/common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../src/ash/workbench/contrib/chat/common/skillSelectors.js';
-import { ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { DictationSession } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationSession.js';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
@@ -161,7 +161,7 @@ services.registerInstance(IDictationService, {
 	onDidChangePreparation: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { },
 	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; } }; },
 });
-services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 registerTestDictationOnboarding(services);
 services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None } as unknown as IEditorService);
@@ -196,7 +196,7 @@ window.ashTableIntegration = {
 	secondDraft: async () => (await secondInput.captureDraft())?.draft.text ?? '',
 	operations,
 	startDictation: async () => { await dictationSession.action.run(); },
-	stopDictation: () => services.get(IChatSpeechToTextService).stopAndTranscribe(),
+	stopDictation: () => services.get(ISpeechService).stopAndTranscribe(),
 	hideSecondInput: () => { secondInput.setVisible(false); secondInput.element.hidden = true; },
 	transcript: (text, final) => transcript(text, final),
 	get draft() { return editor.value; },

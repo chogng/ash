@@ -6,7 +6,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { ITerminalService, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService, SpeechToTextState } from '../../../speech/common/speechService.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';
 import { localize } from '../../../../../nls.js';
@@ -29,7 +29,7 @@ export class TerminalVoiceSession extends Disposable {
 		private readonly focus: () => void,
 		@IInstantiationService instantiation: IInstantiationService,
 		@ITerminalService private readonly terminals: ITerminalService,
-		@IChatSpeechToTextService speech: IChatSpeechToTextService,
+		@ISpeechService speech: ISpeechService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IPreferencesService preferences: IPreferencesService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -67,7 +67,7 @@ export class TerminalVoiceSession extends Disposable {
 		controls.hidden = true;
 		this._register(speech.onDidChangeState(() => {
 			controls.hidden = !this.session.isActive;
-			stop.enabled = !speech.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
+			stop.enabled = !speech.isStarting && speech.state !== SpeechToTextState.Transcribing;
 		}));
 		this._register(terminals.onDidChangeActiveInstance(() => this.hide()));
 		this._register(terminals.onDidDisposeInstance(instance => { if (instance === this.target) { this.hide(); } }));

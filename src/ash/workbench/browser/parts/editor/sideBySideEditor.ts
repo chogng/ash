@@ -85,6 +85,6 @@ export class SideBySideEditor extends EditorPane implements IEditorPane {
 
 	public override focus(): void { this.primaryPane.focus(); }
 
-	protected getSecondaryEditorPane(): IEditorPane { return this.secondaryPane; }
-	protected getPrimaryEditorPane(): IEditorPane { return this.primaryPane; }
+	public getSecondaryEditorPane(): IEditorPane { return this.secondaryPane; }
+	public getPrimaryEditorPane(): IEditorPane { return this.primaryPane; }
 }

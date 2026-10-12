@@ -2070,3 +2070,40 @@ async function openEditor(page: Page): Promise<void> {
 	await page.goto('/textModel.html');
 	await page.waitForFunction(() => window.ashTextModelIntegration !== undefined);
 }
+
+test('extension snippet completions accept, navigate placeholders and undo in the workbench editor', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.getModel()!.setLanguage('javascript');
+		editor.setValue('cla');
+		editor.setPosition({ lineNumber: 1, column: 4 });
+		editor.focus();
+	});
+	await page.keyboard.press('Control+Space');
+	const option = page.locator('.stanza-editor-completion-option').filter({ hasText: 'Class Definition' });
+	await expect(option).toHaveCount(1);
+	await expect(option).toHaveAttribute('role', 'option');
+	await expect(option).toHaveAttribute('aria-selected', 'true');
+	await page.keyboard.press('Enter');
+	const expanded = 'class name {\n\tconstructor(parameters) {\n\t\t\n\t}\n}';
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(expanded);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection())).toMatchObject({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 11 });
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('cla');
+	await page.keyboard.press('Control+Space');
+	await expect(option).toHaveCount(1);
+	await page.keyboard.press('Enter');
+	await page.keyboard.type('Widget');
+	await page.keyboard.press('Tab');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection())).toMatchObject({ startLineNumber: 2, startColumn: 14, endLineNumber: 2, endColumn: 24 });
+	await page.keyboard.press('Shift+Tab');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection())).toMatchObject({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 13 });
+	await page.keyboard.press('Tab');
+	await page.keyboard.type('value');
+	await page.keyboard.press('Tab');
+	await page.keyboard.type('// body');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('class Widget {\n\tconstructor(value) {\n\t\t// body\n\t}\n}');
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => window.ashTextModelIntegration.dispose());
+});

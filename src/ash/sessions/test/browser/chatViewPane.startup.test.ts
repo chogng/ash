@@ -28,7 +28,8 @@ import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
+import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -62,7 +63,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(IDictationService, undefined);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
 	services.registerInstance(ILanguageModelsService, chat);

@@ -1,5 +1,6 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import '../../browser/accessibilitySignal.contribution.js';
+import '../../../speech/browser/speech.contribution.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { suite, test } from 'mocha';
@@ -11,7 +12,7 @@ import { IAccessibilitySignalService } from '../../../../../platform/accessibili
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { IChatService, type ThreadUpdateEnvelope } from '../../../../services/chat/common/chatService.js';
-import { ChatSpeechToTextState, IChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { SpeechToTextState, ISpeechService } from '../../../speech/common/speechService.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { type ITextFileSaveEvent } from '../../../../services/textfile/common/textFileService.js';
 import { IDebugService, type IDebugSession, type DebugSessionState } from '../../../../services/debug/common/debugService.js';
@@ -76,21 +77,21 @@ suite('Accessibility signal production contributions', () => {
 	test('recording cues follow successful capture, stay quiet on startup failure, and stop once', () => {
 		using owner = new DisposableStore();
 		const fixture = services(owner);
-		const changes = owner.add(new Emitter<ChatSpeechToTextState>());
+		const changes = owner.add(new Emitter<SpeechToTextState>());
 		let starting = true;
-		fixture.services.registerInstance(IChatSpeechToTextService, { state: ChatSpeechToTextState.Idle, get isStarting() { return starting; }, onDidChangeState: changes.event } as IChatSpeechToTextService);
-		using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.voiceRecordingAccessibilitySignals']);
+		fixture.services.registerInstance(ISpeechService, { state: SpeechToTextState.Idle, get isStarting() { return starting; }, onDidChangeState: changes.event } as ISpeechService);
+		using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.speechAccessibilitySignal']);
 		host.advance(WorkbenchPhase.AfterRestored);
-		changes.fire(ChatSpeechToTextState.Recording);
-		changes.fire(ChatSpeechToTextState.Idle);
+		changes.fire(SpeechToTextState.Recording);
+		changes.fire(SpeechToTextState.Idle);
 		assert.deepEqual(fixture.cues, []);
-		changes.fire(ChatSpeechToTextState.Recording);
+		changes.fire(SpeechToTextState.Recording);
 		starting = false;
-		changes.fire(ChatSpeechToTextState.Recording);
-		changes.fire(ChatSpeechToTextState.Recording);
-		changes.fire(ChatSpeechToTextState.Transcribing);
-		changes.fire(ChatSpeechToTextState.Idle);
-		changes.fire(ChatSpeechToTextState.Idle);
+		changes.fire(SpeechToTextState.Recording);
+		changes.fire(SpeechToTextState.Recording);
+		changes.fire(SpeechToTextState.Transcribing);
+		changes.fire(SpeechToTextState.Idle);
+		changes.fire(SpeechToTextState.Idle);
 		assert.deepEqual(fixture.cues, ['accessibility.signals.voiceRecordingStarted', 'accessibility.signals.voiceRecordingStopped']);
 	});
 

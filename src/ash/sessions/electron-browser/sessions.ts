@@ -1,3 +1,5 @@
+import { showPartsSplash } from '../../workbench/contrib/splash/browser/splash.js';
+import { WINDOW_SPLASH_READ_CHANNEL, validatePartsSplash } from '../../platform/theme/common/themeService.js';
 import { showStartupError } from '../../workbench/browser/startupError.js';
 import { createSessionsProfile, type SessionsProfile } from '../common/sessionsProfile.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
@@ -8,6 +10,7 @@ import { BrowserLanguagePackStore } from '../../platform/languagePacks/browser/l
 import { productLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 
 try {
+	showPartsSplash(document, validatePartsSplash(await invoke<unknown>(WINDOW_SPLASH_READ_CHANNEL)));
 	const preference = await invoke<unknown>(NLS_CONFIGURATION_CHANNEL);
 	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, new BrowserLanguagePackStore());
 	setNlsMessages(catalog.locale, catalog.bundles);

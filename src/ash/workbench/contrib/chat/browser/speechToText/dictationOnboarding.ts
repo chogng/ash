@@ -12,7 +12,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState } from './chatSpeechToTextService.js';
+import { ISpeechService, SpeechToTextState } from '../../../speech/common/speechService.js';
 import { localize } from '../../../../../nls.js';
 import { isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
@@ -73,7 +73,7 @@ class DictationOnboardingBanner extends Disposable {
 	constructor(
 		public readonly host: OnboardingHost,
 		close: () => void,
-		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
+		@ISpeechService private readonly speech: ISpeechService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IPreferencesService preferences: IPreferencesService,
 		@IContextKeyService contextKeys: IContextKeyService,
@@ -190,7 +190,7 @@ class DictationOnboardingBanner extends Disposable {
 	}
 	private updateTest(): void {
 		this.test.label = this.recording && this.speech.isBusy ? localize({ bundle: 'ash', key: 'dictation.stopTest' }, 'Stop test') : localize({ bundle: 'ash', key: 'dictation.test' }, 'Test microphone');
-		this.test.enabled = this.speech.isConfigured && !this.preparing && (!this.speech.isBusy || this.recording) && !this.speech.isStarting && this.speech.state !== ChatSpeechToTextState.Transcribing;
+		this.test.enabled = this.speech.isConfigured && !this.preparing && (!this.speech.isBusy || this.recording) && !this.speech.isStarting && this.speech.state !== SpeechToTextState.Transcribing;
 	}
 	protected override disposeCore(): void {
 		if (this.recording) { this.recording = false; void this.speech.cancel().catch(() => undefined); }

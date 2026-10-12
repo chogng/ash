@@ -58,7 +58,8 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
+import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
@@ -296,7 +297,7 @@ services.registerInstance(ILanguageModelsService, {
 } satisfies ILanguageModelsService);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerInstance(IDictationService, undefined);
-services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 registerTestDictationOnboarding(services);
 const notifications = resources.add(new NotificationService());
 services.registerInstance(INotificationService, notifications);

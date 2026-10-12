@@ -4,7 +4,7 @@ import type { MessageHistoryEntry } from '../../../../../../platform/messageHist
 import { IQuickInputService, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
 import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import '../media/chat.css';
-import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
+import { ISpeechService, SpeechToTextState } from '../../../../speech/common/speechService.js';
 import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
 import { DictationSession } from '../../speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
@@ -156,7 +156,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		private readonly additionalActions: readonly IAction[] = [],
 		private readonly options: ChatInputPartOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
+		@ISpeechService private readonly speechToText: ISpeechService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
@@ -907,7 +907,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	protected statusText(state: ChatInputState): string {
 		if (state.error) return state.error;
-		if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
+		if (this.dictationSession.isActive && this.speechToText.state === SpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
 		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');
 		switch (state.phase) {
 			case "loading":

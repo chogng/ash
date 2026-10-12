@@ -42,6 +42,8 @@ export interface IKeybindingService {
 	readonly inChordMode: boolean;
 	readonly onDidUpdateKeybindings: Event<void>;
 	getKeybindings(): readonly ResolvedKeybindingItem[];
+	/** Ends when the invoking shortcut is released or its window loses focus; unavailable outside a keydown command. */
+	enableKeybindingHoldMode(commandId: CommandId): Promise<void> | undefined;
 
 	registerSchemaContribution(contribution: KeybindingsSchemaContribution): IDisposable;
 

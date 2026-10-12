@@ -78,6 +78,47 @@ import { WorkbenchConfigurationService } from "../../../../../workbench/services
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
+test('keybinding hold mode follows the invoking shortcut, suppresses repeats and releases on keyup, blur or disposal', async () => {
+	using resources = new DisposableStore();
+	const dom = new JSDOM('<body></body>');
+	resources.add(toDisposable(() => dom.window.close()));
+	const registry = new KeybindingRegistry();
+	const commands = new CommandRegistry();
+	const contexts = resources.add(new ContextKeyService());
+	const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
+	const service = resources.add(new WorkbenchKeybindingService({
+		ownerDocument: dom.window.document,
+		commandService: resources.add(new CommandService(resources.add(new InstantiationService()), commands)),
+		contextKeyService: contexts, keyboardLayoutService: layouts, registry, commandRegistry: commands,
+	}, resources.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+	let release: Promise<void> | undefined;
+	let executions = 0;
+	resources.add(commands.register('test.hold', () => {
+		executions++;
+		assert.equal(service.enableKeybindingHoldMode('test.other'), undefined);
+		release = service.enableKeybindingHoldMode('test.hold');
+	}));
+	resources.add(registry.registerKeybindingRule({ command: 'test.hold', keybinding: Keybinding.single(physicalKey('KeyP', { ctrlKey: true })) }));
+	assert.equal(service.enableKeybindingHoldMode('test.hold'), undefined);
+	for (const end of ['key', 'modifier', 'blur', 'dispose']) {
+		const before = executions;
+		dom.window.document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, bubbles: true }));
+		assert.ok(release);
+		let ended = false;
+		void release.then(() => { ended = true; });
+		dom.window.document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, repeat: true, bubbles: true }));
+		assert.equal(executions, before + 1);
+		dom.window.document.body.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: 'q', code: 'KeyQ', ctrlKey: true, bubbles: true }));
+		await Promise.resolve();
+		assert.equal(ended, false);
+		if (end === 'blur') dom.window.dispatchEvent(new dom.window.Event('blur'));
+		else if (end === 'dispose') service.dispose();
+		else dom.window.document.body.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: end === 'key' ? 'p' : 'Control', code: end === 'key' ? 'KeyP' : 'ControlLeft', ctrlKey: end === 'key', bubbles: true }));
+		await release;
+		assert.equal(ended, true);
+	}
+});
+
 test("resolver applies context, source, priority, and latest-registration precedence", () => {
 	using registrations = new DisposableStore();
 	const registry = new KeybindingRegistry();

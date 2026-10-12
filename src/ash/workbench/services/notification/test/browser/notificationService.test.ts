@@ -677,7 +677,8 @@ class NotificationsPresentation extends Disposable {
 		this.services.registerInstance(IContextViewService, this.views);
 		this.services.registerInstance(IKeybindingService, {
 			inChordMode: false, onDidUpdateKeybindings: Event.None,
-			getKeybindings: () => [], registerSchemaContribution: () => Disposable.None,
+			getKeybindings: () => [],
+		enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => Disposable.None,
 			resolveKeybinding() { throw new Error('No binding in this fixture'); },
 			resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 		});

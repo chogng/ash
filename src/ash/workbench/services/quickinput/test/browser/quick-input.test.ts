@@ -699,6 +699,7 @@ function emptyKeybindingService(): KeybindingService {
 		},
 		registerSchemaContribution: () => Disposable.None,
 		getKeybindings: () => [],
+		enableKeybindingHoldMode: () => undefined,
 		resolveUserBinding: () => undefined,
 		lookupKeybindings: () => [],
 		lookupKeybinding: () => undefined,

@@ -6,6 +6,7 @@ import '../workbench/contrib/extensions/browser/extensionRecommendations.contrib
 import '../workbench/contrib/preferences/browser/preferencesActions.js';
 import '../workbench/contrib/preferences/browser/keyboardLayoutPicker.js';
 import '../workbench/contrib/chat/browser/chat.contribution.js';
+import '../workbench/contrib/speech/browser/speech.contribution.js';
 import '../workbench/contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import '../workbench/services/dialogs/common/dialogService.js';
 import '../workbench/services/path/browser/pathService.js';

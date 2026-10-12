@@ -138,10 +138,11 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionService, transcription);
 	const { IDictationService } = await import('../../../platform/dictation/common/dictationService.js');
-	const { IChatSpeechToTextService, ChatSpeechToTextService } = await import('../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js');
+	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
+	const { SpeechService } = await import('../../../workbench/contrib/speech/browser/speechService.js');
 	services.registerInstance(IDictationService, undefined);
-	using speech = services.createInstance(ChatSpeechToTextService);
-	services.registerInstance(IChatSpeechToTextService, speech);
+	using speech = services.createInstance(SpeechService);
+	services.registerInstance(ISpeechService, speech);
 	const { INotificationService } = await import('../../../platform/notification/common/notification.js');
 	const { NotificationService } = await import('../../../workbench/services/notification/common/notificationService.js');
 	using notifications = new NotificationService();
@@ -164,6 +165,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	} satisfies IClipboardService);
 	services.registerInstance(IKeybindingService, {
 		inChordMode: false, onDidUpdateKeybindings: Event.None, getKeybindings: () => [],
+		enableKeybindingHoldMode: () => undefined,
 		registerSchemaContribution: () => Disposable.None,
 		resolveKeybinding: () => { throw new Error('Explicit keybinding resolution is not used by this fixture'); },
 		resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,

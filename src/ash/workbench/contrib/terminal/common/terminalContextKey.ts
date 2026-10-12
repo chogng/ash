@@ -6,6 +6,7 @@ export const TerminalActiveInstanceInTitleContext = new RawContextKey<boolean>("
 export const TerminalActiveInstanceStateContext = new RawContextKey<string>("terminalActiveInstanceState", "none");
 
 export namespace TerminalContextKeys {
+	export const textSelectedInFocused = new RawContextKey<boolean>('terminalTextSelectedInFocused', false);
 	export const focus = new RawContextKey<boolean>('terminalFocus', false);
 	export const findFocus = new RawContextKey<boolean>('terminalFindFocused', false);
 	export const findVisible = new RawContextKey<boolean>('terminalFindVisible', false);

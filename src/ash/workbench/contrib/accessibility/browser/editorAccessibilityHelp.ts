@@ -62,6 +62,7 @@ export class EditorAccessibilityHelpContribution extends Disposable implements I
 							: localize('accessibility.editorTabIndent', 'Tab inserts indentation. <keybinding:editor.action.toggleTabFocusMode> lets Tab move focus to the next control.'),
 						localize('dropOrPaste.accessibilityHelp', '<keybinding:editor.action.pasteAs> lets you choose a paste action. <keybinding:editor.action.pasteAsText> pastes plain text. After pasting or dropping content, <keybinding:editor.changePasteType> or <keybinding:editor.changeDropType> opens the available actions and preferred-action settings. Escape returns to the editor.'),
 						localize('accessibility.editorMode', '<keybinding:editor.action.toggleScreenReaderAccessibilityMode> toggles screen reader optimization.'),
+						localize('scrollLocking.help', '<keybinding:workbench.action.toggleLockedScrolling> toggles locked scrolling across visible editors, preserving their relative positions. Bind Hold Locked Scrolling Across Editors to temporarily toggle it while a shortcut is held. The Scrolling Locked status bar entry disables it. Releasing the shortcut or leaving the window restores the previous state.'),
 						localize('accessibility.editorCloseHelp', 'Escape closes this help and returns focus to the editor. <keybinding:editor.action.accessibleViewDisableHint> stops announcing the editor help hint.'),
 					].join('\n\n'),
 					() => editor.focus(),

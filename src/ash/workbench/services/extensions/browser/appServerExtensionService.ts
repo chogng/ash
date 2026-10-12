@@ -23,12 +23,10 @@ import { FileIconThemeData } from '../../themes/browser/fileIconThemeData.js';
 import { ProductIconThemeData, loadExtensionFontIcon } from '../../themes/browser/productIconThemeData.js';
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageCompletionProvider, type LanguageCompletionProviderRegistration } from '../../../../editor/common/languages.js';
 import type { LanguageConfiguration } from '../../../../editor/common/languages/languageConfiguration.js';
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { parseLanguageConfiguration } from "./languageConfigurationParser.js";
 import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/services/languagesRegistry.js";
-import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
@@ -48,9 +46,9 @@ import { EditorPanes, getBuiltinEditorPaneFactory, type IEditorPaneDescriptor } 
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../../common/editor.js';
 import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from "../common/extensionFileTemplate.js";
-import { createExtensionSnippetProvider, materializeExtensionFileTemplate, parseExtensionSnippetFile, type ExtensionSnippetDefinition } from "../common/extensionSnippetProvider.js";
+import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from "../common/extensionTheme.js";
-import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, IExtensionService } from "../common/extensionService.js";
+import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, ExtensionSnippetActivation, ExtensionSnippetFile, IExtensionService } from "../common/extensionService.js";
 import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from "../common/extensionDebugAdapter.js";
 
 export interface AppServerExtensionServiceOptions {
@@ -59,7 +57,6 @@ export interface AppServerExtensionServiceOptions {
 	readonly textMateService: ITextMateService;
 	readonly languageService?: IAshLanguageService;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
-	readonly languageFeaturesService?: ILanguageFeaturesService;
 }
 
 interface LanguageConfigurationContribution {
@@ -90,7 +87,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly grammarRegistration: TextMateGrammarRegistration;
 	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
 	private languageConfigurationRegistrations = new DisposableStore();
-	private readonly completionRegistration: LanguageCompletionProviderRegistration | undefined;
+	private snippetHandler: ((files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation) | undefined;
 	private readonly problemMatcherRegistration = this._register(registerProblemMatcherContributions({ matchers: [], patterns: [] }));
 	private readonly debugAdapterFactoryRegistration: DebugAdapterFactoryRegistration;
 	private readonly themeRegistry: ExtensionThemeRegistry;
@@ -102,7 +99,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly welcomeRegistrations = this._register(new DisposableStore());
 	private activeLanguages: readonly LanguageDescriptionContribution[] = Object.freeze([]);
 	private activeLanguageConfigurations: readonly LanguageConfigurationContribution[] = Object.freeze([]);
-	private activeCompletionProviders: readonly LanguageCompletionProvider[] = Object.freeze([]);
 	private readonly fileIconRegistration = this._register(WorkbenchFileIconThemesRegistry.registerThemes());
 	private activeFileIconThemes: readonly IWorkbenchFileIconTheme[] = [];
 	private readonly productIconRegistration = this._register(WorkbenchProductIconThemesRegistry.registerThemes());
@@ -120,7 +116,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		if (options.api.onDidChange) {
 			this._register(options.api.onDidChange(() => { void this.reload().catch(error => console.error('Extension enablement refresh failed', error)); }));
 		}
-		this._register(toDisposable(() => { this.reloadQueued = false; this.activationHandler = undefined; }));
+		this._register(toDisposable(() => {
+			this.reloadQueued = false;
+			this.activationHandler = undefined;
+			this.snippetHandler?.([]).commit();
+			this.snippetHandler = undefined;
+		}));
 		this._register(toDisposable(() => {
 			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).updateConfigurations({ add: [], remove: this.activeConfigurations });
 			this.activeConfigurations = [];
@@ -150,13 +151,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 		this.grammarRegistration = options.textMateService.grammars.registerGrammars([]);
 		this._register(toDisposable(() => this.grammarRegistration.dispose()));
-		const hasLanguageServices = options.languageService !== undefined || options.languageConfigurationService !== undefined || options.languageFeaturesService !== undefined;
-		if (hasLanguageServices && (!options.languageService || !options.languageConfigurationService || !options.languageFeaturesService)) {
+		const hasLanguageServices = options.languageService !== undefined || options.languageConfigurationService !== undefined;
+		if (hasLanguageServices && (!options.languageService || !options.languageConfigurationService)) {
 			this.dispose();
-			throw new TypeError('App Server extension language contributions require language, configuration, and feature services');
+			throw new TypeError('App Server extension language contributions require language and configuration services');
 		}
 		this.languageRegistration = options.languageService ? this._register(options.languageService.registerLanguages([])) : undefined;
-		this.completionRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.completionProvider.registerGroup([])) : undefined;
 		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
@@ -224,6 +224,17 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		return toDisposable(() => { if (this.activationHandler === handler) this.activationHandler = undefined; });
 	}
 
+	public registerSnippetHandler(handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation): IDisposable {
+		this.assertNotDisposed();
+		if (this.snippetHandler) throw new Error('A snippet contribution owner is already registered');
+		this.snippetHandler = handler;
+		return toDisposable(() => {
+			if (this.snippetHandler !== handler) return;
+			this.snippetHandler = undefined;
+			if (!this.isDisposed) this.fileTemplateRegistry.replace([]);
+		});
+	}
+
 	private async drainReloads(): Promise<void> {
 		let failure: ExtensionServiceFailure | undefined;
 		while (!this.isDisposed && this.reloadQueued) {
@@ -242,19 +253,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const themeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [], scopes: [] };
 		const languages: LanguageDescriptionContribution[] = [];
 		const languageConfigurations: LanguageConfigurationContribution[] = [];
-		const completionProviders: LanguageCompletionProvider[] = [];
+		const snippetResources: ExtensionSnippetFile[] = [];
 		const grammars: TextMateGrammarDefinition[] = [];
 		const resources = new Map<string, Promise<Uint8Array>>();
 		const languageConfigurationResources = new Map<string, Promise<ReturnType<typeof parseLanguageConfiguration>>>();
-		const snippetFiles = new Map<string, Promise<readonly ExtensionSnippetDefinition[]>>();
+		const snippetFiles = new Map<string, Promise<string>>();
 		const themes: ExtensionThemeDefinition[] = [];
 		const fileIconThemes: IWorkbenchFileIconTheme[] = [];
 		const productIconThemes: IWorkbenchProductIconTheme[] = [];
-		const fileTemplates: ExtensionFileTemplateDefinition[] = [];
+		let snippetActivation: ExtensionSnippetActivation | undefined;
 		const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
 		const problemMatchers: unknown[] = [];
 		const configurations: IConfigurationNode[] = [];
-		const submenus: { menu: string; item: ISubmenuItem }[] = [];
+		const submenus: { menu: string; item: ISubmenuItem; }[] = [];
 		const welcome: Parameters<typeof ViewsRegistry.registerViewWelcomeContent>[] = [];
 		const problemPatterns: unknown[] = [];
 		const editorPanes: IEditorPaneDescriptor[] = [];
@@ -272,9 +283,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				await verifyExtensionManifestDigest(extension);
 				if (this.isDisposed) return;
 				const manifestJson = await this.localizeManifest(extension, catalog.generation, resources);
-    if (this.isDisposed) return;
-    const manifest = parseExtensionManifest(manifestJson, extension);
-    welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
+				if (this.isDisposed) return;
+				const manifest = parseExtensionManifest(manifestJson, extension);
+				welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
 				configurations.push(...manifest.contributes.configuration);
 				for (const submenu of manifest.contributes.submenus) {
 					for (const placement of submenu.placements) {
@@ -345,25 +356,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						languageConfigurations.push({ languageId: language.id, configuration: resolvedConfiguration, priority: 100 });
 					}
 				}
-				for (const [snippetIndex, snippet] of manifest.contributes.snippets.entries()) {
+				for (const snippet of manifest.contributes.snippets) {
 					const key = `${extension.id}\0${snippet.path}`;
 					const definitions = snippetFiles.get(key) ?? this.loadSnippetFile(resources, catalog.generation, extension.id, snippet.path);
 					snippetFiles.set(key, definitions);
-					const parsed = await definitions;
+					const content = await definitions;
 					if (this.isDisposed) return;
-					for (const languageId of snippet.language) {
-						const providerSnippets = parsed.filter(candidate => candidate.prefixes.length > 0 && (!candidate.scopes || candidate.scopes.includes(languageId)));
-						if (providerSnippets.length > 0) completionProviders.push(createExtensionSnippetProvider(`${extension.id}.snippet.${snippetIndex}.${languageId}`, languageId, providerSnippets));
-						const templates = parsed.filter(candidate => candidate.isFileTemplate && (!candidate.scopes || candidate.scopes.includes(languageId)));
-						for (const [templateIndex, template] of templates.entries()) fileTemplates.push(Object.freeze({
-							id: `${extension.id}.template.${snippetIndex}.${languageId}.${templateIndex}`,
-							extensionId: extension.id,
-							label: template.name,
-							languageId,
-							body: materializeExtensionFileTemplate(template),
-							...(template.description === undefined ? {} : { description: template.description }),
-						}));
-					}
+					snippetResources.push(Object.freeze({
+						extensionId: extension.id,
+						source: extension.displayName,
+						location: toExtensionResourceURI({ generation: catalog.generation, extensionId: extension.id, path: snippet.path }),
+						languageIds: snippet.language,
+						content,
+					}));
 				}
 				for (const [themeIndex, theme] of manifest.contributes.themes.entries()) {
 					const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, themeIndex);
@@ -406,6 +411,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					grammars.push(definition);
 				}
 			}
+			if (snippetResources.length > 0 && !this.snippetHandler) {
+				throw new Error('Extension snippets require a registered snippet contribution owner');
+			}
+			snippetActivation = this.snippetHandler?.(snippetResources);
+			const fileTemplates = snippetActivation?.fileTemplates ?? [];
 			this.validateContributions(themes, fileTemplates, debugAdapters);
 			const debugAdapterFactories = debugAdapters.flatMap(definition => {
 				if (definition.program === undefined) return [];
@@ -431,12 +441,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					for (const submenu of submenus) this.submenuRegistrations.add(MenusRegistry.appendMenuItem(extensionMenuId(submenu.menu), submenu.item));
 					this.welcomeRegistrations.clear();
 					for (const args of welcome) this.welcomeRegistrations.add(ViewsRegistry.registerViewWelcomeContent(...args));
-					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations);
+					this.replaceContributions(languages, languageConfigurations, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations);
+					snippetActivation?.commit();
 					this.activeThemeContributions = themeContributions;
 					this.activeGrammars = Object.freeze([...grammars]);
 					this.activeLanguages = Object.freeze([...languages]);
 					this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);
-					this.activeCompletionProviders = Object.freeze([...completionProviders]);
 					this.activeFileIconThemes = Object.freeze([...fileIconThemes]);
 					this.activeProductIconThemes = Object.freeze([...productIconThemes]);
 					this.activeDebugAdapterFactories = Object.freeze([...debugAdapterFactories]);
@@ -445,6 +455,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					this.changeEmitter.fire(catalog);
 				});
 			} catch (error) {
+				snippetActivation?.rollback();
 				this.editorPaneRegistration.replace(this.activeEditorPanes);
 				if (!this.isDisposed) await this.restoreActivation(previousGrammars, error);
 				throw error;
@@ -481,7 +492,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 
-	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[]): void {
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[]): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;
 		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
 		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
@@ -490,7 +501,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.replaceThemeContributions(themeContributions);
 			this.languageRegistration?.replace(languages);
 			this.replaceLanguageConfigurations(languageConfigurations);
-			this.completionRegistration?.replace(completionProviders);
 			this.themeRegistry.replace(themes);
 			this.fileTemplateRegistry.replace(fileTemplates);
 			this.debugAdapterRegistry.replace(debugAdapters);
@@ -505,7 +515,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				this.replaceThemeContributions(this.activeThemeContributions);
 				this.languageRegistration?.replace(this.activeLanguages);
 				this.replaceLanguageConfigurations(this.activeLanguageConfigurations);
-				this.completionRegistration?.replace(this.activeCompletionProviders);
 				this.themeRegistry.replace(previousThemes);
 				this.fileTemplateRegistry.replace(previousFileTemplates);
 				this.debugAdapterRegistry.replace(previousDebugAdapters);
@@ -582,10 +591,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		return parseLanguageConfiguration(parseJsonc(text, `Extension '${extensionId}' language configuration '${path}'`), `Extension '${extensionId}' language configuration '${path}'`);
 	}
 
-	private async loadSnippetFile(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<readonly ExtensionSnippetDefinition[]> {
+	private async loadSnippetFile(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<string> {
 		const bytes = await this.loadResource(resources, generation, extensionId, path);
 		const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-		return parseExtensionSnippetFile(parseJsonc(text, `Extension '${extensionId}' snippet file '${path}'`), `Extension '${extensionId}' snippet file '${path}'`);
+		return text;
 	}
 
 	private loadResource(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<Uint8Array> {

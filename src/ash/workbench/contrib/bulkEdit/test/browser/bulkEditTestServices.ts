@@ -19,6 +19,7 @@ export class TestEditorService implements IEditorService {
 	public readonly onDidVisibleEditorsChange = Event.None;
 	public readonly activeEditor = undefined;
 	public readonly visibleEditors = [];
+	public readonly visibleEditorPanes = [];
 	public readonly opened: IResourceEditorInput[] = [];
 	public async openEditor(input: IResourceEditorInput): Promise<void> {
 		this.opened.push(input);

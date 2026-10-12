@@ -266,6 +266,8 @@ export class StandaloneCommandService extends Disposable implements ICommandServ
 
 /** Resolves registered shortcuts in the focused standalone editor or its widgets. */
 export class StandaloneKeybindingService extends Disposable implements IKeybindingService {
+	// Embedded editors do not provide Workbench's held-shortcut dispatch lifecycle.
+	enableKeybindingHoldMode(_commandId: string): Promise<void> | undefined { return undefined; }
 	// Embedded editors have no keybindings JSON resource; its schema is owned by Workbench.
 	public registerSchemaContribution(_contribution: KeybindingsSchemaContribution): IDisposable { return Disposable.None; }
 	private readonly resolver = new KeybindingResolver();

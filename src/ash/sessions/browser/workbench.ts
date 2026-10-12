@@ -1,3 +1,5 @@
+import { PartsSplash } from '../../workbench/contrib/splash/browser/partsSplash.js';
+import { ISplashStorageService } from '../../workbench/contrib/splash/browser/splash.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
@@ -721,6 +723,7 @@ export abstract class Workbench extends Disposable {
 			["auxiliarybar", auxiliarybar],
 			['panel', panel],
 		]);
+		if (services.has(ISplashStorageService)) this._register(services.createInstance(PartsSplash));
 		layout.createWorkbenchLayout(parts);
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');

@@ -140,6 +140,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		return this.processReady.pid;
 	}
 
+	public get instanceId(): number { return this.instanceNumber; }
+
 	public get initialCwd(): string {
 		return this.processReady.cwd;
 	}

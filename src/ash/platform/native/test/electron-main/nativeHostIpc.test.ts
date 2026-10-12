@@ -43,7 +43,8 @@ test('the Main color channel exposes only its named read and change event withou
 		onDidChangeColorScheme: changes.event,
 		getColorScheme: () => scheme,
 		getBackgroundColor: () => { throw new Error('Unexpected background read'); },
-		saveWindowTheme: async () => { throw new Error('Unexpected theme write'); },
+		getWindowSplash: () => { throw new Error('Unexpected splash read'); },
+		saveWindowSplash: async () => { throw new Error('Unexpected splash write'); },
 	});
 	assert.deepEqual(await channel.call('window:1', 'getOSColorScheme'), scheme);
 	await assert.rejects(channel.call('window:1', 'saveWindowTheme'), /Invalid system color scheme read/);

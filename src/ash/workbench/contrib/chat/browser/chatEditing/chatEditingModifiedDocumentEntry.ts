@@ -119,7 +119,12 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 				let start = edit.start;
 				let end = edit.end;
 				for (const hunk of this.changes) {
-					if (hunk.modifiedStart <= end && hunk.modifiedEnd >= start) {
+					const overlaps = hunk.modifiedStart === hunk.modifiedEnd
+						? start <= hunk.modifiedStart && end >= hunk.modifiedEnd
+						: start === end
+							? hunk.modifiedStart <= start && start < hunk.modifiedEnd
+							: hunk.modifiedStart < end && hunk.modifiedEnd > start;
+					if (overlaps) {
 						start = Math.min(start, hunk.modifiedStart);
 						end = Math.max(end, hunk.modifiedEnd);
 					}
@@ -148,7 +153,10 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		let delta = 0;
 		for (const hunk of this.changes) {
 			if (offset < hunk.modifiedStart) { break; }
-			if (offset <= hunk.modifiedEnd) { return end ? hunk.originalEnd : hunk.originalStart; }
+			if (offset === hunk.modifiedStart) {
+				return end && hunk.modifiedStart === hunk.modifiedEnd ? hunk.originalEnd : hunk.originalStart;
+			}
+			if (offset < hunk.modifiedEnd) { return end ? hunk.originalEnd : hunk.originalStart; }
 			delta = hunk.originalEnd - hunk.modifiedEnd;
 		}
 		return offset + delta;

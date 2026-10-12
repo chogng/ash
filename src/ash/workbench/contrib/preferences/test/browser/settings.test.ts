@@ -24,7 +24,8 @@ import { IFileTextModelService } from '../../../../services/textmodelResolver/co
 import { IPreferencesService, type ISetting } from '../../../../services/preferences/common/preferences.js';
 import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { ISpeechService } from '../../../speech/common/speechService.js';
+import { SpeechService } from '../../../speech/browser/speechService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -1195,7 +1196,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(IDictationService, undefined);
-	services.registerInstance(IChatSpeechToTextService, disposables.add(services.createInstance(ChatSpeechToTextService)));
+	services.registerInstance(ISpeechService, disposables.add(services.createInstance(SpeechService)));
 	const skillsChanged = disposables.add(new Emitter<void>());
 	let skillEnabled = true;
 	const skillScopes: (string | undefined)[] = [];
