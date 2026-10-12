@@ -72,6 +72,9 @@ import { IPluginManagementService } from '../../../src/ash/platform/extensionMan
 import type { IPluginManagementApi } from '../../../src/ash/platform/extensionManagement/common/pluginManagementApi.js';
 import type { PluginPackageDto, PluginPackageCommandParams } from '../../../.build/protocol/typescript/index.js';
 import { AppServerPluginManagementService } from '../../../src/ash/workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
+import { ILocalGitService } from '../../../src/ash/platform/git/common/localGitService.js';
+import { canceled } from '../../../src/ash/base/common/errors.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
 import { SkillsViewPane, McpServersViewPane, RecommendedExtensionsView } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViews.js';
@@ -277,7 +280,18 @@ const pluginApi: IPluginManagementApi = {
 	revokeGrant: params => mutatePlugin('pluginRevoke', params),
 	uninstall: params => mutatePlugin('pluginUninstall', params),
 };
-services.registerInstance(IPluginManagementService, disposables.add(new AppServerPluginManagementService(pluginApi, { subscribe: () => ({ dispose() { } }) })));
+let cancelHeldGitClone: (() => void) | undefined;
+services.registerInstance(ILocalGitService, {
+	_serviceBrand: undefined,
+	clone: async (operationId, url, targetPath, reference) => {
+		if (!new URLSearchParams(location.search).has('holdGitClone')) { throw new Error('Unexpected Git clone in the local installation fixture'); }
+		requests.push(['gitClone', { operationId, url, targetPath, reference }]);
+		await new Promise<void>((_resolve, reject) => { cancelHeldGitClone = () => reject(canceled()); });
+	},
+	cancel: async operationId => { requests.push(['gitCancel', operationId]); cancelHeldGitClone?.(); },
+});
+services.registerInstance(ILogService, new NullLoggerService());
+services.registerSingleton(IPluginManagementService, () => disposables.add(services.createInstance(AppServerPluginManagementService, pluginApi, { subscribe: () => ({ dispose() { } }) })));
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
 services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);

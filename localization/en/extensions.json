@@ -32,7 +32,7 @@
     "operationFailed": "Extensions operation failed.",
     "filterEditorExtensions": "Editor extensions (Open VSX)",
     "declarativeOnly": "Installation loads supported themes, syntax and snippets without running scripts. Enable or disable the whole extension in its details. JavaScript execution requires separate authorization.",
-    "accessibilityHelp": "Extensions, Plugins, Skills, MCP Servers and Recommended are collapsible panes. Use Left and Right on headers to collapse or expand them. Open /extensions to browse and manage extensions. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Escape closes this help.",
+    "accessibilityHelp": "Extensions, Plugins, Skills, MCP Servers and Recommended are collapsible panes. Use Left and Right on headers to collapse or expand them. Open /extensions to browse and manage extensions. Use Tab to move between controls, arrow keys to select an extension, and Enter to open its details. Enable or Disable in a row or its details controls the whole editor extension, including scripts, themes, syntax and snippets. Language packs are managed through the display language setting. Execution authorization and permissions are reviewed separately in details. Escape closes this help. Run Install plugin from Git repository in the Command Palette to choose a repository revision and package directory. Press Escape during installation to cancel.",
     "installLocalExtension": "Install extension from workspace",
     "localExtensionPath": "Enter the extension package path relative to the selected workspace directory.",
     "localExtensionInstallNotice": "The package must contain .ash-plugin/plugin.json. Installation copies the package into your profile; enablement and permissions are managed separately.",
@@ -137,6 +137,18 @@
     "detailHomepage": "Homepage",
     "detailsHelp": "These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management.",
     "detailAbout": "About",
-    "detailCategories": "Categories"
+    "detailCategories": "Categories",
+    "installGitExtension": "Install plugin from Git repository",
+    "gitInstallWorkspace": "Open a workspace folder to install a plugin from Git.",
+    "gitInstallFolder": "Choose the workspace folder for the temporary checkout",
+    "gitInstallSource": "Enter the repository URL, optional branch, tag or full commit ID, and package directory.",
+    "gitInstallNotice": "The package directory defaults to the repository root and must contain .ash-plugin/plugin.json. Installation uses a temporary checkout in {0}; enablement and permissions are managed separately.",
+    "gitRepositoryUrl": "Git repository URL",
+    "gitReference": "Branch, tag or full commit ID (optional)",
+    "gitPackagePath": "Package directory (optional)",
+    "gitInstallProgress": "Installing plugin from Git. Press Escape to cancel.",
+    "cancelGitInstall": "Cancel installation",
+    "invalidGitPackagePath": "Enter a package path within the repository, using forward slashes.",
+    "unsafeGitPackageEntry": "The package contains a symbolic link or unsupported file: {0}"
   }
 }

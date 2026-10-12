@@ -251,26 +251,110 @@ impl GitClient {
                 Err(error) => return Err(GitError::io("reserve clone destination", error)),
             }
         }
-        let mut destination = CloneDestination(Some(target.ok_or_else(|| {
+        let destination = CloneDestination(Some(target.ok_or_else(|| {
             GitError::runtime(
                 "choose clone destination",
                 "no unused repository folder name",
             )
         })?));
-        let target = destination.0.as_ref().expect("reserved clone destination");
-        let cloned = self
-            .run(GitInvocation::clone(
-                &parent,
-                [
-                    OsStr::new("clone"),
-                    OsStr::new("--"),
-                    OsStr::new(url),
-                    target.as_os_str(),
-                ],
-            ))
+        self.clone_reserved(url, &parent, destination, None).await
+    }
+
+    /// Reserves an exact new checkout. Existing directories are never adopted or overwritten.
+    /// A full commit ID is fetched and verified before publishing the successful checkout.
+    pub async fn clone_repository_to(
+        &self,
+        url: &str,
+        target: &Path,
+        reference: Option<&str>,
+    ) -> GitResult<PathBuf> {
+        validate_argument(url)?;
+        if let Some(reference) = reference {
+            validate_argument(reference)?;
+        }
+        if !target.is_absolute() {
+            return Err(GitError::InvalidConfiguration {
+                field: "clone destination",
+                requirement: "must be an absolute new directory",
+            });
+        }
+        let name = target.file_name().ok_or_else(|| {
+            crate::error::invalid_command("clone destination must have a directory name")
+        })?;
+        let parent = dunce::canonicalize(target.parent().ok_or_else(|| {
+            crate::error::invalid_command("clone destination must have an existing parent")
+        })?)
+        .map_err(|source| GitError::io("resolve clone destination", source))?;
+        let target = parent.join(name);
+        std::fs::create_dir(&target)
+            .map_err(|source| GitError::io("reserve clone destination", source))?;
+        self.clone_reserved(url, &parent, CloneDestination(Some(target)), reference)
             .await
-            .and_then(|output| output.require_success());
-        cloned?;
+    }
+
+    async fn clone_reserved(
+        &self,
+        url: &str,
+        parent: &Path,
+        mut destination: CloneDestination,
+        reference: Option<&str>,
+    ) -> GitResult<PathBuf> {
+        let target = destination.0.as_ref().expect("reserved clone destination");
+        let commit = reference
+            .filter(|value| {
+                matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+            .map(str::to_ascii_lowercase);
+        let mut arguments = vec![OsString::from("clone")];
+        if commit.is_some() {
+            arguments.push(OsString::from("--no-checkout"));
+        } else if let Some(reference) = reference {
+            arguments.extend([OsString::from("--branch"), OsString::from(reference)]);
+        }
+        arguments.extend([
+            OsString::from("--"),
+            OsString::from(url),
+            target.as_os_str().to_owned(),
+        ]);
+        self.run(GitInvocation::clone(parent, arguments))
+            .await?
+            .require_success()?;
+        if let Some(commit) = commit.as_deref() {
+            self.run_mutation(target, ["fetch", "--no-tags", "--", "origin", commit])
+                .await?
+                .require_success()?;
+            let revision = format!("{commit}^{{commit}}");
+            let resolved = self
+                .run_query_unchecked(
+                    target,
+                    ["rev-parse", "--verify", "--end-of-options", &revision],
+                )
+                .await?
+                .require_success()?;
+            if !String::from_utf8_lossy(&resolved.stdout)
+                .trim()
+                .eq_ignore_ascii_case(commit)
+            {
+                return Err(crate::error::invalid_command(
+                    "clone reference did not resolve to the requested commit",
+                ));
+            }
+            self.run_mutation(target, ["checkout", "--detach", &revision, "--"])
+                .await?
+                .require_success()?;
+            let head = self
+                .run_query_unchecked(target, ["rev-parse", "--verify", "HEAD"])
+                .await?
+                .require_success()?;
+            if !String::from_utf8_lossy(&head.stdout)
+                .trim()
+                .eq_ignore_ascii_case(commit)
+            {
+                return Err(crate::error::invalid_command(
+                    "requested commit was not checked out",
+                ));
+            }
+        }
         Ok(destination
             .0
             .take()

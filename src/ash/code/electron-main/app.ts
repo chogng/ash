@@ -4,6 +4,8 @@ import { WebviewProtocolProvider } from '../../platform/webview/electron-main/we
 import { isAdmin, performShellCommand } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
 import { ProcessMainService } from '../../platform/process/electron-main/processMainService.js';
+import { IGPUProcessMainService } from '../../platform/gpu/electron-main/gpuProcessMainService.js';
+import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
 import type { IOpenURLOptions } from '../../platform/url/common/url.js';
 import { hooksConfigurationIpcRoute, openHooksTextFile } from '../../platform/hooks/electron-main/hooksConfigurationIpc.js';
@@ -285,13 +287,23 @@ export class AshApplication extends Disposable {
 	private quitAfterStateSaved = false;
 	private quitSaveStarted = false;
 
-	private constructor(
+	constructor(
 		options: AshApplicationOptions,
 		private readonly stateService: StateService,
 		disposableTracker: DisposableTracker | undefined,
 		tracking: globalThis.Disposable | undefined,
+		@IGPUProcessMainService gpuProcessMainService: IGPUProcessMainService,
+		@IInstantiationService mainServices: IInstantiationService,
 	) {
 		super();
+		this._register(mainServices);
+		this.windowServices.registerInstance(IGPUProcessMainService, gpuProcessMainService);
+		this._register(gpuProcessMainService.onDidUpdateFeatureStatus(status => {
+			this.logService.info('gpu', 'GPU feature status changed', { status: status ?? null });
+		}));
+		this._register(gpuProcessMainService.onDidExitProcess(({ reason }) => {
+			this.logService.warn('gpu', 'GPU process exited', { reason });
+		}));
 		this.rendererRoot = options.rendererRoot;
 		this.appServerStartupMode = options.appServerStartupMode;
 		this.disposableTracker = disposableTracker;
@@ -357,7 +369,7 @@ export class AshApplication extends Disposable {
 		}));
 	}
 
-	static async create(options: AshApplicationOptions): Promise<AshApplication> {
+	static async create(options: AshApplicationOptions, mainServices: IInstantiationService): Promise<AshApplication> {
 		const state = await StateService.create(join(app.getPath("userData"), "state.json"));
 		const disposableTracker = app.isPackaged
 			? undefined
@@ -365,7 +377,7 @@ export class AshApplication extends Disposable {
 		const tracking = disposableTracker
 			? installDisposableTracker(disposableTracker)
 			: undefined;
-		try { return new AshApplication(options, state, disposableTracker, tracking); }
+		try { return mainServices.createInstance(AshApplication, options, state, disposableTracker, tracking); }
 		catch (error) {
 			await state.close();
 			tracking?.[Symbol.dispose]();
@@ -438,7 +450,7 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('keyboardLayout', keyboardLayoutChannel(this.nativeKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('userKeyboardLayout', userKeyboardLayoutChannel(this.services.userKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
-		this.mainProcessIpcServer.registerChannel('process', ProxyChannel.fromService(new ProcessMainService(), this._store));
+		this.mainProcessIpcServer.registerChannel('process', ProxyChannel.fromService(this.windowServices.createInstance(ProcessMainService), this._store));
 		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === localeValue) ?? productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
 		throwIfCancelled(token);

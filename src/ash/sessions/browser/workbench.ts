@@ -60,6 +60,7 @@ import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED
 import { registerExtensionManagementActions } from '../../workbench/contrib/extensions/browser/extensionsActions.js';
 import { AppServerExtensionManagementService } from '../../workbench/services/extensionManagement/browser/appServerExtensionManagementService.js';
 import { IPluginManagementService } from '../../platform/extensionManagement/common/pluginManagementService.js';
+import { ILocalGitService } from '../../platform/git/common/localGitService.js';
 import { AppServerPluginManagementService } from '../../workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
 import { IAppServerRemoteAgentService } from '../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
@@ -316,7 +317,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
-		services.registerInstance(IPluginManagementService, this._register(new AppServerPluginManagementService(options.api.plugins, options.api.events)));
+		services.registerInstance(ILocalGitService, options.api.localGit);
 		const languagePacks = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePacks);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
@@ -407,6 +408,7 @@ export abstract class Workbench extends Disposable {
 		this._register(fileService.registerProvider(Schemas.file, options.browserFileSystemProvider ?? files));
 		this._register(fileService.registerProvider(Schemas.ashRemote, files));
 		services.registerInstance(IFileService, fileService);
+		services.registerInstance(IPluginManagementService, this._register(services.createInstance(AppServerPluginManagementService, options.api.plugins, options.api.events)));
 		services.registerInstance(IFileSearchService, options.api.hasAppServer ? files : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(ISystemFileTransferService, files);
 		services.registerInstance(ILabelService, this._register(services.createInstance(LabelService)));

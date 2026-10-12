@@ -33,6 +33,7 @@ impl RequestLane {
                 | ClientMethod::AssetImportCancel
                 | ClientMethod::DictationModelCancel
                 | ClientMethod::GitCheckIgnoreCancel
+                | ClientMethod::GitCloneCancel
                 | ClientMethod::TestingCancel
                 | ClientMethod::LanguageCancel
                 | ClientMethod::IssueReporterSearchCancel
@@ -58,6 +59,7 @@ impl RequestLane {
                 | ClientMethod::IssueRead
                 | ClientMethod::GitCommand
                 | ClientMethod::GitClone
+                | ClientMethod::GitCloneTo
                 | ClientMethod::GitFetch
                 | ClientMethod::GitPull
                 | ClientMethod::GitPush

@@ -61,6 +61,7 @@ watch subscription、operation queue 或 wire DTO 放进上述 module，意味�
 - `GitClient::with_executable` 只接受调用方明确选择的绝对路径；相对路径直接返回配置错误。此入口保留调用方的子进程环境。
 - `GitClient::executable()` 返回 `GitResult<PathBuf>`；系统程序不存在、不可访问或越出安装根时返回错误。
 - `GitClient::clone_repository` 解析父目录后，通过原子创建空目录领取 repository name 或其 `-1` 至 `-19` 后缀，再启动 Git。并发调用和父目录别名不会领取同一目录，也不需要全局网络操作锁。失败或 future 取消仅移除空的目录预留，保留部分克隆数据。
+- `GitClient::clone_repository_to` 使用调用方指定的绝对目标目录，原子领取新目录并拒绝已存在的目录。可选版本为分支、标签或完整提交 ID；提交 ID 会获取并验证，不能被同名分支替代。两种 clone 入口共用执行实现与取消生命周期，不承担插件来源或安装策略。
 - 普通命令的超时覆盖等待退出、写入 stdin 和读取 stdout/stderr。输出采集直接属于当前 future，取消时同步释放，避免读写任务脱离操作生命周期。
 - 仓库探测按规范化目录、Git 程序、查询 PATH 策略和执行限制合并；不同程序或限制不会混用结果。
 - 探测完成或全部调用方取消后立即移除记录，不缓存成功或失败结果。单个调用方取消不会中断其他调用方；排队等待不占用进程执行超时。

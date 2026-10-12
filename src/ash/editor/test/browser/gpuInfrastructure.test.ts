@@ -164,8 +164,10 @@ test('semantic GPU rules follow type, modifier, language, and highlighting prefe
 test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', async () => {
 	const installedUsage = installEditorTestGlobals({ GPUBufferUsage: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 } });
 	const passes: GPURenderPassDescriptor[] = [];
+	const ready = new DeferredPromise<void>();
 	let ended = false;
 	const device = {
+		lost: new Promise<GPUDeviceLostInfo>(() => { }),
 		queue: {
 			writeBuffer: () => undefined,
 			submit: () => undefined,
@@ -173,7 +175,7 @@ test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', a
 		createBuffer: () => ({ destroy: () => undefined }),
 		createShaderModule: () => ({}),
 		createRenderPipeline: () => ({ getBindGroupLayout: () => ({}) }),
-		createBindGroup: () => ({}),
+		createBindGroup: () => { void ready.complete(); return {}; },
 		createCommandEncoder: () => encoder,
 	} as unknown as GPUDevice;
 	const encoder = {
@@ -208,7 +210,7 @@ test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', a
 
 	try {
 		const renderer = new RectangleRenderer(context, observableValue('contentLeft', 0), observableValue('devicePixelRatio', 1), canvas, canvasContext, Promise.resolve(device));
-		await Promise.resolve();
+		await ready.p;
 		assert.equal(eventHandlerCount, 1);
 		assert.equal(configured, true);
 		renderer.draw({ bigNumbersDelta: 0 } as ViewportData);
@@ -262,15 +264,20 @@ test('GPU initialization and canvas resizing request a fresh host frame and stop
 		devicePixelRatio: observableValue('pixelRatio', 1),
 	} as unknown as ViewGpuContext;
 	let requests = 0;
+	const hostReady = new DeferredPromise<void>();
 	using tracking = installDisposableTracker(tracker);
-	const view = new ViewLinesGpu(context, gpuContext, () => requests++);
+	const view = new ViewLinesGpu(context, gpuContext, () => {
+		requests++;
+		if (requests === 2) void hostReady.complete();
+	});
 	try {
 		// This range belongs to the frame before the model was replaced.
 		view.renderText({
 			getViewLineRenderingData: () => { throw new RangeError('Stale viewport'); },
 		} as unknown as ViewportData);
 		view.onDidRender();
-		await ready.complete({} as GPUDevice);
+		await ready.complete({ lost: new Promise<GPUDeviceLostInfo>(() => { }) } as GPUDevice);
+		await hostReady.p;
 		assert.deepEqual(
 			{ requests, dirty: view.shouldRender(), handlers: handlers.size },
 			{ requests: 2, dirty: true, handlers: 1 },
@@ -291,6 +298,60 @@ test('GPU initialization and canvas resizing request a fresh host frame and stop
 	tracker.assertNoLeaks();
 });
 
+for (const failure of ['initialization', 'device-loss'] as const) {
+	test(`GPU ${failure} invalidates cached geometry and requests a DOM frame`, async () => {
+		const { ViewLinesGpu } = await import('../../browser/viewParts/viewLinesGpu/viewLinesGpu.js');
+		const { ViewGpuContext } = await import('../../browser/gpu/viewGpuContext.js');
+		const originalDevice = ViewGpuContext.device;
+		const originalDeviceSync = ViewGpuContext.deviceSync;
+		const atlasDescriptor = Object.getOwnPropertyDescriptor(ViewGpuContext, 'atlas')!;
+		const ready = new DeferredPromise<GPUDevice>();
+		const lost = new DeferredPromise<GPUDeviceLostInfo>();
+		const initialized = new DeferredPromise<void>();
+		const fallback = new DeferredPromise<void>();
+		using deletedGlyphs = new Emitter<void>();
+		const handlers = new Set<object>();
+		const context = {
+			addEventHandler: (handler: object) => handlers.add(handler),
+			removeEventHandler: (handler: object) => handlers.delete(handler),
+		} as unknown as ViewContext;
+		ViewGpuContext.device = ready.p;
+		ViewGpuContext.deviceSync = undefined;
+		Object.defineProperty(ViewGpuContext, 'atlas', { configurable: true, get: () => ({ onDidDeleteGlyphs: deletedGlyphs.event }) });
+		const gpuContext = {
+			canvas: { domNode: h(browserEnvironment.window.document, 'canvas') },
+			canvasDevicePixelDimensions: observableValue('canvasDimensions', { width: 800, height: 300 }),
+			devicePixelRatio: observableValue('pixelRatio', 1),
+			dispose: () => { void fallback.complete(); },
+		} as unknown as ViewGpuContext;
+		let requests = 0;
+		const view = new ViewLinesGpu(context, gpuContext, () => {
+			requests++;
+			if (requests === 2) void initialized.complete();
+		});
+		try {
+			if (failure === 'initialization') {
+				await ready.error(new Error('Deliberate GPU device failure'));
+			} else {
+				await ready.complete({ lost: lost.p } as GPUDevice);
+				await initialized.p;
+				await lost.complete({ reason: 'unknown', message: 'Deliberate GPU device loss' } as GPUDeviceLostInfo);
+			}
+			await fallback.p;
+			assert.equal(requests, failure === 'initialization' ? 2 : 3);
+			assert.equal(view.shouldRender(), true);
+			assert.equal(view.getLineWidth(1), undefined);
+			view.renderText({ getViewLineRenderingData: () => { throw new Error('GPU rendering continued after fallback'); } } as unknown as ViewportData);
+		} finally {
+			view.dispose();
+			ViewGpuContext.device = originalDevice;
+			ViewGpuContext.deviceSync = originalDeviceSync;
+			Object.defineProperty(ViewGpuContext, 'atlas', atlasDescriptor);
+		}
+		assert.equal(handlers.size, 0);
+	});
+}
+
 test('ViewGpuContext exposes observable canvas geometry and releases view handlers', async () => {
 	const resizeCallbacks: ResizeObserverCallback[] = [];
 	let disconnected = false;
@@ -301,7 +362,7 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 		public disconnect(): void { disconnected = true; }
 		public takeRecords(): ResizeObserverEntry[] { return []; }
 	}
-	const canvasContext = { configure: () => undefined } as unknown as GPUCanvasContext;
+	const canvasContext = { configure: () => undefined, unconfigure: () => undefined } as unknown as GPUCanvasContext;
 	const canvasPrototype = browserEnvironment.window.HTMLCanvasElement.prototype;
 	const originalGetContext = Object.getOwnPropertyDescriptor(canvasPrototype, 'getContext');
 	const originalResizeObserver = Object.getOwnPropertyDescriptor(browserEnvironment.window, 'ResizeObserver');
@@ -382,6 +443,7 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 		gpuContext.dispose();
 		assert.deepEqual({ handlerCount: handlers.size, disconnected, connected: gpuContext.canvas.domNode.isConnected }, { handlerCount: 0, disconnected: true, connected: false });
 	} finally {
+		browserEnvironment.window.dispatchEvent(new browserEnvironment.window.Event('pagehide'));
 		configurationEmitter.dispose();
 		if (originalGetContext) Object.defineProperty(canvasPrototype, 'getContext', originalGetContext);
 		if (originalResizeObserver) Object.defineProperty(browserEnvironment.window, 'ResizeObserver', originalResizeObserver);

@@ -18,8 +18,11 @@ use ash_app_server_protocol::protocol::git::GitCheckIgnoreCancelResult;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreCancelStatusDto;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreParams;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreResult;
+use ash_app_server_protocol::protocol::git::GitCloneCancelParams;
+use ash_app_server_protocol::protocol::git::GitCloneCancelResult;
 use ash_app_server_protocol::protocol::git::GitCloneParams;
 use ash_app_server_protocol::protocol::git::GitCloneResult;
+use ash_app_server_protocol::protocol::git::GitCloneToParams;
 use ash_app_server_protocol::protocol::git::GitCommandDto;
 use ash_app_server_protocol::protocol::git::GitCommandOutcomeDto;
 use ash_app_server_protocol::protocol::git::GitCommandParams;
@@ -221,6 +224,64 @@ impl AppServer {
         result(&GitCloneResult {
             repository_path: path.to_string_lossy().into_owned(),
         })
+    }
+
+    pub(super) fn git_clone_to(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: GitCloneToParams = decode(value)?;
+        if params.target_path.len() > 32768 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| git_error(GitRuntimeError::Service(GitServiceError::Runtime)))?;
+        let path = runtime
+            .block_on(
+                ash_git::GitClient::system()
+                    .clone_repository_to(
+                        &params.url,
+                        Path::new(&params.target_path),
+                        params.reference.as_deref(),
+                    )
+                    .with_cancellation(cancellation.clone()),
+            )
+            .map_err(|_| git_error(GitRuntimeError::Service(GitServiceError::Cancelled)))?
+            .map_err(|error| git_error(GitRuntimeError::Service(GitServiceError::Git(error))))?;
+        result(&GitCloneResult {
+            repository_path: path.to_string_lossy().into_owned(),
+        })
+    }
+
+    pub(super) fn git_clone_cancel(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: GitCloneCancelParams = decode(value)?;
+        if params.operation_id.is_empty() || params.operation_id.chars().count() > 128 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        self.request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id);
+        self.request_scheduler.cancel_waiting_requests();
+        result(&GitCloneCancelResult {})
     }
 
     pub(super) fn git_repositories(&self) -> Result<Value, RpcError> {

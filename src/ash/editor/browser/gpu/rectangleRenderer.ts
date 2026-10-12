@@ -8,6 +8,8 @@ import { GPULifecycle } from './gpuDisposable.js';
 import { quadVertices } from './gpuUtils.js';
 import { createObjectCollectionBuffer, type IObjectCollectionBuffer, type IObjectCollectionBufferEntry } from './objectCollectionBuffer.js';
 import { RectangleRendererBindingId, rectangleRendererWgsl } from './rectangleRenderer.wgsl.js';
+import { raceCancellation } from '../../../base/common/async.js';
+import { CancellationTokenSource } from '../../../base/common/cancellation.js';
 
 export type RectangleRendererEntrySpec = [
 	{ name: 'x'; }, { name: 'y'; }, { name: 'width'; }, { name: 'height'; },
@@ -28,6 +30,7 @@ export class RectangleRenderer extends ViewEventHandler {
 	private device: GPUDevice | undefined;
 	private pipeline: GPURenderPipeline | undefined;
 	private bindGroup: GPUBindGroup | undefined;
+	private readonly initialization = new CancellationTokenSource();
 
 	constructor(
 		private readonly context: ViewContext,
@@ -38,6 +41,7 @@ export class RectangleRenderer extends ViewEventHandler {
 		device: Promise<GPUDevice>,
 	) {
 		super();
+		this._register(toDisposable(() => this.initialization.dispose(true)));
 		this.context.addEventHandler(this);
 		this._register(toDisposable(() => this.context.removeEventHandler(this)));
 		this._register(this.shapes.onDidChangeBuffer(() => {
@@ -45,7 +49,7 @@ export class RectangleRenderer extends ViewEventHandler {
 			this.createShapeBuffer();
 			this.bindGroup = this.createBindGroup();
 		}));
-		void this.initialize(device);
+		void this.initialize(device).catch(() => this.dispose());
 	}
 
 	public register(x: number, y: number, width: number, height: number, red: number, green: number, blue: number, alpha: number): IObjectCollectionBufferEntry<RectangleRendererEntrySpec> {
@@ -100,8 +104,10 @@ export class RectangleRenderer extends ViewEventHandler {
 	}
 
 	private async initialize(device: Promise<GPUDevice>): Promise<void> {
-		const resolvedDevice = await device;
-		if (this.isDisposed) return;
+		const resolvedDevice = await raceCancellation(device, this.initialization.token);
+		if (this.isDisposed || !resolvedDevice) return;
+		const renderer = new WeakRef(this);
+		void resolvedDevice.lost.then(() => renderer.deref()?.dispose());
 		this.device = resolvedDevice;
 		const presentationFormat = this.canvas.ownerDocument.defaultView!.navigator.gpu.getPreferredCanvasFormat();
 		this.ctx.configure({ device: resolvedDevice, format: presentationFormat, alphaMode: 'premultiplied' });

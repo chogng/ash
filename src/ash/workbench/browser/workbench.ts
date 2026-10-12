@@ -254,6 +254,7 @@ import { IGitHubService } from '../../platform/github/common/githubService.js';
 import { GitHubConnectionService } from "../services/accounts/browser/gitHubConnectionService.js";
 import { IGitHubConnectionService } from "../services/accounts/common/gitHubConnectionService.js";
 import { IPluginManagementService } from "../../platform/extensionManagement/common/pluginManagementService.js";
+import { ILocalGitService } from '../../platform/git/common/localGitService.js';
 import { AppServerPluginManagementService } from "../services/extensionManagement/browser/appServerPluginManagementService.js";
 import { IExtensionManagementService } from "../../platform/extensionManagement/common/extensionManagementService.js";
 import { AppServerExtensionManagementService } from "../services/extensionManagement/browser/appServerExtensionManagementService.js";
@@ -732,7 +733,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAccountService, this._register(new AppServerAccountService(api.accounts, api.events)));
 		services.registerInstance(IIssueReporterService, api.issueReporter);
 		services.registerInstance(IGitHubService, api.github);
-		services.registerInstance(IPluginManagementService, this._register(new AppServerPluginManagementService(api.plugins, api.events)));
+		services.registerInstance(ILocalGitService, api.localGit);
+		services.registerInstance(IPluginManagementService, this._register(services.createInstance(AppServerPluginManagementService, api.plugins, api.events)));
 		services.registerInstance(IAppServerSkillApi, api.skills);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IInstructionService, api.instructions);

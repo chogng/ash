@@ -2,6 +2,7 @@ import { h, addDisposableListener, getActiveWindow } from '../../../base/browser
 import { createFastDomNode, type FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { PixelRatio } from '../../../base/browser/pixelRatio.js';
 import { Color } from '../../../base/common/color.js';
+import { CancellationError } from '../../../base/common/errors.js';
 import { Disposable, toDisposable, type IDisposable, type IReference } from '../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../base/common/observable.js';
 import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/editorColors.js';
@@ -32,8 +33,10 @@ export class ViewGpuContext extends Disposable {
 	public readonly canvas: FastDomNode<HTMLCanvasElement>;
 	public readonly ctx: GPUCanvasContext;
 
-	public static device: Promise<GPUDevice>;
+	public static device: Promise<GPUDevice> | undefined;
 	public static deviceSync: GPUDevice | undefined;
+	private static deviceGeneration = 0;
+	private activeDevice: GPUDevice | undefined;
 
 	public readonly rectangleRenderer: RectangleRenderer;
 
@@ -63,71 +66,102 @@ export class ViewGpuContext extends Disposable {
 		this.semanticStyleResolver = new SemanticTokenStyleResolver(context.theme.value, semanticHighlightingEnabled(context.theme.value));
 		const ownerWindow = getActiveWindow();
 		this.canvas = createFastDomNode(h(ownerWindow.document, 'canvas'));
-		this.canvas.setClassName('stanza-editor-gpu-canvas');
-		this.canvas.setAttribute('aria-hidden', 'true');
-		this._register(toDisposable(() => this.canvas.domNode.remove()));
-		this.updateCanvasPadding(context);
-		this._register(context.configuration.onDidChange(event => {
-			if (event.hasChanged(EditorOption.scrollbar)) this.updateCanvasPadding(context);
-		}));
-
+		// Acquire the surface before registering view resources: unsupported contexts
+		// can then fall back without leaving configuration or theme subscriptions.
 		this.ctx = ensureNonNullable(this.canvas.domNode.getContext('webgpu'));
-		ViewGpuContext.updateTheme(context.theme.value);
-		this._register(new GpuThemeListener(context, theme => {
-			ViewGpuContext.updateTheme(theme);
-			this.refreshSemanticStyles(theme);
-		}));
+		try {
+			this.canvas.setClassName('stanza-editor-gpu-canvas');
+			this.canvas.setAttribute('aria-hidden', 'true');
+			this._register(toDisposable(() => this.canvas.domNode.remove()));
+			this.updateCanvasPadding(context);
+			this._register(context.configuration.onDidChange(event => {
+				if (event.hasChanged(EditorOption.scrollbar)) this.updateCanvasPadding(context);
+			}));
 
-		if (!ViewGpuContext.device) {
-			ViewGpuContext.device = GPULifecycle.requestDevice(ownerWindow).then(reference => {
-				sharedDeviceReference = reference;
-				ViewGpuContext.deviceSync = reference.object;
-				ViewGpuContext._atlas = new TextureAtlas(
-					reference.object.limits.maxTextureDimension2D,
-					undefined,
-					ViewGpuContext.decorationStyleCache,
-					ViewGpuContext._colorMap,
-				);
-				return reference.object;
+			ViewGpuContext.updateTheme(context.theme.value);
+			this._register(new GpuThemeListener(context, theme => {
+				ViewGpuContext.updateTheme(theme);
+				this.refreshSemanticStyles(theme);
+			}));
+
+			if (!ViewGpuContext.device) {
+				const generation = ViewGpuContext.deviceGeneration;
+				ViewGpuContext.device = GPULifecycle.requestDevice(ownerWindow).then(reference => {
+					if (generation !== ViewGpuContext.deviceGeneration) {
+						// A page can close while adapter/device acquisition is still pending.
+						reference.dispose();
+						throw new CancellationError();
+					}
+					sharedDeviceReference = reference;
+					ViewGpuContext._atlas = new TextureAtlas(
+						reference.object.limits.maxTextureDimension2D,
+						undefined,
+						ViewGpuContext.decorationStyleCache,
+						ViewGpuContext._colorMap,
+					);
+					ViewGpuContext.deviceSync = reference.object;
+					void reference.object.lost.then(() => {
+						if (sharedDeviceReference === reference) ViewGpuContext.disposeSharedResources();
+					});
+					return reference.object;
+				});
+				void ViewGpuContext.device.catch(() => {
+					if (generation === ViewGpuContext.deviceGeneration) ViewGpuContext.disposeSharedResources();
+				});
+				sharedDevicePagehideListener = addDisposableListener(ownerWindow, 'pagehide', () => ViewGpuContext.disposeSharedResources(), { once: true });
+			}
+			const view = new WeakRef(this);
+			void ViewGpuContext.device.then(device => {
+				const context = view.deref();
+				if (context && !context.isDisposed) context.activeDevice = device;
+			}, () => undefined);
+
+			const pixelRatio = PixelRatio.getInstance(ownerWindow);
+			const devicePixelRatio = observableValue(this, pixelRatio.value);
+			this._register(pixelRatio.onDidChange(value => devicePixelRatio.set(value)));
+			this._register(devicePixelRatio.onDidChange(() => ViewGpuContext._atlas?.clear()));
+			this.devicePixelRatio = devicePixelRatio;
+
+			const canvasDevicePixelDimensions = observableValue(this, {
+				width: this.canvas.domNode.width,
+				height: this.canvas.domNode.height,
 			});
-			sharedDevicePagehideListener = addDisposableListener(ownerWindow, 'pagehide', () => ViewGpuContext.disposeSharedResources(), { once: true });
+			this._register(observeDevicePixelDimensions(this.canvas.domNode, ownerWindow, (width, height) => {
+				this.canvas.domNode.width = width;
+				this.canvas.domNode.height = height;
+				canvasDevicePixelDimensions.set({ width, height });
+			}));
+			this.canvasDevicePixelDimensions = canvasDevicePixelDimensions;
+
+			const contentLeft = observableValue(this, context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
+			this._register(context.configuration.onDidChange(event => {
+				if (event.hasChanged(EditorOption.layoutInfo)) contentLeft.set(context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
+			}));
+			this.contentLeft = contentLeft;
+
+			this.rectangleRenderer = this._register(new RectangleRenderer(
+				context,
+				this.contentLeft,
+				this.devicePixelRatio,
+				this.canvas.domNode,
+				this.ctx,
+				ViewGpuContext.device,
+			));
+		} catch (error) {
+			this.dispose();
+			throw error;
 		}
-
-		const pixelRatio = PixelRatio.getInstance(ownerWindow);
-		const devicePixelRatio = observableValue(this, pixelRatio.value);
-		this._register(pixelRatio.onDidChange(value => devicePixelRatio.set(value)));
-		this._register(devicePixelRatio.onDidChange(() => ViewGpuContext._atlas?.clear()));
-		this.devicePixelRatio = devicePixelRatio;
-
-		const canvasDevicePixelDimensions = observableValue(this, {
-			width: this.canvas.domNode.width,
-			height: this.canvas.domNode.height,
-		});
-		this._register(observeDevicePixelDimensions(this.canvas.domNode, ownerWindow, (width, height) => {
-			this.canvas.domNode.width = width;
-			this.canvas.domNode.height = height;
-			canvasDevicePixelDimensions.set({ width, height });
-		}));
-		this.canvasDevicePixelDimensions = canvasDevicePixelDimensions;
-
-		const contentLeft = observableValue(this, context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
-		this._register(context.configuration.onDidChange(event => {
-			if (event.hasChanged(EditorOption.layoutInfo)) contentLeft.set(context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
-		}));
-		this.contentLeft = contentLeft;
-
-		this.rectangleRenderer = this._register(new RectangleRenderer(
-			context,
-			this.contentLeft,
-			this.devicePixelRatio,
-			this.canvas.domNode,
-			this.ctx,
-			ViewGpuContext.device,
-		));
 	}
 
 	public getSemanticTokens(lineNumber: number): readonly ResolvedSemanticToken[] {
 		return this.semanticTokensForLine(lineNumber);
+	}
+
+	public override dispose(): void {
+		if (this.isDisposed) return;
+		this.activeDevice = undefined;
+		this.ctx.unconfigure();
+		super.dispose();
 	}
 
 	public resolveSemanticStyle(token: ResolvedSemanticToken | undefined, tokenMetadata: number): ReturnType<SemanticTokenStyleResolver['resolve']> {
@@ -139,7 +173,8 @@ export class ViewGpuContext extends Disposable {
 	}
 
 	public canRender(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): boolean {
-		return ViewGpuContext.deviceSync !== undefined && this.canRenderDetailed(options, viewportData, lineNumber).length === 0;
+		return this.activeDevice !== undefined && this.activeDevice === ViewGpuContext.deviceSync
+			&& this.canRenderDetailed(options, viewportData, lineNumber).length === 0;
 	}
 
 	public canRenderDetailed(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): string[] {
@@ -185,13 +220,15 @@ export class ViewGpuContext extends Disposable {
 	}
 
 	private static disposeSharedResources(): void {
+		ViewGpuContext.deviceGeneration++;
+		ViewGpuContext.deviceSync = undefined;
+		ViewGpuContext.device = undefined;
 		sharedDevicePagehideListener?.dispose();
 		sharedDevicePagehideListener = undefined;
 		ViewGpuContext._atlas?.dispose();
 		ViewGpuContext._atlas = undefined;
 		sharedDeviceReference?.dispose();
 		sharedDeviceReference = undefined;
-		ViewGpuContext.deviceSync = undefined;
 	}
 }
 

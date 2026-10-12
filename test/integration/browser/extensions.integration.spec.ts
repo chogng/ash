@@ -1,5 +1,44 @@
 import { expect, test } from '@playwright/test';
 
+for (const [locale, title, urlLabel, refLabel, pathLabel] of [
+	['en', 'Install plugin from Git repository', 'Git repository URL', 'Branch, tag or full commit ID (optional)', 'Package directory (optional)'],
+	['zh-CN', '从 Git 仓库安装插件', 'Git 仓库地址', '分支、标签或完整提交 ID（可选）', '包目录（可选）'],
+]) {
+	test(`Git plugin installation inputs are localized and keyboard cancellable in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.installFromGit'));
+		const dialog = page.getByRole('dialog', { name: title, exact: true });
+		const url = dialog.getByPlaceholder(urlLabel, { exact: true });
+		await expect(url).toBeFocused();
+		await url.fill('https://example.test/plugin.git');
+		await url.press('Tab');
+		await expect(dialog.getByPlaceholder(refLabel, { exact: true })).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(dialog.getByPlaceholder(pathLabel, { exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toBeHidden();
+		await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => ['pluginInstall', 'commandError'].includes(entry[0])))).toEqual([]);
+	});
+}
+
+test('Git plugin installation Escape cancels the running host operation before installing a package', async ({ page }) => {
+	await page.goto('/extensions.html?holdGitClone');
+	await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.installFromGit'));
+	const dialog = page.getByRole('dialog', { name: 'Install plugin from Git repository', exact: true });
+	await dialog.getByPlaceholder('Git repository URL', { exact: true }).fill('https://example.test/plugin.git');
+	await dialog.getByPlaceholder('Branch, tag or full commit ID (optional)', { exact: true }).fill('release');
+	await dialog.getByPlaceholder('Package directory (optional)', { exact: true }).press('Enter');
+	await expect(page.getByRole('option', { name: 'Cancel installation', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
+	const requests = await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => ['gitClone', 'gitCancel', 'pluginInstall', 'commandError'].includes(entry[0])));
+	expect(requests).toHaveLength(2);
+	expect(requests[0]).toMatchObject(['gitClone', { url: 'https://example.test/plugin.git', reference: 'release' }]);
+	const cloneRequest = requests[0] as [string, { operationId: string; }];
+	expect(requests[1]).toEqual(['gitCancel', cloneRequest[1].operationId]);
+});
+
 for (const [locale, detailsLabel, featuresLabel, informationLabel, identifierLabel] of [
 	['en', 'Details', 'Features', 'Additional information', 'Identifier'],
 	['zh-CN', '详情', '功能', '其他信息', '标识符'],

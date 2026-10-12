@@ -1,3 +1,4 @@
+import { createDisconnectedLocalGitService } from '../../git/browser/appServerLocalGitService.js';
 import { createDisconnectedExecutionSettingsService } from './appServerExecutionSettingsService.js';
 import { createDisconnectedInstructionService } from '../../instructions/browser/appServerInstructionService.js';
 import { createDisconnectedFileSearchApi } from '../../search/browser/fileSearchApi.js';
@@ -82,6 +83,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		codebaseSymbols: createDisconnectedCodebaseSymbolsApi(unavailableOperation),
 		connectors: createDisconnectedConnectorApi(unavailableOperation),
 		plugins: createDisconnectedPluginManagementApi(unavailableOperation),
+		localGit: createDisconnectedLocalGitService(unavailableOperation),
 		extensionManagement: createDisconnectedExtensionsApi(unavailableOperation),
 		toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
 		dirPermissions: createDisconnectedDirPermissionsApi(unavailableOperation),

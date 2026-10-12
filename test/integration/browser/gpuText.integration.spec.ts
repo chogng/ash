@@ -39,6 +39,59 @@ test.afterEach(async ({ page }) => {
 	expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
+test('GPU device loss restores DOM text, caret and typing without another GPU frame', async ({ page }) => {
+	await page.goto('/gpuText.html');
+	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+	const input = page.locator('.stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('Control+Home');
+	await page.keyboard.press('ArrowRight');
+	const caret = page.locator('.stanza-editor-caret.primary');
+	const before = await caret.boundingBox();
+	await page.evaluate(() => window.ashGpuTextIntegration.loseDevice());
+	await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(0);
+	await expect(page.locator('.stanza-editor-gpu-canvas')).toHaveCount(0);
+	await expect(page.locator('.view-line').first()).toContainText('interface GeometrySample');
+	await expect(input).toBeFocused();
+	const after = await caret.boundingBox();
+	expect(before).not.toBeNull();
+	expect(after).not.toBeNull();
+	expect(Math.abs(after!.x - before!.x)).toBeLessThan(2);
+	await page.evaluate(() => window.ashGpuTextIntegration.resetGpuFrameTrace());
+	await page.keyboard.insertText('X');
+	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().startsWith('iXnterface'))).toBe(true);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue() === window.ashGpuTextIntegration.initialText)).toBe(true);
+	expect(await page.evaluate(() => window.ashGpuTextIntegration.readGpuFrameTrace())).toEqual([]);
+});
+
+for (const failure of ['missing-api', 'missing-context', 'no-adapter', 'device-rejected'] as const) {
+	test(`GPU initialization falls back to editable DOM text for ${failure}`, async ({ page }) => {
+		await page.addInitScript(failure => {
+			if (failure === 'missing-api') {
+				Object.defineProperty(navigator, 'gpu', { configurable: true, value: undefined });
+			} else if (failure === 'missing-context') {
+				const getContext = HTMLCanvasElement.prototype.getContext;
+				HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
+					return type === 'webgpu' ? null : Reflect.apply(getContext, this, [type, ...args]);
+				} as typeof getContext;
+			} else {
+				navigator.gpu.requestAdapter = async () => failure === 'no-adapter' ? null : {
+					requestDevice: async () => { throw new Error('Deliberate device rejection'); },
+				} as unknown as GPUAdapter;
+			}
+		}, failure);
+		await page.goto('/gpuText.html');
+		await expect(page.locator('.view-line').first()).toContainText('interface GeometrySample');
+		await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(0);
+		const input = page.locator('.stanza-editor-input');
+		await input.focus();
+		await page.keyboard.press('Control+Home');
+		await page.keyboard.insertText('X');
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().startsWith('Xinterface'))).toBe(true);
+	});
+}
+
 test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', async ({ page }) => {
 	await page.goto('/gpuText.html');
 	await expect(page.locator('.stanza-editor-gpu-canvas')).toBeVisible();

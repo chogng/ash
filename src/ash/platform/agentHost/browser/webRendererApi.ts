@@ -7,6 +7,7 @@ import { createAppServerFileSearchApi } from '../../search/browser/fileSearchApi
 import { AppServerAssetService } from '../../assets/browser/appServerAssetService.js';
 import { AppServerIssueReporterService } from '../../issue/browser/appServerIssueReporterService.js';
 import { AppServerGitHubService } from '../../github/browser/appServerGitHubService.js';
+import { AppServerLocalGitService } from '../../git/browser/appServerLocalGitService.js';
 import { createAppServerNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
 import { createAppServerHooksApi } from '../../hooks/browser/hooksApi.js';
 import { AppServerTestExecutionService } from '../../testing/browser/appServerTestExecutionService.js';
@@ -138,6 +139,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		codebaseSymbols: createAppServerCodebaseSymbolsApi(connection),
 		connectors: createAppServerConnectorApi(connection, connectorHostServices),
 		plugins: createAppServerPluginManagementApi(connection),
+		localGit: new AppServerLocalGitService(connection),
 		extensionManagement: createAppServerExtensionManagementApi(connection),
 		toolSearch: createAppServerToolSearchApi(connection),
 		dirPermissions: createAppServerDirPermissionsApi(connection),

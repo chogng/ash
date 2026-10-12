@@ -47,6 +47,16 @@ Plugin 是可同时携带多种 capability 的集成 bundle。`ash-plugin` 定�
 
 ## 1. 结论
 
+App 命令面板提供“从 Git 仓库安装插件”。用户选择仓库 URL、可选分支／标签／完整提交 ID，
+以及仓库内的包目录；包目录默认为根目录，必须包含 `.ash-plugin/plugin.json`。
+App 在捕获的工作区文件夹中临时检出，通过文件服务建立排除 `.git` 元数据的包快照，
+再调用现有本地安装契约；安装不隐含启用或权限授权。成功后清理临时检出与快照，
+失败或取消时保留已下载的检出以便检查，快照在退出流程时清理。安装请求发出后不承诺回滚。
+
+此来源编排属于 App 的插件管理服务；`platform/git` 的 `ILocalGitService` 通过已有 renderer
+连接调用 Rust 通用 `git/cloneTo` 与 `git/cloneTo/cancel`。Rust 只执行 Git 操作，不拥有插件来源、
+更新策略或第二份安装状态。该入口不依赖 SCM 扩展，也不向 TUI 增加插件仓库工作流。
+
 Plugin 的定义与产品生命周期分别由两个 crate 拥有，来源不会建立第二套生命周期：
 
 | 来源                                       | Package lifecycle owner | Capability activation owner                                    |

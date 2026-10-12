@@ -6913,6 +6913,49 @@ fn git_clone_requires_the_product_host_and_returns_a_new_repository_path() {
 }
 
 #[test]
+fn git_clone_to_is_host_only_and_cancellation_is_connection_scoped() {
+    let source = tempfile::tempdir().unwrap();
+    run_git(source.path(), &["init"]);
+    let destination = tempfile::tempdir().unwrap();
+    let target = destination.path().join("checkout");
+    let server = server();
+    let params = serde_json::json!({ "operationId": "clone-test", "url": source.path().to_str().unwrap(), "targetPath": target.to_str().unwrap(), "reference": null });
+    let mut client = server.connection();
+    initialize(&server, &mut client);
+    let denied = call(
+        &server,
+        &mut client,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/cloneTo","params":params}),
+    );
+    assert_eq!(denied["error"]["code"], -32073);
+    assert!(!target.exists());
+    let mut host = server.product_host_connection();
+    initialize(&server, &mut host);
+    let cancelled = call(
+        &server,
+        &mut host,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/cloneTo/cancel","params":{"operationId":"clone-test"}}),
+    );
+    assert_eq!(cancelled["result"], serde_json::json!({}));
+    let stopped = call(
+        &server,
+        &mut host,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"git/cloneTo","params":params}),
+    );
+    assert_eq!(stopped["error"]["code"], -32800);
+    assert!(!target.exists());
+    let mut other_host = server.product_host_connection();
+    initialize(&server, &mut other_host);
+    let cloned = call(
+        &server,
+        &mut other_host,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/cloneTo","params":params}),
+    );
+    assert!(cloned.get("error").is_none(), "{cloned}");
+    assert!(target.join(".git").is_dir());
+}
+
+#[test]
 fn git_status_rpc_returns_dir_repository_state() {
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-git-{}-{}",

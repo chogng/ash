@@ -100,6 +100,29 @@ pub struct GitCloneResult {
     pub repository_path: String,
 }
 
+/// Product-host clone into an exact new directory, optionally selecting an immutable revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitCloneToParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+    #[schemars(length(min = 1, max = 4096))]
+    pub url: String,
+    #[schemars(length(min = 1, max = 32768))]
+    pub target_path: String,
+    pub reference: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitCloneCancelParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+pub struct GitCloneCancelResult {}
+
 /// Remote selection for a Git fetch operation.
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -1,4 +1,5 @@
 import type { Event } from "../../../base/common/event.js";
+import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export interface PluginPackageView {
@@ -36,6 +37,14 @@ export interface IPluginManagementService {
 	list(): Promise<PluginCatalogView>;
 	/** Path is relative to the selected authorized directory; installation does not activate it. */
 	installLocal(path: string, revision: number): Promise<PluginInstallation>;
+	/** App-owned source materialization; the package authority still owns installation and grants. */
+	installFromGit(
+		folder: IWorkspaceFolder,
+		url: string,
+		reference: string | undefined,
+		packagePath: string,
+		signal: AbortSignal,
+	): Promise<PluginInstallation>;
 	enable(plugin: PluginPackageView, revision: number): Promise<void>;
 	disable(plugin: PluginPackageView, revision: number): Promise<void>;
 	grant(plugin: PluginPackageView, revision: number): Promise<void>;

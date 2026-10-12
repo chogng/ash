@@ -152,6 +152,8 @@ Use renderer-aware exact geometry for every visible case that affects caret, sel
 
 Measure startup, scroll, typing, IME, accessibility, and memory behavior on representative files before enabling WebGPU by default. Expand GPU eligibility only when the drawing path and visible geometry agree for the added text class; DOM remains authoritative for browser shaping cases the atlas path does not implement.
 
+An unavailable API, canvas context, adapter, or device leaves the editor on DOM text. Device loss or a failed GPU frame releases that view's GPU resources, invalidates its hit-test geometry, and requests a DOM frame without replacing the model, focus, selection, or scroll state. Existing views remain on DOM after loss; a newly created view can acquire a fresh shared device. Shared acquisition is invalidated on page exit so a late device cannot revive a closed page.
+
 ## Reference implementation mapping
 
 The following VS Code modules are useful evidence when investigating a behavior. They are not normative for Ash's ownership, API, or file layout.

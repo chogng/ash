@@ -15,51 +15,66 @@ import { builtinLanguagePackCatalogs } from '../../workbench/services/localizati
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { access, writeFile } from 'node:fs/promises';
+import { GPUProcessMainService, IGPUProcessMainService } from '../../platform/gpu/electron-main/gpuProcessMainService.js';
+import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 
 /** Starts the Electron product and its fixed Workbench/Sessions entries. */
 export async function startElectronApplication(): Promise<void> {
-	protocol.registerSchemesAsPrivileged([{ scheme: Schemas.vscodeWebview, privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true } }]);
-	const profileRoot = resolveHome();
-	const migrationConflict = await migrateLegacyLocalProfile({ legacyUserDataRoot: app.getPath('userData'), profileRoot });
-	if (migrationConflict) console.error(`Settings migration conflict: ${migrationConflict.legacyPath} and ${migrationConflict.settingsPath}`);
-	const rendererBase = app.isPackaged
-		? join(app.getAppPath(), 'dist', 'renderer')
-		: developmentArtifactsPath(app.getAppPath(), 'renderer');
-	const rendererRoot = app.isPackaged
-		? resolvePackagedRendererRoot(rendererBase)
-		: join(rendererBase, AshRendererDirectory);
-	const appServerStartupMode: AppServerStartupMode = process.env.ASH_DESKTOP_UI_ONLY === '1'
-		? 'disabled'
-		: 'required';
+	const mainServices = new InstantiationService(new ServiceCollection([
+		IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [app]),
+	]));
+	let application: AshApplication | undefined;
+	try {
+		// Capture GPU exit/recovery before profile I/O or window startup can yield.
+		mainServices.get(IGPUProcessMainService);
+		protocol.registerSchemesAsPrivileged([{ scheme: Schemas.vscodeWebview, privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true } }]);
+		const profileRoot = resolveHome();
+		const migrationConflict = await migrateLegacyLocalProfile({ legacyUserDataRoot: app.getPath('userData'), profileRoot });
+		if (migrationConflict) console.error(`Settings migration conflict: ${migrationConflict.legacyPath} and ${migrationConflict.settingsPath}`);
+		const rendererBase = app.isPackaged
+			? join(app.getAppPath(), 'dist', 'renderer')
+			: developmentArtifactsPath(app.getAppPath(), 'renderer');
+		const rendererRoot = app.isPackaged
+			? resolvePackagedRendererRoot(rendererBase)
+			: join(rendererBase, AshRendererDirectory);
+		const appServerStartupMode: AppServerStartupMode = process.env.ASH_DESKTOP_UI_ONLY === '1'
+			? 'disabled'
+			: 'required';
 
-	app.setName(AshApplicationName);
-	configureApplicationDataPaths();
-	const messages = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash!;
-	const initialLaunchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
-	const { args } = parseWindowLaunch(initialLaunchArguments, process.cwd(), messages['taskbar.invalidAgentsArguments']!);
-	if (args.wait && !args.waitMarkerFilePath) {
-		const marker = join(tmpdir(), `ash-wait-${randomUUID()}`);
-		await writeFile(marker, '', { flag: 'wx' });
-		const separator = process.argv.indexOf('--');
-		process.argv.splice(separator < 0 ? process.argv.length : separator, 0, `--waitMarkerFilePath=${marker}`);
-	}
-
-	const launchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
-	if (!app.requestSingleInstanceLock({ launchArguments })) {
-		const marker = parseLaunchArguments(launchArguments).waitMarkerFilePath;
-		if (marker) {
-			await waitForMarkerDeletion(marker);
+		app.setName(AshApplicationName);
+		configureApplicationDataPaths();
+		const messages = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash!;
+		const initialLaunchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
+		const { args } = parseWindowLaunch(initialLaunchArguments, process.cwd(), messages['taskbar.invalidAgentsArguments']!);
+		if (args.wait && !args.waitMarkerFilePath) {
+			const marker = join(tmpdir(), `ash-wait-${randomUUID()}`);
+			await writeFile(marker, '', { flag: 'wx' });
+			const separator = process.argv.indexOf('--');
+			process.argv.splice(separator < 0 ? process.argv.length : separator, 0, `--waitMarkerFilePath=${marker}`);
 		}
-		app.quit();
-		return;
+
+		const launchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
+		if (!app.requestSingleInstanceLock({ launchArguments })) {
+			const marker = parseLaunchArguments(launchArguments).waitMarkerFilePath;
+			if (marker) {
+				await waitForMarkerDeletion(marker);
+			}
+			app.quit();
+			return;
+		}
+
+		application = await AshApplication.create({
+			rendererRoot,
+			appServerStartupMode,
+		}, mainServices);
+
+		void startup(application);
+	} finally {
+		// Once created, the application owns this scope through shutdown/failure cleanup.
+		if (!application) mainServices.dispose();
 	}
-
-	const application = await AshApplication.create({
-		rendererRoot,
-		appServerStartupMode,
-	});
-
-	void startup(application);
 }
 
 async function waitForMarkerDeletion(marker: string): Promise<void> {

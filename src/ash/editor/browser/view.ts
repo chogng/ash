@@ -286,20 +286,28 @@ export class View extends ViewEventHandler {
 		this._register(toDisposable(() => this.viewModel.removeViewEventHandler(this)));
 		this.scrollbar = this.registerViewPart(new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode));
 		this.domNode.domNode.prepend(this.scrollbar.getDomNode().domNode);
-		this.viewGpuContext = this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on'
-			? this._register(new ViewGpuContext(this.viewContext, lineNumber => {
-				const visualLine = this.visualProjection.lineAt(lineNumber - 1);
-				if (!visualLine || visualLine.projectionData?.injectionOffsets) return [];
-				return options.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex).flatMap(token => {
-					const startColumn = Math.max(token.startColumn, visualLine.startColumn);
-					const endColumn = Math.min(token.endColumn, visualLine.endColumn);
-					return endColumn > startColumn ? [{ ...token, startColumn: startColumn - visualLine.startColumn, endColumn: endColumn - visualLine.startColumn }] : [];
-				}) ?? [];
-			}, theme => {
-				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
-				return preference === true || (preference !== false && theme.semanticHighlighting === true);
-			}))
-			: undefined;
+		let gpuContext: ViewGpuContext | undefined;
+		try {
+			gpuContext = this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on'
+				&& this.domNode.domNode.ownerDocument.defaultView?.navigator.gpu
+				? this._register(new ViewGpuContext(this.viewContext, lineNumber => {
+					const visualLine = this.visualProjection.lineAt(lineNumber - 1);
+					if (!visualLine || visualLine.projectionData?.injectionOffsets) return [];
+					return options.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex).flatMap(token => {
+						const startColumn = Math.max(token.startColumn, visualLine.startColumn);
+						const endColumn = Math.min(token.endColumn, visualLine.endColumn);
+						return endColumn > startColumn ? [{ ...token, startColumn: startColumn - visualLine.startColumn, endColumn: endColumn - visualLine.startColumn }] : [];
+					}) ?? [];
+				}, theme => {
+					const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
+					return preference === true || (preference !== false && theme.semanticHighlighting === true);
+				}))
+				: undefined;
+		} catch {
+			// An optional rendering backend must not prevent the editor from opening.
+			gpuContext = undefined;
+		}
+		this.viewGpuContext = gpuContext;
 		if (options.configurationService) {
 			this._register(options.configurationService.onDidChangeConfiguration(event => {
 				if (!event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) return;

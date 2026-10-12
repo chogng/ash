@@ -5,10 +5,13 @@ import { localize } from '../../../nls.js';
 import type { PerformanceInfo, SystemInfo } from '../../diagnostics/common/diagnostics.js';
 import type { IProcessService, IResolvedProcessInformation } from '../common/process.js';
 import { isRecord } from '../../../base/common/types.js';
+import { IGPUProcessMainService } from '../../gpu/electron-main/gpuProcessMainService.js';
 
 /** The Desktop host owns local machine facts; remote facts remain App Server-owned. */
 export class ProcessMainService implements IProcessService {
 	declare public readonly _serviceBrand: undefined;
+
+	constructor(@IGPUProcessMainService private readonly gpuProcessMainService: IGPUProcessMainService) { }
 
 	public async getSystemInfo(): Promise<SystemInfo> {
 		const processors = cpus();
@@ -19,7 +22,7 @@ export class ProcessMainService implements IProcessService {
 			vmHint: localize('issue.diagnosticsUnavailable', 'Unavailable'),
 			// Launch arguments are unnecessary for this report and can contain user data.
 			processArgs: '',
-			gpuStatus: { ...app.getGPUFeatureStatus() },
+			gpuStatus: { ...this.gpuProcessMainService.featureStatus },
 			screenReader: app.isAccessibilitySupportEnabled() ? 'yes' : 'no',
 			remoteData: [],
 			load: process.platform === 'win32' ? undefined : loadavg().map(value => value.toFixed(2)).join(', '),

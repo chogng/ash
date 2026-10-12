@@ -987,9 +987,15 @@ use crate::protocol::git::GitCheckIgnoreParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCheckIgnoreResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCloneCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCloneCancelResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCloneParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCloneResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCloneToParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommandDto;
 #[cfg(any(test, feature = "export"))]
@@ -4633,6 +4639,17 @@ client_methods! {
         response: GitCloneResult,
         serialization: None,
     },
+    GitCloneTo => "git/cloneTo" {
+        params: GitCloneToParams,
+        response: GitCloneResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
+    GitCloneCancel => "git/cloneTo/cancel" {
+        params: GitCloneCancelParams,
+        response: GitCloneCancelResult,
+        serialization: None,
+    },
     // Reads update status caches and graph cursors and use the Git operation lock too. Admit
     // every repository operation before execution so workers never queue behind another RPC.
     GitStatus => "git/status" {
@@ -6575,6 +6592,9 @@ typescript_bindings! {
     GitRepositoryParams,
     GitCloneParams,
     GitCloneResult,
+    GitCloneToParams,
+    GitCloneCancelParams,
+    GitCloneCancelResult,
     GitFetchModeDto,
     GitFetchParams,
     GitPullModeDto,

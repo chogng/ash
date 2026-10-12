@@ -34,6 +34,7 @@ interface GpuTextIntegrationHarness {
 	measureGpuAdvance(text: string): number;
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
+	loseDevice(): Promise<void>;
 	setBracketColor(color: string): void;
 	setSelectionColor(color: string): void;
 	prepareBracketText(length: number): void;
@@ -95,6 +96,12 @@ window.ashGpuTextIntegration = {
 	measureGpuAdvance: text => measureGpuAdvance(text),
 	resetGpuFrameTrace: () => gpuFrameTrace.reset(),
 	readGpuFrameTrace: () => gpuFrameTrace.read(),
+	loseDevice: async () => {
+		const device = ViewGpuContext.deviceSync;
+		if (!device) throw new Error('GPU editor has no initialized device');
+		device.destroy();
+		await device.lost;
+	},
 	prepareBracketText: length => {
 		editor.updateOptions({ wordWrap: 'off' });
 		editor.setValue(`(${'x'.repeat(length)})`);
@@ -172,7 +179,7 @@ function measureGpuAdvance(text: string): number {
 
 function installGpuFrameTrace(): GpuFrameTraceController {
 	const gpu = navigator.gpu;
-	if (!gpu) throw new Error('GPU integration test requires WebGPU');
+	if (!gpu) return { reset: () => undefined, read: () => [], dispose: () => undefined };
 	const originalRequestAdapter = gpu.requestAdapter;
 	let passes: GpuRenderPassTrace[] = [];
 	let viewIds = new WeakMap<GPUTexture | GPUTextureView, number>();

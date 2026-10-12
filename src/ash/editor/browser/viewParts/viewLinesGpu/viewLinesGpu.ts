@@ -1,4 +1,6 @@
-import { MutableDisposable, type IReference } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable, type IReference } from '../../../../base/common/lifecycle.js';
+import { raceCancellation } from '../../../../base/common/async.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { GPULifecycle } from '../../gpu/gpuDisposable.js';
@@ -39,6 +41,7 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 	private readonly atlasTexture = this._register(new MutableDisposable<IReference<GPUTexture>>());
 	private readonly renderStrategy = this._register(new MutableDisposable<IGpuRenderStrategy>());
 	private readonly renderStrategyBindGroupListener = this._register(new MutableDisposable());
+	private readonly atlasListener = this._register(new MutableDisposable());
 	private pipeline: GPURenderPipeline | undefined;
 	private sampler: GPUSampler | undefined;
 	private bindGroup: GPUBindGroup | undefined;
@@ -49,6 +52,7 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 	private lastLineGeometries: ReadonlyMap<number, GpuLineGeometry> | undefined;
 	private lastViewportData: ViewportData | undefined;
 	private visibleObjectCount = 0;
+	private readonly initialization = new CancellationTokenSource();
 
 	constructor(
 		context: ViewContext,
@@ -56,6 +60,7 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		private readonly requestRender: () => void,
 	) {
 		super(context);
+		this._register(toDisposable(() => this.initialization.dispose(true)));
 		this.canvas = this.viewGpuContext.canvas.domNode;
 		this._register(autorun(reader => {
 			this.viewGpuContext.canvasDevicePixelDimensions.read(reader);
@@ -67,13 +72,14 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			this.viewGpuContext.devicePixelRatio.read(reader);
 			if (this.device) this.refreshGlyphRasterizer();
 		}));
-		void this.initWebgpu();
+		void this.initWebgpu().catch(() => this.fallbackToDom());
 	}
 
 	public prepareRender(_context: RenderingContext): void {
 	}
 
 	public override onConfigurationChanged(): boolean {
+		if (!this.initialized) return true;
 		this.refreshGlyphRasterizer();
 		this.renderStrategy.value?.reset();
 		return true;
@@ -159,28 +165,60 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 
 	public renderText(viewportData: ViewportData): void {
 		if (!this.initialized || !this.device) return;
-		const viewLineOptions = new ViewLineOptions(this._context.configuration, this._context.theme.type);
-		this.refreshGlyphRasterizer();
-		this.ensureRenderStrategy(viewportData);
-		this.ensureGpuResources();
-		this.visibleObjectCount = this.renderStrategy.value!.update(viewportData, viewLineOptions);
-		this.updateAtlasStorageAndTexture();
-		const gpuLineIndexes = this.readGpuLineIndexes(viewportData, viewLineOptions);
-		this.lastLineGeometries = this.computeLineGeometries(viewportData, viewLineOptions, gpuLineIndexes);
-		this.lastViewportData = viewportData;
-		this.draw(viewportData);
+		try {
+			const viewLineOptions = new ViewLineOptions(this._context.configuration, this._context.theme.type);
+			this.refreshGlyphRasterizer();
+			this.ensureRenderStrategy(viewportData);
+			this.ensureGpuResources();
+			this.visibleObjectCount = this.renderStrategy.value!.update(viewportData, viewLineOptions);
+			this.updateAtlasStorageAndTexture();
+			const gpuLineIndexes = this.readGpuLineIndexes(viewportData, viewLineOptions);
+			this.lastLineGeometries = this.computeLineGeometries(viewportData, viewLineOptions, gpuLineIndexes);
+			this.lastViewportData = viewportData;
+			this.draw(viewportData);
+		} catch {
+			this.fallbackToDom();
+		}
 	}
 
 	public async initWebgpu(): Promise<void> {
-		this.device = ViewGpuContext.deviceSync ?? await ViewGpuContext.device;
-		if (this.isDisposed) return;
+		const pendingDevice = ViewGpuContext.device;
+		const device = ViewGpuContext.deviceSync ?? (pendingDevice ? await raceCancellation(pendingDevice, this.initialization.token) : undefined);
+		if (this.isDisposed || !device) return;
+		this.device = device;
+		const renderer = new WeakRef(this);
+		void device.lost.then(() => renderer.deref()?.fallbackToDom());
 		const atlas = ViewGpuContext.atlas;
-		this._register(atlas.onDidDeleteGlyphs(() => {
+		this.atlasListener.value = atlas.onDidDeleteGlyphs(() => {
 			this.uploadedPageVersions.length = 0;
 			this.renderStrategy.value?.reset();
-		}));
+		});
 		this.initialized = true;
 		// Device initialization can finish after edits changed the visible rows.
+		this.setShouldRender();
+		this.requestRender();
+	}
+
+	private fallbackToDom(): void {
+		if (this.isDisposed) return;
+		this.initialized = false;
+		this.device = undefined;
+		this.lastLineGeometries = undefined;
+		this.lastViewportData = undefined;
+		this.atlasListener.clear();
+		this.renderStrategyBindGroupListener.clear();
+		this.renderStrategy.clear();
+		this.rasterizer.clear();
+		this.vertexBuffer.clear();
+		this.layoutInfoBuffer.clear();
+		this.atlasInfoBuffer.clear();
+		this.glyphStorageBuffer.clear();
+		this.atlasTexture.clear();
+		this.pipeline = undefined;
+		this.bindGroup = undefined;
+		this.sampler = undefined;
+		this.viewGpuContext.dispose();
+		// The host re-renders retained DOM rows and replaces GPU hit-test geometry.
 		this.setShouldRender();
 		this.requestRender();
 	}

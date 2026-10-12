@@ -189,7 +189,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	});
 	services.registerInstance(IPluginManagementService, {
 		onDidChange: Event.None, list: async () => ({ revision: 0, activationGeneration: 0, packages: [] }),
-		installLocal: unsupportedExtensionAction, enable: unsupportedExtensionAction, disable: unsupportedExtensionAction,
+		installLocal: unsupportedExtensionAction, installFromGit: unsupportedExtensionAction, enable: unsupportedExtensionAction, disable: unsupportedExtensionAction,
 		grant: unsupportedExtensionAction, revokeGrant: unsupportedExtensionAction, uninstall: unsupportedExtensionAction,
 	});
 	using commands = new CommandService(services);

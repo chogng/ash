@@ -74,6 +74,75 @@ async fn clone_repository_uses_an_unused_child_folder() {
     assert!(second.join(".git").exists());
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn clone_repository_to_selects_branches_tags_and_exact_commits() {
+    let source = TestRepository::init();
+    source.write("payload.txt", "first\n");
+    source.commit_all("first");
+    let first = source.git(&["rev-parse", "HEAD"]);
+    source.git(&["tag", "release"]);
+    source.git(&["branch", "review"]);
+    source.write("payload.txt", "second\n");
+    source.commit_all("second");
+    let second = source.git(&["rev-parse", "HEAD"]);
+    // A SHA-shaped branch must never substitute a different commit for an immutable pin.
+    source.git(&["branch", &first, &second]);
+    let destination = tempfile::tempdir().unwrap();
+    let uppercase = first.to_ascii_uppercase();
+    for (index, reference) in ["review", "release", first.as_str(), uppercase.as_str()]
+        .into_iter()
+        .enumerate()
+    {
+        let target = destination.path().join(index.to_string());
+        GitClient::system()
+            .clone_repository_to(source.root().to_str().unwrap(), &target, Some(reference))
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(target.join("payload.txt"))
+                .unwrap()
+                .trim(),
+            "first"
+        );
+        let head = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&target)
+            .output()
+            .unwrap();
+        assert!(head.status.success());
+        assert_eq!(String::from_utf8(head.stdout).unwrap().trim(), first);
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn clone_repository_to_preserves_existing_directories_and_rejects_invalid_refs() {
+    let source = TestRepository::init();
+    let destination = tempfile::tempdir().unwrap();
+    let existing = destination.path().join("existing");
+    std::fs::create_dir(&existing).unwrap();
+    std::fs::write(existing.join("keep.txt"), "keep").unwrap();
+    assert!(
+        GitClient::system()
+            .clone_repository_to(source.root().to_str().unwrap(), &existing, None)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read_to_string(existing.join("keep.txt")).unwrap(),
+        "keep"
+    );
+    let target = destination.path().join("invalid");
+    for reference in ["--upload-pack=bad", "bad\nref", ""] {
+        assert!(
+            GitClient::system()
+                .clone_repository_to(source.root().to_str().unwrap(), &target, Some(reference))
+                .await
+                .is_err()
+        );
+        assert!(!target.exists());
+    }
+}
+
 #[cfg(windows)]
 #[tokio::test(flavor = "current_thread")]
 async fn clone_repository_accepts_a_verbatim_parent_with_spaces_and_unicode() {
