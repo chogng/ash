@@ -1,5 +1,5 @@
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
-import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import assert from 'node:assert/strict';

@@ -1,5 +1,6 @@
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { MarkdownElement } from '../../../../base/browser/markdownRenderer.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import { createObjectUrl } from '../../../../base/browser/fileAccess.js';
 import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { mainWindow } from '../../../../base/browser/window.js';
@@ -258,7 +259,7 @@ export class ExtensionsEditor extends EditorPane {
 					signal.addEventListener('abort', cancel, { once: true });
 					this.actionResources.add(toDisposable(() => { signal.removeEventListener('abort', cancel); cancellation.dispose(true); }));
 					const parsed = await this.prompts.parseNew(skill.uri, cancellation.token);
-					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { this.renderDocument(this.instructions, parsed.content); }
+					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { this.renderDocument(this.instructions, parsed.body?.getContent() ?? ''); }
 				};
 				if (this.selectedTab === DetailTab.Instructions) { this.selectTab(DetailTab.Instructions); }
 				button(skill.enabled ? localize({ bundle: 'ash.extensions', key: 'disableSkill' }, 'Disable skill') : localize({ bundle: 'ash.extensions', key: 'enableSkill' }, 'Enable skill'), async () => {
@@ -271,7 +272,11 @@ export class ExtensionsEditor extends EditorPane {
 					signal.addEventListener('abort', cancel, { once: true });
 					this.actionResources.add(toDisposable(() => { signal.removeEventListener('abort', cancel); cancellation.dispose(true); }));
 					const parsed = await this.prompts.parseNew(skill.uri, cancellation.token);
-					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.editors.openEditor({ resource: skill.uri, initialText: parsed.content, languageId: 'markdown', label: `${skill.name}/SKILL.md`, readOnly: true, showBreadcrumbs: false }, { pinned: true }); }
+					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) {
+						await this.editors.openEditor({ resource: skill.uri, initialText: parsed.content, languageId: 'markdown', label: `${skill.name}/SKILL.md`, readOnly: true, showBreadcrumbs: false }, {
+							pinned: true, selection: parsed.body ? Range.fromPositions(parsed.body.range.getStartPosition()) : undefined,
+						});
+					}
 				});
 				button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), async () => { await this.setInput(input, signal); });
 				return;

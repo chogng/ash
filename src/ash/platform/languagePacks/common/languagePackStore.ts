@@ -1,5 +1,5 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type { LanguagePackCatalog } from './languagePacksService.js';
+import type { LanguagePackCatalog } from './languagePackContract.js';
 import type { LanguagePackIndexEntry } from './languagePackContract.js';
 
 /** Local UI resources remain available before connecting to any backend. */

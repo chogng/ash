@@ -7,9 +7,9 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Emitter } from "../../../../base/common/event.js";
 import { IExtensionManagementService } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
-import { ExtensionsLanguagePackService } from "../../browser/extensionsLanguagePackService.js";
+import { WebLanguagePacksService } from "../../browser/languagePacks.js";
 import { parseLanguagePackCatalog, parseLanguagePackIndexEntry, resolveLanguagePackCatalog } from "../../common/languagePackCatalog.js";
-import type { LanguagePackCatalog } from "../../common/languagePacksService.js";
+import type { LanguagePackCatalog } from "../../common/languagePackContract.js";
 import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from "../../../../workbench/services/localization/common/localizationCatalogs.js";
 
 test("English and preinstalled language packs remain available without Extensions", async () => {
@@ -17,10 +17,10 @@ test("English and preinstalled language packs remain available without Extension
 	extensionManagement.listInstalled = async () => { throw new Error('Extensions is offline'); };
 	using service = createService(extensionManagement);
 
-	await service.whenReady;
-	assert.deepEqual(service.availableLocales.map(locale => locale.locale), ["en", "zh-CN"]);
-	assert.deepEqual(service.availableLocales.map(locale => locale.source), ['builtin', 'preinstalled']);
-	assert.deepEqual(service.installedPackages.map(pack => pack.id), ['ash/language-pack-zh-cn']);
+	assert.deepEqual(await service.getInstalledLanguages(), [
+		{ id: "en", label: "English", description: "English" },
+		{ id: "zh-CN", label: "简体中文", description: "Chinese (Simplified)", extensionId: "ash/language-pack-zh-cn" },
+	]);
 });
 
 test("language pack catalogs are validated before projection", () => {
@@ -50,9 +50,9 @@ test("Extensions localization capability resources become installed language pac
 	using service = createService(extensionManagement);
 
 	await service.whenReady;
-	assert.equal(service.availableLocales.some(locale => locale.locale === "fr" && locale.source === "extensionManagement"), true);
-	assert.equal(service.installedPackages[0]?.installed, true);
-	assert.equal((await service.search("", 10))[0]?.installed, true);
+	assert.deepEqual((await service.getInstalledLanguages()).find(locale => locale.id === "fr"), {
+		id: "fr", label: "Français", description: "French", extensionId: "example/localization-fr-0",
+	});
 });
 
 function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionManagementService {
@@ -98,11 +98,11 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 	};
 }
 
-function createService(extensionManagement: IExtensionManagementService, store: Partial<ILanguagePackStore> = {}): ExtensionsLanguagePackService {
+function createService(extensionManagement: IExtensionManagementService, store: Partial<ILanguagePackStore> = {}): WebLanguagePacksService {
 	using services = new InstantiationService();
 	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, createTestLanguagePackStore(store));
-	return services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
+	return services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
 }
 
 test('installed pack updates are saved for the next startup before they are advertised', async () => {
@@ -146,7 +146,7 @@ test('conflicting locale providers cannot overwrite resources or hide other lang
 		const saved: LanguagePackCatalog[] = [];
 		using service = createService(createExtensions(catalogs), { read: async () => undefined, write: async value => { saved.push(value); } });
 		await service.whenReady;
-		assert.deepEqual(service.availableLocales.map(value => value.locale), ['de', 'en', 'zh-CN']);
+		assert.deepEqual((await service.getInstalledLanguages()).map(value => value.id), ['de', 'en', 'zh-CN']);
 		assert.deepEqual(saved, [german]);
 	}
 });
@@ -170,7 +170,7 @@ test('an unreadable provider releases its lease and does not hide another locale
 	extensions.releaseCapability = async lease => { released.push(lease); };
 	using service = createService(extensions);
 	await service.whenReady;
-	assert.deepEqual(service.availableLocales.map(value => value.locale), ['de', 'en', 'zh-CN']);
+	assert.deepEqual((await service.getInstalledLanguages()).map(value => value.id), ['de', 'en', 'zh-CN']);
 	assert.deepEqual(released, ['capability.localization.0', 'capability.localization.1']);
 });
 
@@ -184,9 +184,7 @@ test('the preinstalled Chinese extension can update independently and uninstall 
 	const store = createTestLanguagePackStore();
 	using service = createService(extensions, store);
 	await service.whenReady;
-	assert.equal(service.installedPackages.find(pack => pack.id === 'ash.language-pack-zh-cn@official')?.version, '1.1.0');
-	assert.equal(service.installedPackages.length, 1);
-	assert.equal(service.availableLocales.find(pack => pack.locale === 'zh-CN')?.source, 'extensionManagement');
+	assert.equal((await service.getInstalledLanguages()).find(pack => pack.id === 'zh-CN')?.extensionId, 'ash.language-pack-zh-cn@official');
 	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles.ash.greeting, '更新后的语言包');
 	assert.deepEqual((await store.readIndex()).map(({ extensionId, version, locale }) => ({ extensionId, version, locale })), [{ extensionId: 'ash.language-pack-zh-cn@official', version: '1.1.0', locale: 'zh-CN' }]);
 	current = [];
@@ -207,7 +205,7 @@ test('uninstall removes a language provider from startup resources and falls bac
 	installed = [];
 	await service.refresh();
 	assert.equal((await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store)).locale, 'en');
-	assert.equal(service.availableLocales.some(pack => pack.locale === 'fr'), false);
+	assert.equal((await service.getInstalledLanguages()).some(pack => pack.id === 'fr'), false);
 });
 
 test('English remains the fallback even when an installed provider declares English', async () => {

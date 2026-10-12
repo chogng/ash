@@ -28,7 +28,7 @@ test.describe('Git ignore decorations', () => {
 		await expect(ignored).toHaveAttribute('aria-label', 'ignored.log, Ignored by Git');
 		const ignoredColor = await ignored.evaluate(element => {
 			const reference = document.createElement('span');
-			reference.style.color = 'var(--ash-git-decoration-ignored-resource-foreground)';
+			reference.style.color = 'var(--ash-gitDecoration-ignoredResourceForeground)';
 			element.append(reference);
 			const color = getComputedStyle(reference).color;
 			reference.remove();

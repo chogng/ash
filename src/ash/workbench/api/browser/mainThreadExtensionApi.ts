@@ -225,7 +225,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.diagnostics.set(source, operation.collection, operation.entries);
 				return { result: 'done' };
 			case 'executeCommand': {
-				const value = await this.commandService.executeCommand(operation.command, ...operation.arguments);
+				const value = await this.commandService.executeCommand(operation.command, ...this.scmApi.reviveCommandArguments(source, operation.arguments));
 				return { result: 'command', value: value === undefined ? null : normalizeExtensionHostPayload(value), hasValue: value !== undefined };
 			}
 			case 'readResourceFile':

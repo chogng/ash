@@ -1,7 +1,7 @@
 import { isRecord } from '../../../base/common/types.js';
 import { parseLanguagePackCatalog, parseLanguagePackIndexEntry } from '../common/languagePackCatalog.js';
 import type { ILanguagePackStore } from '../common/languagePackStore.js';
-import type { LanguagePackCatalog } from '../common/languagePacksService.js';
+import type { LanguagePackCatalog } from '../common/languagePackContract.js';
 import type { LanguagePackIndexEntry } from '../common/languagePackContract.js';
 
 /** The browser profile owns these resources independently of App Server availability. */

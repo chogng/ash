@@ -1,7 +1,7 @@
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { normalizeLocale } from "../../../../platform/languagePacks/common/languagePackCatalog.js";
-import type { ILanguagePackItem } from "../../../../platform/languagePacks/common/languagePacksService.js";
+import type { ILanguagePackItem } from "../../../../platform/languagePacks/common/languagePacks.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import { localize } from "../../../../nls.js";
 import { productLanguagePackCatalogs } from "./localizationCatalogs.js";

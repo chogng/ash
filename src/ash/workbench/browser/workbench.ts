@@ -255,8 +255,8 @@ import { IPluginManagementService } from "../../platform/extensionManagement/com
 import { AppServerPluginManagementService } from "../services/extensionManagement/browser/appServerPluginManagementService.js";
 import { IExtensionManagementService } from "../../platform/extensionManagement/common/extensionManagementService.js";
 import { AppServerExtensionManagementService } from "../services/extensionManagement/browser/appServerExtensionManagementService.js";
-import { ExtensionsLanguagePackService } from "../../platform/languagePacks/browser/extensionsLanguagePackService.js";
-import { ILanguagePackService } from "../../platform/languagePacks/common/languagePacksService.js";
+import { WebLanguagePacksService } from "../../platform/languagePacks/browser/languagePacks.js";
+import { ILanguagePackService } from "../../platform/languagePacks/common/languagePacks.js";
 import { ILocaleService } from "../services/localization/common/locale.js";
 import { WorkbenchLocaleService } from "../services/localization/browser/localeService.js";
 import { ILocalizationService } from "../services/localization/common/localizationService.js";
@@ -516,7 +516,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
-		const languagePackService = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);

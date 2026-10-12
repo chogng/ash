@@ -11,6 +11,14 @@ export interface LanguagePackCatalog {
 	readonly extensionTranslations?: Readonly<Record<string, { readonly package: Readonly<Record<string, string>>; readonly bundle: Readonly<Record<string, string>>; }>>;
 }
 
+export interface PreinstalledLanguagePack {
+	readonly id: string;
+	readonly version: string;
+	readonly displayName: string;
+	readonly description: string;
+	readonly catalog: LanguagePackCatalog;
+}
+
 /** A derived startup resource tied to the installed package that supplied it. */
 export interface LanguagePackIndexEntry {
 	readonly locale: string;

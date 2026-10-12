@@ -1,14 +1,14 @@
 import { Event } from '../../../../../base/common/event.js';
 import { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
-import { ExtensionsLanguagePackService } from '../../../../../platform/languagePacks/browser/extensionsLanguagePackService.js';
+import { WebLanguagePacksService } from '../../../../../platform/languagePacks/browser/languagePacks.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import { ILanguagePackStore } from '../../../../../platform/languagePacks/common/languagePackStore.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IHostService } from '../../../host/browser/host.js';
 import { WorkbenchLocaleService } from '../../browser/localeService.js';
-import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePacksService.js';
+import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePackContract.js';
 import { setNlsMessages } from '../../../../../nls.js';
 import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../common/localizationCatalogs.js';
 import type { LanguagePackIndexEntry } from '../../../../../platform/languagePacks/common/languagePackContract.js';
@@ -33,7 +33,7 @@ export function createTestLanguagePackStore(overrides: Partial<ILanguagePackStor
 export function createEmptyTestLanguagePacks(): ILanguagePackService {
 	return {
 		onDidChange: Event.None, whenReady: Promise.resolve(), catalogs: productLanguagePackCatalogs,
-		availableLocales: [], installedPackages: [], search: async () => [], install: async () => { }, refresh: async () => { },
+		getInstalledLanguages: async () => [], refresh: async () => { },
 		getBuiltInExtensionTranslationsUri: async () => undefined,
 	};
 }
@@ -54,9 +54,9 @@ export function createTestLocaleService(configuration: IConfigurationService, la
 	return services.createInstance(WorkbenchLocaleService);
 }
 
-export function createTestLanguagePacks(extensionManagement: IExtensionManagementService): ExtensionsLanguagePackService {
+export function createTestLanguagePacks(extensionManagement: IExtensionManagementService): WebLanguagePacksService {
 	using services = new InstantiationService();
 	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, createTestLanguagePackStore());
-	return services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
+	return services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
 }

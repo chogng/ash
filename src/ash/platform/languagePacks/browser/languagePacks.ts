@@ -1,23 +1,21 @@
 import { URI } from "../../../base/common/uri.js";
-import type { LanguagePackIndexEntry } from "../common/languagePackContract.js";
+import type { LanguagePackCatalog, LanguagePackIndexEntry, PreinstalledLanguagePack } from "../common/languagePackContract.js";
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { IExtensionManagementService, type ExtensionsInstalledPackage } from "../../extensionManagement/common/extensionManagementService.js";
 import { decodeBase64, normalizeLocale, parseLanguagePackCatalog } from "../common/languagePackCatalog.js";
 import { ILanguagePackStore } from "../common/languagePackStore.js";
-import type { ILanguagePackService, LanguagePackCatalog, LanguagePackInfo, LanguagePackPackage, PreinstalledLanguagePack } from "../common/languagePacksService.js";
+import type { ILanguagePackService, ILanguagePackItem } from "../common/languagePacks.js";
 
 /** Browser client adapter that projects Extensions localization capabilities. */
-export class ExtensionsLanguagePackService extends Disposable implements ILanguagePackService {
+export class WebLanguagePacksService extends Disposable implements ILanguagePackService {
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly builtinLocales: ReadonlySet<string>;
-	private readonly preinstalledLocales: ReadonlySet<string>;
 	private readonly startupCatalogs = new Map<string, LanguagePackCatalog>();
 	private initialized = false;
 	private refreshQueued = false;
 	private readonly catalogsByLocale = new Map<string, LanguagePackCatalog>();
-	private extensionManagementLocales = new Set<string>();
-	private _installedPackages: readonly LanguagePackPackage[] = [];
+	private readonly installedProviders = new Map<string, string>();
 	private refreshPromise: Promise<void> | undefined;
 
 	readonly onDidChange = this._onDidChange.event;
@@ -31,7 +29,6 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 	) {
 		super();
 		this.builtinLocales = new Set(builtinCatalogs.map(catalog => normalizeLocale(catalog.locale)));
-		this.preinstalledLocales = new Set(preinstalled.map(extension => normalizeLocale(extension.catalog.locale)));
 		for (const catalog of [...builtinCatalogs, ...preinstalled.map(extension => extension.catalog)]) {
 			const locale = normalizeLocale(catalog.locale);
 			if (locale) this.catalogsByLocale.set(locale, { ...catalog, locale });
@@ -47,35 +44,18 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 		return [...this.catalogsByLocale.values()];
 	}
 
-	get availableLocales(): readonly LanguagePackInfo[] {
+	public async getInstalledLanguages(): Promise<ILanguagePackItem[]> {
+		await this.whenReady;
 		return this.catalogs.map(catalog => {
-			let source: LanguagePackInfo['source'] = "extensionManagement";
-			if (this.builtinLocales.has(catalog.locale)) { source = "builtin"; }
-			else if (this.preinstalledLocales.has(catalog.locale) && !this.extensionManagementLocales.has(catalog.locale)) { source = "preinstalled"; }
-			return { locale: catalog.locale, languageName: catalog.languageName, localizedLanguageName: catalog.localizedLanguageName, source };
-		}).sort((left, right) => left.locale.localeCompare(right.locale));
-	}
-
-	get installedPackages(): readonly LanguagePackPackage[] {
-		const updatedIds = new Set(this._installedPackages.map(extension => providerId(extension.id)));
-		return [...this.preinstalled.filter(extension => !updatedIds.has(providerId(extension.id))).map(({ catalog: _catalog, ...extension }) => ({ ...extension, installed: true })), ...this._installedPackages];
-	}
-
-	async search(query: string, limit?: number): Promise<readonly LanguagePackPackage[]> {
-		const packages = await this.extensionManagement.search(query, { packageType: "localization", limit });
-		const installed = new Set(this.installedPackages.map(packageValue => `${packageValue.id}\0${packageValue.version}`));
-		return packages.map(packageValue => ({
-			id: packageValue.id,
-			version: packageValue.version,
-			displayName: packageValue.displayName,
-			description: packageValue.description,
-			installed: installed.has(`${packageValue.id}\0${packageValue.version}`),
-		}));
-	}
-
-	async install(packageId: string, version?: string): Promise<void> {
-		await this.extensionManagement.install(packageId, version);
-		await this.refresh();
+			const extensionId = this.installedProviders.get(catalog.locale)
+				?? this.preinstalled.find(pack => pack.catalog.locale === catalog.locale)?.id;
+			return {
+				id: catalog.locale,
+				label: catalog.localizedLanguageName,
+				description: catalog.languageName,
+				...(extensionId ? { extensionId } : {}),
+			};
+		}).sort((left, right) => left.id.localeCompare(right.id));
 	}
 
 	public async getBuiltInExtensionTranslationsUri(id: string, language: string): Promise<URI | undefined> {
@@ -113,14 +93,11 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 				if (preinstalled && providerId(preinstalled.id) !== providerId(entry.extensionId)) { continue; }
 				this.catalogsByLocale.set(entry.locale, entry.catalog);
 				this.startupCatalogs.set(entry.locale, entry.catalog);
-				this.extensionManagementLocales.add(entry.locale);
+				this.installedProviders.set(entry.locale, entry.extensionId);
 			}
 			this.initialized = true;
 		}
 		const installed = await this.extensionManagement.listInstalled();
-		const installedPackages = installed
-			.filter(packageValue => packageValue.state === 'installed' && packageValue.capabilities.some(capability => capability.kind === 'localization'))
-			.map(packageValue => ({ id: packageValue.package.id, version: packageValue.package.version, displayName: packageValue.package.id, description: '', installed: true }));
 		const candidates = new Map<string, LanguagePackIndexEntry | undefined>();
 		for (const entry of await loadInstalledCatalogs(this.extensionManagement, installed)) {
 			if (this.builtinLocales.has(entry.locale)) { continue; }
@@ -138,12 +115,11 @@ export class ExtensionsLanguagePackService extends Disposable implements ILangua
 			if (this.builtinLocales.has(catalog.locale)) { this.catalogsByLocale.set(catalog.locale, catalog); }
 		}
 		for (const pack of this.preinstalled) { this.catalogsByLocale.set(pack.catalog.locale, pack.catalog); }
-		this.extensionManagementLocales.clear();
+		this.installedProviders.clear();
 		for (const entry of loaded) {
 			this.catalogsByLocale.set(entry.locale, entry.catalog);
-			this.extensionManagementLocales.add(entry.locale);
+			this.installedProviders.set(entry.locale, entry.extensionId);
 		}
-		this._installedPackages = installedPackages;
 		this._onDidChange.fire();
 	}
 }

@@ -122,7 +122,7 @@ import { nodeWorkspacePathService } from '../../platform/workspaces/node/workspa
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
 import { productLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
-import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePacksService.js';
+import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL } from '../../platform/window/common/window.js';
 export type AppServerStartupMode = "required" | "disabled";

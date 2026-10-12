@@ -22,7 +22,7 @@ import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilitie
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacks.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -445,7 +445,9 @@ function displayLanguageSetting(setting: ISetting, locale: ILocaleService, langu
 		get title() { return localization.translate('ash.settings', 'displayLanguage.select', 'Interface language'); },
 		get description() { return localization.translate('ash.settings', 'displayLanguage.description', 'Choose the language used by the Ash interface.'); },
 		get options() {
-			const options = languagePacks.availableLocales.map(locale => ({ value: locale.locale, label: locale.localizedLanguageName }));
+			const options = languagePacks.catalogs
+				.map(catalog => ({ value: catalog.locale, label: catalog.localizedLanguageName }))
+				.sort((left, right) => left.value.localeCompare(right.value));
 			const preference = configuration.getValue<string>(LocalizationConfiguration.locale);
 			// A selected local resource remains valid after its Extensions package is removed.
 			if (!options.some(option => option.value === preference)) options.push({ value: preference, label: preference });

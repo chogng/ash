@@ -4,7 +4,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { normalizeLocale } from '../../../../platform/languagePacks/common/languagePackCatalog.js';
 import { ILanguagePackStore } from '../../../../platform/languagePacks/common/languagePackStore.js';
-import { ILanguagePackService, type ILanguagePackItem } from '../../../../platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService, type ILanguagePackItem } from '../../../../platform/languagePacks/common/languagePacks.js';
 import { IHostService } from '../../host/browser/host.js';
 import { LocalizationConfiguration, type ILocaleService } from '../common/locale.js';
 

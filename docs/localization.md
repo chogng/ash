@@ -27,6 +27,19 @@ install them into the renderer. The App Server/Extensions Manager acquires and l
 capability resource. Each client window's `platform/languagePacks` adapter reads that path-free
 resource, validates the Ash catalog contract, and projects the result to its own Workbench services.
 
+The shared service contract is `platform/languagePacks/common/languagePacks.ts`; its
+Desktop and Web implementation is `browser/languagePacks.ts`. Ash retains
+`common/languagePackContract.ts` for the versioned catalog data,
+`common/languagePackCatalog.ts` for boundary validation and startup fallback, and
+`common/languagePackStore.ts` plus `browser/languagePackStore.ts` for profile-local
+startup resources. Settings derives language options from the same service-owned catalogs.
+The service does not retain a second installed-package list or own package search and installation.
+
+`getAvailableLanguages()` and gallery-extension metadata remain unimplemented because the
+Extensions package summary does not expose a locale. Package names are not treated as locale IDs.
+The browser adapter serves both hosts; no Node language-pack service or test-driver-only
+`localizedStrings.ts` is needed by the current production call chain.
+
 ## Preinstalled language packs
 
 Simplified Chinese is owned by [`extensions/language-pack-zh-cn`](../extensions/language-pack-zh-cn/package.json),
@@ -95,7 +108,7 @@ catalog contract can reject a catalog without changing the generic Extensions sc
 
 ## Runtime behavior
 
-`ExtensionsLanguagePackService` starts with core English and the preinstalled language-pack extensions,
+`WebLanguagePacksService` starts with core English and the preinstalled language-pack extensions,
 and loads additional installed Extensions catalogs through the normal capability lease. English always takes precedence. An installed update with the same package ID as a preinstalled
 pack replaces its bundled catalog; a different provider cannot replace that locale. The browser
 startup index records locale, package ID, version and digest alongside the validated catalog. When multiple
@@ -115,8 +128,8 @@ valid pack can restore it on a later startup. `WorkbenchLocalizationService` use
 snapshot as direct `nls.ts` calls. Missing messages use the caller's English source message.
 
 The Command Palette provides **Configure Display Language** and **Clear Display Language Preference**.
-The picker lists available locales and searches Extensions localization packages as the user types.
-Selecting a package installs it and selects its new locale; the Extensions entry opens the package
+The picker obtains installed locales through `ILanguagePackService.getInstalledLanguages()` and searches localization packages directly through `IExtensionManagementService` as the user types.
+Selecting a package installs it through Extension Management, refreshes the language catalogs, and selects its new locale; the Extensions entry opens the package
 browser when the user wants to browse. Clearing the preference removes `workbench.locale` from the
 local profile and selects English for the next startup. Changing the preference leaves the current
 interface unchanged and offers to restart now or later. After a successful installed-package refresh, the index is replaced atomically; uninstalled,

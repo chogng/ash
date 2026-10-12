@@ -1,12 +1,11 @@
 import './media/chatListWidget.css';
-import { MarkdownElement } from "../../../../../base/browser/markdownRenderer.js";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { Disposable, DisposableMap, DisposableStore } from "../../../../../base/common/lifecycle.js";
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ChatMarkdownDecorationsRenderer } from './chatContentParts/chatMarkdownDecorationsRenderer.js';
+import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common/config/fontInfo.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
@@ -228,16 +227,15 @@ export class ChatListWidget extends DomWidget {
 			article.append(body);
 		}
 		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan" || item.type === "advisor") {
-			const markdown = disposables.add(new MarkdownElement({
+			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
 				breaks: true,
 				fillInIncompleteTokens: item.transient,
-				linkHandler: target => this.onDidRequestLink?.(target),
+				linkHandler: (target: string) => this.onDidRequestLink?.(target),
 				imageResourceLoader: this.imageResourceLoader,
 			}));
-			body.append(markdown.element);
-			disposables.add(this.instantiationService.createInstance(ChatMarkdownDecorationsRenderer, markdown.element));
+			body.append(markdown.domNode);
 		} else {
 			const content = h(this.element.ownerDocument, "pre");
 			content.textContent = item.text;

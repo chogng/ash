@@ -331,7 +331,7 @@
       },
       {
         "command": "git.graph.compareRef",
-        "title": "%command.git.graph.compareRef%",
+        "title": "%command.git.graph.compareRef%"
         "enablement": "!scmBusy"
       },
       {
@@ -385,6 +385,8 @@
       {
         "command": "git.openFile",
         "title": "%git.openFileCommand%",
+        "category": "Git",
+        "icon": "$(go-to-file)",
         "enablement": "!scmBusy"
       },
       {
@@ -1177,6 +1179,11 @@
         "view": "ash.gitView",
         "contents": "[%git.welcome.openFolder%](command:workbench.action.files.openFolder)",
         "when": "workspaceFolderCount == 0 && openFolderWorkspaceSupport"
+      },
+      {
+        "view": "ash.gitView",
+        "contents": "[%git.welcome.openFolder%](command:workbench.action.files.openFolderViaWorkspace)",
+        "when": "workspaceFolderCount == 0 && !openFolderWorkspaceSupport && browserLocalFolderSupport"
       },
       {
         "view": "ash.gitView",

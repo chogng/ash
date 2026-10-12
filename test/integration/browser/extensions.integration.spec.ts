@@ -60,6 +60,7 @@ test('Plugins, Skills and MCP use the registered editor with their own content t
 	await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
 	await editor.getByRole('tab', { name: 'Instructions', exact: true }).click();
 	await expect(editor.getByRole('tabpanel', { name: 'Instructions', exact: true })).toContainText('Review changes carefully.');
+	await expect(editor.getByRole('tabpanel', { name: 'Instructions', exact: true })).not.toContainText('description:');
 	await editor.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
 	await expect(editor.getByRole('tabpanel', { name: 'Diagnostics', exact: true })).toContainText('Invalid metadata');
 	await page.evaluate(() => window.ashExtensionsIntegration.addMcpPackage());
@@ -450,7 +451,8 @@ for (const [locale, skillsTitle, disable, enable, openInstructions] of [
 		await expect(details.getByRole('button', { name: enable, exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3, 'session-scope']]);
 		await details.getByRole('button', { name: openInstructions, exact: true }).click();
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'document'))).toMatchObject(['document', { initialText: '# Review\nReview changes carefully.', readOnly: true, languageId: 'markdown' }]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'document'))).toMatchObject(['document', { initialText: '---\r\nname: review\r\ndescription: Review changes\r\n---\r\n# Review\r\nReview changes carefully.', readOnly: true, languageId: 'markdown' }]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'documentOptions'))).toMatchObject(['documentOptions', { selection: { startLineNumber: 5, startColumn: 1, endLineNumber: 5, endColumn: 1 } }]);
 		await header.focus();
 		await header.press('ArrowLeft');
 		await expect(header).toHaveAttribute('aria-expanded', 'false');

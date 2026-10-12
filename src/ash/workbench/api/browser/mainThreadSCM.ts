@@ -189,6 +189,23 @@ export class MainThreadSCM extends Disposable {
 		signal.throwIfAborted();
 		return result;
 	}
+	public reviveCommandArguments(source: ExtensionClientSource, args: readonly JsonValue[]): unknown[] {
+		return args.map(value => {
+			if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+			const entry = object(value);
+			if (entry.type !== 'historyItemViewModel') return value;
+			const descriptor = object(entry.repository);
+			const providerId = string(object(descriptor.provider).id);
+			const repository = this.scm.getRepository(providerId);
+			const owned = [...this.registrations].some(([, owner]) => owner.source.extensionId === source.extensionId && owner.source.activationGeneration === source.activationGeneration && owner.source.incarnation === source.incarnation && owner.providers.get(providerId) === repository?.provider);
+			if (!repository || !owned) throw new TypeError('SCM history command belongs to a retired or foreign repository');
+			return {
+				type: entry.type, repository,
+				historyItemViewModel: { historyItem: parseHistoryItem(object(entry.historyItemViewModel).historyItem) },
+				references: entry.references == null ? undefined : array(entry.references).map(parseRef),
+			};
+		});
+	}
 	public async prepareCommandArguments(extensionId: string, args: readonly unknown[]): Promise<JsonValue[]> {
 		for (const [, owner] of this.registrations) {
 			if (owner.source.extensionId !== extensionId) {
@@ -280,6 +297,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private draft: string;
 	private draftRevision = 0;
 	private syncedDraftRevision = 0;
+	private resourceGroups: readonly ISCMResourceGroup[] | undefined;
 	public readonly historyProvider: ISCMHistoryProvider | undefined;
 	public readonly mergeProvider;
 	constructor(private snapshot: ProviderSnapshot, public readonly call: (method: string, payload: Record<string, unknown>, signal?: AbortSignal) => Promise<JsonValue>, private readonly reportError: (error: unknown) => void) {
@@ -344,7 +362,8 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		};
 	}
 	public get groups(): readonly ISCMResourceGroup[] {
-		return this.snapshot.groups.map(group => ({
+		// Group identity remains stable until the next snapshot so captured menu contexts stay valid.
+		return this.resourceGroups ??= this.snapshot.groups.map(group => ({
 			id: string(group.id), label: string(group.label), actions: array(group.actions).map(value => this.action(value)),
 			resources: array(group.resources).map(value => {
 				const resource = object(value);
@@ -388,6 +407,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		this.snapshot = value;
+		this.resourceGroups = undefined;
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }
 		if (!structuralEquals(this.historyBaseRef.get(), value.historyBaseRef)) { this.historyBaseRef.set(value.historyBaseRef); }

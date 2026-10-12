@@ -10,9 +10,13 @@ import { registerAction2 } from '../../../../../platform/actions/common/actions.
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacksService.js';
-import type { LanguagePackCatalog, LanguagePackInfo } from '../../../../../platform/languagePacks/common/languagePacksService.js';
-import type { LanguagePackPackage } from '../../../../../platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService, type ILanguagePackItem } from '../../../../../platform/languagePacks/common/languagePacks.js';
+import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePackContract.js';
+import {
+	IExtensionManagementService,
+	type ExtensionsInstalledPackage,
+	type ExtensionsSearchOptions,
+} from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -56,7 +60,8 @@ test('display language command installs a Extensions catalog before selecting it
 		const changed = nextPreferenceChange(environment.configuration);
 		picker.accept(packageItem);
 		await changed;
-		assert.deepEqual(environment.languagePacks.installs, [['fr-pack', '1']]);
+		assert.deepEqual(environment.installs, [['fr-pack', '1']]);
+		assert.deepEqual(environment.searches, [['French', { packageType: 'localization', limit: 30 }]]);
 		assert.equal(environment.configuration.getValue(LocalizationConfiguration.locale), 'fr');
 		assert.equal(environment.locale.locale, 'en');
 		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Display Language');
@@ -64,6 +69,30 @@ test('display language command installs a Extensions catalog before selecting it
 	} finally {
 		resetNlsResolver();
 	}
+});
+
+test('display language search excludes installed package versions through Extension Management', async () => {
+	using environment = new LanguageActionEnvironment();
+	environment.installedPackages.push({
+		installationId: 'installed.fr',
+		package: { id: 'fr-pack', version: '1', digest: `sha256:${'a'.repeat(64)}` },
+		state: 'installed',
+		capabilities: [],
+	});
+	await environment.commands.executeCommand(ConfigureDisplayLanguageAction.ID);
+	const picker = environment.quickInput.picker!;
+	const searched = new Promise<void>(resolve => {
+		const listener = picker.onDidChangeItems(() => {
+			listener.dispose();
+			resolve();
+		});
+	});
+	picker.setQuery('French');
+	await searched;
+	assert.equal(picker.items.some(item => item.label === 'French pack'), false);
+	assert.deepEqual(environment.searches, [['French', { packageType: 'localization', limit: 30 }]]);
+	assert.deepEqual(environment.errors, []);
+	picker.hide();
 });
 
 class LanguageActionEnvironment extends Disposable {
@@ -74,11 +103,25 @@ class LanguageActionEnvironment extends Disposable {
 	public readonly quickInput = new TestQuickInputService();
 	public readonly errors: string[] = [];
 	public readonly commands: CommandService;
+	public readonly installs: Array<[string, string | undefined]> = [];
+	public readonly searches: Array<[string, ExtensionsSearchOptions | undefined]> = [];
+	public readonly installedPackages: ExtensionsInstalledPackage[] = [];
 
 	constructor() {
 		super();
 		const services = new InstantiationService();
 		services.registerInstance(ILanguagePackService, this.languagePacks);
+		services.registerInstance(IExtensionManagementService, {
+			search: async (query: string, options?: ExtensionsSearchOptions) => {
+				this.searches.push([query, options]);
+				return [{ id: 'fr-pack', version: '1', packageType: 'localization', displayName: 'French pack', description: '' }];
+			},
+			listInstalled: async () => this.installedPackages,
+			install: async (id: string, version?: string) => {
+				this.installs.push([id, version]);
+				this.languagePacks.queueFrenchCatalog();
+			},
+		} as unknown as IExtensionManagementService);
 		services.registerInstance(ILocaleService, this.locale);
 		services.registerInstance(IQuickInputService, this.quickInput);
 		services.registerInstance(INotificationService, {
@@ -99,30 +142,25 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 	private readonly installedCatalogs: LanguagePackCatalog[] = [...productLanguagePackCatalogs];
 	public readonly onDidChange = this.changed.event;
 	public readonly whenReady = Promise.resolve();
-	public readonly installs: Array<[string, string | undefined]> = [];
-	public readonly installedPackages: readonly LanguagePackPackage[] = [];
+	private pendingFrenchCatalog = false;
 
 	public get catalogs(): readonly LanguagePackCatalog[] {
 		return this.installedCatalogs;
 	}
 
-	public get availableLocales(): readonly LanguagePackInfo[] {
-		return this.installedCatalogs.map(catalog => ({
-			locale: catalog.locale,
-			languageName: catalog.languageName,
-			localizedLanguageName: catalog.localizedLanguageName,
-			source: catalog.locale === 'fr' ? 'extensionManagement' : 'builtin',
-		}));
+	public async getInstalledLanguages(): Promise<ILanguagePackItem[]> {
+		return this.installedCatalogs.map(catalog => ({ id: catalog.locale, label: catalog.localizedLanguageName }));
 	}
 
 	public async getBuiltInExtensionTranslationsUri(): Promise<undefined> { return undefined; }
 
-	public async search(): Promise<readonly LanguagePackPackage[]> {
-		return [{ id: 'fr-pack', version: '1', displayName: 'French pack', description: '', installed: false }];
+	public queueFrenchCatalog(): void {
+		this.pendingFrenchCatalog = true;
 	}
 
-	public async install(packageId: string, version?: string): Promise<void> {
-		this.installs.push([packageId, version]);
+	public async refresh(): Promise<void> {
+		if (!this.pendingFrenchCatalog) { return; }
+		this.pendingFrenchCatalog = false;
 		this.installedCatalogs.push({
 			schemaVersion: 1,
 			locale: 'fr',
@@ -134,7 +172,6 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 		this.changed.fire();
 	}
 
-	public async refresh(): Promise<void> { }
 }
 
 class TestQuickInputService implements IQuickInputService {
@@ -164,6 +201,7 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	public readonly onDidAccept = this.accepted.event;
 	public readonly onDidChangeValue = this.changed.event;
 	public readonly onDidHide = this.hidden.event;
+	public readonly onDidChangeItems = this.itemsChanged.event;
 	public readonly onDidBlur = Event.None;
 	public readonly onDidTriggerItemButton = Event.None;
 	public ariaLabel = '';

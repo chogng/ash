@@ -1,5 +1,5 @@
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
-import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IEditorService } from '../../../editor/common/editorService.js';
 import { IWorkspaceOpenService } from '../../../workspaces/browser/workspaceOpenService.js';

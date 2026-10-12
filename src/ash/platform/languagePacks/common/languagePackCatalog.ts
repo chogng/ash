@@ -1,6 +1,6 @@
 import { decodeBase64 as decodeBase64Buffer } from "../../../base/common/buffer.js";
 import { isRecord } from "../../../base/common/types.js";
-import type { LanguagePackCatalog } from "./languagePacksService.js";
+import type { LanguagePackCatalog } from "./languagePackContract.js";
 import { ASH_LOCALIZATION_CATALOG_VERSION } from "./languagePackContract.js";
 import type { ILanguagePackStore } from "./languagePackStore.js";
 import type { LanguagePackIndexEntry } from "./languagePackContract.js";

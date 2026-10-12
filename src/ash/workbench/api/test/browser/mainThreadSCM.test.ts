@@ -28,6 +28,34 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[]) {
 	return { lifetime, scm, view, bridge, decorationProviders, errors };
 }
 
+test('SCM resource groups retain identity within a snapshot and retire it on replacement', () => {
+	const snapshot = { ...(provider() as Record<string, JsonValue>), groups: [{ id: 'changes', label: 'Changes', actions: [], resources: [] }] };
+	const value = fixture(async () => null, [snapshot]);
+	using cleanup = value.lifetime;
+	const repository = value.scm.getRepository('repo')!;
+	const groups = repository.provider.groups;
+	assert.strictEqual(repository.provider.groups, groups);
+	assert.ok(repository.provider.groups.includes(groups[0]!));
+	value.bridge.set(source, 'ash.scm', 2, [snapshot]);
+	assert.notStrictEqual(repository.provider.groups, groups);
+	assert.ok(!repository.provider.groups.includes(groups[0]!));
+});
+
+test('SCM history command contexts revive only the owning live repository', async () => {
+	const value = fixture(async () => null);
+	using cleanup = value.lifetime;
+	const repository = value.scm.getRepository('repo')!;
+	const item = { id: 'abc', parentIds: ['parent'], subject: 'Commit', message: 'Commit', remoteLinks: [{ name: 'origin', uri: URI.parse('https://example.com/abc') }] };
+	const encoded = await value.bridge.prepareCommandArguments('ash.git', [{ type: 'historyItemViewModel', repository, historyItemViewModel: { historyItem: item } }]);
+	const [revived] = value.bridge.reviveCommandArguments(source, encoded) as Array<{ repository: typeof repository; historyItemViewModel: { historyItem: typeof item }; }>;
+	assert.strictEqual(revived.repository, repository);
+	assert.deepEqual(revived.historyItemViewModel.historyItem.remoteLinks, item.remoteLinks);
+	assert.throws(() => value.bridge.reviveCommandArguments({ ...source, extensionId: 'other.extension' }, encoded), /foreign repository/);
+	assert.throws(() => value.bridge.reviveCommandArguments({ ...source, incarnation: 2 }, encoded), /retired/);
+	value.bridge.update({ generation: 2, extensions: [] });
+	assert.throws(() => value.bridge.reviveCommandArguments(source, encoded), /retired/);
+});
+
 test('SCM extension receives captured repository and history arguments and the current draft', async () => {
 	const calls: JsonValue[] = [];
 	const value = fixture(async request => { calls.push(request.payload); return null; }); using cleanup = value.lifetime;

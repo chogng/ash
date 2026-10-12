@@ -30,6 +30,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 	private readonly rows = new Map<string, RepositoryRow>();
 	private readonly statusDomNode: HTMLElement;
 	private isSwitching = false;
+	private pendingRepository: ISCMRepository | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -166,7 +167,11 @@ export class SCMRepositoriesViewPane extends ViewPane {
 	}
 
 	private async selectRepository(repository: ISCMRepository): Promise<void> {
-		if (this.isSwitching || repository.id === this.scmViewService.activeRepository?.id) return;
+		if (this.isSwitching) {
+			this.pendingRepository = repository;
+			return;
+		}
+		if (repository.id === this.scmViewService.activeRepository?.id || this.scmService.getRepository(repository.id) !== repository) return;
 		this.isSwitching = true;
 		this.list.element.setAttribute('aria-busy', 'true');
 		this.statusDomNode.textContent = '';
@@ -183,6 +188,9 @@ export class SCMRepositoriesViewPane extends ViewPane {
 				this.list.element.setAttribute('aria-busy', 'false');
 				this.updateSelection();
 			}
+			const pending = this.pendingRepository;
+			this.pendingRepository = undefined;
+			if (pending && !this.isDisposed) void this.selectRepository(pending);
 		}
 	}
 }

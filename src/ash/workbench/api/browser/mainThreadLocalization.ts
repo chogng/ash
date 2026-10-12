@@ -2,7 +2,7 @@ import { URI } from '../../../base/common/uri.js';
 import { getNLSLanguage } from '../../../nls.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
 import { toExtensionResourceURI } from '../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
-import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacks.js';
 import { parseTranslationMessages } from '../../../platform/languagePacks/common/languagePackCatalog.js';
 import type { ExtensionHostInitialization } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { parseJsonc } from '../../services/extensions/common/jsonc.js';

@@ -49,7 +49,7 @@ import type { IAppServerRemoteAgentService } from '../../../../services/remote/c
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { IDirPermissionsService } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
-import type { ILanguagePackService, LanguagePackInfo } from '../../../../../platform/languagePacks/common/languagePacksService.js';
+import type { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import type { ILocalTranscriptionModelStatus, ILocalTranscriptionService as LocalTranscriptionService, LocalTranscriptionModelState as ModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
 
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -149,7 +149,7 @@ const { createSettingWidget: instantiateSettingWidget } = await import('../../br
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../services/preferences/common/settingsModels.js');
 const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
 const { productLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
-const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacksService.js');
+const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacks.js');
 const { ILocaleService, LocalizationConfiguration } = await import('../../../../services/localization/common/locale.js');
 const { WorkbenchLocaleService } = await import('../../../../services/localization/browser/localeService.js');
 const { WorkbenchLocalizationService } = await import('../../../../services/localization/browser/workbenchLocalizationService.js');
@@ -1134,16 +1134,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	};
 	const configuration = disposables.add(new WorkbenchConfigurationService());
 	const languagePacksChanged = disposables.add(new Emitter<void>());
-	const availableLocales: LanguagePackInfo[] = productLanguagePackCatalogs.map(catalog => ({ ...catalog, source: 'builtin' }));
+	const catalogs = [...productLanguagePackCatalogs];
 	const languagePacks: ILanguagePackService = {
 		onDidChange: languagePacksChanged.event,
 		getBuiltInExtensionTranslationsUri: async () => undefined,
 		whenReady: Promise.resolve(),
-		catalogs: [...productLanguagePackCatalogs, { ...productLanguagePackCatalogs[0], locale: "fr", languageName: "French", localizedLanguageName: "Français" }],
-		availableLocales,
-		installedPackages: [],
-		search: async () => [],
-		install: async () => { },
+		catalogs,
+		getInstalledLanguages: async () => catalogs.map(catalog => ({ id: catalog.locale, label: catalog.localizedLanguageName })),
 		refresh: async () => { },
 	};
 	const locale = disposables.add(createTestLocaleService(configuration, languagePacks));
@@ -1415,17 +1412,17 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
 	assert.ok(languageControl);
 	assert.equal(languageControl.textContent, 'English');
-	availableLocales.push({ locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', source: 'extensionManagement' });
+	catalogs.push({ ...productLanguagePackCatalogs[0], locale: 'fr', languageName: 'French', localizedLanguageName: 'Français' });
 	languagePacksChanged.fire();
 	languageControl.click();
 	const languageListId = languageControl.getAttribute('aria-controls')!;
 	const languageOptions = [...ownerDocument.getElementById(languageListId)!.querySelectorAll<HTMLElement>('[role="option"]')];
-	assert.deepEqual(languageOptions.map(option => option.textContent), ['English', '简体中文', 'Français']);
-	languageOptions[2].click();
+	assert.deepEqual(languageOptions.map(option => option.textContent), ['English', 'Français', '简体中文']);
+	languageOptions.find(option => option.textContent === 'Français')!.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'fr');
 	assert.equal(languageControl.textContent, 'Français');
-	availableLocales.pop();
+	catalogs.pop();
 	languagePacksChanged.fire();
 	assert.equal(languageControl.textContent, 'fr');
 	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'fr');
@@ -1626,10 +1623,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(userTomlButton.disabled, false);
 
 	const quickInput = disposables.add(new QuickInputController(root));
-	editorServices.registerInstance(IQuickInputService, quickInput);
+	const hooksServices = disposables.add(editorServices.createChild());
+	hooksServices.registerInstance(IQuickInputService, quickInput);
 	const slowDiscovery = new DeferredPromise<readonly HookSource[]>();
 	nextHooksRead = slowDiscovery.p;
-	const configureHooks = editorServices.invokeFunction(showConfigureHooksQuickPick);
+	const configureHooks = hooksServices.invokeFunction(showConfigureHooksQuickPick);
 	const pickerInput = root.querySelector<HTMLInputElement>('.ash-quick-pick input')!;
 	assert.ok(pickerInput);
 	pickerInput.value = 'PreToolUse';

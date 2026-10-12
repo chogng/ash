@@ -126,7 +126,7 @@ async function startupProvider(workbench: import('../../../automation/workbench.
 
 async function expectBranchTitle(workbench: import('../../../automation/workbench.js').Workbench, title: string): Promise<void> {
 	await workbench.quickaccess.open('>git.branch');
-	await expect(workbench.page.locator('.ash-quick-pick').getByRole('option').filter({ hasText: 'git.branch' }).locator('.ash-quick-pick-row-label')).toHaveText(title);
+	await expect(workbench.page.locator('.ash-quick-pick').getByRole('option').filter({ hasText: 'git.branch' }).locator('.ash-quick-pick-row-label')).toHaveText(`Git: ${title}`);
 	await workbench.quickaccess.close();
 }
 
@@ -250,7 +250,7 @@ test('display language stays unchanged until restart and initializes Chinese com
 	await page.keyboard.press('F1');
 	const commands = page.locator('.ash-quick-pick');
 	await workbench.quickaccess.search('>创建分支');
-	await expect(commands.getByRole('option').filter({ hasText: 'git.branch' }).locator('.ash-quick-pick-row-label')).toHaveText('创建分支…');
+	await expect(commands.getByRole('option').filter({ hasText: 'git.branch' }).locator('.ash-quick-pick-row-label')).toHaveText('Git: 创建分支…');
 	await workbench.quickaccess.search('>Preferences: Change Keyboard Layout');
 	await expect(commands.locator('.ash-quick-pick-row-label', { hasText: '首选项：更改键盘布局' })).toBeVisible();
 	await commands.getByRole('combobox').press('Enter');
@@ -304,7 +304,7 @@ test('cached updated language pack translates startup and retired providers rest
 	await expect(workbench.page.getByRole('button', { name: '新版搜索命令', exact: true })).toBeVisible();
 	await workbench.page.keyboard.press('F1');
 	await workbench.quickaccess.search('>新版创建分支');
-	await expect(workbench.page.locator('.ash-quick-pick').getByRole('option').filter({ hasText: 'git.branch' }).locator('.ash-quick-pick-row-label')).toHaveText('新版创建分支…');
+	await expect(workbench.page.locator('.ash-quick-pick').getByRole('option').filter({ hasText: 'git.branch' }).locator('.ash-quick-pick-row-label')).toHaveText('Git: 新版创建分支…');
 	await workbench.page.keyboard.press('Escape');
 	// No installation owns this cached update. Reconciliation must retire it for the next startup.
 	await expect.poll(() => workbench.page.evaluate(async () => {

@@ -46,7 +46,7 @@ import type { IDecorationsService } from '../../../src/ash/workbench/services/de
 import type { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import type { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 

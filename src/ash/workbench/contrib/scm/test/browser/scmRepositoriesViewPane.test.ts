@@ -96,6 +96,23 @@ suite('SCMRepositoriesViewPane', () => {
 		}
 	});
 
+	test('keeps the latest repository selection made while activation is pending', async () => {
+		using environment = fixture();
+		using main = environment.scm.registerSCMProvider(provider('main', '/desktop/ash', async () => { }));
+		const activation = new DeferredPromise<void>();
+		using topic = environment.scm.registerSCMProvider(provider('topic', '/worktrees/ash', () => activation.p));
+		using pane = environment.services.createInstance(SCMRepositoriesViewPane, environment.container, { id: REPOSITORIES_VIEW_PANE_ID, title: 'Repositories' });
+		pane.setVisible(true);
+		const rows = pane.element.querySelectorAll<HTMLElement>('[role="option"]');
+		rows[1].click();
+		rows[0].click();
+		await activation.complete();
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.equal(environment.views.activeRepository, main);
+		assert.equal(rows[0].getAttribute('aria-selected'), 'true');
+	});
+
 	test('keeps the accepted repository after activation fails and ignores activation completed after removal', async () => {
 		using environment = fixture();
 		using main = environment.scm.registerSCMProvider(provider('main', '/desktop/ash', async () => { }));

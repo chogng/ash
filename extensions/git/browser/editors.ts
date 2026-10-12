@@ -6,7 +6,7 @@ export interface DialogClient { confirm(options: { title?: string; message: stri
 export interface EditorClient { openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<unknown>; }
 export interface ViewsClient { focusView(id: string): Promise<unknown>; openView(id: string, focus?: boolean): Promise<unknown>; }
 export interface WorkingCopyClient { get(uri: URI): Promise<readonly { isDirty: boolean; }[]> | readonly { isDirty: boolean; }[]; }
-export const commandClient: CommandClient = { executeCommand: async <T>(command: string, ...args: readonly unknown[]) => await commands.executeCommand<T>(command, ...args) as T };
+export const commandClient: CommandClient = { executeCommand: async <T>(command: string, ...args: readonly unknown[]) => await commands.executeCommand<T>(command, ...args.map(value => value === undefined ? null : encode(value))) as T };
 export const dialogClient: DialogClient = { confirm: options => editors.request({ method: 'confirm', ...options }) };
 export const editorClient: EditorClient = { openEditor: (input, options, target) => editors.request({ method: 'open', input: encode(input), options, sideBySide: target === 'sideGroup' }) };
 export const viewsClient: ViewsClient = { focusView: id => editors.request({ method: 'openView', id, focus: true }), openView: (id, focus) => editors.request({ method: 'openView', id, focus }) };

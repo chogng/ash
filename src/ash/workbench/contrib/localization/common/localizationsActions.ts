@@ -4,21 +4,25 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacksService.js';
-import type { LanguagePackInfo, LanguagePackPackage } from '../../../../platform/languagePacks/common/languagePacksService.js';
-import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { ILanguagePackService, type ILanguagePackItem } from '../../../../platform/languagePacks/common/languagePacks.js';
+import {
+	IExtensionManagementService,
+	OPEN_EXTENSIONS_COMMAND_ID,
+	type ExtensionsPackageSummary,
+} from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
+import { preinstalledLanguagePacks } from '../../../services/localization/common/localizationCatalogs.js';
 
 interface InstalledLanguageItem extends IQuickPickItem {
 	readonly kind: 'locale';
-	readonly locale: LanguagePackInfo;
+	readonly locale: ILanguagePackItem;
 }
 
 interface AvailablePackageItem extends IQuickPickItem {
 	readonly kind: 'package';
-	readonly languagePack: LanguagePackPackage;
+	readonly languagePack: ExtensionsPackageSummary;
 }
 
 interface BrowseLanguagesItem extends IQuickPickItem {
@@ -38,10 +42,12 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): void {
+	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const languagePacks = accessor.get(ILanguagePackService);
+		const extensionManagement = accessor.get(IExtensionManagementService);
 		const localeService = accessor.get(ILocaleService);
 		const notifications = accessor.get(INotificationService);
+		const installedLanguages = await languagePacks.getInstalledLanguages();
 		const picker = accessor.get(IQuickInputService).createQuickPick<LanguageItem>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
@@ -50,13 +56,13 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 
 		let searchRevision = 0;
 		let closed = false;
-		const installedItems = (): InstalledLanguageItem[] => languagePacks.availableLocales.map(locale => ({
+		const installedItems = (): InstalledLanguageItem[] => installedLanguages.map(locale => ({
 			kind: 'locale',
 			locale,
-			label: locale.localizedLanguageName,
-			description: locale.locale === localeService.locale
+			label: locale.label,
+			description: locale.id === localeService.locale
 				? localize({ bundle: 'ash.settings', key: 'displayLanguage.current' }, 'Current')
-				: locale.languageName,
+				: locale.description,
 		}));
 		const browseItem: BrowseLanguagesItem = {
 			kind: 'browse',
@@ -69,13 +75,20 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 				return;
 			}
 			try {
-				const packages = await languagePacks.search(query.trim(), 30);
+				const [packages, installations] = await Promise.all([
+					extensionManagement.search(query.trim(), { packageType: 'localization', limit: 30 }),
+					extensionManagement.listInstalled(),
+				]);
 				if (closed || revision !== searchRevision) {
 					return;
 				}
+				const installed = new Set([
+					...preinstalledLanguagePacks,
+					...installations.filter(installation => installation.state === 'installed').map(installation => installation.package),
+				].map(pack => `${pack.id}\0${pack.version}`));
 				picker.items = [
 					...installedItems(),
-					...packages.filter(languagePack => !languagePack.installed).map((languagePack): AvailablePackageItem => ({
+					...packages.filter(pack => !installed.has(`${pack.id}\0${pack.version}`)).map((languagePack): AvailablePackageItem => ({
 						kind: 'package',
 						languagePack,
 						label: languagePack.displayName,
@@ -104,19 +117,20 @@ export class ConfigureDisplayLanguageAction extends Action2 {
 					return;
 				}
 				if (item.kind === 'locale') {
-					await localeService.setLocale({ id: item.locale.locale, label: item.locale.localizedLanguageName });
+					await localeService.setLocale(item.locale);
 					return;
 				}
-				const previousLocales = new Set(languagePacks.availableLocales.map(locale => locale.locale));
-				await languagePacks.install(item.languagePack.id, item.languagePack.version);
-				const installedLocale = languagePacks.availableLocales.find(locale => !previousLocales.has(locale.locale));
+				const previousLocales = new Set((await languagePacks.getInstalledLanguages()).map(locale => locale.id));
+				await extensionManagement.install(item.languagePack.id, item.languagePack.version);
+				await languagePacks.refresh();
+				const installedLocale = (await languagePacks.getInstalledLanguages()).find(locale => !previousLocales.has(locale.id));
 				if (!installedLocale) {
 					throw new Error(localize(
 						{ bundle: 'ash.settings', key: 'displayLanguage.noLocale' },
 						'The installed package contains no new display language.',
 					));
 				}
-				await localeService.setLocale({ id: installedLocale.locale, label: installedLocale.localizedLanguageName });
+				await localeService.setLocale(installedLocale);
 			})().catch(error => {
 				notifications.error(localize(
 					{ bundle: 'ash.settings', key: 'displayLanguage.changeFailed' },

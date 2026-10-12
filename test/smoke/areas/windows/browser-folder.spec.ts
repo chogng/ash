@@ -15,7 +15,9 @@ test('standalone browser searches granted files and disables process commands', 
 		}
 		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 	});
-	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	const scmWelcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: 'Welcome', exact: true });
+	await scmWelcome.getByRole('button', { name: 'Open Folder', exact: true }).click();
 	await page.getByRole('tab', { name: 'Search', exact: true }).click();
 	const search = page.getByRole('textbox', { name: 'Search workspace' });
 	await expect(search).toBeVisible();
@@ -270,8 +272,7 @@ test('browser opens an authorized local folder and saves its files', { tag: ['@b
 	}, folderName)).toBe('first value');
 	await fileRow.click();
 	await page.keyboard.press('F1');
-	const commandQuery = page.locator('.ash-quick-pick').getByRole('combobox');
-	await commandQuery.fill('Copy Relative Path');
+	await workbench.quickaccess.search('>Copy Relative Path');
 	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Copy Relative Path' })).toBeVisible();
 	await page.keyboard.press('Enter');
 	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('hello %中.txt');
@@ -312,10 +313,7 @@ test('browser opens an authorized local folder and saves its files', { tag: ['@b
 	]);
 	expect(download.suggestedFilename()).toBe('hello %中.txt');
 	expect(await readFile(await download.path(), 'utf8')).toBe('second value');
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('New File...');
-	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'New File...' })).toBeVisible();
-	await page.keyboard.press('Enter');
+	await workbench.quickaccess.runCommand('explorer.newFile');
 	const newFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
 	await newFileName.fill('created.txt');
 	await newFileName.press('Enter');
@@ -327,9 +325,7 @@ test('browser opens an authorized local folder and saves its files', { tag: ['@b
 	const sourceFolderRow = explorer.getByRole('treeitem', { name: 'src', exact: true });
 	await sourceFolderRow.click();
 	if (await sourceFolderRow.getAttribute('aria-expanded') === 'false') await sourceFolderRow.click();
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('New File...');
-	await page.keyboard.press('Enter');
+	await workbench.quickaccess.runCommand('explorer.newFile');
 	const nestedFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
 	await nestedFileName.fill('nested.txt');
 	await nestedFileName.press('Enter');

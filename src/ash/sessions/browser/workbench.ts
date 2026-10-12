@@ -45,8 +45,8 @@ import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } 
 import { ILanguageModelsService, LanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
-import { ExtensionsLanguagePackService } from '../../platform/languagePacks/browser/extensionsLanguagePackService.js';
-import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacksService.js';
+import { WebLanguagePacksService } from '../../platform/languagePacks/browser/languagePacks.js';
+import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacks.js';
 import { ILocaleService } from '../../workbench/services/localization/common/locale.js';
 import { WorkbenchLocaleService } from '../../workbench/services/localization/browser/localeService.js';
 import { ILocalizationService } from '../../workbench/services/localization/common/localizationService.js';
@@ -312,7 +312,7 @@ export abstract class Workbench extends Disposable {
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		services.registerInstance(IPluginManagementService, this._register(new AppServerPluginManagementService(options.api.plugins, options.api.events)));
-		const languagePacks = this._register(services.createInstance(ExtensionsLanguagePackService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		const languagePacks = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePacks);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);

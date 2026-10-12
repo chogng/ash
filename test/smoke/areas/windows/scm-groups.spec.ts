@@ -287,16 +287,16 @@ test.describe('SCM editor groups', () => {
 		await picker.getByRole('combobox').press('Enter');
 		({ application, workbench } = await restartWorkbench());
 		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		await page.getByRole('tab', { name: /^源代码管理(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: '源代码管理更改', exact: true });
-		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: '打开 src/nested/two.ts 的暂存的更改', exact: true })).toBeVisible();
 		await expect(tree).toHaveAttribute('aria-description', /Shift\+F10.*全部折叠/u);
 		const before = await groupRepositoryState(testWorkspace.directory);
 		await tree.focus();
 		await tree.press('Home');
 		await workbench.menus.select(application, () => tree.press('Shift+F10'), ['全部折叠']);
-		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: '打开 src/nested/two.ts 的暂存的更改', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: '打开 src/nested/two.ts 的更改', exact: true })).toBeVisible();
 		await expect(tree).toBeFocused();
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
@@ -487,9 +487,9 @@ test.describe('SCM editor groups', () => {
 				({ workbench } = await restartWorkbench());
 			}
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			const staged = tree.getByRole('button', { name: 'Open Staged Changes for main.ts', exact: true });
+			const staged = tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 main.ts 的暂存的更改' : 'Open Staged Changes for main.ts', exact: true });
 			await staged.click();
 			await expect(page.locator('.stanza-diff-editor')).toBeVisible();
 			const tabCount = await workbench.editors.groupAt(0).tabs.count();
@@ -541,9 +541,9 @@ test.describe('SCM editor groups', () => {
 				({ workbench } = await restartWorkbench());
 			}
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			await tree.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 main.ts 的更改' : 'Open Changes for main.ts', exact: true }).click();
 			const group = workbench.editors.groupAt(0);
 			const diff = group.content.locator('.stanza-diff-editor:visible');
 			await expect(diff).toBeVisible();
@@ -561,7 +561,7 @@ test.describe('SCM editor groups', () => {
 			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true }).click();
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
-			await tree.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 main.ts 的更改' : 'Open Changes for main.ts', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await collapse.focus();
@@ -585,7 +585,7 @@ test.describe('SCM editor groups', () => {
 			await expect(next).toHaveCount(0);
 			await expect(collapse).toHaveCount(0);
 			const openWorkingFile = async (path: string): Promise<void> => {
-				const row = tree.getByRole('button', { name: `Open Changes for ${path}`, exact: true });
+				const row = tree.getByRole('button', { name: locale === 'zh-CN' ? `打开 ${path} 的更改` : `Open Changes for ${path}`, exact: true });
 				await row.hover();
 				await row.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? `打开文件：${path}` : `Open File: ${path}`, exact: true }).click();
 			};

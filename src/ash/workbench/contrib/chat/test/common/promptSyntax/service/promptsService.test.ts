@@ -36,7 +36,7 @@ test('Prompt discovery is metadata-only and reading pins source, digest and Sess
 	assert.equal(first.uri.scheme, 'private');
 	assert.deepEqual(backend.calls, [['list', 'cached', 'first'], ['list', 'cached', 'second']]);
 	const parsed = await prompts.parseNew(first.uri);
-	assert.deepEqual({ content: parsed.content, body: parsed.body, uri: parsed.uri }, { content: instructions, body: '# Review\nKeep the exact file.\n', uri: first.uri });
+	assert.deepEqual({ content: parsed.content, body: parsed.body?.getContent(), uri: parsed.uri }, { content: instructions, body: '# Review\r\nKeep the exact file.\r\n', uri: first.uri });
 	assert.deepEqual(backend.calls.at(-1), ['body', { id, version: { type: 'pinnedDigest', digest } }, 'first', false]);
 });
 

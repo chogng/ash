@@ -34,6 +34,7 @@ export default defineConfig({
 				advisor: resolve(import.meta.dirname, "advisor.html"),
 				agentTrace: resolve(import.meta.dirname, 'agentTrace.html'),
 				chatInput: resolve(import.meta.dirname, "chatInput.html"),
+				chatTranscript: resolve(import.meta.dirname, 'chatTranscript.html'),
 				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),
 				extensionHost: resolve(import.meta.dirname, 'extensionHost.html'),
 				gitExtension: resolve(import.meta.dirname, 'gitExtension.html'),

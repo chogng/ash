@@ -26,7 +26,7 @@ test('code blocks inherit editor typography, retain their nodes on updates, and 
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 	widget.render([{ id: 'reply', type: 'agentMessage', text: 'Text with `inline code`.\n\n```ts\nconst value = 1;\n```', transient: false }]);
 	const transcript = widget.element.querySelector<HTMLElement>('[role="log"]')!;
-	const code = transcript.querySelector('pre code')!;
+	const code = transcript.querySelector<HTMLElement>('.ash-chat-code-block .stanza-editor')!;
 	const inlineCode = transcript.querySelector('p code')!;
 	assert.match(transcript.style.getPropertyValue('--ash-chat-code-font-family'), /^"Fira Code",/u);
 	assert.equal(transcript.style.getPropertyValue('--ash-chat-code-font-size'), '16px');
@@ -35,7 +35,9 @@ test('code blocks inherit editor typography, retain their nodes on updates, and 
 	await configuration.updateValue(ChatEditorConfiguration.fontSize, 20);
 	await configuration.updateValue(ChatEditorConfiguration.lineHeight, 32);
 	await configuration.updateValue(ChatEditorConfiguration.wordWrap, 'on');
-	assert.equal(transcript.querySelector('pre code'), code);
+	assert.equal(transcript.querySelector('.ash-chat-code-block .stanza-editor'), code);
+	assert.equal(code.style.fontSize, '20px');
+	assert.equal(code.style.lineHeight, '32px');
 	assert.equal(transcript.querySelector('p code'), inlineCode);
 	assert.match(transcript.style.getPropertyValue('--ash-chat-code-font-family'), /^"Courier New",/u);
 	assert.equal(transcript.style.getPropertyValue('--ash-chat-code-font-size'), '20px');

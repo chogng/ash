@@ -1,5 +1,5 @@
 import { localizeManifest } from '../../../../platform/extensionManagement/common/extensionNls.js';
-import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacksService.js';
+import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacks.js';
 import { MenusRegistry, type ISubmenuItem } from '../../../../platform/actions/common/actions.js';
 import { extensionMenuId } from '../common/extensionMenus.js';
 import { ViewsRegistry } from '../../../common/views.js';
