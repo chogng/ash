@@ -979,7 +979,6 @@ export class View extends ViewEventHandler {
 		}
 		let context: RenderingContext;
 		let parts: ViewPart[];
-		let shouldMeasureText = false;
 		return {
 			owner: this,
 			renderText: () => {
@@ -991,21 +990,12 @@ export class View extends ViewEventHandler {
 				this.contentNode.setTransform(`translate3d(${bodyOffsetLeft}px, 0, 0)`);
 				if (this.viewLines.shouldRender()) {
 					this.viewLines.renderText(viewportData);
-					shouldMeasureText = true;
+					this.viewLines.onDidRender();
 				}
 				if (this.viewLinesGpu?.shouldRender()) {
 					this.viewLinesGpu.renderText(viewportData);
 					this.viewLinesGpu.onDidRender();
 				}
-			},
-			measureText: () => {
-				if (shouldMeasureText) {
-					this.viewLines.prepareRender(this.createRenderingContext(viewportData));
-					this.viewLines.onDidRender();
-				}
-			},
-			layoutText: () => {
-				const contentOffsetLeft = this.contentOffsetLeft;
 				const textLayout = this.viewport.layout;
 				this.domNode.domNode.classList.toggle("horizontally-scrollable", textLayout.maximumScrollPosition.left > 0);
 				this.domNode.domNode.classList.toggle("vertically-scrollable", textLayout.maximumScrollPosition.top > 0);
@@ -1191,8 +1181,6 @@ export class View extends ViewEventHandler {
 interface EditorRenderPass {
 	readonly owner: View;
 	renderText(): void;
-	measureText(): void;
-	layoutText(): void;
 	prepareParts(): void;
 	renderParts(): void;
 }
@@ -1233,9 +1221,9 @@ class EditorRenderingCoordinator {
 				onUnexpectedError(error);
 			}
 		}
-		// Finish text writes before width reads, then publish host geometry before
-		// measuring Parts. Every Part measurement still precedes Part commits.
-		for (const phase of ['renderText', 'measureText', 'layoutText', 'prepareParts', 'renderParts'] as const) {
+		// Finish every editor's text and scroll geometry before measuring Parts;
+		// every Part measurement must then finish before any Part writes geometry.
+		for (const phase of ['renderText', 'prepareParts', 'renderParts'] as const) {
 			for (const pass of passes) {
 				if (pass.owner.isDisposed) {
 					passes.delete(pass);

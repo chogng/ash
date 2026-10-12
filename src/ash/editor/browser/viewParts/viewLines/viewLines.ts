@@ -136,18 +136,14 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this.lastViewportData = viewportData;
 		this._checkMonospaceFontAssumptions();
 		this._visibleLines.render(viewportData);
-	}
-
-	public override prepareRender(context: RestrictedRenderingContext): void {
 		this.updateLineWidths();
 		// Reveal uses the measured extent of the new rows before the host binds
 		// its RenderingContext, including text wider than the model estimate.
-		this.applyHorizontalReveal(context.viewportData);
+		this.applyHorizontalReveal(viewportData);
 	}
 
 	public render(context: RestrictedRenderingContext): void {
 		this.renderText(context.viewportData);
-		this.prepareRender(context);
 	}
 
 	public override onConfigurationChanged(_event?: ViewConfigurationChangedEvent): boolean {

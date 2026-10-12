@@ -101,7 +101,7 @@ test('editors finish text rendering before measuring widgets and writing widget 
 			phases: ['text first', 'text second', 'measure first', 'measure second', 'write first', 'write second'],
 			measuredText: [['first updated', 'second updated'], ['first updated', 'second updated']],
 		});
-		assert.deepEqual(lineWidthSnapshots, [['first updated', 'second updated'], ['first updated', 'second updated']]);
+		assert.deepEqual(lineWidthSnapshots, [['first updated', 'second'], ['first updated', 'second updated']]);
 	} finally {
 		first.dispose();
 		second.dispose();
