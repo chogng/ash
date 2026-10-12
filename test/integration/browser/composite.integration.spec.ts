@@ -25,6 +25,7 @@ test('activity badges keep compact icons readable, center label counts and retai
 			const style = getComputedStyle(element.querySelector('.ash-composite-bar-badge')!);
 			return {
 				height: badge.height,
+				itemWidth: tab.width,
 				itemHeight: tab.height,
 				top: badge.top - tab.top,
 				right: tab.right - badge.right,
@@ -38,7 +39,7 @@ test('activity badges keep compact icons readable, center label counts and retai
 				foreground: style.color, background: style.backgroundColor, outline: style.outlineColor,
 			};
 		});
-		expect(geometry).toMatchObject({ height: 13, itemHeight: 35, top: 17, right: 0, font: '9px', weight: '600', lineHeight: '13px', padding: '0px 2px', radius: '16px' });
+		expect(geometry).toMatchObject({ height: 13, itemWidth: 24, itemHeight: 24, top: 11, right: 0, font: '9px', weight: '600', lineHeight: '13px', padding: '0px 2px', radius: '16px' });
 		expect(geometry.inside).toBe(true);
 		expect(geometry.overlap).toBeLessThan(0.5);
 		expect(geometry.foreground).not.toBe(geometry.background);

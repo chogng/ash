@@ -1,3 +1,9 @@
+import { IMenuService, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
+import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
+import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { extensionMenuId } from '../../../src/ash/workbench/services/extensions/common/extensionMenus.js';
+import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { IMessageHistoryService, type MessageHistoryEntry, type MessageHistoryQuery } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
@@ -57,7 +63,7 @@ import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
-import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { EventType, Gesture } from '../../../src/ash/base/browser/touch.js';
 import { addDisposableListener, stopEvent } from '../../../src/ash/base/browser/dom.js';
@@ -69,7 +75,7 @@ import { IChatService } from '../../../src/ash/workbench/services/chat/common/ch
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
+	interface Window { ashChatInputIntegration: { setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -79,7 +85,9 @@ if (locale) {
 }
 const resources = new DisposableStore();
 setARIAContainer(document.body);
-const theme = resources.add(new TestThemeService(darkColorTheme));
+const themes = { dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
+const themeName = new URLSearchParams(location.search).get('theme') as keyof typeof themes | null;
+const theme = resources.add(new TestThemeService(themes[themeName ?? 'dark']));
 resources.add(bindColorTheme(theme, document.body));
 if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	const main = document.querySelector('main')!;
@@ -128,6 +136,15 @@ const recordDestination = (value: unknown): void => { destinations.textContent =
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
 services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: URI | string) => { if (id === 'git.getRepositoryContexts') { return CommandsRegistry.getCommand(id)!(services); } recordDestination({ command: id, ...(resource !== undefined ? { resource: resource.toString() } : {}) }); } } as unknown as ICommandService);
+const contextKeys = resources.add(new ContextKeyService());
+services.registerInstance(IContextKeyService, contextKeys);
+services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
+const footerStatusVisible = contextKeys.createKey<boolean>('test.chat.status.visible', false);
+const footerStatus = new URLSearchParams(location.search).has('footerStatus')
+	? resources.add(MenusRegistry.appendMenuItem(extensionMenuId('chat/input/status'), {
+		command: { id: 'test.chat.status', title: 'Extension status', icon: Lxicon.chat4 },
+		when: ContextKeyExpr.has('test.chat.status.visible'), group: 'status',
+	})) : undefined;
 const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
 services.registerInstance(IClipboardService, {
 	triggerPaste: () => undefined,
@@ -386,7 +403,7 @@ const delegate: ChatInputDelegate = {
 		historySubmissions.push({ text: _text, skills: _skills });
 		submission.textContent = JSON.stringify(await Promise.all((contexts ?? []).map(context => context.resolve())));
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
-	}, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
+	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, executeServerCommand: async () => { }, interrupt: async () => { },
 	selectModel: async model => {
 		selectedModel = model;
 		automatic = false;
@@ -398,13 +415,14 @@ const delegate: ChatInputDelegate = {
 		automatic = true;
 		renderModels();
 	},
-	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, openModelSettings: async () => { },
+	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, openModelSettings: async () => { recordDestination({ settings: 'models' }); },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
 const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, [], {
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
+	renderSecondaryToolbar: !cowork,
 }));
 const state: ChatInputState = {
 	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
@@ -432,6 +450,8 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	setFooterStatus: visible => footerStatusVisible.set(visible),
+	removeFooterStatus: () => footerStatus?.dispose(),
 	historyState: () => ({ writes: historyWrites, submissions: historySubmissions, reads: historyReads }),
 	holdNextHistoryRead: () => { holdHistoryRead = true; },
 	releaseHistorySearch: query => historyWaits.get(query)?.(),

@@ -305,6 +305,7 @@
   "git.diff.unstageSelection": "Unstage selected lines",
   "git.diff.revertHunk": "Revert change",
   "git.diff.revertSelection": "Revert selected changes",
+  "git.diff.revertButton": "Revert changes",
   "git.readingStatus": "Reading Git status…",
   "git.mergeChanges": "Merge Changes",
   "git.switchingRepository": "Switching repository…",

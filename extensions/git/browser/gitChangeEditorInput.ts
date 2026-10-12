@@ -40,11 +40,15 @@ function changeOriginalPath(change: GitRepositoryChange, comparison: GitChangeFi
 }
 
 function changeEditorInput(content: GitCommitFileContent, resource: URI, label: string): IResourceEditorInput | undefined {
+	const text = content.kind === 'text' ? content.text : '';
+	const hasBom = text.startsWith('\uFEFF');
 	return {
 		resource,
 		label,
 		readOnly: true,
-		...(content.kind === 'binary' ? { contentType: 'application/octet-stream' } : { initialText: content.kind === 'missing' ? '' : content.text }),
+		// Git returns the file BOM in its snapshot; the text model restores it from encoding metadata.
+		// Strip exactly one BOM so a following U+FEFF remains part of the document.
+		...(content.kind === 'binary' ? { contentType: 'application/octet-stream' } : { initialText: hasBom ? text.slice(1) : text, ...(hasBom ? { encoding: 'utf8bom' } : {}) }),
 	};
 }
 

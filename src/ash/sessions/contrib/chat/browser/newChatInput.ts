@@ -1,4 +1,5 @@
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import './media/chatInput.css';
 import '../../../common/theme.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
@@ -62,6 +63,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IStorageService private readonly storage: IStorageService,
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IQuickInputService quickInput: IQuickInputService,
+		@IMenuService menuService: IMenuService,
 	) {
 		super(container, {
 			...delegate,
@@ -90,7 +92,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], { modePicker: 'visible', modelPickerPosition: 'leading' }, instantiationService, speechToText, onboarding, quickInput);
+		}], { modePicker: 'visible', modelPickerPosition: 'leading', renderSecondaryToolbar: false }, instantiationService, speechToText, onboarding, quickInput, menuService);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add('chat-composer');

@@ -39,3 +39,13 @@ test('extension editor inputs reject invalid binary data at the bridge boundary'
 	}
 	assert.throws(() => parseExtensionEditorInput({ kind: 'multiDiff', resource: 'comparison:/invalid', label: 'Invalid', items: [{ label: 'image.bin', binary: 'true', original: { resource: 'snapshot:/before' }, modified: { resource: 'snapshot:/after' } }] }), /Invalid multi-diff binary state/);
 });
+
+test('extension editor inputs retain validated snapshot encodings', () => {
+	const input = parseExtensionEditorInput({ resource: 'snapshot:/bom', initialText: '\uFEFFcontent', encoding: 'utf8bom' });
+	assert.equal(input.encoding, 'utf8bom');
+	assert.equal(input.initialText, '\uFEFFcontent');
+	assert.equal(input.readOnly, true);
+	for (const encoding of ['invalid', 1, false, {}]) {
+		assert.throws(() => parseExtensionEditorInput({ resource: 'snapshot:/invalid', encoding }));
+	}
+});

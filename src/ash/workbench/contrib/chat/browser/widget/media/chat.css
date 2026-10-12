@@ -48,6 +48,28 @@
 	flex-direction: column;
 }
 
+.ash-chat-secondary-toolbar {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	margin-top: var(--ash-spacing-size40);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-secondary-input-toolbar {
+	min-width: 0;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+}
+
+.ash-chat-input-status-toolbar {
+	flex: 0 0 auto;
+	margin-left: auto;
+}
+
 .ash-chat-status {
 	min-height: 18px;
 	flex: 0 0 auto;

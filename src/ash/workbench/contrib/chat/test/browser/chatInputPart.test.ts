@@ -1,3 +1,6 @@
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IMessageHistoryService } from '../../../../../platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
@@ -66,6 +69,8 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
 	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	partServices.registerInstance(ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService);
+	partServices.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
+	partServices.registerSingleton(IMenuService, () => partServices.createInstance(MenuService));
 	partServices.registerInstance(INotificationService, notifications);
 	partServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
 	const contextView = inputResources.add(new BrowserContextViewService(document.body));

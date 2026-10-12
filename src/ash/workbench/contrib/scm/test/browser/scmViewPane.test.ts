@@ -137,6 +137,14 @@ test("SCM diff inputs open live files and keep deleted files on the readable sid
 
 	assert.equal(live.goToFile?.resource.toString(), "file:///workspace/src/working.ts");
 	assert.equal(deleted.goToFile, deleted.original);
+	for (const prefix of ['', '\uFEFF', '\uFEFF\uFEFF']) {
+		const snapshots = await resolveGitChangeInputs({
+			changeFile: async () => ({ original: { kind: 'text', text: `${prefix}before` }, modified: { kind: 'text', text: `${prefix}after` } }),
+		} as unknown as IGitService, status, change('src/bom.ts', 'unmodified', 'modified'), 'unstaged');
+		// Only the encoding BOM is removed; a second U+FEFF is document content.
+		assert.deepEqual([snapshots.original?.initialText, snapshots.modified?.initialText, snapshots.original?.encoding, snapshots.modified?.encoding],
+			[prefix.slice(1) + 'before', prefix.slice(1) + 'after', prefix ? 'utf8bom' : undefined, prefix ? 'utf8bom' : undefined]);
+	}
 });
 
 test('SCM Open File actions open editable working files from each group and skip deleted files', async () => {

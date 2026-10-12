@@ -9,7 +9,7 @@ import { DictationActionViewItem } from '../../speechToText/dictationActionViewI
 import { DictationSession } from '../../speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
 import { addDisposableListener, h, stopEvent } from "../../../../../../base/browser/dom.js";
-import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { ButtonActionViewItem, LabelActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
 import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
@@ -18,7 +18,8 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
-import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
+import { IMenuService, MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
@@ -75,6 +76,7 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 export interface ChatInputPartOptions {
 	readonly modePicker: 'visible' | 'hidden';
 	readonly modelPickerPosition: 'leading' | 'trailing';
+	readonly renderSecondaryToolbar?: boolean;
 }
 
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
@@ -123,6 +125,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected readonly inputContainer: HTMLFormElement;
 	protected readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
+	private readonly secondaryToolbarContainer: HTMLElement | undefined;
 	// Retaining this action keeps the open picker and its focused switch alive when the selection changes.
 	private readonly modelAction = new ChatInputAction('ash.chat.input.model', '', '', undefined, true, 'model', () => { });
 	private readonly modelPickerPresentationChanged = this._register(new Emitter<void>());
@@ -156,6 +159,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@IMenuService menuService: IMenuService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -197,16 +201,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputToolbar.element.classList.toggle('model-picker-trailing', options.modelPickerPosition === 'trailing');
 		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
+		this.secondaryToolbarContainer = options.renderSecondaryToolbar === false
+			? undefined
+			: this.createSecondaryToolbar(contextMenuService, menuService);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
 				type, priority: 95, name: `chatAttachments-${type}-${createUuid()}`,
 				getProvider: () => {
 					const focused = this.element.ownerDocument.activeElement as HTMLElement | null;
-					if (!focused || (!this.input.element.contains(focused) && !this.attachmentList.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
+					const footerFocused = focused && this.secondaryToolbarContainer?.contains(focused);
+					if (!focused || (!footerFocused && !this.input.element.contains(focused) && !this.attachmentList.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
+					if (footerFocused && type === AccessibleViewType.View) { return undefined; }
 					if (type === AccessibleViewType.View && this.attachmentModel.size === 0) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
 						const names = this.attachmentModel.attachments.map(attachment => attachment.name).join('\n');
-						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('hooks.feedbackHelp', 'Hook blocks and failures appear in the conversation. Use Tab to reach a Hook summary and Enter or Space to expand its reason. Execution Trace shows status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only.') + '\n' + names;
+						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('hooks.feedbackHelp', 'Hook blocks and failures appear in the conversation. Use Tab to reach a Hook summary and Enter or Space to expand its reason. Execution Trace shows status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only.') + '\n' + (this.secondaryToolbarContainer ? localize('chat.input.secondaryHelp', 'Below the input, use Models & providers to open model settings, or Report an issue to open the issue reporter. Use Tab to reach each toolbar, arrow keys to move between actions, and Enter or Space to activate an action. Extension status actions appear alongside these controls.') : '') + '\n' + names;
 					}, () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -216,6 +225,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(this.speechToText.onDidChangeState(() => { this.status.textContent = this.statusText(this.state); this.renderToolbarActions(); }));
 		this._register(this.dictationSession.onDidEnd(error => { if (error) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error)); } }));
 		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer);
+		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
 		this._register(onboarding.registerHost({ container: this.element, focusTarget: this.element, isVisible: () => this.visible }));
 		this._register(addDisposableListener(this.inputContainer, "focusin", event => {
 			this.inputContainer.classList.add("focused");
@@ -671,6 +681,57 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		try { await this.dictationSession.stop(); }
 		catch (error) {
 			if (!this.isDisposed) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error))); }
+		}
+	}
+
+	private createSecondaryToolbar(contextMenus: IContextMenuService, menuService: IMenuService): HTMLElement {
+		const container = h(this.element.ownerDocument, 'div');
+		container.className = 'ash-chat-secondary-toolbar';
+		const settings: IAction = {
+			id: 'ash.chat.input.settings',
+			label: localize('chat.input.modelsAndProviders', 'Models & providers'),
+			tooltip: localize('chat.input.modelsAndProviders', 'Models & providers'),
+			icon: Lxicon.settings,
+			enabled: true,
+			run: () => this.runSecondaryAction(() => this.delegate.openModelSettings()),
+		};
+		const feedback: IAction = {
+			id: 'workbench.action.openIssueReporter',
+			label: localize('chat.input.reportIssue', 'Report an issue'),
+			tooltip: localize('chat.input.reportIssue', 'Report an issue'),
+			icon: Lxicon.chat4,
+			enabled: true,
+			run: () => this.runSecondaryAction(() => this.delegate.executeCommand({
+				commandId: 'workbench.action.openIssueReporter', argumentsText: '',
+			})),
+		};
+		const secondaryToolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenus, MenuId.ChatInputSecondary, {
+			ariaLabel: localize('chat.input.secondaryActions', 'Chat secondary actions'),
+			leadingActions: [settings, feedback],
+			presentation: 'inherit-foreground',
+			toolbarOptions: { primaryGroup: () => true },
+			actionViewItemProvider: action => action === settings || action === feedback
+				? new LabelActionViewItem(action, { label: action === feedback ? '' : action.label, ariaLabel: action.label })
+				: undefined,
+		}));
+		secondaryToolbar.element.classList.add('ash-chat-secondary-input-toolbar');
+		const statusToolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenus, MenuId.ChatInputStatus, {
+			ariaLabel: localize('chat.input.statusActions', 'Chat status actions'),
+			presentation: 'inherit-foreground',
+			// Status indicators stay inline instead of disappearing into More Actions.
+			toolbarOptions: { primaryGroup: () => true },
+		}));
+		statusToolbar.element.classList.add('ash-chat-input-status-toolbar');
+		return container;
+	}
+
+	private async runSecondaryAction(run: () => Promise<void>): Promise<void> {
+		try {
+			await run();
+		} catch (error) {
+			if (!this.isDisposed) {
+				this.notifications.error(localize('chat.input.actionFailed', 'Could not open Chat action: {0}', String(error)));
+			}
 		}
 	}
 

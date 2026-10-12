@@ -310,18 +310,14 @@
 	line-height: 10px;
 }
 
-/* The badge's 17px top offset is measured from a 35px icon item. */
-.ash-composite-bar-horizontal.ash-composite-bar-icon
-	> .ash-action-bar
-	> .ash-composite-bar-item {
-	height: 35px;
-	min-height: 35px;
-}
-
+/*
+ * Horizontal icon items retain a square 24px footprint. Anchor badges to the bottom
+ * instead of increasing item height to fit a fixed top offset, which stretches the selected background.
+ */
 .ash-composite-bar-horizontal.ash-composite-bar-icon .ash-composite-bar-badge {
-	top: 17px;
+	top: auto;
 	right: 0;
-	bottom: auto;
+	bottom: 0;
 	min-width: 13px;
 	height: 13px;
 	padding: 0 2px;

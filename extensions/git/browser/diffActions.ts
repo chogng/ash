@@ -41,7 +41,7 @@ export async function runDiffChange(ctx: DiffChangeContext, raw: unknown, compar
 	const dirty = async () => (await ctx.editors.request<readonly { isDirty: boolean; }[]>({ method: 'dirty', uri: resource })).some(copy => copy.isDirty);
 	if (await dirty()) { throw new Error(localize('git.diff.dirtyWorktree', 'Save or revert the open file before reverting this change.')); }
 	const file = await ctx.editors.request<{ text: string; revision: string | null; encoding: string; }>({ method: 'readTextFile', uri: resource });
-	if (!(await ctx.dialogs.confirm({ message: localize('git.diff.revertConfirm', 'Revert the selected changes in {0}?', path), primaryButton: localize('git.diff.revertButton', 'Revert Changes') })).confirmed) { return; }
+	if (!(await ctx.dialogs.confirm({ message: localize('git.diff.revertConfirm', 'Revert the selected changes in {0}?', path), primaryButton: localize('git.diff.revertButton', 'Revert changes') })).confirmed) { return; }
 	const latest = await ctx.git.indexDiff(path, comparison, repositoryId);
 	if (file.text !== state.modifiedText || !file.revision || await dirty() || !await current() || (latest.original ?? '') !== state.originalFileText || (latest.modified ?? '') !== state.modifiedFileText) { throw stale(); }
 	let result = state.modifiedText;

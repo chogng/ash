@@ -271,6 +271,9 @@ const harness = {
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
 		host.id = 'title-comparison';
+		// EditorPart.layout() sizes its inner grid, not its host. Reserve the matching editor height
+		// and a separate status bar row so the status bar cannot cover diff gutter actions.
+		host.style.cssText = 'position:relative;display:grid;grid-template-rows:300px 32px;width:1000px';
 		document.body.prepend(host);
 		resources.add(toDisposable(() => host.remove()));
 		titleConfiguration = resources.add(new InMemoryConfigurationService());
@@ -337,13 +340,24 @@ const harness = {
 						try { await runDiffChange({ git: titleGit, editors: { request: async <T>(payload: unknown) => await editorChanges.handle(normalizeExtensionHostPayload(payload), new AbortController().signal) as T }, dialogs: services.get(IDialogService) }, value, commandId.includes('unstage') ? 'staged' : 'unstaged', commandId.includes('revert') ? 'revert' : 'index'); }
 						catch (error) { services.get(INotificationService).error(gitLocalize('git.commandFailed', 'Git operation failed: {0}', error instanceof Error ? error.message : String(error))); }
 					}));
-					resources.add(MenusRegistry.appendMenuItem(menuName === 'diffEditor/hunkToolbar' ? MenuId.DiffEditorHunkToolbar : MenuId.DiffEditorSelectionToolbar, { command: { id: commandId, title, icon: definition.icon ? Icon.fromId(definition.icon.slice(2, -1)) : undefined }, group: entry.group, when: ContextKeyExpr.deserialize('when' in entry ? entry.when : undefined) }));
+					resources.add(MenusRegistry.appendMenuItem(menuName === 'diffEditor/hunkToolbar' ? MenuId.DiffEditorHunkToolbar : MenuId.DiffEditorSelectionToolbar, {
+						command: { id: commandId, title, icon: definition.icon ? Icon.fromId(definition.icon.slice(2, -1)) : undefined },
+						group: 'group' in entry ? entry.group : undefined,
+						when: ContextKeyExpr.deserialize('when' in entry ? entry.when : undefined),
+					}));
 				}
 			}
 			const resolver = services.get(IMultiDiffSourceResolverService);
 			resources.add(resolver.registerResolver({
 				canHandleUri: resource => resource.scheme === 'ash-scm',
-				resolveDiffSource: async () => { const input = await createGitMultiDiffEditorInput(titleGit, 'unstaged'); if (!isMultiDiffEditorInput(input)) throw new Error('Expected multi-diff'); return { resource: input.resource, resources: input.items, source: input.source, label: input.label }; },
+				resolveDiffSource: async resource => {
+					// Refresh the requested source, or a staged comparison is replaced with unstaged resources.
+					const scope = new URLSearchParams(resource.query).get('scope');
+					if (scope !== 'staged' && scope !== 'unstaged' && scope !== 'uncommitted') throw new Error('Invalid Git source scope');
+					const input = await createGitMultiDiffEditorInput(titleGit, scope);
+					if (!isMultiDiffEditorInput(input)) throw new Error('Expected multi-diff');
+					return { resource: input.resource, resources: input.items, source: input.source, label: input.label };
+				},
 				sourceActions: () => [], primaryRepositoryAction: () => undefined,
 			}));
 			resources.add(titleGitEvents.event(() => resolver.notifyChanged()));
@@ -354,7 +368,7 @@ const harness = {
 		let storedEncoding = 'utf8';
 		const store: ITextResourceStore = {
 			onDidChange: Event.None,
-			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? 'after\nshared', revision: kind === 'encoding' ? 'encoding-revision' : undefined, ...(kind === 'encoding' ? { encoding: request.encoding ?? storedEncoding } : {}) }),
+			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? 'after\nshared', revision: kind === 'encoding' ? 'encoding-revision' : undefined, ...(kind === 'encoding' ? { encoding: request.encoding ?? storedEncoding } : request.encoding === undefined ? {} : { encoding: request.encoding }) }),
 			save: async request => { if (titleSaveFailure) throw new Error('Save rejected'); titleWrites.push({ resource: request.resource.path, text: request.text, ...(request.encoding === undefined ? {} : { encoding: request.encoding }) }); storedEncoding = request.encoding ?? storedEncoding; return { revision: kind === 'encoding' ? 'encoded-revision' : undefined }; },
 		};
 		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, store, {}));

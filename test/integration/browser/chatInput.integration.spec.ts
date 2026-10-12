@@ -1,5 +1,58 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
+		test(`Chat footer actions stay below the input and accept keyboard commands in ${locale} ${theme}`, async ({ page }) => {
+			await page.goto(`/chatInput.html?footerStatus=1&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-textarea-input');
+			await input.fill('Keep my draft');
+			const footer = page.locator('.ash-chat-secondary-toolbar');
+			const settings = footer.getByRole('button', { name: locale === 'en' ? 'Models & providers' : '模型与提供商' });
+			const feedback = footer.getByRole('button', { name: locale === 'en' ? 'Report an issue' : '报告问题' });
+			const status = footer.getByRole('button', { name: 'Extension status' });
+			await expect(settings).toBeVisible();
+			await expect(status).toHaveCount(0);
+			const composer = await page.locator('.ash-chat-input-container').boundingBox();
+			const footerBounds = await footer.boundingBox();
+			expect(footerBounds!.y).toBeGreaterThanOrEqual(composer!.y + composer!.height);
+			await settings.focus();
+			await page.keyboard.press('Enter');
+			await expect(page.getByLabel('Opened sources')).toHaveText('[{"settings":"models"}]');
+			await page.keyboard.press('ArrowRight');
+			await expect(feedback).toBeFocused();
+			await page.keyboard.press('Space');
+			await expect(page.getByLabel('Opened sources')).toHaveText('[{"settings":"models"},{"command":"workbench.action.openIssueReporter"}]');
+			await expect(input).toHaveValue('Keep my draft');
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterStatus(true));
+			await expect(status).toBeVisible();
+			await page.keyboard.press('Tab');
+			await expect(status).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(page.getByLabel('Opened sources')).toContainText('test.chat.status');
+			for (const width of [240, 450]) {
+				await page.locator('main').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+				await expect(settings).toBeVisible();
+				await expect(feedback).toBeVisible();
+				await expect(status).toBeVisible();
+				const bounds = await footer.boundingBox();
+				for (const button of [settings, feedback, status]) {
+					const buttonBounds = await button.boundingBox();
+					expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width + 1);
+				}
+			}
+			if (locale === 'en' && theme === 'light') {
+				await footer.screenshot({ path: test.info().outputPath('chat-footer.png') });
+			}
+			await page.evaluate(() => window.ashChatInputIntegration.removeFooterStatus());
+			await expect(status).toHaveCount(0);
+			await expect(settings).toBeVisible();
+			await page.evaluate(() => window.ashChatInputIntegration.dispose());
+			await expect(footer).toHaveCount(0);
+		});
+	}
+}
+
 test('Input history pages older records and restores draft selection, attachments and pinned skills', async ({ page }) => {
 	await page.goto('/chatInput.html?history=1');
 	const input = page.locator('.ash-chat-textarea-input');

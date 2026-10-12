@@ -92,6 +92,8 @@ export class MenuId {
 	static readonly DiffEditorSelectionToolbar = new MenuId('DiffEditorSelectionToolbar');
 	static readonly ChatTitle = new MenuId("ChatTitle");
 	static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");
+	static readonly ChatInputSecondary = new MenuId('ChatInputSecondary');
+	static readonly ChatInputStatus = new MenuId('ChatInputStatus');
 	static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");
 	static readonly SCMTitle = new MenuId('SCMTitle');
 	static readonly SCMResourceGroupContext = new MenuId('SCMResourceGroupContext');

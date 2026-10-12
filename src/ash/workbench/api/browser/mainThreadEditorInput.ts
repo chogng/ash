@@ -4,6 +4,7 @@ import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../common
 import { createScmMergeEditorInput } from '../../contrib/scm/browser/scmMergeEditorInput.js';
 import { createMultiDiffEditorInput, requireActions, type MultiDiffEditorInputItem } from '../../contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { assertEncoding } from '../../services/textfile/common/encoding.js';
 function record(value: JsonValue): Record<string, JsonValue> {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) {
 		throw new TypeError('Expected extension editor object');
@@ -42,5 +43,7 @@ export function parseExtensionEditorInput(value: JsonValue): IResourceEditorInpu
 		return createMultiDiffEditorInput(URI.parse(text(input.resource)), items, text(input.label), input.source as unknown as Parameters<typeof createMultiDiffEditorInput>[3]);
 	}
 	const initialText = optionalText(input.initialText);
-	return { resource: URI.parse(text(input.resource)), label: optionalText(input.label), contentType: optionalText(input.contentType), ...(initialText === undefined ? {} : { initialText, readOnly: true }), ...(input.initialBytes === undefined ? {} : { initialBytes: bytes(input.initialBytes), readOnly: true }), ...(input.readOnly === true ? { readOnly: true } : {}) };
+	const encoding = optionalText(input.encoding);
+	if (encoding !== undefined) assertEncoding(encoding);
+	return { resource: URI.parse(text(input.resource)), label: optionalText(input.label), contentType: optionalText(input.contentType), ...(encoding === undefined ? {} : { encoding }), ...(initialText === undefined ? {} : { initialText, readOnly: true }), ...(input.initialBytes === undefined ? {} : { initialBytes: bytes(input.initialBytes), readOnly: true }), ...(input.readOnly === true ? { readOnly: true } : {}) };
 }
