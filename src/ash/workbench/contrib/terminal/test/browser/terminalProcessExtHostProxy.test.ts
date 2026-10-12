@@ -12,7 +12,7 @@ suite('Extension terminal process boundary', () => {
 		using lifetime = new DisposableStore();
 		const operations: { operation: string; payload: JsonValue; }[] = [];
 		let released = 0;
-		const child = lifetime.add(new TerminalProcessExtHostProxy(7, 'opaque-pty', true, 90, 30, async (operation, payload) => {
+		const child = lifetime.add(new TerminalProcessExtHostProxy(7, 'opaque-pty', true, 90, 30, async (operation, payload): Promise<JsonValue> => {
 			operations.push({ operation, payload });
 			return operation === 'openTaskTerminal' ? { events: [{ type: 'data', data: 'open output' }, { type: 'name', name: 'Provider title' }, { type: 'close', code: 7 }] } : null;
 		}, () => released++));

@@ -737,7 +737,8 @@
     "prompt.validation.unknown": "Skill 目录不接受字段 {0}。",
     "prompt.validation.metadata": "元数据必须将名称映射到文本值。",
     "prompt.validation.text": "Skill 字段 {0} 需要文本值。",
-    "prompt.validation.required": "Skill 头部需要非空的 {0} 字段。"
+    "prompt.validation.required": "Skill 头部需要非空的 {0} 字段。",
+    "prompt.references.open": "打开引用文件"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

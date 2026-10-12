@@ -8,6 +8,7 @@ import { Range } from '../../../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../../../editor/common/model/textModel.js';
 import { LanguageCompletionTriggerKind } from '../../../../../../../editor/common/languages.js';
 import { PromptHeaderAutocompletion } from '../../../../common/promptSyntax/languageProviders/promptHeaderAutocompletion.js';
+import { PromptLinkProvider } from '../../../../common/promptSyntax/languageProviders/promptLinkProvider.js';
 import { PromptValidator } from '../../../../common/promptSyntax/languageProviders/promptValidator.js';
 import { PromptFileParser } from '../../../../common/promptSyntax/promptFileParser.js';
 import { PromptHoverProvider } from '../../../../common/promptSyntax/languageProviders/promptHovers.js';
@@ -98,4 +99,16 @@ test('allowed-tools suggestions read the real capability catalog, omit hidden an
 	controller.abort();
 	await delayed.complete(tools);
 	assert.equal(await cancelled, undefined);
+});
+
+
+test('Prompt links use the original Skill URI and reject code, remote web links and cancelled requests', () => {
+	const uri = URI.parse('private://skill/review/SKILL.md?source=pinned');
+	using model = new TextModel('---\nname: review\n---\n[Guide](references/guide.md) and `[code](hidden.md)`', { resource: uri, languageId: 'markdown' });
+	const controller = new AbortController();
+	const request = { model, snapshot: model.createVersionedSnapshot(), resource: uri, languageId: 'markdown', modelLanguageId: 'markdown', signal: controller.signal };
+	const provider = new PromptLinkProvider();
+	assert.deepEqual(provider.provideLinks(request, controller.signal).map(link => ({ range: link.range, target: link.target })), [{ range: new Range(4, 9, 4, 28), target: uri.with({ path: '/review/references/guide.md' }).toString() }]);
+	controller.abort();
+	assert.deepEqual(provider.provideLinks(request, controller.signal), []);
 });

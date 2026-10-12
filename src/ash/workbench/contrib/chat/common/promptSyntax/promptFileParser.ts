@@ -194,8 +194,17 @@ function bodyFileReferences(body: string, startLine: number): readonly IBodyFile
 	const starts = [0];
 	for (const match of source.matchAll(/\n/gu)) starts.push(match.index + 1);
 	const at = (offset: number, length: number): Range => {
-		const index = starts.findLastIndex(start => start <= offset);
-		const end = starts.findLastIndex(start => start <= offset + length);
+		const lineAt = (value: number): number => {
+			let low = 0;
+			let high = starts.length;
+			while (low + 1 < high) {
+				const middle = Math.floor((low + high) / 2);
+				if (starts[middle]! <= value) low = middle; else high = middle;
+			}
+			return low;
+		};
+		const index = lineAt(offset);
+		const end = lineAt(offset + length);
 		return new Range(startLine + index, offset - starts[index]! + 1, startLine + end, offset + length - starts[end]! + 1);
 	};
 	const add = (content: string, offset: number, length: number, isMarkdownLink: boolean) => {

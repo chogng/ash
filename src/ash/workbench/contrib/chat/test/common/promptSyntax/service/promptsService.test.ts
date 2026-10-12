@@ -102,3 +102,22 @@ test('Configure Skills opens the Extensions Skills pane without opening Settings
 	await services.invokeFunction(CommandsRegistry.getCommand(CONFIGURE_SKILLS_ACTION_ID)!);
 	assert.deepEqual(calls, [['ash.extensions.open', { view: 'skills' }]]);
 });
+
+test('Prompt relative references preserve source, pinned digest and Session and reject forged or escaping URIs', async () => {
+	using backend = new Backend();
+	backend.readTextResource = async (reference, path, signal, sessionId) => { backend.calls.push(['resource', reference, path, sessionId, signal.aborted]); return 'See [next](nested/checks.md).'; };
+	using prompts = new PromptsService(backend);
+	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'reference-session');
+	const root = await prompts.parseNew(skill.uri);
+	const child = root.body!.resolveFilePath('references/guide.md')!;
+	const parsed = await prompts.parseNew(child);
+	assert.equal(parsed.uri.toString(), child.toString());
+	assert.equal(parsed.content, 'See [next](nested/checks.md).');
+	assert.deepEqual(backend.calls.at(-1), ['resource', { id, version: { type: 'pinnedDigest', digest } }, 'references/guide.md', 'reference-session', false]);
+	const next = parsed.body!.resolveFilePath('nested/checks.md')!;
+	await prompts.parseNew(next);
+	assert.equal((backend.calls.at(-1) as unknown[])[2], 'references/nested/checks.md');
+	for (const invalid of [child.with({ query: 'forged' }), child.with({ authority: 'other' }), skill.uri.with({ path: '/review/../secret' }), skill.uri.with({ path: '/review/assets\\secret' }), root.body!.resolveFilePath('../escape.md')!]) {
+		await assert.rejects(prompts.parseNew(invalid), /not discovered/u);
+	}
+});

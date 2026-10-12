@@ -54,12 +54,16 @@ test('Frontend CI retains Academic coverage in the unified Workbench projects', 
 	}
 });
 
-test('Frontend CI collects success, rejection, failure, revocation and close cases for both Task kinds', { timeout: 15_000 }, async () => {
+test('Frontend CI collects lifecycle, dependency, readiness, output and reuse cases for both Task kinds', { timeout: 15_000 }, async () => {
 	assert.match(workflow, /name: Test mock Agent process and shell Task execution\n\s+if: matrix.surface == 'electron'[\s\S]*?run: pnpm run test:smoke:desktop:no-compile test\/smoke\/areas\/tasks\/task-agent.spec.ts/u);
 	const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', 'electron-app-server', 'test/smoke/areas/tasks/task-agent.spec.ts', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
 	assert.match(stdout, /process › Mock Agent Task loop/u);
 	assert.match(stdout, /shell › Mock Agent Task loop/u);
 	for (const title of [
+		'waits for dependency completion',
+		'observes background readiness',
+		'pages Unicode output',
+		'isolates retained output',
 		'refuses a declined approval',
 		'retains the failed Run ID',
 		'rechecks revoked command permission',
@@ -67,7 +71,9 @@ test('Frontend CI collects success, rejection, failure, revocation and close cas
 		'closes its process with the owning window',
 		'discovers, runs, reads and cancels',
 	]) {
-		assert.equal(stdout.split('\n').filter(line => line.includes(title)).length, 2, title);
+		for (const kind of ['process', 'shell']) {
+			assert.equal(stdout.split('\n').filter(line => line.includes(kind + ' ›') && line.includes(title)).length, 1, kind + ': ' + title);
+		}
 	}
-	assert.match(stdout, /Total: 12 tests in 1 file/u);
+	assert.match(stdout, /Total: 20 tests in 1 file/u);
 });

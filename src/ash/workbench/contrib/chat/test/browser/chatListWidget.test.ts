@@ -1,3 +1,9 @@
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../common/promptSyntax/service/promptsServiceImpl.js';
+import { Event } from '../../../../../base/common/event.js';
 import { IAgentCapabilitiesService } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -220,6 +226,7 @@ test('Skill diagnostic contribution handles open, edits, language changes and di
 	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
 	markers.changeOne('other', uri, [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: MarkerSeverity.Warning, message: 'existing' }]);
 	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
+	services.registerInstance(IPromptsService, resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [] }, diagnostics: [] }), setEnabled: async () => { }, readTextResource: async () => { throw new Error('No discovered Skill'); } })));
 	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
 	assert.deepEqual(markers.read(uri, PromptLanguageFeaturesProvider.ID).map(marker => marker.code), ['requiredField']);
 	model.setValue('---\nname: review\ndescription: Review changes\n---');
@@ -258,4 +265,47 @@ test('streamed memory references retain their buttons, code editor and focus as 
 	widget.render([]);
 	button.click();
 	assert.deepEqual(opened, ['memory:first', 'memory:second']);
+});
+
+
+test('Skill resource content provider shares readonly models and cancels a late resource on removal', async () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	resources.add(services.get(ILanguageService).registerLanguage({ id: 'markdown', extensions: ['.md'] }));
+	services.registerInstance(IAgentCapabilitiesService, { isAvailable: false, read: async () => { throw new Error('Unexpected capabilities read'); } });
+	const pending = new DeferredPromise<string>();
+	let delayed: AbortSignal | undefined;
+	const calls: unknown[] = [];
+	const prompts = resources.add(new PromptsService({
+		onDidChangeSkills: Event.None,
+		list: async () => ({ generation: 1, skills: [{ id: { source: 'user:review', name: 'review' }, description: 'Review', contentDigest: `sha256:${'a'.repeat(64)}`, enabled: true, compatible: true }] }),
+		read: async () => { throw new Error('Unexpected management read'); }, setEnabled: async () => { },
+		readTextResource: async (reference, path, signal, sessionId) => {
+			calls.push([reference, path, sessionId]);
+			if (path === 'references/late.md') { delayed = signal; return pending.p; }
+			return path === 'SKILL.md' ? '---\nname: review\ndescription: Review changes\n---\n[Guide](references/guide.md)' : 'Read the guide.';
+		},
+	}));
+	services.registerInstance(IPromptsService, prompts);
+	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
+	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'session');
+	const resolver = services.get(ITextModelService);
+	const [first, second] = await Promise.all([resolver.createModelReference(skill.uri), resolver.createModelReference(skill.uri)]);
+	assert.equal(first.object.isReadonly(), true);
+	assert.equal(first.object.textEditorModel, second.object.textEditorModel);
+	first.dispose();
+	assert.equal(second.object.textEditorModel.isDisposed(), false);
+	const child = skill.uri.with({ path: '/review/references/guide.md' });
+	const childModel = await resolver.createModelReference(child);
+	assert.equal(childModel.object.textEditorModel.getValue(), 'Read the guide.');
+	assert.deepEqual((calls.at(-1) as unknown[]).slice(1), ['references/guide.md', 'session']);
+	childModel.dispose();
+	second.dispose();
+	assert.equal(services.get(IModelService).getModels().length, 0);
+	const reading = resolver.createModelReference(skill.uri.with({ path: '/review/references/late.md' }));
+	contribution.dispose();
+	assert.equal(delayed?.aborted, true);
+	await pending.complete('late text');
+	await assert.rejects(reading, /cancel/iu);
+	assert.equal(services.get(IModelService).getModels().length, 0);
 });

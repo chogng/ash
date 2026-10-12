@@ -1,3 +1,9 @@
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { Schemas } from '../../../../../base/common/network.js';
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
+import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
+import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
+import { PromptLinkProvider } from '../../common/promptSyntax/languageProviders/promptLinkProvider.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ITextModel } from '../../../../../editor/common/model.js';
@@ -14,6 +20,7 @@ import { PromptValidator } from '../../common/promptSyntax/languageProviders/pro
 export class PromptLanguageFeaturesProvider extends Disposable {
 	public static readonly ID = 'chat.promptLanguageFeatures';
 	private readonly models = this._register(new DisposableMap<ITextModel, DisposableStore>());
+	private readonly readers = this._register(new DisposableStore());
 	private readonly parser = new PromptFileParser();
 	private readonly validator = new PromptValidator();
 
@@ -22,10 +29,27 @@ export class PromptLanguageFeaturesProvider extends Disposable {
 		@IModelService private readonly modelService: IModelService,
 		@IMarkerService private readonly markerService: IMarkerService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@ILanguageService languages: ILanguageService,
+		@ITextModelService textModels: ITextModelService,
+		@IPromptsService prompts: IPromptsService,
 	) {
 		super();
 		this._register(features.completionProvider.register(instantiationService.createInstance(PromptHeaderAutocompletion)));
 		this._register(features.hoverProvider.register(['markdown'], new PromptHoverProvider()));
+		this._register(features.linkProvider.register(['markdown'], new PromptLinkProvider()));
+		this._register(textModels.registerTextModelContentProvider(Schemas.internal, {
+			provideTextContent: async resource => {
+				if (resource.authority !== 'skill') return null;
+				const existing = this.modelService.getModel(resource);
+				if (existing) return existing;
+				const cancellation = new CancellationTokenSource();
+				const cleanup = this.readers.add(toDisposable(() => cancellation.dispose(true)));
+				try {
+					const parsed = await prompts.parseNew(resource, cancellation.token);
+					return this.modelService.getModel(resource) ?? this.modelService.createModel(parsed.content, languages.createByFilepathOrFirstLine(resource, parsed.content.split('\n', 1)[0]), resource);
+				} finally { this.readers.delete(cleanup); cleanup.dispose(); }
+			},
+		}));
 		this._register(modelService.onModelAdded(model => this.track(model)));
 		this._register(modelService.onModelLanguageChanged(({ model }) => this.track(model)));
 		this._register(modelService.onModelRemoved(model => this.models.deleteAndDispose(model)));

@@ -270,3 +270,22 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(errors).toEqual([]);
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Skill reference commands resolve nested files with their original authority and readonly model in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/chatTranscript.html?prompt=1&locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.openSkill());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().resource)).toContain('/review/SKILL.md');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.openReference(5, 11));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().file)).toBe('Reference guide.\n\n[Next](nested/checks.md)');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().resource)).toContain('/review/references/guide.md');
+		await page.keyboard.insertText('must not edit');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().file)).toBe('Reference guide.\n\n[Next](nested/checks.md)');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.openReference(3, 10));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().file)).toBe('Nested reference.');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.skillRequests())).toEqual(['SKILL.md', 'references/guide.md', 'references/nested/checks.md'].map(path => [{ id: { source: 'user:review', name: 'review' }, version: { type: 'pinnedDigest', digest: `sha256:${'a'.repeat(64)}` } }, path, 'reference-session']));
+		expect(errors).toEqual([]);
+	});
+}

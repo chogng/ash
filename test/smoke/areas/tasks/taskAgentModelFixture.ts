@@ -22,7 +22,10 @@ export class TaskAgentModelFixture {
 	private followupStart = 0;
 	private directory: string | undefined;
 	private runId: string | undefined;
-	private expected: 'running' | 'denied' | 'failed' | 'revoked' = 'running';
+	private expected: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded' = 'running';
+	private selectedLabel = taskLabel;
+	private pageSize: number | undefined;
+	private referenceRead = false;
 	readonly exchanges: { name?: string; arguments?: unknown; result?: unknown; answer?: string; }[] = [];
 	readonly errors: string[] = [];
 
@@ -38,13 +41,12 @@ export class TaskAgentModelFixture {
 				const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { input: InputItem[]; };
 				if (!this.directory) throw new Error('Task fixture directory has not been selected');
 				if (this.sequence >= 256) throw new Error('Agent exceeded the bounded Task tool sequence');
-				// Core adds context after the authored prompt; inspect all user entries.
-				const cancel = body.input.some(item => item.role === 'user' && JSON.stringify(item).includes('TASK_FIXTURE_CANCEL'));
-				const retry = body.input.some(item => item.role === 'user' && JSON.stringify(item).includes('TASK_FIXTURE_RETRY'));
-				const inspect = !retry && body.input.some(item => item.role === 'user' && JSON.stringify(item).includes('TASK_FIXTURE_INSPECT'));
-				const followup = cancel || inspect || retry;
-				if (followup && !this.followupStart) this.followupStart = this.sequence + 1;
-				const latest = body.input.filter(item => item.type === 'function_call_output' && (!followup || Number(item.call_id?.split('-').at(-1)) >= this.followupStart)).at(-1);
+				// Use the latest authored action, since Core sends earlier turns too.
+				const action = body.input.filter(item => item.role === 'user').map(item => JSON.stringify(item).match(/TASK_FIXTURE_(RUN|CANCEL|RETRY|INSPECT)/)?.[1]).filter(Boolean).at(-1);
+				const cancel = action === 'CANCEL';
+				const inspect = action === 'INSPECT';
+				if ((cancel || inspect || action === 'RETRY') && !this.followupStart) this.followupStart = this.sequence + 1;
+				const latest = body.input.filter(item => item.type === 'function_call_output' && Number(item.call_id?.split('-').at(-1)) >= this.followupStart).at(-1);
 				const call = latest && body.input.find(item => item.type === 'function_call' && item.call_id === latest.call_id);
 				const text = latest && (typeof latest.output === 'string' ? latest.output : latest.output!.map(part => part.text).join(''));
 				let result;
@@ -70,7 +72,7 @@ export class TaskAgentModelFixture {
 				} else {
 					switch (call?.name) {
 						case 'tasks_list': {
-							const task = result.tasks.find((task: { label: string; }) => task.label === taskLabel);
+							const task = result.tasks.find((task: { label: string; }) => task.label === this.selectedLabel);
 							if (!task?.revision || task.unavailableReason) throw new Error('Existing Task unavailable: ' + JSON.stringify(result));
 							next('tasks_run', { directory: this.directory, task_id: task.taskId, revision: task.revision });
 							break;
@@ -85,10 +87,12 @@ export class TaskAgentModelFixture {
 							break;
 						case 'tasks_status':
 							if (result.runId !== this.runId) throw new Error('Status returned another Run');
-							if ((result.status === 'failed' || result.status === 'canceled') && (this.expected === 'failed' || inspect)) {
+							if ((result.status === 'failed' || result.status === 'canceled' || result.status === 'succeeded') && (this.expected === 'failed' || inspect)) {
 								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
-							} else if (result.status === 'failed' || result.status === 'completed') throw new Error('Fixture Task stopped unexpectedly: ' + JSON.stringify(result));
-							else if ((!cancel && !inspect && this.expected === 'running' && result.status === 'running' && result.terminalId) || (cancel && result.status === 'canceled')) {
+							} else if (!cancel && !inspect && this.expected === 'succeeded' && result.status === 'succeeded') {
+								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
+							} else if (result.status === 'failed' || result.status === 'succeeded') throw new Error('Fixture Task stopped unexpectedly: ' + JSON.stringify(result));
+							else if ((!cancel && !inspect && (this.expected === 'running' || (this.expected === 'ready' && result.ready)) && result.status === 'running' && result.terminalId) || (cancel && result.status === 'canceled')) {
 								next('tasks_output', { ...target(), cursor: 0, max_characters: 65536 });
 							} else {
 								// Back off while the real PTY is starting; do not spin model requests.
@@ -97,7 +101,15 @@ export class TaskAgentModelFixture {
 							}
 							break;
 						case 'tasks_output':
-							if (this.expected === 'failed') answer = 'FAILED ' + this.runId;
+							if (this.pageSize && !cancel) {
+								// Follow actual cursors and make one final empty read at EOF.
+								if (!this.referenceRead) {
+									this.referenceRead = true;
+									next('tasks_output', { ...target(), cursor: 0, max_characters: this.pageSize });
+								} else if (result.hasMore || result.text) next('tasks_output', { ...target(), cursor: result.nextCursor, max_characters: this.pageSize });
+								else answer = 'OUTPUT_COMPLETE ' + this.runId;
+							} else if (this.expected === 'succeeded') answer = 'SUCCEEDED ' + this.runId;
+							else if (this.expected === 'failed') answer = 'FAILED ' + this.runId;
 							else if (inspect) answer = 'STOPPED ' + this.runId;
 							else if (result.text.includes(taskMarker)) answer = (cancel ? 'CANCELED ' : 'RUNNING ') + this.runId;
 							else {
@@ -132,8 +144,11 @@ export class TaskAgentModelFixture {
 
 	get baseUrl(): string { return 'http://127.0.0.1:' + (this.server.address() as AddressInfo).port + '/v1'; }
 	selectDirectory(directory: string): void { this.directory = directory; }
-	expectOutcome(outcome: 'running' | 'denied' | 'failed' | 'revoked'): void { this.expected = outcome; }
-	beginFollowup(): void { this.followupStart = 0; }
+	expectOutcome(outcome: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded'): void { this.expected = outcome; }
+	beginFollowup(): void { this.followupStart = this.sequence + 1; }
+	selectTask(label: string): void { this.selectedLabel = label; }
+	readPages(size: number): void { this.pageSize = size; }
+	inspectRun(runId: string): void { this.runId = runId; this.beginFollowup(); }
 
 	async close(): Promise<void> {
 		await new Promise<void>((resolve, reject) => {

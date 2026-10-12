@@ -1,3 +1,8 @@
+import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
+import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
+import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
+import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import toneWav from '../../../crates/utils/audio/tests/fixtures/tone.wav?url';
@@ -64,6 +69,19 @@ services.registerInstance(IClipboardService, resources.add(new Clipboard()));
 services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 registerCodeEditorServices(services);
 services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], localProcessSandboxConfigured: false, directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [] }) });
+const skillResourceRequests: unknown[] = [];
+const prompts = resources.add(new PromptsService({ onDidChangeSkills: Event.None,
+	list: async () => ({ generation: 1, skills: [{ id: { source: 'user:review', name: 'review' }, description: 'Review', contentDigest: `sha256:${'a'.repeat(64)}`, enabled: true, compatible: true }] }),
+	read: async () => { throw new Error('Unexpected management read'); }, setEnabled: async () => { },
+	readTextResource: async (reference, path, _signal, sessionId) => {
+		skillResourceRequests.push([reference, path, sessionId]);
+		if (path === 'SKILL.md') return '---\nname: review\ndescription: Review changes\n---\n[Guide](references/guide.md)';
+		if (path === 'references/guide.md') return 'Reference guide.\n\n[Next](nested/checks.md)';
+		if (path === 'references/nested/checks.md') return 'Nested reference.';
+		throw new Error('Skill resource unavailable');
+	},
+}));
+services.registerInstance(IPromptsService, prompts);
 const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures']));
 promptContributions.advance(WorkbenchPhase.BlockStartup);
 const fileContainer = document.createElement('section');
@@ -80,11 +98,21 @@ if (!(fileModel instanceof TextModel)) throw new TypeError('Expected the registe
 resources.add(fileModel);
 const file = resources.add(services.createInstance(CodeEditorWidget, {
 	container: fileContainer, model: fileModel,
-	contributions: promptFile ? EditorExtensionsRegistry.getSomeEditorContributions([SuggestController.ID, 'editor.contrib.hover']) : [],
+	contributions: promptFile ? EditorExtensionsRegistry.getSomeEditorContributions([SuggestController.ID, 'editor.contrib.hover', LinkDetector.ID]) : [],
 }));
 file.layout({ width: 600, height: 140 });
 file.setSelection(promptFile ? new Selection(2, 1, 2, 1) : new Selection(1, 8, 1, 8));
 let activeResource = fileModel.uri;
+resources.add(services.get(ICodeEditorService).registerCodeEditorOpenHandler(async input => {
+	if (input.resource.authority !== 'skill') return null;
+	const reference = resources.add(await services.get(ITextModelService).createModelReference(input.resource));
+	if (!(reference.object.textEditorModel instanceof TextModel)) throw new TypeError('Expected a resolved Stanza model');
+	activeResource = input.resource;
+	file.setModel(reference.object.textEditorModel);
+	file.updateOptions({ readOnly: reference.object.isReadonly() !== false });
+	file.focus();
+	return file;
+}));
 services.registerInstance(IEditorPart, { get activePane() { return { getControl: () => file }; } } as unknown as IEditorPart);
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
@@ -139,6 +167,9 @@ declare global {
 	interface Window {
 		ashChatTranscriptIntegration: {
 			state(): { copied: string; file: string; resource: string; editorCount: number; selection: unknown; notifications: readonly string[]; };
+			openSkill(): Promise<void>;
+			openReference(line: number, column: number): Promise<void>;
+			skillRequests(): readonly unknown[];
 			setFile(value: string, line: number, column: number): void;
 			diagnostics(): readonly { message: string; code?: string | number; }[];
 			setReadonly(value: boolean): void;
@@ -167,6 +198,12 @@ window.ashChatTranscriptIntegration = {
 		selection: services.get(ICodeEditorService).listCodeEditors().find(editor => editor !== file)?.getSelection(),
 		notifications: services.get(INotificationService).getNotifications().map(item => item.message),
 	}),
+	openSkill: async () => {
+		const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'reference-session');
+		await services.get(ICodeEditorService).openCodeEditor({ resource: skill.uri }, file);
+	},
+	openReference: async (line, column) => { file.setSelection(new Selection(line, column, line, column)); file.focus(); await services.get(ICommandService).executeCommand('editor.action.openLink'); },
+	skillRequests: () => skillResourceRequests,
 	setFile: (value, line, column) => { fileModel.setValue(value); file.setSelection(new Selection(line, column, line, column)); },
 	diagnostics: () => services.get(IMarkerService).read(fileModel.uri).map(marker => ({ message: marker.message, code: marker.code })),
 	setReadonly: value => file.updateOptions({ readOnly: value }),

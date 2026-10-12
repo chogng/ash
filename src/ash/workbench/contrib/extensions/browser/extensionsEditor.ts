@@ -25,6 +25,7 @@ import { toExtensionResourceURI } from '../../../../platform/extensionResourceLo
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
 import { changeExtensionEnablement, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -259,7 +260,7 @@ export class ExtensionsEditor extends EditorPane {
 					signal.addEventListener('abort', cancel, { once: true });
 					this.actionResources.add(toDisposable(() => { signal.removeEventListener('abort', cancel); cancellation.dispose(true); }));
 					const parsed = await this.prompts.parseNew(skill.uri, cancellation.token);
-					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { this.renderDocument(this.instructions, parsed.body?.getContent() ?? ''); }
+					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { this.renderDocument(this.instructions, parsed.body?.getContent() ?? '', { prompt: parsed }); }
 				};
 				if (this.selectedTab === DetailTab.Instructions) { this.selectTab(DetailTab.Instructions); }
 				button(skill.enabled ? localize({ bundle: 'ash.extensions', key: 'disableSkill' }, 'Disable skill') : localize({ bundle: 'ash.extensions', key: 'enableSkill' }, 'Enable skill'), async () => {
@@ -273,7 +274,7 @@ export class ExtensionsEditor extends EditorPane {
 					this.actionResources.add(toDisposable(() => { signal.removeEventListener('abort', cancel); cancellation.dispose(true); }));
 					const parsed = await this.prompts.parseNew(skill.uri, cancellation.token);
 					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) {
-						await this.editors.openEditor({ resource: skill.uri, initialText: parsed.content, languageId: 'markdown', label: `${skill.name}/SKILL.md`, readOnly: true, showBreadcrumbs: false }, {
+						await this.editors.openEditor({ resource: skill.uri, languageId: 'markdown', label: `${skill.name}/SKILL.md`, readOnly: true, showBreadcrumbs: false }, {
 							pinned: true, selection: parsed.body ? Range.fromPositions(parsed.body.range.getStartPosition()) : undefined,
 						});
 					}
@@ -483,13 +484,13 @@ export class ExtensionsEditor extends EditorPane {
 		}));
 	}
 
-	private renderDocument(container: HTMLElement, markdown: string, source?: { readonly resource: URI; readonly api: IExtensionApi; }): void {
+	private renderDocument(container: HTMLElement, markdown: string, source?: { readonly resource: URI; readonly api: IExtensionApi; } | { readonly prompt: ParsedPromptFile; }): void {
 		const version = this.loadVersion;
 		const document = this.documentResources.add(new MarkdownElement({
 			ownerDocument: mainWindow.document, markdown: { value: markdown, isTrusted: false, supportHtml: true },
-			sanitizerConfig: { allowedLinkSchemes: { augment: ['ash-extension-resource'] }, remoteImageIsAllowed: () => false },
-			transformUri: source ? href => /^[a-z][a-z\d+.-]*:/iu.test(href) ? href : URI.joinPath(source.resource, '..', href).toString() : undefined,
-			imageResourceLoader: source ? async resource => new Blob([new Uint8Array(await source.api.resources.readExtensionResourceBytes(resource))]) : undefined,
+			sanitizerConfig: { allowedLinkSchemes: { augment: ['ash-extension-resource', ...(source && 'prompt' in source ? ['private'] : [])] }, remoteImageIsAllowed: () => false },
+			transformUri: source ? href => 'prompt' in source ? source.prompt.body?.resolveFilePath(href)?.toString() ?? href : /^[a-z][a-z\d+.-]*:/iu.test(href) ? href : URI.joinPath(source.resource, '..', href).toString() : undefined,
+			imageResourceLoader: source && 'api' in source ? async resource => new Blob([new Uint8Array(await source.api.resources.readExtensionResourceBytes(resource))]) : undefined,
 			linkHandler: href => { void this.opener.open(href, { allowCommands: false, fromUserGesture: true }).catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = String(error); } }); },
 		}));
 		container.replaceChildren(document.element);

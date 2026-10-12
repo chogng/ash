@@ -36,6 +36,16 @@ test('Skill body reading opens exact authorized bytes lazily and releases the co
 	]);
 });
 
+test('Skill reference reading uses the same exact identity and connection resource lifetime', async () => {
+	const transport = new SkillResourceTransport(Buffer.from('Reference text'));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	assert.equal(await createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'references/checks.md', new AbortController().signal, 'reference-session'), 'Reference text');
+	assert.deepEqual(transport.requests.find(request => request.method === 'skill/resource/open')?.params, { sessionId: 'reference-session', skillId: pinnedSkill.id, skillContentDigest: pinnedSkill.version.digest, path: 'references/checks.md' });
+	assert.equal(transport.requests.at(-1)?.method, 'resource/release');
+});
+
 test('Cancellation while opening a Skill releases its late handle without requesting chunks', async () => {
 	const transport = new SkillResourceTransport(Buffer.from('instructions'));
 	const controller = new AbortController();
