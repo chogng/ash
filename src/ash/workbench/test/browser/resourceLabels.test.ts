@@ -61,6 +61,16 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	assert.equal(label.element.classList.contains('strikethrough'), true);
 	assert.equal(decorationChanges, 1);
 	assert.equal(label.element.getAttribute('aria-label'), 'main.ts, Ignored');
+	assert.equal(label.element.classList.contains('ash-resource-label-badge'), false);
+
+	decorationData = { letter: '8', tooltip: 'Changed files' };
+	decorationUpdates.fire([resource]);
+	assert.equal(label.element.classList.contains('ash-resource-label-badge'), true);
+	assert.match(label.element.className, /ash-decoration-\d+-badge/u);
+	label.setFile(resource, { fileDecorations: { colors: true, badges: false } });
+	assert.equal(label.element.classList.contains('ash-resource-label-badge'), false);
+	label.setFile(resource, { fileDecorations: { colors: true, badges: true } });
+	assert.equal(label.element.classList.contains('ash-resource-label-badge'), true);
 
 	decorationData = { letter: Lxicon.add, tooltip: 'Added' };
 	decorationUpdates.fire([resource]);

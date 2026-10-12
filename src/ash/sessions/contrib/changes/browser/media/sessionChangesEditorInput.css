@@ -1,9 +1,10 @@
-.ash-icon-label.ash-session-changes-editor-label[class*="-badge"]::after {
+.ash-icon-label.ash-session-changes-editor-label.ash-resource-label-badge::after {
 	font-variant-numeric: tabular-nums;
 	font-weight: var(--ash-fontWeight-semiBold);
 	padding-inline: var(--ash-spacing-size40);
 	color: var(--ash-badge-foreground);
 	background: var(--ash-badge-background);
 	border-radius: var(--ash-cornerRadius-small);
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 }

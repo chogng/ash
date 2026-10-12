@@ -119,6 +119,9 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
+// Actions capture their translated titles when registered, after language setup.
+await import('../../../src/ash/sessions/contrib/changes/browser/changesActions.js');
+await import('../../../src/ash/sessions/contrib/changes/browser/changesetReviewActions.js');
 
 await import('../../../src/ash/sessions/contrib/changes/browser/changesActions.js');
 await import('../../../src/ash/sessions/contrib/changes/browser/changesetReviewActions.js');

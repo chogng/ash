@@ -57,7 +57,7 @@ import './contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import './contrib/documentEditor/browser/documentEditor.contribution.js';
 import './contrib/academic/browser/academicEditor.contribution.js';
 // Debug, testing and the extension host need tasks even when no Tasks view is loaded.
-import './contrib/tasks/browser/taskService.js';
+import { registerTasksView } from './contrib/tasks/browser/tasks.contribution.js';
 import './contrib/debug/browser/debug.contribution.js';
 import './contrib/testing/browser/testing.contribution.js';
 import './api/browser/extensionHost.contribution.js';
@@ -68,6 +68,8 @@ import { registerWorkbenchContribution, WorkbenchPhase } from './common/contribu
 import { AppServerSyntaxProviders } from './services/language/browser/appServerSyntaxProviders.js';
 import { IRendererHostService } from '../platform/renderer/common/rendererHost.js';
 import { Disposable } from '../base/common/lifecycle.js';
+
+registerTasksView();
 
 registerWorkbenchContribution(
 	'code.contrib.appServerSyntax',
