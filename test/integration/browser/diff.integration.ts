@@ -116,7 +116,7 @@ import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from 
 import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
-import { SessionChangesEditor } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditor.js';
+import { CHANGESET_REVIEW_ACTION_ID, SessionChangesEditor } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditor.js';
 
 // Display language is fixed before constructing widgets, as it is at product startup.
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {

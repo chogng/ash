@@ -91,6 +91,7 @@ function turnFileInput(file: ComposedTurnFile): MultiDiffEditorInputItem {
 		modified,
 		goToFile: modified,
 		contextKeys: {
+			'sessions.changesCanReview': file.latestSummary.captureState !== 'discarded',
 			'sessions.changesCanPreview': file.latestSummary.captureState === 'sealed'
 				&& !file.latestSummary.committedPaths.includes(file.file.path)
 				&& file.latestSummary.commitState !== 'queued' && file.latestSummary.commitState !== 'committing',

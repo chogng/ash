@@ -12,6 +12,7 @@ export class ChangesetReviewAction extends Action2 {
 	constructor() {
 		super({
 			id: CHANGESET_REVIEW_ACTION_ID, title: localize2('sessions.changes.viewed', 'Viewed'),
+			precondition: ContextKeyExpr.has('sessions.changesCanReview'),
 			toggled: ContextKeyExpr.in('resource', 'sessions.changesReviewedFiles'),
 			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), group: 'navigation', order: 1 },
 		});
@@ -23,7 +24,7 @@ export class ChangesetReviewAction extends Action2 {
 		const editors = accessor.get(IEditorPart);
 		const pane = editors.activePane;
 		if (!(pane instanceof SessionChangesEditor)) { return; }
-		const change = await pane.getFileChange(resource);
+		const change = await pane.getFileChange(resource, { review: true });
 		if (!change || editors.activePane !== pane) { return; }
 		const state = accessor.get(IChangesViewService);
 		const reviewed = !state.reviewedFilesObs.get().has(change.uri.toString());

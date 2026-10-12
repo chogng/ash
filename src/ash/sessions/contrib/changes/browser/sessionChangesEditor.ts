@@ -168,7 +168,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		this.viewState = state;
 	}
 
-	public async getFileChange(resource: URI): Promise<ISessionFileChange | undefined> {
+	/** Resolves either comparison side to its current capture; only review actions require the review capability. */
+	public async getFileChange(resource: URI, options: { readonly review?: boolean; } = {}): Promise<ISessionFileChange | undefined> {
 		const comparison = this.comparisonInput;
 		const input = this.input;
 		const item = this.findComparisonItem(resource);
@@ -180,7 +181,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		const sessionResource = new SessionChangesEditorInput(input.resource).sessionResource;
 		const selection = input instanceof SessionChangesEditorInput ? input.changesetSelection : undefined;
 		const changeset = selection?.kind === 'transient' ? selection.changeset : await this.changesService.resolveChangeset(sessionResource, id);
-		if (this.isDisposed || this.comparisonInput !== comparison || !changeset.isEnabled.get() || !changeset.capabilities?.review) { return undefined; }
+		if (this.isDisposed || this.comparisonInput !== comparison || !changeset.isEnabled.get() || options.review && !changeset.capabilities?.review) { return undefined; }
 		return findChangesEditorFileChange(currentResource, changeset.changes.get());
 	}
 
@@ -250,7 +251,10 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 					if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 					return {
 						label: change.file.path, binary: contents.binary,
-						contextKeys: { 'sessions.changesCanPreview': change.summary.captureState === 'sealed' && !change.summary.committedPaths.includes(change.file.path) && change.summary.commitState !== 'queued' && change.summary.commitState !== 'committing' },
+						contextKeys: {
+							'sessions.changesCanReview': selected.changeset.capabilities?.review === true,
+							'sessions.changesCanPreview': change.summary.captureState === 'sealed' && !change.summary.committedPaths.includes(change.file.path) && change.summary.commitState !== 'queued' && change.summary.commitState !== 'committing',
+						},
 						original: { resource: change.originalUri, initialText: contents.before ?? '', readOnly: true },
 						modified: { resource: change.modifiedUri, initialText: contents.after ?? '', readOnly: true }
 					};

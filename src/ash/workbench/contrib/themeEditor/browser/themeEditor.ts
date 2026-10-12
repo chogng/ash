@@ -95,12 +95,14 @@ export class ThemeEditor extends EditorPane {
 		this._register(textEditor);
 		this._register(toDisposable(() => { for (const row of this.rows.values()) row.dispose(); this.rows.clear(); }));
 		// Validate every save path, including Save All and another JSON view of this file.
-		this._register(models.addSaveParticipant({ participate: async model => {
-			if (model !== this.getControl()?.getModel()) return;
-			const input = this.input;
-			let source: string;
-			do { source = model.getText(); await this.compile(source, input); } while (model.getText() !== source);
-		} }));
+		this._register(models.addSaveParticipant({
+			participate: async model => {
+				if (model !== this.getControl()?.getModel()) return;
+				const input = this.input;
+				let source: string;
+				do { source = model.getText(); await this.compile(source, input); } while (model.getText() !== source);
+			}
+		}));
 		this._register(Colors.onDidChange(() => this.renderRows()));
 		this._register(themes.onDidColorThemeChange(() => this.renderRows()));
 	}
@@ -407,7 +409,11 @@ export class ThemeEditor extends EditorPane {
 		picker.setColor(row.color ?? Color.black);
 		lifetime.add(this.contextKeys.createScoped(picker.domNode)).createKey(ThemeEditorFocused.key, true);
 		lifetime.add(picker.onDidChangeColor(color => this.editColor(row.id, Color.Format.CSS.formatHexA(color, true))));
-		lifetime.add(picker.onDidRequestClose(() => this.pickerLifetime.clear()));
+		lifetime.add(picker.onDidRequestClose(() => {
+			this.pickerLifetime.clear();
+			// Close is an explicit return to the trigger; outside clicks retain their own focus.
+			if (row.picker.domNode.isConnected && row.picker.enabled) row.picker.focus();
+		}));
 		// Stores dispose in reverse order: hide and restore focus before removing the controls.
 		lifetime.add(toDisposable(() => {
 			if (visible) this.contextViews.hide();

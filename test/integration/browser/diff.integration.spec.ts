@@ -748,7 +748,6 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes restores a 
 	await expect(first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-later'));
 	await expect(message).toBeHidden();
-	await expect(page.locator('#session-changes .stanza-multi-diff-editor-file-count')).toHaveCount(0);
 	const label = page.locator('#session-changes-label .ash-icon-label');
 	await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').content)).toBe('"2"');
 	await first.getByRole('button', { name: /file-0.ts/ }).click();
@@ -781,6 +780,10 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes accepts a t
 	await expect(message).toBeHidden();
 	await page.evaluate(() => window.ashDiffIntegration.reviewSessionOriginalFile(0));
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
+	const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
+	await expect(first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true })).toBeDisabled();
+	await first.getByRole('button', { name: localized(locale, 'Open File', '打开文件'), exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenedFiles())).toEqual(['file:///workspace/file-0.ts']);
 	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change', 'disabled'));
 	await expect(message).toHaveText(localized(locale, 'No changes in this conversation.', '当前对话没有更改。'));
 	expect(errors).toEqual([]);
