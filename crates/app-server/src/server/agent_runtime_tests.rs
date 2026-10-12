@@ -35,8 +35,175 @@ use core_api::StartThreadRequest;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
+
+struct InterruptibleModel {
+    calls: AtomicUsize,
+    entered: mpsc::Sender<CancellationToken>,
+    release: Mutex<mpsc::Receiver<()>>,
+}
+
+impl ModelService for InterruptibleModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        let call = self.calls.fetch_add(1, Ordering::Relaxed);
+        if call == 0 {
+            self.entered.send(cancellation.clone()).unwrap();
+            self.release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+        }
+        // Providers can return successfully after cancellation; Core must reject that response.
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text(if call == 0 {
+                "late response".into()
+            } else {
+                "fresh response".into()
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+struct ExecutionFinishedSignal(mpsc::Sender<core_api::TurnExecutionFinished>);
+
+impl core_api::TurnExecutionObserver for ExecutionFinishedSignal {
+    fn will_execute(&self, _: &core_api::TurnExecutionStarted) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn did_finish(&self, event: &core_api::TurnExecutionFinished) {
+        let _ = self.0.send(event.clone());
+    }
+}
+
+#[test]
+fn repeated_turn_wakeups_remain_interruptible_through_rpc_and_allow_a_new_turn() {
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let (finished_tx, finished_rx) = mpsc::channel();
+    let model = Arc::new(InterruptibleModel {
+        calls: AtomicUsize::new(0),
+        entered: entered_tx,
+        release: Mutex::new(release_rx),
+    });
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let mut server =
+        crate::AppServer::new(threads.clone(), model.clone()).with_ephemeral_env_state();
+    let executor = server
+        .turn_executor_snapshot()
+        .with_execution_observer(Arc::new(ExecutionFinishedSignal(finished_tx)));
+    server.turn_backend.install_executor(executor.clone());
+    server.env_runtime_mut().turn_executor = executor.clone();
+    let mut connection = server.connection();
+    crate::tests::initialize(&server, &mut connection);
+    let mut call = |id, method, params| {
+        crate::tests::call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":id, "method":method, "params":params}),
+        )
+    };
+    let session = call(
+        2,
+        "session/create",
+        json!({"commandId":"interrupt-session", "title":"Interrupt", "executionTarget":null}),
+    );
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = call(
+        3,
+        "session/request",
+        json!({"commandId":"interrupt-thread", "sessionId":session_id, "request":{"type":"createThread", "title":"Interrupt"}}),
+    );
+    let thread_id = ThreadId::new(thread["result"]["value"]["threadId"].as_str().unwrap()).unwrap();
+    let start = json!({"commandId":"interrupt-start", "sessionId":session_id, "request":{
+        "type":"startTurn", "threadId":thread_id, "expectedSequence":1,
+        "input":[{"type":"text", "text":"Wait for interruption"}]
+    }});
+    let started = call(4, "session/request", start.clone());
+    let turn_id =
+        ash_protocol::TurnId::new(started["result"]["value"]["turnId"].as_str().unwrap()).unwrap();
+    let cancellation = entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(
+        call(5, "session/request", start.clone())["result"],
+        started["result"]
+    );
+    executor.resume(&thread_id, &turn_id).unwrap();
+    executor.resume(&thread_id, &turn_id).unwrap();
+    let interrupt = json!({"commandId":"interrupt-running", "sessionId":session_id, "request":{
+        "type":"interruptTurn", "threadId":thread_id, "turnId":turn_id,
+        "expectedSequence":threads.read_thread(&thread_id).unwrap().sequence
+    }});
+    let interrupted = call(6, "session/request", interrupt.clone());
+    let original_io_cancelled = cancellation.is_cancelled();
+    release_tx.send(()).unwrap();
+    assert_eq!(
+        interrupted["result"]["type"], "turnInterrupt",
+        "{interrupted}"
+    );
+    assert!(
+        original_io_cancelled,
+        "the running model kept its old cancellation handle"
+    );
+    let finished = finished_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(finished.turn_id, turn_id);
+    assert_eq!(
+        finished.terminal_state,
+        core_api::TurnExecutionTerminalState::Interrupted
+    );
+    assert_eq!(
+        call(7, "session/request", interrupt.clone())["result"],
+        interrupted["result"]
+    );
+    assert!(call(8, "session/request", start).get("error").is_some());
+    let fresh = call(
+        9,
+        "session/request",
+        json!({"commandId":"fresh-start", "sessionId":session_id, "request":{
+            "type":"startTurn", "threadId":thread_id,
+            "expectedSequence":threads.read_thread(&thread_id).unwrap().sequence,
+            "input":[{"type":"text", "text":"Start again"}]
+        }}),
+    );
+    assert_eq!(fresh["result"]["type"], "turn", "{fresh}");
+    let fresh_finished = finished_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(
+        fresh_finished.turn_id.as_str(),
+        fresh["result"]["value"]["turnId"].as_str().unwrap()
+    );
+    assert_eq!(
+        fresh_finished.terminal_state,
+        core_api::TurnExecutionTerminalState::Completed
+    );
+    let before_retry = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(
+        call(10, "session/request", interrupt)["result"],
+        interrupted["result"]
+    );
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.sequence, before_retry.sequence);
+    assert_eq!(snapshot.turns[0].status, TurnStatus::Interrupted);
+    assert_eq!(snapshot.turns[1].status, TurnStatus::Completed);
+    assert!(!snapshot.items.iter().any(|item| matches!(item,
+        ash_protocol::ThreadItem::AgentMessage { turn_id: id, .. } if id == &turn_id
+    )));
+    assert_eq!(model.calls.load(Ordering::Relaxed), 2);
+}
 
 #[test]
 fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {

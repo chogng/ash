@@ -2665,6 +2665,15 @@ impl ThreadController {
             });
         }
         for turn in snapshot.turns.clone() {
+            if turn.status == crate::TurnStatus::Cancelling {
+                // A durable cancellation wins over resumable Tool work from the previous process.
+                recovery_events.push(ThreadEvent::TurnInterrupted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn.turn_id,
+                    error: None,
+                });
+                continue;
+            }
             if !matches!(
                 turn.status,
                 crate::TurnStatus::Completed
@@ -2693,12 +2702,10 @@ impl ThreadController {
                     | crate::TurnStatus::WaitingForCapability
             ) && !snapshot.has_resumable_tool_continuation(&turn.turn_id)
             {
-                if turn.status != crate::TurnStatus::Cancelling {
-                    recovery_events.push(ThreadEvent::TurnCancelling {
-                        thread_id: thread_id.clone(),
-                        turn_id: turn.turn_id.clone(),
-                    });
-                }
+                recovery_events.push(ThreadEvent::TurnCancelling {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn.turn_id.clone(),
+                });
                 recovery_events.push(ThreadEvent::TurnInterrupted {
                     thread_id: thread_id.clone(),
                     turn_id: turn.turn_id,

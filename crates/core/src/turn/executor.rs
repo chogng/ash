@@ -457,60 +457,61 @@ impl TurnExecutor {
     /// lock. Completion, failure, and cancellation remain durable Core transitions.
     pub fn start(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         let mut executor = self.clone();
+        // Duplicate wakeups for one Turn must share the very same connection snapshot.
+        let mut models = self
+            .turn_models
+            .lock()
+            .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?;
+        let reused_model = models
+            .get(thread_id)
+            .is_some_and(|(id, _, _)| id == turn_id);
+        executor.model = if let Some((_, model, policy)) =
+            models.get(thread_id).filter(|(id, _, _)| id == turn_id)
         {
-            // Duplicate wakeups for one Turn must share the very same connection snapshot.
-            let mut models = self
-                .turn_models
-                .lock()
-                .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?;
-            executor.model = if let Some((_, model, policy)) =
-                models.get(thread_id).filter(|(id, _, _)| id == turn_id)
-            {
-                executor.policy = Arc::clone(policy);
-                Arc::clone(model)
-            } else {
-                let snapshot = self.threads.read_thread(thread_id)?;
-                let turn = snapshot
-                    .turns
-                    .iter()
-                    .find(|turn| &turn.turn_id == turn_id)
-                    .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
-                let selection = turn
-                    .model
-                    .as_ref()
-                    .map_or(ModelSelection::ConfiguredDefault, ModelSelection::Session);
-                let model = self
-                    .model_source
-                    .snapshot(selection)?
-                    .unwrap_or_else(|| Arc::clone(&self.model_source));
-                executor.policy = self
-                    .policy_source
-                    .snapshot(Arc::clone(&model))?
-                    .unwrap_or_else(|| Arc::clone(&self.policy_source));
-                if let Some(advisor) = &turn.advisor {
-                    let auxiliary = model
-                        .snapshot(ModelSelection::Session(&advisor.model))?
-                        .unwrap_or_else(|| Arc::clone(&model));
-                    self.threads
-                        .turn_tool_models
-                        .lock()
-                        .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
-                        .insert(
-                            thread_id.clone(),
-                            (turn_id.clone(), advisor.model.clone(), auxiliary),
-                        );
-                }
-                models.insert(
-                    thread_id.clone(),
-                    (
-                        turn_id.clone(),
-                        Arc::clone(&model),
-                        Arc::clone(&executor.policy),
-                    ),
-                );
-                model
-            };
-        }
+            executor.policy = Arc::clone(policy);
+            Arc::clone(model)
+        } else {
+            let snapshot = self.threads.read_thread(thread_id)?;
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            let selection = turn
+                .model
+                .as_ref()
+                .map_or(ModelSelection::ConfiguredDefault, ModelSelection::Session);
+            let model = self
+                .model_source
+                .snapshot(selection)?
+                .unwrap_or_else(|| Arc::clone(&self.model_source));
+            executor.policy = self
+                .policy_source
+                .snapshot(Arc::clone(&model))?
+                .unwrap_or_else(|| Arc::clone(&self.policy_source));
+            if let Some(advisor) = &turn.advisor {
+                let auxiliary = model
+                    .snapshot(ModelSelection::Session(&advisor.model))?
+                    .unwrap_or_else(|| Arc::clone(&model));
+                self.threads
+                    .turn_tool_models
+                    .lock()
+                    .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
+                    .insert(
+                        thread_id.clone(),
+                        (turn_id.clone(), advisor.model.clone(), auxiliary),
+                    );
+            }
+            models.insert(
+                thread_id.clone(),
+                (
+                    turn_id.clone(),
+                    Arc::clone(&model),
+                    Arc::clone(&executor.policy),
+                ),
+            );
+            model
+        };
         if self.model_compaction {
             executor.compaction = Arc::new(ModelContextCompactionService::new(
                 Arc::clone(&executor.model),
@@ -535,17 +536,22 @@ impl TurnExecutor {
                     ) {
                         executor.release_turn_model(&queued_thread_id, &queued_turn_id);
                     }
-                } else {
+                } else if execution.cancellation().is_cancelled() {
+                    // Superseded wakeups share this Turn's frozen model with the queued wakeup.
+                    // Only cancellation ends that ownership before execution reaches a terminal state.
                     executor.release_turn_model(&queued_thread_id, &queued_turn_id);
                 }
             });
-        if result.is_err() {
-            self.release_turn_model(thread_id, turn_id);
+        if result.is_err() && !reused_model {
+            // Keep admission and rollback under the model lock: another accepted wakeup must
+            // never lose its frozen connection because this attempt was rejected.
+            models.remove(thread_id);
+            self.release_turn_tool_model(thread_id, turn_id);
         }
         result
     }
 
-    fn release_turn_model(&self, thread_id: &ThreadId, turn_id: &TurnId) {
+    fn release_turn_tool_model(&self, thread_id: &ThreadId, turn_id: &TurnId) {
         if let Ok(mut models) = self.threads.turn_tool_models.lock() {
             if models
                 .get(thread_id)
@@ -554,7 +560,10 @@ impl TurnExecutor {
                 models.remove(thread_id);
             }
         }
+    }
 
+    fn release_turn_model(&self, thread_id: &ThreadId, turn_id: &TurnId) {
+        self.release_turn_tool_model(thread_id, turn_id);
         if let Ok(mut models) = self.turn_models.lock() {
             if models
                 .get(thread_id)
@@ -620,7 +629,7 @@ impl TurnExecutor {
             .recover_turns(sessions)
             .map_err(|error| CoreError::Execution(error.to_string()))?;
         for turn in &turns {
-            self.resume(&turn.thread_id, &turn.turn_id)?;
+            self.resume_recovered_turn(&turn.thread_id, &turn.turn_id)?;
         }
         Ok(turns.len())
     }
@@ -652,12 +661,40 @@ impl TurnExecutor {
                 if turn.status == TurnStatus::Running
                     && snapshot.has_resumable_tool_continuation(&turn.turn_id)
                 {
-                    self.resume(&snapshot.thread_id, &turn.turn_id)?;
+                    self.resume_recovered_turn(&snapshot.thread_id, &turn.turn_id)?;
                     resumed += 1;
                 }
             }
         }
         Ok(resumed)
+    }
+
+    fn resume_recovered_turn(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Result<(), CoreError> {
+        if let Err(error) = self.resume(thread_id, turn_id) {
+            // Recovery bypasses Runtime's normal dispatch failure transition. Persist failure
+            // here too, or every restart will retry a Turn that was never accepted by its lane.
+            let snapshot = self.threads.read_thread(thread_id)?;
+            if snapshot.turns.iter().any(|turn| {
+                &turn.turn_id == turn_id
+                    && !matches!(
+                        turn.status,
+                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                    )
+            }) {
+                self.threads.fail_turn(
+                    thread_id,
+                    turn_id,
+                    StableTurnError::model_invocation_failed(),
+                )?;
+                self.publish_committed_after(thread_id, snapshot.sequence);
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn notify_failed_turn(
@@ -738,6 +775,7 @@ impl TurnExecutor {
             };
         self.publish_committed_after(thread_id, sequence_before_execution);
         if let Some(terminal_state) = terminal_state {
+            self.threads.cancel_turn_execution(thread_id, turn_id);
             self.execution_observer.did_finish(&TurnExecutionFinished {
                 session_id: execution.session_id,
                 thread_id: execution.thread_id,
@@ -892,6 +930,7 @@ impl TurnExecutor {
         };
         self.publish_committed_after(thread_id, sequence_before_execution);
         if let Some(terminal_state) = terminal_state {
+            self.threads.cancel_turn_execution(thread_id, turn_id);
             self.execution_observer.did_finish(&TurnExecutionFinished {
                 session_id: execution.session_id,
                 thread_id: execution.thread_id,

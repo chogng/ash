@@ -209,6 +209,126 @@ fn one_thread_is_fifo_and_rejects_work_beyond_its_bounded_backlog() {
     assert_eq!(*order.lock().unwrap(), ["first", "second"]);
 }
 
+#[test]
+fn repeated_turn_wakeup_preserves_the_running_operation_and_its_cancellation() {
+    let loaded_threads = Arc::new(LoadedThreads::new(Arc::new(InMemoryThreadStore::default())));
+    let thread_id = ThreadId::new("thread").unwrap();
+    let turn_id = TurnId::new("turn").unwrap();
+    install(&loaded_threads, snapshot(&thread_id));
+    let mailboxes = ThreadExecutionMailboxes::with_settings(
+        loaded_threads,
+        NonZeroUsize::new(2).unwrap(),
+        Duration::from_secs(1),
+    );
+    let (context_tx, context_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    mailboxes
+        .enqueue(&thread_id, &turn_id, move |execution| {
+            context_tx.send(execution).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        })
+        .unwrap();
+    let running = context_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    let duplicate_ran = Arc::new(AtomicBool::new(false));
+    let duplicate = duplicate_ran.clone();
+    mailboxes
+        .enqueue(&thread_id, &turn_id, move |execution| {
+            if execution.check_current().is_ok() {
+                duplicate.store(true, Ordering::SeqCst);
+            }
+        })
+        .unwrap();
+    let still_current = running.check_current().is_ok();
+    mailboxes.cancel(&thread_id, &turn_id);
+    let cancelled = running.cancellation().is_cancelled();
+    let rejected_after_cancel = running.check_current().is_err();
+    release_tx.send(()).unwrap();
+    wait_until(Duration::from_secs(1), || {
+        !mailboxes.has_work(&thread_id).unwrap()
+    });
+    assert!(still_current);
+    assert!(cancelled);
+    assert!(rejected_after_cancel);
+    assert!(!duplicate_ran.load(Ordering::SeqCst));
+}
+
+#[test]
+fn failed_repeated_turn_enqueue_keeps_the_original_cancellation_handle() {
+    let loaded_threads = Arc::new(LoadedThreads::new(Arc::new(InMemoryThreadStore::default())));
+    let thread_id = ThreadId::new("thread").unwrap();
+    let turn_id = TurnId::new("running").unwrap();
+    install(&loaded_threads, snapshot(&thread_id));
+    let mailboxes = ThreadExecutionMailboxes::with_settings(
+        loaded_threads,
+        NonZeroUsize::new(1).unwrap(),
+        Duration::from_secs(1),
+    );
+    let (context_tx, context_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    mailboxes
+        .enqueue(&thread_id, &turn_id, move |execution| {
+            context_tx.send(execution).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        })
+        .unwrap();
+    let running = context_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    mailboxes
+        .enqueue(&thread_id, &TurnId::new("queued").unwrap(), |_| {})
+        .unwrap();
+    let rejected = mailboxes.enqueue(&thread_id, &turn_id, |_| {});
+    mailboxes.cancel(&thread_id, &turn_id);
+    let cancelled = running.cancellation().is_cancelled();
+    release_tx.send(()).unwrap();
+    wait_until(Duration::from_secs(1), || {
+        !mailboxes.has_work(&thread_id).unwrap()
+    });
+    assert!(
+        matches!(rejected, Err(CoreError::Execution(message)) if message.contains("mailbox is full"))
+    );
+    assert!(cancelled);
+}
+
+#[test]
+fn only_the_latest_queued_wakeup_for_a_turn_runs() {
+    let loaded_threads = Arc::new(LoadedThreads::new(Arc::new(InMemoryThreadStore::default())));
+    let thread_id = ThreadId::new("thread").unwrap();
+    install(&loaded_threads, snapshot(&thread_id));
+    let mailboxes = ThreadExecutionMailboxes::with_settings(
+        loaded_threads,
+        NonZeroUsize::new(3).unwrap(),
+        Duration::from_secs(1),
+    );
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    mailboxes
+        .enqueue(&thread_id, &TurnId::new("blocker").unwrap(), move |_| {
+            entered_tx.send(()).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        })
+        .unwrap();
+    entered_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    let order = Arc::new(Mutex::new(Vec::new()));
+    for wakeup in 1..=2 {
+        let recorded = order.clone();
+        mailboxes
+            .enqueue(
+                &thread_id,
+                &TurnId::new("turn").unwrap(),
+                move |execution| {
+                    if execution.check_current().is_ok() {
+                        recorded.lock().unwrap().push(wakeup);
+                    }
+                },
+            )
+            .unwrap();
+    }
+    release_tx.send(()).unwrap();
+    wait_until(Duration::from_secs(1), || {
+        !mailboxes.has_work(&thread_id).unwrap()
+    });
+    assert_eq!(*order.lock().unwrap(), [2]);
+}
+
 fn install(loaded_threads: &LoadedThreads, snapshot: ThreadSnapshot) {
     let slot = loaded_threads.slot(&snapshot.thread_id).unwrap();
     *slot.loaded.lock().unwrap() = Some(loaded_threads.install(snapshot));

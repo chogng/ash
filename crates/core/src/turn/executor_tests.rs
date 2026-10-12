@@ -1908,6 +1908,87 @@ fn cancellation_during_overflow_compaction_prevents_the_checkpoint_and_retry() {
 }
 
 #[test]
+fn failed_recovery_dispatch_is_durable_and_does_not_retry_on_the_next_restart() {
+    struct UnavailableModel;
+    impl ModelService for UnavailableModel {
+        fn snapshot(
+            &self,
+            _: ModelSelection<'_>,
+        ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
+            Err(CoreError::ModelAuthFailed)
+        }
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            unreachable!("model selection failed before dispatch")
+        }
+    }
+    let store = Arc::new(InMemoryThreadStore::default());
+    let (original, thread_id, turn_id) =
+        started_turn_with_store(ash_protocol::ToolMode::Direct, store.clone());
+    original
+        .record_tool_call(
+            &thread_id,
+            &turn_id,
+            crate::RecordToolCallRequest {
+                tool_call_id: None,
+                name: ToolName::new("weather").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+        )
+        .unwrap();
+    drop(original);
+    let recovered = Arc::new(ThreadController::with_store(store.clone()));
+    let before = recovered.recover_thread(&thread_id).unwrap();
+    assert_eq!(before.turns[0].status, TurnStatus::Running);
+    let updates = Arc::new(RecordingUpdates::default());
+    let executor = TurnExecutor::without_tools(recovered.clone(), Arc::new(UnavailableModel))
+        .with_thread_updates(updates.clone());
+    assert!(matches!(
+        executor.resume_recovered_tool_continuations(),
+        Err(CoreError::ModelAuthFailed)
+    ));
+    let failed = recovered.read_thread(&thread_id).unwrap();
+    assert_eq!(failed.turns[0].status, TurnStatus::Failed);
+    assert_eq!(
+        failed.turns[0].failure,
+        Some(StableTurnError::model_invocation_failed())
+    );
+    assert_eq!(failed.items, before.items);
+    assert!(updates.updates().iter().any(|update| matches!(
+        update.update,
+        ThreadUpdate::Committed {
+            event: ash_protocol::ThreadEvent::TurnFailed { .. }
+        }
+    )));
+    assert!(
+        !recovered
+            .thread_catalog_record(&thread_id)
+            .unwrap()
+            .requires_startup_recovery
+    );
+    drop(executor);
+    drop(recovered);
+    let restarted = Arc::new(ThreadController::with_store(store));
+    assert_eq!(
+        restarted.recover_thread(&thread_id).unwrap().sequence,
+        failed.sequence
+    );
+    let unused = Arc::new(ScriptedModel::new([Ok(text_response("must not execute"))]));
+    assert_eq!(
+        TurnExecutor::without_tools(restarted, unused.clone())
+            .resume_recovered_tool_continuations()
+            .unwrap(),
+        0
+    );
+    assert!(unused.requests().is_empty());
+}
+
+#[test]
 fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
     let store = Arc::new(InMemoryThreadStore::default());
     let original = Arc::new(ThreadController::with_store(store.clone()));
@@ -4568,6 +4649,149 @@ fn encrypted_reasoning_survives_tool_results_and_reloading_thread_history() {
         .execute(&thread_id, &next, &CancellationSource::new().token())
         .unwrap();
     assert!(model.requests()[0].input.contains(&expected));
+}
+
+#[test]
+fn superseded_and_rejected_wakeups_reuse_the_frozen_model_until_the_turn_finishes() {
+    enum Backlog {
+        Superseded,
+        Full,
+    }
+    struct FrozenModel {
+        entered: std::sync::mpsc::Sender<()>,
+        release: Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+    impl ModelService for FrozenModel {
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            self.entered.send(()).unwrap();
+            self.release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+            Ok(text_response("done"))
+        }
+    }
+    struct Selector {
+        snapshots: AtomicUsize,
+        frozen: Arc<dyn ModelService>,
+    }
+    impl ModelService for Selector {
+        fn snapshot(
+            &self,
+            _: ModelSelection<'_>,
+        ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
+            self.snapshots.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(self.frozen.clone()))
+        }
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            unreachable!("the selected connection must execute the Turn")
+        }
+    }
+    struct Observer {
+        starts: AtomicUsize,
+        finished: std::sync::mpsc::Sender<()>,
+    }
+    impl crate::TurnExecutionObserver for Observer {
+        fn will_execute(&self, _: &crate::TurnExecutionStarted) -> Result<(), CoreError> {
+            self.starts.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        fn did_finish(&self, _: &crate::TurnExecutionFinished) {
+            let _ = self.finished.send(());
+        }
+    }
+    for backlog in [Backlog::Superseded, Backlog::Full] {
+        let (threads, thread_id, turn_id) = started_turn();
+        let (blocker_entered_tx, blocker_entered_rx) = std::sync::mpsc::channel();
+        let (blocker_release_tx, blocker_release_rx) = std::sync::mpsc::channel();
+        threads
+            .enqueue_turn_execution(&thread_id, &TurnId::new("blocker").unwrap(), move |_| {
+                blocker_entered_tx.send(()).unwrap();
+                blocker_release_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap();
+            })
+            .unwrap();
+        blocker_entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+        let model = Arc::new(Selector {
+            snapshots: AtomicUsize::new(0),
+            frozen: Arc::new(FrozenModel {
+                entered: entered_tx,
+                release: Mutex::new(release_rx),
+            }),
+        });
+        let observer = Arc::new(Observer {
+            starts: AtomicUsize::new(0),
+            finished: finished_tx,
+        });
+        let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+            .with_execution_observer(observer.clone());
+        executor.start(&thread_id, &turn_id).unwrap();
+        let (drained_tx, drained_rx) = std::sync::mpsc::channel();
+        let mut filler_count = 0;
+        match backlog {
+            Backlog::Superseded => executor.resume(&thread_id, &turn_id).unwrap(),
+            Backlog::Full => {
+                for index in 0..64 {
+                    let drained = drained_tx.clone();
+                    let result = threads.enqueue_turn_execution(
+                        &thread_id,
+                        &TurnId::new(format!("filler-{index}")).unwrap(),
+                        move |_| {
+                            let _ = drained.send(());
+                        },
+                    );
+                    match result {
+                        Ok(()) => filler_count += 1,
+                        Err(CoreError::Execution(error)) if error.contains("mailbox is full") => {
+                            break;
+                        }
+                        Err(error) => panic!("unexpected enqueue error: {error}"),
+                    }
+                }
+                assert!(executor.resume(&thread_id, &turn_id).is_err());
+            }
+        }
+        blocker_release_tx.send(()).unwrap();
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        // A discarded wakeup or failed admission must not make this resume snapshot again.
+        let _ = executor.resume(&thread_id, &turn_id);
+        let snapshots = model.snapshots.load(Ordering::SeqCst);
+        release_tx.send(()).unwrap();
+        finished_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        for _ in 0..filler_count {
+            drained_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        }
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        threads
+            .enqueue_turn_execution(&thread_id, &TurnId::new("drained").unwrap(), move |_| {
+                let _ = done_tx.send(());
+            })
+            .unwrap();
+        done_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(snapshots, 1);
+        assert_eq!(observer.starts.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            threads.read_thread(&thread_id).unwrap().turns[0].status,
+            TurnStatus::Completed
+        );
+    }
 }
 
 #[test]

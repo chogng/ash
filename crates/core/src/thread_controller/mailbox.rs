@@ -40,9 +40,11 @@ struct ExecutionLane {
     sender: SyncSender<QueuedExecution>,
 }
 
+#[derive(Clone)]
 struct ActiveExecution {
     incarnation: ThreadIncarnationId,
     operation_id: u64,
+    running_operation_id: Option<u64>,
     cancellation: CancellationSource,
 }
 
@@ -76,9 +78,11 @@ impl ThreadExecutionContext {
             .get(&(self.thread_id.clone(), self.turn_id.clone()))
             .is_some_and(|execution| {
                 execution.incarnation == self.incarnation
-                    && execution.operation_id == self.operation_id
+                    && (execution.operation_id == self.operation_id
+                        || execution.running_operation_id == Some(self.operation_id))
             });
-        if is_current_operation
+        if !self.cancellation.is_cancelled()
+            && is_current_operation
             && self
                 .loaded_threads
                 .is_current(&self.thread_id, self.incarnation)
@@ -225,7 +229,6 @@ impl ThreadExecutionMailboxes {
             .ensure_loaded_incarnation(thread_id)
             .map_err(EnqueueError::Core)?;
         let operation_id = self.next_operation.fetch_add(1, Ordering::Relaxed);
-        let cancellation = CancellationSource::new();
         let mut lanes = self.lanes.lock().map_err(|_| {
             EnqueueError::Core(CoreError::Execution(
                 "execution mailbox registry lock poisoned".into(),
@@ -245,21 +248,38 @@ impl ThreadExecutionMailboxes {
                     sender
                 })?,
         };
-        self.active
-            .lock()
-            .map_err(|_| {
-                EnqueueError::Core(CoreError::Execution(
-                    "execution mailbox state lock poisoned".into(),
-                ))
-            })?
-            .insert(
-                (thread_id.clone(), turn_id.clone()),
-                ActiveExecution {
-                    incarnation,
-                    operation_id,
-                    cancellation: cancellation.clone(),
-                },
-            );
+        let mut active = self.active.lock().map_err(|_| {
+            EnqueueError::Core(CoreError::Execution(
+                "execution mailbox state lock poisoned".into(),
+            ))
+        })?;
+        let key = (thread_id.clone(), turn_id.clone());
+        let previous = active.get(&key).cloned();
+        let cancellation = match &previous {
+            Some(execution) if execution.incarnation == incarnation => {
+                execution.cancellation.clone()
+            }
+            Some(execution) => {
+                execution.cancellation.cancel();
+                CancellationSource::new()
+            }
+            None => CancellationSource::new(),
+        };
+        // Wakeups may supersede queued work, but must retain the running operation and the
+        // cancellation source used by its model or tool I/O.
+        let running_operation_id = previous
+            .as_ref()
+            .filter(|execution| execution.incarnation == incarnation)
+            .and_then(|execution| execution.running_operation_id);
+        active.insert(
+            key.clone(),
+            ActiveExecution {
+                incarnation,
+                operation_id,
+                running_operation_id,
+                cancellation: cancellation.clone(),
+            },
+        );
         let queued = QueuedExecution {
             trace_context: opentelemetry::Context::current(),
             thread_id: thread_id.clone(),
@@ -272,7 +292,15 @@ impl ThreadExecutionMailboxes {
         match sender.try_send(queued) {
             Ok(()) => Ok(()),
             Err(error) => {
-                clear_active(&self.active, thread_id, turn_id, incarnation, operation_id);
+                // Admission failure cannot acknowledge or remove an earlier accepted operation.
+                match previous {
+                    Some(execution) => {
+                        active.insert(key, execution);
+                    }
+                    None => {
+                        active.remove(&key);
+                    }
+                }
                 Err(EnqueueError::Core(match error {
                     TrySendError::Full(_) => CoreError::Execution(format!(
                         "Thread execution mailbox is full: {thread_id}"
@@ -374,6 +402,13 @@ fn run_queued(
         task,
     } = queued;
     if loaded_threads.is_current(&thread_id, incarnation) {
+        if let Ok(mut active) = active.lock()
+            && let Some(execution) = active.get_mut(&(thread_id.clone(), turn_id.clone()))
+            && execution.incarnation == incarnation
+            && execution.operation_id == operation_id
+        {
+            execution.running_operation_id = Some(operation_id);
+        }
         let execution = ThreadExecutionContext {
             thread_id: thread_id.clone(),
             turn_id: turn_id.clone(),
@@ -400,10 +435,14 @@ fn clear_active(
 ) {
     if let Ok(mut active) = active.lock() {
         let key = (thread_id.clone(), turn_id.clone());
-        if active.get(&key).is_some_and(|execution| {
-            execution.incarnation == incarnation && execution.operation_id == operation_id
-        }) {
-            active.remove(&key);
+        if let Some(execution) = active.get_mut(&key)
+            && execution.incarnation == incarnation
+        {
+            if execution.operation_id == operation_id {
+                active.remove(&key);
+            } else if execution.running_operation_id == Some(operation_id) {
+                execution.running_operation_id = None;
+            }
         }
     }
 }

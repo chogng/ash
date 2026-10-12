@@ -66,6 +66,7 @@
 	--scm-graph-row-background: var(--ash-sideBar-background);
 	position: relative;
 	min-width: 0;
+	user-select: none;
 }
 
 .ash-scm-graph-row {
@@ -77,6 +78,27 @@
 	align-items: center;
 	padding: 0 8px 0 0;
 	line-height: 22px;
+}
+
+.ash-scm-graph-commit.selected {
+	--scm-graph-row-background: var(--ash-list-inactiveSelectionBackground);
+}
+
+.ash-scm-graph:focus-within .ash-scm-graph-commit.selected {
+	--scm-graph-row-background: var(--ash-list-activeSelectionBackground);
+}
+
+.ash-scm-graph-commit.selected > .ash-scm-graph-row {
+	background: var(--scm-graph-row-background);
+}
+
+.ash-scm-graph:focus-within .ash-scm-graph-commit.selected > .ash-scm-graph-row {
+	color: var(--ash-list-activeSelectionForeground);
+}
+
+.ash-scm-graph-commit.selected:not(:focus-visible) > .ash-scm-graph-row {
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+	outline-offset: -1px;
 }
 
 .ash-scm-graph-commit:focus-visible {

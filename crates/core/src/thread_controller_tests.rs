@@ -2029,6 +2029,86 @@ fn interrupt_turn_is_a_retry_safe_typed_command() {
 }
 
 #[test]
+fn recovery_finishes_cancelling_turns_with_unresolved_tool_calls() {
+    for execution_started in [false, true] {
+        let store = Arc::new(InMemoryThreadStore::default());
+        let original = ThreadController::with_store(store.clone());
+        let thread = create_thread(&original, "cancelling tools");
+        let turn = start_turn(&original, &thread, "cancelled-tool-turn");
+        let call = original
+            .record_tool_call(
+                &thread,
+                &turn,
+                RecordToolCallRequest {
+                    tool_call_id: None,
+                    name: ToolName::new("search").unwrap(),
+                    arguments_json: "{}".into(),
+                    binding: None,
+                },
+            )
+            .unwrap();
+        if execution_started {
+            original
+                .record_tool_execution_started(
+                    &thread,
+                    &turn,
+                    RecordToolExecutionStart {
+                        tool_call_id: call.tool_call_id.clone(),
+                        action_digest: "action".into(),
+                        policy_revision: "policy".into(),
+                        authority: ash_protocol::ToolExecutionAuthority::Sandboxed,
+                        expected_review_sequence: None,
+                    },
+                )
+                .unwrap();
+        }
+        // Replay a valid rollout prefix left by a process that persisted cancellation first.
+        let mut cancelling = store.load(&thread).unwrap().pop().unwrap();
+        cancelling.event_id = ash_history::EventId("recover-cancellation".into());
+        cancelling.sequence += 1;
+        cancelling.command = None;
+        cancelling.event = ThreadEvent::TurnCancelling {
+            thread_id: thread.clone(),
+            turn_id: turn.clone(),
+        };
+        let mut catalog = original.thread_catalog_record(&thread).unwrap();
+        catalog.sequence = cancelling.sequence;
+        store
+            .append_batch(&ThreadEventBatch {
+                history_index: None,
+                history_prefixes: Vec::new(),
+                batch_id: "recover-cancellation".into(),
+                thread_id: thread.clone(),
+                expected_sequence: cancelling.sequence - 1,
+                events: vec![cancelling],
+                catalog,
+            })
+            .unwrap();
+        drop(original);
+
+        let recovered = ThreadController::with_store(store);
+        let before = recovered.read_thread(&thread).unwrap();
+        assert_eq!(before.turns[0].status, TurnStatus::Cancelling);
+        assert!(before.has_resumable_tool_continuation(&turn));
+        let snapshot = recovered.recover_thread(&thread).unwrap();
+        assert_eq!(snapshot.turns[0].status, TurnStatus::Interrupted);
+        assert_eq!(snapshot.sequence, before.sequence + 1);
+        assert_eq!(snapshot.items, before.items);
+        assert_eq!(snapshot.started_tool_calls, before.started_tool_calls);
+        assert!(
+            !recovered
+                .thread_catalog_record(&thread)
+                .unwrap()
+                .requires_startup_recovery
+        );
+        assert_eq!(
+            recovered.recover_thread(&thread).unwrap().sequence,
+            snapshot.sequence
+        );
+    }
+}
+
+#[test]
 fn steering_is_ordered_retry_safe_and_recovers_without_duplicate_items() {
     let store = Arc::new(InMemoryThreadStore::default());
     let threads = ThreadController::with_store(store.clone());

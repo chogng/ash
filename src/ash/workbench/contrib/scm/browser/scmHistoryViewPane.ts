@@ -488,6 +488,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (index >= 0 && this.list) {
 			this.list.reveal(index, 0.5);
 			this.list.setActiveIndex(index, undefined, { reveal: false });
+			this.list.setSelection([index]);
 			this.list.row(index)?.querySelector<HTMLElement>('.ash-scm-graph-commit')?.focus({ preventScroll: true });
 		}
 	}
@@ -603,11 +604,25 @@ export class SCMHistoryViewPane extends ViewPane {
 			const limit = previousPage ? Math.max(pageSize, previousPage.items.length) + pageSize : pageSize;
 			const loaded = await provider.provideHistoryItems({ skip: 0, limit: limit + 1, historyItemRefs: this.historyItemRefs });
 			if (this.isDisposed || generation !== this.generation) return;
-			const items = loaded ?? [];
+			const items = [...loaded ?? []];
 			const previousTail = previousPage?.items.at(-1)?.id;
-			const tailIndex = previousTail === undefined ? -1 : items.findIndex(item => item.id === previousTail);
-			const retainedCount = Math.max(pageSize, tailIndex + 1);
-			const page = { items: items.slice(0, retainedCount), hasMore: items.length > retainedCount };
+			let tailIndex = previousTail === undefined ? -1 : items.findIndex(item => item.id === previousTail);
+			let hasMore = items.length > limit;
+			if (previousTail && tailIndex < 0 && hasMore && this.head?.revision && provider.resolveHistoryItemRefsCommonAncestor) {
+				// Only search beyond the bounded refresh when the old tail is still reachable.
+				// A rewritten branch must not cause refresh to drain the entire repository.
+				const ancestor = await provider.resolveHistoryItemRefsCommonAncestor([previousTail, this.head.revision]).catch(() => undefined);
+				if (this.isDisposed || generation !== this.generation) return;
+				while (ancestor === previousTail && tailIndex < 0 && hasMore) {
+					const next = await provider.provideHistoryItems({ skip: items.length, limit: pageSize + 1, historyItemRefs: this.historyItemRefs }) ?? [];
+					if (this.isDisposed || generation !== this.generation) return;
+					items.push(...next);
+					hasMore = next.length > pageSize;
+					tailIndex = items.findIndex(item => item.id === previousTail);
+				}
+			}
+			const retainedCount = Math.max(pageSize, previousPage?.items.length ?? 0, tailIndex + 1);
+			const page = { items: items.slice(0, retainedCount), hasMore: items.length > retainedCount || hasMore };
 			this.page = page;
 			this.head = provider.historyItemRef.get();
 			this.renderGraph(page);
@@ -641,18 +656,25 @@ export class SCMHistoryViewPane extends ViewPane {
 		let anchor: { id: string; offset: number; } | undefined;
 		let position = 0;
 		if (scrollTop > 0) {
-			for (const model of previousRows) {
-				const height = this.rowHeight(model.historyItem);
+			for (const [index, model] of previousRows.entries()) {
+				const height = this.list?.getElementHeight(index) ?? this.rowHeight(model.historyItem);
 				if (position + height > scrollTop) { anchor = { id: model.historyItem.id, offset: scrollTop - position }; break; }
 				position += height;
 			}
 		}
 		const focused = this.graphElement.ownerDocument.activeElement as HTMLElement | null;
 		const restoreFocus = focused && this.graphElement.contains(focused) ? focused : undefined;
+		const focusedCommitId = restoreFocus?.closest<HTMLElement>('.ash-scm-graph-commit')?.dataset.historyItemId;
+		const focusedFilePath = restoreFocus?.closest<HTMLElement>('.ash-scm-graph-change-row')?.querySelector<HTMLElement>('.ash-scm-graph-change')?.dataset.historyPath;
+		const focusedFolder = restoreFocus?.dataset.historyFolder;
+		const focusedAction = restoreFocus?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
+		const focusedReference = restoreFocus?.classList.contains('ash-scm-graph-label') ? restoreFocus.getAttribute('aria-label') : undefined;
+		const previousFocusIndex = this.list?.activeIndex ?? 0;
 		const retained = new Set([...page.items.map(item => item.id), SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId]);
 		for (const id of this.expanded.keys()) {
 			if (!retained.has(id)) this.expanded.delete(id);
 		}
+		for (const id of this.collapsedFolders.keys()) { if (!retained.has(id)) this.collapsedFolders.delete(id); }
 		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head, this.comparison);
 		this.currentItemContext.set(this.head?.revision !== undefined);
 		this.upstreamContext.set(this.provider?.historyItemRemoteRef?.get()?.revision !== undefined);
@@ -665,7 +687,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.listResources.value = resources;
 			const list = resources.add(new List<HistoryListItem>(this.graphElement, {
 				role: 'tree', ariaLabel: this.graphLabel, scrolling: 'managed',
-				mouseSupport: false, keyboardNavigation: false,
+				mouseSupport: false, keyboardNavigation: false, multipleSelectionSupport: false,
 				loopNavigation: false,
 				getId: item => item.id,
 				getHeight: item => item.model ? this.rowHeight(item.model.historyItem) : SWIMLANE_HEIGHT * 2,
@@ -690,9 +712,11 @@ export class SCMHistoryViewPane extends ViewPane {
 				},
 			}));
 			this.list = list;
+			list.element.setAttribute('aria-multiselectable', 'false');
+			resources.add(list.onDidChangeSelection(() => this.updateSelection()));
 			resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
 			list.domNode.classList.add('ash-scm-graph-viewport');
-			list.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to move between commits, Home and End to move to the first and last loaded commits, and Page Up and Page Down to move by a page. Use Right Arrow to expand files and Left Arrow to collapse them. Press Enter or Space on a history item to toggle its files; on macOS, Command+Down Arrow also toggles them. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that item. Press Enter on a reference badge for provider actions. Press Alt+Down Arrow to focus history details and use its actions; Escape returns to the history item. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. In tree mode, use Enter or the Left and Right Arrow keys on a folder to collapse or expand it. Incoming and Outgoing Changes compare the corresponding branch with its merge base. Binary changes open a read-only hexadecimal comparison. Use Up and Down Arrow to navigate expanded folders and files. Use Left Arrow to return to their parent, and Right Arrow on an expanded commit or folder to enter it. Page Up and Page Down also work from files and folders. Use Tab to reach Open File on a changed file and open its read-only historical contents.'));
+			list.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to move between commits, Home and End to move to the first and last loaded commits, and Page Up and Page Down to move by a page. Use Right Arrow to expand files and Left Arrow to collapse them. Press Enter or Space on a history item to toggle its files; on macOS, Command+Down Arrow also toggles them. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that item. Press Enter on a reference badge for provider actions. Press Alt+Down Arrow to focus history details and use its actions; Escape returns to the history item. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. In tree mode, use Enter or the Left and Right Arrow keys on a folder to collapse or expand it. Incoming and Outgoing Changes compare the corresponding branch with its merge base. Binary changes open a read-only hexadecimal comparison. Use Up and Down Arrow to navigate expanded folders and files. Use Left Arrow to return to their parent, and Right Arrow on an expanded commit or folder to enter it. Page Up and Page Down also work from files and folders. Use Tab to reach Open File on a changed file and open its read-only historical contents. The graph selects one commit at a time. Click or press Enter or Space to select it. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded files.'));
 			resources.add(list.onDidRenderRows(() => {
 				for (const [, row] of this.rowResources) {
 					if (!row.hover?.visible) continue;
@@ -720,18 +744,52 @@ export class SCMHistoryViewPane extends ViewPane {
 					top += this.rowHeight(model.historyItem);
 				}
 			} else if (scrollTop === 0) { this.list.scrollTop = 0; }
-			if (restoreFocus?.isConnected && restoreFocus !== this.graphElement.ownerDocument.activeElement) restoreFocus.focus({ preventScroll: true });
+			this.updateSelection();
+			const active = this.graphElement.ownerDocument.activeElement;
+			if (restoreFocus && (active === this.graphElement.ownerDocument.body || active === restoreFocus || active && this.graphElement.contains(active))) {
+				let target: HTMLElement | undefined = restoreFocus.isConnected ? restoreFocus : undefined;
+				if (!target && focusedCommitId) {
+					const index = this.rows.findIndex(row => row.historyItem.id === focusedCommitId);
+					const fallbackIndex = Math.min(Math.max(0, previousFocusIndex), this.rows.length - 1);
+					const row = this.list.row(index >= 0 ? index : fallbackIndex)?.querySelector<HTMLElement>('.ash-scm-graph-commit') ?? undefined;
+					const fileRow = [...row?.querySelectorAll<HTMLElement>('.ash-scm-graph-change') ?? []].find(file => file.dataset.historyPath === focusedFilePath)?.closest<HTMLElement>('.ash-scm-graph-change-row');
+					target = row;
+					if (focusedFilePath) { target = fileRow?.querySelector<HTMLElement>('.ash-scm-graph-change') ?? row; }
+					if (focusedFolder) { target = [...row?.querySelectorAll<HTMLElement>('.ash-scm-graph-folder') ?? []].find(folder => folder.dataset.historyFolder === focusedFolder) ?? row; }
+					if (focusedReference) { target = [...row?.querySelectorAll<HTMLElement>('.ash-scm-graph-label') ?? []].find(reference => reference.getAttribute('aria-label') === focusedReference) ?? row; }
+					if (focusedAction) { target = [...(fileRow ?? row)?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].find(action => action.dataset.actionId === focusedAction)?.querySelector<HTMLElement>('button') ?? target; }
+				}
+				target?.focus({ preventScroll: true });
+			}
 		}
 		this.graphElement.setAttribute('aria-busy', this.loading || this.refreshing ? 'true' : 'false');
 	}
 
 	private loadMoreIfVisible(): void {
-		if (this.configurationService.getValue<boolean>('scm.graph.pageOnScroll') && this.isBodyVisible() && this.graphElement.querySelector('.ash-scm-graph-load-more')) void this.loadMore();
+		if (!this.moreError && this.configurationService.getValue<boolean>('scm.graph.pageOnScroll') && this.isBodyVisible() && this.graphElement.querySelector('.ash-scm-graph-load-more')) void this.loadMore();
+	}
+
+	private selectCommit(id: string, event?: UIEvent): void {
+		const index = this.rows.findIndex(row => row.historyItem.id === id);
+		if (index < 0 || !this.list) return;
+		this.list.setActiveIndex(index, event, { reveal: false });
+		this.list.setSelection([index], event);
+	}
+
+	private updateSelection(): void {
+		const id = this.list?.selection[0]?.model?.historyItem.id;
+		for (const [key, row] of this.rowResources) {
+			row.element.classList.toggle('selected', key === id);
+			row.element.setAttribute('aria-selected', String(key === id));
+		}
 	}
 
 	private updateCommitAccessibility(row: HistoryItemRow, index: number): void {
 		row.element.setAttribute('aria-posinset', String(index + 1));
 		row.element.setAttribute('aria-setsize', String(this.rows.length));
+		const selected = this.list?.selection.some(item => item.model?.historyItem.id === row.historyItemViewModel.historyItem.id) ?? false;
+		row.element.classList.toggle('selected', selected);
+		row.element.setAttribute('aria-selected', String(selected));
 	}
 
 
@@ -770,10 +828,12 @@ export class SCMHistoryViewPane extends ViewPane {
 	private renderMore(): HTMLDivElement {
 		const container = h(this.graphElement.ownerDocument, "div");
 		container.className = "ash-scm-graph-load-more";
+		container.tabIndex = -1;
 		if (this.moreError) {
 			const error = h(this.graphElement.ownerDocument, "span");
 			error.className = "ash-scm-empty";
 			error.textContent = this.moreError;
+			error.setAttribute('role', 'status');
 			container.append(error);
 		}
 		const button = h(this.graphElement.ownerDocument, "button");
@@ -790,8 +850,14 @@ export class SCMHistoryViewPane extends ViewPane {
 	private updateMore(): void {
 		const current = this.graphElement.querySelector('.ash-scm-graph-load-more');
 		if (current) {
+			const restoreFocus = current.contains(current.ownerDocument.activeElement);
 			this.more.clear();
-			current.replaceWith(this.renderMore());
+			const next = this.renderMore();
+			current.replaceWith(next);
+			if (restoreFocus) {
+				const button = next.querySelector<HTMLButtonElement>('button');
+				if (button && !button.disabled) { button.focus(); } else { next.focus(); }
+			}
 		}
 		this.graphElement.setAttribute('aria-busy', this.loading || this.refreshing ? 'true' : 'false');
 	}
@@ -802,6 +868,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (!page || !provider || !page.hasMore || this.loading || this.refreshing || this.refreshFailed) return;
 
 		const generation = this.generation;
+		const hadLoaderFocus = this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(this.graphElement.ownerDocument.activeElement) === true;
 		this.loading = true;
 		this.moreError = undefined;
 		this.updateMore();
@@ -815,6 +882,10 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.loading = false;
 			this.renderGraph(this.page);
 			this.updateMore();
+			const active = this.graphElement.ownerDocument.activeElement;
+			if (hadLoaderFocus && (active === this.graphElement.ownerDocument.body || active && this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(active))) {
+				this.list?.row(page.items.length)?.querySelector<HTMLElement>('.ash-scm-graph-commit')?.focus({ preventScroll: true });
+			}
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			this.loading = false;
@@ -830,6 +901,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const item = rendered.element;
 		const resources = rendered.resources;
 		item.className = "ash-scm-graph-commit";
+		item.dataset.historyItemId = historyItem.id;
 		const current = this.head?.revision === historyItem.id;
 		const merge = historyItem.parentIds.length > 1;
 		item.classList.toggle("current", current);
@@ -920,6 +992,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 		resources.add(addDisposableListener(item, "click", (event) => {
 			if ((event.target as Element).closest(".ash-scm-graph-change, .ash-scm-graph-folder, .ash-scm-graph-actions, .ash-scm-graph-label")) return;
+			this.selectCommit(historyItem.id, event);
 			void this.toggleCommit(historyItem);
 		}));
 		resources.add(addDisposableListener(item, 'focus', () => {
@@ -938,8 +1011,10 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (menuTarget) { this.showHistoryMenu(menuTarget, scope, item); }
 			} else if (toOpenEditorOptions(new StandardKeyboardEvent(event))) {
 				event.preventDefault();
+				this.selectCommit(historyItem.id, event);
 				void this.toggleCommit(historyItem);
 			} else if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+				if (event.key === 'Escape') { event.preventDefault(); this.list?.setSelection([]); return; }
 				if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
 					event.preventDefault();
 					if (this.expanded.has(historyItem.id) === (event.key === 'ArrowLeft')) { void this.toggleCommit(rendered.historyItemViewModel.historyItem); }
@@ -1079,6 +1154,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private showHistoryMenu(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, focus: HTMLElement, event?: MouseEvent): void {
+		this.selectCommit(target.historyItemViewModel.historyItem.id);
 		focus.focus();
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined } : focus,
@@ -1234,6 +1310,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			row.className = 'ash-scm-graph-change-row';
 			const button = h(document, "button");
 			button.className = "ash-scm-graph-change";
+			button.dataset.historyPath = change.path;
 			button.style.setProperty('--scm-graph-change-depth', String(this.viewMode === 'tree' ? parts.length - 1 : 0));
 			button.type = "button";
 			button.title = localize('scm.history.openChange', 'Open {0} from {1}', change.path, historyItem.displayId ?? historyItem.subject);

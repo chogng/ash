@@ -132,7 +132,9 @@ fn both_policies_cross_multiple_windows_in_one_turn_and_restore_without_repeatin
     ] {
         let (store, threads, thread, turn) = window_turn(policy.clone());
         let trace_root = tempfile::tempdir().unwrap();
-        let recorder = Arc::new(ash_rollout_trace::TraceRecorder::new(Some(trace_root.path().into())));
+        let recorder = Arc::new(ash_rollout_trace::TraceRecorder::new(Some(
+            trace_root.path().into(),
+        )));
         let threads = Arc::new(
             Arc::try_unwrap(threads)
                 .ok()

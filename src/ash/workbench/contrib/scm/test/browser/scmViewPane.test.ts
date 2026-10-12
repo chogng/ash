@@ -481,6 +481,8 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		assert.equal(rows[1].getAttribute('aria-current'), 'true');
 		assert.equal(rows[1].querySelector('.ash-scm-graph-label.head')?.textContent, 'topic');
 		assert.equal(rows[0].getAttribute('aria-expanded'), 'true');
+		assert.equal(rows[0].getAttribute('aria-selected'), 'true');
+		assert.equal(rows[1].getAttribute('aria-selected'), 'false');
 		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-commit')[0], rows[0]);
 		assert.equal(queries, loaded);
 		rows[0].focus();
@@ -500,6 +502,16 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		await new CommandService(services).executeCommand('workbench.scm.action.graph.revealCurrentHistoryItem');
 		assert.equal(browser.window.document.activeElement, rows[1], 'The title action uses the latest HEAD without reloading');
 		assert.equal(queries, loaded);
+		assert.equal(rows[1].getAttribute('aria-selected'), 'true', 'Go to Current selects the current history item');
+		rows[0].dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, ctrlKey: true }));
+		assert.equal(rows[0].getAttribute('aria-selected'), 'true');
+		assert.equal(rows[1].getAttribute('aria-selected'), 'false', 'Modified clicks still use the upstream single-selection policy');
+		rows[1].dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, shiftKey: true }));
+		assert.equal(rows[1].getAttribute('aria-selected'), 'true');
+		assert.equal(rows[0].getAttribute('aria-selected'), 'false');
+		rows[1].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		assert.equal(rows[1].getAttribute('aria-selected'), 'false');
+		assert.equal(rows[1].getAttribute('aria-expanded'), 'true', 'Escape clears selection without collapsing files');
 		pane.dispose();
 		head.set({ id: 'HEAD', name: 'detached', revision: 'one' });
 		assert.equal(rows[1].getAttribute('aria-current'), 'true', 'Disposed panes stop observing the old provider');
@@ -513,6 +525,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const graphRequests: GraphQuery[] = [];
+	let failNextPage = true;
 	const [
 		{ ContextKeyService },
 		{ MenuService },
@@ -548,6 +561,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		branches: async () => [],
 		graph: async (query: GraphQuery) => {
 			graphRequests.push(query);
+			if (query.cursor === '100' && failNextPage) { failNextPage = false; throw new Error('Temporary page failure'); }
 			const start = query.cursor ? Number(query.cursor) : 0;
 			const commits = Array.from({ length: Math.min(50, 101 - start) }, (_, index) => ({
 				objectId: `commit-${start + index + 1}`,
@@ -594,10 +608,22 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		assert.equal(graphRequests.length, 2, 'A visible next-page button does not load when automatic paging is disabled');
 		const loadMore = graph.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more > button')!;
 		assert.ok(loadMore);
+		loadMore.focus();
 		loadMore.click();
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 3);
+		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '50');
+		const retry = graph.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more > button')!;
+		assert.equal(retry.getAttribute('aria-label'), 'Retry loading commit history');
+		assert.equal(browser.window.document.activeElement, retry, 'A failed page returns keyboard focus to its live retry button');
+		await historyConfiguration.updateValue('scm.graph.pageOnScroll', true);
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
+		assert.equal(graphRequests.length, 3, 'A visible failed page waits for explicit retry instead of looping');
+		await historyConfiguration.updateValue('scm.graph.pageOnScroll', false);
+		retry.click();
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 4);
+		assert.equal(browser.window.document.activeElement?.querySelector('.ash-scm-graph-subject')?.textContent, 'History item 51');
 		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '100');
-		assert.deepEqual(graphRequests, [{ limit: 50, revisions: ['commit-1'] }, { limit: 50, cursor: '50', revisions: ['commit-1'] }, { limit: 50, cursor: '100', revisions: ['commit-1'] }]);
+		assert.deepEqual(graphRequests, [{ limit: 50, revisions: ['commit-1'] }, { limit: 50, cursor: '50', revisions: ['commit-1'] }, { limit: 50, cursor: '100', revisions: ['commit-1'] }, { limit: 50, cursor: '100', revisions: ['commit-1'] }]);
 		assert.equal(list!.querySelectorAll('.ash-scm-graph-commit').length < 100, true);
 
 		viewport.scrollTop = 2178;
@@ -607,11 +633,112 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		await waitFor(() => list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize') === '101');
 		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '101');
 		assert.equal(pane.element.querySelector('.ash-scm-graph-load-more'), null);
-		assert.equal(graphRequests.length, 3);
+		assert.equal(graphRequests.length, 4);
 		assert.equal(pane.element.querySelector('.ash-scm-graph .ash-list'), list);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+	}
+});
+
+test('SCM history refresh retains loaded identities and folder focus and bounds a rewritten branch', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	try {
+		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
+		const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+		const { MenuService } = await import('../../../../../platform/actions/common/menuService.js');
+		using context = new ContextKeyService();
+		using services = new InstantiationService();
+		using scm = new SCMService();
+		using view = new SCMViewService(scm);
+		using changed = new Emitter<void>();
+		const makeItem = (id: string) => ({ id, parentIds: [], subject: id, message: id });
+		let items = Array.from({ length: 30 }, (_, index) => makeItem(`original-${index}`));
+		const head = observableValue<ISCMHistoryItemRef | undefined>('retainedHead', { id: 'refs/heads/main', name: 'main', revision: items[0].id, category: 'localBranch' });
+		const queries: Array<{ skip: number; limit: number; }> = [];
+		let reachable = true;
+		let pauseNextQuery: DeferredPromise<void> | undefined;
+		const provider: ISCMHistoryProvider = {
+			onDidChange: changed.event, historyItemRef: head, refresh() { },
+			provideHistoryItems: async options => {
+				const skip = options.skip ?? 0;
+				const limit = options.limit ?? 50;
+				queries.push({ skip, limit });
+				const result = items.slice(skip, skip + limit);
+				const pause = pauseNextQuery;
+				pauseNextQuery = undefined;
+				await pause?.p;
+				return result;
+			},
+			resolveHistoryItemRefsCommonAncestor: async refs => reachable ? refs[0] : undefined,
+			provideHistoryItemChanges: async () => [{ uri: URI.parse('git:/src/history.txt'), path: 'src/history.txt', status: 'modified' }],
+			resolveHistoryItemDetails: async () => { throw new Error('Unexpected details'); },
+			resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected contents'); },
+			resolveHistoryItemChatContext: async () => undefined,
+			resolveHistoryItemChangeRangeChatContext: async () => undefined,
+		};
+		using registration = scm.registerSCMProvider(testSCMProvider('retained', 'Repository', provider));
+		await import('../../browser/scm.contribution.js');
+		using configuration = new InMemoryConfigurationService();
+		await configuration.updateValue('scm.graph.pageSize', 5);
+		await configuration.updateValue('scm.graph.pageOnScroll', false);
+		using uiServices = createTestComponentServices(undefined, undefined, browser.window.document);
+		using quickInput = new QuickInputController(browser.window.document.body);
+		const hover: IHoverService = { setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { } };
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'retained-state', title: 'Graph' }, view, new MenuService(new CommandService(services), context), testContextMenuProvider as IContextMenuService, context, hover, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, uiServices.get(IStorageService), scm);
+		pane.setVisible(true);
+		const graph = pane.element.querySelector<HTMLElement>('.ash-scm-graph')!;
+		Object.defineProperty(graph, 'clientHeight', { configurable: true, value: 100 });
+		browser.window.document.body.append(pane.element);
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
+		graph.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more > button')!.click();
+		await waitFor(() => graph.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize') === '10');
+		const viewport = graph.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		viewport.scrollTop = 88;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
+		const current = (): HTMLElement => graph.querySelector('[data-history-item-id="original-4"]')!;
+		current().click();
+		await waitFor(() => current().querySelector('.ash-scm-graph-change') !== null);
+		pane.setViewMode('tree');
+		const folder = (): HTMLButtonElement => current().querySelector('.ash-scm-graph-folder')!;
+		folder().click();
+		assert.equal(folder().getAttribute('aria-expanded'), 'false');
+		folder().focus();
+		const position = viewport.scrollTop;
+		const prefix = Array.from({ length: 100 }, (_, index) => makeItem(`new-${index}`));
+		items = [...prefix, ...items];
+		head.set({ id: 'refs/heads/main', name: 'main', revision: items[0].id, category: 'localBranch' });
+		changed.fire();
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && current()?.getAttribute('aria-setsize') === '110');
+		assert.equal(current().getAttribute('aria-selected'), 'true');
+		assert.equal(current().getAttribute('aria-expanded'), 'true');
+		assert.equal(folder().getAttribute('aria-expanded'), 'false');
+		assert.equal(browser.window.document.activeElement, folder(), 'Refresh returns to the same logical folder');
+		assert.equal(viewport.scrollTop, position + 100 * 22);
+		assert.ok(queries.every(query => query.limit <= 16));
+		const beforeRewrite = queries.length;
+		reachable = false;
+		items = Array.from({ length: 200 }, (_, index) => makeItem(`rewritten-${index}`));
+		head.set({ id: 'refs/heads/main', name: 'main', revision: items[0].id, category: 'localBranch' });
+		changed.fire();
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graph.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize') === '110');
+		assert.equal(queries.length, beforeRewrite + 1, 'Unreachable retained IDs do not trigger an unbounded history search');
+		assert.equal(graph.querySelector('[data-history-item-id="original-4"]'), null);
+		assert.equal(graph.querySelectorAll('[role="treeitem"][aria-selected="true"]').length, 0);
+		assert.equal((browser.window.document.activeElement as HTMLElement).dataset.historyItemId, 'rewritten-104');
+		const deferred = new DeferredPromise<void>();
+		pauseNextQuery = deferred;
+		changed.fire();
+		const outside = browser.window.document.createElement('input');
+		browser.window.document.body.append(outside);
+		outside.focus();
+		await deferred.complete();
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
+		assert.equal(browser.window.document.activeElement, outside, 'Completing an async refresh preserves another input’s newer focus');
+	} finally {
+		browser.window.close();
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
 	}
 });
 
