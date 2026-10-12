@@ -5,6 +5,7 @@ export const TERMINAL_CONFIG_SECTION = 'terminal.integrated';
 /** Presentation settings with active screen consumers. */
 export interface ITerminalConfiguration {
 	readonly fontFamily: string;
+	readonly fontRendering: 'auto' | 'grayscale';
 	readonly fontSize: number;
 	readonly letterSpacing: number;
 	readonly lineHeight: number;
@@ -35,6 +36,7 @@ export const enum TerminalCommandId {
 	CopyAndClearSelection = 'workbench.action.terminal.copyAndClearSelection',
 	Paste = 'workbench.action.terminal.paste',
 	PasteSelection = 'workbench.action.terminal.pasteSelection',
+	SendSequence = 'workbench.action.terminal.sendSequence',
 }
 
 export const TERMINAL_VIEW_ID = "ash.terminal";

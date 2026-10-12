@@ -521,7 +521,29 @@ function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscr
 }
 
 function toThreadItem(item: ThreadItemDto): ThreadItem {
-	return { ...item };
+	// Do not leak nested transport values into retained Chat snapshots. Reads and notifications
+	// use the same conversion so tool provenance and rich result content survive both paths.
+	switch (item.type) {
+		case 'toolCall': {
+			const binding = item.binding;
+			return {
+				...item,
+				binding: binding ? {
+					...binding,
+					sourceChain: binding.sourceChain.map(source => ({ ...source })),
+					caller: { ...binding.caller },
+					activity: binding.activity?.type === 'command' ? { ...binding.activity, arguments: [...binding.activity.arguments] }
+						: binding.activity ? { ...binding.activity } : binding.activity,
+				} : binding,
+			};
+		}
+		case 'toolResult': return {
+			...item,
+			content: item.content?.map(part => part.type === 'imageAttachment' || part.type === 'audioAttachment'
+				? { ...part, attachment: { ...part.attachment } } : { ...part }) ?? item.content,
+		};
+		default: return { ...item };
+	}
 }
 
 function toAgentResponse(response: AgentResponse): AgentResponseDto {

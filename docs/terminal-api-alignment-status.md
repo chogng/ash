@@ -1,5 +1,23 @@
 # Terminal API 对齐状态
 
+## 文件清单批处理（2026-10-12）
+
+按文件清单覆盖现有消费链，不创建无消费者的剩余文件。第一批准入：新建上游同路径 `browser/xterm/{xtermAddonImporter.ts,terminalFontRendering.ts,terminalFontRendering.css}` 与 `browser/{terminalIcons.ts,terminalTooltip.ts}`。Find → XtermTerminal → importer 的 search 构造加载；配置 fontRendering → 原 xterm 字体策略/atlas refresh；菜单/列表 → terminalIcons 与 getShellProcessTooltip → 当前实例只读 PID/cwd/profile/state。所有 screen、Shell 状态和 PTY 仍归原 owner；不构建第二个 capability store。Decoration/MarkNavigation 的完整上游端口需要下层 capability 契约，不能把当前状态 facade 当成已完成的 capability owner。
+
+第一批准入修改路径：上述 5 个新文件、现有 xtermTerminal.ts、terminalMenus.ts、terminalTabsList.ts、common/{terminal.ts,terminalConfiguration.ts}；现有 terminalConfigurationService.test.ts 与 integration terminal fixture/spec；中文语言包、Terminal README、本台账。CSS 使用 Ash class 与主题，无上游复制。定向验证包括 Find、实时配置、字体模式、atlas 清理、tooltip 目录更新、中文说明与既有主题/焦点/释放。
+
+## Send Sequence 本批准入（2026-10-12）
+
+用户 keybindings.json 的 Send Sequence 或命令面板 → 既有 Terminal contribution 装载 sendSequence → 当前窗口 TerminalService 的运行实例 → 原 ConfigurationResolverService 与该实例所属 Workspace folder → 原 TerminalInstance.sendText(false) → TerminalProcessManager 输入队列与后端确认。实例/服务仍拥有进程与屏幕；新 contribution 只拥有一次调用的取消订阅，不保存业务状态或创建 PTY。
+
+准确路径：双方已有的 `terminal/browser/terminal.contribution.ts` 只装载入口，`terminal/common/terminal.ts` 只补标准命令 ID；VS Code 有而 Ash 缺失的 `terminalContrib/sendSequence/browser/terminal.sendSequence.contribution.ts` 独立实现命令入口；双方已有的 `terminalContrib/accessibility/browser/terminalAccessibilityHelp.ts` 补帮助。现有 `terminal/test/browser/terminalService.test.ts` 覆盖真实实例输入、确认、失败、异步解析与生命周期；既有 `test/integration/browser/terminal.integration.ts` / `terminal.integration.spec.ts` 补产品 keybinding 与 Quick Input 场景。浏览器 fixture 准入补充：原 history contribution 需要的 StorageService 尚未装配，导致屏幕创建失败；仅在既有 setupTerminalFixtureServices 中装配真实 BrowserStorageService，不改变产品 owner。另仅更新中文 NLS、Terminal README 和本台账。现有仅 Ash 的 README/行为测试沿用此前台账确认职责；不修改其他缺失文件、CSS、Rust、protocol 或 HistoryService。
+
+上游公开行为证据：标准命令接受 `{ text: string }`，无文本时提示输入，提示文本支持反斜线 n/r 与两位十六进制，经配置变量解析后发送而不追加执行回车。Ash 使用既有实例的 folder ID 选择变量上下文，不向尚无该 API 的 HistoryService 增加替代公开端口。参数是命令边界；变量解析、提示与后端确认期间一旦 active instance、实例状态/退出、成员或 workspace 发生变化，该调用失效。订阅在完成/失败时释放，原屏幕保留自己的 DOM、焦点与布局；没有新的 UI surface 或样式。
+
+本批结果：标准 Send Sequence 命令已通过原 Terminal contribution 装载，可从命令面板输入或 keybindings.json 传入 text；只对提示输入单次解码 n/r/xNN，不重解码参数或十六进制生成的反斜线。原 resolver 使用实例 folder ID 解析变量，原 sendText 保留 LF/CRLF 到 CR 的既有输入语义，不追加 Enter、不使用 bracketed paste，并等待原后端输入确认。运行实例与 active instance/进程 PID 检查阻止旧解析写入复用 Shell；状态、退出、关闭、切换和 workspace 事件取消该调用。变量仍未完成时取消立即结算，晚到失败仍被观察，订阅由该次调用释放。
+
+验证：正常 `pnpm test:unit --run .../terminalService.test.ts` 的 67 项通过（本批新增 12 项，包括原真实实例、multi-root folder、后端确认/拒绝、prompt 解码、无终端、无效参数、延迟结果、复用、取消与晚到失败）；runner 9 项自测通过。正常 `pnpm test:browser:integration terminal.integration.spec.ts --project=chromium` 的 Chromium 62 项全部通过，包括新增的真实用户快捷键、Quick Input Enter/Escape、终端焦点恢复、英文/中文提示与无障碍帮助，以及原 Find/clipboard/实例/配置/布局场景。common 2331、Renderer 3696、浏览器 3501 文件类型检查与 test TypeScript 编译通过；7 个相关 TS 文件格式、文档/语言包 Prettier 和 diff whitespace 检查通过。初次测试暴露 fixture 重复注册 resolver 和缺少 StorageService，现已改为可配置的单一测试 resolver 和真实存储装配；multi-root 输入断言保留真实 dirId 路由。本批不声称补齐 Shell 专属默认控制快捷键、完整 sendSequence keybinding 注册端口、服务器 flow control、group/editor/Agent owner；未运行真实 Windows/Linux/SSH Shell。共享工作树同期的 Session route、Tasks 和 Rust 改动保留；本 agent 未提交或推送。
+
 ## 命令导航与跨重启历史本批准入（2026-10-12）
 
 用户运行 Shell 命令 → 现有 resolver 与 TerminalInstance → 执行端 Rust tracker 校验 nonce 并发布完成命令 → TerminalProcessManager 在 xterm 输出提交后派发状态 → xtermTerminal 为该 PTY 命令保留可导航 marker；同一完成事件由 Terminal History contribution 过滤 Task 与非可信文本后写入应用级 StorageService → Recent Command Quick Pick 仅按当前 profile 读取 → 用户选择后通过原 TerminalInstance.sendText 启动。

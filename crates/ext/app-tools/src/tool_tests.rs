@@ -40,16 +40,27 @@ fn parser_rejects_spoofed_identity_and_ambiguous_operations() {
 }
 #[test]
 fn section_reordering_keeps_uniqueness_at_the_boundary_without_an_unsupported_strict_keyword() {
-    assert!(AppToolService::operation(&call(
-        "reorder_section",
-        json!({"section_id":"section-1","session_ids":["session-1","session-1"]})
-    )).is_err());
-    assert!(AppToolService::operation(&call(
-        "reorder_section",
-        json!({"section_id":"section-1","session_ids":["session-1","session-2"]})
-    )).is_ok());
+    assert!(
+        AppToolService::operation(&call(
+            "reorder_section",
+            json!({"section_id":"section-1","session_ids":["session-1","session-1"]})
+        ))
+        .is_err()
+    );
+    assert!(
+        AppToolService::operation(&call(
+            "reorder_section",
+            json!({"section_id":"section-1","session_ids":["session-1","session-2"]})
+        ))
+        .is_ok()
+    );
     for definition in definitions() {
-        assert!(!definition.parameters.to_string().contains("\"uniqueItems\""));
+        assert!(
+            !definition
+                .parameters
+                .to_string()
+                .contains("\"uniqueItems\"")
+        );
     }
 }
 

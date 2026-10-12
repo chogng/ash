@@ -5,7 +5,7 @@
 | 源码文件 | Ash | VS Code | 同路径 | 仅 Ash | 仅 VS Code |
 | -------- | --: | ------: | -----: | -----: | ---------: |
 | 首次审计 |  95 |     965 |     72 |     23 |        893 |
-| 当前     | 103 |     965 |     84 |     19 |        881 |
+| 本批前   | 108 |     965 |     90 |     18 |        875 |
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
@@ -109,3 +109,11 @@ start 绑定调用连接、目标 Thread 和媒体代次；stop 只关闭该会�
 ### 其他目录中的已有职责
 
 会话 UI 在 `src/ash/sessions/browser/chatViewPane.ts`，自动化 UI/契约在 `contrib/automation` 与 `platform/automation`，执行与持久领域状态由 Rust 共享后端拥有。尚未把这些能力当作 contrib/chat 文件缺失而新建竞争 owner。
+
+## 工具调用与 agentHost 联动批准入（2026-10-12）
+
+用户读取工具执行 → 现有 ChatWidgetModel / ChatService → agentHost 的 Thread snapshot 与 transcript notification adapter → chatTranscriptListItems 按 Turn + toolCallId 关联 → ChatListWidget / ChatToolInvocationPart → 可展开的调用参数、来源、执行目标、stdout/stderr 与最终结果。Rust Thread transcript 仍拥有执行状态；现有 ChatWidgetModel 只保存订阅快照，组件只保存展开/焦点，不创建执行器或第二套工具状态。结果丢失或 Turn 终止时不推断成功。
+
+准确范围：Chat 双方已有的 browser/widget/chatListWidget.ts 只增加工具内容组件接入、更新和视图状态；已确认 Ash 的 browser/widget/chatListItems.ts 只关联工具条目并保留文本可访问内容；双方有同路径的 browser/widget/chatContentParts/toolInvocationParts/chatToolInvocationPart.ts 在 Ash 缺失，原路径独立实现；样式落上游同路径 browser/widget/chatContentParts/media/chatCollapsibleContentPart.css，仅由新组件拥有。browser/widget/input/chatInputPart.ts 更新现有帮助。已确认的 src/ash/sessions/browser/chatWidgetModel.ts 仅把原 Thread 的 Turn 状态交给渲染转换，不改变订阅 owner；采用 sessions skill。agentHost 的既有 browser/appServerAgentService.ts 只转换工具调用/结果的嵌套领域值，Thread read、subscribe 和 notification 共用该边界；平台 owner 按 Sessions README 已确认的共享 Agent 领域归属保留，应用 app-server-api-integration skill。验证路径为现有 ChatListWidget、agentHost adapter 与 Sessions ChatViewPane 单测，以及 chatTranscript.integration.ts/spec.ts；另仅更新 chat.json 中文和本台账。其他路径只读，已有 Tasks/Terminal/Rust 修改保留。
+
+上游证据只取同路径、ChatToolInvocationPart 的 domNode/toolCallId/onDidChangeHeight 公共职责、renderer 对调用 ID 的复用，以及工具调用可检查输入、流式输出和终态的可观察行为；不复制上游私有 subpart/observable/MCP 实现。Ash 直接使用其已有 ThreadItem / ChatToolCallBinding / ThreadTranscriptEntry，不引入 AHP 或生成 DTO 到内容组件。检验需覆盖真实 adapter→领域值→组件、跨 Turn 同 ID、结果/输出乱序、孤立结果、失败/中断、快照与增量、展开和焦点保留、主题/窄宽度、安全文本、中文、移除与释放。

@@ -117,6 +117,7 @@ pub(super) struct WorkspaceRuntime {
 #[derive(Default)]
 pub(super) struct ExecutionRuntime {
     pub(super) terminals: Option<Arc<exec_server::terminal::TerminalService>>,
+    pub(super) session_terminals: Option<Arc<exec_server::terminal::TerminalService>>,
     pub(super) dir_terminals: BTreeMap<String, Arc<exec_server::terminal::TerminalService>>,
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) dir_debug_adapters: BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
@@ -2174,6 +2175,7 @@ impl AppServer {
             },
             execution: ExecutionRuntime {
                 terminals: None,
+                session_terminals: None,
                 dir_terminals: BTreeMap::new(),
                 debug_adapters: None,
                 dir_debug_adapters: BTreeMap::new(),
@@ -2394,6 +2396,7 @@ impl AppServer {
             },
             execution: ExecutionRuntime {
                 terminals: Some(Arc::clone(&terminals)),
+                session_terminals: None,
                 dir_terminals: BTreeMap::new(),
                 debug_adapters: debug_adapters.clone(),
                 dir_debug_adapters: BTreeMap::new(),
@@ -2936,8 +2939,8 @@ impl AppServer {
         if let Some((session_id, path)) = Self::terminal_session_directory(dir_id)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
         {
-            self.session_dir_authorization(&session_id, &path, Permission::ExecuteCommands)?;
-            return self.terminal_service();
+            let authorization = self.session_dir_authorization(&session_id, &path, Permission::ExecuteCommands)?;
+            return self.session_terminal_service(&session_id, &authorization);
         }
         let runtime = self
             .env_runtime
@@ -2958,6 +2961,40 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable))
     }
 
+    pub(super) fn session_terminal_service(
+        &self,
+        session_id: &SessionId,
+        authorization: &Authorization,
+    ) -> Result<Arc<exec_server::terminal::TerminalService>, RpcError> {
+        let source = self.session_view(session_id)?.execution_target;
+        let mut runtime = self
+            .env_runtime
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(primary) = &runtime.execution.terminals {
+            return Ok(Arc::clone(primary));
+        }
+        // A projectless Agents window has no selected Terminal owner. Reuse the
+        // Session source's configured owner; creation still uses its Session grant.
+        if let Some(ash_protocol::SessionExecutionTarget::Local { root }) = source {
+            if let Some((id, _)) = runtime
+                .dirs
+                .iter()
+                .find(|(_, grant)| grant.dir().canonical_path() == root)
+            {
+                if let Some(service) = runtime.execution.dir_terminals.get(id) {
+                    return Ok(Arc::clone(service));
+                }
+            }
+        }
+        if runtime.execution.session_terminals.is_none() {
+            let service = exec_server::terminal::TerminalService::new(authorization.clone())
+                .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?;
+            runtime.execution.session_terminals = Some(Arc::new(service));
+        }
+        Ok(Arc::clone(runtime.execution.session_terminals.as_ref().unwrap()))
+    }
+
     pub(super) fn configured_terminal_services(
         &self,
     ) -> Vec<Arc<exec_server::terminal::TerminalService>> {
@@ -2968,6 +3005,9 @@ impl AppServer {
         let mut services = Vec::new();
         if let Some(primary) = &runtime.execution.terminals {
             services.push(Arc::clone(primary));
+        }
+        if let Some(session) = &runtime.execution.session_terminals {
+            services.push(Arc::clone(session));
         }
         for service in runtime.execution.dir_terminals.values() {
             if !services

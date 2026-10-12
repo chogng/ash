@@ -3,7 +3,8 @@ import { TabList, type TabListDropPosition } from '../../../../base/browser/ui/t
 import { Emitter } from '../../../../base/common/event.js';
 import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
+import { killTerminalIcon } from './terminalIcons.js';
+import { getShellProcessTooltip } from './terminalTooltip.js';
 import { localize } from '../../../../nls.js';
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -42,7 +43,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 	) {
 		super(parent, {
 			ariaLabel: localize('terminal.tabs.instances', 'Terminal instances'),
-			orientation: 'vertical', draggable: true, closeActionIcon: Lxicon.trash,
+			orientation: 'vertical', draggable: true, closeActionIcon: killTerminalIcon,
 			onActivate: instance => { this.terminals.setActiveInstance(instance); this.focused.fire(); },
 			onClose: instance => { void this.terminals.closeTerminal(instance).catch(() => { }); },
 			dragAndDrop: {
@@ -98,7 +99,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 			if (!this.instanceListeners.has(instance)) this.instanceListeners.set(instance, instance.onDidChangeState(() => this.refresh()));
 		}
 		this.setTabs(this.terminals.instances.map(instance => ({
-			id: instance.id, value: instance, label: instance.title, tooltip: instance.title,
+			id: instance.id, value: instance, label: instance.title, tooltip: instance.title + getShellProcessTooltip(instance, true),
 			icon: terminalProfileIcon(instance.profile), state: instance.state, tabId: `${instance.id}-tab`,
 			renderLabel: (container: HTMLElement) => {
 				const label = new IconLabel(container, { label: instance.title, icon: terminalProfileIcon(instance.profile) });

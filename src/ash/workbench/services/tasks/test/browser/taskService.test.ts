@@ -123,6 +123,33 @@ import { ContextKeyService } from '../../../../../platform/contextkey/browser/co
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { WorkbenchQuickInputService } from '../../../quickinput/browser/quickInputService.js';
 
+test('TaskService discovers UTF-8 configuration through the provider text contract without opening binary resources', async () => {
+	const root = URI.file('/task-text');
+	const files = new FakeFileService(root, {
+		'.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: '构建 😀', type: 'process', command: 'node', args: ['build.cjs'] }] }),
+	});
+	const textReads: string[] = [];
+	const provider: IFileSystemProvider = Object.assign(files, {
+		readTextFile: async (resource: URI, encoding: string) => {
+			textReads.push(encoding);
+			const content = await FakeFileService.prototype.readFile.call(files, resource);
+			return { resource, content: new TextDecoder().decode(content.bytes), revision: content.revision };
+		},
+		readFile: async () => { throw new Error('A binary resource cannot be read on this Session route'); },
+	});
+	const workspace: IWorkspaceContextService = {
+		onDidChangeWorkspace: Event.None,
+		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'task-text', index: 0 }] }),
+		getWorkbenchState: () => 2, getWorkspaceFolder: () => null,
+	};
+	using resources = new DisposableStore();
+	const terminals = resources.add(new FakeTerminalService());
+	const services = taskServices(resources, provider, workspace, terminals);
+	const tasks = resources.add(services.createInstance(TaskService));
+	assert.deepEqual((await tasks.refresh()).map(task => task.label), ['构建 😀']);
+	assert.deepEqual(textReads, ['utf8']);
+});
+
 test("TaskService discovers tasks, creates a shell execution, and tracks its exit", async () => {
 	const root = URI.file("C:\\project");
 	const files = new FakeFileService(root, {

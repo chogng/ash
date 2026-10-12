@@ -291,7 +291,9 @@ impl AppToolService {
                 }
                 let mut seen = HashSet::new();
                 if session_ids.iter().any(|id| !seen.insert(id)) {
-                    return Err(CoreError::Policy("section contains duplicate sessions".into()));
+                    return Err(CoreError::Policy(
+                        "section contains duplicate sessions".into(),
+                    ));
                 }
             }
             AppToolOperation::ListThreads { .. }

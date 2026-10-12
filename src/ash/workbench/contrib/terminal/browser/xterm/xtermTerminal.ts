@@ -23,6 +23,10 @@ import { CancellationError } from '../../../../../base/common/errors.js';
 import { searchMatchBackground } from '../../../../../platform/theme/common/colors/searchColors.js';
 import { contrastBorder, focusBorder } from '../../../../../platform/theme/common/colors/baseColors.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { XtermAddonImporter } from './xtermAddonImporter.js';
+import { updateTerminalFontRendering } from './terminalFontRendering.js';
+
+const addonImporter = new XtermAddonImporter();
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
 export class XtermTerminal extends Disposable implements IXtermTerminal {
@@ -84,6 +88,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this._register(configuration.onConfigChanged(() => {
 			if (!this.terminal) return;
 			this.terminal.options = this.screenOptions();
+			updateTerminalFontRendering(this.terminal, this.configuration.config.fontRendering);
 			this.fit();
 		}));
 	}
@@ -122,6 +127,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		terminal.loadAddon(this.fitAddon);
 		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }));
 		terminal.open(this.element);
+		updateTerminalFontRendering(terminal, this.configuration.config.fontRendering);
 		const bell = terminal.onBell(() => { void this.signals.playSignal(AccessibilitySignal.terminalBell); });
 		this._register(toDisposable(() => bell.dispose()));
 		this.registerAlternateScrollMode(terminal);
@@ -230,7 +236,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 
 	private async loadSearchAddon(): Promise<SearchAddon> {
 		await this.initialize();
-		const { SearchAddon } = await import('@xterm/addon-search');
+		const SearchAddon = await addonImporter.importAddon('search');
 		if (this.isDisposed) { throw new CancellationError(); }
 		const addon = new SearchAddon({ highlightLimit: 1000 });
 		this.raw.loadAddon(addon);

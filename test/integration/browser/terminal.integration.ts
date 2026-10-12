@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/browser/configurationResolverService.js';
@@ -66,6 +68,10 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 
 const store = new DisposableStore();
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
+	if (!services.has(IStorageService)) {
+		services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', backend: window.localStorage, flushInterval: 0 })));
+	}
+
 	services.registerInstance(IExtensionService, { terminalProfiles: [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	services.registerInstance(IPathService, { path: Promise.resolve(posix), resolvedUserHome: URI.file('/home/test'), userHome: async () => URI.file('/home/test'), getPath: async () => posix, getOperatingSystem: async () => OperatingSystem.Linux, fileURI: async (path: string) => URI.file(path) } as unknown as IPathService);
 	services.registerInstance(IConfigurationResolverService, lifetime.add(services.createInstance(ConfigurationResolverService)));
@@ -709,6 +715,7 @@ if (new URLSearchParams(location.search).has('input')) {
 		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
 	]);
 	const clipboardFixture = new URLSearchParams(location.search).has('clipboard');
+	const sequenceFixture = new URLSearchParams(location.search).has('sequence');
 	let clipboardText = '';
 	const copied: string[] = [];
 	let clipboardReads = 0;
@@ -759,7 +766,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	const terminals = services.get(ITerminalService);
 	store.add(terminals.onDidCreateInstance(instance => {
 		instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
-		if (new URLSearchParams(location.search).has('find') || clipboardFixture) {
+		if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture) {
 			instance.xterm!.setVisible(true);
 			instance.xterm!.focus();
 		}
@@ -768,7 +775,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	const screen = (await terminal.xtermReadyPromise)!;
 	screen.setVisible(true);
 	screen.focus();
-	if (new URLSearchParams(location.search).has('find') || clipboardFixture) {
+	if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture) {
 		TerminalHasActiveInstanceContext.bindTo(services.get(IContextKeyService)).set(true);
 		const commands = store.add(new CommandService(services));
 		services.registerInstance(ICommandService, commands);
@@ -778,12 +785,26 @@ if (new URLSearchParams(location.search).has('input')) {
 		const notifications = store.add(new NotificationService());
 		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
-		services.registerInstance(IFileService, { onDidChangeFiles: Event.None, readFile: async resource => ({ resource, content: '[]', revision: '1' }) } as IFileService);
+		const keybindingSource = sequenceFixture ? JSON.stringify([
+			{ key: 'ctrl+alt+y', command: 'workbench.action.terminal.sendSequence', args: { text: '\u001b[1;5D${workspaceFolder}' }, when: 'terminalFocus' },
+		]) : '[]';
+		services.registerInstance(IFileService, { onDidChangeFiles: Event.None, readFile: async resource => ({ resource, content: keybindingSource, revision: '1' }) } as IFileService);
 		const layouts = store.add(new BrowserKeyboardLayoutService({ navigator }));
 		const keybindings = store.add(services.createInstance(WorkbenchKeybindingService, {
 			ownerDocument: document, commandService: commands, contextKeyService: services.get(IContextKeyService), keyboardLayoutService: layouts,
 		}));
 		await keybindings.initialize();
+		if (sequenceFixture) {
+			window.ashTerminalSequenceIntegration = {
+				command: args => commands.executeCommand('workbench.action.terminal.sendSequence', args),
+				errors: () => notifications.getNotifications().map(item => item.message),
+				help: async () => {
+					const { TerminalAccessibilityHelpProvider } = await import('../../../src/ash/workbench/contrib/terminalContrib/accessibility/browser/terminalAccessibilityHelp.js');
+					using provider = new TerminalAccessibilityHelpProvider(terminal);
+					return provider.provideContent();
+				},
+			};
+		}
 		if (clipboardFixture) {
 			window.ashTerminalClipboardIntegration = {
 				command: id => commands.executeCommand(id),
@@ -885,6 +906,11 @@ declare global {
 			help(): Promise<string>;
 			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight'): void;
 			errors(): readonly string[];
+		};
+		ashTerminalSequenceIntegration: {
+			command(args?: unknown): Promise<unknown>;
+			errors(): readonly string[];
+			help(): Promise<string>;
 		};
 		ashTerminalInputIntegration: {
 			readonly writes: readonly (string | number[])[];

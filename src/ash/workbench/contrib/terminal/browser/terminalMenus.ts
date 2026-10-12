@@ -1,5 +1,6 @@
 import { localize, localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { newTerminalIcon, killTerminalIcon } from './terminalIcons.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
@@ -36,7 +37,7 @@ export function setupTerminalMenus(): void {
 			id: TerminalCommandId.New,
 			title: localize2('terminal.title.new', "New Terminal"),
 			tooltip: localize('terminal.title.new', "New Terminal"),
-			icon: Lxicon.add,
+			icon: newTerminalIcon,
 			precondition: ContextKeyExpr.and(AppServerAvailableContext.isEqualTo(true), TerminalCreatingContext.isEqualTo(false)),
 		},
 		group: "navigation",
@@ -61,7 +62,7 @@ export function setupTerminalMenus(): void {
 			id: TerminalCommandId.Kill,
 			title: localize2('terminal.title.kill', "Kill Terminal"),
 			tooltip: localize('terminal.title.kill', "Kill Terminal"),
-			icon: Lxicon.trash,
+			icon: killTerminalIcon,
 		},
 		when: TerminalHasActiveInstanceContext.isEqualTo(true),
 		group: "navigation",

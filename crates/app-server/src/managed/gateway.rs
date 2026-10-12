@@ -899,10 +899,17 @@ fn selected_execution_target(
         return Ok(None);
     }
     let terminal_directory = if method.is_some_and(|method| method.starts_with("terminal/")) {
-        AppServer::terminal_session_directory(request.get("params")
-            .and_then(|params| params.get("dirId")).and_then(Value::as_str))?
-    } else { None };
-    let terminal_session = terminal_directory.map(|(session, _)| Value::String(session.to_string()));
+        AppServer::terminal_session_directory(
+            request
+                .get("params")
+                .and_then(|params| params.get("dirId"))
+                .and_then(Value::as_str),
+        )?
+    } else {
+        None
+    };
+    let terminal_session =
+        terminal_directory.map(|(session, _)| Value::String(session.to_string()));
     let params = request.get("params");
     if method == Some("session/create") {
         let selected: Option<SessionExecutionTarget> = serde_json::from_value(
@@ -921,7 +928,8 @@ fn selected_execution_target(
                     .get("sessionDirectory")
                     .and_then(|dir| dir.get("sessionId"))
             })
-        }).or(terminal_session.as_ref())
+        })
+        .or(terminal_session.as_ref())
         .and_then(Value::as_str)
     {
         let local_id = SessionId::new(session_id.to_owned()).map_err(|error| error.to_string())?;

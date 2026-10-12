@@ -1,0 +1,39 @@
+.ash-chat-tool-invocation {
+	min-width: 0;
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-chat-tool-invocation > summary {
+	padding: 4px 8px;
+	border-radius: var(--ash-cornerRadius-small);
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+
+.ash-chat-tool-invocation > summary:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-chat-tool-invocation > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-chat-tool-invocation > .ash-chat-tool-source {
+	margin: 8px;
+	overflow-wrap: anywhere;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-chat-tool-invocation > pre {
+	margin: 0 0 8px;
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}
+
+.ash-chat-tool-invocation.error > summary,
+.ash-chat-tool-invocation > .ash-chat-tool-stderr {
+	color: var(--ash-error-foreground);
+}

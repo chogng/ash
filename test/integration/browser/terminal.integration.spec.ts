@@ -1113,3 +1113,66 @@ test('terminal reuse keeps command decorations separate when the new PTY restart
 	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().closes)).toBe(1);
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
+
+
+test('Send Sequence user keybinding resolves variables and sends control characters through the real instance', async ({ page }) => {
+	const pageErrors: string[] = [];
+	page.on('pageerror', error => pageErrors.push(error.message));
+	await page.goto('/terminal.html?input&sequence');
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalSequenceIntegration)), errors: pageErrors })).toEqual({ ready: true, errors: [] });
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.clear());
+	await page.locator('.xterm-helper-textarea').focus();
+	await page.keyboard.press('Control+Alt+y');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[1;5D/workspace']);
+	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+	expect(await page.evaluate(() => window.ashTerminalSequenceIntegration.errors())).toEqual([]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`Send Sequence prompt supports control escapes, cancellation and accessible help in ${locale}`, async ({ page }) => {
+		const pageErrors: string[] = [];
+		page.on('pageerror', error => pageErrors.push(error.message));
+		await page.goto(`/terminal.html?input&sequence&locale=${locale}`);
+		await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalSequenceIntegration)), errors: pageErrors })).toEqual({ ready: true, errors: [] });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
+		const title = locale === 'zh-CN' ? '终端：发送序列' : 'Terminal: Send Sequence';
+		const placeholder = locale === 'zh-CN' ? '输入文本或控制字符（\\n、\\r、\\xNN）' : 'Enter text or control characters (\\n, \\r, \\xNN)';
+		const sending = page.evaluate(() => window.ashTerminalSequenceIntegration.command());
+		const input = page.getByPlaceholder(placeholder, { exact: true });
+		await expect(page.getByRole('dialog', { name: title, exact: true })).toBeVisible();
+		await expect(input).toBeFocused();
+		await input.fill('\\x1b[A${workspaceFolder}\\r');
+		await input.press('Enter');
+		await sending;
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[A/workspace\r']);
+		await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+		const canceled = page.evaluate(() => window.ashTerminalSequenceIntegration.command());
+		await expect(input).toBeVisible();
+		await input.press('Escape');
+		await canceled;
+		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[A/workspace\r']);
+		await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+		expect(await page.evaluate(() => window.ashTerminalSequenceIntegration.help())).toContain(locale === 'zh-CN' ? '发送序列' : 'Send Sequence');
+		expect(await page.evaluate(() => window.ashTerminalSequenceIntegration.errors())).toEqual([]);
+		await page.evaluate(() => window.ashTerminalInputIntegration.close());
+	});
+}
+
+
+test('terminal font rendering updates the existing screen without replacing its content', async ({ page }) => {
+	await page.goto('/terminal.html');
+	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
+	await page.evaluate(async () => { window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready(); window.ashTerminalIntegration.write('font policy retained'); });
+	await expect(page.locator('.xterm-rows')).toContainText('font policy retained');
+	const mac = await page.evaluate(() => /Mac/.test(navigator.platform));
+	await page.evaluate(() => window.ashTerminalIntegration.configure('terminal.integrated.fontRendering', 'grayscale'));
+	await expect(page.locator('.xterm')).toHaveClass(mac ? /ash-terminal-font-grayscale/ : /^(?!.*ash-terminal-font-grayscale)/);
+	if (mac) await expect(page.locator('.xterm')).toHaveCSS('-webkit-font-smoothing', 'antialiased');
+	await page.evaluate(() => window.ashTerminalIntegration.configure('terminal.integrated.fontRendering', 'auto'));
+	await expect(page.locator('.xterm')).not.toHaveClass(/ash-terminal-font-grayscale/);
+	await expect(page.locator('.xterm-rows')).toContainText('font policy retained');
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});

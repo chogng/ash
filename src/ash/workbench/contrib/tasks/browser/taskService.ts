@@ -766,7 +766,8 @@ export class TaskService extends Disposable implements ITaskService {
 
 	private async readOptional(resource: URI): Promise<string | undefined> {
 		if (!await this.exists(resource)) return undefined;
-		return (await this.fileService.readFile(resource)).content;
+		// Task configuration is UTF-8 text; provider text reads keep Session routing on one request.
+		return (await this.fileService.readFile(resource, 'utf8')).content;
 	}
 }
 

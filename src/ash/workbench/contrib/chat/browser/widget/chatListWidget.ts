@@ -11,6 +11,8 @@ import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { ChatEditorConfiguration } from '../../common/constants.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
+import { ChatToolInvocationPart } from './chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
+import { localize } from '../../../../../nls.js';
 import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
 
 interface ChatListWidgetOptions {
@@ -21,7 +23,7 @@ interface ChatListWidgetOptions {
 }
 
 class RenderedItem extends Disposable {
-	constructor(public readonly item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore) {
+	constructor(public item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore, public readonly toolPart?: ChatToolInvocationPart) {
 		super();
 		this._register(disposables);
 	}
@@ -38,6 +40,7 @@ interface ChatListViewState {
 	readonly top: number;
 	readonly anchor: ReadingAnchor | undefined;
 	readonly advisorExpansion: readonly [string, boolean][];
+	readonly toolExpansion?: readonly [string, boolean][];
 	readonly focus: { readonly itemId: string; readonly index: number; } | undefined;
 }
 
@@ -74,7 +77,7 @@ export class ChatListWidget extends DomWidget {
 		this.transcript = this.scrollable.contentElement;
 		this.transcript.classList.add("ash-chat-transcript");
 		this.transcript.setAttribute("role", "log");
-		this.transcript.setAttribute("aria-label", "Chat transcript");
+		this.transcript.setAttribute('aria-label', localize('chat.transcript.label', 'Chat transcript'));
 		this.transcript.setAttribute("aria-live", "polite");
 		this.updateCodeBlockOptions();
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
@@ -111,7 +114,13 @@ export class ChatListWidget extends DomWidget {
 		let next: ChildNode | null = this.transcript.firstChild;
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
-			if (!row || !sameItem(row.item, item)) {
+			if (row?.toolPart && item.toolInvocation && row.toolPart.toolCallId === item.toolInvocation.call.toolCallId) {
+				row.toolPart.render(item.toolInvocation);
+				row.item = item;
+				row.element.classList.toggle('error', item.isError === true);
+				if (item.transient) row.element.dataset.transient = 'true';
+				else delete row.element.dataset.transient;
+			} else if (!row || !sameItem(row.item, item)) {
 				if (row?.element === next) next = row.element.nextSibling;
 				row?.element.remove();
 				row = this.renderedItems.set(item.id, this.renderItem(item));
@@ -155,6 +164,7 @@ export class ChatListWidget extends DomWidget {
 			top: this.pendingReadingPosition?.top ?? this.scrollable.state.top,
 			anchor: this.pendingReadingPosition?.anchor ?? (this.visible && !this.shouldFollow ? this.readingAnchor() : undefined),
 			advisorExpansion: [...this.advisorExpansion],
+			toolExpansion: [...this.renderedItems].flatMap(([id, row]) => row.toolPart ? [[id, row.toolPart.domNode.open] as [string, boolean]] : []),
 			focus,
 		};
 	}
@@ -163,6 +173,10 @@ export class ChatListWidget extends DomWidget {
 	public restoreViewState(state: ChatListViewState, items: readonly IChatListItem[]): void {
 		for (const [id, expanded] of state.advisorExpansion) this.advisorExpansion.set(id, expanded);
 		this.render(items);
+		for (const [id, expanded] of state.toolExpansion ?? []) {
+			const part = this.renderedItems.get(id)?.toolPart;
+			if (part) part.domNode.open = expanded;
+		}
 		this.shouldFollow = state.shouldFollow;
 		// Hidden panes cannot measure their scroll range until their retained host is shown again.
 		this.pendingReadingPosition = { top: state.top, anchor: state.anchor };
@@ -210,6 +224,12 @@ export class ChatListWidget extends DomWidget {
 		article.dataset.itemId = item.id;
 		if (item.transient) article.dataset.transient = "true";
 		if (item.isError) article.classList.add("error");
+		if (item.toolInvocation) {
+			const part = disposables.add(new ChatToolInvocationPart(article.ownerDocument, item.toolInvocation));
+			disposables.add(part.onDidChangeHeight(() => { if (this.visible) this.layout(); }));
+			article.append(part.domNode);
+			return new RenderedItem(item, article, disposables, part);
+		}
 		if (item.type === 'hook' && item.hookPart) {
 			const part = disposables.add(new ChatHookContentPart(article.ownerDocument, item.hookPart));
 			article.append(part.domNode);

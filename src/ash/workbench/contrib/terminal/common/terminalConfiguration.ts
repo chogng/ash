@@ -36,6 +36,10 @@ properties[`${TERMINAL_CONFIG_SECTION}.fontFamily`] = {
 	get description() { return localize('terminal.config.fontFamilyDescription', 'Terminal font family. An empty value uses the editor font.'); },
 	ashSetting: { valueType: 'text', placeholder: '', get title() { return localize('terminal.config.fontFamily', 'Terminal font family'); }, get description() { return localize('terminal.config.fontFamilyDescription', 'Terminal font family. An empty value uses the editor font.'); } },
 };
+properties[`${TERMINAL_CONFIG_SECTION}.fontRendering`] = {
+	type: 'string', default: 'auto', enum: ['auto', 'grayscale'],
+	get description() { return localize('terminal.config.fontRendering', 'Terminal font smoothing on macOS. Grayscale uses antialiased text.'); },
+};
 properties[`${TERMINAL_CONFIG_SECTION}.cursorBlinking`] = {
 	type: 'boolean', default: false,
 	get description() { return localize('terminal.config.cursorBlinkingDescription', 'Blink the terminal cursor.'); },

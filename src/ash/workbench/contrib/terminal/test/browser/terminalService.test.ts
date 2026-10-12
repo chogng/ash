@@ -1,3 +1,9 @@
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { IQuickInputService, type IInputOptions } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { TerminalCommandId } from '../../common/terminal.js';
+import '../../../terminalContrib/sendSequence/browser/terminal.sendSequence.contribution.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -35,6 +41,19 @@ test("TerminalService keeps empty windows off the process API and enables a fold
 	await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: "default" } });
 	assert.equal(processService.profileListCalls, 1);
 	assert.equal(processService.createCalls.length, 1);
+});
+
+test('a single Session folder keeps its process route through creation and closing after selection changes', async () => {
+	const processService = new TestTerminalProcessService([]);
+	const scope = 'session:thread%3Aone:%2Fsession-workspace';
+	using workspace = new WorkspaceContextService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
+	using services = terminalServices(processService, workspace);
+	const service = services.get(ITerminalService);
+	const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	assert.equal(processService.createCalls[0]?.dirId, scope);
+	workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
+	await service.closeTerminal(instance);
+	assert.deepEqual(processService.closeOptions, [{ dirId: scope, terminalId: 'terminal-1' }]);
 });
 
 test("TerminalService exposes event-driven instances over the process service", async () => {
@@ -1365,4 +1384,167 @@ test('TerminalService retains the spawn environment snapshot when relaunching a 
 	processes.emitConnectionState('ready');
 	await service.relaunchTerminal(instance, { rows: 25, cols: 90 });
 	assert.deepEqual(processes.createCalls.map(call => call.env), [{ MODE: 'original', REMOVE: null }, { MODE: 'original', REMOVE: null }]);
+});
+
+
+suite('Terminal Send Sequence', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	function setup(owner: DisposableStore) {
+		const processes = new TestTerminalProcessService([]);
+		const workspace = owner.add(new WorkspaceContextService({ id: 'sequence', uri: URI.file('/workspace') }));
+		const services = owner.add(terminalServices(processes, workspace));
+		const terminals = services.get(ITerminalService);
+		const commands = owner.add(new CommandService(services));
+		services.registerInstance(ICommandService, commands);
+		const resolver = { resolveAsync: async (_folder: unknown, value: unknown): Promise<unknown> => value };
+		services.registerInstance(IConfigurationResolverService, resolver as IConfigurationResolverService);
+		return { processes, workspace, services, terminals, commands, resolver };
+	}
+
+	test('resolves for the initiating folder and waits for the actual input acknowledgement', async () => {
+		using owner = new DisposableStore();
+		const { processes, workspace, resolver, terminals, commands } = setup(owner);
+		await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		const acknowledgement = deferred<void>();
+		processes.writeGates.push(acknowledgement.promise);
+		const resolutions: unknown[] = [];
+		resolver.resolveAsync = async (folder, value) => { resolutions.push({ folder, value }); return '\x1b[1;5D中文'; };
+		let completed = false;
+		const sending = commands.executeCommand(TerminalCommandId.SendSequence, { text: '${workspaceFolder}' }).then(() => { completed = true; });
+		await waitFor(() => processes.writeCalls.length === 1);
+		assert.deepEqual(resolutions, [{ folder: workspace.getWorkspace().folders[0], value: '${workspaceFolder}' }]);
+		assert.deepEqual(processes.writeCalls, [{ terminalId: 'terminal-1', data: '\x1b[1;5D中文' }]);
+		assert.equal(completed, false);
+		acknowledgement.resolve();
+		await sending;
+		assert.equal(completed, true);
+	});
+
+	test('uses the terminal folder in a multi-root workspace', async () => {
+		using owner = new DisposableStore();
+		const { processes, workspace, resolver, terminals, commands } = setup(owner);
+		workspace.updateWorkspace({
+			id: 'multi', folders: [
+				{ id: 'first', uri: URI.file('/first'), name: 'First', index: 0 },
+				{ id: 'second', uri: URI.file('/second'), name: 'Second', index: 1 },
+			]
+		});
+		await terminals.createTerminal({ dirId: 'second', dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		resolver.resolveAsync = async (folder) => {
+			assert.equal(folder, workspace.getWorkspace().folders[1]);
+			return '/second';
+		};
+		await commands.executeCommand(TerminalCommandId.SendSequence, { text: '${workspaceFolder}' });
+		assert.deepEqual(processes.writeCalls, [{ dirId: 'second', terminalId: 'terminal-1', data: '/second' }]);
+	});
+
+	test('cancellation settles the command while an unresolved variable remains pending', async () => {
+		using owner = new DisposableStore();
+		const { processes, resolver, terminals, commands } = setup(owner);
+		await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		const resolution = deferred<string>();
+		let resolving = false;
+		resolver.resolveAsync = async () => { resolving = true; return resolution.promise; };
+		const sending = commands.executeCommand(TerminalCommandId.SendSequence, { text: '${pending}' });
+		await waitFor(() => resolving);
+		terminals.setActiveInstance(undefined);
+		await sending;
+		resolution.reject(new Error('late failure after cancellation'));
+		assert.deepEqual(processes.writeCalls, []);
+	});
+
+	test('prompt decodes control characters once, while supplied text keeps literal escapes', async () => {
+		using owner = new DisposableStore();
+		const { processes, services, terminals, commands } = setup(owner);
+		await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		const prompts: IInputOptions[] = [];
+		services.registerInstance(IQuickInputService, {
+			input: async options => { prompts.push(options); return String.raw`\x1b[A\n\r\x00\x5cn\xGG中文`; },
+		} as IQuickInputService);
+		await commands.executeCommand(TerminalCommandId.SendSequence);
+		await commands.executeCommand(TerminalCommandId.SendSequence, { text: String.raw`\n\r\x1b` });
+		assert.equal(prompts.length, 1);
+		assert.deepEqual(processes.writeCalls, [
+			{ terminalId: 'terminal-1', data: '\x1b[A\r\r\0\\n\\xGG中文' },
+			{ terminalId: 'terminal-1', data: String.raw`\n\r\x1b` },
+		]);
+	});
+
+	test('rejects malformed command arguments and never prompts without a running instance', async () => {
+		using owner = new DisposableStore();
+		const { processes, services, terminals, commands } = setup(owner);
+		let prompts = 0;
+		services.registerInstance(IQuickInputService, { input: async () => { prompts++; return 'unexpected'; } } as unknown as IQuickInputService);
+		for (const value of [null, 'text', [], {}, { text: 42 }]) {
+			await assert.rejects(commands.executeCommand(TerminalCommandId.SendSequence, value), /string text property/);
+		}
+		await commands.executeCommand(TerminalCommandId.SendSequence);
+		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await instance.close();
+		await commands.executeCommand(TerminalCommandId.SendSequence);
+		assert.equal(prompts, 0);
+		assert.deepEqual(processes.writeCalls, []);
+	});
+
+	for (const change of ['switch away and back', 'reuse', 'close', 'workspace', 'disconnect and recover'] as const) {
+		test(`discards a delayed resolution after ${change}`, async () => {
+			using owner = new DisposableStore();
+			const { processes, resolver, workspace, terminals, commands } = setup(owner);
+			const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+			const resolution = deferred<string>();
+			let resolving = false;
+			resolver.resolveAsync = async () => { resolving = true; return resolution.promise; };
+			const sending = commands.executeCommand(TerminalCommandId.SendSequence, { text: 'stale input' });
+			await waitFor(() => resolving);
+			switch (change) {
+				case 'switch away and back': terminals.setActiveInstance(undefined); terminals.setActiveInstance(instance); break;
+				case 'reuse': await instance.reuseTerminal({}); break;
+				case 'close': await instance.close(); break;
+				case 'workspace': workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') }); break;
+				case 'disconnect and recover': processes.emitConnectionState('crashed'); processes.emitConnectionState('ready'); break;
+			}
+			resolution.resolve('stale input');
+			await sending;
+			assert.deepEqual(processes.writeCalls, []);
+		});
+	}
+
+	test('cancels an open prompt when the active instance changes', async () => {
+		using owner = new DisposableStore();
+		const { processes, services, terminals, commands } = setup(owner);
+		await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		let prompted = false;
+		let canceled = false;
+		services.registerInstance(IQuickInputService, {
+			input: (_options, token) => new Promise(resolve => {
+				prompted = true;
+				owner.add(token!.onCancellationRequested(() => { canceled = true; resolve(undefined); }));
+			}),
+		} as IQuickInputService);
+		const sending = commands.executeCommand(TerminalCommandId.SendSequence);
+		await waitFor(() => prompted);
+		terminals.setActiveInstance(undefined);
+		await sending;
+		assert.equal(canceled, true);
+		assert.deepEqual(processes.writeCalls, []);
+	});
+
+	test('propagates configuration resolution and transport failures without executing extra input', async () => {
+		using owner = new DisposableStore();
+		const { processes, resolver, terminals, commands } = setup(owner);
+		await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		const failure = new Error('sequence failed');
+		resolver.resolveAsync = async () => { throw failure; };
+		await assert.rejects(commands.executeCommand(TerminalCommandId.SendSequence, { text: 'unsent' }), error => error === failure);
+		assert.deepEqual(processes.writeCalls, []);
+		resolver.resolveAsync = async (_folder, value) => value;
+		const acknowledgement = deferred<void>();
+		processes.writeGates.push(acknowledgement.promise);
+		const sending = assert.rejects(commands.executeCommand(TerminalCommandId.SendSequence, { text: 'sent' }), error => error === failure);
+		await waitFor(() => processes.writeCalls.length === 1);
+		acknowledgement.reject(failure);
+		await sending;
+		assert.deepEqual(processes.writeCalls, [{ terminalId: 'terminal-1', data: 'sent' }]);
+	});
 });

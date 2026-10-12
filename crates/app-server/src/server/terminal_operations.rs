@@ -25,11 +25,17 @@ impl AppServer {
         let Some(identity) = dir_id.and_then(|id| id.strip_prefix("session:")) else {
             return Ok(None);
         };
-        let (session, path) = identity.split_once(':').ok_or("Invalid Session folder identity")?;
-        let decode = |value: &str| url::form_urlencoded::parse(value.as_bytes())
-            .next().map(|(key, _)| key.into_owned()).ok_or("Empty Session folder identity");
-        let session = ash_protocol::SessionId::new(decode(session)?)
-            .map_err(|error| error.to_string())?;
+        let (session, path) = identity
+            .split_once(':')
+            .ok_or("Invalid Session folder identity")?;
+        let decode = |value: &str| {
+            url::form_urlencoded::parse(value.as_bytes())
+                .next()
+                .map(|(key, _)| key.into_owned())
+                .ok_or("Empty Session folder identity")
+        };
+        let session =
+            ash_protocol::SessionId::new(decode(session)?).map_err(|error| error.to_string())?;
         let path = decode(path)?;
         if !std::path::Path::new(&path).is_absolute() || path.contains('\0') {
             return Err("Session Terminal directory must be absolute".into());
@@ -92,15 +98,20 @@ impl AppServer {
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let created = if let Some((session_id, path)) = directory {
             let authorization = self.session_dir_authorization(
-                &session_id, &path, ash_file_access::Permission::ExecuteCommands,
+                &session_id,
+                &path,
+                ash_file_access::Permission::ExecuteCommands,
             )?;
-            self.terminal_service()?.create_in_dir(
-                connection.connection_id, create_request(params), authorization,
+            self.session_terminal_service(&session_id, &authorization)?.create_in_dir(
+                connection.connection_id,
+                create_request(params),
+                authorization,
             )
         } else {
             self.terminal_service_for(params.dir_id.as_deref())?
                 .create(connection.connection_id, create_request(params))
-        }.map_err(terminal_error)?;
+        }
+        .map_err(terminal_error)?;
         result(&wire::TerminalCreateResult {
             ready: ready_to_dto(created.ready),
             terminal_id: created.terminal_id,
@@ -121,7 +132,7 @@ impl AppServer {
             ash_file_access::Permission::ExecuteCommands,
         )?;
         let created = self
-            .terminal_service()?
+            .session_terminal_service(&params.session_id, &authorization)?
             .create_in_dir(
                 connection.connection_id,
                 exec_server::terminal::TerminalCreateRequest {

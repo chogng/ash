@@ -117,7 +117,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 			return instance;
 		}
 		const workspaceFolder = this.requireWorkspaceFolder(options.dirId);
-		const processWorkspaceFolderId = this.workspaceContext.getWorkspace().folders.length > 1
+		// A Session directory needs its execution route even when it is the only visible folder.
+		const processWorkspaceFolderId = this.workspaceContext.getWorkspace().folders.length > 1 || workspaceFolder.id.startsWith('session:')
 			? workspaceFolder.id
 			: undefined;
 		const environment = options.env === undefined ? undefined : Object.freeze({ ...options.env });

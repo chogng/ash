@@ -1,0 +1,92 @@
+import '../media/chatCollapsibleContentPart.css';
+import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
+import { Emitter } from '../../../../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { localize } from '../../../../../../../nls.js';
+import type { ChatToolCallBinding } from '../../../../../../services/chat/common/chatService.js';
+import type { IChatListItem } from '../../chatListItems.js';
+
+/** A view of one backend call; it never starts a tool or infers success from a closed Turn. */
+export class ChatToolInvocationPart extends Disposable {
+	public readonly domNode: HTMLDetailsElement;
+	public readonly toolCallId: string;
+	private readonly summary: HTMLElement;
+	private readonly source: HTMLElement;
+	private readonly activity: HTMLElement;
+	private readonly parameters: HTMLElement;
+	private readonly stdout: HTMLElement;
+	private readonly stderr: HTMLElement;
+	private readonly result: HTMLElement;
+	private readonly _onDidChangeHeight = this._register(new Emitter<void>());
+	public readonly onDidChangeHeight = this._onDidChangeHeight.event;
+
+	constructor(document: Document, invocation: NonNullable<IChatListItem['toolInvocation']>) {
+		super();
+		this.toolCallId = invocation.call.toolCallId;
+		this.domNode = h(document, 'details');
+		this.domNode.className = 'ash-chat-tool-invocation';
+		this.domNode.dataset.toolCallId = this.toolCallId;
+		this.summary = h(document, 'summary');
+		this.source = h(document, 'p');
+		this.source.className = 'ash-chat-tool-source';
+		this.activity = h(document, 'pre');
+		this.parameters = h(document, 'pre');
+		this.stdout = h(document, 'pre');
+		this.stderr = h(document, 'pre');
+		this.stderr.className = 'ash-chat-tool-stderr';
+		this.result = h(document, 'pre');
+		this.domNode.append(this.summary, this.source, this.activity, this.parameters, this.stdout, this.stderr, this.result);
+		this._register(addDisposableListener(this.domNode, 'toggle', () => this._onDidChangeHeight.fire()));
+		this._register(toDisposable(() => this.domNode.remove()));
+		this.render(invocation);
+	}
+
+	/** Updates text in place so a streaming result retains its disclosure and keyboard focus. */
+	public render(invocation: NonNullable<IChatListItem['toolInvocation']>): void {
+		const { call, result, output, stopped } = invocation;
+		this.summary.textContent = result
+			? result.isError ? localize('chat.tool.failed', '{0} · Failed', call.name) : localize('chat.tool.completed', '{0} · Completed', call.name)
+			: stopped ? localize('chat.tool.stopped', '{0} · No result', call.name) : localize('chat.tool.pending', '{0} · Awaiting result', call.name);
+		this.domNode.classList.toggle('error', result?.isError === true);
+		const sources = call.binding?.sourceChain.map(source => {
+			switch (source.type) {
+				case 'product': return localize('chat.tool.product', 'Product: {0}', source.component);
+				case 'plugin': return localize('chat.tool.plugin', 'Plugin: {0} ({1})', source.pluginId, source.version);
+				case 'mcp': return localize('chat.tool.mcp', 'MCP: {0} / {1}', source.serverId, source.remoteName);
+				case 'dynamic': return localize('chat.tool.dynamic', 'Dynamic tool: {0}', source.name);
+				case 'extension': return localize('chat.tool.extension', 'Extension: {0}', source.id);
+				case 'system': return localize('chat.tool.system', 'System: {0}', source.id);
+			}
+		}) ?? [];
+		if (call.binding?.caller.type === 'codeMode') sources.push(localize('chat.tool.parent', 'Parent call: {0}', call.binding.caller.parentToolCallId));
+		this.setText(this.source, sources.join(' · '));
+		this.setText(this.activity, activityText(call.binding?.activity));
+		this.setText(this.parameters, call.argumentsJson, localize('chat.tool.input', 'Input'));
+		this.setText(this.stdout, output.filter(value => value.stream === 'stdout').map(value => value.text).join('\n'), localize('chat.tool.stdout', 'Standard output'));
+		this.setText(this.stderr, output.filter(value => value.stream === 'stderr').map(value => value.text).join('\n'), localize('chat.tool.stderr', 'Standard error'));
+		const resultText = result?.text || result?.content?.flatMap(part => part.type === 'text' ? [part.text] : []).join('\n') || '';
+		this.setText(this.result, resultText, result?.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'));
+	}
+
+	private setText(element: HTMLElement, text: string, label?: string): void {
+		const value = text && label ? `${label}\n${text}` : text;
+		if (element.textContent !== value) element.textContent = value;
+		element.hidden = !text;
+	}
+}
+
+function activityText(activity: ChatToolCallBinding['activity']): string {
+	if (!activity) return '';
+	switch (activity.type) {
+		case 'command': return localize('chat.tool.command', 'Command: {0}\nArguments: {1}\nDirectory: {2}', activity.program, JSON.stringify(activity.arguments), activity.workingDirectory);
+		case 'fileRead': return localize('chat.tool.read', 'Read: {0}', activity.path);
+		case 'fileSearch': return localize('chat.tool.search', 'Search: {0}\nDirectory: {1}', activity.pattern, activity.path);
+		case 'fileList': return localize('chat.tool.list', 'List: {0}\nDirectory: {1}', activity.pattern, activity.path);
+		case 'fileEdit': return localize('chat.tool.edit', 'Edit: {0}', activity.path);
+		case 'read': return localize('chat.tool.read', 'Read: {0}', activity.target);
+		case 'search': return localize('chat.tool.searchTarget', 'Search: {0}', activity.target);
+		case 'list': return localize('chat.tool.listTarget', 'List: {0}', activity.target);
+		case 'edit': return localize('chat.tool.edit', 'Edit: {0}', activity.target);
+		case 'run': return localize('chat.tool.run', 'Run');
+	}
+}

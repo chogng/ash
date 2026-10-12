@@ -16,6 +16,12 @@ export interface IChatListItem {
 	readonly id: string;
 	readonly type: ThreadItem["type"] | "turnError" | "advisor" | 'hook';
 	readonly hookPart?: IChatHookPart;
+	readonly toolInvocation?: {
+		readonly call: Extract<ThreadItem, { readonly type: 'toolCall'; }>;
+		readonly result?: Extract<ThreadItem, { readonly type: 'toolResult'; }>;
+		readonly output: readonly Extract<ThreadTranscriptEntry, { readonly type: 'toolOutput'; }>[];
+		readonly stopped: boolean;
+	};
 	readonly text: string;
 	readonly transient: boolean;
 	readonly isError?: boolean;
@@ -48,16 +54,47 @@ function chatPlanUpdateListItem(turnId: string, plan: PlanUpdate): IChatListItem
 }
 
 /** Groups an advisor call and its result into one inspectable consultation. */
-export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[], latestTurnId?: string): readonly IChatListItem[] {
-	const calls = new Map(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolCall" && entry.item.name === "advisor" ? [[entry.item.toolCallId, entry] as const] : []));
-	const results = new Set(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolResult" ? [entry.item.toolCallId] : []));
+export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[], latestTurnId?: string, turns: readonly Turn[] = []): readonly IChatListItem[] {
+	// Call IDs are provider-owned and can be reused in another Turn. Keep presentation identity scoped.
+	const key = (turnId: string, toolCallId: string) => JSON.stringify([turnId, toolCallId]);
+	const toolCalls = new Map(entries.flatMap(entry => entry.type === 'item' && entry.item.type === 'toolCall' ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : []));
+	const toolResults = new Map(entries.flatMap(entry => entry.type === 'item' && entry.item.type === 'toolResult' ? [[key(entry.turnId, entry.item.toolCallId), entry.item] as const] : []));
+	const outputs = new Map<string, Extract<ThreadTranscriptEntry, { readonly type: 'toolOutput'; }>[]>();
+	for (const entry of entries) {
+		if (entry.type !== 'toolOutput') continue;
+		const identity = key(entry.turnId, entry.toolCallId);
+		const output = outputs.get(identity) ?? [];
+		output.push(entry);
+		outputs.set(identity, output);
+	}
+	const stoppedTurns = new Set(turns.filter(turn => turn.status === 'failed' || turn.status === 'interrupted' || turn.status === 'completed').map(turn => turn.turnId));
+	for (const entry of entries) if (entry.type === 'turnError') stoppedTurns.add(entry.turnId);
+	const calls = new Map(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolCall" && entry.item.name === "advisor" ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : []));
+	const results = new Set(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolResult" ? [key(entry.turnId, entry.item.toolCallId)] : []));
 	return entries.flatMap(entry => {
+		if (entry.type === 'toolOutput' && toolCalls.has(key(entry.turnId, entry.toolCallId))) return [];
+		if (entry.type === 'item' && entry.item.type === 'toolCall' && entry.item.name !== 'advisor') {
+			const call = entry.item;
+			const identity = key(entry.turnId, call.toolCallId);
+			const result = toolResults.get(identity);
+			const output = outputs.get(identity) ?? [];
+			return [{
+				id: entry.entryId, type: 'toolCall' as const,
+				text: [call.name, call.argumentsJson, ...output.map(value => `${value.stream}: ${value.text}`), result?.text].filter(Boolean).join('\n\n'),
+				transient: !result && !stoppedTurns.has(entry.turnId), isError: result?.isError,
+				toolInvocation: { call, result, output, stopped: stoppedTurns.has(entry.turnId) },
+			}];
+		}
+		if (entry.type === 'item' && entry.item.type === 'toolResult') {
+			const call = toolCalls.get(key(entry.turnId, entry.item.toolCallId));
+			if (call?.item.type === 'toolCall' && call.item.name !== 'advisor') return [];
+		}
 		if (entry.type === 'hookRun' && (entry.run.status.type === 'running' || entry.run.status.type === 'continued')) { return []; }
-		if (entry.type === "item" && entry.item.type === "toolCall" && calls.has(entry.item.toolCallId)) {
-			if (results.has(entry.item.toolCallId)) return [];
+		if (entry.type === "item" && entry.item.type === "toolCall" && calls.has(key(entry.turnId, entry.item.toolCallId))) {
+			if (results.has(key(entry.turnId, entry.item.toolCallId))) return [];
 			return [{ id: entry.entryId, type: "advisor" as const, text: "Consulting the selected model…", transient: entry.transient, label: "Advisor" }];
 		}
-		if (entry.type === "item" && entry.item.type === "toolResult" && calls.has(entry.item.toolCallId)) {
+		if (entry.type === "item" && entry.item.type === "toolResult" && calls.has(key(entry.turnId, entry.item.toolCallId))) {
 			const item = entry.item;
 			let value: unknown;
 			try { value = JSON.parse(item.text); } catch { /* Core policy/recovery errors are plain text tool results. */ }
