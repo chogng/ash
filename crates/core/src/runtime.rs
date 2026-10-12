@@ -204,6 +204,13 @@ impl<'a> Runtime<'a> {
 }
 
 impl AgentRuntime for Runtime<'_> {
+    fn read_thread_history(
+        &self,
+        thread_id: &ThreadId,
+        window: &ash_thread_store::ThreadHistoryWindow,
+    ) -> Result<ash_thread_store::ThreadHistoryPage, CoreError> {
+        self.threads.read_thread_history(thread_id, window)
+    }
     fn inspect_context(
         &self,
         request: ContextInspectionRequest<'_>,
@@ -490,6 +497,15 @@ impl AgentRuntime for Runtime<'_> {
             )?;
         }
         Ok(result.sequence)
+    }
+
+    fn replay_interaction_resolution(
+        &self,
+        thread_id: &ThreadId,
+        request: &ResolveTurnInteractionRequest,
+    ) -> Result<Option<u64>, CoreError> {
+        self.threads
+            .replay_interaction_resolution(thread_id, request)
     }
 
     fn replay_advisor_configuration(

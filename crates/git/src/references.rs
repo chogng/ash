@@ -39,6 +39,12 @@ pub enum GitCommand {
         object_id: String,
         name: String,
     },
+    PublishBranch {
+        remote: String,
+        name: String,
+        branch: String,
+        expected_head: String,
+    },
     PushBranch {
         remote: String,
         remote_identity: String,
@@ -126,6 +132,7 @@ pub struct GitCatalog {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitReferenceState {
     pub references: Vec<crate::GitReference>,
+    pub base_reference: Option<crate::GitReference>,
     pub remotes: Vec<crate::GitRemote>,
     pub catalog: GitCatalog,
 }
@@ -135,10 +142,55 @@ impl GitClient {
         &self,
         repository: &GitRepository,
     ) -> GitResult<GitReferenceState> {
+        let references = self.references(repository).await?;
+        let remotes = self.remotes(repository).await?;
+        let catalog = self.catalog(repository).await?;
+        // Use Git's symbolic default; branch names such as main/master are not reliable defaults.
+        let remote = catalog.upstream_remote.as_deref().or_else(|| {
+            if catalog.remotes.len() == 1 {
+                catalog.remotes.first().map(String::as_str)
+            } else {
+                None
+            }
+        });
+        let base_reference = if let Some(remote) = remote {
+            let output = self
+                .run_query_unchecked(
+                    repository.worktree_root(),
+                    [
+                        "symbolic-ref",
+                        "--quiet",
+                        &format!("refs/remotes/{remote}/HEAD"),
+                    ],
+                )
+                .await?;
+            if output.status.code() == Some(1) {
+                None
+            } else {
+                let output = output.require_success()?;
+                let target = std::str::from_utf8(&output.stdout)
+                    .map_err(|_| invalid("invalid default reference encoding"))?
+                    .trim();
+                references
+                    .iter()
+                    .find(|reference| {
+                        let namespace = match reference.kind() {
+                            crate::GitReferenceKind::LocalBranch => "refs/heads/",
+                            crate::GitReferenceKind::RemoteBranch => "refs/remotes/",
+                            crate::GitReferenceKind::Tag => "refs/tags/",
+                        };
+                        target == format!("{namespace}{}", reference.name())
+                    })
+                    .cloned()
+            }
+        } else {
+            None
+        };
         Ok(GitReferenceState {
-            references: self.references(repository).await?,
-            remotes: self.remotes(repository).await?,
-            catalog: self.catalog(repository).await?,
+            references,
+            base_reference,
+            remotes,
+            catalog,
         })
     }
 
@@ -276,6 +328,33 @@ impl GitClient {
                     return Err(invalid("remote commit changed since review"));
                 }
                 self.run_mutation(root, ["switch", "--no-track", "-c", name, "--", &commit])
+                    .await
+            }
+            GitCommand::PublishBranch {
+                remote,
+                name,
+                branch,
+                expected_head,
+            } => {
+                self.require_remote(repository, remote).await?;
+                self.validate_ref(repository, &format!("refs/heads/{name}"))
+                    .await?;
+                if !valid_commit_identity(expected_head) {
+                    return Err(invalid("expected a complete commit identity"));
+                }
+                let head = self.resolve_commit(repository, "HEAD").await?;
+                let current = self
+                    .run_query(root, ["symbolic-ref", "--quiet", "HEAD"])
+                    .await?
+                    .require_success()?;
+                if head != *expected_head
+                    || String::from_utf8_lossy(&current.stdout).trim()
+                        != format!("refs/heads/{branch}")
+                {
+                    return Err(invalid("local branch changed before publication"));
+                }
+                let target = format!("refs/heads/{branch}:refs/heads/{name}");
+                self.run_mutation(root, ["push", "--set-upstream", "--", remote, &target])
                     .await
             }
             GitCommand::PushBranch {

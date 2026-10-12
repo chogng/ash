@@ -1160,3 +1160,466 @@ fn catalog_only_connections_observe_branch_management_and_full_reads_share_its_f
     );
     assert_eq!(full["result"]["session"], catalog["result"]["session"]);
 }
+
+fn subscription_test_thread(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+) -> (ash_protocol::SessionId, ThreadId) {
+    let created = crate::tests::call(
+        server,
+        connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"session/create",
+            "params":{"commandId":"subscription-session","title":"task","executionTarget":null}
+        }),
+    );
+    let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    (
+        ash_protocol::SessionId::new(session_id).unwrap(),
+        ThreadId::new(
+            created["result"]["session"]["threads"][0]["threadId"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap(),
+    )
+}
+
+#[test]
+fn thread_subscription_rejects_future_cursors_without_retaining_subscription() {
+    for history in [
+        None,
+        Some(serde_json::json!({"type":"latest","turnLimit":1})),
+    ] {
+        for after_sequence in [2, u64::MAX] {
+            let server = crate::tests::server();
+            let mut writer = server.connection();
+            crate::tests::initialize(&server, &mut writer);
+            let (session_identity, thread_identity) =
+                subscription_test_thread(&server, &mut writer);
+            let session_id = session_identity.as_str();
+            let thread_id = thread_identity.as_str();
+            let mut observer = server.connection();
+            crate::tests::initialize(&server, &mut observer);
+            let mut params = serde_json::json!({
+                "sessionId":session_id,"threadId":thread_id,"afterSequence":after_sequence
+            });
+            if let Some(history) = &history {
+                params["history"] = history.clone();
+            }
+            let rejected = crate::tests::call(
+                &server,
+                &mut observer,
+                serde_json::json!({
+                    "jsonrpc":"2.0","id":2,"method":"session/thread/subscribe","params":params
+                }),
+            );
+            assert_eq!(rejected["error"]["code"], -32602, "{rejected}");
+            assert_eq!(rejected["error"]["message"], "InvalidParams");
+
+            let archived = server.threads().archive_thread(&thread_identity).unwrap();
+            server.notify_thread_updates(&thread_identity, 1).unwrap();
+            assert!(server.drain_notifications(&mut observer).is_empty());
+
+            let accepted = crate::tests::call(
+                &server,
+                &mut observer,
+                serde_json::json!({
+                    "jsonrpc":"2.0","id":3,"method":"session/thread/subscribe",
+                    "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":archived.sequence}
+                }),
+            );
+            assert_eq!(accepted["result"]["thread"]["sequence"], archived.sequence);
+            assert_eq!(accepted["result"]["updates"], serde_json::json!([]));
+            server.drain_notifications(&mut observer);
+            let restored = server
+                .threads()
+                .restore_session(&ash_protocol::SessionId::new(session_id).unwrap())
+                .unwrap();
+            server
+                .notify_thread_updates(&thread_identity, archived.sequence)
+                .unwrap();
+            let updates = server.drain_notifications(&mut observer);
+            assert!(
+                updates.iter().any(|notification| {
+                    let notification: serde_json::Value =
+                        serde_json::from_str(notification).unwrap();
+                    notification["method"] == "session/thread/update"
+                        && notification["params"]["durableSequence"] == restored.sequence
+                        && notification["params"]["update"]["event"]["type"] == "threadRestored"
+                }),
+                "{updates:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn thread_subscription_failed_resubscribe_preserves_pending_durable_update() {
+    for (history, cursor_offset) in [
+        (Some(serde_json::json!({"type":"latest","turnLimit":0})), 0),
+        (
+            Some(serde_json::json!({"type":"before","turnId":"missing-turn","turnLimit":1})),
+            0,
+        ),
+        (None, 1),
+    ] {
+        let server = crate::tests::server();
+        let mut writer = server.connection();
+        crate::tests::initialize(&server, &mut writer);
+        let (session_identity, thread_identity) = subscription_test_thread(&server, &mut writer);
+        let session_id = session_identity.as_str();
+        let thread_id = thread_identity.as_str();
+        let mut observer = server.connection();
+        crate::tests::initialize(&server, &mut observer);
+        let subscribed = crate::tests::call(
+            &server,
+            &mut observer,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":2,"method":"session/thread/subscribe",
+                "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":1}
+            }),
+        );
+        assert_eq!(subscribed["result"]["thread"]["sequence"], 1);
+        server.drain_notifications(&mut observer);
+
+        // Keep a committed event pending so a rejected request cannot acknowledge its sequence.
+        let archived = server.threads().archive_thread(&thread_identity).unwrap();
+        let rejected = crate::tests::call(
+            &server,
+            &mut observer,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":3,"method":"session/thread/subscribe",
+                "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":archived.sequence + cursor_offset,"history":history}
+            }),
+        );
+        assert_eq!(rejected["error"]["message"], "InvalidParams");
+
+        server.notify_thread_updates(&thread_identity, 1).unwrap();
+        let updates = server.drain_notifications(&mut observer);
+        assert!(
+            updates.iter().any(|notification| {
+                let notification: serde_json::Value = serde_json::from_str(notification).unwrap();
+                notification["method"] == "session/thread/update"
+                    && notification["params"]["durableSequence"] == archived.sequence
+                    && notification["params"]["update"]["event"]["type"] == "threadArchived"
+            }),
+            "{updates:?}"
+        );
+    }
+}
+
+#[test]
+fn thread_subscription_invalid_history_does_not_retain_new_subscription() {
+    let server = crate::tests::server();
+    let mut writer = server.connection();
+    crate::tests::initialize(&server, &mut writer);
+    let (session_identity, thread_identity) = subscription_test_thread(&server, &mut writer);
+    let session_id = session_identity.as_str();
+    let thread_id = thread_identity.as_str();
+    let mut observer = server.connection();
+    crate::tests::initialize(&server, &mut observer);
+    let rejected = crate::tests::call(
+        &server,
+        &mut observer,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":1,"history":{"type":"latest","turnLimit":0}}
+        }),
+    );
+    assert_eq!(rejected["error"]["message"], "InvalidParams");
+
+    server.threads().archive_thread(&thread_identity).unwrap();
+    server.notify_thread_updates(&thread_identity, 1).unwrap();
+    assert!(server.drain_notifications(&mut observer).is_empty());
+}
+
+#[test]
+fn rejected_thread_subscription_does_not_deliver_or_cancel_a_pending_interaction() {
+    for dynamic in [false, true] {
+        for history in [
+            None,
+            Some(serde_json::json!({"type":"latest","turnLimit":0})),
+        ] {
+            let server = crate::tests::server();
+            let mut writer = server.connection();
+            crate::tests::initialize(&server, &mut writer);
+            let (session_id, thread_id) = subscription_test_thread(&server, &mut writer);
+            let turn = server
+                .threads()
+                .start_turn(
+                    &thread_id,
+                    ash_core::StartTurnRequest {
+                        context_policy: Default::default(),
+                        mode: Default::default(),
+                        advisor: None,
+                        command_id: CommandId::new("pending-interaction-turn").unwrap(),
+                        expected_sequence: core_api::SequenceExpectation::Any,
+                        model: None,
+                        reasoning_effort: None,
+                        kind: ash_protocol::TurnKind::Coding,
+                        instructions: ash_protocol::TurnInstructions::new(
+                            "fixture",
+                            "lifecycle",
+                            "1",
+                            "Wait for a response.",
+                        )
+                        .unwrap(),
+                        policy_revision: "test-policy".into(),
+                        approval_mode: ash_protocol::ApprovalMode::Manual,
+                        tool_mode: ash_protocol::ToolMode::Direct,
+                        tool_profile: None,
+                        activated_skills: Vec::new(),
+                        input: vec![ash_protocol::UserInput::Text {
+                            text: "wait".into(),
+                        }],
+                    },
+                )
+                .unwrap();
+            let request = ash_protocol::AgentRequestEnvelope {
+                session_id: session_id.clone(),
+                thread_id: thread_id.clone(),
+                turn_id: turn.turn_id.clone(),
+                interaction: ash_protocol::TurnInteraction {
+                    request_id: ash_protocol::RequestId::new("pending-request").unwrap(),
+                    item_id: None,
+                    request: if dynamic {
+                        ash_protocol::AgentRequest::DynamicTool {
+                            call: ash_protocol::DynamicToolCall {
+                                call_id: ash_protocol::ToolCallId::new("pending-call").unwrap(),
+                                name: ToolName::new("client_lookup").unwrap(),
+                                definition_digest: "a".repeat(64),
+                                arguments: serde_json::json!({}),
+                            },
+                        }
+                    } else {
+                        ash_protocol::AgentRequest::Approval {
+                            request: ash_protocol::ActionApprovalRequest {
+                                action_digest: "a".repeat(64),
+                                policy_revision: "test-policy".into(),
+                                capabilities: vec![ash_protocol::ActionApprovalCapability {
+                                    kind: ash_protocol::ActionApprovalCapabilityKind::Network,
+                                    scope: "example.test".into(),
+                                }],
+                                reason: "Approve test access".into(),
+                                sandbox_denial: None,
+                            },
+                        }
+                    },
+                    deadline: None,
+                },
+            };
+            let sequence = server
+                .threads()
+                .request_turn_interaction(
+                    &thread_id,
+                    &turn.turn_id,
+                    ash_core::RequestTurnInteraction {
+                        request_id: request.interaction.request_id.clone(),
+                        item_id: None,
+                        request: request.interaction.request.clone(),
+                        deadline: None,
+                    },
+                )
+                .unwrap()
+                .sequence;
+            server
+                .updates
+                .offer_agent_request(request.clone(), sequence);
+            let mut observer = server.connection();
+            let initialized = crate::tests::call(
+                &server,
+                &mut observer,
+                serde_json::json!({
+                    "jsonrpc":"2.0","id":1,"method":"initialize",
+                    "params":{"clientInfo":{"name":"lifecycle-test","version":"1"},
+                    "capabilities":{"agentInteractions":{"version":1,"kinds":[if dynamic {"dynamicTool"} else {"approval"}],
+                            "dynamicTools":if dynamic {Some(vec!["client_lookup"])} else {None}}}}
+                }),
+            );
+            assert!(initialized.get("result").is_some(), "{initialized}");
+            let rejected = crate::tests::call(
+                &server,
+                &mut observer,
+                serde_json::json!({
+                    "jsonrpc":"2.0","id":2,"method":"session/thread/subscribe",
+                "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":sequence + 1,"history":history}
+                }),
+            );
+            assert_eq!(rejected["error"]["message"], "InvalidParams");
+            assert!(server.drain_notifications(&mut observer).is_empty());
+            assert!(!server.updates.is_agent_interaction_owner(
+                observer.connection_id,
+                &request.interaction.request_id
+            ));
+            let snapshot = server.threads().read_thread(&thread_id).unwrap();
+            assert_eq!(snapshot.sequence, sequence);
+            assert_eq!(
+                snapshot.turns[0].pending_interaction.as_ref(),
+                Some(&request.interaction)
+            );
+            let accepted = crate::tests::call(
+                &server,
+                &mut observer,
+                serde_json::json!({
+                    "jsonrpc":"2.0","id":3,"method":"session/thread/subscribe",
+                "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":sequence}
+                }),
+            );
+            assert!(accepted.get("result").is_some(), "{accepted}");
+            let requests = server.drain_notifications(&mut observer);
+            assert_eq!(
+                requests
+                    .iter()
+                    .filter(|notice| notice.contains("\"method\":\"agent/request\""))
+                    .count(),
+                1,
+                "{requests:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn thread_read_and_subscribe_keep_transients_within_the_visible_running_history() {
+    let server = crate::tests::server();
+    let mut connection = server.connection();
+    crate::tests::initialize(&server, &mut connection);
+    let (session_id, thread_id) = subscription_test_thread(&server, &mut connection);
+    let mut turn_ids = Vec::new();
+    for index in 0..2 {
+        let before = server.threads().read_thread(&thread_id).unwrap();
+        let started = server
+            .threads()
+            .start_turn(
+                &thread_id,
+                ash_core::StartTurnRequest {
+                    context_policy: Default::default(),
+                    mode: Default::default(),
+                    advisor: None,
+                    command_id: CommandId::new(format!("transcript-window-{index}")).unwrap(),
+                    expected_sequence: core_api::SequenceExpectation::Exact(before.sequence),
+                    model: None,
+                    reasoning_effort: None,
+                    kind: ash_protocol::TurnKind::Coding,
+                    instructions: ash_protocol::TurnInstructions::new(
+                        "fixture",
+                        "transcript-window",
+                        "1",
+                        "Return a test answer.",
+                    )
+                    .unwrap(),
+                    policy_revision: "test-policy".into(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: Vec::new(),
+                    input: vec![ash_protocol::UserInput::Text {
+                        text: format!("input-{index}"),
+                    }],
+                },
+            )
+            .unwrap();
+        turn_ids.push(started.turn_id.clone());
+        server
+            .updates
+            .publish_thread_update(ash_protocol::ThreadUpdateEnvelope {
+                session_id: session_id.clone(),
+                thread_id: thread_id.clone(),
+                durable_sequence: started.sequence,
+                stream_cursor: Some(ash_protocol::StreamCursor {
+                    stream_instance_id: ash_protocol::StreamInstanceId::new(
+                        "history-window-stream",
+                    )
+                    .unwrap(),
+                    sequence: index + 1,
+                }),
+                update: ash_protocol::ThreadUpdate::ItemDelta {
+                    turn_id: started.turn_id.clone(),
+                    item_id: ash_protocol::ItemId::new(format!("partial-{index}")).unwrap(),
+                    delta: ash_protocol::ItemDelta::AgentMessage {
+                        text: format!("partial-{index}"),
+                    },
+                },
+            });
+        if index == 0 {
+            // Durable completion can be visible before its notification reaches the stream cache.
+            server
+                .threads()
+                .complete_turn(&thread_id, &started.turn_id, "done-0".into())
+                .unwrap();
+        }
+    }
+    let mut request_id = 10;
+    for method in ["session/thread/read", "session/thread/subscribe"] {
+        for history in [
+            None,
+            Some(serde_json::json!({"type":"latest","turnLimit":1})),
+        ] {
+            request_id += 1;
+            let response = crate::tests::call(
+                &server,
+                &mut connection,
+                serde_json::json!({
+                    "jsonrpc":"2.0", "id":request_id, "method":method,
+                    "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0,"history":history}
+                }),
+            );
+            assert!(response.get("error").is_none(), "{response}");
+            let transients = response["result"]["transcript"]["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|entry| entry["transient"] == true)
+                .collect::<Vec<_>>();
+            assert_eq!(transients.len(), 1, "{response}");
+            assert_eq!(transients[0]["turnId"], turn_ids[1].as_str());
+            assert_eq!(transients[0]["item"]["text"], "partial-1");
+        }
+        request_id += 1;
+        let empty = crate::tests::call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":request_id, "method":method,
+                "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0,
+                    "history":{"type":"before","turnId":turn_ids[0],"turnLimit":1}}
+            }),
+        );
+        assert_eq!(
+            empty["result"]["transcript"]["entries"],
+            serde_json::json!([]),
+            "{empty}"
+        );
+    }
+    server
+        .threads()
+        .complete_turn(&thread_id, &turn_ids[1], "done-1".into())
+        .unwrap();
+    for method in ["session/thread/read", "session/thread/subscribe"] {
+        request_id += 1;
+        let response = crate::tests::call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":request_id, "method":method,
+                "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0,
+                    "history":{"type":"latest","turnLimit":1}}
+            }),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        let entries = response["result"]["transcript"]["entries"]
+            .as_array()
+            .unwrap();
+        assert!(
+            entries.iter().all(|entry| entry["transient"] != true),
+            "{response}"
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry["item"]["text"] == "done-1"),
+            "{response}"
+        );
+    }
+}

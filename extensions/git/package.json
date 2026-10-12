@@ -316,7 +316,8 @@
       },
       {
         "command": "git.graph.checkout",
-        "title": "%command.git.graph.checkout%"
+        "title": "%command.git.graph.checkout%",
+        "enablement": "!scmBusy"
       },
       {
         "command": "git.graph.checkoutDetached",
@@ -329,38 +330,28 @@
         "enablement": "!scmBusy"
       },
       {
-        "command": "git.graph.compare",
-        "title": "%command.git.graph.compare%",
+        "command": "git.graph.compareRef",
+        "title": "%command.git.graph.compareRef%",
         "enablement": "!scmBusy"
       },
       {
-        "command": "git.graph.compareMergeBase",
-        "title": "%command.git.graph.compareMergeBase%",
+        "command": "git.graph.compareWithMergeBase",
+        "title": "%command.git.graph.compareWithMergeBase%",
+        "enablement": "!scmBusy && scmCurrentHistoryItemRefHasBase"
+      },
+      {
+        "command": "git.graph.compareWithRemote",
+        "title": "%command.git.graph.compareWithRemote%",
+        "enablement": "!scmBusy && scmCurrentHistoryItemRefHasRemote"
+      },
+      {
+        "command": "git.copyCommitId",
+        "title": "%command.git.copyCommitId%",
         "enablement": "!scmBusy"
       },
       {
-        "command": "git.graph.compareRemote",
-        "title": "%command.git.graph.compareRemote%",
-        "enablement": "!scmBusy"
-      },
-      {
-        "command": "git.graph.copyHash",
-        "title": "%command.git.graph.copyHash%",
-        "enablement": "!scmBusy"
-      },
-      {
-        "command": "git.graph.copyMessage",
-        "title": "%command.git.graph.copyMessage%",
-        "enablement": "!scmBusy"
-      },
-      {
-        "command": "git.graph.createBranch",
-        "title": "%command.git.graph.createBranch%",
-        "enablement": "!scmBusy"
-      },
-      {
-        "command": "git.graph.createTag",
-        "title": "%command.git.graph.createTag%",
+        "command": "git.copyCommitMessage",
+        "title": "%command.git.copyCommitMessage%",
         "enablement": "!scmBusy"
       },
       {
@@ -621,7 +612,15 @@
       },
       {
         "command": "git.graph.deleteTag",
-        "title": "%command.git.graph.deleteTag%"
+        "title": "%command.git.graph.deleteTag%",
+        "enablement": "!scmBusy"
+      },
+      {
+        "command": "git.publish",
+        "title": "%command.git.publish%",
+        "icon": "$(repo-push)",
+        "category": "Git",
+        "enablement": "!scmBusy"
       }
     ],
     "colors": [
@@ -802,7 +801,12 @@
         },
         {
           "command": "git.push",
-          "when": "scmHistoryProviderId == git",
+          "when": "scmHistoryProviderId == git && scmCurrentHistoryItemRefHasRemote",
+          "group": "navigation@3"
+        },
+        {
+          "command": "git.publish",
+          "when": "scmHistoryProviderId == git && scmCurrentHistoryItemRefHasCommit && !scmCurrentHistoryItemRefHasRemote",
           "group": "navigation@3"
         }
       ],
@@ -813,22 +817,22 @@
           "when": "scmHistoryProviderId == git && scmHistoryItemHasRemote"
         },
         {
-          "command": "git.graph.compare",
+          "command": "git.graph.compareRef",
           "group": "scm_1_compare@1",
           "when": "scmHistoryProviderId == git"
         },
         {
-          "command": "git.graph.compareRemote",
+          "command": "git.graph.compareWithRemote",
           "group": "scm_1_compare@2",
-          "when": "scmHistoryProviderId == git && scmHistoryItemHasUpstream"
+          "when": "scmHistoryProviderId == git"
         },
         {
-          "command": "git.graph.compareMergeBase",
+          "command": "git.graph.compareWithMergeBase",
           "group": "scm_1_compare@3",
           "when": "scmHistoryProviderId == git"
         },
         {
-          "command": "git.graph.createBranch",
+          "command": "git.branch",
           "group": "scm_3_edit@1",
           "when": "scmHistoryProviderId == git"
         },
@@ -838,12 +842,12 @@
           "when": "scmHistoryProviderId == git"
         },
         {
-          "command": "git.graph.copyHash",
+          "command": "git.copyCommitId",
           "group": "scm_5_copy@1",
           "when": "scmHistoryProviderId == git"
         },
         {
-          "command": "git.graph.copyMessage",
+          "command": "git.copyCommitMessage",
           "group": "scm_5_copy@2",
           "when": "scmHistoryProviderId == git"
         },
@@ -1035,7 +1039,7 @@
       ],
       "git.historyMoreMenu": [
         {
-          "command": "git.graph.createTag",
+          "command": "git.createTag",
           "group": "1"
         },
         {
@@ -1114,6 +1118,52 @@
           "command": "git.graph.deleteTag",
           "when": "scmHistoryProviderId == git && scmHistoryRefHasTag",
           "group": "3_tag@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "git.graph.checkout",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.checkoutDetached",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.cherryPick",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.compareRef",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.compareWithMergeBase",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.compareWithRemote",
+          "when": "false"
+        },
+        {
+          "command": "git.copyCommitId",
+          "when": "false"
+        },
+        {
+          "command": "git.copyCommitMessage",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.deleteBranch",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.openRemote",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.deleteTag",
+          "when": "false"
         }
       ]
     },

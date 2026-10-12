@@ -72,6 +72,9 @@ grep 后端，不重建或移除目录执行规则。
 
 `session/read` 和被动 `session/catalog/read` 返回同源的 Session 与分支管理事实。完整读取仍按现有入口装配 Agent tree；管理状态分类由 Core 维护，App Server 不再次计算。目录订阅不授予交互权限，也不增加 Thread 历史订阅。
 
+Thread 订阅建立期间只缓冲该连接的更新，使用连接的通知字节预算；快照、重连补读和响应构造成功后才提交订阅并参与交互分配。失败回滚只移除本次尝试，保留已有订阅；退订或断线使尚未提交的尝试失效。
+交互投递按 Turn 保存版本游标，拒绝旧快照和迟到事件复活已结束的请求；动态工具原执行连接丢失后不重新分配。请求结束即清理投递归属，已提交响应的精确重试由 Core 的持久命令记录确认；未提交的响应仍要求当前连接拥有请求。过期请求不分配给新订阅者，Session 删除时清理投递游标。
+
 环境和目录授权语义见 [`docs/environment-access.md`](../../docs/environment-access.md)，wire contract 见
 [`docs/ash-app-server-api.md`](../../docs/ash-app-server-api.md)。
 

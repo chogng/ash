@@ -108,6 +108,7 @@ export interface ISCMHistoryProvider {
 	readonly onDidChangeHistoryItemRefs?: Event<readonly ISCMHistoryItem[]>;
 	readonly historyItemRef: IObservable<ISCMHistoryItemRef | undefined>;
 	readonly historyItemRemoteRef?: IObservable<ISCMHistoryItemRef | undefined>;
+	readonly historyItemBaseRef?: IObservable<ISCMHistoryItemRef | undefined>;
 	refresh(): void;
 	provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[] | undefined>;
 	resolveHistoryItemDetails(historyItemId: string): Promise<ISCMHistoryItemDetails>;

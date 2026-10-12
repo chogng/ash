@@ -18,6 +18,7 @@ use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
+use ash_protocol::TurnStatus;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
@@ -103,7 +104,7 @@ impl TranscriptAccumulator {
         self.finish(update, changes)
     }
 
-    /// Builds a complete client snapshot from durable Thread state plus current transient entries.
+    /// Builds a client snapshot from the supplied history window and its live transient entries.
     ///
     /// Returns `None` when the supplied Thread belongs to another accumulator scope.
     pub fn snapshot(&self, thread: &Thread) -> Option<crate::ThreadTranscriptSnapshot> {
@@ -112,16 +113,59 @@ impl TranscriptAccumulator {
         }
         let mut snapshot = crate::ThreadTranscriptSnapshot::from_thread(thread);
         snapshot.revision = self.revision;
-        let committed_entry_ids = snapshot
-            .entries
+        let live_turns = thread
+            .turns
             .iter()
-            .map(|entry| entry.entry_id().to_owned())
+            .filter(|turn| match turn.status {
+                TurnStatus::Created
+                | TurnStatus::Running
+                | TurnStatus::WaitingForApproval
+                | TurnStatus::WaitingForUserInput
+                | TurnStatus::WaitingForCapability
+                | TurnStatus::Cancelling => true,
+                TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted => false,
+            })
+            .map(|turn| &turn.turn_id)
             .collect::<BTreeSet<_>>();
+        let committed_item_ids = thread
+            .turns
+            .iter()
+            .flat_map(|turn| &turn.items)
+            .map(ThreadItem::item_id)
+            .collect::<BTreeSet<_>>();
+        let completed_tools = thread
+            .turns
+            .iter()
+            .flat_map(|turn| {
+                turn.items.iter().filter_map(|item| {
+                    if let ThreadItem::ToolResult { tool_call_id, .. } = item {
+                        Some((&turn.turn_id, tool_call_id))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<BTreeSet<_>>();
+        // Reads can observe durable completion before its notification reaches this cache.
+        // The supplied history window and terminal state remain authoritative for visibility.
         snapshot.entries.extend(
             self.transient_order
                 .iter()
                 .filter_map(|entry_id| self.transient_entries.get(entry_id))
-                .filter(|entry| !committed_entry_ids.contains(entry.entry_id()))
+                .filter(|entry| live_turns.contains(entry.turn_id()))
+                .filter(|entry| match entry {
+                    ThreadTranscriptEntry::Item { item, .. } => {
+                        !committed_item_ids.contains(item.item_id())
+                    }
+                    ThreadTranscriptEntry::ToolOutput {
+                        turn_id,
+                        tool_call_id,
+                        ..
+                    } => !completed_tools.contains(&(turn_id, tool_call_id)),
+                    ThreadTranscriptEntry::HookRun { .. }
+                    | ThreadTranscriptEntry::TurnPlan { .. }
+                    | ThreadTranscriptEntry::TurnError { .. } => true,
+                })
                 .cloned(),
         );
         Some(snapshot)

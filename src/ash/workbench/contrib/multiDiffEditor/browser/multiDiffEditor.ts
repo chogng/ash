@@ -146,7 +146,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.workingCopiesListener.value = this.session.value?.onDidChangeWorkingCopies(() => this.workingCopiesEmitter.fire());
 		this.workingCopiesEmitter.fire();
 		this.session.value?.show();
-		await this.options.viewsService?.focusView(VIEW_PANE_ID);
+		if (input.source?.kind !== 'snapshot') { await this.options.viewsService?.focusView(VIEW_PANE_ID); }
 	}
 
 	public override clearInput(): void {

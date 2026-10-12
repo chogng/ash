@@ -298,6 +298,22 @@
 	stroke-dasharray: 2 2;
 }
 
+.ash-scm-graph-change-row {
+	position: relative;
+}
+
+.ash-scm-graph-change-row > .ash-scm-graph-actions {
+	position: absolute;
+	top: 0;
+	right: 0;
+	padding: 0;
+}
+
+.ash-scm-graph-change-row:hover > .ash-scm-graph-actions,
+.ash-scm-graph-change-row:focus-within > .ash-scm-graph-actions {
+	display: flex;
+}
+
 .ash-scm-graph-change {
 	display: flex;
 	width: calc(100% - var(--scm-graph-content-x, 22px));
@@ -307,7 +323,7 @@
 	border: 0;
 	border-radius: 0;
 	margin-left: var(--scm-graph-content-x, 22px);
-	padding: 0 8px 0
+	padding: 0 var(--ash-spacing-size320) 0
 		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
 	color: inherit;
 	background: transparent;

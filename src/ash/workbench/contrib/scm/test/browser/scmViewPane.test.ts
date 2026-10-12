@@ -355,6 +355,7 @@ test('SCM history details expose copy and remote actions without extension menu 
 		using services = new InstantiationService();
 		const menus = new MenuService(new CommandService(services), context);
 		using scm = new SCMService();
+		services.registerInstance(ISCMService, scm);
 		using view = new SCMViewService(scm);
 		const id = 'abcdef0123456789';
 		const uri = URI.parse(`https://github.com/test/history/commit/${id}`);
@@ -495,7 +496,8 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		await waitFor(() => rows[0].getAttribute('aria-expanded') === 'true');
 		const reveal = menus.getMenuActions(MenuId.SCMHistoryTitle, { arg: pane }).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.revealCurrentHistoryItem')!;
 		assert.equal(reveal.enabled, true);
-		await reveal.run();
+		services.registerInstance(IViewsService, { getActiveViewWithId: (id: string) => id === 'ash.gitGraph' ? pane : null } as unknown as IViewsService);
+		await new CommandService(services).executeCommand('workbench.scm.action.graph.revealCurrentHistoryItem');
 		assert.equal(browser.window.document.activeElement, rows[1], 'The title action uses the latest HEAD without reloading');
 		assert.equal(queries, loaded);
 		pane.dispose();
@@ -819,6 +821,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	};
 	const contextMenus: Array<{
 		readonly menuId: MenuId;
+		readonly onHide?: (cancelled: boolean) => void;
 		readonly contextKeyService?: IContextKeyService;
 		readonly menuActionOptions?: { readonly arg?: unknown; readonly args?: readonly unknown[]; };
 	}> = [];
@@ -842,9 +845,22 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.ok(commit);
 		commit.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		assert.equal(contextMenus[0]?.menuId, MenuId.SCMHistoryItemContext);
+		const outside = browser.window.document.createElement('input');
+		browser.window.document.body.append(outside);
+		outside.focus();
+		contextMenus[0].onHide?.(true);
+		assert.equal(browser.window.document.activeElement, outside, 'Closing a history menu preserves focus transferred to another input');
+		outside.remove();
 		assert.equal((contextMenus[0]?.menuActionOptions?.arg as { readonly historyItemViewModel: { readonly historyItem: { readonly id: string; }; }; }).historyItemViewModel.historyItem.id, objectId);
 		commit.focus();
-		commit.click();
+		for (const modifiers of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }]) {
+			const event = new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...modifiers });
+			commit.dispatchEvent(event);
+			assert.equal(event.defaultPrevented, false);
+			assert.equal(commit.getAttribute('aria-expanded'), 'false');
+		}
+		if (isMacintosh) { commit.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', metaKey: true, bubbles: true })); }
+		else { commit.click(); }
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-change") !== null);
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), commit);
 		assert.equal(browser.window.document.activeElement, commit);
@@ -887,8 +903,11 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.equal(opened.length, 3);
 		const openFile = menuService.getMenuActions(MenuId.SCMHistoryItemChangeContext, contextMenus[2].menuActionOptions, contextMenus[2].contextKeyService).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.openFile')!;
 		assert.equal(openFile.enabled, true);
-		await openFile.run();
-		assert.equal(opened.length, 4);
+		const inlineOpenFile = change?.parentElement?.querySelector<HTMLButtonElement>('[data-action-id="workbench.scm.action.graph.openFile"] > button');
+		assert.ok(inlineOpenFile);
+		inlineOpenFile.click();
+		await waitFor(() => opened.length === 4);
+		assert.equal(commit.getAttribute('aria-expanded'), 'true', 'File actions do not toggle their commit');
 		assert.equal(opened[3].input.label, 'editor.ts (1111111)');
 		assert.equal(opened[3].input.initialText, 'after\n');
 		assert.equal(opened[3].input.readOnly, true);
@@ -899,17 +918,25 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.ok(!change?.isConnected);
 		change?.click();
 		assert.equal(opened.length, 4, 'Collapsing files disposes their action listeners');
-		pane.setViewMode('tree');
+		commandServices.registerInstance(IViewsService, { getActiveViewWithId: (id: string) => id === 'ash.gitGraph' ? pane : null } as unknown as IViewsService);
+		await new CommandService(commandServices).executeCommand('workbench.scm.action.graph.setTreeViewMode');
 		assert.equal(historyUiServices.get(IStorageService).get('scm.graphView.viewMode', StorageScope.WORKSPACE), 'tree');
 		commit.click();
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-folder') !== null);
 		const folder = (): HTMLButtonElement => pane.element.querySelector('.ash-scm-graph-folder')!;
 		assert.equal(folder().getAttribute('aria-label'), 'Folder src');
 		commit.focus();
-		commit.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-		assert.equal(browser.window.document.activeElement, folder());
+		commit.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		assert.equal(browser.window.document.activeElement, folder(), 'Right Arrow enters an expanded commit');
 		folder().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 		assert.equal(browser.window.document.activeElement?.className, 'ash-scm-graph-change');
+		const child = browser.window.document.activeElement!;
+		const pageKey = new browser.window.KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true });
+		child.dispatchEvent(pageKey);
+		await waitFor(() => browser.window.document.activeElement === commit);
+		assert.equal(pageKey.defaultPrevented, true);
+		folder().focus();
+		folder().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 		(browser.window.document.activeElement as HTMLElement).dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
 		assert.equal(browser.window.document.activeElement, folder());
 		folder().click();
@@ -917,7 +944,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.equal(pane.element.querySelector<HTMLUListElement>('.ash-scm-graph-folder-children')!.hidden, true);
 		folder().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 		assert.equal(folder().getAttribute('aria-expanded'), 'true');
-		pane.setViewMode('list');
+		await new CommandService(commandServices).executeCommand('workbench.scm.action.graph.setListViewMode');
 		assert.equal(pane.element.querySelector('.ash-scm-graph-folder'), null);
 		binary = true;
 		const binaryChange = pane.element.querySelector<HTMLButtonElement>('.ash-scm-graph-change')!;
@@ -938,7 +965,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		await assert.rejects(historyConfiguration.updateValue('scm.graph.badges', 'invalid'));
 		await historyConfiguration.updateValue('scm.graph.badges', 'filter');
 		assert.equal(pane.element.querySelector('[aria-label="history-tag"]'), null);
-		const choosing = pane.pickHistoryItemRef();
+		const choosing = new CommandService(commandServices).executeCommand('workbench.scm.action.graph.pickHistoryItemRefs');
 		await waitFor(() => browser.window.document.querySelectorAll('[role="option"]').length === 3);
 		const all = [...browser.window.document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent?.includes('All References'))!;
 		all.click();
@@ -995,11 +1022,12 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 			};
 		},
 	} as unknown as IGitService;
+	const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using history = createHistoryViewFixture(git);
-		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
+		services.registerInstance(ISCMService, history.scmService);
 		const hover: IHoverService = { setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { } };
 		await import('../../browser/scm.contribution.js');
 		using historyConfiguration = new InMemoryConfigurationService();
@@ -1034,7 +1062,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 		assert.equal(requests.length, 6);
 		assert.ok(requests.every(request => request.id === objectId && request.repository === 'repo-1'));
 		const historyItem = (await history.viewService.activeRepository!.provider.historyProvider!.provideHistoryItems({ limit: 1 }))![0];
-		const context = { repository: history.viewService.activeRepository!, historyItemViewModel: { historyItem }, type: 'historyItemViewModel' };
+		const context = JSON.parse(JSON.stringify({ repository: { provider: { id: 'repo-1', providerId: 'git' } }, historyItemViewModel: { historyItem }, type: 'historyItemViewModel' }));
 		const action = menus.getMenuActions(MenuId.SCMHistoryItemContext, { arg: context }).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.viewChanges')!;
 		await action.run();
 		assert.equal(opened.length, 2);

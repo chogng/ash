@@ -615,7 +615,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.activeContributions = next;
 		this.commandMenus.clear();
 		for (const command of next.commands) {
-			if (command.metadata?.description === command.id) continue;
+			if (command.metadata?.description === command.id || next.menus.some(placement => placement.id === MenuId.CommandPalette && placement.item.command.id === command.id)) continue;
 			this.commandMenus.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: command.id, title: command.metadata!.description } }));
 		}
 		// Menu declarations belong to the activated package, and disappear with its command authority.

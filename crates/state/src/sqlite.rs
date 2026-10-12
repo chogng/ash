@@ -20,6 +20,8 @@ mod projects;
 mod teams;
 #[path = "sqlite/thread.rs"]
 mod thread;
+#[path = "sqlite/thread_history.rs"]
+mod thread_history;
 #[path = "sqlite/thread_pull_requests.rs"]
 mod thread_pull_requests;
 

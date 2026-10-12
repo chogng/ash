@@ -35,6 +35,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 				statusBarCommands: value.statusBarCommands.map(command => ({ id: command.id, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, priority: command.priority, compactGroup: command.compactGroup, icon: command.icon?.id })),
 				hasHistory: !!value.historyProvider, historyRef: value.historyProvider?.historyItemRef.get(), historyRevision: entry.historyRevision,
 				historyRemoteRef: value.historyProvider?.historyItemRemoteRef?.get(),
+				historyBaseRef: value.historyProvider?.historyItemBaseRef?.get(),
 				hasHistoryItemRefs: typeof value.historyProvider?.provideHistoryItemRefs === 'function',
 				hasHistoryMergeBase: typeof value.historyProvider?.resolveHistoryItemRefsCommonAncestor === 'function',
 				historyRefsRevision: entry.historyRefsRevision, historyRefsItems: entry.historyRefsItems,
@@ -107,6 +108,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 			if (provider.historyProvider) {
 				listeners.push(provider.historyProvider.historyItemRef.onDidChange(publish));
 				if (provider.historyProvider.historyItemRemoteRef) listeners.push(provider.historyProvider.historyItemRemoteRef.onDidChange(publish));
+				if (provider.historyProvider.historyItemBaseRef) listeners.push(provider.historyProvider.historyItemBaseRef.onDidChange(publish));
 				listeners.push(provider.historyProvider.onDidChange(() => { ++entry.historyRevision; entry.historyRefsItems = []; publish(); }));
 				if (provider.historyProvider.onDidChangeHistoryItemRefs) {
 					listeners.push(provider.historyProvider.onDidChangeHistoryItemRefs(items => {

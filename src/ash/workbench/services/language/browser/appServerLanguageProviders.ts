@@ -49,31 +49,33 @@ export class AppServerLanguageProviders extends Disposable {
 
 	private install(support: AppServerLanguageSupport): DisposableStore {
 		const languageIds = support.languageIds;
+		// Directory-backed services cannot analyze immutable snapshots from another URI scheme.
+		const selector = this.workspace.getWorkspace().folders.flatMap(folder => languageIds.map(language => ({ language, scheme: folder.uri.scheme })));
 		const adapter = new AppServerLanguageProvider(this.api, this.workspace, languageIds);
 		const registrations = new DisposableStore();
-		registrations.add(this.languageFeatures.hoverProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.hoverProvider.register(selector, adapter));
 		registrations.add(this.languageFeatures.completionProvider.register(adapter));
-		registrations.add(this.languageFeatures.declarationProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.definitionProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.implementationProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.typeDefinitionProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.referenceProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.callHierarchyProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.typeHierarchyProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.declarationProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.definitionProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.implementationProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.typeDefinitionProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.referenceProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.callHierarchyProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.typeHierarchyProvider.register(selector, adapter));
 		registrations.add(this.languageFeatures.workspaceSymbolProvider.register('*', new AppServerWorkspaceSymbolProvider(this.api, this.workspace, support)));
-		registrations.add(this.languageFeatures.renameProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.codeActionProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.documentFormattingEditProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.documentRangeFormattingEditProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.signatureHelpProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.inlayHintsProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.linkedEditingRangeProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.documentSemanticTokensProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.documentSymbolProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.codeLensProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.linkProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.colorProvider.register(languageIds, adapter));
-		registrations.add(this.languageFeatures.foldingRangeProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.renameProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.codeActionProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.documentFormattingEditProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.documentRangeFormattingEditProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.signatureHelpProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.inlayHintsProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.linkedEditingRangeProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.documentSemanticTokensProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.documentSymbolProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.codeLensProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.linkProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.colorProvider.register(selector, adapter));
+		registrations.add(this.languageFeatures.foldingRangeProvider.register(selector, adapter));
 		return registrations;
 	}
 

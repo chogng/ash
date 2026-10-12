@@ -262,6 +262,27 @@ impl NotificationQueue {
         }
     }
 
+    pub(super) fn buffer(&self) -> Self {
+        let budget = self.inner.state.lock().unwrap().budget.clone();
+        Self {
+            inner: Arc::new(NotificationQueueInner {
+                state: Mutex::new(NotificationQueueState::new(budget)),
+                changed: Condvar::new(),
+            }),
+        }
+    }
+
+    pub(super) fn forward_to(&self, target: &Self, mut include: impl FnMut(&Value) -> bool) {
+        let (values, closed) = {
+            let mut state = self.inner.state.lock().unwrap();
+            (state.values.drain(..).collect::<Vec<_>>(), state.closed)
+        };
+        target.extend_queued(values.into_iter().filter(|value| include(value)));
+        if closed {
+            target.close();
+        }
+    }
+
     pub(crate) fn listener(&self) -> NotificationListener {
         NotificationListener {
             queue: self.clone(),

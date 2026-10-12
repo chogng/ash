@@ -1150,7 +1150,10 @@ fn recovery_interrupts_non_terminal_turns() {
 
 #[derive(Default)]
 struct PerThreadBlockingStore {
-    inner: InMemoryThreadStore,
+    inner: Arc<InMemoryThreadStore>,
+    full_reads: AtomicU64,
+    range_reads: Mutex<Vec<(u64, usize)>>,
+    on_range: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     state: Mutex<PerThreadBlockingState>,
     changed: Condvar,
 }
@@ -1221,6 +1224,40 @@ impl agent_graph_store::AgentGraphStore for PerThreadBlockingStore {
 }
 
 impl ThreadStore for PerThreadBlockingStore {
+    fn history_index_sequence(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Option<u64>, ThreadStoreError> {
+        self.inner.history_index_sequence(thread_id)
+    }
+    fn read_history_page(
+        &self,
+        thread_id: &ThreadId,
+        window: &ash_thread_store::ThreadHistoryWindow,
+    ) -> Result<Option<ash_thread_store::ThreadHistoryPage>, ThreadStoreError> {
+        self.inner.read_history_page(thread_id, window)
+    }
+    fn backfill_history_index(
+        &self,
+        index: &ash_thread_store::ThreadHistoryIndexUpdate,
+    ) -> Result<(), ThreadStoreError> {
+        self.inner.backfill_history_index(index)
+    }
+    fn load_range(
+        &self,
+        thread_id: &ThreadId,
+        after: u64,
+        limit: usize,
+    ) -> Result<ash_thread_store::ThreadEventPage, ThreadStoreError> {
+        self.range_reads.lock().unwrap().push((after, limit));
+        let page = self.inner.load_range(thread_id, after, limit)?;
+        let callback = self.on_range.lock().unwrap().take();
+        if let Some(callback) = callback {
+            callback();
+        }
+        Ok(page)
+    }
+
     fn recent_tool_calls(
         &self,
         query: &ash_thread_store::RecentToolCallsQuery,
@@ -1255,6 +1292,7 @@ impl ThreadStore for PerThreadBlockingStore {
     }
 
     fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError> {
+        self.full_reads.fetch_add(1, Ordering::Relaxed);
         self.inner.load(thread_id)
     }
 
@@ -1366,12 +1404,30 @@ fn waiting_interaction_survives_recovery_and_resolves_idempotently() {
         request_id: RequestId::new("request_1").expect("test ID is non-empty"),
         response: user_input_response(),
     };
+    assert_eq!(
+        recovered
+            .replay_interaction_resolution(&thread, &resolve())
+            .unwrap(),
+        None
+    );
     let resolved = recovered
         .resolve_turn_interaction(&thread, resolve())
         .unwrap();
     let replayed = recovered
         .resolve_turn_interaction(&thread, resolve())
         .unwrap();
+    let cold = ThreadController::with_store(store.clone());
+    assert_eq!(
+        cold.replay_interaction_resolution(&thread, &resolve())
+            .unwrap(),
+        Some(resolved.sequence)
+    );
+    let mut conflict = resolve();
+    conflict.request_id = RequestId::new("another-request").unwrap();
+    assert!(matches!(
+        cold.replay_interaction_resolution(&thread, &conflict),
+        Err(CoreError::CommandConflict)
+    ));
 
     assert_eq!(
         resolved.disposition,
@@ -3006,4 +3062,95 @@ fn hook_logs_do_not_invalidate_auto_review_but_concurrent_execution_facts_do() {
             );
         }
     }
+}
+
+#[test]
+fn thread_history_replay_uses_bounded_ranges_and_a_fixed_tail() {
+    let store = Arc::new(PerThreadBlockingStore::default());
+    let writer = Arc::new(ThreadController::with_store(store.inner.clone()));
+    let thread_id = ThreadId::new("history-replay").unwrap();
+    let session_id = SessionId::new(thread_id.as_str()).unwrap();
+    writer
+        .create_thread(CreateThreadRequest {
+            agent_id: ash_protocol::AgentId::new("replay-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+            title: "Replay".into(),
+            execution_target: None,
+        })
+        .unwrap();
+    for _ in 0..300 {
+        writer.archive_thread(&thread_id).unwrap();
+        writer.restore_session(&session_id).unwrap();
+    }
+    let events = store.inner.events();
+    let tail = events.last().unwrap().sequence;
+    let expected = events
+        .into_iter()
+        .skip(1)
+        .map(|event| ash_protocol::ThreadUpdateEnvelope {
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+            durable_sequence: event.sequence,
+            stream_cursor: None,
+            update: ash_protocol::ThreadUpdate::Committed { event: event.event },
+        })
+        .collect::<Vec<_>>();
+    let advancing = writer.clone();
+    let advancing_id = thread_id.clone();
+    *store.on_range.lock().unwrap() = Some(Box::new(move || {
+        advancing.archive_thread(&advancing_id).unwrap();
+    }));
+    let reader = ThreadController::with_store(store.clone());
+    assert_eq!(
+        reader.thread_updates_after(&thread_id, 1).unwrap(),
+        expected
+    );
+    assert_eq!(
+        *store.range_reads.lock().unwrap(),
+        vec![(1, 500), (501, 100)]
+    );
+    assert_eq!(store.full_reads.load(Ordering::Relaxed), 0);
+    let next = reader.thread_updates_after(&thread_id, tail).unwrap();
+    assert_eq!(next.len(), 1);
+    assert_eq!(next[0].durable_sequence, tail + 1);
+    assert!(matches!(
+        next[0].update,
+        ash_protocol::ThreadUpdate::Committed {
+            event: ThreadEvent::ThreadArchived { .. }
+        }
+    ));
+    assert!(reader.thread_updates_after(&thread_id, tail + 2).is_err());
+    assert_eq!(store.full_reads.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn thread_history_window_selects_before_cloning_the_execution_snapshot() {
+    let store = Arc::new(PerThreadBlockingStore::default());
+    let writer = ThreadController::with_store(store.clone());
+    let thread_id = create_thread(&writer, "History window");
+    for index in 0..5 {
+        let turn = start_turn(&writer, &thread_id, &format!("history-{index}"));
+        writer
+            .complete_turn(&thread_id, &turn, "x".repeat(32 * 1024))
+            .unwrap();
+    }
+    let expected =
+        core_api::ThreadView::from(writer.read_thread(&thread_id).unwrap()).public_thread();
+    store.full_reads.store(0, Ordering::Relaxed);
+    let reader = ThreadController::with_store(store.clone());
+    let page = reader
+        .read_thread_history(
+            &thread_id,
+            &ash_thread_store::ThreadHistoryWindow::Latest {
+                turn_limit: std::num::NonZeroU32::new(2).unwrap(),
+            },
+        )
+        .unwrap();
+    assert_eq!(page.thread.turns, expected.turns[3..]);
+    assert_eq!(page.thread.sequence, expected.sequence);
+    assert!(page.has_older_turns);
+    assert_eq!(store.full_reads.load(Ordering::Relaxed), 0);
 }

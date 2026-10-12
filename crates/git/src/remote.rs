@@ -384,7 +384,11 @@ impl GitClient {
         self.run_mutation(repository.worktree_root(), ["remote", "remove", "--", name])
             .await
     }
-    async fn require_remote(&self, repository: &GitRepository, name: &str) -> GitResult<()> {
+    pub(crate) async fn require_remote(
+        &self,
+        repository: &GitRepository,
+        name: &str,
+    ) -> GitResult<()> {
         validate_argument(name)?;
         let output = self
             .run_query(repository.worktree_root(), ["remote"])

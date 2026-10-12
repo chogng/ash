@@ -545,3 +545,110 @@ async fn reviewed_remote_checkout_and_push_pin_repositories_commits_and_local_br
     );
     assert_eq!(remote.git(&["rev-parse", "refs/heads/feature"]), updated);
 }
+
+#[tokio::test]
+async fn default_reference_follows_the_configured_remote_symbolic_head() {
+    let source = TestRepository::init();
+    source.write("file.txt", "initial\n");
+    source.commit_all("Initial");
+    source.git(&[
+        "remote",
+        "add",
+        "team/backup",
+        source.root().to_str().unwrap(),
+    ]);
+    source.git(&["update-ref", "refs/remotes/team/backup/main", "HEAD"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    assert!(
+        client
+            .reference_state(&repository)
+            .await
+            .unwrap()
+            .base_reference
+            .is_none()
+    );
+    source.git(&[
+        "symbolic-ref",
+        "refs/remotes/team/backup/HEAD",
+        "refs/remotes/team/backup/main",
+    ]);
+    let reference = client
+        .reference_state(&repository)
+        .await
+        .unwrap()
+        .base_reference
+        .unwrap();
+    assert_eq!(reference.name(), "team/backup/main");
+    source.git(&["update-ref", "refs/remotes/team/backup/release", "HEAD"]);
+    source.git(&[
+        "symbolic-ref",
+        "refs/remotes/team/backup/HEAD",
+        "refs/remotes/team/backup/release",
+    ]);
+    assert_eq!(
+        client
+            .reference_state(&repository)
+            .await
+            .unwrap()
+            .base_reference
+            .unwrap()
+            .name(),
+        "team/backup/release"
+    );
+}
+
+#[tokio::test]
+async fn publication_sets_upstream_and_rejects_stale_heads_and_same_oid_branch_switches() {
+    let source = TestRepository::init();
+    source.write("file.txt", "initial\n");
+    source.commit_all("Initial");
+    let remote = source.root().join(".git/publish-remote.git");
+    source.git(&["init", "--bare", remote.to_str().unwrap()]);
+    source.git(&["remote", "add", "origin", remote.to_str().unwrap()]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let head = source.git(&["rev-parse", "HEAD"]);
+    let publish = |expected_head: String| GitCommand::PublishBranch {
+        remote: "origin".into(),
+        name: "published".into(),
+        branch: "main".into(),
+        expected_head,
+    };
+    assert!(
+        client
+            .execute_command(&repository, &publish("0".repeat(40)))
+            .await
+            .is_err()
+    );
+    source.git(&["switch", "-c", "other"]);
+    assert!(
+        client
+            .execute_command(&repository, &publish(head.clone()))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        source.git(&[
+            "--git-dir",
+            remote.to_str().unwrap(),
+            "for-each-ref",
+            "--format=%(refname)"
+        ]),
+        ""
+    );
+    source.git(&["switch", "main"]);
+    client
+        .execute_command(&repository, &publish(head.clone()))
+        .await
+        .unwrap();
+    assert_eq!(source.git(&["config", "branch.main.remote"]), "origin");
+    assert_eq!(
+        source.git(&["config", "branch.main.merge"]),
+        "refs/heads/published"
+    );
+    assert_eq!(
+        source.git(&["rev-parse", "refs/remotes/origin/published"]),
+        head
+    );
+}

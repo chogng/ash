@@ -4,6 +4,8 @@ Ash 声明官方 `mxc-sdk = "=1.0.0"`，通过根 `Cargo.toml` 的 `[patch.crate
 
 发布包 `1.0.0` 来自 Microsoft `a846837d827b496fc4a08dfe60554515758c6647`，早于 Ash 已验证的官方基线 `c6f301d53a1430c4c921a05c57af838f7392348f`。兼容 fork 从后一提交建立，保留上游目录、清单的 workspace 继承和测试来源；不能仅按相同版本号认定发布包与当前实现等价。完整修正见 [固定差异](https://github.com/chogng/mxc/compare/c6f301d53a1430c4c921a05c57af838f7392348f...d4bc220668130f941d117aab4326edb4c1812e78)。
 
+上游提交的独立问题拆分、贡献要求与本地 PR 准备状态见 [上游补丁审查](upstream-review.md)。
+
 ## 必须保留的修正
 
 | 修正                                                  | 保留原因与验证依据                                                                                                                                                                                                                                                                      |

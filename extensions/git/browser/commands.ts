@@ -66,8 +66,28 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 			await provider(id)?.runTitleOperation(() => git.fetch(id, target));
 		});
 	}
+	register('git.publish', async value => {
+		const id = (await git.getRepository(repositoryId(value))).id;
+		const status = await git.status(id);
+		if (status.head.type !== 'branch') { ctx.notifications.info(localize('git.publishNeedsCommit', 'Create a commit on a branch before publishing it.')); return; }
+		const head = status.head;
+		const { remotes } = await git.catalog(id);
+		if (!remotes.length) { ctx.notifications.info(localize('git.publishNeedsRemote', 'Add a Git remote before publishing this branch.')); return; }
+		const remote = remotes.length === 1 ? remotes[0] : (await pickGitItem(ctx.input, remotes.map(remote => ({ label: remote, remote })), localize('git.publishChooseRemote', 'Choose the remote to publish this branch to')))?.remote;
+		if (!remote) { return; }
+		await provider(id)?.runTitleOperation(() => git.executeCommand({ kind: 'publishBranch', remote, name: head.name, branch: head.name, expectedHead: head.objectId }, id));
+	});
 	for (const method of ['pull', 'push'] as const) { register(`git.${method}`, value => provider(value)?.runTitleOperation(() => git[method](repositoryId(value)))); }
-	for (const definition of repositoryCommands) { register(definition.id, async value => { const id = (await git.getRepository(repositoryId(value))).id; const command = await prepareGitCommand(ctx, definition.kind, id); if (command) { const result = await git.executeCommand(command, id); if (result.outcome === 'conflicted') { ctx.notifications.warning(localize('git.integrationConflicts', 'Git stopped on conflicts. Resolve the files in Source Control, then run Git: Continue. Use Git: Abort to cancel an integration.')); } } }); }
+	for (const definition of repositoryCommands) {
+		register(definition.id, async value => {
+			if (definition.kind === 'createTag' && value && typeof value === 'object' && 'type' in value && value.type === 'historyItemViewModel') { return runGraphAction(ctx, 'createTag', reviveHistoryTarget(value)); }
+			const id = (await git.getRepository(repositoryId(value))).id;
+			const command = await prepareGitCommand(ctx, definition.kind, id);
+			if (!command) { return; }
+			const result = await git.executeCommand(command, id);
+			if (result.outcome === 'conflicted') { ctx.notifications.warning(localize('git.integrationConflicts', 'Git stopped on conflicts. Resolve the files in Source Control, then run Git: Continue. Use Git: Abort to cancel an integration.')); }
+		});
+	}
 	registerBranchCommands(register, ctx, repositoryId);
 	register('git.init', async () => { const folders = monitor.workspace.getWorkspace().folders; const selected = await pickGitItem(ctx.input, folders.map(folder => ({ label: folder.name, folder })), localize('git.initFolder', 'Choose a workspace folder to initialize')); if (!selected) { return; } const branch = await input({ value: 'main', placeHolder: localize('git.initBranch', 'Initial branch name') }); if (branch !== undefined) { await git.initializeRepository(branch.trim(), selected.folder.id); ctx.notifications.info(localize('git.initialized', 'Git repository initialized.')); } });
 	register('git.clone', async () => { if (!git.canCloneRepository) { throw new Error(localize('git.cloneUnavailable', 'Cloning is unavailable in this host.')); } const url = await input({ title: localize('git.cloneUrlTitle', 'Clone Repository'), placeHolder: localize('git.cloneUrlPlaceholder', 'Enter a repository URL'), validateInput: async value => value.trim() ? undefined : localize('git.cloneUrlRequired', 'Enter a repository URL.') }); if (url === undefined) { return; } const parentPath = await editors.request<string | null>({ method: 'pickFolder' }); if (!parentPath) { return; } const path = await git.cloneRepository(url.trim(), parentPath); if ((await dialogClient.confirm({ title: localize('git.cloneCompleteTitle', 'Repository cloned'), message: localize('git.cloneCompleteMessage', 'Open the cloned repository at {0}?', path), primaryButton: localize('git.openClonedRepository', 'Open Repository') })).confirmed) { await editors.request({ method: 'openWorkspace', path }); } });
@@ -79,7 +99,12 @@ export function registerGitCommands(context: ExtensionContext, git: GitService, 
 		['git.diff.unstageHunk', 'staged', 'index'], ['git.diff.unstageSelection', 'staged', 'index'],
 		['git.diff.revertHunk', 'unstaged', 'revert'], ['git.diff.revertSelection', 'unstaged', 'revert'],
 	] as const) { register(id, value => runDiffChange({ git, editors, dialogs: dialogClient }, value, comparison, operation)); }
-	for (const kind of ['openRemote', 'checkout', 'checkoutDetached', 'createBranch', 'deleteBranch', 'createTag', 'deleteTag', 'cherryPick', 'compareRemote', 'compareMergeBase', 'compare', 'copyHash', 'copyMessage'] as const) { register(`git.graph.${kind}`, value => runGraphAction(ctx, kind, reviveHistoryTarget(value))); }
+	for (const [id, kind] of [
+		['git.graph.openRemote', 'openRemote'], ['git.graph.checkout', 'checkout'], ['git.graph.checkoutDetached', 'checkoutDetached'],
+		['git.graph.deleteBranch', 'deleteBranch'], ['git.graph.deleteTag', 'deleteTag'], ['git.graph.cherryPick', 'cherryPick'],
+		['git.graph.compareWithRemote', 'compareRemote'], ['git.graph.compareWithMergeBase', 'compareMergeBase'], ['git.graph.compareRef', 'compare'],
+		['git.copyCommitId', 'copyHash'], ['git.copyCommitMessage', 'copyMessage'],
+	] as const) { register(id, value => runGraphAction(ctx, kind, reviveHistoryTarget(value))); }
 	for (const scope of ['staged', 'unstaged', 'uncommitted'] as const) { register(`git.open${scope[0].toUpperCase()}${scope.slice(1)}Changes`, async () => editorClient.openEditor(await createGitMultiDiffEditorInput(git, scope), { pinned: true })); }
 	register('git.openChanges', async value => { const options = value as { status: Parameters<typeof createGitMultiDiffEditorInput>[2]; comparison: 'staged' | 'unstaged'; title: string; changes: Parameters<typeof createGitMultiDiffEditorInput>[4]; }; const current = await git.status(options.status!.repositoryId); if (current.streamInstanceId !== options.status!.streamInstanceId || current.revision !== options.status!.revision) { return 'stale'; } const input = await createGitMultiDiffEditorInput(git, options.comparison, options.status, options.title, options.changes); if (!input.items.length) { return 'empty'; } await editorClient.openEditor(input, { pinned: true }); return 'opened'; });
 	register('git.getRepositoryContexts', async () => Promise.all((await git.listRepositories()).map(async repository => ({ id: repository.id, label: repository.label, path: repository.path, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))));
@@ -117,6 +142,7 @@ function registerBranchCommands(register: (id: string, callback: (...args: reado
 		}
 	});
 	register('git.branch', async value => {
+		if (value && typeof value === 'object' && 'type' in value && value.type === 'historyItemViewModel') { return runGraphAction(ctx, 'createBranch', reviveHistoryTarget(value)); }
 		try {
 			const id = (await ctx.git.getRepository(repositoryId(value))).id;
 			const branches = await ctx.git.branches(id);
@@ -178,7 +204,7 @@ function reviveHistoryTarget(value: unknown): HistoryTarget {
 	const item = target.historyItemViewModel.historyItem;
 	return { ...target, historyItemViewModel: { historyItem: { ...item, remoteLinks: item.remoteLinks?.map(link => ({ ...link, uri: typeof link.uri === 'string' ? URI.parse(link.uri) : link.uri })) } } };
 }
-type RepositoryCommandKind = Exclude<GitCommand['kind'], 'createBranchAt' | 'checkoutDetached' | 'checkoutRemoteBranch' | 'fetchAndCheckout' | 'pushBranch' | 'amend' | 'undoCommit'>;
+type RepositoryCommandKind = Exclude<GitCommand['kind'], 'createBranchAt' | 'checkoutDetached' | 'checkoutRemoteBranch' | 'fetchAndCheckout' | 'pushBranch' | 'publishBranch' | 'amend' | 'undoCommit'>;
 
 const repositoryCommands: readonly { readonly kind: RepositoryCommandKind; readonly id: string; readonly key: string; readonly title: string; }[] = [
 	{ kind: 'renameBranch', id: 'git.renameBranch', key: 'git.renameBranchTitle', title: 'Git: Rename Branch' },
@@ -333,7 +359,9 @@ async function runGraphAction(accessor: GitCommandContext, kind: GraphActionKind
 				command = { kind: 'checkoutDetached', objectId: commit.id };
 				break;
 			}
-			const defaultName = reference.description ? reference.name.slice(reference.description.length + 1) : reference.name;
+			const { remotes } = await git.catalog(repositoryId);
+			const remote = [...remotes].sort((left, right) => right.length - left.length).find(remote => reference.name.startsWith(`${remote}/`));
+			const defaultName = remote ? reference.name.slice(remote.length + 1) : reference.name;
 			const name = await promptName(localize('git.graph.trackingBranchName', 'Name for the new local tracking branch'), defaultName);
 			if (name === undefined) { return; }
 			command = { kind: 'checkoutRemoteBranch', name: name.trim(), reference: reference.name };
@@ -401,15 +429,18 @@ async function runGraphAction(accessor: GitCommandContext, kind: GraphActionKind
 		case 'compareRemote': {
 			let baseReference: string | undefined;
 			let baseLabel: string | undefined;
-			if (kind === 'compareRemote') {
-				const reference = await chooseReference(references.filter(reference => reference.upstream !== undefined), localize('git.graph.chooseUpstream', 'Choose the branch whose remote you want to compare'));
-				baseLabel = reference?.upstream;
-				baseReference = baseLabel === undefined ? undefined : `refs/remotes/${baseLabel}`;
+			if (kind === 'compareRemote' || kind === 'compareMergeBase') {
+				const history = accessor.providers.get(repositoryId)?.historyProvider;
+				const reference = kind === 'compareRemote' ? history?.historyItemRemoteRef.get() : history?.historyItemBaseRef.get();
+				baseReference = reference?.revision;
+				baseLabel = reference?.name;
 			} else {
-				const [branches, catalog] = await Promise.all([git.branches(repositoryId), git.catalog(repositoryId)]);
+				const snapshot = await git.historyRefs(repositoryId);
 				const options: Array<PickItem & { reference?: string; }> = [
-					...branches.map(branch => ({ label: branch.name, description: branch.objectId.slice(0, 7), reference: `refs/heads/${branch.name}` })),
-					...catalog.tags.map(tag => ({ label: tag.name, description: tag.objectId.slice(0, 7), reference: `refs/tags/${tag.name}` })),
+					...snapshot.references.map(reference => {
+						const namespace = { localBranch: 'refs/heads', remoteBranch: 'refs/remotes', tag: 'refs/tags' }[reference.kind];
+						return { label: reference.name, description: reference.objectId.slice(0, 7), reference: `${namespace}/${reference.name}` };
+					}),
 					{ label: localize('git.graph.enterReference', 'Enter Commit or Reference…') },
 				];
 				const selected = await pickGitItem(input, options, localize('git.graph.compareBase', 'Choose the left side to compare with selected commit {0} on the right', commit.displayId ?? commit.id));
@@ -418,11 +449,8 @@ async function runGraphAction(accessor: GitCommandContext, kind: GraphActionKind
 				baseReference = selected.reference ?? (await promptName(localize('git.graph.reference', 'Commit hash, branch, tag or remote reference (left side)')))?.trim();
 			}
 			if (!baseReference) { return; }
-			const mode = kind === 'compareMergeBase' ? 'mergeBase' : 'direct';
-			const comparison = await git.compareChanges(commit.id, baseReference, mode, repositoryId);
-			const label = mode === 'mergeBase'
-				? localize('git.graph.mergeBaseTitle', 'Merge base with {0} ({1}) → {2}', baseLabel ?? baseReference, comparison.baseObjectId.slice(0, 7), commit.displayId ?? commit.id)
-				: localize('git.graph.compareTitle', '{0} ({1}) → {2}', baseLabel ?? baseReference, comparison.baseObjectId.slice(0, 7), commit.displayId ?? commit.id);
+			const comparison = await git.compareChanges(commit.id, baseReference, 'direct', repositoryId);
+			const label = localize('git.graph.compareTitle', '{0} ({1}) → {2}', baseLabel ?? baseReference, comparison.baseObjectId.slice(0, 7), commit.displayId ?? commit.id);
 			await accessor.commands.executeCommand('workbench.scm.action.graph.viewChanges', element, { baseId: comparison.baseObjectId, label } satisfies ISCMHistoryItemComparison);
 			return;
 		}

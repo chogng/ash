@@ -956,6 +956,7 @@ impl GitRepositoryRuntime {
             status,
             graph_revision: state.graph_revision,
             references: project_references(&references.references),
+            base_reference: references.base_reference.as_ref().map(project_reference),
             remotes: project_remotes(&references.remotes),
             branches,
         })
@@ -2074,21 +2075,22 @@ fn project_graph(
     }
 }
 
+fn project_reference(reference: &ash_git::GitReference) -> GitReferenceDto {
+    GitReferenceDto {
+        name: reference.name().into(),
+        object_id: reference.object_id().into(),
+        kind: match reference.kind() {
+            GitReferenceKind::LocalBranch => GitReferenceKindDto::LocalBranch,
+            GitReferenceKind::RemoteBranch => GitReferenceKindDto::RemoteBranch,
+            GitReferenceKind::Tag => GitReferenceKindDto::Tag,
+        },
+        remote_name: reference.remote_name().map(Into::into),
+        current: reference.is_current(),
+    }
+}
+
 fn project_references(references: &[ash_git::GitReference]) -> Vec<GitReferenceDto> {
-    references
-        .iter()
-        .map(|reference| GitReferenceDto {
-            name: reference.name().into(),
-            object_id: reference.object_id().into(),
-            kind: match reference.kind() {
-                GitReferenceKind::LocalBranch => GitReferenceKindDto::LocalBranch,
-                GitReferenceKind::RemoteBranch => GitReferenceKindDto::RemoteBranch,
-                GitReferenceKind::Tag => GitReferenceKindDto::Tag,
-            },
-            remote_name: reference.remote_name().map(Into::into),
-            current: reference.is_current(),
-        })
-        .collect()
+    references.iter().map(project_reference).collect()
 }
 
 fn project_remotes(remotes: &[ash_git::GitRemote]) -> Vec<GitRemoteDto> {

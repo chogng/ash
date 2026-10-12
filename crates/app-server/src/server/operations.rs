@@ -1206,8 +1206,11 @@ impl AppServer {
             params.history.as_ref(),
             Some(ThreadSnapshotHistory::Before { .. })
         );
-        let snapshot = self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
-        let (thread, history) = bounded_thread_snapshot(snapshot.public_thread(), params.history)?;
+        let (thread, history, _) = self.read_session_thread_history(
+            &params.session_id,
+            &params.thread_id,
+            params.history,
+        )?;
         let transcript = self
             .updates
             .thread_transcript_snapshot(&thread, include_transient);
@@ -1259,27 +1262,22 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionThreadSubscribeParams = decode(params)?;
-        let inserted_subscription = self.updates.subscribe_session_thread(
-            connection.connection_id,
-            params.session_id.clone(),
-            params.thread_id.clone(),
-            params.after_sequence,
-        );
-        let result = self.session_thread_subscribe_after_registration(connection, params.clone());
-        if result.is_err() && inserted_subscription {
-            let lost_dynamic_tools = self.updates.unsubscribe_session_thread(
+        // Buffer concurrent updates without granting interaction ownership until validation,
+        // replay and response construction succeed. Drop discards only this attempt on failure.
+        let registration = self
+            .updates
+            .begin_session_thread_subscription(
                 connection.connection_id,
-                &params.session_id,
-                &params.thread_id,
-            );
-            self.cancel_lost_dynamic_tool_owners(lost_dynamic_tools);
-        }
-        result
+                params.session_id.clone(),
+                params.thread_id.clone(),
+            )
+            .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        self.session_thread_subscribe_after_registration(registration, params)
     }
 
     fn session_thread_subscribe_after_registration(
         &self,
-        connection: &mut ConnectionState,
+        registration: super::update_broker::ThreadSubscriptionRegistration,
         params: SessionThreadSubscribeParams,
     ) -> Result<Value, RpcError> {
         let bounded_history = params.history.is_some();
@@ -1287,8 +1285,15 @@ impl AppServer {
             params.history.as_ref(),
             Some(ThreadSnapshotHistory::Before { .. })
         );
-        let snapshot = self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
-        let (thread, history) = bounded_thread_snapshot(snapshot.public_thread(), params.history)?;
+        let (thread, history, pending_interactions) = self.read_session_thread_history(
+            &params.session_id,
+            &params.thread_id,
+            params.history,
+        )?;
+        let sequence = thread.sequence;
+        if params.after_sequence > sequence {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let transcript = self
             .updates
             .thread_transcript_snapshot(&thread, include_transient);
@@ -1301,19 +1306,26 @@ impl AppServer {
             .agent_runtime()
             .thread_updates_after(&params.thread_id, replay_after)
             .map_err(core_error)?;
-        self.updates.subscribe_session_thread(
-            connection.connection_id,
-            params.session_id.clone(),
-            params.thread_id.clone(),
-            thread.sequence,
-        );
-        self.offer_pending_interactions(&snapshot);
-        result(&SessionThreadSubscribeResult {
+        let delivered_sequence = updates
+            .last()
+            .map_or(sequence, |update| update.durable_sequence.max(sequence));
+        let transcript_revision = transcript.revision;
+        let response = result(&SessionThreadSubscribeResult {
             thread,
             transcript,
             updates,
             history,
-        })
+        })?;
+        self.updates.commit_session_thread_subscription(
+            registration,
+            delivered_sequence,
+            transcript_revision,
+            super::update_broker::ThreadSubscriptionScope::Thread,
+        );
+        for request in pending_interactions {
+            self.updates.offer_agent_request(request, sequence);
+        }
+        Ok(response)
     }
 
     pub(super) fn session_thread_unsubscribe(
@@ -1338,6 +1350,60 @@ impl AppServer {
     ) -> Result<ash_protocol::Thread, RpcError> {
         self.read_session_thread_snapshot(session_id, thread_id)
             .map(|thread| thread.public_thread())
+    }
+
+    fn read_session_thread_history(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        thread_id: &ash_protocol::ThreadId,
+        history: Option<ThreadSnapshotHistory>,
+    ) -> Result<
+        (
+            ash_protocol::Thread,
+            Option<ThreadHistoryBoundary>,
+            Vec<AgentRequestEnvelope>,
+        ),
+        RpcError,
+    > {
+        let Some(history) = history else {
+            let snapshot = self.read_session_thread_snapshot(session_id, thread_id)?;
+            let pending = snapshot
+                .turns
+                .iter()
+                .filter_map(|turn| {
+                    turn.pending_interaction
+                        .as_ref()
+                        .map(|interaction| AgentRequestEnvelope {
+                            session_id: session_id.clone(),
+                            thread_id: thread_id.clone(),
+                            turn_id: turn.turn_id.clone(),
+                            interaction: interaction.clone(),
+                        })
+                })
+                .collect();
+            return Ok((snapshot.public_thread(), None, pending));
+        };
+        let page = self
+            .agent_runtime()
+            .read_thread_history(thread_id, &history_window(history)?)
+            .map_err(|error| {
+                if matches!(error, core_api::CoreError::InvalidInput(_)) {
+                    RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                } else {
+                    core_error(error)
+                }
+            })?;
+        if page.thread.session_id != *session_id {
+            return Err(RpcError::new(
+                -32010,
+                AppServerErrorName::CoreOperationFailed,
+            ));
+        }
+        let boundary = ThreadHistoryBoundary {
+            has_older_turns: page.has_older_turns,
+            oldest_turn_id: page.thread.turns.first().map(|turn| turn.turn_id.clone()),
+        };
+        Ok((page.thread, Some(boundary), page.pending_interactions))
     }
 
     pub(super) fn read_session_thread_snapshot(
@@ -1369,12 +1435,15 @@ impl AppServer {
     pub(super) fn offer_pending_interactions(&self, thread: &ThreadView) {
         for turn in &thread.turns {
             if let Some(interaction) = &turn.pending_interaction {
-                self.updates.offer_agent_request(AgentRequestEnvelope {
-                    session_id: thread.session_id.clone(),
-                    thread_id: thread.thread_id.clone(),
-                    turn_id: turn.turn_id.clone(),
-                    interaction: interaction.clone(),
-                });
+                self.updates.offer_agent_request(
+                    AgentRequestEnvelope {
+                        session_id: thread.session_id.clone(),
+                        thread_id: thread.thread_id.clone(),
+                        turn_id: turn.turn_id.clone(),
+                        interaction: interaction.clone(),
+                    },
+                    thread.sequence,
+                );
             }
         }
     }
@@ -1891,28 +1960,10 @@ impl AppServer {
         request_id: ash_protocol::RequestId,
         response: ash_protocol::AgentResponse,
     ) -> Result<TurnInteractionResolveResult, RpcError> {
-        if !self
-            .updates
-            .is_agent_interaction_owner(connection_id, &request_id)
-        {
-            return Err(RpcError::new(
-                -32030,
-                AppServerErrorName::AgentInteractionNotOwner,
-            ));
-        }
         let _env_runtime = self
             .env_runtime_gate
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
-        if self
-            .updates
-            .is_agent_interaction_expired(&request_id, super::update_broker::unix_time_millis())
-        {
-            return Err(RpcError::new(
-                -32031,
-                AppServerErrorName::AgentInteractionExpired,
-            ));
-        }
         let before = self
             .agent_runtime()
             .read_thread(&thread_id)
@@ -1923,18 +1974,43 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
+        let request = ResolveTurnInteractionRequest {
+            command_id: mutation.command_id,
+            expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+            turn_id,
+            request_id,
+            response,
+        };
+        // Delivery ownership ends at resolution. Exact retries use Core's durable command
+        // receipt, including after reconnect, instead of retaining stale broker assignments.
+        if let Some(sequence) = self
+            .agent_runtime()
+            .replay_interaction_resolution(&thread_id, &request)
+            .map_err(core_error)?
+        {
+            return Ok(TurnInteractionResolveResult { sequence });
+        }
+        if !self
+            .updates
+            .is_agent_interaction_owner(connection_id, &request.request_id)
+        {
+            return Err(RpcError::new(
+                -32030,
+                AppServerErrorName::AgentInteractionNotOwner,
+            ));
+        }
+        if self.updates.is_agent_interaction_expired(
+            &request.request_id,
+            super::update_broker::unix_time_millis(),
+        ) {
+            return Err(RpcError::new(
+                -32031,
+                AppServerErrorName::AgentInteractionExpired,
+            ));
+        }
         let sequence = self
             .agent_runtime()
-            .resolve_interaction(
-                &thread_id,
-                ResolveTurnInteractionRequest {
-                    command_id: mutation.command_id,
-                    expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                    turn_id,
-                    request_id,
-                    response,
-                },
-            )
+            .resolve_interaction(&thread_id, request)
             .map_err(core_error)?;
         Ok(TurnInteractionResolveResult { sequence })
     }
@@ -2222,48 +2298,28 @@ fn rewrite_phase_command_id(
     .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
 }
 
-fn bounded_thread_snapshot(
-    mut thread: ash_protocol::Thread,
-    history: Option<ThreadSnapshotHistory>,
-) -> Result<(ash_protocol::Thread, Option<ThreadHistoryBoundary>), RpcError> {
-    let Some(history) = history else {
-        return Ok((thread, None));
+fn history_window(
+    history: ThreadSnapshotHistory,
+) -> Result<thread_store::ThreadHistoryWindow, RpcError> {
+    let limit = match &history {
+        ThreadSnapshotHistory::Latest { turn_limit }
+        | ThreadSnapshotHistory::Before { turn_limit, .. } => *turn_limit,
     };
-    let (start, end, turn_limit) = match history {
-        ThreadSnapshotHistory::Latest { turn_limit } => {
-            let retained = usize::try_from(turn_limit).unwrap_or(usize::MAX);
-            (
-                thread.turns.len().saturating_sub(retained),
-                thread.turns.len(),
-                turn_limit,
-            )
-        }
-        ThreadSnapshotHistory::Before {
-            turn_id,
-            turn_limit,
-        } => {
-            let end = thread
-                .turns
-                .iter()
-                .position(|turn| turn.turn_id == turn_id)
-                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-            let retained = usize::try_from(turn_limit).unwrap_or(usize::MAX);
-            (end.saturating_sub(retained), end, turn_limit)
-        }
-    };
-    if turn_limit == 0 || turn_limit > MAX_THREAD_SNAPSHOT_TURNS {
+    if limit == 0 || limit > MAX_THREAD_SNAPSHOT_TURNS {
         return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
     }
-    let has_older_turns = start > 0;
-    thread.turns = thread.turns[start..end].to_vec();
-    let oldest_turn_id = thread.turns.first().map(|turn| turn.turn_id.clone());
-    Ok((
-        thread,
-        Some(ThreadHistoryBoundary {
-            has_older_turns,
-            oldest_turn_id,
-        }),
-    ))
+    let turn_limit = std::num::NonZeroU32::new(limit).expect("history page size was validated");
+    Ok(match history {
+        ThreadSnapshotHistory::Latest { .. } => {
+            thread_store::ThreadHistoryWindow::Latest { turn_limit }
+        }
+        ThreadSnapshotHistory::Before { turn_id, .. } => {
+            thread_store::ThreadHistoryWindow::Before {
+                turn_id,
+                turn_limit,
+            }
+        }
+    })
 }
 
 pub(super) fn resource_rpc_error(error: crate::resource_store::ResourceError) -> RpcError {

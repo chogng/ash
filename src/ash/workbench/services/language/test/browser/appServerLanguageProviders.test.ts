@@ -31,8 +31,8 @@ test("App Server language providers map cross-resource locations without double-
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
-	using model = new TextModel("value", { languageId: "typescript" });
 	const source = URI.file("C:/project/main file.ts");
+	using model = new TextModel("value", { languageId: "typescript", resource: source });
 
 	const locations = await definition(languages, model, source, new Position((0) + 1, (2) + 1));
 
@@ -50,7 +50,7 @@ test('App Server Shell registration uses the editor grammar language identity', 
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
-	using model = new TextModel('value', { languageId: 'shellscript' });
+	using model = new TextModel('value', { languageId: 'shellscript', resource: URI.file('/project/main.sh') });
 	await definition(languages, model, URI.file('/project/main.sh'), new Position(1, 2));
 	assert.equal(api.locationRequests[0]!.document.languageId, 'shellscript');
 	assert.equal(languages.completionProvider.getProvider('ash.appServer.completions')!.languageIds.includes('shellscript'), true);
@@ -69,8 +69,8 @@ test("App Server language providers route resources through their owning Workspa
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
-	using model = new TextModel("value", { languageId: "typescript" });
 	const source = URI.file("C:/backend/main.ts");
+	using model = new TextModel("value", { languageId: "typescript", resource: source });
 
 	const locations = await definition(languages, model, source, new Position((0) + 1, (2) + 1));
 
@@ -151,8 +151,8 @@ test("App Server rename and code actions preserve ordered workspace file operati
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
-	using model = new TextModel("value", { languageId: "typescript" });
 	const resource = URI.file("C:/project/main.ts");
+	using model = new TextModel("value", { languageId: "typescript", resource });
 	const signal = new AbortController().signal;
 	const request = {
 		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
@@ -222,8 +222,8 @@ test("App Server language providers do not send documents above their transport 
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
-	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)), { languageId: "typescript" });
 	const source = URI.file("C:/project/large.ts");
+	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)), { languageId: "typescript", resource: source });
 
 	assert.deepEqual(await definition(languages, model, source, new Position((0) + 1, (0) + 1)), []);
 	assert.equal(api.locationRequests.length, 0);
@@ -237,8 +237,8 @@ test("App Server language providers register only while directory permissions al
 	const permissions = new FakeDirPermissionsService("workspace", []);
 	using providers = new AppServerLanguageProviders(languages, api, workspace, { dirPermissions: permissions, events });
 	await tick();
-	using model = new TextModel("value", { languageId: "typescript" });
 	const source = URI.file("C:/project/main.ts");
+	using model = new TextModel("value", { languageId: "typescript", resource: source });
 
 	await tick();
 	assert.deepEqual(languages.definitionProvider.ordered(model), []);
@@ -389,8 +389,8 @@ test("installed language servers register new languages and uninstall removes th
 	api.availableServers = [];
 	const events = new FakeServerEvents();
 	using providers = new AppServerLanguageProviders(languages, api, workspace, { events });
-	using model = new TextModel("value", { languageId: "python" });
 	const resource = URI.file("/project/main.py");
+	using model = new TextModel("value", { languageId: "python", resource });
 	await tick();
 	assert.deepEqual(languages.definitionProvider.ordered(model), []);
 
@@ -405,4 +405,22 @@ test("installed language servers register new languages and uninstall removes th
 	await tick();
 	assert.deepEqual(languages.definitionProvider.ordered(model), []);
 	assert.equal(api.locationRequests.length, 1);
+});
+
+
+test('Workspace language providers leave committed Git snapshots to editor providers', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
+	using working = new TextModel('value', { languageId: 'rust', resource: URI.file('/project/main.rs') });
+	using history = new TextModel('committed value', { languageId: 'rust', resource: URI.parse('git:/repo/commit/main.rs') });
+	for (const registry of [languages.definitionProvider, languages.hoverProvider, languages.inlayHintsProvider, languages.documentSemanticTokensProvider, languages.codeLensProvider, languages.linkProvider, languages.foldingRangeProvider]) {
+		assert.equal(registry.has(working), true);
+		assert.equal(registry.has(history), false);
+	}
+	await definition(languages, working, working.uri, new Position(1, 1));
+	assert.equal(api.locationRequests.length, 1);
+	assert.equal(api.locationRequests[0]!.document.path, 'main.rs');
 });

@@ -137,6 +137,11 @@ pub trait AgentRuntime {
     ) -> Result<ContextInspection, CoreError>;
 
     fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadView, CoreError>;
+    fn read_thread_history(
+        &self,
+        thread_id: &ThreadId,
+        window: &ash_thread_store::ThreadHistoryWindow,
+    ) -> Result<ash_thread_store::ThreadHistoryPage, CoreError>;
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError>;
     fn read_session(&self, session_id: &SessionId) -> Result<SessionView, CoreError>;
     fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, CoreError>;
@@ -215,6 +220,13 @@ pub trait AgentRuntime {
         thread_id: &ThreadId,
         request: ResolveTurnInteractionRequest,
     ) -> Result<u64, CoreError>;
+    /// Returns the committed sequence for an exact retry, or a command conflict for changed input.
+    /// This lookup grants no permission to resolve an outstanding interaction.
+    fn replay_interaction_resolution(
+        &self,
+        thread_id: &ThreadId,
+        request: &ResolveTurnInteractionRequest,
+    ) -> Result<Option<u64>, CoreError>;
     fn replay_advisor_configuration(
         &self,
         thread_id: &ThreadId,

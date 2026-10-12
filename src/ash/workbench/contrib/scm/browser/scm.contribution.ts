@@ -312,8 +312,9 @@ registerAction2(class SCMHistoryRefreshAction extends Action2 {
 		});
 	}
 
-	override async run(_accessor: ServicesAccessor, target: unknown): Promise<void> {
-		if (target instanceof SCMHistoryViewPane) await target.runTitleOperation();
+	override async run(accessor: ServicesAccessor, target: unknown): Promise<void> {
+		const view = target instanceof SCMHistoryViewPane ? target : accessor.get(IViewsService).getActiveViewWithId<SCMHistoryViewPane>(SCM_HISTORY_VIEW_ID);
+		await view?.runTitleOperation();
 	}
 });
 

@@ -293,6 +293,7 @@ export class GitService extends Disposable implements IGitService {
 		const result = await this.api.historyRefs({ repositoryId: repository.id });
 		return {
 			status: toGitStatus(result.status, repository), graphRevision: result.graphRevision,
+			baseReference: result.baseReference ? { ...result.baseReference, remoteName: result.baseReference.remoteName ?? undefined } : undefined,
 			references: result.references.map(reference => ({ ...reference, remoteName: reference.remoteName ?? undefined })),
 			branches: result.branches.map(branch => ({ ...branch, upstream: branch.upstream ?? undefined })),
 			remotes: result.remotes.map(remote => ({ name: remote.name, identity: remote.identity ? { ...remote.identity } : undefined })),

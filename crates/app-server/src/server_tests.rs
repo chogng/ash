@@ -6154,10 +6154,66 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
     );
 
     assert_eq!(resolved["result"]["value"]["sequence"], 6);
+    // The delivery assignment is gone, but the committed command remains retryable after reconnect.
+    server.close_connection(connection);
+    let mut reconnected = server.connection();
+    initialize(&server, &mut reconnected);
+    let retry_params = serde_json::json!({
+        "commandId":"resolve-approval-1", "sessionId":session_id,
+        "request":{"type":"resolveInteraction","expectedSequence":5,"threadId":thread_id,
+            "turnId":started.turn_id,"requestId":"approval-1",
+            "response":{"type":"approval","response":{"decision":"approveOnce"}}}
+    });
+    let replayed = call(
+        &server,
+        &mut reconnected,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"session/request","params":retry_params
+        }),
+    );
+    assert_eq!(replayed["result"]["value"]["sequence"], 6, "{replayed}");
+    let mut conflicting = retry_params.clone();
+    conflicting["request"]["response"]["response"]["decision"] = serde_json::json!("decline");
+    let conflict = call(
+        &server,
+        &mut reconnected,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"session/request","params":conflicting
+        }),
+    );
+    assert_eq!(
+        conflict["error"]["message"], "CommandConflict",
+        "{conflict}"
+    );
+    let mut new_command = retry_params;
+    new_command["commandId"] = serde_json::json!("another-resolution");
+    let rejected = call(
+        &server,
+        &mut reconnected,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request","params":new_command
+        }),
+    );
+    assert_eq!(
+        rejected["error"]["message"], "AgentInteractionNotOwner",
+        "{rejected}"
+    );
     let events = server
         .threads()
         .thread_updates_after(&thread_id, 5)
         .unwrap();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|update| matches!(
+                &update.update,
+                ash_protocol::ThreadUpdate::Committed {
+                    event: ash_protocol::ThreadEvent::InteractionResolved { .. }
+                }
+            ))
+            .count(),
+        1
+    );
     assert!(matches!(
         &events[0].update,
         ash_protocol::ThreadUpdate::Committed {

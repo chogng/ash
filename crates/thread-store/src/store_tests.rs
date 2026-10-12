@@ -10,6 +10,7 @@ use ash_protocol::ThreadStatus;
 
 fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
     ThreadEventBatch {
+        history_index: None,
         history_prefixes: Vec::new(),
         batch_id: "batch_1".into(),
         thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),

@@ -8,6 +8,7 @@ use super::core_error;
 use super::decode;
 use super::operations::SessionMutation;
 use super::result;
+use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::session::SessionCatalogReadResult;
 use ash_app_server_protocol::protocol::session::SessionCreateParams;
 use ash_app_server_protocol::protocol::session::SessionListResult;
@@ -402,6 +403,18 @@ impl AppServer {
             .read_session(&params.session_id)
             .map_err(core_error)?;
         let thread_snapshots = view.threads;
+        let registrations = thread_snapshots
+            .iter()
+            .map(|thread| {
+                self.updates
+                    .begin_session_thread_subscription(
+                        connection.connection_id,
+                        params.session_id.clone(),
+                        thread.thread_id.clone(),
+                    )
+                    .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
         let thread_projections = thread_snapshots
             .iter()
             .map(|thread| {
@@ -417,24 +430,34 @@ impl AppServer {
                 })
             })
             .collect::<Result<Vec<_>, RpcError>>()?;
-        self.updates
-            .subscribe_session(connection.connection_id, params.session_id.clone());
-        for item in &thread_projections {
-            self.updates.subscribe_session_thread(
-                connection.connection_id,
-                params.session_id.clone(),
-                item.thread.thread_id.clone(),
-                item.thread.sequence,
+        let watermarks = thread_projections
+            .iter()
+            .map(|item| {
+                (
+                    item.updates.last().map_or(item.thread.sequence, |update| {
+                        update.durable_sequence.max(item.thread.sequence)
+                    }),
+                    item.transcript.revision,
+                )
+            })
+            .collect::<Vec<_>>();
+        let response = result(&SessionSubscribeResult {
+            agent_tree: view.agent_tree,
+            session,
+            thread_projections,
+        })?;
+        for (registration, (sequence, revision)) in registrations.into_iter().zip(watermarks) {
+            self.updates.commit_session_thread_subscription(
+                registration,
+                sequence,
+                revision,
+                super::update_broker::ThreadSubscriptionScope::Session,
             );
         }
         for snapshot in &thread_snapshots {
             self.offer_pending_interactions(snapshot);
         }
-        result(&SessionSubscribeResult {
-            agent_tree: view.agent_tree,
-            session,
-            thread_projections,
-        })
+        Ok(response)
     }
 
     pub(super) fn session_unsubscribe(

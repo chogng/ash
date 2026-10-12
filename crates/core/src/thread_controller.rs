@@ -1901,6 +1901,29 @@ impl ThreadController {
         })
     }
 
+    /// Looks up an exact committed resolution without requiring a live delivery assignment.
+    pub(crate) fn replay_interaction_resolution(
+        &self,
+        thread_id: &ThreadId,
+        request: &ResolveTurnInteractionRequest,
+    ) -> Result<Option<u64>, CoreError> {
+        validate_command_id(&request.command_id)?;
+        self.with_loaded_thread(thread_id, |loaded| {
+            let Some(entry) = loaded
+                .snapshot
+                .commands
+                .iter()
+                .find(|entry| entry.receipt.command_id == request.command_id)
+            else {
+                return Ok(None);
+            };
+            if entry.receipt.command != resolution_command(request) {
+                return Err(CoreError::CommandConflict);
+            }
+            Ok(Some(entry.response_sequence))
+        })
+    }
+
     /// Resolves a durable interaction through a retry-safe client command.
     pub fn resolve_turn_interaction(
         &self,
@@ -2253,6 +2276,47 @@ impl ThreadController {
         self.with_loaded_thread(thread_id, |loaded| Ok(loaded.snapshot.clone()))
     }
 
+    /// Reads a visible history page without restoring execution state when the index is current.
+    pub fn read_thread_history(
+        &self,
+        thread_id: &ThreadId,
+        window: &ash_thread_store::ThreadHistoryWindow,
+    ) -> Result<ash_thread_store::ThreadHistoryPage, CoreError> {
+        match self.store.read_history_page(thread_id, window) {
+            Ok(Some(page)) => return Ok(page),
+            Ok(None) => {}
+            Err(ThreadStoreError::InvalidBatch(message)) => {
+                return Err(CoreError::InvalidInput(message));
+            }
+            Err(error) => return Err(error.into()),
+        }
+        self.with_loaded_thread(thread_id, |loaded| {
+            let snapshot = &loaded.snapshot;
+            let end = match window {
+                ash_thread_store::ThreadHistoryWindow::Latest { .. } => snapshot.turns.len(),
+                ash_thread_store::ThreadHistoryWindow::Before { turn_id, .. } => snapshot
+                    .turns
+                    .iter()
+                    .position(|turn| &turn.turn_id == turn_id)
+                    .ok_or_else(|| CoreError::InvalidInput("unknown history Turn".into()))?,
+            };
+            let limit = match window {
+                ash_thread_store::ThreadHistoryWindow::Latest { turn_limit }
+                | ash_thread_store::ThreadHistoryWindow::Before { turn_limit, .. } => {
+                    turn_limit.get() as usize
+                }
+            };
+            let start = end.saturating_sub(limit);
+            let index = snapshot.history_index(None, false, &BTreeSet::new());
+            self.store.backfill_history_index(&index)?;
+            Ok(ash_thread_store::ThreadHistoryPage {
+                thread: snapshot.public_history_thread(start..end),
+                has_older_turns: start > 0,
+                pending_interactions: index.pending_interactions,
+            })
+        })
+    }
+
     /// Admits transient extension data to the current Turn under the Thread commit lock.
     /// The callback must not re-enter Core. It must keep data in the supplied Turn's
     /// extension scope, which is removed when that Turn ends. This never starts work.
@@ -2526,20 +2590,47 @@ impl ThreadController {
         thread_id: &ThreadId,
         sequence: u64,
     ) -> Result<Vec<ThreadUpdateEnvelope>, CoreError> {
-        let session_id = self.read_thread(thread_id)?.session_id;
-        Ok(self
+        let binding = self
             .store
-            .load(thread_id)?
-            .into_iter()
-            .filter(|event| event.sequence > sequence)
-            .map(|event| ThreadUpdateEnvelope {
-                session_id: session_id.clone(),
-                thread_id: thread_id.clone(),
-                durable_sequence: event.sequence,
-                stream_cursor: None,
-                update: ThreadUpdate::Committed { event: event.event },
-            })
-            .collect())
+            .read_thread_binding(thread_id)?
+            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
+        let first = self.store.load_range(thread_id, sequence, 500)?;
+        let tail = first.current_sequence;
+        let mut cursor = sequence;
+        let mut events = first.events;
+        let mut updates = Vec::new();
+        loop {
+            if events.is_empty() && cursor < tail {
+                return Err(CoreError::Journal(
+                    "Thread replay has a missing committed event".into(),
+                ));
+            }
+            for event in events {
+                if event.sequence != cursor + 1 {
+                    return Err(CoreError::Journal("Thread replay is not contiguous".into()));
+                }
+                cursor = event.sequence;
+                updates.push(ThreadUpdateEnvelope {
+                    session_id: binding.session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    durable_sequence: cursor,
+                    stream_cursor: None,
+                    update: ThreadUpdate::Committed { event: event.event },
+                });
+            }
+            if cursor == tail {
+                return Ok(updates);
+            }
+            let page =
+                self.store
+                    .load_range(thread_id, cursor, (tail - cursor).min(500) as usize)?;
+            if page.current_sequence < tail {
+                return Err(CoreError::Journal(
+                    "Thread history changed during replay".into(),
+                ));
+            }
+            events = page.events;
+        }
     }
 
     /// Replays one Thread's durable rollout and interrupts any Turn that was in progress when the
@@ -2802,6 +2893,15 @@ impl ThreadController {
             )));
         }
         let expected_sequence = snapshot.as_ref().map_or(0, |snapshot| snapshot.sequence);
+        let previous_turns = snapshot.as_ref().map(|snapshot| snapshot.turns.clone());
+        let index_ready = self.store.history_index_sequence(thread_id)? == Some(expected_sequence);
+        let completed_items = events
+            .iter()
+            .filter_map(|event| match event {
+                ThreadEvent::ItemCompleted { turn_id, .. } => Some(turn_id.clone()),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
         let input_time = if events.iter().any(|event| {
             matches!(
                 event,
@@ -2892,11 +2992,14 @@ impl ThreadController {
         }
         let projection = projection.expect("a non-empty event batch always creates a projection");
         let catalog = thread_catalog_record(&projection);
+        let history_index =
+            projection.history_index(previous_turns.as_deref(), index_ready, &completed_items);
         Ok((
             projection,
             crate::message_checkpoint::PreparedThreadBatch {
                 captures,
                 data: ThreadEventBatch {
+                    history_index: Some(history_index),
                     history_prefixes,
                     batch_id: self.next_identifier("batch"),
                     thread_id: thread_id.clone(),
@@ -3427,12 +3530,44 @@ pub struct InMemoryThreadStore(Mutex<InMemoryThreadStoreState>);
 
 #[derive(Default)]
 struct InMemoryThreadStoreState {
+    history_indices: BTreeMap<ThreadId, MemoryHistoryIndex>,
     checkpoint_cleanup: BTreeMap<String, ash_protocol::RepositoryCheckpoint>,
     prefixes: BTreeMap<String, ash_history::HistoryPrefix>,
     agents: BTreeMap<ash_protocol::AgentId, agent_graph_store::AgentRecord>,
     threads: BTreeMap<ThreadId, Vec<StoredEvent>>,
     catalog: BTreeMap<ThreadId, ThreadCatalogRecord>,
     batch_ids: BTreeSet<String>,
+}
+
+struct MemoryHistoryIndex {
+    header: ash_thread_store::ThreadHistoryIndexUpdate,
+    turns: BTreeMap<usize, ash_protocol::Turn>,
+}
+
+fn update_memory_history_index(
+    indices: &mut BTreeMap<ThreadId, MemoryHistoryIndex>,
+    index: &ash_thread_store::ThreadHistoryIndexUpdate,
+) {
+    let header = ash_thread_store::ThreadHistoryIndexUpdate {
+        thread: index.thread.clone(),
+        turn_count: index.turn_count,
+        pending_interactions: index.pending_interactions.clone(),
+        turns: Vec::new(),
+        mode: index.mode,
+    };
+    let current = indices
+        .entry(index.thread.thread_id.clone())
+        .or_insert_with(|| MemoryHistoryIndex {
+            header: header.clone(),
+            turns: BTreeMap::new(),
+        });
+    if index.mode == ash_thread_store::ThreadHistoryIndexMode::Replace {
+        current.turns.clear();
+    }
+    for turn in &index.turns {
+        current.turns.insert(turn.ordinal, turn.turn.clone());
+    }
+    current.header = header;
 }
 
 impl InMemoryThreadStore {
@@ -3449,6 +3584,128 @@ impl InMemoryThreadStore {
 }
 
 impl ThreadStore for InMemoryThreadStore {
+    fn load_range(
+        &self,
+        thread_id: &ThreadId,
+        after: u64,
+        limit: usize,
+    ) -> Result<ash_thread_store::ThreadEventPage, ThreadStoreError> {
+        if !(1..=500).contains(&limit) {
+            return Err(ThreadStoreError::InvalidBatch(
+                "event range limit must be 1..500".into(),
+            ));
+        }
+        let state = self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let events = state
+            .threads
+            .get(thread_id)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let current_sequence = events.last().map_or(0, |event| event.sequence);
+        if after > current_sequence {
+            return Err(ThreadStoreError::InvalidBatch(
+                "event cursor exceeds committed history".into(),
+            ));
+        }
+        let start = after as usize;
+        Ok(ash_thread_store::ThreadEventPage {
+            events: events[start..(start + limit).min(events.len())].to_vec(),
+            current_sequence,
+        })
+    }
+
+    fn history_index_sequence(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Option<u64>, ThreadStoreError> {
+        let state = self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        Ok(state
+            .history_indices
+            .get(thread_id)
+            .map(|index| index.header.thread.sequence))
+    }
+
+    fn read_history_page(
+        &self,
+        thread_id: &ThreadId,
+        window: &ash_thread_store::ThreadHistoryWindow,
+    ) -> Result<Option<ash_thread_store::ThreadHistoryPage>, ThreadStoreError> {
+        let state = self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let Some(index) = state.history_indices.get(thread_id) else {
+            return Ok(None);
+        };
+        if state
+            .threads
+            .get(thread_id)
+            .and_then(|events| events.last())
+            .map(|event| event.sequence)
+            != Some(index.header.thread.sequence)
+        {
+            return Ok(None);
+        }
+        let (end, limit) = match window {
+            ash_thread_store::ThreadHistoryWindow::Latest { turn_limit } => {
+                (index.header.turn_count, turn_limit.get() as usize)
+            }
+            ash_thread_store::ThreadHistoryWindow::Before {
+                turn_id,
+                turn_limit,
+            } => (
+                index
+                    .turns
+                    .iter()
+                    .find(|(_, turn)| &turn.turn_id == turn_id)
+                    .map(|(ordinal, _)| *ordinal)
+                    .ok_or_else(|| ThreadStoreError::InvalidBatch("unknown history Turn".into()))?,
+                turn_limit.get() as usize,
+            ),
+        };
+        let start = end.saturating_sub(limit);
+        let mut thread = index.header.thread.clone();
+        thread.turns = index
+            .turns
+            .range(start..end)
+            .map(|(_, turn)| turn.clone())
+            .collect();
+        Ok(Some(ash_thread_store::ThreadHistoryPage {
+            thread,
+            has_older_turns: start > 0,
+            pending_interactions: index.header.pending_interactions.clone(),
+        }))
+    }
+
+    fn backfill_history_index(
+        &self,
+        index: &ash_thread_store::ThreadHistoryIndexUpdate,
+    ) -> Result<(), ThreadStoreError> {
+        let mut state = self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let actual = state
+            .threads
+            .get(&index.thread.thread_id)
+            .and_then(|events| events.last())
+            .map_or(0, |event| event.sequence);
+        if actual != index.thread.sequence {
+            return Err(ThreadStoreError::SequenceConflict {
+                expected: index.thread.sequence,
+                actual,
+            });
+        }
+        update_memory_history_index(&mut state.history_indices, index);
+        Ok(())
+    }
+
     fn recent_tool_calls(
         &self,
         query: &ash_thread_store::RecentToolCallsQuery,
@@ -3739,6 +3996,7 @@ impl ThreadStore for InMemoryThreadStore {
         for thread_id in &thread_ids {
             state.catalog.remove(thread_id);
             state.threads.remove(thread_id);
+            state.history_indices.remove(thread_id);
         }
         let mut retained = BTreeSet::new();
         let mut pending = state
@@ -3866,6 +4124,9 @@ impl ThreadStore for InMemoryThreadStore {
         state
             .catalog
             .insert(batch.thread_id.clone(), batch.catalog.clone());
+        if let Some(index) = &batch.history_index {
+            update_memory_history_index(&mut state.history_indices, index);
+        }
         state.prefixes.extend(staged);
         state.batch_ids.insert(batch.batch_id.clone());
         Ok(result)

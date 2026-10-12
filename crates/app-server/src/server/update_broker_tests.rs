@@ -78,7 +78,7 @@ fn delivered_request_and_assistant_text_emit_ui_hook_events() {
     broker.set_agent_interaction_capability(1, Some(approval_capability()));
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
 
-    broker.offer_agent_request(approval_request(&session_id, &thread_id));
+    broker.offer_agent_request(approval_request(&session_id, &thread_id), 0);
     broker.publish_thread_update(transient_thread_update(&session_id, &thread_id, 1, "Hello"));
 
     assert_eq!(
@@ -457,7 +457,25 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
         usage: ash_protocol::ModelUsageSummary::default(),
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
-        turns: Vec::new(),
+        turns: vec![ash_protocol::Turn {
+            turn_id: TurnId::new("turn_1").unwrap(),
+            status: ash_protocol::TurnStatus::Running,
+            kind: ash_protocol::TurnKind::Coding,
+            mode: ash_protocol::CollaborationMode::Agent,
+            instructions: None,
+            model: None,
+            reasoning_effort: None,
+            advisor: None,
+            tool_profile: None,
+            tool_mode: ash_protocol::ToolMode::Direct,
+            approval_mode: ash_protocol::ApprovalMode::Manual,
+            usage: ash_protocol::ModelUsageSummary::default(),
+            context_usage: None,
+            items: Vec::new(),
+            plan: None,
+            pending_interaction: None,
+            error: None,
+        }],
         hook_runs: Vec::new(),
     };
     let snapshot = broker.thread_transcript_snapshot(&thread, true);
@@ -553,7 +571,7 @@ fn agent_request_is_delivered_to_exactly_one_capable_thread_subscriber() {
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
     broker.subscribe_session_thread(2, session_id.clone(), thread_id.clone(), 0);
 
-    broker.offer_agent_request(approval_request(&session_id, &thread_id));
+    broker.offer_agent_request(approval_request(&session_id, &thread_id), 0);
 
     assert_eq!(first.len(), 1);
     assert_eq!(second.len(), 0);
@@ -577,7 +595,7 @@ fn agent_request_is_reassigned_when_its_connection_closes() {
     broker.set_agent_interaction_capability(2, Some(approval_capability()));
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
     broker.subscribe_session_thread(2, session_id.clone(), thread_id.clone(), 0);
-    broker.offer_agent_request(approval_request(&session_id, &thread_id));
+    broker.offer_agent_request(approval_request(&session_id, &thread_id), 0);
     first.drain();
 
     broker.unregister(1);
@@ -605,7 +623,7 @@ fn delivered_dynamic_tool_is_not_reassigned_when_its_owner_closes() {
     broker.set_agent_interaction_capability(2, Some(dynamic_tool_capability()));
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
     broker.subscribe_session_thread(2, session_id.clone(), thread_id.clone(), 0);
-    broker.offer_agent_request(dynamic_tool_request(&session_id, &thread_id));
+    broker.offer_agent_request(dynamic_tool_request(&session_id, &thread_id), 0);
     first.drain();
 
     let lost = broker.unregister(1);
@@ -630,7 +648,7 @@ fn dynamic_tool_is_delivered_only_to_a_connection_hosting_that_tool_name() {
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
     broker.subscribe_session_thread(2, session_id.clone(), thread_id.clone(), 0);
 
-    broker.offer_agent_request(dynamic_tool_request(&session_id, &thread_id));
+    broker.offer_agent_request(dynamic_tool_request(&session_id, &thread_id), 0);
 
     assert!(other.drain().is_empty());
     assert_eq!(owner.drain().len(), 1);
@@ -645,7 +663,7 @@ fn agent_request_waits_until_a_matching_capability_subscribes() {
     broker.bind_session_scope(session_id.clone());
     broker.register(1, false, &queue);
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
-    broker.offer_agent_request(approval_request(&session_id, &thread_id));
+    broker.offer_agent_request(approval_request(&session_id, &thread_id), 0);
     assert_eq!(queue.len(), 0);
 
     broker.set_agent_interaction_capability(1, Some(approval_capability()));
@@ -666,9 +684,269 @@ fn agent_request_is_not_assigned_to_a_foreign_env_scope() {
     foreign_scope.set_agent_interaction_capability(connection_id, Some(approval_capability()));
     foreign_scope.subscribe_session_thread(connection_id, session_id.clone(), thread_id.clone(), 0);
 
-    owning_scope.offer_agent_request(approval_request(&session_id, &thread_id));
+    owning_scope.offer_agent_request(approval_request(&session_id, &thread_id), 0);
 
     assert!(queue.drain().is_empty());
+}
+
+fn subscription_lifecycle_fixture() -> (UpdateBroker, NotificationQueue, SessionId, ThreadId) {
+    let broker = UpdateBroker::default();
+    let queue = NotificationQueue::default();
+    let session_id = SessionId::new("subscription-session").unwrap();
+    let thread_id = ThreadId::new("subscription-thread").unwrap();
+    broker.bind_session_scope(session_id.clone());
+    broker.register(1, false, &queue);
+    broker.set_agent_interaction_capability(1, Some(approval_capability()));
+    (broker, queue, session_id, thread_id)
+}
+
+#[test]
+fn subscription_commit_releases_only_updates_after_the_response_and_grants_ownership() {
+    let (broker, queue, session_id, thread_id) = subscription_lifecycle_fixture();
+    broker.offer_agent_request(approval_request(&session_id, &thread_id), 0);
+    let registration = broker
+        .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+        .unwrap();
+    broker.publish_thread(
+        &thread_id,
+        &[
+            thread_update(&session_id, &thread_id, 1),
+            thread_update(&session_id, &thread_id, 2),
+        ],
+    );
+    broker.publish_thread_update(transient_thread_update(&session_id, &thread_id, 1, "live"));
+    assert!(queue.drain().is_empty());
+    assert!(!broker.is_agent_interaction_owner(1, &RequestId::new("approval_1").unwrap()));
+    broker.commit_session_thread_subscription(registration, 1, 0, ThreadSubscriptionScope::Thread);
+    let notifications = queue.drain();
+    let durable = notifications
+        .iter()
+        .filter(|notice| notice["params"]["update"]["type"] == "committed")
+        .collect::<Vec<_>>();
+    assert_eq!(durable.len(), 1);
+    assert_eq!(durable[0]["params"]["durableSequence"], 2);
+    assert!(
+        notifications
+            .iter()
+            .any(|notice| notice["method"] == "session/thread/transcript/update")
+    );
+    assert_eq!(
+        notifications
+            .iter()
+            .filter(|notice| notice["method"] == "agent/request")
+            .count(),
+        1
+    );
+    assert!(broker.is_agent_interaction_owner(1, &RequestId::new("approval_1").unwrap()));
+    broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 2)]);
+    assert!(queue.drain().is_empty());
+}
+
+#[test]
+fn subscription_rollback_discards_background_updates_and_preserves_an_existing_subscription() {
+    for existing in [false, true] {
+        let (broker, queue, session_id, thread_id) = subscription_lifecycle_fixture();
+        if existing {
+            broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 1);
+        }
+        let registration = broker
+            .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+            .unwrap();
+        let updates = broker.state.clone();
+        let pending_update = thread_update(&session_id, &thread_id, 2);
+        // Background producers do not participate in the issuing request's notification deferral.
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| broker.publish_thread(&thread_id, &[pending_update]))
+                .join()
+                .unwrap();
+        });
+        drop(registration);
+        assert_eq!(queue.drain().len(), usize::from(existing));
+        let state = updates.lock().unwrap();
+        let threads = &state.subscribers[&1].threads;
+        if existing {
+            assert_eq!(threads[&thread_id].sequence, 2);
+            assert!(threads[&thread_id].pending.is_empty());
+        } else {
+            assert!(threads.is_empty());
+        }
+    }
+}
+
+#[test]
+fn concurrent_subscription_attempts_and_unsubscribe_do_not_resurrect_a_removed_subscription() {
+    let (broker, queue, session_id, thread_id) = subscription_lifecycle_fixture();
+    let failed = broker
+        .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+        .unwrap();
+    let successful = broker
+        .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+        .unwrap();
+    drop(failed);
+    broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 1)]);
+    broker.commit_session_thread_subscription(successful, 0, 0, ThreadSubscriptionScope::Thread);
+    assert_eq!(queue.drain().len(), 1);
+    let cancelled = broker
+        .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+        .unwrap();
+    broker.unsubscribe_session_thread(1, &session_id, &thread_id);
+    broker.commit_session_thread_subscription(cancelled, 1, 0, ThreadSubscriptionScope::Thread);
+    broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 2)]);
+    assert!(queue.drain().is_empty());
+    assert!(
+        broker.state.lock().unwrap().subscribers[&1]
+            .threads
+            .is_empty()
+    );
+}
+
+#[test]
+fn session_unsubscribe_invalidates_pending_thread_and_session_catalog_registration() {
+    let (broker, queue, session_id, thread_id) = subscription_lifecycle_fixture();
+    let registration = broker
+        .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+        .unwrap();
+    broker.unsubscribe_session(1, &session_id);
+    broker.commit_session_thread_subscription(registration, 0, 0, ThreadSubscriptionScope::Session);
+    broker.publish_session_changed(&session_id);
+    broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 1)]);
+    assert!(queue.drain().is_empty());
+    let state = broker.state.lock().unwrap();
+    assert!(state.subscribers[&1].sessions.is_empty());
+    assert!(state.subscribers[&1].threads.is_empty());
+}
+
+#[test]
+fn resolved_interactions_are_not_resurrected_by_old_snapshots_or_replayed_events() {
+    let (broker, queue, session_id, thread_id) = subscription_lifecycle_fixture();
+    broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
+    let request = approval_request(&session_id, &thread_id);
+    let requested = ThreadUpdateEnvelope {
+        update: ThreadUpdate::Committed {
+            event: ThreadEvent::InteractionRequested {
+                thread_id: thread_id.clone(),
+                turn_id: request.turn_id.clone(),
+                interaction: request.interaction.clone(),
+            },
+        },
+        ..thread_update(&session_id, &thread_id, 1)
+    };
+    broker.publish_thread(&thread_id, std::slice::from_ref(&requested));
+    assert!(broker.is_agent_interaction_owner(1, &request.interaction.request_id));
+    let resolved = ThreadUpdateEnvelope {
+        update: ThreadUpdate::Committed {
+            event: ThreadEvent::InteractionResolved {
+                thread_id: thread_id.clone(),
+                turn_id: request.turn_id.clone(),
+                request_id: request.interaction.request_id.clone(),
+                response: ash_protocol::AgentResponse::Approval {
+                    response: ash_protocol::ActionApprovalResponse {
+                        decision: ash_protocol::ActionApprovalDecision::ApproveOnce,
+                    },
+                },
+            },
+        },
+        ..thread_update(&session_id, &thread_id, 3)
+    };
+    broker.publish_thread(&thread_id, &[resolved]);
+    assert!(!broker.is_agent_interaction_owner(1, &request.interaction.request_id));
+    queue.drain();
+    broker.offer_agent_request(request.clone(), 2);
+    broker.publish_thread(&thread_id, &[requested]);
+    assert!(queue.drain().is_empty());
+    assert!(broker.state.lock().unwrap().pending_interactions.is_empty());
+    let mut next = request.clone();
+    next.interaction.request_id = RequestId::new("approval-next").unwrap();
+    broker.offer_agent_request(next.clone(), 4);
+    broker.offer_agent_request(request, 2);
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(
+        notifications[0]["params"]["interaction"]["requestId"],
+        "approval-next"
+    );
+    assert!(broker.is_agent_interaction_owner(1, &next.interaction.request_id));
+    broker.forget_session(&session_id);
+    let state = broker.state.lock().unwrap();
+    assert!(state.interaction_versions.is_empty());
+    assert!(state.interaction_assignments.is_empty());
+}
+
+#[test]
+fn disconnected_dynamic_tool_owner_cannot_be_restored_by_a_stale_snapshot() {
+    let (broker, first, session_id, thread_id) = subscription_lifecycle_fixture();
+    let second = NotificationQueue::default();
+    broker.register(2, false, &second);
+    for connection in [1, 2] {
+        broker.set_agent_interaction_capability(connection, Some(dynamic_tool_capability()));
+        broker.subscribe_session_thread(connection, session_id.clone(), thread_id.clone(), 0);
+    }
+    let request = dynamic_tool_request(&session_id, &thread_id);
+    broker.offer_agent_request(request.clone(), 1);
+    assert_eq!(first.drain().len(), 1);
+    let lost = broker.unregister(1);
+    assert_eq!(lost.len(), 1);
+    broker.offer_agent_request(request.clone(), 2);
+    assert!(second.drain().is_empty());
+    assert!(!broker.is_agent_interaction_owner(2, &request.interaction.request_id));
+    let mut next = request;
+    next.interaction.request_id = RequestId::new("dynamic-next").unwrap();
+    broker.offer_agent_request(next, 3);
+    assert_eq!(second.drain().len(), 1);
+}
+
+#[test]
+fn expired_unassigned_interaction_is_not_delivered_to_a_new_subscriber() {
+    let (broker, queue, session_id, thread_id) = subscription_lifecycle_fixture();
+    let mut request = approval_request(&session_id, &thread_id);
+    request.interaction.deadline = Some(ash_protocol::InteractionDeadline {
+        expires_at_unix_ms: 0,
+    });
+    broker.offer_agent_request(request.clone(), 1);
+    broker.subscribe_session_thread(1, session_id, thread_id, 0);
+    assert!(queue.drain().is_empty());
+    assert_eq!(
+        broker.expired_agent_requests(unix_time_millis()),
+        vec![request]
+    );
+}
+
+#[test]
+fn terminal_turn_prevents_late_approval_delivery_before_its_resolution_event_arrives() {
+    let (broker, queue, session_id, thread_id) = subscription_lifecycle_fixture();
+    broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
+    let request = approval_request(&session_id, &thread_id);
+    broker.publish_thread(
+        &thread_id,
+        &[ThreadUpdateEnvelope {
+            update: ThreadUpdate::Committed {
+                event: ThreadEvent::TurnCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: request.turn_id.clone(),
+                },
+            },
+            ..thread_update(&session_id, &thread_id, 4)
+        }],
+    );
+    queue.drain();
+    broker.offer_agent_request(request.clone(), 2);
+    broker.publish_thread(
+        &thread_id,
+        &[ThreadUpdateEnvelope {
+            update: ThreadUpdate::Committed {
+                event: ThreadEvent::InteractionRequested {
+                    thread_id: thread_id.clone(),
+                    turn_id: request.turn_id.clone(),
+                    interaction: request.interaction.clone(),
+                },
+            },
+            ..thread_update(&session_id, &thread_id, 1)
+        }],
+    );
+    assert!(queue.drain().is_empty());
+    assert!(!broker.is_agent_interaction_owner(1, &request.interaction.request_id));
+    assert!(broker.state.lock().unwrap().pending_interactions.is_empty());
 }
 
 fn approval_capability() -> AgentInteractionCapability {

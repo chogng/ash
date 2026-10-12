@@ -2,7 +2,7 @@ import { CommandsRegistry } from '../../../../../platform/commands/common/comman
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
@@ -293,11 +293,13 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.deepEqual(opened, ['file:///workspace/src/first.ts']);
 	assert.deepEqual(gitActions, ['stage:src/first.ts', 'discard:src/first.ts']);
 	assert.deepEqual(committedChangeSets, ['change-1']);
+	const focusedViewsBeforeSnapshot = [...focusedViews];
 	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/history'), [{
 		label: 'src/committed.ts',
 		original: { resource: URI.parse('git-commit:/parent/committed.ts'), initialText: 'before', readOnly: true },
 		modified: { resource: URI.parse('git-commit:/commit/committed.ts'), initialText: 'after', readOnly: true },
 	}], 'Committed changes', { kind: 'snapshot', repositoryId: 'repo', label: 'Committed changes' }), new AbortController().signal);
+	assert.deepEqual(focusedViews, focusedViewsBeforeSnapshot, 'A historical snapshot must not redirect focus to the working tree view');
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor-toolbar'), null);
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor-source-toolbar'), null);
 	assert.deepEqual(opened, ['file:///workspace/src/first.ts']);
@@ -375,6 +377,8 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 	assert.ok(acquired.every(resource => /\/lazy\/[0-9]\//.test(resource) && Number(resource.match(/\/lazy\/(\d+)\//)?.[1]) < 10));
 	const editor = requiredElement<HTMLElement>(parent, '.stanza-multi-diff-editor');
 	const content = requiredElement<HTMLElement>(editor, '.stanza-multi-diff-editor-content');
+	// jsdom has no layout; the scrollbar needs the viewport's real measured bounds.
+	Object.defineProperties(editor, { clientHeight: { get: () => 240 }, scrollHeight: { get: () => parseFloat(content.style.height) } });
 	editor.scrollTop = parseFloat(content.style.height) - 200;
 	editor.dispatchEvent(new dom.window.Event('scroll', { bubbles: true }));
 	await new Promise<void>(resolve => {
@@ -573,7 +577,7 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 
 
 test('Multi-diff configuration and registered file menus work in Chinese', async () => {
-	const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
+	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 	const dom = createTestDom();
 	try {

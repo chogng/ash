@@ -128,6 +128,7 @@ fn catalog_session_manager(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadEventBatch {
+    pub history_index: Option<ThreadHistoryIndexUpdate>,
     pub history_prefixes: Vec<ash_history::HistoryPrefix>,
     pub batch_id: String,
     pub thread_id: ThreadId,
@@ -148,6 +149,48 @@ pub struct AppendBatchResult {
 pub struct ThreadEventPage {
     pub events: Vec<StoredEvent>,
     pub current_sequence: u64,
+}
+
+/// A normalized selection of visible Turns. RPC owners validate their maximum page size.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ThreadHistoryWindow {
+    Latest {
+        turn_limit: std::num::NonZeroU32,
+    },
+    Before {
+        turn_id: ash_protocol::TurnId,
+        turn_limit: std::num::NonZeroU32,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ThreadHistoryPage {
+    pub thread: ash_protocol::Thread,
+    pub has_older_turns: bool,
+    pub pending_interactions: Vec<ash_protocol::AgentRequestEnvelope>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ThreadHistoryIndexMode {
+    Replace,
+    Update,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ThreadHistoryTurn {
+    pub ordinal: usize,
+    pub turn: ash_protocol::Turn,
+}
+
+/// Core-derived read cache committed alongside the canonical events, never an execution owner.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ThreadHistoryIndexUpdate {
+    /// Aggregate metadata without Turn bodies.
+    pub thread: ash_protocol::Thread,
+    pub turn_count: usize,
+    pub pending_interactions: Vec<ash_protocol::AgentRequestEnvelope>,
+    pub turns: Vec<ThreadHistoryTurn>,
+    pub mode: ThreadHistoryIndexMode,
 }
 
 /// Execution authority recorded separately when immutable history changes profile ownership.
@@ -189,6 +232,27 @@ impl ThreadExecutionBinding {
 /// event or none, makes the complete batch durable before returning success, and excludes
 /// uncommitted tail batches from subsequent `load` results.
 pub trait ThreadStore: agent_graph_store::AgentGraphStore {
+    /// Returns a page only when the derived index matches the committed event tail.
+    fn read_history_page(
+        &self,
+        _thread_id: &ThreadId,
+        _window: &ThreadHistoryWindow,
+    ) -> Result<Option<ThreadHistoryPage>, ThreadStoreError> {
+        Ok(None)
+    }
+    fn history_index_sequence(
+        &self,
+        _thread_id: &ThreadId,
+    ) -> Result<Option<u64>, ThreadStoreError> {
+        Ok(None)
+    }
+    /// Installs a complete rebuild only if its sequence is still current.
+    fn backfill_history_index(
+        &self,
+        _index: &ThreadHistoryIndexUpdate,
+    ) -> Result<(), ThreadStoreError> {
+        Ok(())
+    }
     /// Returns newest shell tool inputs from at most eight Sessions and 64 calls, without
     /// replaying transcripts. Storage filters execution scope and age before loading content.
     fn recent_tool_calls(
@@ -286,6 +350,29 @@ pub fn validate_append_batch(
     batch: &ThreadEventBatch,
     actual_sequence: u64,
 ) -> Result<AppendBatchResult, ThreadStoreError> {
+    if let Some(index) = &batch.history_index {
+        if !index.thread.turns.is_empty()
+            || index.thread.thread_id != batch.thread_id
+            || index.thread.session_id != batch.catalog.session_id
+            || index.thread.agent_id != batch.catalog.binding.agent_id
+            || index.thread.sequence != batch.catalog.sequence
+            || index
+                .turns
+                .iter()
+                .any(|turn| turn.ordinal >= index.turn_count)
+            || (index.mode == ThreadHistoryIndexMode::Replace
+                && (index.turns.len() != index.turn_count
+                    || index
+                        .turns
+                        .iter()
+                        .enumerate()
+                        .any(|(ordinal, turn)| ordinal != turn.ordinal)))
+        {
+            return Err(ThreadStoreError::InvalidBatch(
+                "history index disagrees with its event batch".into(),
+            ));
+        }
+    }
     if batch.expected_sequence != actual_sequence {
         return Err(ThreadStoreError::SequenceConflict {
             expected: batch.expected_sequence,

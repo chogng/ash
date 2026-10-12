@@ -1166,3 +1166,29 @@ fn git_history_filters_and_binary_payloads_keep_legacy_requests_readable() {
         serde_json::json!({"kind": "binary", "data": "AAH/"})
     );
 }
+
+#[test]
+fn git_default_reference_is_optional_and_publication_carries_the_reviewed_head() {
+    use crate::protocol::git::GitCommandDto;
+    use crate::protocol::git::GitHistoryRefsResult;
+    let legacy = serde_json::json!({
+        "status": {"repositoryId": "repo", "streamInstanceId": "stream", "revision": 1,
+            "historyRevision": 1, "path": ".", "head": {"type": "unborn", "name": "main"}, "changes": []},
+        "graphRevision": 1, "references": [], "remotes": [], "branches": []
+    });
+    let decoded: GitHistoryRefsResult = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(decoded.base_reference.is_none());
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+    let mut snapshot = legacy;
+    snapshot["baseReference"] = serde_json::json!({"name": "origin/main", "objectId": "a".repeat(40),
+        "kind": "remoteBranch", "remoteName": "origin", "current": false});
+    let decoded: GitHistoryRefsResult = serde_json::from_value(snapshot.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), snapshot);
+    let intent = serde_json::json!({"kind": "publishBranch", "remote": "origin", "name": "topic",
+        "branch": "topic", "expectedHead": "b".repeat(40)});
+    let decoded: GitCommandDto = serde_json::from_value(intent.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), intent);
+    let mut incomplete = intent;
+    incomplete.as_object_mut().unwrap().remove("expectedHead");
+    assert!(serde_json::from_value::<GitCommandDto>(incomplete).is_err());
+}

@@ -256,6 +256,7 @@ interface ProviderSnapshot {
 	readonly statusBarCommands: readonly Record<string, JsonValue>[];
 	readonly historyRef: ISCMHistoryItemRef | undefined;
 	readonly historyRemoteRef: ISCMHistoryItemRef | undefined;
+	readonly historyBaseRef: ISCMHistoryItemRef | undefined;
 	readonly hasHistoryItemRefs: boolean;
 	readonly hasHistoryMergeBase: boolean;
 	readonly historyRevision: number;
@@ -275,6 +276,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private readonly historyRefsChanged = this._register(new Emitter<readonly ISCMHistoryItem[]>());
 	private readonly historyRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
 	private readonly historyRemoteRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
+	private readonly historyBaseRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
 	private draft: string;
 	private draftRevision = 0;
 	private syncedDraftRevision = 0;
@@ -285,9 +287,10 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		this.draft = string(snapshot.input.value);
 		this.historyRef.set(snapshot.historyRef);
 		this.historyRemoteRef.set(snapshot.historyRemoteRef);
+		this.historyBaseRef.set(snapshot.historyBaseRef);
 		if (snapshot.hasHistory) {
 			this.historyProvider = {
-				onDidChange: this.historyChanged.event, historyItemRef: this.historyRef, historyItemRemoteRef: this.historyRemoteRef,
+				onDidChange: this.historyChanged.event, historyItemRef: this.historyRef, historyItemRemoteRef: this.historyRemoteRef, historyItemBaseRef: this.historyBaseRef,
 				...(snapshot.hasHistoryItemRefs ? { provideHistoryItemRefs: async (refs?: readonly string[]) => array(await this.call('history', { methodName: 'provideHistoryItemRefs', arguments: [refs ?? null] })).map(parseRef) } : {}),
 				...(snapshot.hasHistoryMergeBase ? { resolveHistoryItemRefsCommonAncestor: async (refs: readonly string[]) => optionalString(await this.call('history', { methodName: 'resolveHistoryItemRefsCommonAncestor', arguments: [refs] })) } : {}),
 				onDidChangeHistoryItemRefs: this.historyRefsChanged.event,
@@ -387,6 +390,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		this.snapshot = value;
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }
+		if (!structuralEquals(this.historyBaseRef.get(), value.historyBaseRef)) { this.historyBaseRef.set(value.historyBaseRef); }
 		this.changed.fire();
 		this.decorationChanged.fire([]);
 		if (historyChanged) { this.historyChanged.fire(); }
@@ -464,7 +468,7 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	const historyRefsRevision = entry.historyRefsRevision == null ? 0 : number(entry.historyRefsRevision);
 	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) { throw new TypeError('Invalid SCM history refs revision'); }
 	const historyRefsItems = entry.historyRefsItems == null ? [] : array(entry.historyRefsItems).map(parseHistoryItem);
-	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
+	return { id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }

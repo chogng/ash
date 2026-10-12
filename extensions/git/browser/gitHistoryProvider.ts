@@ -20,6 +20,9 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 	private readonly historyRefChanged = this._register(new Emitter<ISCMHistoryItemRef | undefined>());
 	private currentHistoryRef: ISCMHistoryItemRef | undefined;
 	private currentRemoteRef: ISCMHistoryItemRef | undefined;
+	private currentBaseRef: ISCMHistoryItemRef | undefined;
+	private readonly baseRefChanged = this._register(new Emitter<ISCMHistoryItemRef | undefined>());
+	public readonly historyItemBaseRef = observableFromEvent(this, this.baseRefChanged.event, () => this.currentBaseRef);
 	private readonly remoteRefChanged = this._register(new Emitter<ISCMHistoryItemRef | undefined>());
 	public readonly historyItemRemoteRef = observableFromEvent(this, this.remoteRefChanged.event, () => this.currentRemoteRef);
 	private historyRoots: readonly string[] | undefined;
@@ -94,6 +97,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		this.branches = snapshot.branches;
 		this.remotes = snapshot.remotes;
 		this.acceptReferences(snapshot.references);
+		this.setBaseRef(snapshot.baseReference);
 		this.setHistoryItemRef(currentRef(snapshot.status.head));
 		const refs = [...this.references.values()].flat();
 		return historyItemRefs ? refs.filter(ref => historyItemRefs.includes(ref.id)) : refs;
@@ -238,7 +242,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 				const branch = reference.kind === 'localBranch' ? this.branches.find(branch => branch.name === reference.name) : undefined;
 				items.push({
 					...toHistoryRef(reference),
-					upstream: branch?.upstream && references.some(remote => remote.kind === 'remoteBranch' && remote.name === branch.upstream) ? branch.upstream : undefined,
+					upstream: branch?.upstream && references.some(remote => (remote.kind === 'remoteBranch' || remote.kind === 'localBranch') && remote.name === branch.upstream) ? branch.upstream : undefined,
 					canDelete: branch !== undefined && !branch.current && !branch.checkedOutElsewhere,
 				});
 			}
@@ -291,6 +295,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 			this.branches = snapshot.branches;
 			this.remotes = snapshot.remotes;
 			this.acceptReferences(snapshot.references);
+			this.setBaseRef(snapshot.baseReference);
 			this.setHistoryItemRef(currentRef(snapshot.status.head));
 			this.refsChanged.fire(this.commits.map(commit => this.historyItem(commit)));
 			return;
@@ -310,14 +315,22 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 			this.branches = [];
 			this.remotes = [];
 			this.setHistoryItemRef(undefined);
+			this.setBaseRef(undefined);
 		}
 		this.nextCursor = undefined;
 		this.hasMore = true;
 		if (notify) this.changeEmitter.fire();
 	}
 
+	private setBaseRef(reference: GitReference | undefined): void {
+		const next = reference ? toHistoryRef(reference) : undefined;
+		if (next?.id === this.currentBaseRef?.id && next?.revision === this.currentBaseRef?.revision) { return; }
+		this.currentBaseRef = next;
+		this.baseRefChanged.fire(next);
+	}
+
 	private setHistoryItemRef(ref: ISCMHistoryItemRef | undefined): void {
-		const remote = [...this.references.values()].flat().find(item => item.category === 'remoteBranch' && item.name === ref?.upstream);
+		const remote = [...this.references.values()].flat().find(item => (item.category === 'remoteBranch' || item.category === 'localBranch') && item.name === ref?.upstream);
 		if (remote?.id !== this.currentRemoteRef?.id || remote?.revision !== this.currentRemoteRef?.revision) {
 			this.currentRemoteRef = remote;
 			this.remoteRefChanged.fire(remote);

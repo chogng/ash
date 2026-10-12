@@ -346,6 +346,37 @@ test('document callback errors do not suppress later commits and language change
 	model.dispose();
 });
 
+test('extension command palette declarations replace implicit entries and retire with command authority', async () => {
+	const registrations = [
+		{ kind: 'command' as const, registrationId: 'context', command: 'acme.graph.context', title: 'Context action', menus: [{ menu: 'commandPalette', when: 'false' }] },
+		{ kind: 'command' as const, registrationId: 'conditional', command: 'acme.graph.conditional', title: 'Conditional action', menus: [{ menu: 'commandPalette', when: 'graphReady' }] },
+		{ kind: 'command' as const, registrationId: 'ordinary', command: 'acme.graph.ordinary', title: 'Ordinary action' },
+	];
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.old', registrations));
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const items = () => MenusRegistry.getMenuItems(MenuId.CommandPalette).filter(item => 'command' in item && item.command.id.startsWith('acme.graph.'));
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	assert.equal(items().length, 3, 'Each registered command has one palette placement');
+	const context = items().find(item => 'command' in item && item.command.id === 'acme.graph.context')!;
+	const conditional = items().find(item => 'command' in item && item.command.id === 'acme.graph.conditional')!;
+	const ordinary = items().find(item => 'command' in item && item.command.id === 'acme.graph.ordinary')!;
+	using keys = new (await import('../../../../../platform/contextkey/browser/contextKeyService.js')).ContextKeyService();
+	keys.setContext('graphReady', false);
+	assert.equal(context.when?.evaluate(keys.getContext()), false);
+	assert.equal(conditional.when?.evaluate(keys.getContext()), false);
+	keys.setContext('graphReady', true);
+	assert.equal(conditional.when?.evaluate(keys.getContext()), true);
+	assert.equal(ordinary.when, undefined);
+	await services.invokeFunction(accessor => commands.getCommand('acme.graph.context')!(accessor));
+	assert.equal(api.invocations.at(-1)?.operation, 'execute', 'Palette visibility does not revoke the contextual command');
+	service.dispose();
+	assert.equal(items().length, 0);
+	assert.equal(commands.hasCommand('acme.graph.context'), false);
+});
+
 test('extension editor menus capture the clicked input and reject malformed replacement menus before commit', async () => {
 	const placement = { menu: 'editor/title/context', when: 'resourceLangId == markdown', group: 'navigation@1' };
 	const registration = { kind: 'command' as const, registrationId: 'preview', command: 'acme.preview', title: 'Preview', category: 'Acme', enablement: 'editorTextFocus', menus: [placement] };

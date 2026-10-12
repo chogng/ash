@@ -933,6 +933,17 @@ fn command(command: GitCommandDto) -> ash_git::GitCommand {
             object_id,
             name,
         },
+        GitCommandDto::PublishBranch {
+            remote,
+            name,
+            branch,
+            expected_head,
+        } => ash_git::GitCommand::PublishBranch {
+            remote,
+            name,
+            branch,
+            expected_head,
+        },
         GitCommandDto::PushBranch {
             remote,
             remote_identity,

@@ -222,6 +222,7 @@ fn append_created_thread(
 ) {
     store
         .append_batch(&ThreadEventBatch {
+            history_index: None,
             history_prefixes: Vec::new(),
             batch_id: format!("thread-batch-{ordinal}"),
             thread_id: thread_id.clone(),
@@ -324,6 +325,7 @@ fn append_recent_activity_with_padding(
     record.execution_target = Some(target);
     store
         .append_batch(&ThreadEventBatch {
+            history_index: None,
             history_prefixes: Vec::new(),
             batch_id: format!("activity-{label}"),
             thread_id: thread.clone(),
@@ -637,6 +639,7 @@ fn sqlite_thread_store_recovers_typed_events() {
     SqliteThreadStore::open(&path)
         .unwrap()
         .append_batch(&ThreadEventBatch {
+            history_index: None,
             history_prefixes: Vec::new(),
             batch_id: "thread-batch-1".into(),
             thread_id: thread_id.clone(),
@@ -792,6 +795,7 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
         .unwrap();
     store
         .append_batch(&ThreadEventBatch {
+            history_index: None,
             history_prefixes: Vec::new(),
             batch_id: "advisor-batch".into(),
             thread_id: thread_id.clone(),
@@ -825,6 +829,7 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
     archived.archived_at_unix_ms = Some(2);
     store
         .append_batch(&ThreadEventBatch {
+            history_index: None,
             history_prefixes: Vec::new(),
             batch_id: "archive-batch".into(),
             thread_id: thread_id.clone(),
@@ -988,6 +993,7 @@ fn assert_session_catalog_fact_updates(
         record.execution_target = execution_target;
         store
             .append_batch(&ThreadEventBatch {
+                history_index: None,
                 history_prefixes: Vec::new(),
                 batch_id: format!("catalog-facts-{sequence}"),
                 thread_id: thread_id.clone(),
@@ -1148,6 +1154,14 @@ fn sqlite_session_catalog_follows_waiting_turn_model_migration_and_reopen() {
     );
     assert_eq!(after.turns[1].status, before.turns[1].status);
     assert_eq!(after.turns[1].model, Some(new.clone()));
+    assert_eq!(
+        store
+            .read_history_page(&thread_id, &latest_history_window(2))
+            .unwrap()
+            .unwrap()
+            .thread,
+        core_api::ThreadView::from(after.clone()).public_thread()
+    );
     let expected = session_from_catalog(after_catalog).unwrap();
     assert_eq!(expected.model, Some(new.clone()));
     assert_eq!(
@@ -1374,6 +1388,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
     let store = SqliteThreadStore::open(&path).unwrap();
     store
         .append_batch(&ThreadEventBatch {
+            history_index: None,
             history_prefixes: Vec::new(),
             batch_id: "thread-batch-1".into(),
             thread_id: thread_id.clone(),
@@ -1526,6 +1541,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
     let store = SqliteThreadStore::open(&path).unwrap();
     store
         .append_batch(&ThreadEventBatch {
+            history_index: None,
             history_prefixes: Vec::new(),
             batch_id: "batch-1".into(),
             thread_id: thread_id.clone(),
@@ -1535,6 +1551,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         })
         .unwrap();
     let stale = store.append_batch(&ThreadEventBatch {
+        history_index: None,
         history_prefixes: Vec::new(),
         batch_id: "batch-2".into(),
         thread_id: thread_id.clone(),
@@ -1581,6 +1598,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     let store = SqliteThreadStore::open(&path).unwrap();
     store
         .append_batch(&ThreadEventBatch {
+            history_index: None,
             history_prefixes: Vec::new(),
             batch_id: "batch-1".into(),
             thread_id: thread_id.clone(),
@@ -1740,4 +1758,400 @@ fn event_ranges_read_only_the_requested_committed_index_and_reject_gaps() {
         )
         .unwrap();
     assert!(store.load_range(&thread, 2, 3).is_err());
+}
+
+fn history_window_fixture(
+    path: &std::path::Path,
+    count: usize,
+) -> (
+    Arc<SqliteThreadStore>,
+    ThreadController,
+    ThreadId,
+    ash_protocol::Thread,
+) {
+    let store = Arc::new(SqliteThreadStore::open(path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    let thread_id = ThreadId::new("history-window").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            agent_id: ash_protocol::AgentId::new("history-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: SessionId::new(thread_id.as_str()).unwrap(),
+            thread_id: thread_id.clone(),
+            title: "History window".into(),
+            execution_target: None,
+        })
+        .unwrap();
+    for index in 0..count {
+        let turn = start_catalog_model_turn(
+            &threads,
+            &thread_id,
+            &format!("history-{index}"),
+            ModelRef::new(
+                ProviderId::new("test").unwrap(),
+                ModelId::new("test").unwrap(),
+            ),
+        );
+        threads
+            .complete_turn(
+                &thread_id,
+                &turn,
+                format!("Answer {index}: {}", "x".repeat(32 * 1024)),
+            )
+            .unwrap();
+    }
+    let expected =
+        core_api::ThreadView::from(threads.read_thread(&thread_id).unwrap()).public_thread();
+    (store, threads, thread_id, expected)
+}
+
+fn latest_history_window(limit: u32) -> ash_thread_store::ThreadHistoryWindow {
+    ash_thread_store::ThreadHistoryWindow::Latest {
+        turn_limit: std::num::NonZeroU32::new(limit).unwrap(),
+    }
+}
+
+#[test]
+fn history_window_cold_reads_and_reconnect_skip_unrequested_records() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("history-window.sqlite");
+    let (store, threads, thread_id, expected) = history_window_fixture(&path, 6);
+    let cursor = expected.sequence - 3;
+    let gap = store
+        .load_range(&thread_id, cursor, 3)
+        .unwrap()
+        .events
+        .into_iter()
+        .map(|record| ash_protocol::ThreadUpdateEnvelope {
+            session_id: expected.session_id.clone(),
+            thread_id: thread_id.clone(),
+            durable_sequence: record.sequence,
+            stream_cursor: None,
+            update: ash_protocol::ThreadUpdate::Committed {
+                event: record.event,
+            },
+        })
+        .collect::<Vec<_>>();
+    drop(threads);
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    // Both sources would fail decoding if the reader loaded the complete history before selecting.
+    connection.execute("UPDATE history_records SET record_json = 'invalid' WHERE digest = (SELECT record_digest FROM thread_events WHERE thread_id = ?1 AND sequence = 1)", [thread_id.as_str()]).unwrap();
+    connection.execute("UPDATE thread_history_turns SET turn_json = 'invalid' WHERE thread_id = ?1 AND ordinal = 0", [thread_id.as_str()]).unwrap();
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let cold = ThreadController::with_store(store.clone());
+    let page = cold
+        .read_thread_history(&thread_id, &latest_history_window(2))
+        .unwrap();
+    let mut latest = expected.clone();
+    latest.turns = expected.turns[4..].to_vec();
+    assert_eq!(page.thread, latest);
+    assert!(page.has_older_turns);
+    let older = cold
+        .read_thread_history(
+            &thread_id,
+            &ash_thread_store::ThreadHistoryWindow::Before {
+                turn_id: expected.turns[3].turn_id.clone(),
+                turn_limit: std::num::NonZeroU32::new(2).unwrap(),
+            },
+        )
+        .unwrap();
+    let mut previous = expected.clone();
+    previous.turns = expected.turns[1..3].to_vec();
+    assert_eq!(older.thread, previous);
+    assert!(older.has_older_turns);
+    assert_eq!(cold.thread_updates_after(&thread_id, cursor).unwrap(), gap);
+    assert!(
+        cold.thread_updates_after(&thread_id, expected.sequence + 1)
+            .is_err()
+    );
+    assert!(cold.read_thread(&thread_id).is_err());
+}
+
+#[test]
+fn history_window_repairs_missing_stale_and_damaged_indexes() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("history-repair.sqlite");
+    let (store, threads, thread_id, expected) = history_window_fixture(&path, 3);
+    drop(threads);
+    let mut latest = expected.clone();
+    latest.turns = expected.turns[1..].to_vec();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    for damage in [
+        "DELETE FROM thread_history_index WHERE thread_id = ?1",
+        "UPDATE thread_history_index SET sequence = 0 WHERE thread_id = ?1",
+        "UPDATE thread_history_index SET header_json = 'invalid' WHERE thread_id = ?1",
+        "UPDATE thread_history_turns SET turn_json = 'invalid' WHERE thread_id = ?1 AND ordinal = 2",
+    ] {
+        connection.execute(damage, [thread_id.as_str()]).unwrap();
+        let cold = ThreadController::with_store(store.clone());
+        assert_eq!(
+            cold.read_thread_history(&thread_id, &latest_history_window(2))
+                .unwrap()
+                .thread,
+            latest
+        );
+        assert_eq!(
+            store
+                .read_history_page(&thread_id, &latest_history_window(2))
+                .unwrap()
+                .unwrap()
+                .thread,
+            latest
+        );
+    }
+    let first = ThreadController::with_store(store.clone())
+        .read_thread_history(
+            &thread_id,
+            &ash_thread_store::ThreadHistoryWindow::Before {
+                turn_id: expected.turns[0].turn_id.clone(),
+                turn_limit: std::num::NonZeroU32::new(2).unwrap(),
+            },
+        )
+        .unwrap();
+    assert!(first.thread.turns.is_empty());
+    assert!(!first.has_older_turns);
+    assert!(matches!(
+        ThreadController::with_store(store.clone()).read_thread_history(
+            &thread_id,
+            &ash_thread_store::ThreadHistoryWindow::Before {
+                turn_id: TurnId::new("missing").unwrap(),
+                turn_limit: std::num::NonZeroU32::new(2).unwrap()
+            }
+        ),
+        Err(core_api::CoreError::InvalidInput(_))
+    ));
+}
+
+#[test]
+fn history_window_retains_live_interactions_outside_an_older_page() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("history-interaction.sqlite");
+    let (store, threads, thread_id, _) = history_window_fixture(&path, 2);
+    let turn = start_catalog_model_turn(
+        &threads,
+        &thread_id,
+        "waiting",
+        ModelRef::new(
+            ProviderId::new("test").unwrap(),
+            ModelId::new("test").unwrap(),
+        ),
+    );
+    threads
+        .request_turn_interaction(
+            &thread_id,
+            &turn,
+            RequestTurnInteraction {
+                request_id: ash_protocol::RequestId::new("history-question").unwrap(),
+                item_id: None,
+                request: ash_protocol::AgentRequest::UserInput {
+                    request: ash_protocol::RequestUserInput {
+                        questions: vec![ash_protocol::UserInputQuestion {
+                            id: "continue".into(),
+                            header: "Continue".into(),
+                            question: "Continue?".into(),
+                            options: Vec::new(),
+                            allow_free_form: true,
+                        }],
+                    },
+                },
+                deadline: None,
+            },
+        )
+        .unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    let expected = ash_protocol::AgentRequestEnvelope {
+        session_id: snapshot.session_id.clone(),
+        thread_id: thread_id.clone(),
+        turn_id: turn.clone(),
+        interaction: snapshot
+            .turns
+            .last()
+            .unwrap()
+            .pending_interaction
+            .clone()
+            .unwrap(),
+    };
+    drop(threads);
+    let cold = ThreadController::with_store(store);
+    let page = cold
+        .read_thread_history(
+            &thread_id,
+            &ash_thread_store::ThreadHistoryWindow::Before {
+                turn_id: turn,
+                turn_limit: std::num::NonZeroU32::new(1).unwrap(),
+            },
+        )
+        .unwrap();
+    assert_eq!(page.thread.turns.len(), 1);
+    assert_eq!(
+        page.thread.turns[0].status,
+        ash_protocol::TurnStatus::Completed
+    );
+    assert_eq!(page.pending_interactions, vec![expected]);
+}
+
+#[test]
+fn history_window_fork_index_survives_source_deletion() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("history-fork.sqlite");
+    let (store, threads, thread_id, _) = history_window_fixture(&path, 4);
+    let fork = threads
+        .fork_session(
+            &ash_core::NoThreadWorktreeBinder,
+            core_api::ForkThreadRequest {
+                command_id: ash_protocol::CommandId::new("history-fork").unwrap(),
+                source_thread_id: thread_id.clone(),
+                title: "Fork".into(),
+            },
+        )
+        .unwrap();
+    let mut expected = core_api::ThreadView::from(fork.clone()).public_thread();
+    expected.turns = expected.turns[2..].to_vec();
+    threads.archive_thread(&thread_id).unwrap();
+    threads
+        .delete_session_threads(&SessionId::new(thread_id.as_str()).unwrap())
+        .unwrap();
+    drop(threads);
+    drop(store);
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let cold = ThreadController::with_store(store.clone());
+    assert_eq!(
+        cold.read_thread_history(&fork.thread_id, &latest_history_window(2))
+            .unwrap()
+            .thread,
+        expected
+    );
+    assert_eq!(store.history_index_sequence(&thread_id).unwrap(), None);
+}
+
+#[test]
+fn history_window_index_failure_rolls_back_the_event_commit() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("history-index-atomic.sqlite");
+    let (store, threads, thread_id, expected) = history_window_fixture(&path, 2);
+    let events = store.load(&thread_id).unwrap();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection.execute_batch("CREATE TRIGGER reject_history_index BEFORE UPDATE ON thread_history_index BEGIN SELECT RAISE(ABORT, 'forced history index failure'); END;").unwrap();
+    assert!(threads.archive_thread(&thread_id).is_err());
+    assert_eq!(store.load(&thread_id).unwrap(), events);
+    assert_eq!(
+        core_api::ThreadView::from(threads.read_thread(&thread_id).unwrap()).public_thread(),
+        expected
+    );
+    assert_eq!(
+        store
+            .read_history_page(&thread_id, &latest_history_window(2))
+            .unwrap()
+            .unwrap()
+            .thread,
+        expected
+    );
+    connection
+        .execute_batch("DROP TRIGGER reject_history_index")
+        .unwrap();
+    let archived = threads.archive_thread(&thread_id).unwrap();
+    let page = store
+        .read_history_page(&thread_id, &latest_history_window(2))
+        .unwrap()
+        .unwrap();
+    assert_eq!(page.thread.sequence, archived.sequence);
+    assert_eq!(page.thread.status, ThreadStatus::Archived);
+}
+
+#[test]
+fn history_window_metadata_updates_do_not_rewrite_existing_message_bodies() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("history-incremental.sqlite");
+    let (store, threads, thread_id, _) = history_window_fixture(&path, 1);
+    let turn = start_catalog_model_turn(
+        &threads,
+        &thread_id,
+        "plan-update",
+        ModelRef::new(
+            ProviderId::new("test").unwrap(),
+            ModelId::new("test").unwrap(),
+        ),
+    );
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection.execute_batch("CREATE TRIGGER reject_old_item_rewrite BEFORE UPDATE ON thread_history_items BEGIN SELECT RAISE(ABORT, 'old item was rewritten'); END; CREATE TRIGGER reject_old_item_delete BEFORE DELETE ON thread_history_items BEGIN SELECT RAISE(ABORT, 'old item was deleted'); END;").unwrap();
+    threads
+        .update_plan(
+            &thread_id,
+            &turn,
+            ash_protocol::PlanUpdate {
+                explanation: None,
+                steps: vec![ash_protocol::PlanStep {
+                    step: "Continue".into(),
+                    status: ash_protocol::PlanStepStatus::InProgress,
+                }],
+            },
+        )
+        .unwrap();
+    threads
+        .complete_turn(&thread_id, &turn, "Final answer".into())
+        .unwrap();
+    let expected =
+        core_api::ThreadView::from(threads.read_thread(&thread_id).unwrap()).public_thread();
+    assert_eq!(
+        store
+            .read_history_page(&thread_id, &latest_history_window(2))
+            .unwrap()
+            .unwrap()
+            .thread,
+        expected
+    );
+    // Keep the count and row present but change the body; a subsequent metadata write must not read or repair it.
+    connection.execute("UPDATE thread_history_items SET item_json = 'invalid' WHERE thread_id = ?1 AND turn_id = ?2 AND ordinal = 0",
+        rusqlite::params![thread_id.as_str(), expected.turns[0].turn_id.as_str()]).unwrap_err();
+    connection
+        .execute_batch("DROP TRIGGER reject_old_item_rewrite; DROP TRIGGER reject_old_item_delete")
+        .unwrap();
+    connection.execute("UPDATE thread_history_items SET item_json = 'invalid' WHERE thread_id = ?1 AND turn_id = ?2 AND ordinal = 0",
+        rusqlite::params![thread_id.as_str(), expected.turns[0].turn_id.as_str()]).unwrap();
+    threads.archive_thread(&thread_id).unwrap();
+    let body: String = connection.query_row("SELECT item_json FROM thread_history_items WHERE thread_id = ?1 AND turn_id = ?2 AND ordinal = 0",
+        rusqlite::params![thread_id.as_str(), expected.turns[0].turn_id.as_str()], |row| row.get(0)).unwrap();
+    assert_eq!(body, "invalid");
+    let rebuilt = threads
+        .read_thread_history(&thread_id, &latest_history_window(2))
+        .unwrap();
+    assert_eq!(rebuilt.thread.status, ThreadStatus::Archived);
+    assert_eq!(rebuilt.thread.turns, expected.turns);
+}
+
+#[test]
+fn history_window_cache_encoding_upgrade_preserves_canonical_events() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("history-cache-upgrade.sqlite");
+    let (store, threads, thread_id, expected) = history_window_fixture(&path, 2);
+    let events = store.load(&thread_id).unwrap();
+    drop(threads);
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "UPDATE ash_schema_migrations SET version = 1 WHERE component = 'thread-history-index'",
+            [],
+        )
+        .unwrap();
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    assert_eq!(store.history_index_sequence(&thread_id).unwrap(), None);
+    assert_eq!(store.load(&thread_id).unwrap(), events);
+    assert_eq!(
+        ThreadController::with_store(store.clone())
+            .read_thread_history(&thread_id, &latest_history_window(2))
+            .unwrap()
+            .thread,
+        expected
+    );
+    let version: i64 = connection
+        .query_row(
+            "SELECT version FROM ash_schema_migrations WHERE component = 'thread-history-index'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, 2);
 }

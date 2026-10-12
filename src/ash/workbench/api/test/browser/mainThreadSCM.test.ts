@@ -162,7 +162,7 @@ test('SCM bridge forwards reference-only HEAD moves once without invalidating hi
 
 test('SCM bridges advertised reference filters, upstream changes and immutable binary bytes', async () => {
 	const ref = { id: 'remoteBranch:origin/main', name: 'origin/main', revision: 'remote', category: 'remoteBranch' };
-	const snapshot = { ...(provider() as Record<string, JsonValue>), hasHistory: true, hasHistoryItemRefs: true, hasHistoryMergeBase: true, historyRemoteRef: ref };
+	const snapshot = { ...(provider() as Record<string, JsonValue>), hasHistory: true, hasHistoryItemRefs: true, hasHistoryMergeBase: true, historyRemoteRef: ref, historyBaseRef: { ...ref, id: 'remoteBranch:origin/base', name: 'origin/base' } };
 	const calls: Array<Record<string, JsonValue>> = [];
 	let bytes: JsonValue = [0, 1, 255];
 	const value = fixture(async request => {
@@ -182,10 +182,16 @@ test('SCM bridges advertised reference filters, upstream changes and immutable b
 	assert.equal(await history.resolveHistoryItemRefsCommonAncestor!(['head', 'remote']), 'base');
 	assert.deepEqual(calls.at(-1)!.arguments, [['head', 'remote']]);
 	assert.equal(history.historyItemRemoteRef!.get()!.revision, 'remote');
+	assert.equal(history.historyItemBaseRef!.get()!.name, 'origin/base');
+	let baseChanges = 0;
+	using baseListener = history.historyItemBaseRef!.onDidChange(() => baseChanges++);
 	let upstreamChanges = 0;
 	using listener = history.historyItemRemoteRef!.onDidChange(() => upstreamChanges++);
 	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, historyRemoteRef: { ...ref, revision: 'new-remote' } }]);
 	assert.equal(upstreamChanges, 1);
+	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, historyBaseRef: { ...ref, id: 'remoteBranch:origin/release', name: 'origin/release' } }]);
+	assert.equal(baseChanges, 1);
+	assert.equal(history.historyItemBaseRef!.get()!.name, 'origin/release');
 	const change = { uri: URI.parse('git:/image.bin'), path: 'image.bin', status: 'modified' };
 	const result = await history.resolveHistoryItemChangeContents('head', change);
 	assert.deepEqual(result.original, { kind: 'binary', bytes: new Uint8Array([0, 1, 255]) });

@@ -34,7 +34,8 @@ pub struct SqliteThreadStore {
 impl SqliteThreadStore {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self, ThreadStoreError> {
         let path = path.into();
-        let connection = open(&path).map_err(ThreadStoreError::Storage)?;
+        let mut connection = open(&path).map_err(ThreadStoreError::Storage)?;
+        super::thread_history::create_schema(&mut connection)?;
         let catalog_connection = open(&path).map_err(ThreadStoreError::Storage)?;
         Ok(Self {
             path,
@@ -86,6 +87,52 @@ impl SqliteThreadStore {
 }
 
 impl ThreadStore for SqliteThreadStore {
+    fn history_index_sequence(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Option<u64>, ThreadStoreError> {
+        let connection = self.connection()?;
+        super::thread_history::sequence(&connection, thread_id)
+    }
+    fn read_history_page(
+        &self,
+        thread_id: &ThreadId,
+        window: &ash_thread_store::ThreadHistoryWindow,
+    ) -> Result<Option<ash_thread_store::ThreadHistoryPage>, ThreadStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(storage_error)?;
+        let result = super::thread_history::read(&transaction, thread_id, window)?;
+        transaction.commit().map_err(storage_error)?;
+        Ok(result)
+    }
+    fn backfill_history_index(
+        &self,
+        index: &ash_thread_store::ThreadHistoryIndexUpdate,
+    ) -> Result<(), ThreadStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        let actual = transaction
+            .query_row(
+                "SELECT current_sequence FROM thread_streams WHERE thread_id = ?1",
+                [index.thread.thread_id.as_str()],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(storage_error)?;
+        let actual = from_sql_integer(actual).map_err(storage_error)?;
+        if actual != index.thread.sequence {
+            return Err(ThreadStoreError::SequenceConflict {
+                expected: index.thread.sequence,
+                actual,
+            });
+        }
+        super::thread_history::write(&transaction, index, actual)?;
+        transaction.commit().map_err(storage_error)
+    }
+
     fn recent_tool_calls(
         &self,
         query: &ash_thread_store::RecentToolCallsQuery,
@@ -780,6 +827,9 @@ impl ThreadStore for SqliteThreadStore {
             });
         }
         let session_changed = session_list_changed(&transaction, &batch.catalog)?;
+        if let Some(index) = &batch.history_index {
+            super::thread_history::write(&transaction, index, batch.expected_sequence)?;
+        }
         write_catalog(&transaction, &batch.catalog)?;
         if session_changed {
             write_session_catalog(&transaction, &batch.catalog.session_id)?;

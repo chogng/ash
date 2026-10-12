@@ -39,6 +39,7 @@ use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdate;
 use ash_protocol::ThreadUpdateEnvelope;
+use ash_protocol::TurnId;
 use ash_thread_transcript::ThreadTranscriptChange;
 use ash_thread_transcript::ThreadTranscriptEntry;
 use ash_thread_transcript::ThreadTranscriptUpdateEnvelope;
@@ -86,8 +87,32 @@ struct BrokerState {
     session_scopes: BTreeMap<SessionId, u64>,
     interaction_assignments: BTreeMap<RequestId, u64>,
     pending_interactions: BTreeMap<RequestId, AgentRequestEnvelope>,
+    interaction_versions: BTreeMap<(ThreadId, TurnId), InteractionDeliveryVersion>,
+    next_subscription_ticket: u64,
     // Login IDs belong to a directory service; connections are profile-wide.
     login_owners: BTreeMap<(u64, String), u64>,
+}
+
+struct InteractionDeliveryVersion {
+    session_id: SessionId,
+    sequence: u64,
+    status: InteractionDeliveryStatus,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+enum InteractionDeliveryStatus {
+    Pending(RequestId),
+    Retired(RequestId),
+    TurnEnded,
+}
+
+impl InteractionDeliveryStatus {
+    fn matches_request(&self, id: &RequestId) -> bool {
+        match self {
+            Self::Pending(request_id) | Self::Retired(request_id) => request_id == id,
+            Self::TurnEnded => false,
+        }
+    }
 }
 
 struct Subscriber {
@@ -105,6 +130,59 @@ struct Subscriber {
 struct ThreadSubscription {
     sequence: u64,
     session_owners: BTreeSet<SessionId>,
+    pending: BTreeMap<u64, PendingSubscription>,
+}
+
+struct PendingSubscription {
+    session_id: SessionId,
+    delivery: SubscriptionDelivery,
+}
+
+enum SubscriptionDelivery {
+    Active,
+    Buffered(NotificationQueue),
+}
+
+pub(super) struct ThreadSubscriptionRegistration {
+    state: Arc<Mutex<BrokerState>>,
+    connection_id: u64,
+    thread_id: ThreadId,
+    ticket: u64,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum ThreadSubscriptionScope {
+    Thread,
+    Session,
+}
+
+impl Drop for ThreadSubscriptionRegistration {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&self.connection_id)
+            && let Some(subscription) = subscriber.threads.get_mut(&self.thread_id)
+        {
+            subscription.pending.remove(&self.ticket);
+            if subscription.session_owners.is_empty() && subscription.pending.is_empty() {
+                subscriber.threads.remove(&self.thread_id);
+            }
+        }
+    }
+}
+
+impl ThreadSubscription {
+    fn publish(&self, session_id: &SessionId, value: Value, queue: &NotificationQueue) {
+        if self.session_owners.contains(session_id) {
+            queue.push(value.clone());
+        }
+        for pending in self.pending.values() {
+            if &pending.session_id == session_id
+                && let SubscriptionDelivery::Buffered(buffer) = &pending.delivery
+            {
+                buffer.push(value.clone());
+            }
+        }
+    }
 }
 
 impl Default for UpdateBroker {
@@ -297,8 +375,18 @@ impl UpdateBroker {
         }
     }
 
-    pub(super) fn offer_agent_request(&self, request: AgentRequestEnvelope) {
+    pub(super) fn offer_agent_request(&self, request: AgentRequestEnvelope, sequence: u64) {
         if let Ok(mut state) = self.state.lock() {
+            if !record_interaction_version(
+                &mut state,
+                &request.session_id,
+                &request.thread_id,
+                &request.turn_id,
+                sequence,
+                InteractionDeliveryStatus::Pending(request.interaction.request_id.clone()),
+            ) {
+                return;
+            }
             state
                 .pending_interactions
                 .insert(request.interaction.request_id.clone(), request);
@@ -352,8 +440,7 @@ impl UpdateBroker {
 
     pub(super) fn retire_agent_request(&self, request_id: &RequestId) {
         if let Ok(mut state) = self.state.lock() {
-            state.pending_interactions.remove(request_id);
-            state.interaction_assignments.remove(request_id);
+            retire_interaction_delivery(&mut state, request_id);
         }
     }
 
@@ -441,7 +528,10 @@ impl UpdateBroker {
             subscriber.sessions.remove(session_id);
             subscriber.threads.retain(|_, subscription| {
                 subscription.session_owners.remove(session_id);
-                !subscription.session_owners.is_empty()
+                subscription
+                    .pending
+                    .retain(|_, pending| &pending.session_id != session_id);
+                !subscription.session_owners.is_empty() || !subscription.pending.is_empty()
             });
             let lost = take_owned_dynamic_interactions(&mut state, connection_id, |request| {
                 &request.session_id == session_id
@@ -455,6 +545,9 @@ impl UpdateBroker {
     pub(super) fn forget_session(&self, session_id: &SessionId) {
         if let Ok(mut state) = self.state.lock() {
             state.session_scopes.remove(session_id);
+            state
+                .interaction_versions
+                .retain(|_, version| &version.session_id != session_id);
             let request_ids = state
                 .pending_interactions
                 .iter()
@@ -469,7 +562,10 @@ impl UpdateBroker {
                 subscriber.sessions.remove(session_id);
                 subscriber.threads.retain(|_, subscription| {
                     subscription.session_owners.remove(session_id);
-                    !subscription.session_owners.is_empty()
+                    subscription
+                        .pending
+                        .retain(|_, pending| &pending.session_id != session_id);
+                    !subscription.session_owners.is_empty() || !subscription.pending.is_empty()
                 });
             }
             reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
@@ -549,6 +645,97 @@ impl UpdateBroker {
         false
     }
 
+    pub(super) fn begin_session_thread_subscription(
+        &self,
+        connection_id: u64,
+        session_id: SessionId,
+        thread_id: ThreadId,
+    ) -> Option<ThreadSubscriptionRegistration> {
+        let mut state = self.state.lock().ok()?;
+        let ticket = state.next_subscription_ticket;
+        state.next_subscription_ticket = ticket.checked_add(1)?;
+        let subscriber = state.subscribers.get_mut(&connection_id)?;
+        let queue = subscriber.queue.upgrade()?;
+        let subscription = subscriber.threads.entry(thread_id.clone()).or_default();
+        let delivery = if subscription.session_owners.contains(&session_id) {
+            SubscriptionDelivery::Active
+        } else {
+            SubscriptionDelivery::Buffered(queue.buffer())
+        };
+        subscription.pending.insert(
+            ticket,
+            PendingSubscription {
+                session_id,
+                delivery,
+            },
+        );
+        Some(ThreadSubscriptionRegistration {
+            state: Arc::clone(&self.state),
+            connection_id,
+            thread_id,
+            ticket,
+        })
+    }
+
+    pub(super) fn commit_session_thread_subscription(
+        &self,
+        registration: ThreadSubscriptionRegistration,
+        sequence: u64,
+        transcript_revision: u64,
+        scope: ThreadSubscriptionScope,
+    ) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        let Some(subscriber) = state.subscribers.get_mut(&registration.connection_id) else {
+            return;
+        };
+        let Some(queue) = subscriber.queue.upgrade() else {
+            return;
+        };
+        let Some(subscription) = subscriber.threads.get_mut(&registration.thread_id) else {
+            return;
+        };
+        let Some(pending) = subscription.pending.remove(&registration.ticket) else {
+            return;
+        };
+        if scope == ThreadSubscriptionScope::Session {
+            subscriber.sessions.insert(pending.session_id.clone());
+        }
+        match pending.delivery {
+            SubscriptionDelivery::Active => {
+                if subscription.session_owners.contains(&pending.session_id) {
+                    subscription.sequence = subscription.sequence.max(sequence);
+                }
+            }
+            SubscriptionDelivery::Buffered(buffer) => {
+                subscription.sequence = subscription.sequence.max(sequence);
+                if subscription.session_owners.insert(pending.session_id) {
+                    let mut delivered_sequence = sequence;
+                    buffer.forward_to(&queue, |value| {
+                        if value["method"] == "session/thread/transcript/update" {
+                            return value["params"]["revision"]
+                                .as_u64()
+                                .is_some_and(|revision| revision > transcript_revision);
+                        }
+                        if value["params"]["update"]["type"] == "committed" {
+                            let cursor = value["params"]["durableSequence"]
+                                .as_u64()
+                                .unwrap_or_default();
+                            delivered_sequence = delivered_sequence.max(cursor);
+                            return cursor > sequence;
+                        }
+                        true
+                    });
+                    subscription.sequence = subscription.sequence.max(delivered_sequence);
+                }
+            }
+        }
+        reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
+        // Registration Drop takes the same lock to discard failed subscriptions.
+        drop(state);
+    }
+
     pub(super) fn unsubscribe_session_thread(
         &self,
         connection_id: u64,
@@ -560,7 +747,10 @@ impl UpdateBroker {
         {
             if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
                 subscription.session_owners.remove(session_id);
-                if subscription.session_owners.is_empty() {
+                subscription
+                    .pending
+                    .retain(|_, pending| &pending.session_id != session_id);
+                if subscription.session_owners.is_empty() && subscription.pending.is_empty() {
                     subscriber.threads.remove(thread_id);
                 }
             }
@@ -616,6 +806,16 @@ impl UpdateBroker {
                     interaction,
                     ..
                 } => {
+                    if !record_interaction_version(
+                        &mut state,
+                        &update.session_id,
+                        &update.thread_id,
+                        turn_id,
+                        update.durable_sequence,
+                        InteractionDeliveryStatus::Pending(interaction.request_id.clone()),
+                    ) {
+                        continue;
+                    }
                     state.pending_interactions.insert(
                         interaction.request_id.clone(),
                         AgentRequestEnvelope {
@@ -626,12 +826,40 @@ impl UpdateBroker {
                         },
                     );
                 }
-                ThreadEvent::InteractionResolved { request_id, .. } => {
-                    state.pending_interactions.remove(request_id);
+                ThreadEvent::InteractionResolved {
+                    turn_id,
+                    request_id,
+                    ..
                 }
-                ThreadEvent::InteractionCancelled { request_id, .. } => {
+                | ThreadEvent::InteractionCancelled {
+                    turn_id,
+                    request_id,
+                    ..
+                } => {
+                    if !record_interaction_version(
+                        &mut state,
+                        &update.session_id,
+                        &update.thread_id,
+                        turn_id,
+                        update.durable_sequence,
+                        InteractionDeliveryStatus::Retired(request_id.clone()),
+                    ) {
+                        continue;
+                    }
                     state.pending_interactions.remove(request_id);
                     state.interaction_assignments.remove(request_id);
+                }
+                ThreadEvent::TurnCompleted { turn_id, .. }
+                | ThreadEvent::TurnFailed { turn_id, .. }
+                | ThreadEvent::TurnInterrupted { turn_id, .. } => {
+                    record_interaction_version(
+                        &mut state,
+                        &update.session_id,
+                        &update.thread_id,
+                        turn_id,
+                        update.durable_sequence,
+                        InteractionDeliveryStatus::TurnEnded,
+                    );
                 }
                 _ => {}
             }
@@ -641,18 +869,20 @@ impl UpdateBroker {
                 return false;
             };
             if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
-                let session_pending = updates
+                for update in updates
                     .iter()
                     .filter(|update| update.durable_sequence > subscription.sequence)
-                    .map(|update| {
-                        notification(ServerNotificationMethod::SessionThreadUpdate, update)
-                    })
-                    .collect::<Vec<_>>();
-                if let Some(last) = updates.last() {
-                    subscription.sequence = subscription.sequence.max(last.durable_sequence);
+                {
+                    subscription.publish(
+                        &update.session_id,
+                        notification(ServerNotificationMethod::SessionThreadUpdate, update),
+                        &queue,
+                    );
                 }
-                if !subscription.session_owners.is_empty() {
-                    queue.extend(session_pending);
+                if !subscription.session_owners.is_empty()
+                    && let Some(last) = updates.last()
+                {
+                    subscription.sequence = subscription.sequence.max(last.durable_sequence);
                 }
             }
             for (session_id, agent_tree_changed) in &sessions_with_catalog_change {
@@ -744,13 +974,15 @@ impl UpdateBroker {
             let Some(subscription) = subscriber.threads.get(&update.thread_id) else {
                 return true;
             };
-            if !subscription.session_owners.is_empty() {
-                queue.push(notification(
+            subscription.publish(
+                &update.session_id,
+                notification(
                     ServerNotificationMethod::SessionThreadTranscriptUpdate,
                     update,
-                ));
-                delivered = true;
-            }
+                ),
+                &queue,
+            );
+            delivered |= subscription.session_owners.contains(&update.session_id);
             true
         });
         drop(state);
@@ -1173,12 +1405,11 @@ impl UpdateBroker {
             let Some(subscription) = subscriber.threads.get(&update.thread_id) else {
                 return true;
             };
-            if !subscription.session_owners.is_empty() {
-                queue.push(notification(
-                    ServerNotificationMethod::SessionThreadUpdate,
-                    update,
-                ));
-            }
+            subscription.publish(
+                &update.session_id,
+                notification(ServerNotificationMethod::SessionThreadUpdate, update),
+                &queue,
+            );
             true
         });
     }
@@ -1245,6 +1476,70 @@ fn hex_bytes(bytes: &[u8]) -> String {
     encoded
 }
 
+// One watermark per Turn is enough because Core admits only one pending interaction per Turn.
+// Retired identities also reject snapshots read before cancellation or connection cleanup.
+fn record_interaction_version(
+    state: &mut BrokerState,
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+    turn_id: &TurnId,
+    sequence: u64,
+    status: InteractionDeliveryStatus,
+) -> bool {
+    let key = (thread_id.clone(), turn_id.clone());
+    if state.interaction_versions.get(&key).is_some_and(|version| {
+        version.sequence >= sequence
+            || version.status == InteractionDeliveryStatus::TurnEnded
+            || matches!((&status, &version.status),
+                (InteractionDeliveryStatus::Pending(id), InteractionDeliveryStatus::Retired(retired)) if id == retired)
+    }) {
+        return false;
+    }
+    state.interaction_versions.insert(
+        key,
+        InteractionDeliveryVersion {
+            session_id: session_id.clone(),
+            sequence,
+            status: status.clone(),
+        },
+    );
+    let stale = state
+        .pending_interactions
+        .iter()
+        .filter_map(|(id, request)| {
+            (&request.thread_id == thread_id
+                && &request.turn_id == turn_id
+                && match &status {
+                    InteractionDeliveryStatus::Pending(request_id) => id != request_id,
+                    InteractionDeliveryStatus::Retired(_)
+                    | InteractionDeliveryStatus::TurnEnded => true,
+                })
+            .then(|| id.clone())
+        })
+        .collect::<Vec<_>>();
+    for id in stale {
+        state.pending_interactions.remove(&id);
+        state.interaction_assignments.remove(&id);
+    }
+    true
+}
+
+fn retire_interaction_delivery(
+    state: &mut BrokerState,
+    request_id: &RequestId,
+) -> Option<AgentRequestEnvelope> {
+    state.interaction_assignments.remove(request_id);
+    let request = state.pending_interactions.remove(request_id)?;
+    if let Some(version) = state
+        .interaction_versions
+        .get_mut(&(request.thread_id.clone(), request.turn_id.clone()))
+        && version.status.matches_request(request_id)
+    {
+        version.status = InteractionDeliveryStatus::Retired(request_id.clone());
+    }
+    Some(request)
+}
+
 fn take_owned_dynamic_interactions(
     state: &mut BrokerState,
     connection_id: u64,
@@ -1267,10 +1562,7 @@ fn take_owned_dynamic_interactions(
         .collect::<Vec<_>>();
     request_ids
         .into_iter()
-        .filter_map(|request_id| {
-            state.interaction_assignments.remove(&request_id);
-            state.pending_interactions.remove(&request_id)
-        })
+        .filter_map(|request_id| retire_interaction_delivery(state, &request_id))
         .collect()
 }
 
@@ -1331,7 +1623,9 @@ fn reconcile_interaction_assignments(
         .interaction_assignments
         .iter()
         .filter_map(|(request_id, connection_id)| {
-            let request = state.pending_interactions.get(request_id)?;
+            let Some(request) = state.pending_interactions.get(request_id) else {
+                return Some(request_id.clone());
+            };
             let required_scope = state.session_scopes.get(&request.session_id).copied();
             let valid = state
                 .subscribers
@@ -1356,6 +1650,13 @@ fn reconcile_interaction_assignments(
         let Some(request) = state.pending_interactions.get(&request_id) else {
             continue;
         };
+        if request
+            .interaction
+            .deadline
+            .is_some_and(|deadline| deadline.expires_at_unix_ms <= unix_time_millis())
+        {
+            continue;
+        }
         let required_scope = state.session_scopes.get(&request.session_id).copied();
         let owner = state
             .subscribers

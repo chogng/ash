@@ -128,6 +128,32 @@ fn queue_with_bytes(limit: usize) -> NotificationQueue {
 }
 
 #[test]
+fn subscription_buffers_share_capacity_and_move_message_leases_on_commit() {
+    let value =
+        serde_json::json!({"method":"session/thread/update","params":{"durableSequence":1}});
+    let size = serialized_value_bytes(&value);
+    let queue = queue_with_bytes(size * 2);
+    let budget = queue.inner.state.lock().unwrap().budget.clone();
+    let buffer = queue.buffer();
+    buffer.push(value.clone());
+    assert!(budget.try_reserve(size * 2).is_none());
+    buffer.forward_to(&queue, |_| true);
+    assert!(budget.try_reserve(size).is_some());
+    assert!(budget.try_reserve(size * 2).is_none());
+    assert_eq!(queue.drain(), vec![value.clone()]);
+    assert!(budget.try_reserve(size * 2).is_some());
+    let rolled_back = queue.buffer();
+    rolled_back.push(value.clone());
+    drop(rolled_back);
+    assert!(budget.try_reserve(size * 2).is_some());
+    let filtered = queue.buffer();
+    filtered.push(value);
+    filtered.forward_to(&queue, |_| false);
+    assert!(budget.try_reserve(size * 2).is_some());
+    assert!(queue.drain().is_empty());
+}
+
+#[test]
 fn byte_overflow_prunes_transcript_updates_and_preserves_the_reset_and_durable_event() {
     let transient = serde_json::json!({"method":"session/thread/transcript/update","params":{"sessionId":"session-1","threadId":"thread-1","durableSequence":7,"revision":9,"streamCursor":{"sequence":1},"changes":[{"type":"upsert","text":"x".repeat(1024)}]}});
     let queue = queue_with_bytes(serialized_value_bytes(&transient));

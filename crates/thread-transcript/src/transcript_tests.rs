@@ -416,7 +416,10 @@ fn snapshot_includes_current_transient_entries_for_late_consumers() {
         ),
     );
     let snapshot = accumulator
-        .snapshot(&empty_thread())
+        .snapshot(&thread_with_turn(
+            turn_id(),
+            ash_protocol::TurnStatus::Running,
+        ))
         .expect("matching Thread scope");
 
     assert_eq!(snapshot.revision, 1);
@@ -429,6 +432,163 @@ fn snapshot_includes_current_transient_entries_for_late_consumers() {
             ..
         } if text == "in progress"
     ));
+}
+
+#[test]
+fn snapshot_transients_follow_visible_live_turns() {
+    use ash_protocol::TurnStatus;
+    for status in [
+        TurnStatus::Created,
+        TurnStatus::Running,
+        TurnStatus::WaitingForApproval,
+        TurnStatus::WaitingForUserInput,
+        TurnStatus::WaitingForCapability,
+        TurnStatus::Cancelling,
+        TurnStatus::Completed,
+        TurnStatus::Failed,
+        TurnStatus::Interrupted,
+    ] {
+        let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+        let visible_turn_id = TurnId::new("visible-turn").unwrap();
+        for (sequence, id) in [(1, turn_id()), (2, visible_turn_id.clone())] {
+            apply(
+                &mut accumulator,
+                transient(
+                    sequence,
+                    ThreadUpdate::ItemDelta {
+                        turn_id: id,
+                        item_id: item_id(&format!("item-{sequence}")),
+                        delta: ItemDelta::AgentMessage {
+                            text: "streaming".into(),
+                        },
+                    },
+                ),
+            );
+        }
+        let page = thread_with_turn(visible_turn_id.clone(), status);
+        let snapshot = accumulator.snapshot(&page).unwrap();
+        let terminal = matches!(
+            status,
+            TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+        );
+        assert_eq!(snapshot.entries.len(), usize::from(!terminal), "{status:?}");
+        assert!(
+            snapshot
+                .entries
+                .iter()
+                .all(|entry| entry.turn_id() == &visible_turn_id)
+        );
+        assert!(
+            accumulator
+                .snapshot(&empty_thread())
+                .unwrap()
+                .entries
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn snapshot_excludes_items_and_tool_output_already_committed_in_durable_state() {
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    let call_id = ToolCallId::new("completed-call").unwrap();
+    let pending_call_id = ToolCallId::new("pending-call").unwrap();
+    for (sequence, update) in [
+        (
+            1,
+            ThreadUpdate::ItemDelta {
+                turn_id: turn_id(),
+                item_id: item_id("message"),
+                delta: ItemDelta::AgentMessage {
+                    text: "partial".into(),
+                },
+            },
+        ),
+        (
+            2,
+            ThreadUpdate::ItemDelta {
+                turn_id: turn_id(),
+                item_id: item_id("reasoning"),
+                delta: ItemDelta::Reasoning {
+                    text: "stale reasoning".into(),
+                },
+            },
+        ),
+        (
+            3,
+            ThreadUpdate::ToolOutputDelta {
+                turn_id: turn_id(),
+                tool_call_id: call_id.clone(),
+                stream: ToolOutputStream::Stdout,
+                text: "partial tool output".into(),
+            },
+        ),
+        (
+            4,
+            ThreadUpdate::ToolOutputDelta {
+                turn_id: turn_id(),
+                tool_call_id: pending_call_id.clone(),
+                stream: ToolOutputStream::Stderr,
+                text: "live tool output".into(),
+            },
+        ),
+    ] {
+        apply(&mut accumulator, transient(sequence, update));
+    }
+    let mut thread = thread_with_turn(turn_id(), ash_protocol::TurnStatus::Running);
+    thread.sequence = 10;
+    thread.turns[0].items = vec![
+        agent_item("message", "final"),
+        ThreadItem::Reasoning {
+            item_id: item_id("reasoning"),
+            turn_id: turn_id(),
+            text: String::new(),
+            state: Vec::new(),
+        },
+        ThreadItem::ToolResult {
+            item_id: item_id("result"),
+            turn_id: turn_id(),
+            tool_call_id: call_id,
+            text: "final tool output".into(),
+            content: None,
+            is_error: false,
+        },
+    ];
+    // The canonical snapshot has advanced before the accumulator receives the completion events.
+    let snapshot = accumulator.snapshot(&thread).unwrap();
+    assert_eq!(snapshot.entries.len(), 3);
+    assert!(matches!(&snapshot.entries[0], ThreadTranscriptEntry::Item {
+        item: ThreadItem::AgentMessage { text, .. }, transient: false, ..
+    } if text == "final"));
+    assert!(
+        matches!(&snapshot.entries[2], ThreadTranscriptEntry::ToolOutput {
+        tool_call_id, text, ..
+    } if tool_call_id == &pending_call_id && text == "live tool output")
+    );
+}
+
+fn thread_with_turn(id: TurnId, status: ash_protocol::TurnStatus) -> Thread {
+    let mut thread = empty_thread();
+    thread.turns.push(ash_protocol::Turn {
+        turn_id: id,
+        status,
+        mode: ash_protocol::CollaborationMode::Agent,
+        advisor: None,
+        kind: ash_protocol::TurnKind::Coding,
+        instructions: None,
+        model: None,
+        reasoning_effort: None,
+        tool_profile: None,
+        tool_mode: ash_protocol::ToolMode::Direct,
+        approval_mode: ash_protocol::ApprovalMode::Manual,
+        usage: ModelUsageSummary::default(),
+        context_usage: None,
+        items: Vec::new(),
+        plan: None,
+        pending_interaction: None,
+        error: None,
+    });
+    thread
 }
 
 fn apply(

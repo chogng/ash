@@ -106,6 +106,7 @@ export interface GitReference {
 }
 
 export interface GitHistoryRefs {
+	readonly baseReference?: GitReference;
 	readonly status: GitStatus;
 	readonly graphRevision: number;
 	readonly references: readonly GitReference[];
@@ -196,6 +197,7 @@ export type GitIntegration = 'merge' | 'rebase' | 'cherryPick';
 /** Finite repository intents owned by the frontend Git domain. */
 export type GitCommand =
 	| { readonly kind: 'fetchAndCheckout'; readonly remote: string; readonly remoteIdentity: string; readonly reference: string; readonly objectId: string; readonly name: string; }
+	| { readonly kind: 'publishBranch'; readonly branch: string; readonly remote: string; readonly name: string; readonly expectedHead: string; }
 	| { readonly kind: 'pushBranch'; readonly branch: string; readonly remote: string; readonly remoteIdentity: string; readonly name: string; readonly expectedHead: string; }
 	| { readonly kind: 'createBranchAt'; readonly name: string; readonly objectId: string; }
 	| { readonly kind: 'checkoutDetached'; readonly objectId: string; }

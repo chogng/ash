@@ -824,6 +824,50 @@ fn external_ref_and_remote_changes_publish_without_head_or_file_changes() {
 }
 
 #[test]
+fn default_reference_changes_publish_without_changing_head_or_traversal() {
+    let repository = TestRepository::init();
+    repository.write("file.txt", "base");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "base"]);
+    repository.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://example.invalid/repository",
+    ]);
+    repository.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    repository.git(&["update-ref", "refs/remotes/origin/release", "HEAD"]);
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.history_refs_for(None).unwrap();
+    assert!(initial.base_reference.is_none());
+    queue.drain();
+    for name in ["main", "release"] {
+        repository.git(&[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            &format!("refs/remotes/origin/{name}"),
+        ]);
+        let refs = runtime.history_refs_for(None).unwrap();
+        assert_eq!(refs.status.head, initial.status.head);
+        assert_eq!(refs.graph_revision, initial.graph_revision);
+        assert_eq!(refs.base_reference.unwrap().name, format!("origin/{name}"));
+        assert_eq!(queue.drain().len(), 1);
+    }
+    repository.git(&["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"]);
+    assert!(
+        runtime
+            .history_refs_for(None)
+            .unwrap()
+            .base_reference
+            .is_none()
+    );
+    assert_eq!(queue.drain().len(), 1);
+}
+
+#[test]
 fn ref_snapshots_preserve_ancestor_labels_but_invalidate_added_and_removed_histories() {
     let repository = TestRepository::init();
     for value in ["first", "second", "third"] {

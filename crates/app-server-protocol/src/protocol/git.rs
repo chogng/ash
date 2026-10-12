@@ -354,6 +354,9 @@ pub struct GitHistoryRefsResult {
     pub references: Vec<GitReferenceDto>,
     pub remotes: Vec<GitRemoteDto>,
     pub branches: Vec<GitBranchDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub base_reference: Option<GitReferenceDto>,
 }
 
 /// Identifies one commit whose changed paths should be expanded in repository history.
@@ -811,6 +814,13 @@ pub enum GitCommandDto {
         #[ts(rename = "objectId")]
         object_id: String,
         name: String,
+    },
+    PublishBranch {
+        remote: String,
+        name: String,
+        branch: String,
+        #[ts(rename = "expectedHead")]
+        expected_head: String,
     },
     PushBranch {
         remote: String,
